@@ -13,6 +13,7 @@ import type {
   LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
+import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -148,13 +149,8 @@ function parseRemoteTrackingLocalBaseRef(
 }
 
 function parseRevListDrift(output: string): { ahead: number; behind: number } | null {
-  const [aheadStr, behindStr] = output.trim().split(/\s+/)
-  const ahead = Number(aheadStr)
-  const behind = Number(behindStr)
-  if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
-    return null
-  }
-  return { ahead, behind }
+  const counts = parseGitRevListAheadBehindCounts(output)
+  return counts.status === 'ok' ? { ahead: counts.ahead, behind: counts.behind } : null
 }
 
 async function evaluateLocalBaseRefRefreshability(
@@ -461,6 +457,41 @@ async function readWorktreeList(
   return parseWorktreeList(stdout)
 }
 
+async function readTranslatedWorktreeGraph(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return (await readWorktreeList(repoPath, options)).map((worktree) => {
+    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+  })
+}
+
+export async function listWorktreeGraph(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  try {
+    return await readTranslatedWorktreeGraph(repoPath, options)
+  } catch (err) {
+    if (getErrorCode(err) === 'ENOENT') {
+      try {
+        await stat(repoPath)
+      } catch (statErr) {
+        if (getErrorCode(statErr) === 'ENOENT') {
+          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+          return []
+        }
+      }
+    }
+    if (isNotGitRepositoryError(err)) {
+      return []
+    }
+    console.warn(`[git/worktree] listWorktreeGraph failed for ${repoPath}:`, err)
+    return []
+  }
+}
+
 /**
  * List all worktrees for a git repo at the given path.
  */
@@ -469,10 +500,7 @@ export async function listWorktrees(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   try {
-    const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
-      const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
-      return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
-    })
+    const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
     return annotateSparseCheckoutStatus(worktrees)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
@@ -494,6 +522,17 @@ export async function listWorktrees(
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
+}
+
+export async function listWorktreesStrict(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
+    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+  })
+  return annotateSparseCheckoutStatus(worktrees)
 }
 
 async function annotateSparseCheckoutStatus(
@@ -937,7 +976,11 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   branchHead: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const runGit = (args: string[]) => gitExecFileAsync(args, gitExecOptions(repoPath, options))
+  const runGit = (args: string[], execOptions?: { stdin?: string }) =>
+    gitExecFileAsync(args, {
+      ...gitExecOptions(repoPath, options),
+      ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
+    })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch

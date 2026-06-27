@@ -12,6 +12,7 @@ import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable, listWslDistros } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
+import { destroySystemTray } from '../tray/system-tray'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -56,7 +57,9 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    properties: ['openDirectory', 'createDirectory']
+    // Why: this picker grants access to an existing workspace directory.
+    // Creation belongs to explicit file/write actions, not typeahead input.
+    properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
     ? await dialog.showOpenDialog(parentWindow, options)
@@ -214,6 +217,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Mark shutdown first because app.exit() can bypass the usual quit latch.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
+      // Why: app.exit(0) skips before-quit/will-quit, so clean the Windows tray
+      // explicitly before relaunching to avoid a stale notification-area icon.
+      destroySystemTray()
       app.relaunch()
       app.exit(0)
     }, 150)

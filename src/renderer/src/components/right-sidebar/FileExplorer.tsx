@@ -23,6 +23,11 @@ import { SearchResultsPane } from './SearchResultsPane'
 import { useFileSearchPanel } from './useFileSearchPanel'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
+import {
+  getNameFilterCollapsedPathsAfterExpand,
+  getNextNameFilterCollapsedPaths,
+  isFileExplorerNameFilterQueryTooLarge
+} from './file-explorer-name-filter-projection'
 import { splitPathSegments } from './path-tree'
 import { buildFolderStatusMap, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
@@ -48,12 +53,16 @@ import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRow
 import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
   const [nameFilterQuery, setNameFilterQuery] = useState('')
+  const [nameFilterCollapsedPaths, setNameFilterCollapsedPaths] = useState<Set<string>>(
+    () => new Set()
+  )
   const searchPanel = useFileSearchPanel(explorerView)
 
   const handleSelectExplorerView = useCallback(
@@ -70,6 +79,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRuntimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+  )
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
@@ -91,6 +103,18 @@ function FileExplorerFiles(): React.JSX.Element {
   const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
   const worktreePath = activeWorktree?.path ?? null
+  const runtimeDownloadContext = useMemo(
+    () =>
+      activeRuntimeEnvironmentId && activeWorktreeId && worktreePath
+        ? {
+            settings: { activeRuntimeEnvironmentId },
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: activeRepo?.connectionId ?? undefined
+          }
+        : null,
+    [activeRepo?.connectionId, activeRuntimeEnvironmentId, activeWorktreeId, worktreePath]
+  )
   const isFilesViewActive = explorerView === 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView,
@@ -119,9 +143,18 @@ function FileExplorerFiles(): React.JSX.Element {
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
+  const nameFilterQueryTooLarge = useMemo(
+    () => isFileExplorerNameFilterQueryTooLarge(nameFilterQuery),
+    [nameFilterQuery]
+  )
   const hasNameFilter = isFilesViewActive && hasNameFilterQuery
+  useEffect(() => {
+    if (!hasNameFilter) {
+      setNameFilterCollapsedPaths((current) => (current.size > 0 ? new Set() : current))
+    }
+  }, [hasNameFilter])
   const nameFilterFiles = useRuntimeFileListForWorktree({
-    enabled: hasNameFilter,
+    enabled: hasNameFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId
   })
   const nameFilterSource = useMemo(
@@ -129,13 +162,20 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter
         ? {
             query: nameFilterQuery,
-            relativePaths:
-              nameFilterFiles.loading && nameFilterFiles.files.length === 0
+            relativePaths: nameFilterQueryTooLarge
+              ? []
+              : nameFilterFiles.loading && nameFilterFiles.files.length === 0
                 ? null
                 : nameFilterFiles.files
           }
         : null,
-    [hasNameFilter, nameFilterFiles.files, nameFilterFiles.loading, nameFilterQuery]
+    [
+      hasNameFilter,
+      nameFilterFiles.files,
+      nameFilterFiles.loading,
+      nameFilterQuery,
+      nameFilterQueryTooLarge
+    ]
   )
   const {
     rowProjection,
@@ -150,14 +190,17 @@ function FileExplorerFiles(): React.JSX.Element {
     expanded,
     activeRepoSupportsGit && isFilesViewActive,
     showDotfiles,
-    nameFilterSource
+    nameFilterSource,
+    hasNameFilter ? nameFilterCollapsedPaths : null
   )
   const rowExpandedPaths = useMemo(
     () =>
-      nameFilterExpandedPaths.size > 0
-        ? new Set([...expanded, ...nameFilterExpandedPaths])
-        : expanded,
-    [expanded, nameFilterExpandedPaths]
+      hasNameFilter
+        ? nameFilterExpandedPaths
+        : nameFilterExpandedPaths.size > 0
+          ? new Set([...expanded, ...nameFilterExpandedPaths])
+          : expanded,
+    [expanded, hasNameFilter, nameFilterExpandedPaths]
   )
   const visibleRowCount = rowProjection.getVisibleCount()
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
@@ -421,12 +464,24 @@ function FileExplorerFiles(): React.JSX.Element {
     () => rowProjection.getRowsByPaths(selectedPaths),
     [rowProjection, selectedPaths]
   )
+  const handleToggleNameFilterDir = useCallback(
+    (_worktreeId: string, dirPath: string) => {
+      setNameFilterCollapsedPaths((current) =>
+        getNextNameFilterCollapsedPaths(current, dirPath, rowExpandedPaths.has(dirPath))
+      )
+    },
+    [rowExpandedPaths]
+  )
+  const handleExpandNameFilterDir = useCallback((dirPath: string) => {
+    setNameFilterCollapsedPaths((current) =>
+      getNameFilterCollapsedPathsAfterExpand(current, dirPath)
+    )
+  }, [])
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
     openFile,
     makePreviewFilePermanent,
-    toggleDir,
-    canToggleDirectories: !hasNameFilter,
+    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -454,13 +509,13 @@ function FileExplorerFiles(): React.JSX.Element {
     containerRef: explorerShellRef,
     rowProjection,
     expandedPaths: rowExpandedPaths,
-    canToggleDirectories: !hasNameFilter,
+    canToggleDirectories: true,
     inlineInput,
     selectedPaths,
     selectedNode,
     activateNode,
     moveSelection,
-    toggleDir,
+    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     startRename,
     requestDelete,
     requestDeleteAll,
@@ -677,6 +732,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 flashingPath={flashingPath}
                 deleteShortcutLabel={deleteShortcutLabel}
                 connectionId={activeRepo?.connectionId ?? null}
+                runtimeDownloadContext={runtimeDownloadContext}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onContextMenuSelect={preserveSelectionForContextMenu}
@@ -692,9 +748,11 @@ function FileExplorerFiles(): React.JSX.Element {
                 onMoveDrop={handleMoveDrop}
                 onDragTargetChange={setDropTargetDir}
                 onDragSourceChange={setDragSourcePath}
-                onDragExpandDir={handleDragExpandDir}
+                onDragExpandDir={hasNameFilter ? handleExpandNameFilterDir : handleDragExpandDir}
                 onNativeDragTargetChange={setNativeDropTargetDir}
-                onNativeDragExpandDir={handleNativeDragExpandDir}
+                onNativeDragExpandDir={
+                  hasNameFilter ? handleExpandNameFilterDir : handleNativeDragExpandDir
+                }
                 dropTargetDir={dropTargetDir}
                 dragSourcePath={dragSourcePath}
                 nativeDropTargetDir={nativeDropTargetDir}

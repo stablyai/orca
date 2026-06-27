@@ -28,6 +28,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -66,6 +67,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { readLocalGitConfigSignature } from './local-git-config-signature'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -1259,13 +1261,24 @@ export async function listWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
+  const trimmedQuery = query?.trim() ?? ''
+  if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
+    return {
+      items: [],
+      sources: {
+        issues: null,
+        prs: null,
+        originCandidate: null,
+        upstreamCandidate: null
+      }
+    }
+  }
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
   ])
   const issueOwnerRepo = issueResolved.source
   const prOwnerRepo = prResolved.source
-  const trimmedQuery = query?.trim() ?? ''
   await acquire()
   try {
     // Why: errors propagate to IPC so the renderer's cross-repo aggregator can
@@ -1417,6 +1430,10 @@ export async function countWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
+  const trimmedQuery = query?.trim() ?? ''
+  if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
+    return 0
+  }
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
@@ -1428,7 +1445,6 @@ export async function countWorkItems(
     return 0
   }
 
-  const trimmedQuery = query?.trim() ?? ''
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
 
@@ -1973,6 +1989,16 @@ const PR_LOOKUP_JSON_FIELDS =
   'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
 const PR_BRANCH_LIST_JSON_FIELDS =
   'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+const PR_AUTO_MERGE_IDENTITY_JSON_FIELDS = 'id,headRefOid,baseRefName'
+const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' | 'REBASE'> = {
+  merge: 'MERGE',
+  squash: 'SQUASH',
+  rebase: 'REBASE'
+}
+
+export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
+  acceptMergedFallbackPR?: boolean
+}
 
 function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
   const mergeableState = pr.mergeable_state?.toLowerCase()
@@ -2015,6 +2041,38 @@ function isMergedImplicitPR(data: PullRequestLookupData, linkedPRNumber?: number
   // explicit PR link. Showing them as implicit review context leaves nothing
   // meaningful to unlink after the branch has been rebased or merged.
   return typeof linkedPRNumber !== 'number' && mapPRState(data.state, data.isDraft) === 'merged'
+}
+
+async function getCurrentHeadOid(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<string | null> {
+  try {
+    const provider = connectionId ? getSshGitProvider(connectionId) : null
+    const result = provider
+      ? await provider.exec(['rev-parse', 'HEAD'], repoPath)
+      : await gitExecFileAsync(['rev-parse', 'HEAD'], {
+          cwd: repoPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        })
+    return result.stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+function shouldHideMergedImplicitPR(
+  data: PullRequestLookupData | null,
+  linkedPRNumber: number | null | undefined,
+  currentHeadOid: string | null
+): boolean {
+  if (!data || !isMergedImplicitPR(data, linkedPRNumber)) {
+    return false
+  }
+  // Why: keep hiding historical merged branch matches, but preserve the merged
+  // PR for the exact commit currently checked out in the sidebar.
+  return !currentHeadOid || data.headRefOid !== currentHeadOid
 }
 
 function normalizePullRequestLookupData(data: PullRequestLookupData): PullRequestLookupData {
@@ -2222,15 +2280,65 @@ type TrackedUpstreamBranch = {
   branchName: string
 }
 
-function parseTrackedUpstreamBranch(
-  upstreamRef: string,
-  branchName: string
-): TrackedUpstreamBranch | null {
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
+
+type TrackedUpstreamSnapshotCacheEntry = {
+  expiresAt: number
+  gitConfigSignature?: string
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}
+
+type TrackedUpstreamSnapshotProbeResult = {
+  cacheable: boolean
+  gitConfigSignature?: string
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}
+
+const trackedUpstreamSnapshotCache = new Map<string, TrackedUpstreamSnapshotCacheEntry>()
+const trackedUpstreamSnapshotInFlight = new Map<
+  string,
+  Promise<TrackedUpstreamSnapshotProbeResult>
+>()
+const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
+  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
+  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
+  return nextGeneration
+}
+
+export function __resetTrackedUpstreamBranchCacheForTests(): void {
+  trackedUpstreamSnapshotCache.clear()
+  trackedUpstreamSnapshotInFlight.clear()
+  trackedUpstreamSnapshotGenerations.clear()
+}
+
+function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
   const parsed = splitRemoteBranchName(upstreamRef.trim())
-  if (!parsed || parsed.branchName === branchName) {
+  if (!parsed) {
     return null
   }
   return parsed
+}
+
+function prOwnerRepoKey(ownerRepo: OwnerRepo): string {
+  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
+}
+
+function shouldRetryTrackedUpstreamBranch(
+  upstreamBranch: TrackedUpstreamBranch,
+  branchName: string,
+  upstreamHeadRepo: OwnerRepo,
+  headRepo: OwnerRepo | null
+): boolean {
+  if (upstreamBranch.branchName !== branchName) {
+    return true
+  }
+  if (!headRepo) {
+    return true
+  }
+  return prOwnerRepoKey(upstreamHeadRepo) !== prOwnerRepoKey(headRepo)
 }
 
 async function getTrackedUpstreamBranch(
@@ -2239,7 +2347,160 @@ async function getTrackedUpstreamBranch(
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<TrackedUpstreamBranch | null> {
-  const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branchName}@{upstream}`]
+  const cacheKey = getTrackedUpstreamBranchCacheKey(repoPath, connectionId, localGitOptions)
+  const now = Date.now()
+  const cached = trackedUpstreamSnapshotCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    const configSignatureMatches = await doesTrackedUpstreamCacheConfigSignatureMatch(
+      cached,
+      repoPath,
+      connectionId,
+      localGitOptions
+    )
+    if (
+      configSignatureMatches &&
+      cached.upstreamsByBranchName.has(branchName) &&
+      canUseCachedTrackedUpstreamBranch(cached, branchName)
+    ) {
+      return cached.upstreamsByBranchName.get(branchName) ?? null
+    }
+    trackedUpstreamSnapshotCache.delete(cacheKey)
+  }
+  if (cached) {
+    trackedUpstreamSnapshotCache.delete(cacheKey)
+  }
+
+  const inFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
+  if (inFlight) {
+    const result = await inFlight
+    if (result.upstreamsByBranchName.has(branchName)) {
+      return result.upstreamsByBranchName.get(branchName) ?? null
+    }
+    // Why: a concurrent snapshot may finish before this branch exists in git.
+    // Re-probe instead of returning a one-shot synthetic null.
+    const retryInFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
+    if (retryInFlight) {
+      const retryResult = await retryInFlight
+      return retryResult.upstreamsByBranchName.get(branchName) ?? null
+    }
+  }
+
+  // Why: PR polling can ask about hundreds of local worktree branches at once.
+  // Read the branch upstream snapshot in one git process per repo/runtime
+  // instead of spawning one failing `branch@{upstream}` probe per branch.
+  const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
+  const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
+  trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
+  try {
+    const result = await probe
+    if (result.cacheable && trackedUpstreamSnapshotGenerations.get(cacheKey) === probeGeneration) {
+      trackedUpstreamSnapshotCache.set(cacheKey, {
+        ...(result.gitConfigSignature ? { gitConfigSignature: result.gitConfigSignature } : {}),
+        upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
+        expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
+      })
+    }
+    if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
+      const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
+      if (fresherCached?.upstreamsByBranchName.has(branchName)) {
+        return fresherCached.upstreamsByBranchName.get(branchName) ?? null
+      }
+    }
+    return result.upstreamsByBranchName.get(branchName) ?? null
+  } finally {
+    if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
+      trackedUpstreamSnapshotInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function probeTrackedUpstreamSnapshot(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<TrackedUpstreamSnapshotProbeResult> {
+  const startingGitConfigSignature = await readLocalGitConfigSignature({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })
+  const { probeFailed, upstreamsByBranchName } = await probeTrackedUpstreamBranches(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  const endingGitConfigSignature = await readLocalGitConfigSignature({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })
+  const isLocalHostRuntime = !connectionId && !localGitOptions.wslDistro
+  const configSignatureChanged =
+    isLocalHostRuntime && startingGitConfigSignature !== endingGitConfigSignature
+  const gitConfigSignature =
+    startingGitConfigSignature === endingGitConfigSignature ? endingGitConfigSignature : undefined
+  return {
+    // Why: transient git failures must not cache an empty snapshot that forces
+    // every branch lookup to delete and re-probe on the next refresh tick.
+    cacheable: !configSignatureChanged && !probeFailed,
+    probeFailed,
+    ...(gitConfigSignature ? { gitConfigSignature } : {}),
+    upstreamsByBranchName
+  }
+}
+
+function getCacheableTrackedUpstreamSnapshot(
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+): Map<string, TrackedUpstreamBranch | null> {
+  // Why: SSH/WSL cannot cheaply inspect remote .git/config here. The short TTL
+  // still bounds stale positives, while repeated PR refreshes share one scan.
+  return upstreamsByBranchName
+}
+
+function canUseCachedTrackedUpstreamBranch(
+  cached: TrackedUpstreamSnapshotCacheEntry,
+  branchName: string
+): boolean {
+  return cached.upstreamsByBranchName.has(branchName)
+}
+
+async function doesTrackedUpstreamCacheConfigSignatureMatch(
+  cached: TrackedUpstreamSnapshotCacheEntry,
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  if (!cached.gitConfigSignature) {
+    return true
+  }
+  const currentSignature = await readLocalGitConfigSignature({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })
+  return currentSignature === cached.gitConfigSignature
+}
+
+function getTrackedUpstreamBranchCacheKey(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): string {
+  const runtimeKey = connectionId
+    ? `ssh:${connectionId}`
+    : `local:${localGitOptions.wslDistro ?? 'host'}`
+  return [runtimeKey, repoPath].join('\0')
+}
+
+async function probeTrackedUpstreamBranches(
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
+): Promise<{
+  probeFailed: boolean
+  upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
+}> {
+  const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
   try {
     const provider = connectionId ? getSshGitProvider(connectionId) : null
     const result = provider
@@ -2248,10 +2509,41 @@ async function getTrackedUpstreamBranch(
           cwd: repoPath,
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
         })
-    return parseTrackedUpstreamBranch(result.stdout, branchName)
+    return {
+      probeFailed: false,
+      upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
+    }
   } catch {
+    return { probeFailed: true, upstreamsByBranchName: new Map() }
+  }
+}
+
+function parseTrackedUpstreamBranches(stdout: string): Map<string, TrackedUpstreamBranch | null> {
+  const upstreamsByBranchName = new Map<string, TrackedUpstreamBranch | null>()
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const [branchName, upstreamRef] = line.split('\0')
+    const localBranchName = branchName?.replace(/^refs\/heads\//, '')
+    if (!localBranchName) {
+      continue
+    }
+    upstreamsByBranchName.set(localBranchName, parseTrackedUpstreamRef(upstreamRef ?? ''))
+  }
+  return upstreamsByBranchName
+}
+
+function parseTrackedUpstreamRef(upstreamRef: string): TrackedUpstreamBranch | null {
+  const remoteRefPrefix = 'refs/remotes/'
+  const normalizedRef = upstreamRef.trim()
+  if (normalizedRef.startsWith(remoteRefPrefix)) {
+    return parseTrackedUpstreamBranch(normalizedRef.slice(remoteRefPrefix.length))
+  }
+  if (normalizedRef.startsWith('refs/heads/')) {
     return null
   }
+  return parseTrackedUpstreamBranch(normalizedRef)
 }
 
 async function lookupPRByBranchName(args: {
@@ -2440,7 +2732,7 @@ export async function getPRForBranch(
   linkedPRNumber?: number | null,
   connectionId?: string | null,
   fallbackPRNumber?: number | null,
-  options: HostedReviewExecutionOptions = {}
+  options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRInfo | null> {
   const outcome = await getPRForBranchOutcome(
     repoPath,
@@ -2459,7 +2751,7 @@ export async function getPRForBranchOutcome(
   linkedPRNumber?: number | null,
   connectionId?: string | null,
   fallbackPRNumber?: number | null,
-  options: HostedReviewExecutionOptions = {}
+  options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRRefreshOutcome> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -2483,6 +2775,19 @@ export async function getPRForBranchOutcome(
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
     let dataHeadRepo: OwnerRepo | null = headRepo
+    let currentHeadOidForMergedImplicit: string | null | undefined
+
+    const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
+      if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
+        return false
+      }
+      currentHeadOidForMergedImplicit ??= await getCurrentHeadOid(
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
+    }
 
     if (typeof linkedPRNumber === 'number') {
       const exactLookup = await lookupPRByNumber({
@@ -2504,8 +2809,8 @@ export async function getPRForBranchOutcome(
       data = branchLookup.data
       dataRepo = branchLookup.dataRepo
       if (!data) {
-        // Why: worktrees can have a short local branch tracking a differently
-        // named remote PR head; after the local miss, try that configured head.
+        // Why: the tracked upstream can identify the real PR head by branch
+        // name or by fork owner even when branch names match locally.
         const upstreamBranch = await getTrackedUpstreamBranch(
           repoPath,
           branchName,
@@ -2520,21 +2825,28 @@ export async function getPRForBranchOutcome(
               connectionId,
               ...localGitArgs
             )) ?? headRepo
-          const upstreamLookup = await lookupPRByBranchName({
-            candidates,
-            headRepo: upstreamHeadRepo,
-            branchName: upstreamBranch.branchName,
-            ghOptions
-          })
-          data = upstreamLookup.data
-          dataRepo = upstreamLookup.dataRepo
-          if (data) {
-            dataHeadRepo = upstreamHeadRepo
+          if (
+            upstreamHeadRepo &&
+            shouldRetryTrackedUpstreamBranch(upstreamBranch, branchName, upstreamHeadRepo, headRepo)
+          ) {
+            const upstreamLookup = await lookupPRByBranchName({
+              candidates,
+              headRepo: upstreamHeadRepo,
+              branchName: upstreamBranch.branchName,
+              ghOptions
+            })
+            data = upstreamLookup.data
+            dataRepo = upstreamLookup.dataRepo
+            if (data) {
+              dataHeadRepo = upstreamHeadRepo
+            }
           }
         }
       }
     }
-    if (data && isMergedImplicitPR(data, linkedPRNumber)) {
+    let mergedBranchLookupNumber: number | null = null
+    if (await hideMergedImplicitPR(data)) {
+      mergedBranchLookupNumber = data?.number ?? null
       data = null
       dataRepo = null
       dataHeadRepo = headRepo
@@ -2551,7 +2863,18 @@ export async function getPRForBranchOutcome(
     if (!data) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
-    if (isMergedImplicitPR(data, linkedPRNumber)) {
+    const fallbackConfirmedMergedBranch =
+      typeof fallbackPRNumber === 'number' &&
+      mergedBranchLookupNumber === fallbackPRNumber &&
+      data.number === fallbackPRNumber
+    // Why: a currently visible PR can be merged outside Orca; when the caller
+    // marks the fallback as visible review state, keep its lifecycle fresh even
+    // if GitHub no longer reports it by branch (for example deleted heads).
+    if (
+      (await hideMergedImplicitPR(data)) &&
+      !fallbackConfirmedMergedBranch &&
+      options.acceptMergedFallbackPR !== true
+    ) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
@@ -3601,10 +3924,10 @@ export async function setPRAutoMerge(
   const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   await acquire()
   try {
-    const args = ['pr', 'merge', String(prNumber), enabled ? '--auto' : '--disable-auto']
     if (enabled) {
-      args.push(`--${method}`)
+      return await enablePRAutoMerge(prNumber, method, ownerRepo, ghOptions)
     }
+    const args = ['pr', 'merge', String(prNumber), '--disable-auto']
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }
@@ -3620,6 +3943,103 @@ export async function setPRAutoMerge(
   } finally {
     release()
   }
+}
+
+type PRAutoMergeIdentity = {
+  id?: string
+  headRefOid?: string
+  baseRefName?: string
+}
+
+async function getPRAutoMergeIdentity(
+  prNumber: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<PRAutoMergeIdentity | null> {
+  const args = ['pr', 'view', String(prNumber), '--json', PR_AUTO_MERGE_IDENTITY_JSON_FIELDS]
+  if (ownerRepo) {
+    args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
+  const { stdout } = await ghExecFileAsync(args, ghOptions)
+  const data = JSON.parse(stdout) as PRAutoMergeIdentity
+  return {
+    id: typeof data.id === 'string' ? data.id : undefined,
+    headRefOid: typeof data.headRefOid === 'string' ? data.headRefOid : undefined,
+    baseRefName: typeof data.baseRefName === 'string' ? data.baseRefName : undefined
+  }
+}
+
+async function runPRAutoMergeCommand(
+  prNumber: number,
+  method: GitHubPRMergeMethod,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<void> {
+  const args = ['pr', 'merge', String(prNumber), '--auto', `--${method}`]
+  if (ownerRepo) {
+    args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
+  await ghExecFileAsync(args, {
+    ...ghOptions,
+    env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+  })
+}
+
+async function shouldUseMergeQueueAutoMerge(
+  pr: PRAutoMergeIdentity,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<boolean> {
+  if (!ownerRepo || !pr.baseRefName) {
+    return false
+  }
+  const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, pr.baseRefName, ghOptions)
+  return mergeMetadata.mergeQueueRequired === true
+}
+
+async function enablePRAutoMerge(
+  prNumber: number,
+  method: GitHubPRMergeMethod,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const pr = await getPRAutoMergeIdentity(prNumber, ownerRepo, ghOptions)
+  if (!pr?.id) {
+    return { ok: false, error: 'Could not resolve GitHub pull request ID' }
+  }
+  if (await shouldUseMergeQueueAutoMerge(pr, ownerRepo, ghOptions)) {
+    await runPRAutoMergeCommand(prNumber, method, ownerRepo, ghOptions)
+    return { ok: true }
+  }
+  const query = `mutation($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!, $expectedHeadOid: GitObjectID) {
+    enablePullRequestAutoMerge(input: {
+      pullRequestId: $pullRequestId,
+      mergeMethod: $mergeMethod,
+      expectedHeadOid: $expectedHeadOid
+    }) {
+      pullRequest { id }
+    }
+  }`
+  const args = [
+    'api',
+    'graphql',
+    '-f',
+    `query=${query}`,
+    '-f',
+    `pullRequestId=${pr.id}`,
+    '-f',
+    `mergeMethod=${GITHUB_AUTO_MERGE_METHODS[method]}`
+  ]
+  if (pr.headRefOid) {
+    args.push('-f', `expectedHeadOid=${pr.headRefOid}`)
+  }
+  // Why: `gh pr merge --auto` can perform an immediate merge; this mutation
+  // only creates GitHub's auto-merge request and lets branch requirements gate it.
+  await ghExecFileAsync(args, {
+    ...ghOptions,
+    env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+  })
+  return { ok: true }
 }
 
 async function getPRMergeBlocker(

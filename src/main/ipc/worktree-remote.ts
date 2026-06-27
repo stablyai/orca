@@ -13,6 +13,7 @@ import { existsSync } from 'fs'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type {
+  AutomationWorkspaceProvenance,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   GitPushTarget,
@@ -56,6 +57,11 @@ import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getSshGitUsername } from '../git/git-username'
+import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+
+type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
+  automationProvenance?: AutomationWorkspaceProvenance
+}
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
@@ -245,6 +251,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
       command: startup.command,
       env: startup.env,
+      ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+      ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
+      startupCommandDelivery: startup.startupCommandDelivery,
       telemetry: startup.telemetry,
       activate: true
     })
@@ -1320,6 +1329,9 @@ async function getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
 }
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
+  // Why: invalidate detected-worktree caches before renderer observers react,
+  // so follow-up listDetected reads post-change state.
+  runWorktreeChangeInvalidators(repoId)
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
   }
@@ -1340,7 +1352,7 @@ export function emitCreateWorktreeProgress(
 }
 
 export async function createRemoteWorktree(
-  args: CreateWorktreeArgs,
+  args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow
@@ -1641,6 +1653,7 @@ export async function createRemoteWorktree(
     orcaCreatedAt: now,
     orcaCreationSource: 'ssh',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -1748,7 +1761,7 @@ export async function createRemoteWorktree(
 }
 
 export async function createLocalWorktree(
-  args: CreateWorktreeArgs,
+  args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
@@ -2237,6 +2250,7 @@ export async function createLocalWorktree(
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),

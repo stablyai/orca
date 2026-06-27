@@ -42,11 +42,25 @@ export type RichMarkdownAnnotationTarget = RichMarkdownComposerState & {
   buttonLeft: number
 }
 
-function countMarkdownLines(value: string): number {
+export function countRichMarkdownReviewMarkdownLines(value: string): number {
   if (value.length === 0) {
     return 1
   }
-  return value.split(/\r\n|\r|\n/).length
+  let lineCount = 1
+  for (let index = 0; index < value.length; index += 1) {
+    const charCode = value.charCodeAt(index)
+    if (charCode === 13) {
+      lineCount += 1
+      if (value.charCodeAt(index + 1) === 10) {
+        index += 1
+      }
+      continue
+    }
+    if (charCode === 10) {
+      lineCount += 1
+    }
+  }
+  return lineCount
 }
 
 function serializeRichMarkdownJson(editor: Editor, content: JSONContent[]): string {
@@ -66,12 +80,12 @@ export function buildRichMarkdownCommentBlocks(editor: Editor): RichMarkdownComm
       return
     }
     const nodeMarkdown = serializeRichMarkdownJson(editor, [nodeJson])
-    const nodeLineCount = countMarkdownLines(nodeMarkdown)
+    const nodeLineCount = countRichMarkdownReviewMarkdownLines(nodeMarkdown)
     if (previousNodeJson) {
       const pairMarkdown = serializeRichMarkdownJson(editor, [previousNodeJson, nodeJson])
       const separatorLineCount = Math.max(
         0,
-        countMarkdownLines(pairMarkdown) - previousNodeLineCount - nodeLineCount
+        countRichMarkdownReviewMarkdownLines(pairMarkdown) - previousNodeLineCount - nodeLineCount
       )
       nextLine += separatorLineCount
     }

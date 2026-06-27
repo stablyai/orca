@@ -32,7 +32,6 @@ import type {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
@@ -102,7 +101,7 @@ import {
   getNextVisibleContextualTourStepIndex,
   getPreviousVisibleContextualTourStepIndex
 } from '../../components/contextual-tours/contextual-tour-gate'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '../../lib/agent-status'
+import { agentKindForAgentType, formatAgentTypeLabel } from '../../lib/agent-status'
 import {
   deriveRunningAgentSendTargets,
   resolveRunningAgentSendTarget
@@ -116,6 +115,12 @@ export type PendingSidebarWorktreeReveal = {
   behavior: 'auto' | 'smooth'
   highlight?: boolean
   beginRename?: boolean
+}
+
+export type PendingSidebarRowReveal = {
+  rowKey: string
+  behavior: 'auto' | 'smooth'
+  highlight?: boolean
 }
 
 export type AgentSendPopoverTargetMode = {
@@ -446,11 +451,6 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
   )
 }
 
-function agentKindForTarget(agentType: Parameters<typeof agentTypeToIconAgent>[0]) {
-  const tuiAgent = agentTypeToIconAgent(agentType)
-  return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
-}
-
 let agentSendTargetModeInstanceCounter = 0
 
 function createAgentSendTargetModeInstanceId(): string {
@@ -673,6 +673,14 @@ export type UISlice = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
+  pendingAutomationRunNavigation: {
+    automationId: string
+    runId: string | null
+    hostId?: ExecutionHostId
+  } | null
+  setPendingAutomationRunNavigation: (
+    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
+  ) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
@@ -792,6 +800,8 @@ export type UISlice = {
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
+  hideAutomationGeneratedWorkspaces: boolean
+  setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
@@ -843,6 +853,7 @@ export type UISlice = {
   petSize: number
   setPetSize: (size: number) => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
+  pendingRevealSidebarRow: PendingSidebarRowReveal | null
   revealWorktreeInSidebar: (
     worktreeId: string,
     options?: {
@@ -851,7 +862,15 @@ export type UISlice = {
       beginRename?: boolean
     }
   ) => void
+  revealSidebarRow: (
+    rowKey: string,
+    options?: {
+      behavior?: PendingSidebarRowReveal['behavior']
+      highlight?: boolean
+    }
+  ) => void
   clearPendingRevealWorktreeId: () => void
+  clearPendingRevealSidebarRow: () => void
   // Why: lets the SourceControl sidebar request that the diff editor scroll
   // to a specific note. Cleared by the diff decorator after it reveals the
   // line, so the same id can be requested again later without the surface
@@ -975,14 +994,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     )
 
     const label = formatAgentTypeLabel(target.entry.agentType)
-    const { sendBracketedPasteToRunningAgent } = await import('@/lib/agent-paste-draft')
-    const delivered = await sendBracketedPasteToRunningAgent({
-      ptyId: target.ptyId,
-      content: mode.prompt
-    }).catch(() => false)
+    const { activeAgentNotesSendFailureMessage, sendNotesToActiveAgentSession } =
+      await import('@/lib/active-agent-note-send')
+    const result = await sendNotesToActiveAgentSession({
+      worktreeId: mode.worktreeId,
+      prompt: mode.prompt,
+      noteTarget: { tabId: target.tabId, leafId: target.leafId }
+    }).catch((error) => {
+      console.error('Failed to send notes to sidebar agent target:', error)
+      return { status: 'no-active-terminal' as const }
+    })
 
-    if (!delivered) {
-      const message = 'Terminal is no longer available'
+    const stillCurrent = (): boolean => {
+      const current = get().agentSendPopoverTargetMode
+      return current?.id === mode.id && current.instanceId === mode.instanceId
+    }
+
+    if (!stillCurrent()) {
+      return false
+    }
+
+    if (result.status !== 'sent') {
+      const message = activeAgentNotesSendFailureMessage(result.status, { explicitTarget: true })
       set((s) =>
         s.agentSendPopoverTargetMode?.id === mode.id &&
         s.agentSendPopoverTargetMode.instanceId === mode.instanceId
@@ -997,6 +1030,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : s
       )
       const { toast } = await import('sonner')
+      if (!stillCurrent()) {
+        return false
+      }
       toast.error(
         translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
           value0: label
@@ -1006,10 +1042,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return false
     }
 
-    mode.onPromptDelivered?.()
     const [{ toast }, { track }] = await Promise.all([import('sonner'), import('@/lib/telemetry')])
+    if (!stillCurrent()) {
+      return false
+    }
+    mode.onPromptDelivered?.()
     track('agent_prompt_sent', {
-      agent_kind: agentKindForTarget(target.entry.agentType),
+      agent_kind: agentKindForAgentType(target.entry.agentType),
       launch_source: mode.launchSource,
       request_kind: 'followup'
     })
@@ -1316,6 +1355,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
+  pendingAutomationRunNavigation: null,
+  setPendingAutomationRunNavigation: (navigation) =>
+    set({ pendingAutomationRunNavigation: navigation }),
   openAutomationsPage: () => {
     get().recordViewVisit('automations')
     set((state) => ({
@@ -1893,6 +1935,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
+  hideAutomationGeneratedWorkspaces: false,
+  setHideAutomationGeneratedWorkspaces: (v) => set({ hideAutomationGeneratedWorkspaces: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2116,6 +2160,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   pendingRevealWorktree: null,
+  pendingRevealSidebarRow: null,
   revealWorktreeInSidebar: (worktreeId, options) =>
     set({
       pendingRevealWorktree: {
@@ -2125,7 +2170,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ...(options?.beginRename ? { beginRename: true } : {})
       }
     }),
+  revealSidebarRow: (rowKey, options) =>
+    set({
+      pendingRevealSidebarRow: {
+        rowKey,
+        behavior: options?.behavior ?? 'smooth',
+        ...(options?.highlight === false ? {} : { highlight: true })
+      }
+    }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
+  clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
   scrollToDiffCommentId: null,
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
@@ -2219,6 +2273,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
+        hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),

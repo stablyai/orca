@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useState,
   type SetStateAction
 } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 
 import {
   ArrowLeft,
@@ -24,6 +24,10 @@ import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/const
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import {
+  isPairedWebClientWindow,
+  shouldRenderDesktopWindowChrome
+} from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
@@ -57,7 +61,10 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import {
+  TOGGLE_FLOATING_TERMINAL_EVENT,
+  requestFloatingTerminalOpenMaximized
+} from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspacePanelShortcut,
@@ -82,6 +89,8 @@ import {
   resolvePrimarySelectionMiddleClickPaste,
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
+import { useAppMenuPaste } from './hooks/useAppMenuPaste'
+import { useLargeTextControlPaste } from './hooks/useLargeTextControlPaste'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
@@ -124,6 +133,7 @@ import {
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
 import { selectFloatingVisibleTabCount } from './store/selectors'
+import { selectActiveTerminalChromeState } from './store/active-terminal-chrome-selector'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState, UpdateStatus } from '../../shared/types'
@@ -154,6 +164,14 @@ import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialo
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+// Why: Windows and Linux both run with the native title bar removed (Windows
+// via titleBarStyle: 'hidden', Linux via frame: false), so the renderer draws
+// its own logo/menu anchor and min/max/close controls on both. Paired web
+// clients run in a browser tab, so they must not render desktop window chrome.
+const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
+  platform: shortcutPlatform,
+  isWebClient: isPairedWebClientWindow()
+})
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -177,9 +195,10 @@ type ShortcutDispatchInput = {
   preventDefault: () => void
 }
 
-// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
-// so we render our own minimize/maximize/close buttons.  These SVG icons match
-// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+// Why: Windows ('hidden' titleBarStyle) and Linux (frame: false) both remove
+// the native OS title bar, so we render our own minimize/maximize/close
+// buttons. These SVG icons match the Fluent/Win11 style: thin 10×10 paths on a
+// 40×30 hit area.
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -372,8 +391,11 @@ function App(): React.JSX.Element {
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
+      fetchReposForAllHosts: s.fetchReposForAllHosts,
       fetchProjectGroups: s.fetchProjectGroups,
+      fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
+      fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
@@ -415,7 +437,13 @@ function App(): React.JSX.Element {
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const {
+    activeWorktreeId,
+    tabCount,
+    effectiveActiveTabId,
+    activeTabCanExpand,
+    effectiveActiveTabExpanded
+  } = useAppStore(useShallow(selectActiveTerminalChromeState))
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Why: the creation surface owns the tab strip from the first pending frame.
   // Gating it on the delayed loader flag made the tab bar swap in mid-create.
@@ -429,11 +457,7 @@ function App(): React.JSX.Element {
   // that remount so the left workspace list doesn't restart at scrollTop 0.
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
-  const activeTabId = useAppStore((s) => s.activeTabId)
-  const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
-  const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -573,6 +597,7 @@ function App(): React.JSX.Element {
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -600,6 +625,8 @@ function App(): React.JSX.Element {
     settings?.primarySelectionMiddleClickPaste
   )
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
+  useAppMenuPaste()
+  useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
   const renderPetOverlay = shouldRenderPetOverlay({
@@ -819,9 +846,12 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await actions.fetchSettings()
-        await actions.fetchRepos()
-        await actions.fetchProjectGroups()
-        await actions.fetchFolderWorkspaces()
+        // Why: load local + every configured runtime environment (not just the
+        // active one) so a cold start that restored a remote workspace doesn't
+        // hide local repos. The sidebar "All hosts" scope then shows them all.
+        await actions.fetchReposForAllHosts()
+        await actions.fetchProjectGroupsForAllHosts()
+        await actions.fetchFolderWorkspacesForAllHosts()
         await actions.fetchAllWorktrees()
         await actions.fetchWorktreeLineage()
         const persistedUI = await window.api.ui.get()
@@ -1247,6 +1277,7 @@ function App(): React.JSX.Element {
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
+        hideAutomationGeneratedWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
@@ -1272,6 +1303,7 @@ function App(): React.JSX.Element {
     projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -1325,15 +1357,7 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
-  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
-  const hasTabBar = tabs.length >= 2
-  const effectiveActiveTabId = activeTabId ?? tabs[0]?.id ?? null
-  const activeTabCanExpand = effectiveActiveTabId
-    ? (canExpandPaneByTabId[effectiveActiveTabId] ?? false)
-    : false
-  const effectiveActiveTabExpanded = effectiveActiveTabId
-    ? (expandedPaneByTabId[effectiveActiveTabId] ?? false)
-    : false
+  const hasTabBar = tabCount >= 2
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
@@ -1370,10 +1394,53 @@ function App(): React.JSX.Element {
     )
   }
 
+  const globalShortcutStateRef = useRef({
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalEnabled,
+    floatingTerminalOpen,
+    floatingVisibleTabCount,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus,
+    workspaceChromeActive,
+    creationLayoutActive
+  })
+  // Why: window key listeners are global and long-lived; keep one registration
+  // while letting the handler read current shortcut state on each key event.
+  globalShortcutStateRef.current = {
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalEnabled,
+    floatingTerminalOpen,
+    floatingVisibleTabCount,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus,
+    workspaceChromeActive,
+    creationLayoutActive
+  }
+
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
+      const {
+        activeView,
+        activeWorktreeId,
+        actions,
+        floatingTerminalEnabled,
+        floatingTerminalOpen,
+        floatingVisibleTabCount,
+        keybindings,
+        terminalShortcutPolicy,
+        setFloatingTerminalOpenWithFocus,
+        workspaceChromeActive,
+        creationLayoutActive
+      } = globalShortcutStateRef.current
+
       // Why: child-component handlers (e.g. terminal search Cmd+G / Cmd+Shift+G)
       // register on the same window capture phase and fire first. If they already
       // called preventDefault, this handler must not also act on the event —
@@ -1399,13 +1466,10 @@ function App(): React.JSX.Element {
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
           context,
-          terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          terminalShortcutPolicy
         })
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
-        if (
-          context !== 'terminal' ||
-          (settings?.terminalShortcutPolicy ?? 'orca-first') !== 'orca-first'
-        ) {
+        if (context !== 'terminal' || (terminalShortcutPolicy ?? 'orca-first') !== 'orca-first') {
           return
         }
         showTerminalShortcutCaptureNotification({
@@ -1463,6 +1527,22 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Why: when the floating workspace is closed, its own keydown handler is
+      // unmounted and cannot claim Cmd+Opt+Shift+A. Honor the maximize chord
+      // here by opening the panel with a one-shot intent so it mounts straight
+      // into the maximized state. While the panel is open, this is a no-op: the
+      // panel's handler owns the maximize/restore toggle.
+      if (
+        !floatingTerminalOpen &&
+        matchShortcut('floatingWorkspace.maximize') &&
+        floatingTerminalEnabled
+      ) {
+        input.preventDefault()
+        requestFloatingTerminalOpenMaximized()
+        setFloatingTerminalOpenWithFocus(true)
+        return
+      }
+
       // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
       // window-level handler *not* toggling the sidebar when focus lives in an
       // editable surface. The main-process before-input-event already carves out
@@ -1509,7 +1589,7 @@ function App(): React.JSX.Element {
         if (
           isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
             context,
-            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+            terminalShortcutPolicy
           })
         ) {
           return
@@ -1521,6 +1601,21 @@ function App(): React.JSX.Element {
         input.preventDefault()
         notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
+        return
+      }
+
+      // Toggle the "show sleeping workspaces" sidebar filter without opening the
+      // filters menu (issue #5209). When revealing them, open the left sidebar
+      // so the now-visible sleeping worktrees are actually reachable.
+      if (matchShortcut('sidebar.sleepingWorkspaces.toggle')) {
+        input.preventDefault()
+        notifyTerminalCapture('sidebar.sleepingWorkspaces.toggle')
+        const store = useAppStore.getState()
+        const nextShowSleeping = !store.showSleepingWorkspaces
+        store.setShowSleepingWorkspaces(nextShowSleeping)
+        if (nextShowSleeping) {
+          store.setSidebarOpen(true)
+        }
         return
       }
 
@@ -1711,18 +1806,7 @@ function App(): React.JSX.Element {
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)
     }
-  }, [
-    activeView,
-    activeWorktreeId,
-    actions,
-    floatingTerminalOpen,
-    floatingVisibleTabCount,
-    keybindings,
-    settings?.terminalShortcutPolicy,
-    setFloatingTerminalOpenWithFocus,
-    workspaceChromeActive,
-    creationLayoutActive
-  ])
+  }, [])
 
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current
@@ -1776,9 +1860,9 @@ function App(): React.JSX.Element {
       <div className="flex h-full items-center">
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
-        ) : isWindows ? (
-          /* Why: on Windows the native title bar is hidden, so we render the
-             Orca logo as a non-interactive identity anchor and a ··· button
+        ) : hasCustomTitleBar ? (
+          /* Why: on Windows/Linux the native title bar is removed, so we render
+             the Orca logo as a non-interactive identity anchor and a ··· button
              that pops up the application menu (the same menu revealed by Alt
              on the default autoHideMenuBar). */
           <>
@@ -1801,7 +1885,7 @@ function App(): React.JSX.Element {
         ) : (
           <div className="pl-2" />
         )}
-        {showSidebar && !isWindows && (
+        {showSidebar && !hasCustomTitleBar && (
           <>
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
@@ -1944,8 +2028,8 @@ function App(): React.JSX.Element {
       visible at a time. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so content is not obscured by the
-      fixed-position window-controls overlay on Windows. */}
-      {isWindows && <div className="window-controls-titlebar-spacer" />}
+      fixed-position window-controls overlay on Windows/Linux. */}
+      {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
 
@@ -1957,12 +2041,13 @@ function App(): React.JSX.Element {
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
           // Why: consumed by anything that needs to avoid the fixed-position
-          // window-controls overlay on Windows (floating sidebar toggle, right
-          // sidebar header, etc.) without hardcoding 138px in multiple places.
-          '--window-controls-width': isWindows ? '138px' : '0px',
+          // window-controls overlay on Windows/Linux (floating sidebar toggle,
+          // right sidebar header, etc.) without hardcoding 138px in multiple
+          // places.
+          '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Why: consumed by the side-position activity bar to push icons below
-          // the fixed-position window-controls overlay on Windows.
-          '--window-controls-height': isWindows ? '36px' : '0px'
+          // the fixed-position window-controls overlay on Windows/Linux.
+          '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
       }
     >
@@ -2111,9 +2196,9 @@ function App(): React.JSX.Element {
                               {
                                 // Why: right: var(--window-controls-width) is the single
                                 // mechanism that keeps the toggle clear of the
-                                // fixed-position window-controls overlay on Windows (138px)
-                                // and sits at the right edge on non-Windows (0px). No
-                                // internal spacer needed — adding one would push the button
+                                // fixed-position window-controls overlay on custom desktop
+                                // chrome (138px) and sits at the right edge otherwise (0px).
+                                // No internal spacer needed — adding one would push the button
                                 // a further 138px to the left and cover the pane-actions
                                 // Ellipsis button with an un-clickable div.
                                 right: 'var(--window-controls-width)',
@@ -2558,7 +2643,7 @@ function App(): React.JSX.Element {
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and
           ignores z-index — placing WindowControls earlier caused the drag region to
           win, making the buttons unclickable. */}
-      {isWindows && <WindowControls />}
+      {hasCustomTitleBar && <WindowControls />}
     </div>
   )
 }

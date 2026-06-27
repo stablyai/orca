@@ -8,6 +8,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'gemini',
   'antigravity',
   'opencode',
+  'mimo-code',
   'droid',
   'grok',
   'devin'
@@ -22,6 +23,12 @@ export type AgentProviderSessionMetadata = {
   id: string
 }
 
+export type SleepingAgentLaunchConfig = {
+  agentCommand?: string
+  agentArgs: string
+  agentEnv: Record<string, string>
+}
+
 export type SleepingAgentSessionRecord = {
   paneKey: string
   tabId?: string
@@ -34,7 +41,9 @@ export type SleepingAgentSessionRecord = {
   updatedAt: number
   terminalTitle?: string
   lastAssistantMessage?: string
+  interrupted?: boolean
   connectionId?: string | null
+  launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,
@@ -107,7 +116,9 @@ export function extractAgentProviderSession(
     case 'claude':
     case 'codex':
     case 'gemini':
-    case 'droid': {
+    case 'droid':
+    // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
+    case 'kimi': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
@@ -115,7 +126,8 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['conversationId'])
       return id ? { key: 'conversation_id', id } : null
     }
-    case 'opencode': {
+    case 'opencode':
+    case 'mimo-code': {
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
@@ -154,6 +166,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'conversation_id' ? ['agy', '--conversation', id] : null
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
+    case 'mimo-code':
+      return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
     case 'grok':

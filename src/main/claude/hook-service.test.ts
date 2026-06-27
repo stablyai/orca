@@ -21,6 +21,8 @@ import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const OPENCLAUDE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
 type FakeFs = {
   files: Map<string, string>
@@ -161,14 +163,22 @@ describe('ClaudeHookService.install', () => {
       )
       expect(legacyCommands).toContain('/usr/local/bin/user-hook')
       expect(
-        legacyCommands.some((command: string) => command.includes(CLAUDE_SCRIPT_FILE_NAME))
+        legacyCommands.some((command: string) =>
+          process.platform === 'win32'
+            ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
+            : command.includes(CLAUDE_SCRIPT_FILE_NAME)
+        )
       ).toBe(true)
       expect(
         legacyCommands.some((command: string) =>
           command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
-      expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain(CLAUDE_SCRIPT_FILE_NAME)
+      expect(legacy.hooks.StopFailure[0].hooks[0].command).toMatch(
+        process.platform === 'win32'
+          ? WINDOWS_POWERSHELL_LAUNCHER
+          : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
+      )
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('DEVIN_PROJECT_DIR')
@@ -177,6 +187,60 @@ describe('ClaudeHookService.install', () => {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
+
+  // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
+  // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
+  // command must use an encoded launcher so Git Bash/cmd.exe never splits or
+  // expands the raw path before invoking the managed .cmd.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+
+        const settings = JSON.parse(
+          readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+          const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+        }
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
+
+  // Why: the launcher must stay PowerShell-encoded for Git Bash, but the hook
+  // POST inside the .cmd should use curl.exe so each hook spawns one
+  // interpreter, not two. Posting via a second PowerShell was the slow path.
+  it.skipIf(process.platform !== 'win32')(
+    'posts from the managed .cmd via curl.exe, not a second PowerShell',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-curl-'))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+        const script = readFileSync(
+          join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+          'utf-8'
+        )
+        expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+        expect(script).toContain('--data-urlencode "payload@-"')
+        expect(script).toContain('/hook/claude')
+        expect(script).not.toMatch(/Invoke-WebRequest/i)
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
 })
 
 describe('ClaudeHookService.installRemote', () => {
@@ -287,13 +351,18 @@ describe('OpenClaudeHookService-compatible install', () => {
       const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
-        expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+        if (process.platform === 'win32') {
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+        } else {
+          expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+          expect(command).toMatch(/^if \[ -x /)
+        }
       }
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('/hook/claude')
       expect(
-        readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'openclaude-hook.sh'), 'utf-8')
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).not.toContain('DEVIN_PROJECT_DIR')
       expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
     } finally {

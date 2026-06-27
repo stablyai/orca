@@ -31,6 +31,7 @@ import {
   getSidebarEntries,
   getStatusBarEntries,
   getStatusBarToggles,
+  getSystemTrayEntries,
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
@@ -41,7 +42,8 @@ import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
-import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getUiLanguageChoiceLabel,
   SHOW_UI_LANGUAGE_SETTING,
@@ -99,6 +101,10 @@ export function AppearancePane({
   warpThemes
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const isWebClient = isWebClientLocation()
+  // Why: the system tray behavior is desktop-Electron Windows-only; a Windows
+  // browser web client has no local tray to control.
+  const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
@@ -106,8 +112,9 @@ export function AppearancePane({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const terminalAppearanceSearchEntries = getTerminalAppearanceSearchEntries({
-    showWarpImport: !isWebClientLocation()
+    showWarpImport: !isWebClient
   })
+  const systemTrayEntries = getSystemTrayEntries({ showSystemTray: isDesktopWindows })
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const visibleSections = [
@@ -356,6 +363,42 @@ export function AppearancePane({
               checked={settings.showTitlebarAppName}
               onChange={() =>
                 updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
+              }
+            />
+          </SearchableSetting>
+        </div>
+      </section>
+    ) : null,
+    isDesktopWindows && matchesSettingsSearch(searchQuery, systemTrayEntries) ? (
+      <section key="system-tray" className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AppearancePane.872af9556e', 'System Tray')}
+        />
+
+        <div className="divide-y divide-border/40">
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.AppearancePane.2edf606c46',
+              'Minimize to Tray on Close'
+            )}
+            description={translate(
+              'auto.components.settings.AppearancePane.b707773a0d',
+              'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+            )}
+            keywords={systemTrayEntries[0]?.keywords ?? ['tray', 'minimize', 'close']}
+          >
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AppearancePane.2edf606c46',
+                'Minimize to Tray on Close'
+              )}
+              description={translate(
+                'auto.components.settings.AppearancePane.b707773a0d',
+                'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+              )}
+              checked={settings.minimizeToTrayOnClose === true}
+              onChange={() =>
+                updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
               }
             />
           </SearchableSetting>

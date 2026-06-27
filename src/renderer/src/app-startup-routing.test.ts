@@ -11,7 +11,7 @@ describe('renderer startup runtime routing', () => {
 
     expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeGreaterThanOrEqual(0)
     expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchRepos()')
+      startupBlock.indexOf('await actions.fetchReposForAllHosts()')
     )
     expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
       startupBlock.indexOf('await actions.fetchAllWorktrees()')
@@ -161,7 +161,7 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain('boundaryId="modal.confirm-add-project-from-folder"')
     expect(appSource).toContain('boundaryId="modal.project-added"')
     expect(appSource).toContain('setTimeout(() =>')
-    expect(sidebarSource).toContain("React.lazy(() => import('./WorktreeMetaDialog'))")
+    expect(sidebarSource).toContain("lazyWithRetry(() => import('./WorktreeMetaDialog'))")
     expect(sidebarSource).not.toContain("from './AddRepoDialog'")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./AddRepoDialog'))")
     expect(sidebarSource).not.toContain("React.lazy(() => import('./NonGitFolderDialog'))")

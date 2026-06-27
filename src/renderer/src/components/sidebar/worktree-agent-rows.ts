@@ -59,6 +59,8 @@ function orchestrationContextsEqual(
   return (
     a.taskId === b.taskId &&
     a.dispatchId === b.dispatchId &&
+    a.taskTitle === b.taskTitle &&
+    a.displayName === b.displayName &&
     a.parentTerminalHandle === b.parentTerminalHandle &&
     a.parentPaneKey === b.parentPaneKey &&
     a.coordinatorHandle === b.coordinatorHandle &&
@@ -247,6 +249,7 @@ export function buildWorktreeAgentRows(args: {
         entry: rowEntry,
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
+        rowSource: 'live',
         state: shouldDecay ? 'idle' : rowEntry.state,
         startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
       })
@@ -286,6 +289,7 @@ export function buildWorktreeAgentRows(args: {
       entry: rowEntry,
       tab,
       agentType: resolveRowAgentType(rowEntry, tab),
+      rowSource: 'live',
       state: shouldDecay ? 'idle' : rowEntry.state,
       startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
     })
@@ -314,6 +318,7 @@ export function buildWorktreeAgentRows(args: {
       entry: rowEntry,
       tab: ra.tab,
       agentType: resolveRowAgentType(rowEntry, ra.tab),
+      rowSource: 'retained',
       state: 'done',
       startedAt: ra.startedAt
     })

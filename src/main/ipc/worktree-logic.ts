@@ -1,23 +1,15 @@
-import { basename, resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
-import type {
-  GitWorktreeInfo,
-  GlobalSettings,
-  OrcaWorkspaceLayout,
-  Repo,
-  Worktree,
-  WorktreeMeta
-} from '../../shared/types'
+import { resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
+import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
 import { resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getWslHome, parseWslPath } from '../wsl'
-import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
 export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export { mergeWorktree } from './worktree-metadata-merge'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -266,71 +258,6 @@ export function shouldSetDisplayName(
 }
 
 /**
- * Merge raw git worktree info with persisted user metadata into a full Worktree.
- */
-export function mergeWorktree(
-  repoId: string,
-  git: GitWorktreeInfo,
-  meta: WorktreeMeta | undefined,
-  defaultDisplayName?: string
-): Worktree {
-  const branchShort = git.branch.replace(/^refs\/heads\//, '')
-  return {
-    id: `${repoId}::${git.path}`,
-    ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId,
-    ...(meta?.projectId !== undefined ? { projectId: meta.projectId } : {}),
-    ...(meta?.hostId !== undefined ? { hostId: meta.hostId } : {}),
-    ...(meta?.projectHostSetupId !== undefined
-      ? { projectHostSetupId: meta.projectHostSetupId }
-      : {}),
-    path: git.path,
-    head: git.head,
-    branch: git.branch,
-    isBare: git.isBare,
-    ...(git.isSparse === true ? { isSparse: true } : {}),
-    isMainWorktree: git.isMainWorktree,
-    displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
-    comment: meta?.comment || '',
-    linkedIssue: meta?.linkedIssue ?? null,
-    linkedPR: meta?.linkedPR ?? null,
-    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
-    linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
-    linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,
-    ...getLinkedWorkItemMetadata(meta),
-    isArchived: meta?.isArchived ?? false,
-    isUnread: meta?.isUnread ?? false,
-    isPinned: meta?.isPinned ?? false,
-    sortOrder: meta?.sortOrder ?? 0,
-    ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta?.lastActivityAt ?? 0,
-    ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(meta?.pendingFirstAgentMessageRename !== undefined
-      ? { pendingFirstAgentMessageRename: meta.pendingFirstAgentMessageRename }
-      : {}),
-    ...(meta?.firstAgentMessageRenameError !== undefined
-      ? { firstAgentMessageRenameError: meta.firstAgentMessageRenameError }
-      : {}),
-    ...(git.isSparse === true
-      ? {
-          sparseDirectories: meta?.sparseDirectories,
-          sparseBaseRef: meta?.sparseBaseRef,
-          sparsePresetId: meta?.sparsePresetId
-        }
-      : {}),
-    ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
-    ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
-    workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
-    // shared/types) and forwarded verbatim so the renderer store mirrors
-    // on-disk state. `undefined` here means the worktree has no comments yet.
-    diffComments: meta?.diffComments,
-    mobileDiffReview: meta?.mobileDiffReview
-  }
-}
-
-/**
  * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
  */
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
@@ -352,6 +279,23 @@ export function isOrphanedWorktreeError(error: unknown): boolean {
   }
   const msg = (error as { stderr?: string }).stderr || error.message
   return /is not a working tree/.test(msg)
+}
+
+export function isWindowsLongPathWorktreeRemovalError(
+  error: unknown,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (platform !== 'win32' || typeof error !== 'object' || error === null) {
+    return false
+  }
+  const errorWithDetails = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const details = [errorWithDetails.stderr, errorWithDetails.stdout, errorWithDetails.message]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join('\n')
+
+  // Why: Git for Windows has reported this failure through both stderr and the
+  // thrown message, with wording that varies between "filename" and "path".
+  return /(?:file ?name|path).{0,40}too long|too long.{0,40}(?:file ?name|path)/i.test(details)
 }
 
 export function isOrphanCompatiblePreflightError(error: unknown): boolean {

@@ -27,6 +27,26 @@ function sliceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('TerminalWebView scroll routing', () => {
+  it('keeps Android touch drags inside the terminal WebView', () => {
+    expect(source).toContain('nestedScrollEnabled')
+  })
+
+  it('maps a downward pull at the bottom to older scrollback rows', () => {
+    expect(source).toContain('var deltaY = ts.lastY - y;')
+    expect(source).toContain('smoothScrollOffsetY -= deltaY;')
+    expect(source).toContain('var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);')
+
+    const nextViewportY = simulateNormalBufferPull({
+      baseY: 120,
+      viewportY: 120,
+      startY: 300,
+      endY: 340,
+      cellHeight: 20
+    })
+
+    expect(nextViewportY).toBe(118)
+  })
+
   it('routes alternate-screen and mouse-aware scroll before smooth normal scroll', () => {
     expect(source).toContain(
       'return isWheelMouseTrackingMode(getMouseTrackingMode()) || isAlternateBufferActive();'
@@ -233,3 +253,26 @@ describe('TerminalWebView scroll routing', () => {
     )
   })
 })
+
+function simulateNormalBufferPull({
+  baseY,
+  viewportY,
+  startY,
+  endY,
+  cellHeight
+}: {
+  baseY: number
+  viewportY: number
+  startY: number
+  endY: number
+  cellHeight: number
+}): number {
+  const deltaY = startY - endY
+  if (deltaY > 0 ? viewportY >= baseY : viewportY <= 0) {
+    return viewportY
+  }
+  const smoothScrollOffsetY = -deltaY
+  const lines = Math.trunc(-smoothScrollOffsetY / cellHeight)
+  const applied = Math.max(lines, -viewportY)
+  return viewportY + applied
+}

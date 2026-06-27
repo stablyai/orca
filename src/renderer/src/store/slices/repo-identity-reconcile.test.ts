@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
 import type { Repo } from '../../../../shared/types'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
 
@@ -46,5 +47,35 @@ describe('reconcileFetchedRepos', () => {
     expect(result).not.toBe(previous)
     expect(result[0]).toBe(previous[0])
     expect(result.map((r) => r.id)).toEqual(['a', 'b'])
+  })
+
+  it('preserves same-id repo identity only within the matching host', () => {
+    const previous = [
+      makeRepo('same', { executionHostId: 'local', displayName: 'Local' }),
+      makeRepo('same', { executionHostId: 'runtime:env-1', displayName: 'Remote' })
+    ]
+    const next = [
+      makeRepo('same', { executionHostId: 'runtime:env-1', displayName: 'Remote' }),
+      makeRepo('same', { executionHostId: 'local', displayName: 'Local' })
+    ]
+
+    const result = reconcileFetchedRepos(previous, next)
+
+    expect(result[0]).toBe(previous[1])
+    expect(result[1]).toBe(previous[0])
+  })
+
+  it('uses map-style host identity lookups for large duplicate refreshes', () => {
+    const previous = Array.from({ length: 1000 }, (_, index) =>
+      makeRepo(`repo-${index}`, { executionHostId: index % 2 === 0 ? 'local' : 'runtime:env-1' })
+    )
+    const next = previous.map((repo) => ({ ...repo }))
+
+    const result = reconcileFetchedRepos(previous, next)
+
+    expect(result).toBe(previous)
+    expect(result.every((repo, index) => repo === previous[index])).toBe(true)
+    const source = fs.readFileSync(new URL('./repo-identity-reconcile.ts', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/previous\.find|next\.find|findIndex/)
   })
 })

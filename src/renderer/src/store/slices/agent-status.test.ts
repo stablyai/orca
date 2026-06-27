@@ -156,6 +156,8 @@ describe('agent status runtime orchestration metadata', () => {
       [childPaneKey]: {
         taskId: 'task-1',
         dispatchId: 'ctx-1',
+        taskTitle: 'Checkout race',
+        displayName: 'Fix checkout race',
         parentPaneKey
       }
     })
@@ -163,6 +165,8 @@ describe('agent status runtime orchestration metadata', () => {
     expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
       taskId: 'task-1',
       dispatchId: 'ctx-1',
+      taskTitle: 'Checkout race',
+      displayName: 'Fix checkout race',
       parentPaneKey
     })
     expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
@@ -897,6 +901,62 @@ describe('agent status retention + prefix sweep', () => {
     // Why: the ":" delimiter on the prefix guards against false-prefix matches
     // across tab ids that share a leading substring (tab-1 vs tab-10).
     expect(map['tab-10:0']).toBeDefined()
+  })
+
+  it('setAgentStatus clears a retained snapshot for the same paneKey', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const oldEntry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'old turn',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000,
+      paneKey: 'tab-a:0',
+      stateHistory: [],
+      agentType: 'claude'
+    }
+    const siblingEntry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'sibling turn',
+      updatedAt: 1_000,
+      stateStartedAt: 1_000,
+      paneKey: 'tab-a:1',
+      stateHistory: [],
+      agentType: 'claude'
+    }
+    const retainedA: RetainedAgentEntry = {
+      entry: oldEntry,
+      worktreeId: 'wt-a',
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
+      agentType: 'claude',
+      startedAt: 1_000
+    }
+    const retainedSibling: RetainedAgentEntry = {
+      entry: siblingEntry,
+      worktreeId: 'wt-a',
+      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
+      agentType: 'claude',
+      startedAt: 1_000
+    }
+
+    store.getState().retainAgents([retainedA, retainedSibling])
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-a:0',
+        { state: 'done', prompt: 'interrupted turn', agentType: 'claude', interrupted: true },
+        'claude',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey['tab-a:0']).toMatchObject({
+      state: 'done',
+      prompt: 'interrupted turn',
+      interrupted: true
+    })
+    expect(state.retainedAgentsByPaneKey['tab-a:0']).toBeUndefined()
+    expect(state.retainedAgentsByPaneKey['tab-a:1']).toBe(retainedSibling)
   })
 
   it('dismissRetainedAgentsByWorktree removes only entries for the given worktreeId', () => {

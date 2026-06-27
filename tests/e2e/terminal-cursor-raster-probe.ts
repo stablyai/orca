@@ -25,7 +25,16 @@ export type ViewportSize = {
 }
 
 function isCursorProbePixel(red: number, green: number, blue: number, alpha: number): boolean {
-  return alpha > 240 && Math.abs(red - 35) <= 2 && green >= 253 && Math.abs(blue - 69) <= 2
+  if (alpha <= 240) {
+    return false
+  }
+
+  const isRawProbeColor = Math.abs(red - 35) <= 2 && green >= 253 && Math.abs(blue - 69) <= 2
+  // Why: WebGL can composite the forced cursor color over the terminal
+  // background before Playwright captures pixels, especially on macOS.
+  const isCompositedProbeColor =
+    Math.abs(red - 121) <= 3 && green >= 249 && Math.abs(blue - 100) <= 3
+  return isRawProbeColor || isCompositedProbeColor
 }
 
 export function analyzeRasterCursorCells(

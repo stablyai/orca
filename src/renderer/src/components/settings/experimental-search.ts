@@ -148,11 +148,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     {
       title: translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
-        'Agent hibernation'
+        'Agent sleep'
       ),
       description: translate(
         'auto.components.settings.experimental.search.agentHibernation.description',
-        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.'
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by Orca; manually started agents may resume with current Orca defaults.'
       ),
       keywords: [
         ...translateSearchKeyword(
@@ -166,10 +166,6 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentHibernation.agents',
           'agents'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.agentHibernation.hibernate',
-          'hibernate'
         ),
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentHibernation.sleep',
@@ -261,7 +257,7 @@ export function getExperimentalSearchEntry() {
     agentHibernation: findEntry(
       translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
-        'Agent hibernation'
+        'Agent sleep'
       )
     ),
     newWorktreeCardStyle: findEntry(

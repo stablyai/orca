@@ -73,6 +73,14 @@ type RemoteCliBridgeEnv = {
   pathDelimiter?: ':' | ';'
 }
 
+type ForwardedReplayFingerprint = {
+  fingerprint: string
+  deliveredAt: number
+}
+
+const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
+const REPLAY_FINGERPRINT_EDGE_CHARS = 128
+
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
   const raw = graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
   const requested = Number.isFinite(raw) ? Math.floor(raw) : DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -109,7 +117,9 @@ export class SshRelaySession {
   private _onReady: ((targetId: string) => void) | null = null
   private portScanner: PortScanner | null = null
   private currentConnection: SshConnection | null = null
+  private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
+  private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
 
   constructor(
     readonly targetId: string,
@@ -174,6 +184,10 @@ export class SshRelaySession {
     return this.mux
   }
 
+  getHostPlatform(): RemoteHostPlatform | null {
+    return this.remoteCliBridgeEnv?.hostPlatform ?? this.hostPlatform
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -199,6 +213,7 @@ export class SshRelaySession {
     try {
       const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
         await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -325,6 +340,7 @@ export class SshRelaySession {
     try {
       const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
         await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      this.hostPlatform = hostPlatform ?? null
       this.remoteCliBridgeEnv =
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
@@ -744,6 +760,7 @@ export class SshRelaySession {
       }
       const envelope = params as {
         paneKey?: unknown
+        launchToken?: unknown
         tabId?: unknown
         worktreeId?: unknown
         env?: unknown
@@ -769,6 +786,7 @@ export class SshRelaySession {
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
+          launchToken: typeof envelope.launchToken === 'string' ? envelope.launchToken : undefined,
           tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,
           worktreeId: typeof envelope.worktreeId === 'string' ? envelope.worktreeId : undefined,
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
@@ -941,6 +959,7 @@ export class SshRelaySession {
       const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
       clearProviderPtyState(payload.id)
       deletePtyOwnership(payload.id)
+      this.forwardedReattachReplayByPty.delete(payload.id)
       this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
       this.runtime?.onPtyExit(payload.id, payload.code)
       const win = this.getMainWindow()
@@ -948,6 +967,34 @@ export class SshRelaySession {
         win.webContents.send('pty:exit', payload)
       }
     })
+  }
+
+  private replayFingerprint(data: string): string {
+    const head = data.slice(0, REPLAY_FINGERPRINT_EDGE_CHARS)
+    const tail = data.slice(-REPLAY_FINGERPRINT_EDGE_CHARS)
+    return `${data.length}:${head}:${tail}`
+  }
+
+  private shouldForwardReattachReplay(appPtyId: string, data: string): boolean {
+    const now = Date.now()
+    const fingerprint = this.replayFingerprint(data)
+    const previous = this.forwardedReattachReplayByPty.get(appPtyId)
+    this.forwardedReattachReplayByPty.set(appPtyId, { fingerprint, deliveredAt: now })
+    return (
+      !previous ||
+      previous.fingerprint !== fingerprint ||
+      now - previous.deliveredAt > RECONNECT_REPLAY_DUPLICATE_WINDOW_MS
+    )
+  }
+
+  private forwardReattachReplay(appPtyId: string, data: string): void {
+    if (!data || !this.shouldForwardReattachReplay(appPtyId, data)) {
+      return
+    }
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:replay', { id: appPtyId, data })
+    }
   }
 
   private async reattachKnownPtys(shouldContinue: () => boolean): Promise<void> {
@@ -974,13 +1021,14 @@ export class SshRelaySession {
         return
       }
       try {
-        await ptyProvider.attach(ptyId)
+        const attachResult = (await ptyProvider.attachForReconnect(ptyId)) ?? {}
         if (!shouldContinue()) {
           return
         }
         const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         setPtyOwnership(appPtyId, this.targetId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'attached')
+        this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       } catch (err) {
         if (!isSshPtyNotFoundError(err)) {
           throw err
@@ -993,6 +1041,7 @@ export class SshRelaySession {
         const appPtyId = toAppSshPtyId(this.targetId, ptyId)
         clearProviderPtyState(appPtyId)
         deletePtyOwnership(appPtyId)
+        this.forwardedReattachReplayByPty.delete(appPtyId)
         this.store.markSshRemotePtyLease(this.targetId, ptyId, 'expired')
         // Why: if the new relay cannot reattach this id, the remote backing
         // process is gone. Tell the renderer so it clears stale pane bindings

@@ -44,6 +44,7 @@ import {
   buildLinearIssueBranchName,
   formatLinearIssueRelativeTime
 } from '@/components/linear-issue-workspace-text'
+import { getLinearProjectSearchRequestQuery } from '@/components/linear-project-search-query'
 import {
   linearCreateSubIssue,
   linearGetIssue,
@@ -338,10 +339,17 @@ function LinearIssueSidebarProjectCard({
     if (!open) {
       return
     }
+    const requestQuery = getLinearProjectSearchRequestQuery(query)
+    if (requestQuery === null) {
+      // Oversized pasted queries stay visible but must not reach provider IPC/RPC.
+      setProjects([])
+      setLoading(false)
+      return
+    }
     let cancelled = false
     const timeout = window.setTimeout(() => {
       setLoading(true)
-      void linearListProjects(providerSettings, query, 20, issue.workspaceId)
+      void linearListProjects(providerSettings, requestQuery, 20, issue.workspaceId)
         .then((result) => {
           if (!cancelled) {
             setProjects(result.items)

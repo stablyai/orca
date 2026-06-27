@@ -52,18 +52,46 @@ function entry(
 
 function state(
   overrides: Partial<
-    Pick<AppState, 'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId'>
+    Pick<
+      AppState,
+      | 'agentStatusByPaneKey'
+      | 'tabsByWorktree'
+      | 'terminalLayoutsByTabId'
+      | 'ptyIdsByTabId'
+      | 'runtimePaneTitlesByTabId'
+    >
   > = {}
 ) {
+  const terminalLayoutsByTabId = overrides.terminalLayoutsByTabId ?? {}
   return {
     agentStatusByPaneKey: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [tab(TAB_ID)],
       [OTHER_WORKTREE_ID]: [tab(OTHER_TAB_ID, OTHER_WORKTREE_ID)]
     },
-    terminalLayoutsByTabId: {},
+    terminalLayoutsByTabId,
+    ptyIdsByTabId: deriveLivePtyIdsByTabId(terminalLayoutsByTabId),
+    runtimePaneTitlesByTabId: {},
     ...overrides
-  } as Pick<AppState, 'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId'>
+  } as Pick<
+    AppState,
+    | 'agentStatusByPaneKey'
+    | 'tabsByWorktree'
+    | 'terminalLayoutsByTabId'
+    | 'ptyIdsByTabId'
+    | 'runtimePaneTitlesByTabId'
+  >
+}
+
+function deriveLivePtyIdsByTabId(
+  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
+): AppState['ptyIdsByTabId'] {
+  return Object.fromEntries(
+    Object.entries(terminalLayoutsByTabId).map(([tabId, layout]) => [
+      tabId,
+      Object.values(layout?.ptyIdsByLeafId ?? {})
+    ])
+  )
 }
 
 describe('running agent send targets', () => {
@@ -89,7 +117,7 @@ describe('running agent send targets', () => {
     expect(targets[0]).not.toHaveProperty('disabledReason')
   })
 
-  it('allows fresh waiting and blocked agent states when the pane has a leaf PTY', () => {
+  it('allows working agents and disables permission states when the pane has a leaf PTY', () => {
     const workingPaneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
     const waitingPaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const blockedPaneKey = makePaneKey(OTHER_TAB_ID, OTHER_LEAF_ID)
@@ -132,18 +160,49 @@ describe('running agent send targets', () => {
 
     expect(resolveRunningAgentSendTarget(state(), WORKTREE_ID, 'missing')).toBeNull()
     expect(targets.find((target) => target.paneKey === workingPaneKey)).toMatchObject({
-      status: 'disabled',
-      disabledReason: 'Agent is working',
+      status: 'eligible',
       ptyId: 'pty-left'
     })
     expect(targets.find((target) => target.paneKey === waitingPaneKey)).toMatchObject({
-      status: 'eligible',
+      status: 'disabled',
+      disabledReason: 'Agent needs permission',
       ptyId: 'pty-right'
     })
     expect(targets.find((target) => target.paneKey === blockedPaneKey)).toMatchObject({
-      status: 'eligible',
+      status: 'disabled',
+      disabledReason: 'Agent needs permission',
       ptyId: 'pty-other'
     })
+  })
+
+  it('disables a status-backed working row when the live pane title needs permission', () => {
+    const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+    const targets = deriveRunningAgentSendTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(TAB_ID, WORKTREE_ID, 'pty-left')] },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: LEFT_LEAF_ID },
+            activeLeafId: LEFT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEFT_LEAF_ID]: 'pty-left' }
+          }
+        },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toMatchObject([
+      {
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent needs permission',
+        ptyId: 'pty-left'
+      }
+    ])
   })
 
   it('disables stale agent status rows even when the pane still has a leaf PTY', () => {
@@ -160,7 +219,8 @@ describe('running agent send targets', () => {
             expandedLeafId: null,
             ptyIdsByLeafId: { [RIGHT_LEAF_ID]: 'pty-right' }
           }
-        }
+        },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex - action required' } }
       }),
       WORKTREE_ID,
       stalePaneKey,
@@ -192,7 +252,36 @@ describe('running agent send targets', () => {
             expandedLeafId: null,
             ptyIdsByLeafId: { [LEFT_LEAF_ID]: 'pty-left' }
           }
-        }
+        },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 2: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: null,
+      status: 'disabled',
+      disabledReason: 'Terminal is no longer available'
+    })
+  })
+
+  it('disables a stale layout PTY after the live PTY map has been cleared', () => {
+    const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: LEFT_LEAF_ID },
+            activeLeafId: LEFT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEFT_LEAF_ID]: 'pty-left' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: [] }
       }),
       WORKTREE_ID,
       paneKey,
@@ -235,7 +324,8 @@ describe('running agent send targets', () => {
     expect(
       resolveRunningAgentSendTarget(base, OTHER_WORKTREE_ID, remotePaneKey, NOW)
     ).toMatchObject({
-      status: 'eligible',
+      status: 'disabled',
+      disabledReason: 'Agent needs permission',
       ptyId: 'remote:env@@terminal-1'
     })
   })

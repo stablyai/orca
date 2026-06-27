@@ -1,7 +1,8 @@
 import { MonitorCog } from 'lucide-react'
 import {
   COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  COMPUTER_USE_SKILL_NAME
+  COMPUTER_USE_SKILL_NAME,
+  COMPUTER_USE_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
@@ -15,7 +16,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import { useAppStore } from '@/store'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
@@ -23,13 +24,18 @@ import { translate } from '@/i18n/i18n'
 
 export function ComputerUseSkillSetupPanel(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const installCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillInstallCommandForRuntime(
-          COMPUTER_USE_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : COMPUTER_USE_SKILL_INSTALL_COMMAND
+  const installCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(
+        COMPUTER_USE_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+    : COMPUTER_USE_SKILL_INSTALL_COMMAND
+  const updateCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(
+        COMPUTER_USE_SKILL_UPDATE_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+    : COMPUTER_USE_SKILL_UPDATE_COMMAND
   const {
     installed: computerUseSkillDetected,
     loading: computerUseSkillLoading,
@@ -48,6 +54,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
         'Enables agents to inspect and operate local desktop apps.'
       )}
       command={installCommand}
+      installedCommand={updateCommand}
       terminalTitle="Computer Use setup"
       terminalAriaLabel="Computer Use skill install terminal"
       terminalWorktreeId="settings-computer-use-skill-terminal"

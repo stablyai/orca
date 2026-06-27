@@ -43,11 +43,19 @@ import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
+import {
+  isPairedWebClientWindow,
+  shouldRenderDesktopWindowChrome
+} from '@/lib/desktop-window-chrome'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
-const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 function RightSidebarInner(): React.JSX.Element {
+  const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
+    platform: getRendererAppPlatform(),
+    isWebClient: isPairedWebClientWindow()
+  })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
@@ -289,7 +297,7 @@ function RightSidebarInner(): React.JSX.Element {
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
             <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
-              {!isWindows && (
+              {!hasDesktopWindowChrome && (
                 <TooltipProvider delayDuration={400}>
                   <ContextMenuTrigger asChild>
                     <div
@@ -303,8 +311,9 @@ function RightSidebarInner(): React.JSX.Element {
                         )}
                       >
                         {/* Why: the top strip shares a narrow titlebar with the close
-                            button and Windows controls. Overflow goes behind More
-                            instead of creating a horizontally scrollable toolbar. */}
+                            button and desktop window controls. Overflow goes
+                            behind More instead of creating a horizontally
+                            scrollable toolbar. */}
                         <div className="flex min-w-0 shrink">
                           {topActivityLayout.visibleItems.map((item) => (
                             <ActivityBarButton
@@ -338,7 +347,7 @@ function RightSidebarInner(): React.JSX.Element {
                   </div>
                 </TooltipProvider>
               )}
-              {isWindows && (
+              {hasDesktopWindowChrome && (
                 <TooltipProvider delayDuration={400}>
                   <div
                     className={cn(
@@ -351,16 +360,17 @@ function RightSidebarInner(): React.JSX.Element {
                 </TooltipProvider>
               )}
             </div>
-            {isWindows && (
+            {hasDesktopWindowChrome && (
               <TooltipProvider delayDuration={400}>
                 <ContextMenuTrigger asChild>
                   <div
                     ref={topActivityStripRef}
                     className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
                   >
-                    {/* Why: Windows has fixed native-style controls in the titlebar
-                        area; keep sidebar navigation in the sidebar body so the
-                        titlebar stays visually native instead of crowded. */}
+                    {/* Why: custom desktop chrome has fixed native-style controls
+                        in the titlebar area; keep sidebar navigation in the
+                        sidebar body so the titlebar stays visually native
+                        instead of crowded. */}
                     <div className="flex min-w-0 flex-1 shrink">
                       {topActivityLayout.visibleItems.map((item) => (
                         <ActivityBarButton
@@ -393,10 +403,11 @@ function RightSidebarInner(): React.JSX.Element {
         ) : (
           /* ── Side layout: static title header ── */
           /* Why: the 40px side activity bar absorbs the rightmost 40px of the
-             138px window-controls overlay, but the remaining 98px still overlaps
-             the panel header. right-sidebar-header-side-inset applies exactly
-             that remainder (138-40=98px) as padding-right so the close button
-             clears the minimize button without the full 138px gap. */
+             138px window-controls overlay when custom desktop chrome is active,
+             but the remaining 98px still overlaps the panel header.
+             right-sidebar-header-side-inset applies exactly that remainder
+             (138-40=98px) as padding-right so the close button clears the
+             minimize button without the full 138px gap. */
           <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}

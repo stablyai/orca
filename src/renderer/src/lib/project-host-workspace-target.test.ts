@@ -200,4 +200,84 @@ describe('project-host workspace target resolution', () => {
       reason: 'setup-not-ready'
     })
   })
+
+  // Regression: selecting a project in the new-workspace dropdown must not be
+  // pinned to the host of the currently-active workspace. Each project below is
+  // set up on exactly one (different) host; picking the other project while the
+  // current host is given only as a preference must resolve to that project's
+  // own host instead of returning '' (the silent no-op the dropdown showed).
+  describe('cross-host project selection', () => {
+    const repos = [makeRepo('local-repo'), makeRepo('remote-repo', { connectionId: 'remote-1' })]
+    const projects = [
+      makeProject('repo:local-repo', ['local-repo']),
+      makeProject('repo:remote-repo', ['remote-repo'])
+    ]
+    const projectHostSetups = [
+      makeSetup('local-repo', 'repo:local-repo', 'local', 'local-repo'),
+      makeSetup('remote-repo', 'repo:remote-repo', 'ssh:remote-1', 'remote-repo')
+    ]
+
+    it('resolves a remote-only project while the current host is local', () => {
+      expect(
+        resolveWorkspaceCreationRepoId({
+          eligibleRepos: repos,
+          projects,
+          projectHostSetups,
+          projectId: 'repo:remote-repo',
+          focusedHostScope: 'local'
+        })
+      ).toBe('remote-repo')
+    })
+
+    it('resolves a local-only project while the current host is remote', () => {
+      expect(
+        resolveWorkspaceCreationRepoId({
+          eligibleRepos: repos,
+          projects,
+          projectHostSetups,
+          projectId: 'repo:local-repo',
+          focusedHostScope: 'ssh:remote-1'
+        })
+      ).toBe('local-repo')
+    })
+
+    it('still prefers the current host when the project is set up on it', () => {
+      const multiHostProjects = [makeProject('repo:multi', ['multi-local', 'multi-remote'])]
+      const multiHostSetups = [
+        makeSetup('multi-local', 'repo:multi', 'local', 'multi-local'),
+        makeSetup('multi-remote', 'repo:multi', 'ssh:remote-1', 'multi-remote')
+      ]
+
+      expect(
+        resolveWorkspaceCreationRepoId({
+          eligibleRepos: [
+            makeRepo('multi-local'),
+            makeRepo('multi-remote', { connectionId: 'remote-1' })
+          ],
+          projects: multiHostProjects,
+          projectHostSetups: multiHostSetups,
+          projectId: 'repo:multi',
+          focusedHostScope: 'local'
+        })
+      ).toBe('multi-local')
+    })
+
+    it('still reports unavailable for an explicit project+host with no ready setup', () => {
+      // The strict projectId+hostId path (used by the explicit "Run on" host
+      // picker) keeps its hard match — only the project-dropdown call site
+      // changed to pass the host as a preference.
+      expect(
+        resolveWorkspaceCreationTarget({
+          eligibleRepos: repos,
+          projects,
+          projectHostSetups,
+          projectId: 'repo:remote-repo',
+          hostId: 'local'
+        })
+      ).toEqual({
+        status: 'unavailable',
+        reason: 'project-not-set-up-on-host'
+      })
+    })
+  })
 })

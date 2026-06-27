@@ -107,6 +107,43 @@ describe('resolveTerminalShortcutAction', () => {
     })
   })
 
+  it('forwards Ctrl+Enter as the kitty CSI-u chord so TUIs can cue instead of send', () => {
+    // Why: xterm.js collapses Ctrl+Enter to a bare CR; intercept upstream and
+    // emit the kitty sequence (modifier code 5 = Ctrl) so probing TUIs receive
+    // the distinct chord on every platform.
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', ctrlKey: true }), true)
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', ctrlKey: true }), false)
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+    // Windows uses the same kitty sequence for now: no TUI is known to treat the
+    // CSI-u Ctrl+Enter form as inert (cf. the Shift+Enter Codex-on-PowerShell case).
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+
+    // Modifier combos that are NOT plain Ctrl+Enter must keep falling through.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true, shiftKey: true }),
+        true
+      )
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', ctrlKey: true, metaKey: true }),
+        true
+      )
+    ).toBeNull()
+  })
+
   it('translates Cmd+←/→ on macOS to readline start/end-of-line (Ctrl+A/E)', () => {
     expect(
       resolveTerminalShortcutAction(
@@ -125,6 +162,26 @@ describe('resolveTerminalShortcutAction', () => {
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'ArrowLeft', code: 'ArrowLeft', metaKey: true, shiftKey: true }),
+        true
+      )
+    ).toBeNull()
+  })
+
+  it('maps Cmd+↑/↓ on macOS to terminal scrollback top/bottom navigation', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'ArrowUp', code: 'ArrowUp', metaKey: true }), true)
+    ).toEqual({ type: 'scrollViewport', position: 'top' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowDown', code: 'ArrowDown', metaKey: true }),
+        true
+      )
+    ).toEqual({ type: 'scrollViewport', position: 'bottom' })
+
+    // Cmd+Shift+Arrow is selection territory; leave it to focused apps/shells.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowUp', code: 'ArrowUp', metaKey: true, shiftKey: true }),
         true
       )
     ).toBeNull()

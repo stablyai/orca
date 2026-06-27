@@ -14,70 +14,16 @@ import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/use
 import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
+import {
+  getLandingPreflightIssues,
+  hasGitHubBackedProject,
+  type PreflightIssue
+} from './landing-preflight-issues'
 
 type ShortcutItem = {
   id: string
   shortcut: ShortcutKeyComboDetails
   action: string
-}
-
-type PreflightIssue = {
-  id: string
-  title: string
-  description: string
-  fixLabel: string
-  fixUrl: string
-  /** Git is a hard global dependency and stays pinned; provider-specific CLI
-   *  setup (gh) is a soft nudge the user can dismiss. */
-  dismissible?: boolean
-}
-
-function getPreflightIssues(status: {
-  git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
-}): PreflightIssue[] {
-  const issues: PreflightIssue[] = []
-
-  if (!status.git.installed) {
-    issues.push({
-      id: 'git',
-      title: translate('auto.components.Landing.e5b7296d9d', 'Git is not installed'),
-      description: translate(
-        'auto.components.Landing.b673e7cf1b',
-        'Git is required for Git projects, source control, and workspace management.'
-      ),
-      fixLabel: 'Install Git',
-      fixUrl: 'https://git-scm.com/downloads'
-    })
-  }
-
-  if (!status.gh.installed) {
-    issues.push({
-      id: 'gh',
-      title: translate('auto.components.Landing.5beaef5f9e', 'GitHub CLI is not installed'),
-      description: translate(
-        'auto.components.Landing.73e1ad4282',
-        'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.'
-      ),
-      fixLabel: 'Install GitHub CLI',
-      fixUrl: 'https://cli.github.com',
-      dismissible: true
-    })
-  } else if (!status.gh.authenticated) {
-    issues.push({
-      id: 'gh-auth',
-      title: translate('auto.components.Landing.9f96d018b7', 'GitHub CLI is not authenticated'),
-      description: translate(
-        'auto.components.Landing.00cee697c1',
-        'Run "gh auth login" in a terminal to connect your GitHub account.'
-      ),
-      fixLabel: 'Learn more',
-      fixUrl: 'https://cli.github.com/manual/gh_auth_login',
-      dismissible: true
-    })
-  }
-
-  return issues
 }
 
 const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
@@ -288,6 +234,8 @@ export default function Landing(): React.JSX.Element {
   const createTargetLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
   const canCreateWorktree = repos.length > 0
+  const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
+  const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -298,7 +246,9 @@ export default function Landing(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPreflightIssues(getPreflightIssues(status))
+        setPreflightIssues(
+          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+        )
       })
     }
 
@@ -321,7 +271,7 @@ export default function Landing(): React.JSX.Element {
       document.removeEventListener('visibilitychange', handleWindowActive)
       window.removeEventListener('focus', handleWindowActive)
     }
-  }, [])
+  }, [hasGitHubProject])
 
   useEffect(() => {
     if (preflightIssues.length === 0) {
@@ -336,7 +286,9 @@ export default function Landing(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPreflightIssues(getPreflightIssues(status))
+        setPreflightIssues(
+          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+        )
       })
     }, 30000)
 
@@ -344,7 +296,7 @@ export default function Landing(): React.JSX.Element {
       cancelled = true
       window.clearInterval(intervalId)
     }
-  }, [preflightIssues.length])
+  }, [hasGitHubProject, preflightIssues.length])
 
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
@@ -430,9 +382,11 @@ export default function Landing(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-        <GitHubStarButton hasRepos={repos.length > 0} />
-      </div>
+      {showGitHubSupportFooter && (
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+          <GitHubStarButton hasRepos={repos.length > 0} />
+        </div>
+      )}
     </div>
   )
 }

@@ -168,6 +168,11 @@ describe('detectRepoIcon', () => {
     })
 
     await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toEqual({
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/stablyai/orca',
+        remoteName: 'upstream',
+        remoteUrl: 'git@github.com:stablyai/orca.git'
+      },
       repoIcon: {
         type: 'image',
         src: 'https://github.com/stablyai.png?size=64',
@@ -175,6 +180,24 @@ describe('detectRepoIcon', () => {
         label: 'stablyai/orca'
       },
       upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+  })
+
+  it('detects a provider-neutral git remote identity for non-GitHub remotes', async () => {
+    const repoPath = await makeTempRepoDir()
+    await gitExecFileAsync(['init'], { cwd: repoPath })
+    await gitExecFileAsync(
+      ['remote', 'add', 'origin', 'git@git.company.test:platform/tools/sample-app.git'],
+      { cwd: repoPath }
+    )
+
+    await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toMatchObject({
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/platform/tools/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.test:platform/tools/sample-app.git'
+      },
+      upstream: null
     })
   })
 })

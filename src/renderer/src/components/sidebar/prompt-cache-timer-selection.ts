@@ -1,4 +1,10 @@
 import type { TerminalTab } from '../../../../shared/types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+
+export type PromptCacheCountdownSelection = {
+  startedAt: number
+  ttlMs: number
+}
 
 function getCacheTimerTabId(key: string): string | null {
   const separator = key.indexOf(':')
@@ -27,4 +33,16 @@ export function getMostUrgentPromptCacheStartedAt(
     }
   }
   return oldest
+}
+
+export function getPromptCacheCountdownForPane(
+  paneKey: string,
+  cacheTimerByKey: Record<string, number | null>,
+  ttlMs: number
+): PromptCacheCountdownSelection | null {
+  if (ttlMs <= 0 || parsePaneKey(paneKey) === null) {
+    return null
+  }
+  const startedAt = cacheTimerByKey[paneKey]
+  return startedAt == null ? null : { startedAt, ttlMs }
 }

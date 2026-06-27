@@ -3,7 +3,9 @@ import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
 } from '../../src/shared/protocol-version'
+import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
+import { FAKE_SCROLLBACK, STREAMING_CHUNKS } from './mock-server-terminal-fixtures'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
@@ -28,28 +30,6 @@ const FAKE_TERMINALS = [
     isActive: false,
     hasRunningProcess: false
   }
-]
-
-const FAKE_SCROLLBACK = [
-  '$ claude "refactor the auth module to use JWT tokens"',
-  '',
-  '⏳ Working on it...',
-  '',
-  "I'll refactor the auth module. Here's my plan:",
-  '1. Replace session-based auth with JWT',
-  '2. Add token refresh endpoint',
-  '3. Update middleware',
-  '',
-  'Let me start by reading the current auth module...',
-  ''
-].join('\n')
-
-const STREAMING_CHUNKS = [
-  'Reading src/auth/middleware.ts...\n',
-  'Reading src/auth/session.ts...\n',
-  '\nI see the current implementation uses express-session.\n',
-  "I'll replace it with jsonwebtoken.\n",
-  '\nUpdating src/auth/middleware.ts...\n'
 ]
 
 export type RpcRequest = {
@@ -118,6 +98,9 @@ export function handleRequest(
   }
 
   if (handleMockGitRequest(request, respond, success)) {
+    return
+  }
+  if (handleMockFilePreviewRequest(request, respond, success, error)) {
     return
   }
 

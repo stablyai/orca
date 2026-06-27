@@ -2,104 +2,44 @@ import { isShellProcess } from './agent-detection'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
-  type ResumableTuiAgent
+  type ResumableTuiAgent,
+  type SleepingAgentLaunchConfig
 } from './agent-session-resume'
-import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import {
+  clearEnvCommand,
+  commandSeparator,
+  planAgentCliArgsSuffix,
+  quoteStartupArg,
+  resolveStartupShell,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { TuiAgent } from './types'
+
+const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type AgentStartupPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
   followupPrompt: string | null
+  launchConfig: SleepingAgentLaunchConfig
+  launchToken?: string
   draftPrompt?: string | null
   env?: Record<string, string>
-}
-
-export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
-
-export function resolveStartupShell(
-  platform: NodeJS.Platform,
-  shell?: AgentStartupShell
-): AgentStartupShell {
-  return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
-}
-
-export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
-  if (shell === 'powershell') {
-    return `'${value.replace(/'/g, "''")}'`
-  }
-  if (shell === 'cmd') {
-    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
-  }
-  // Why: POSIX shells allow literal newlines inside a single-quoted argument,
-  // but that makes the terminal show a `quote>` (or `>`) continuation prompt
-  // while the user is reading the line. Keep the typed command on one physical
-  // line by using printf command substitution for multiline values, while still
-  // passing the exact value (including real newlines) as a single argv
-  // argument when the shell executes the command.
-  if (!value.includes('\n')) {
-    return `'${value.replace(/'/g, `'\\''`)}'`
-  }
-  const lines = value.split('\n')
-  const quotedLines = lines.map((line) => `'${line.replace(/'/g, `'\\''`)}'`)
-  return `"$(printf '%s\\n' ${quotedLines.join(' ')})"`
-}
-
-export function buildShellCommandFromArgv(
-  args: readonly string[],
-  shell: AgentStartupShell
-): string {
-  const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
-  if (shell === 'powershell' && command) {
-    return `& ${command}`
-  }
-  return command
-}
-
-function clearEnvCommand(name: string, shell: AgentStartupShell): string {
-  if (shell === 'powershell') {
-    return `Remove-Item Env:${name} -ErrorAction SilentlyContinue`
-  }
-  if (shell === 'cmd') {
-    return `set "${name}="`
-  }
-  return `unset ${name}`
-}
-
-function commandSeparator(shell: AgentStartupShell): string {
-  return shell === 'cmd' ? ' & ' : '; '
-}
-
-export type AgentCliArgsPlan = { ok: true; suffix: string } | { ok: false; error: string }
-
-export function planAgentCliArgsSuffix(
-  agentArgs: string | null | undefined,
-  shell: AgentStartupShell
-): AgentCliArgsPlan {
-  const trimmed = agentArgs?.trim()
-  if (!trimmed) {
-    return { ok: true, suffix: '' }
-  }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed)
-  if (!tokenized.ok) {
-    return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
-  }
-  return {
-    ok: true,
-    suffix: tokenized.tokens.map((token) => quoteStartupArg(token, shell)).join(' ')
-  }
+  startupCommandDelivery?: StartupCommandDelivery
 }
 
 function resolveBaseCommand(args: {
   agent: TuiAgent
   cmdOverrides: Partial<Record<TuiAgent, string>>
+  platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
 }): { ok: true; command: string } | { ok: false; error: string } {
   const override = args.cmdOverrides[args.agent]
-  const command = override || TUI_AGENT_CONFIG[args.agent].launchCmd
+  const command = override || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform)
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -107,6 +47,20 @@ function resolveBaseCommand(args: {
   // Why: Codex status hooks live in Orca's runtime CODEX_HOME; adding
   // --profile-v2 makes Codex load a second hook representation and warn.
   return { ok: true, command: suffix.suffix ? `${command} ${suffix.suffix}` : command }
+}
+
+function buildSleepingAgentLaunchConfig(args: {
+  agentCommand?: string | null
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
+}): SleepingAgentLaunchConfig {
+  return {
+    ...(args.agentCommand?.trim() ? { agentCommand: args.agentCommand } : {}),
+    agentArgs: args.agentArgs ?? '',
+    // Why: startupPlan.env may include prompt transport or pane identity env; the
+    // durable resume snapshot is limited to Orca-managed agent env inputs.
+    agentEnv: args.agentEnv ? { ...args.agentEnv } : {}
+  }
 }
 
 export function buildAgentStartupPlan(args: {
@@ -126,12 +80,17 @@ export function buildAgentStartupPlan(args: {
   const baseCommand = resolveBaseCommand({
     agent,
     cmdOverrides,
+    platform,
     shell,
     agentArgs: args.agentArgs
   })
   if (!baseCommand.ok) {
     return null
   }
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    ...args,
+    agentCommand: baseCommand.command
+  })
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -142,6 +101,7 @@ export function buildAgentStartupPlan(args: {
       launchCommand: baseCommand.command,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
@@ -156,59 +116,73 @@ export function buildAgentStartupPlan(args: {
       : trimmedPrompt.replace(/\r\n?/g, '\n')
   const quotedPrompt = quoteStartupArg(shellNormalizedPrompt, shell)
 
-  switch (config.promptInjectionMode) {
-    case 'stdin-after-start':
-      // Why: stdin-after-start prompts are written directly to the PTY after
-      // the agent starts — they are never parsed by a shell. Normalize
-      // CRLF/CR to LF on all platforms so multiline prompts reach the PTY
-      // intact.
-      return {
-        agent,
-        launchCommand: baseCommand.command,
-        expectedProcess: config.expectedProcess,
-        followupPrompt: trimmedPrompt.replace(/\r\n?/g, '\n'),
-        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-      }
-    case 'argv':
-      return {
-        agent,
-        launchCommand: `${baseCommand.command} ${quotedPrompt}`,
-        expectedProcess: config.expectedProcess,
-        followupPrompt: null,
-        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-      }
-    case 'flag-prompt':
-      return {
-        agent,
-        launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
-        expectedProcess: config.expectedProcess,
-        followupPrompt: null,
-        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-      }
-    case 'flag-prompt-interactive':
-      return {
-        agent,
-        launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
-        expectedProcess: config.expectedProcess,
-        followupPrompt: null,
-        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-      }
-    case 'flag-interactive':
-      return {
-        agent,
-        launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
-        expectedProcess: config.expectedProcess,
-        followupPrompt: null,
-        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-      }
-    default:
-      return {
-        agent,
-        launchCommand: baseCommand.command,
-        expectedProcess: config.expectedProcess,
-        followupPrompt: shellNormalizedPrompt,
-        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-      }
+  if (config.promptInjectionMode === 'stdin-after-start') {
+    // Why: stdin-after-start prompts are written directly to the PTY after
+    // the agent starts — they are never parsed by a shell. Normalize
+    // CRLF/CR to LF on all platforms so multiline prompts reach the PTY
+    // intact.
+    return {
+      agent,
+      launchCommand: baseCommand.command,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: trimmedPrompt.replace(/\r\n?/g, '\n'),
+      launchConfig,
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (config.promptInjectionMode === 'argv') {
+    return {
+      agent,
+      launchCommand: `${baseCommand.command} ${quotedPrompt}`,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
+      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (config.promptInjectionMode === 'flag-prompt') {
+    return {
+      agent,
+      launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (config.promptInjectionMode === 'flag-prompt-interactive') {
+    return {
+      agent,
+      launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (config.promptInjectionMode === 'flag-interactive') {
+    return {
+      agent,
+      launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  return {
+    agent,
+    launchCommand: baseCommand.command,
+    expectedProcess: config.expectedProcess,
+    followupPrompt: shellNormalizedPrompt,
+    launchConfig,
+    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
 
@@ -220,6 +194,7 @@ export function buildAgentResumeStartupPlan(args: {
   shell?: AgentStartupShell
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  agentCommand?: string | null
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession)
   if (!argv) {
@@ -227,15 +202,23 @@ export function buildAgentResumeStartupPlan(args: {
   }
   const shell = resolveStartupShell(args.platform, args.shell)
   const config = TUI_AGENT_CONFIG[args.agent]
-  const baseCommand = resolveBaseCommand({
-    agent: args.agent,
-    cmdOverrides: args.cmdOverrides,
-    shell,
-    agentArgs: args.agentArgs
-  })
+  const resolvedAgentCommand = args.agentCommand?.trim()
+  const baseCommand = resolvedAgentCommand
+    ? ({ ok: true, command: resolvedAgentCommand } as const)
+    : resolveBaseCommand({
+        agent: args.agent,
+        cmdOverrides: args.cmdOverrides,
+        platform: args.platform,
+        shell,
+        agentArgs: args.agentArgs
+      })
   if (!baseCommand.ok) {
     return null
   }
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    ...args,
+    agentCommand: baseCommand.command
+  })
   const resumeArgs = argv
     .slice(1)
     .map((arg) => quoteStartupArg(arg, shell))
@@ -246,6 +229,7 @@ export function buildAgentResumeStartupPlan(args: {
     launchCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
+    launchConfig,
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
@@ -254,7 +238,25 @@ export type AgentDraftLaunchPlan = {
   agent: TuiAgent
   launchCommand: string
   expectedProcess: string
+  launchConfig: SleepingAgentLaunchConfig
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
+}
+
+function inlineDraftPlanFitsPlatform(
+  plan: AgentDraftLaunchPlan,
+  platform: NodeJS.Platform
+): boolean {
+  if (platform !== 'win32') {
+    return true
+  }
+  const envChars = Object.entries(plan.env ?? {}).reduce(
+    (total, [key, value]) => total + key.length + value.length,
+    0
+  )
+  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
+  // generated drafts should use the existing post-ready paste fallback.
+  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
 }
 
 export function buildAgentDraftLaunchPlan(args: {
@@ -276,31 +278,50 @@ export function buildAgentDraftLaunchPlan(args: {
   const baseCommand = resolveBaseCommand({
     agent,
     cmdOverrides,
+    platform,
     shell,
     agentArgs: args.agentArgs
   })
   if (!baseCommand.ok) {
     return null
   }
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    ...args,
+    agentCommand: baseCommand.command
+  })
+  let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
-    return {
+    plan = {
       agent,
       launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
+      launchConfig,
+      // Why: native draft flags carry user text on argv and must survive rc-file startup.
+      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
-  }
-  if (config.draftPromptEnvVar) {
+  } else if (config.draftPromptEnvVar) {
     const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
-    return {
+    plan = {
       agent,
       launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
+      launchConfig,
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
-  return null
+  if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {
+    return null
+  }
+  return plan
 }
 
 export { isShellProcess }
+export {
+  buildShellCommandFromArgv,
+  planAgentCliArgsSuffix,
+  quoteStartupArg,
+  resolveStartupShell
+} from './tui-agent-startup-shell'
+export type { AgentCliArgsPlan, AgentStartupShell } from './tui-agent-startup-shell'

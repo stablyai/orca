@@ -1,4 +1,5 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 
 export type TerminalWebViewCommand =
   | { type: 'write'; id?: number; data: string }
@@ -8,6 +9,7 @@ export type TerminalWebViewCommand =
       cols: number
       rows: number
       initialData?: string
+      oscLinks?: TerminalOscLinkRange[]
       terminalTheme?: RuntimeMobileTerminalTheme
       fontScale?: number
       // Why: width-reflow re-streams replay the same content rewrapped at new

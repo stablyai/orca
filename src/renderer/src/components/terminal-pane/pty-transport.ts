@@ -10,6 +10,10 @@ import {
   extractAllOscTitles
 } from '../../../../shared/agent-detection'
 import {
+  isTerminalInputTooLargeWithDeferredMeasurement,
+  iterateTerminalInputChunks
+} from '../../../../shared/terminal-input'
+import {
   ptyDataHandlers,
   ptyReplayHandlers,
   ptyExitHandlers,
@@ -17,6 +21,7 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
+import { drainPreHandlerPtyData, drainPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import type {
   PtyTransport,
   IpcPtyTransportOptions,
@@ -35,11 +40,13 @@ export {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   registerEagerPtyBuffer,
+  restorePtyDataHandlersAfterFailedShutdown,
   subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
 export type {
   EagerPtyHandle,
+  LocalPtySessionMetadata,
   PtyTransport,
   PtyBufferSnapshot,
   PtyConnectResult,
@@ -50,6 +57,14 @@ export { extractLastOscTitle } from '../../../../shared/agent-detection'
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
+
+type PendingPtyInputWrite = {
+  id: string
+  text: string
+  tooLarge: boolean | Promise<boolean>
+  chunks?: Iterator<string>
+  nextChunk?: string
+}
 
 // Why: onAgentStatus callback added to IpcPtyTransportOptions in pty-dispatcher
 // so the OSC 9999 status payloads can be forwarded to the store.
@@ -421,6 +436,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     env,
     command,
+    launchConfig,
+    launchToken,
+    launchAgent,
+    startupCommandDelivery,
     connectionId,
     worktreeId,
     tabId,
@@ -446,6 +465,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // unread marks, or notifications for unrelated worktrees just because Orca
   // is reconnecting background terminals on launch.
   let suppressAttentionEvents = false
+  let pendingInputWrites: PendingPtyInputWrite[] = []
+  let inputWriteDrainPromise: Promise<void> | null = null
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -485,13 +506,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // channel. Route it through onReplayData so the renderer engages the
     // replay guard and xterm auto-replies do not leak into the shell.
     ptyReplayHandlers.set(id, (data) => {
+      if (ptyId !== id) {
+        return
+      }
       if (storedCallbacks.onReplayData) {
         storedCallbacks.onReplayData(data)
       } else {
         storedCallbacks.onData?.(data)
       }
     })
-    ptyDataHandlers.set(id, (data, meta) => {
+    const dataHandler = (data: string, meta?: PtyDataMeta): void => {
+      if (ptyId !== id) {
+        return
+      }
       outputProcessor.processData(
         data,
         storedCallbacks,
@@ -501,15 +528,132 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         },
         meta
       )
-    })
+    }
+    ptyDataHandlers.set(id, dataHandler)
+    drainPreHandlerPtyData(id, dataHandler)
   }
 
   function clearAccumulatedState(): void {
     outputProcessor.clearAccumulatedState()
   }
 
+  function yieldToInputWriteDrain(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  async function drainPendingInputWrites(): Promise<void> {
+    while (pendingInputWrites.length > 0) {
+      const next = pendingInputWrites[0]
+      if (!next) {
+        continue
+      }
+      if (!connected || ptyId !== next.id) {
+        pendingInputWrites.shift()
+        continue
+      }
+      if (next.tooLarge !== false) {
+        next.tooLarge = await Promise.resolve(next.tooLarge).catch(() => true)
+        if (next.tooLarge) {
+          pendingInputWrites.shift()
+          continue
+        }
+        if (!connected || ptyId !== next.id) {
+          pendingInputWrites.shift()
+          continue
+        }
+      }
+      next.chunks ??= iterateTerminalInputChunks(next.text)
+      const chunk =
+        next.nextChunk === undefined ? next.chunks.next() : { done: false, value: next.nextChunk }
+      next.nextChunk = undefined
+      if (chunk.done) {
+        pendingInputWrites.shift()
+        continue
+      }
+      window.api.pty.write(next.id, chunk.value)
+      const following = next.chunks.next()
+      if (following.done) {
+        pendingInputWrites.shift()
+      } else {
+        next.nextChunk = following.value
+      }
+      if (pendingInputWrites.length > 0) {
+        await yieldToInputWriteDrain()
+      }
+    }
+  }
+
+  function schedulePendingInputWriteDrain(): void {
+    if (inputWriteDrainPromise) {
+      return
+    }
+    inputWriteDrainPromise = drainPendingInputWrites().finally(() => {
+      inputWriteDrainPromise = null
+      if (pendingInputWrites.length > 0) {
+        schedulePendingInputWriteDrain()
+      }
+    })
+  }
+
+  function clearPendingInputWrites(): void {
+    pendingInputWrites = []
+  }
+
+  function enqueuePtyInputWrite(id: string, data: string): boolean {
+    try {
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
+      if (tooLarge === true) {
+        return false
+      }
+      pendingInputWrites.push({ id, text: data, tooLarge })
+      schedulePendingInputWriteDrain()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function waitForPendingInputWrites(): Promise<void> {
+    while (inputWriteDrainPromise) {
+      await inputWriteDrainPromise
+    }
+  }
+
+  async function writeAcceptedPtyInput(id: string, data: string): Promise<boolean> {
+    try {
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
+      if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+        return false
+      }
+      const chunks = iterateTerminalInputChunks(data)
+      let chunk = chunks.next()
+      while (!chunk.done) {
+        if (!connected || ptyId !== id) {
+          return false
+        }
+        const accepted = await window.api.pty.writeAccepted(id, chunk.value)
+        if (!accepted) {
+          return false
+        }
+        chunk = chunks.next()
+        if (!chunk.done) {
+          await yieldToInputWriteDrain()
+        }
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
   function registerPtyExitHandler(id: string): void {
-    ptyExitHandlers.set(id, (code) => {
+    const exitHandler = (code: number): void => {
+      if (ptyId !== null && ptyId !== id) {
+        // Why: a preserved sleep/reconnect session can report its old exit
+        // after this transport has already rebound to a replacement PTY.
+        unregisterPtyHandlers(id)
+        return
+      }
       clearAccumulatedState()
       connected = false
       ptyId = null
@@ -517,7 +661,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks.onExit?.(code)
       storedCallbacks.onDisconnect?.()
       onPtyExit?.(id)
-    })
+    }
+    ptyExitHandlers.set(id, exitHandler)
     // Why: shutdownWorktreeTerminals bypasses the transport layer — it
     // kills PTYs directly via IPC without calling disconnect()/destroy().
     // This teardown callback lets unregisterPtyDataHandlers cancel
@@ -525,6 +670,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // would otherwise fire stale notifications after the data handler
     // is removed but before the exit event arrives.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
+    drainPreHandlerPtyExit(id, exitHandler)
   }
 
   return {
@@ -541,8 +687,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
-          env,
-          command,
+          env: options.env ?? env,
+          command: options.command ?? command,
+          ...((options.launchConfig ?? launchConfig)
+            ? { launchConfig: options.launchConfig ?? launchConfig }
+            : {}),
+          ...((options.launchToken ?? launchToken)
+            ? { launchToken: options.launchToken ?? launchToken }
+            : {}),
+          ...((options.launchAgent ?? launchAgent)
+            ? { launchAgent: options.launchAgent ?? launchAgent }
+            : {}),
+          ...((options.startupCommandDelivery ?? startupCommandDelivery)
+            ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
+            : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
@@ -572,6 +730,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         registerPtyDataHandler(spawnResult.id)
         registerPtyExitHandler(spawnResult.id)
+        if (!connected || ptyId !== spawnResult.id) {
+          return undefined
+        }
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
@@ -579,6 +740,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
             id: spawnResult.id,
+            ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             snapshot: spawnResult.snapshot,
             snapshotCols: spawnResult.snapshotCols,
             snapshotRows: spawnResult.snapshotRows,
@@ -586,6 +748,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay
+          } satisfies PtyConnectResult
+        }
+        if (spawnResult.launchConfig) {
+          return {
+            id: spawnResult.id,
+            launchConfig: spawnResult.launchConfig
           } satisfies PtyConnectResult
         }
         return spawnResult.id
@@ -642,6 +810,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       // recency sort order that reconnectPersistedTerminals preserved.
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
+      if (!connected || ptyId !== id) {
+        return
+      }
 
       // Why: hidden automation PTYs may have already rendered their TUI into
       // the eager buffer. Clear stale pane contents before replaying that
@@ -714,6 +885,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     disconnect() {
       clearAccumulatedState()
+      clearPendingInputWrites()
       if (ptyId) {
         const id = ptyId
         window.api.pty.kill(id)
@@ -726,6 +898,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     detach() {
       clearAccumulatedState()
+      clearPendingInputWrites()
       if (ptyId) {
         // Why: detach() is used for in-session remounts such as moving a tab
         // between split groups. Stop delivering data/title events into the
@@ -743,8 +916,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!connected || !ptyId) {
         return false
       }
-      window.api.pty.write(ptyId, data)
-      return true
+      return enqueuePtyInputWrite(ptyId, data)
     },
 
     ...(connectionId
@@ -754,7 +926,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             if (!connected || !ptyId) {
               return false
             }
-            return window.api.pty.writeAccepted(ptyId, data)
+            const id = ptyId
+            await waitForPendingInputWrites()
+            if (!connected || ptyId !== id) {
+              return false
+            }
+            return writeAcceptedPtyInput(id, data)
           }
         }),
 
@@ -772,6 +949,22 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     getPtyId() {
       return ptyId
+    },
+
+    getConnectionId() {
+      return connectionId ?? null
+    },
+
+    getLocalSessionMetadata() {
+      if (connectionId) {
+        return null
+      }
+      // Why: paste/runtime diagnostics must follow the launched PTY session,
+      // not later project setting changes.
+      return {
+        ...(cwd ? { cwd } : {}),
+        ...(shellOverride ? { shellOverride } : {})
+      }
     },
 
     destroy() {

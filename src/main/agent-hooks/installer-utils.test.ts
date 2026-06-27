@@ -15,11 +15,13 @@ import { join } from 'path'
 import { spawnSync } from 'child_process'
 import {
   buildWindowsAgentHookPostCommand,
+  buildWindowsAgentHookCurlPostCommand,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
   type HooksConfig
@@ -165,6 +167,11 @@ describe('createManagedCommandMatcher', () => {
         'if [ -x "/Users/alice/Library/Application Support/Orca/agent-hooks/claude-hook.sh" ]; then /bin/sh "/Users/alice/Library/Application Support/Orca/agent-hooks/claude-hook.sh"; fi'
       )
     ).toBe(true)
+  })
+
+  it('matches encoded Windows launcher commands by decoding their script path', () => {
+    const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
+    expect(match(command)).toBe(true)
   })
 
   it('matches the legacy per-userData script path AND the new shared ~/.orca path', () => {
@@ -332,15 +339,107 @@ describe('wrapPosixHookCommand', () => {
   )
 })
 
+describe('wrapWindowsHookCommand', () => {
+  const qualifiedPowerShellCommand =
+    /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+
+  function decodeWindowsHookCommand(command: string): string {
+    const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+    expect(encodedCommand).toBeTruthy()
+    return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
+  }
+
+  it('invokes the .cmd through an encoded PowerShell command', () => {
+    const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
+    expect(command).toMatch(qualifiedPowerShellCommand)
+    expect(command).not.toMatch(/^powershell\b/i)
+    expect(decodeWindowsHookCommand(command)).toBe(
+      "& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
+    )
+  })
+
+  // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
+  // #6078 — the raw path used to be split at the space. The wrapper must keep
+  // the whole path inside the encoded command so shells do not split it.
+  it('preserves spaces in the script path (user profile with space case)', () => {
+    const cmd = wrapWindowsHookCommand('C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd')
+    expect(cmd).toMatch(qualifiedPowerShellCommand)
+    expect(decodeWindowsHookCommand(cmd)).toBe(
+      "& 'C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
+    )
+  })
+
+  it('keeps cmd.exe percent expansion and caret escapes out of the command line', () => {
+    const cmd = wrapWindowsHookCommand('C:\\Users\\%ORCA_TEST%\\a^b\\codex-hook.cmd')
+    expect(cmd).not.toContain('%ORCA_TEST%')
+    expect(cmd).not.toContain('^')
+    expect(decodeWindowsHookCommand(cmd)).toBe(
+      "& 'C:\\Users\\%ORCA_TEST%\\a^b\\codex-hook.cmd'; exit $LASTEXITCODE"
+    )
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'executes a script path containing a cmd.exe caret literally',
+    () => {
+      const scriptDir = join(tmpDir, 'home with ^ caret', '.orca', 'agent-hooks')
+      mkdirSync(scriptDir, { recursive: true })
+      const scriptPath = join(scriptDir, 'codex-hook.cmd')
+      writeFileSync(scriptPath, '@echo off\r\nexit /b 7\r\n', 'utf-8')
+
+      const result = spawnSync('cmd.exe', ['/d', '/c', wrapWindowsHookCommand(scriptPath)], {
+        env: { ...process.env, ORCA_WRAP_TEST: 'expanded' }
+      })
+
+      expect(result.status).toBe(7)
+    }
+  )
+})
+
 describe('buildWindowsAgentHookPostCommand', () => {
-  it('forces UTF-8 for redirected hook stdin and POST bodies', () => {
+  it('posts hook stdin through bounded curl without spawning PowerShell', () => {
     const command = buildWindowsAgentHookPostCommand('codex')
 
-    expect(command).toContain('[Console]::InputEncoding=$utf8')
-    expect(command).toContain('[Console]::OutputEncoding=$utf8')
-    expect(command).toContain('$bodyBytes=$utf8.GetBytes($body)')
-    expect(command).toContain("-ContentType 'application/json; charset=utf-8'")
+    expect(command).toContain('"%SystemRoot%\\System32\\curl.exe" -sS -X POST')
+    expect(command).toContain('--connect-timeout 0.5 --max-time 1.5')
+    expect(command).toContain('-H "Content-Type: application/x-www-form-urlencoded"')
+    expect(command).toContain('-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"')
+    expect(command).toContain('--data-urlencode "paneKey=%ORCA_PANE_KEY%"')
+    expect(command).toContain('--data-urlencode "payload@-"')
     expect(command).toContain('/hook/codex')
-    expect(command).not.toContain("'Content-Type'='application/json'")
+    expect(command).not.toContain('powershell')
+    expect(command).not.toContain('Invoke-WebRequest')
+  })
+
+  it('does not resolve curl from the current directory or PATH', () => {
+    const command = buildWindowsAgentHookPostCommand('gemini')
+
+    expect(command).toMatch(/^"%SystemRoot%\\System32\\curl\.exe"/)
+    expect(command).not.toMatch(/^curl\.exe\b/)
+  })
+})
+
+describe('buildWindowsAgentHookCurlPostCommand', () => {
+  it('posts form fields via curl.exe and reads the payload from stdin', () => {
+    const command = buildWindowsAgentHookCurlPostCommand('codex')
+
+    // Why: the fast path must not spawn a second PowerShell; that startup cost
+    // is the regression this replaces.
+    expect(command).not.toMatch(/powershell/i)
+    expect(command).toContain('%SystemRoot%\\System32\\curl.exe')
+    expect(command).toContain('http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/codex')
+    expect(command).toContain('-H "Content-Type: application/x-www-form-urlencoded"')
+    expect(command).toContain('-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"')
+    expect(command).toContain('--data-urlencode "paneKey=%ORCA_PANE_KEY%"')
+    expect(command).toContain('--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"')
+    // Why: `payload@-` makes curl read raw bytes from stdin and urlencode them,
+    // so UTF-8 prompts survive without a code-page conversion.
+    expect(command).toContain('--data-urlencode "payload@-"')
+    // Why: same dead-listener bound as the POSIX hook so a stalled server can't
+    // hold up the agent.
+    expect(command).toContain('--connect-timeout 0.5 --max-time 1.5')
+  })
+
+  it('targets the requested hook source endpoint', () => {
+    expect(buildWindowsAgentHookCurlPostCommand('grok')).toContain('/hook/grok')
   })
 })

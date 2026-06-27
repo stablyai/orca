@@ -129,6 +129,12 @@ describe('remote runtime request connection integration', () => {
         },
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        showRepo: (selector: string) => {
+          if (selector !== repo.id && selector !== `id:${repo.id}`) {
+            throw new Error('repo_not_found')
+          }
+          return repo
+        },
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -347,6 +353,12 @@ describe('remote runtime request connection integration', () => {
         },
         watchFileExplorer: async () => () => {},
         listRepos: () => [repo],
+        showRepo: (selector: string) => {
+          if (selector !== repo.id && selector !== `id:${repo.id}`) {
+            throw new Error('repo_not_found')
+          }
+          return repo
+        },
         listDetectedManagedWorktrees: () => ({
           repoId: repo.id,
           authoritative: true,

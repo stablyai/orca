@@ -9,6 +9,7 @@ import {
   OptionalFiniteNumber,
   OptionalPlainString,
   OptionalString,
+  requiredStringAllowingEmpty,
   requiredString
 } from '../schemas'
 
@@ -22,9 +23,7 @@ export const Goto = BrowserTarget.extend({
 
 export const Fill = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
-  value: z.custom<string>((v) => typeof v === 'string', {
-    message: 'Missing required --value'
-  })
+  value: requiredStringAllowingEmpty('Missing required --value')
 })
 
 export const Type = BrowserTarget.extend({
@@ -120,7 +119,10 @@ export const TabCreate = z.object({
   profileId: OptionalString,
   waitForRegistration: z.boolean().optional(),
   // User-initiated opens focus the tab; agent/automation opens stay background.
-  activate: z.boolean().optional()
+  activate: z.boolean().optional(),
+  // Why: the split group whose "+" was clicked, so a headless host places the
+  // new browser tab there instead of coalescing into the first/active group.
+  targetGroupId: OptionalString
 })
 
 export const TabShow = z.object({

@@ -18,6 +18,7 @@ import {
   mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
+  isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   areWorktreePathsEqual
@@ -354,7 +355,21 @@ describe('mergeWorktree', () => {
       sortOrder: 5,
       lastActivityAt: 1000,
       workspaceStatus: 'in-review',
-      diffComments: []
+      diffComments: [],
+      priorWorktreeIds: ['repo1::/workspaces/old-feature'],
+      automationProvenance: {
+        kind: 'created-by-automation' as const,
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Nightly review',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly review run',
+        createdAt: 123,
+        executionTargetType: 'ssh' as const,
+        executionTargetId: 'openclaw-2',
+        projectId: 'github:stablyai/orca',
+        repoId: 'repo1',
+        hostId: 'ssh:openclaw-2' as const
+      }
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -387,7 +402,21 @@ describe('mergeWorktree', () => {
       sortOrder: 5,
       lastActivityAt: 1000,
       workspaceStatus: 'in-review',
-      diffComments: []
+      diffComments: [],
+      priorWorktreeIds: ['repo1::/workspaces/old-feature'],
+      automationProvenance: {
+        kind: 'created-by-automation',
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Nightly review',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly review run',
+        createdAt: 123,
+        executionTargetType: 'ssh',
+        executionTargetId: 'openclaw-2',
+        projectId: 'github:stablyai/orca',
+        repoId: 'repo1',
+        hostId: 'ssh:openclaw-2'
+      }
     })
   })
 
@@ -504,6 +533,32 @@ describe('isOrphanedWorktreeError', () => {
   it('returns false for non-Error input', () => {
     expect(isOrphanedWorktreeError('string error')).toBe(false)
     expect(isOrphanedWorktreeError(null)).toBe(false)
+  })
+})
+
+describe('isWindowsLongPathWorktreeRemovalError', () => {
+  it('matches Git for Windows long-path deletion failures on Windows', () => {
+    const error = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'error: failed to delete some/deep/file: Filename too long'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'win32')).toBe(true)
+  })
+
+  it('does not match long-path text off Windows', () => {
+    const error = Object.assign(new Error('file name too long'), {
+      stderr: 'Filename too long'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'linux')).toBe(false)
+  })
+
+  it('does not match unrelated Git removal failures on Windows', () => {
+    const error = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'fatal: contains modified or untracked files'
+    })
+
+    expect(isWindowsLongPathWorktreeRemovalError(error, 'win32')).toBe(false)
   })
 })
 

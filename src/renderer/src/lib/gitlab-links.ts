@@ -1,3 +1,5 @@
+import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
+
 // Why: GitLab project paths can include nested groups, and the host may
 // be self-hosted (gitlab.example.com), so the URL pattern uses the
 // project-internal `/-/` separator as the GitLab-specific signal rather
@@ -17,6 +19,7 @@ export type ProjectSlug = {
 export type GitLabLinkQuery = {
   query: string
   directNumber: number | null
+  tooLarge?: boolean
 }
 
 /**
@@ -105,6 +108,9 @@ export function parseGitLabIssueOrMRLink(input: string): {
  * GitLab URLs resolve to a usable query + direct-number lookup.
  */
 export function normalizeGitLabLinkQuery(raw: string): GitLabLinkQuery {
+  if (isWorkItemLinkQueryTooLarge(raw)) {
+    return { query: '', directNumber: null, tooLarge: true }
+  }
   const trimmed = raw.trim()
   if (!trimmed) {
     return { query: '', directNumber: null }

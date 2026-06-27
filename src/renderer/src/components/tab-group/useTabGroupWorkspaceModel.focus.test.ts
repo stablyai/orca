@@ -133,6 +133,7 @@ function resetStore(): void {
     reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     settings: { activeRuntimeEnvironmentId: null },
     tabsByWorktree: { 'wt-1': [terminalTab] },
+    terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: { 'wt-1': [unifiedTab] },
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
@@ -186,7 +187,35 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      terminalLayoutsByTabId: {
+        'terminal-1': {
+          activeLeafId: 'right-leaf',
+          ptyIdsByLeafId: {
+            'left-leaf': 'pty-left',
+            'right-leaf': 'pty-right'
+          },
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: 'left-leaf' },
+            second: { type: 'leaf', leafId: 'right-leaf' }
+          },
+          expandedLeafId: null
+        }
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.activateTerminal('terminal-1')
+
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'right-leaf')
   })
 
   it('toggles pane expansion from the split-group tab bar collapse button', async () => {
@@ -214,9 +243,52 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     expect(mocks.createEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.dropUnifiedTab).not.toHaveBeenCalled()
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledWith('terminal-pane-split')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-2')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+  })
+
+  it('seeds a new terminal instead of moving the active tab when the group has multiple tabs', async () => {
+    const secondUnifiedTab = {
+      id: 'unified-terminal-2',
+      entityId: 'terminal-2',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'terminal',
+      label: 'Terminal 2',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    storeBox.state = {
+      ...storeBox.state,
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: secondUnifiedTab.id,
+            tabOrder: ['unified-terminal-1', secondUnifiedTab.id]
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [...(storeBox.state?.unifiedTabsByWorktree?.['wt-1'] ?? []), secondUnifiedTab]
+      }
+    }
+    mocks.createEmptySplitGroup.mockReturnValue('group-2')
+    mocks.createTab.mockReturnValue({ id: 'terminal-3' })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.createSplitGroup('right')
+
+    expect(mocks.createEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
+    expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.dropUnifiedTab).not.toHaveBeenCalled()
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-3')
   })
 
   it('closes client-local browser fallback tabs locally in remote workspaces', async () => {
@@ -298,5 +370,58 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       'browser-workspace-1'
     )
     expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
+  })
+
+  it('closes a host-mirrored browser with an empty page list via the host (no dead-end)', async () => {
+    // Regression: a host-owned browser whose local page list was momentarily
+    // empty had no remote-owned PAGES, so the close skipped the host RPC and the
+    // local close couldn't resolve it — the tab became un-closable. It must now
+    // route to the host close AND remove the visible unified tab.
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    storeBox.state = {
+      ...storeBox.state,
+      // No pages for this workspace — the corrupt/transient state.
+      browserPagesByWorkspace: {},
+      browserTabsByWorktree: { 'wt-1': [] },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'browser-unified-1',
+            tabOrder: ['browser-unified-1']
+          }
+        ]
+      },
+      remoteBrowserPageHandlesByPageId: {},
+      settings: { activeRuntimeEnvironmentId: 'remote-runtime' },
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-unified-1',
+            entityId: 'browser-workspace-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'browser',
+            label: 'New Browser Tab',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem('browser-unified-1')
+
+    // Host close fires (idempotent) and the visible unified tab is removed.
+    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
+    )
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
   })
 })

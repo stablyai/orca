@@ -18,6 +18,8 @@ import type {
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -28,6 +30,7 @@ export type PtySpawnOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
@@ -90,6 +93,7 @@ export type PtySpawnResult = {
   coldRestore?: {
     scrollback: string
     cwd: string
+    oscLinks?: TerminalOscLinkRange[]
   }
 }
 
@@ -161,8 +165,13 @@ export type IFilesystemProvider = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
+export type GitProviderStatusOptions = {
+  includeIgnored?: boolean
+  bypassEffectiveUpstreamNegativeCache?: boolean
+}
+
 export type IGitProvider = {
-  getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
+  getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>

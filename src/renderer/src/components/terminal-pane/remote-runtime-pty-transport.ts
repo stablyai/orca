@@ -5,6 +5,10 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
+import {
+  isTerminalInputTooLargeWithDeferredMeasurement,
+  iterateTerminalInputChunks
+} from '../../../../shared/terminal-input'
 import type { PtyConnectResult, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
 import { createPtyOutputProcessor } from './pty-transport'
 import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
@@ -47,7 +51,11 @@ export function createRemoteRuntimePtyTransport(
 ): PtyTransport {
   const {
     command,
+    startupCommandDelivery,
     env,
+    launchConfig,
+    launchToken,
+    launchAgent,
     worktreeId,
     tabId,
     leafId,
@@ -67,6 +75,7 @@ export function createRemoteRuntimePtyTransport(
   let remotePtyId: string | null = null
   let currentRuntimeEnvironmentId = runtimeEnvironmentId
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
+  let multiplexedStreamHandle: string | null = null
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
@@ -215,14 +224,38 @@ export function createRemoteRuntimePtyTransport(
     if (!data) {
       return true
     }
+    await inputBatcher.drain()
+    if (!connected || handle !== targetHandle) {
+      return false
+    }
+    // Why: normal remote sendInput may be waiting on yielded size validation;
+    // drain it before acknowledged writes so terminal bytes stay ordered.
     const text = `${inputBatcher.takePending()}${data}`
     try {
-      const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
-        terminal: targetHandle,
-        text,
-        client: { id: clientId, type: 'desktop' }
-      })
-      return result.send.accepted === true
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(text)
+      if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+        return false
+      }
+    } catch {
+      return false
+    }
+    try {
+      for (const chunk of iterateTerminalInputChunks(text)) {
+        if (!connected || handle !== targetHandle) {
+          return false
+        }
+        // Why: acknowledged sends are ordered behind any pending debounce text,
+        // but they must not collapse large paste input back into one remote RPC.
+        const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
+          terminal: targetHandle,
+          text: chunk,
+          client: { id: clientId, type: 'desktop' }
+        })
+        if (result.send.accepted !== true) {
+          return false
+        }
+      }
+      return true
     } catch (error) {
       storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
       return false
@@ -234,7 +267,7 @@ export function createRemoteRuntimePtyTransport(
     if (!connected || !targetHandle) {
       return
     }
-    if (multiplexedStream?.sendInput(text)) {
+    if (getCurrentMultiplexedStream(targetHandle)?.sendInput(text)) {
       return
     }
     void callRuntime('terminal.send', {
@@ -251,7 +284,7 @@ export function createRemoteRuntimePtyTransport(
     if (!connected || !targetHandle) {
       return
     }
-    if (multiplexedStream?.resize(cols, rows)) {
+    if (getCurrentMultiplexedStream(targetHandle)?.resize(cols, rows)) {
       return
     }
     void callRuntime('terminal.updateViewport', {
@@ -270,13 +303,34 @@ export function createRemoteRuntimePtyTransport(
     desiredViewport = { cols, rows }
   }
 
+  function getCurrentMultiplexedStream(
+    targetHandle: string
+  ): RemoteRuntimeMultiplexedTerminal | null {
+    return multiplexedStreamHandle === targetHandle ? multiplexedStream : null
+  }
+
+  function closeMultiplexedStream(): void {
+    multiplexedStream?.close()
+    multiplexedStream = null
+    multiplexedStreamHandle = null
+  }
+
+  function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
+    return (
+      !destroyed &&
+      connected &&
+      handle === targetHandle &&
+      remotePtyId === targetPtyId &&
+      targetPtyId !== null
+    )
+  }
+
   function retireRemoteTerminalId(): void {
     connected = false
     const stalePtyId = remotePtyId
     handle = null
     remotePtyId = null
-    multiplexedStream?.close()
-    multiplexedStream = null
+    closeMultiplexedStream()
     if (stalePtyId) {
       onPtyExit?.(stalePtyId)
     }
@@ -299,6 +353,9 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     const subscribedHandle = handle
+    const subscribedPtyId = remotePtyId
+    const isCurrentSubscription = (): boolean =>
+      isCurrentRemoteTerminal(subscribedHandle, subscribedPtyId)
     const nextStream = await getRemoteRuntimeTerminalMultiplexer(
       currentRuntimeEnvironmentId
     ).subscribeTerminal({
@@ -306,9 +363,13 @@ export function createRemoteRuntimePtyTransport(
       client: { id: clientId, type: 'desktop' },
       viewport: desiredViewport ?? undefined,
       callbacks: {
-        onData: (data, meta) => outputProcessor.processData(data, storedCallbacks, undefined, meta),
+        onData: (data, meta) => {
+          if (isCurrentSubscription()) {
+            outputProcessor.processData(data, storedCallbacks, undefined, meta)
+          }
+        },
         onSnapshot: (data) => {
-          if (data) {
+          if (data && isCurrentSubscription()) {
             outputProcessor.processData(data, storedCallbacks, {
               replayingBufferedData: true,
               suppressAttentionEvents: true
@@ -316,48 +377,74 @@ export function createRemoteRuntimePtyTransport(
           }
         },
         onSubscribed: () => {
+          if (!isCurrentSubscription()) {
+            return
+          }
           storedCallbacks.onConnect?.()
           storedCallbacks.onStatus?.('shell')
         },
         onEnd: () => {
+          if (!isCurrentSubscription()) {
+            return
+          }
           outputProcessor.clearAccumulatedState()
           connected = false
+          handle = null
+          remotePtyId = null
+          multiplexedStream = null
+          multiplexedStreamHandle = null
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
-          if (remotePtyId) {
-            onPtyExit?.(remotePtyId)
+          if (subscribedPtyId) {
+            onPtyExit?.(subscribedPtyId)
           }
         },
-        onError: (message) => handleRemoteTerminalError(message),
+        onError: (message) => {
+          if (isCurrentSubscription()) {
+            handleRemoteTerminalError(message)
+          }
+        },
         onFitOverrideChanged: (event) => {
-          if (remotePtyId) {
-            setFitOverride(remotePtyId, event.mode, event.cols, event.rows)
+          if (isCurrentSubscription() && subscribedPtyId) {
+            setFitOverride(subscribedPtyId, event.mode, event.cols, event.rows)
           }
         },
         onDriverChanged: (driver) => {
-          if (remotePtyId) {
-            setDriverForPty(remotePtyId, driver)
+          if (isCurrentSubscription() && subscribedPtyId) {
+            setDriverForPty(subscribedPtyId, driver)
           }
         },
         onTransportClose: () => {
+          if (!isCurrentSubscription()) {
+            return
+          }
           multiplexedStream = null
+          multiplexedStreamHandle = null
           if (destroyed || !connected || !handle || resubscribing) {
             return
           }
           resubscribing = true
+          const resubscribeHandle = handle
+          const resubscribePtyId = remotePtyId
           void subscribeToHandle()
-            .catch((error) => handleRemoteTerminalError(error))
+            .catch((error) => {
+              if (isCurrentRemoteTerminal(resubscribeHandle, resubscribePtyId)) {
+                handleRemoteTerminalError(error)
+              }
+            })
             .finally(() => {
               resubscribing = false
             })
         }
       }
     })
-    if (destroyed || !connected || handle !== subscribedHandle) {
+    if (destroyed || !connected || handle !== subscribedHandle || remotePtyId !== subscribedPtyId) {
       nextStream.close()
       return
     }
+    closeMultiplexedStream()
     multiplexedStream = nextStream
+    multiplexedStreamHandle = subscribedHandle
   }
 
   return {
@@ -374,8 +461,12 @@ export function createRemoteRuntimePtyTransport(
 
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          command,
-          env,
+          command: options.command ?? command,
+          startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery,
+          env: options.env ?? env,
+          launchConfig: options.launchConfig ?? launchConfig,
+          launchToken: options.launchToken ?? launchToken,
+          launchAgent: options.launchAgent ?? launchAgent,
           tabId,
           leafId,
           focus: false,
@@ -420,6 +511,7 @@ export function createRemoteRuntimePtyTransport(
       if (!handle) {
         connected = false
         remotePtyId = null
+        closeMultiplexedStream()
         storedCallbacks.onError?.('Remote runtime terminal id is invalid.')
         return
       }
@@ -429,13 +521,22 @@ export function createRemoteRuntimePtyTransport(
         cols: options.cols ?? 80,
         rows: options.rows ?? 24
       }
+      const targetHandle = handle
+      const targetPtyId = remotePtyId
       void subscribeToHandle().catch((error) => {
+        if (!isCurrentRemoteTerminal(targetHandle, targetPtyId)) {
+          return
+        }
+        if (handle === targetHandle && multiplexedStreamHandle !== targetHandle) {
+          closeMultiplexedStream()
+        }
         handleRemoteTerminalError(error)
       })
     },
 
     disconnect() {
       inputBatcher.flush()
+      inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       if (!connected && !handle) {
@@ -443,8 +544,7 @@ export function createRemoteRuntimePtyTransport(
       }
       connected = false
       const id = remotePtyId
-      multiplexedStream?.close()
-      multiplexedStream = null
+      closeMultiplexedStream()
       handle = null
       remotePtyId = null
       storedCallbacks.onDisconnect?.()
@@ -455,11 +555,11 @@ export function createRemoteRuntimePtyTransport(
 
     detach() {
       inputBatcher.flush()
+      inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       connected = false
-      multiplexedStream?.close()
-      multiplexedStream = null
+      closeMultiplexedStream()
       storedCallbacks = {}
     },
 
@@ -472,8 +572,7 @@ export function createRemoteRuntimePtyTransport(
       }
       // Why: callers use \r or terminal.send's enter flag for semantic Enter;
       // literal LF bytes from paste/programmatic input must survive the stream.
-      inputBatcher.push(data)
-      return true
+      return inputBatcher.push(data)
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,
@@ -497,11 +596,15 @@ export function createRemoteRuntimePtyTransport(
       return remotePtyId
     },
 
+    getConnectionId() {
+      return null
+    },
+
     async serializeBuffer(opts) {
-      if (!connected || !multiplexedStream) {
+      if (!connected || !handle) {
         return null
       }
-      return multiplexedStream.serializeBuffer(opts)
+      return getCurrentMultiplexedStream(handle)?.serializeBuffer(opts) ?? null
     },
 
     destroy() {

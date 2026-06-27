@@ -4,11 +4,11 @@ description: >-
   Use Orca orchestration for structured multi-agent coordination: threaded
   messages, blocking ask/reply flows, task dispatch, worker_done/escalation
   waits, task DAGs, decision gates, coordinator loops, or decomposing work
-  across agents. Use `orca-cli` instead for ordinary terminal control,
-  lightweight terminal prompts, shell commands, Orca worktree management,
-  reading or waiting on terminals, and automation of the browser embedded inside
-  Orca. Use Computer Use for browser windows, webviews, Orca app UI, or desktop
-  UI outside Orca's embedded browser.
+  across agents. Use `orca-cli` instead for full ownership handoffs, ordinary
+  terminal control, lightweight terminal prompts, shell commands, Orca worktree
+  management, reading or waiting on terminals, and automation of the browser
+  embedded inside Orca. Use Computer Use for browser windows, webviews, Orca app
+  UI, or desktop UI outside Orca's embedded browser.
 ---
 
 # Orca Inter-Agent Orchestration
@@ -38,7 +38,8 @@ Orchestration messages and tasks are runtime-global. Completion authority comes 
 Classify inherited context before sending lifecycle messages:
 
 - Coordinated subtask: a live coordinator owns the DAG and waits on this dispatch. Follow the preamble exactly, including `worker_done`, heartbeat/status, `ask`, and `escalation`.
-- Full handoff: the original actor delegated ownership and is not monitoring. Finish in the current session. Create a new coordinator only when the user asks or you deliberately decompose fresh subtasks; if spawning workers, use your current-worktree coordinator handle and a selector such as `--worktree active`.
+- Full handoff means ownership transfer, not supervised dispatch. The original actor is not monitoring a DAG, so do not create lifecycle obligations unless the user explicitly asks you to supervise.
+- Do not use `orca orchestration dispatch --inject` for full handoffs. It injects a coordinator preamble that tells the worker to send `worker_done`, heartbeat, `ask`, and post-completion polling messages back to the original terminal.
 
 If unclear, inspect orchestration state before sending lifecycle messages:
 
@@ -107,6 +108,24 @@ orca orchestration run-stop [--json]
 
 Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears runtime-global orchestration state. Do not run it during active coordination unless explicitly abandoning that state.
 
+## Full Handoffs
+
+For full ownership transfer, use non-lifecycle terminal/worktree commands and then stop monitoring unless the user asks for supervision.
+
+New top-level worktree handoff:
+
+```bash
+orca worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --json
+```
+
+Existing terminal handoff:
+
+```bash
+orca terminal send --terminal <handle> --text "<task brief>" --enter --json
+```
+
+`--no-parent` only controls Orca lineage; it does not choose the Git base. For an independent top-level worktree, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base (`origin/main`, `origin/master`, or the `orca repo show --repo <selector> --json` value); never base it on the current feature branch unless the user explicitly asks for stacked work or "branch from current". Put current-branch context in the prompt instead.
+
 ## Worker Terminals
 
 Choose the worker location before creating a terminal. `Fresh worker` means a fresh agent session, not a new git worktree. If the task says current worktree only, depends on uncommitted files/artifacts, or must validate/PR the current branch, create the worker in the active worktree:
@@ -117,7 +136,7 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
 
-Reuse an idle agent in the required worktree only if the prompt allows reuse; otherwise create a fresh terminal there. Use a new worktree only when explicitly requested or when independent isolated checkout state is intended:
+Reuse an idle agent in the required worktree only if the prompt allows reuse; otherwise create a fresh terminal there. Use a new worktree only when explicitly requested or when independent isolated checkout state is intended. For supervised new-worktree workers, decide the Git base separately from lineage: `--no-parent` makes the worktree top-level in Orca, while omitted `--base-branch` uses the repo default base.
 
 ```bash
 orca worktree create --name <task-name> --agent codex --json
@@ -128,7 +147,7 @@ orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 
 For new-worktree workers, read the id from `worktree create`, then use `terminal list` to get the agent handle. Omit `--repo` only inside an Orca-managed worktree; otherwise pass `--repo <selector>`. `--agent` reveals the new worktree and launches the selected agent in its first terminal, so do not create a separate startup terminal. Do not run `worktree create` when the task must stay in the current worktree.
 
-Use `orca worktree create --prompt ...` or `orca terminal send ...` only for untracked/lightweight prompts. Those paths do not attach `taskId`/`dispatchId`; the worker should not send lifecycle messages unless the prompt supplies a live orchestration preamble.
+Use `orca worktree create --prompt ...` or `orca terminal send ...` for full handoffs or untracked/lightweight prompts. Those paths do not attach `taskId`/`dispatchId`; the worker should not send lifecycle messages unless the prompt supplies a live orchestration preamble.
 
 Other terminal commands coordinators often need:
 

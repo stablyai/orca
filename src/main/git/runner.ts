@@ -250,9 +250,11 @@ type GitExecOptions = {
   encoding?: BufferEncoding | 'buffer'
   maxBuffer?: number
   timeout?: number
+  stdin?: string
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   wslDistro?: string
+  useConfiguredSshCommandForNetwork?: boolean
 }
 
 type CommandExecOptions = {
@@ -312,6 +314,7 @@ function killSpawnedCommandTree(child: ChildProcess): void {
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
+  stdin?: string
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -399,6 +402,12 @@ function execFileCapture(
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
+    }
+
+    child.once('error', (error) => finish(error))
+
+    if (options.stdin !== undefined) {
+      child.stdin?.end(options.stdin)
     }
 
     // Why: Node's native execFile timeout waits for the child to exit after
@@ -517,6 +526,15 @@ export function gitOptionalLocksDisabledEnv(
   }
 }
 
+function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
+  }
+}
+
 /**
  * Force git to be non-interactive so it fails fast instead of blocking forever
  * on a prompt. Without this, a git read-path call (status, worktree list, …)
@@ -533,16 +551,173 @@ export function gitOptionalLocksDisabledEnv(
  *   caller hasn't set its own GIT_SSH_COMMAND.
  */
 export function nonInteractiveGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const next: NodeJS.ProcessEnv = {
-    ...env,
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
-  }
+  const next = promptGuardGitEnv(env)
   if (!next.GIT_SSH_COMMAND) {
     next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
   }
   return next
+}
+
+type GitSshPolicyMode =
+  | 'default'
+  | 'explicit-env'
+  | 'fallback'
+  | 'configured-openssh'
+  | 'configured-wrapper-passthrough'
+
+const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
+
+function commandBasename(command: string): string {
+  const pieces = command.split(/[\\/]+/)
+  return pieces.at(-1)?.toLowerCase() ?? command.toLowerCase()
+}
+
+function isMergeableOpenSshCommand(command: string): boolean {
+  const basename = commandBasename(command)
+  return basename === 'ssh' || basename === 'ssh.exe'
+}
+
+function shellTokenize(command: string): string[] | null {
+  const tokens: string[] = []
+  let current = ''
+  let quote: "'" | '"' | null = null
+  let escaped = false
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i]
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      const next = command[i + 1]
+      if (next && /[\s'"\\]/.test(next)) {
+        escaped = true
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+      continue
+    }
+    if (';&|<>()`'.includes(char)) {
+      return null
+    }
+    current += char
+  }
+
+  if (escaped || quote) {
+    return null
+  }
+  if (current) {
+    tokens.push(current)
+  }
+  return tokens
+}
+
+function shellQuoteToken(token: string): string {
+  return /^[A-Za-z0-9_@%+=:,./~-]+$/.test(token) ? token : quotePosixShell(token)
+}
+
+function containsShellExpansionSyntax(command: string): boolean {
+  return command.includes('$')
+}
+
+function withoutBatchModeOptions(tokens: string[]): string[] {
+  const next: string[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    const lower = token.toLowerCase()
+    if (lower === '-o') {
+      const option = tokens[i + 1]?.toLowerCase()
+      if (option?.startsWith('batchmode')) {
+        i += 1
+        continue
+      }
+    }
+    if (lower.startsWith('-obatchmode')) {
+      continue
+    }
+    next.push(token)
+  }
+  return next
+}
+
+function buildOpenSshBatchModeCommand(configuredCommand: string): string | null {
+  if (containsShellExpansionSyntax(configuredCommand)) {
+    return null
+  }
+  const tokens = shellTokenize(configuredCommand)
+  if (!tokens || tokens.length === 0 || !isMergeableOpenSshCommand(tokens[0])) {
+    return null
+  }
+  return [...withoutBatchModeOptions(tokens), '-o', 'BatchMode=yes'].map(shellQuoteToken).join(' ')
+}
+
+async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
+  env: NodeJS.ProcessEnv
+  mode: GitSshPolicyMode
+}> {
+  const promptEnv = promptGuardGitEnv(options.env)
+  if (promptEnv.GIT_SSH_COMMAND) {
+    return { env: promptEnv, mode: 'explicit-env' }
+  }
+
+  const resolved = resolveCommand(
+    'git',
+    ['config', '--get', 'core.sshCommand'],
+    options.cwd,
+    options.wslDistro,
+    { useWslLoginShell: Boolean(options.wslDistro) }
+  )
+  let configuredCommand = ''
+  try {
+    const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: 'utf-8',
+      maxBuffer: DEFAULT_GIT_MAX_BUFFER,
+      timeout: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS,
+      env: promptEnv,
+      signal: options.signal
+    })
+    configuredCommand = String(stdout).trim()
+  } catch {
+    configuredCommand = ''
+  }
+
+  if (!configuredCommand) {
+    return { env: { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }, mode: 'fallback' }
+  }
+
+  const batchModeCommand = buildOpenSshBatchModeCommand(configuredCommand)
+  if (!batchModeCommand) {
+    // Why: custom wrappers are executable user policy; rewriting their argv is
+    // riskier than relying on prompt guards plus the caller's target timeout.
+    return { env: promptEnv, mode: 'configured-wrapper-passthrough' }
+  }
+
+  return {
+    env: { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand },
+    mode: 'configured-openssh'
+  }
 }
 
 /**
@@ -563,16 +738,29 @@ export async function gitExecFileAsync(
       const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
         useWslLoginShell: Boolean(options.wslDistro)
       })
-      const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-        maxBuffer: options.maxBuffer,
-        timeout: options.timeout,
-        // Why: never let a git read-path call block on an interactive prompt
-        // (issue #5308) — fail fast instead of hanging the runtime.
-        env: nonInteractiveGitEnv(options.env),
-        signal: options.signal
-      })
+      const policy = options.useConfiguredSshCommandForNetwork
+        ? await buildNetworkSshPolicyEnv(options)
+        : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
+      let result: { stdout: string | Buffer; stderr: string | Buffer }
+      try {
+        result = await execFileCapture(resolved.binary, resolved.args, {
+          cwd: resolved.cwd,
+          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+          maxBuffer: options.maxBuffer,
+          timeout: options.timeout,
+          stdin: options.stdin,
+          // Why: never let a git read-path call block on an interactive prompt
+          // (issue #5308) — fail fast instead of hanging the runtime.
+          env: policy.env,
+          signal: options.signal
+        })
+      } catch (error) {
+        if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
+          Object.assign(error, { gitSshPolicyMode: policy.mode })
+        }
+        throw error
+      }
+      const { stdout, stderr } = result
       return { stdout: stdout as string, stderr: stderr as string }
     }
   )
@@ -975,11 +1163,10 @@ export function extractExecError(err: unknown): { stderr: string; stdout: string
  * and burns the retry budget. Also supports HTTP-date Retry-After values.
  */
 export function parseRetryAfterMs(stderr: string): number | null {
-  const m = stderr.match(/retry-after:\s*([^\r\n]+)/i)
-  if (!m) {
+  const raw = findRetryAfterHeaderValue(stderr)
+  if (raw === null) {
     return null
   }
-  const raw = m[1].trim()
   if (/^\d+$/.test(raw)) {
     const seconds = Number(raw)
     return Number.isFinite(seconds) ? seconds * 1000 : null
@@ -989,6 +1176,50 @@ export function parseRetryAfterMs(stderr: string): number | null {
     return null
   }
   return Math.max(0, ts - Date.now())
+}
+
+function findRetryAfterHeaderValue(stderr: string): string | null {
+  const headerIndex = indexOfAsciiIgnoreCase(stderr, 'retry-after:', 0)
+  if (headerIndex === -1) {
+    return null
+  }
+  let valueStart = headerIndex + 'retry-after:'.length
+  while (valueStart < stderr.length) {
+    const code = stderr.charCodeAt(valueStart)
+    if (code !== 9 && code !== 32) {
+      break
+    }
+    valueStart++
+  }
+  let valueEnd = valueStart
+  while (valueEnd < stderr.length) {
+    const code = stderr.charCodeAt(valueEnd)
+    if (code === 10 || code === 13) {
+      break
+    }
+    valueEnd++
+  }
+  const value = stderr.slice(valueStart, valueEnd).trim()
+  return value.length > 0 ? value : null
+}
+
+function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
+  const lastStart = value.length - search.length
+  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
+    let matches = true
+    for (let offset = 0; offset < search.length; offset++) {
+      const code = value.charCodeAt(index + offset)
+      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
+      if (normalizedCode !== search.charCodeAt(offset)) {
+        matches = false
+        break
+      }
+    }
+    if (matches) {
+      return index
+    }
+  }
+  return -1
 }
 
 /**

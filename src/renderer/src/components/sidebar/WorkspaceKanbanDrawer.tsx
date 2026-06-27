@@ -46,11 +46,15 @@ import { translate } from '@/i18n/i18n'
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
   open: boolean
+  statusBarVisible: boolean
   dragPreview: boolean
   preserveOpenForMenu: boolean
   onOpenChange: (open: boolean) => void
   onMenuOpenChange: (open: boolean) => void
 }
+
+const WORKSPACE_TOP_CHROME_HEIGHT = 36
+const STATUS_BAR_RESERVE_HEIGHT = 24
 
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
@@ -129,6 +133,7 @@ function formatTaskStatusSyncDescription(result: WorkspaceBoardTaskStatusSyncRes
 export default function WorkspaceKanbanDrawer({
   leftSidebarStyle,
   open,
+  statusBarVisible,
   dragPreview,
   preserveOpenForMenu,
   onOpenChange,
@@ -632,6 +637,9 @@ export default function WorkspaceKanbanDrawer({
   const drawerLeftCss = sidebarOpen
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
     : '0px'
+  // Why: App reserves a bottom status row while visible; the portalled board
+  // must share that viewport bound instead of covering the status controls.
+  const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
 
   return (
     <Sheet open={open} onOpenChange={handleSheetOpenChange} modal={false}>
@@ -639,15 +647,21 @@ export default function WorkspaceKanbanDrawer({
         side="left"
         showCloseButton={false}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
-        overlayStyle={{ top: 36, left: drawerLeftCss, pointerEvents: 'none' }}
+        overlayStyle={{
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          left: drawerLeftCss,
+          pointerEvents: 'none'
+        }}
         style={
           {
             ...leftSidebarStyle,
             // Why: the board is a companion to the workspace sidebar, so it
             // expands from the sidebar edge instead of covering the sidebar.
             left: drawerLeftCss,
-            top: 36,
-            height: 'calc(100% - 36px)',
+            top: WORKSPACE_TOP_CHROME_HEIGHT,
+            bottom: drawerBottom,
+            height: 'auto',
             width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
           } as React.CSSProperties
         }

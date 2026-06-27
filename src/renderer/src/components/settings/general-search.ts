@@ -95,41 +95,6 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getGeneralNetworkSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.general.search.c29f23ab57', 'HTTP Proxy'),
-    description: translate(
-      'auto.components.settings.general.search.e3b1d42f95',
-      'Proxy URL for Orca network requests and local terminal children.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.20b711ac9e', 'proxy'),
-      ...translateSearchKeyword('auto.components.settings.general.search.8f03d44672', 'http_proxy'),
-      ...translateSearchKeyword(
-        'auto.components.settings.general.search.b9096a44cf',
-        'https_proxy'
-      ),
-      ...translateSearchKeyword('auto.components.settings.general.search.c56cb6f1c2', 'network'),
-      ...translateSearchKeyword('auto.components.settings.general.search.9da6c875e5', 'dock'),
-      ...translateSearchKeyword('auto.components.settings.general.search.e55d62dfa4', 'launchpad')
-    ]
-  },
-  {
-    title: translate('auto.components.settings.general.search.8436ff6f8e', 'Proxy Bypass Rules'),
-    description: translate(
-      'auto.components.settings.general.search.eb8946b2c9',
-      'Hosts that should bypass the configured HTTP proxy.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.20b711ac9e', 'proxy'),
-      ...translateSearchKeyword('auto.components.settings.general.search.3a73054565', 'bypass'),
-      ...translateSearchKeyword('auto.components.settings.general.search.91a46caafc', 'no_proxy'),
-      ...translateSearchKeyword('auto.components.settings.general.search.3566fce83f', 'localhost'),
-      ...translateSearchKeyword('auto.components.settings.general.search.c56cb6f1c2', 'network')
-    ]
-  }
-])
-
 export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.256d92554d', 'Tab Order'),
@@ -228,25 +193,6 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getGeneralCacheTimerSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('auto.components.settings.general.search.1e0f28c6f1', 'Prompt Cache Timer'),
-    description: translate(
-      'auto.components.settings.general.search.40c9585e43',
-      'Countdown timer showing time until prompt cache expires (Claude agents).'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.b2601a778c', 'cache'),
-      ...translateSearchKeyword('auto.components.settings.general.search.939b80f5fd', 'timer'),
-      ...translateSearchKeyword('auto.components.settings.general.search.0efc9d96ad', 'prompt'),
-      ...translateSearchKeyword('auto.components.settings.general.search.585beac3f8', 'ttl'),
-      ...translateSearchKeyword('auto.components.settings.general.search.95b63edde7', 'claude'),
-      ...translateSearchKeyword('auto.components.settings.general.search.660528b048', 'cost'),
-      ...translateSearchKeyword('auto.components.settings.general.search.3462308bd3', 'tokens')
-    ]
-  }
-])
-
 export const getGeneralAgentSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.db11502270', 'Default Agent'),
@@ -285,12 +231,10 @@ export function getGeneralPaneSearchEntries(
 ): SettingsSearchEntry[] {
   return [
     ...getGeneralWorkspaceSearchEntries(),
-    ...getGeneralNetworkSearchEntries(),
     ...getGeneralNavigationSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),
     ...getGeneralCliSearchEntries(),
-    ...getGeneralCacheTimerSearchEntries(),
     ...getGeneralUpdateSearchEntries(),
     ...getGeneralSupportSearchEntries()
   ]

@@ -70,18 +70,15 @@ import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-s
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
-  getCachedWindowsTerminalCapabilities,
-  getWindowsTerminalCapabilityOwnerKey
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
-export function isWebClientLocation(): boolean {
-  return (
-    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
-    window.location.pathname.endsWith('/web-index.html')
-  )
-}
+export { isWebClientLocation } from '@/lib/web-client-location'
 
 export function buildSettingsNavigationMetadata({
   isMac,
@@ -118,7 +115,7 @@ export function buildSettingsNavigationMetadata({
         'Manage AI agents, set a default, and customize commands.'
       ),
       icon: Bot,
-      searchEntries: getAgentsPaneSearchEntries(),
+      searchEntries: getAgentsPaneSearchEntries({ includeAgentRuntime: isWindowsTerminalHost }),
       group: 'capabilities'
     },
     {
@@ -333,7 +330,10 @@ export function buildSettingsNavigationMetadata({
         'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
       ),
       icon: Palette,
-      searchEntries: getAppearancePaneSearchEntries(),
+      searchEntries: getAppearancePaneSearchEntries({
+        showWarpImport: showDesktopOnlySettings,
+        showSystemTray: showDesktopOnlySettings && isWindows
+      }),
       group: 'interface'
     },
     {
@@ -503,18 +503,21 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   // contents refresh on rerender without depending on i18n.language directly.
   useTranslation()
   const repos = useAppStore((state) => state.repos)
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId
-  )
+  const settings = useAppStore((state) => state.settings)
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId
+    settings?.activeRuntimeEnvironmentId
   )
-  const isWindowsTerminalHost =
-    isWindows ||
-    getCachedWindowsTerminalCapabilities(windowsTerminalCapabilityOwnerKey).hostPlatform === 'win32'
+  const runtimeTarget = getActiveRuntimeTarget(settings)
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    isWindows || isWebClient || runtimeTarget.kind === 'environment',
+    false,
+    windowsTerminalCapabilityOwnerKey,
+    runtimeTarget
+  )
+  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
   // and search entries cannot drift. Keep this hook free of Settings pane UI

@@ -615,18 +615,16 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           get().recordFeatureInteraction('browser-tab-created')
           return
         }
-      } catch {
-        // Fall through to the client-local fallback below.
+      } catch (error) {
+        // Why: a remote-owned workspace must NOT silently fall back to a local
+        // desktop browser tab — that creates confusing split ownership. Headless
+        // remotes that support browser panes advertise browser.headless.v1 and
+        // succeed above; if creation fails, surface it instead of going local.
+        console.warn(
+          '[browser] remote browser tab creation failed:',
+          error instanceof Error ? error.message : String(error)
+        )
       }
-      // Why: headless remote runtimes cannot host browser panes yet. Keep the
-      // workspace remote-owned, but open this browser page on the desktop client.
-      get().createBrowserTab(worktreeId, defaultUrl, {
-        title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
-        focusAddressBar: true,
-        targetGroupId: groupId,
-        browserRuntimeEnvironmentId: null
-      })
-      get().recordFeatureInteraction('browser-tab-created')
       return
     }
     get().createBrowserTab(worktreeId, defaultUrl, {

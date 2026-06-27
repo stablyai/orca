@@ -121,21 +121,29 @@ export function getRuntimeGitScope(
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,
-  options?: { includeIgnored?: boolean }
+  options?: { includeIgnored?: boolean; bypassEffectiveUpstreamNegativeCache?: boolean }
 ): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
+  const upstreamCacheBypassArgs = options?.bypassEffectiveUpstreamNegativeCache
+    ? { bypassEffectiveUpstreamNegativeCache: true }
+    : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.status({
       worktreePath: context.worktreePath,
       connectionId: context.connectionId,
-      ...includeIgnoredArgs
+      ...includeIgnoredArgs,
+      ...upstreamCacheBypassArgs
     })
   }
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.status',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...includeIgnoredArgs },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      ...includeIgnoredArgs,
+      ...upstreamCacheBypassArgs
+    },
     { timeoutMs: 15_000 }
   )
 }

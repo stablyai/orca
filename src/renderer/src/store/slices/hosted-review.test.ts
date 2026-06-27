@@ -159,6 +159,30 @@ describe('hosted review slice', () => {
     expect(store.getState().hostedReviewCache['local::repo-1::feature/gitlab']).toBeUndefined()
   })
 
+  it('uses local hosted-review IPC for a known local repo while a runtime is focused', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-win'
+    } as AppState['settings'])
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/local', {
+        repoId: 'repo-1'
+      })
+    ).resolves.toEqual(review)
+
+    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/repo', branch: 'feature/local' })
+    )
+    expect(store.getState().hostedReviewCache['local::repo-1::feature/local']).toMatchObject({
+      data: review
+    })
+    expect(
+      store.getState().hostedReviewCache['runtime:env-win::repo-1::feature/local']
+    ).toBeUndefined()
+  })
+
   it('routes active runtime review lookups through runtime RPC', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
     const store = makeStore({

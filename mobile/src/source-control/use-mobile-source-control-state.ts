@@ -7,6 +7,7 @@ import type { MobilePrPrefill } from './mobile-pr-create'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
+import { buildMobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import {
@@ -53,6 +54,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [showBranchPicker, setShowBranchPicker] = useState(false)
   const [localBranches, setLocalBranches] = useState<MobileGitLocalBranches | null>(null)
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
+  const [createdPrWarning, setCreatedPrWarning] = useState<string | null>(null)
   const [prPrefill, setPrPrefill] = useState<MobilePrPrefill | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
@@ -99,8 +101,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
 
     const onShow = Keyboard.addListener(showEvent, (event) => {
-      const height = event.endCoordinates.height - (Platform.OS === 'ios' ? insets.bottom : 0)
-      setKeyboardLift(Math.max(0, height))
+      // Why: iOS keyboard height already describes the obscured screen area.
+      // Subtracting the safe-area inset lets the commit bar tuck under the keyboard.
+      setKeyboardLift(Math.max(0, event.endCoordinates.height))
     })
     const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))
 
@@ -108,7 +111,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       onShow.remove()
       onHide.remove()
     }
-  }, [insets.bottom])
+  }, [])
 
   const status = screenState.kind === 'ready' ? screenState.status : null
   const entries = status?.entries ?? []
@@ -156,6 +159,10 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
   const unstagedCount = useMemo(() => countUnstagedEntries(entries), [entries])
+  const hasUnresolvedConflicts = useMemo(
+    () => entries.some((entry) => entry.conflictStatus === 'unresolved'),
+    [entries]
+  )
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
@@ -199,6 +206,43 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setPrPrefill,
     setShowPrSheet
   })
+  const primaryAction = useMemo(
+    () =>
+      buildMobileSourceControlPrimaryAction({
+        status,
+        hasUnresolvedConflicts,
+        stageablePaths,
+        stagedCount,
+        unstagedCount,
+        commitMessage,
+        busyAction,
+        openingPath,
+        openingBranchPath,
+        branchCompareResult,
+        handlers: {
+          commit: runners.commit,
+          stageAll: runners.stageAll,
+          runActionSheetGitSequence: runners.runActionSheetGitSequence,
+          runActionSheetGitSync: runners.runActionSheetGitSync
+        }
+      }),
+    [
+      branchCompareResult,
+      busyAction,
+      commitMessage,
+      hasUnresolvedConflicts,
+      openingBranchPath,
+      openingPath,
+      runners.commit,
+      runners.runActionSheetGitSequence,
+      runners.runActionSheetGitSync,
+      runners.stageAll,
+      stageablePaths,
+      stagedCount,
+      status,
+      unstagedCount
+    ]
+  )
 
   return {
     client,
@@ -224,6 +268,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     localBranches,
     createdPrUrl,
     setCreatedPrUrl,
+    createdPrWarning,
+    setCreatedPrWarning,
     prPrefill,
     discardTarget,
     setDiscardTarget,
@@ -250,6 +296,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     upstream,
     upstreamKnown,
     syncLabel,
+    primaryAction,
     // actions
     loadStatus,
     openFile,

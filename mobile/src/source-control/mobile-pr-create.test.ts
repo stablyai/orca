@@ -69,7 +69,10 @@ describe('buildMobilePrCreateParams', () => {
 
 describe('createMobilePr', () => {
   it('returns the url on success', async () => {
-    const client = clientWith([ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' })])
+    const client = clientWith([
+      ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' }),
+      ok({ worktree: { linkedPR: 42 } })
+    ])
     await expect(
       createMobilePr(client, 'repo-1::/tmp/wt', {
         provider: 'github',
@@ -80,6 +83,56 @@ describe('createMobilePr', () => {
       })
     ).resolves.toEqual({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' })
     expect(client.calls[0].method).toBe('hostedReview.create')
+    expect(client.calls[1]).toEqual({
+      method: 'worktree.set',
+      params: { worktree: 'id:repo-1::/tmp/wt', baseRef: 'main', linkedPR: 42 }
+    })
+  })
+
+  it('links created merge requests through the provider-specific worktree field', async () => {
+    const client = clientWith([
+      ok({ ok: true, number: 7, url: 'https://gitlab.com/o/r/-/merge_requests/7' }),
+      ok({ worktree: { linkedGitLabMR: 7 } })
+    ])
+    await expect(
+      createMobilePr(client, 'repo-1::/tmp/wt', {
+        provider: 'gitlab',
+        base: 'main',
+        title: 'T',
+        body: '',
+        draft: false
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 7,
+      url: 'https://gitlab.com/o/r/-/merge_requests/7'
+    })
+    expect(client.calls[1]).toEqual({
+      method: 'worktree.set',
+      params: { worktree: 'id:repo-1::/tmp/wt', baseRef: 'main', linkedGitLabMR: 7 }
+    })
+  })
+
+  it('keeps the created url when the metadata link refresh fails', async () => {
+    const client = clientWith([
+      ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' }),
+      fail('metadata failed')
+    ])
+
+    await expect(
+      createMobilePr(client, 'repo-1::/tmp/wt', {
+        provider: 'github',
+        base: 'main',
+        title: 'T',
+        body: '',
+        draft: false
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 42,
+      url: 'https://github.com/o/r/pull/42',
+      linkError: 'metadata failed'
+    })
   })
 
   it('maps a host failure result to { ok:false }', async () => {

@@ -24,34 +24,163 @@ type ParsedTerminalHttpLink = {
   endIndex: number
 }
 
-// Mirrors @xterm/addon-web-links' strict URL matcher so fallback clicks use
-// the same visible URL span as xterm's hover-time WebLinksAddon provider.
-const TERMINAL_HTTP_URL_REGEX = /\bhttps?:\/\/[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~[\]`()<>]/gi
+const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
+export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
 
-function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
+export function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   const links: ParsedTerminalHttpLink[] = []
-  for (const match of lineText.matchAll(TERMINAL_HTTP_URL_REGEX)) {
-    const url = match[0]
-    const index = match.index ?? 0
+  for (const candidate of iterateTerminalHttpUrlCandidates(lineText)) {
     let parsed: URL
     try {
-      parsed = new URL(url)
+      parsed = new URL(candidate.url)
     } catch {
       continue
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       continue
     }
-    links.push({ url: parsed.toString(), startIndex: index, endIndex: index + url.length })
+    links.push({
+      url: parsed.toString(),
+      startIndex: candidate.startIndex,
+      endIndex: candidate.endIndex
+    })
   }
   return links
 }
 
-function isTerminalLinkActivation(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
-): boolean {
-  const isMac = navigator.userAgent.includes('Mac')
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
+function isPrimaryHttpLinkFallbackActivation(event: MouseEvent): boolean {
+  if (event.defaultPrevented || event.button !== 0) {
+    return false
+  }
+  // Why: URL links now open on ordinary clicks, but macOS Ctrl-click must stay
+  // available for context menus even when Chromium reports it as button 0.
+  return !(navigator.userAgent.includes('Mac') && event.ctrlKey && !event.metaKey)
+}
+
+function* iterateTerminalHttpUrlCandidates(
+  lineText: string
+): Generator<{ url: string; startIndex: number; endIndex: number }> {
+  let searchStart = 0
+  while (searchStart < lineText.length) {
+    const startIndex = findNextHttpSchemeIndex(lineText, searchStart)
+    if (startIndex === -1) {
+      return
+    }
+
+    if (!hasHttpUrlWordBoundary(lineText, startIndex)) {
+      searchStart = startIndex + 1
+      continue
+    }
+
+    const rawEndIndex = findHttpUrlCandidateEnd(lineText, startIndex)
+    const endIndex = trimHttpUrlTrailingPunctuation(lineText, startIndex, rawEndIndex)
+    searchStart = Math.max(rawEndIndex, startIndex + 1)
+    if (endIndex <= startIndex || rawEndIndex - startIndex > TERMINAL_HTTP_URL_MAX_LENGTH) {
+      continue
+    }
+
+    yield {
+      url: lineText.slice(startIndex, endIndex),
+      startIndex,
+      endIndex
+    }
+  }
+}
+
+function findNextHttpSchemeIndex(lineText: string, searchStart: number): number {
+  let nextIndex = -1
+  for (const prefix of HTTP_SCHEME_PREFIXES) {
+    const candidateIndex = lineText.indexOf(prefix, searchStart)
+    if (candidateIndex !== -1 && (nextIndex === -1 || candidateIndex < nextIndex)) {
+      nextIndex = candidateIndex
+    }
+  }
+  return nextIndex
+}
+
+function hasHttpUrlWordBoundary(lineText: string, startIndex: number): boolean {
+  return startIndex === 0 || !isAsciiWordCode(lineText.charCodeAt(startIndex - 1))
+}
+
+function findHttpUrlCandidateEnd(lineText: string, startIndex: number): number {
+  const scanEnd = Math.min(lineText.length, startIndex + TERMINAL_HTTP_URL_MAX_LENGTH + 1)
+  for (let index = startIndex; index < scanEnd; index += 1) {
+    if (isHttpUrlBodyTerminator(lineText.charCodeAt(index))) {
+      return index
+    }
+  }
+  return scanEnd
+}
+
+function trimHttpUrlTrailingPunctuation(
+  lineText: string,
+  startIndex: number,
+  rawEndIndex: number
+): number {
+  let endIndex = rawEndIndex
+  while (endIndex > startIndex && isHttpUrlTrailingPunctuation(lineText.charCodeAt(endIndex - 1))) {
+    endIndex -= 1
+  }
+  return endIndex
+}
+
+function isHttpUrlBodyTerminator(code: number): boolean {
+  return (
+    isAsciiWhitespace(code) ||
+    code === 0x22 ||
+    code === 0x27 ||
+    code === 0x21 ||
+    code === 0x2a ||
+    code === 0x28 ||
+    code === 0x29 ||
+    code === 0x7b ||
+    code === 0x7d ||
+    code === 0x7c ||
+    code === 0x5c ||
+    code === 0x5e ||
+    code === 0x3c ||
+    code === 0x3e ||
+    code === 0x60
+  )
+}
+
+function isHttpUrlTrailingPunctuation(code: number): boolean {
+  return (
+    isAsciiWhitespace(code) ||
+    code === 0x22 ||
+    code === 0x27 ||
+    code === 0x3a ||
+    code === 0x2c ||
+    code === 0x2e ||
+    code === 0x21 ||
+    code === 0x3f ||
+    code === 0x7b ||
+    code === 0x7d ||
+    code === 0x7c ||
+    code === 0x5c ||
+    code === 0x5e ||
+    code === 0x7e ||
+    code === 0x5b ||
+    code === 0x5d ||
+    code === 0x28 ||
+    code === 0x29 ||
+    code === 0x3c ||
+    code === 0x3e ||
+    code === 0x60
+  )
+}
+
+function isAsciiWhitespace(code: number): boolean {
+  return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32
+}
+
+function isAsciiWordCode(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    code === 95 ||
+    (code >= 97 && code <= 122)
+  )
 }
 
 function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
@@ -91,7 +220,7 @@ export function installHttpLinkClickFallback(
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
   const handleMouseUp = (event: MouseEvent): void => {
-    if (event.defaultPrevented || event.button !== 0 || !isTerminalLinkActivation(event)) {
+    if (!isPrimaryHttpLinkFallbackActivation(event)) {
       return
     }
 
@@ -101,9 +230,8 @@ export function installHttpLinkClickFallback(
     }
 
     // Why: xterm's WebLinksAddon only activates after hover state exists. This
-    // direct mouseup fallback preserves Cmd/Ctrl-click when the hover link was
-    // never established, while defaultPrevented avoids double-opening links
-    // that xterm already handled.
+    // direct mouseup fallback preserves ordinary link clicks when the hover link
+    // was never established, while defaultPrevented avoids duplicate opens.
     const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
       worktreeId: deps.worktreeId,
       forceSystemBrowser: event.shiftKey,

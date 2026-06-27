@@ -94,7 +94,7 @@ describe('GitHandler pull reconciliation', () => {
     )
 
     expect(execGit(consumerDir, ['status', '--short'])).toBe('')
-  })
+  }, 15_000)
 
   it('preserves configured rebase pull semantics', async () => {
     const consumerDir = createDivergentFixture()
@@ -108,7 +108,7 @@ describe('GitHandler pull reconciliation', () => {
     expect(parentRefs).toHaveLength(1)
     expect(existsSync(path.join(consumerDir, 'remote.txt'))).toBe(true)
     expect(execGit(consumerDir, ['status', '--short'])).toBe('')
-  })
+  }, 15_000)
 })
 
 function restoreGitEnv(

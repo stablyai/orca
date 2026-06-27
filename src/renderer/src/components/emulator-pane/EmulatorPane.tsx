@@ -47,7 +47,10 @@ function EmulatorPaneContent({ tab, worktreeId, isActive = true }: EmulatorPaneP
   })
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-sm text-foreground">
+    <div
+      data-emulator-pane
+      className="flex h-full min-h-0 flex-col bg-background text-sm text-foreground"
+    >
       <EmulatorPaneToolbar
         displayName={displayName}
         isLive={isLive}

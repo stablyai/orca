@@ -57,6 +57,7 @@ import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
+import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import {
   isGitRepo,
   getGitUsername,
@@ -69,6 +70,7 @@ import {
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
+  mergeBaseRefSearchResultGroups,
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -80,6 +82,7 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
+import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
 import { normalizeExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
@@ -791,6 +794,11 @@ const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
   z.object({
     scope: z.literal('project-group'),
     projectGroupId: z.string().min(1)
+  }),
+  z.object({
+    scope: z.literal('path'),
+    path: z.string().min(1),
+    connectionId: z.string().min(1).nullable().optional()
   })
 ])
 
@@ -1136,10 +1144,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('sparsePresets:remove')
 
   ipcMain.handle('repos:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
     return store.getRepos()
   })
 
-  ipcMain.handle('projects:list', () => store.getProjects())
+  ipcMain.handle('projects:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
+    return store.getProjects()
+  })
 
   ipcMain.handle('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
     const args = parseProjectGroupIpcArgs(
@@ -1150,7 +1166,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.updateProject(args.projectId, args.updates)
   })
 
-  ipcMain.handle('projectHostSetups:list', () => store.getProjectHostSetups())
+  ipcMain.handle('projectHostSetups:list', () => {
+    enrichMissingRepoGitRemoteIdentities(store, {
+      onChanged: () => notifyReposChanged(mainWindow)
+    })
+    return store.getProjectHostSetups()
+  })
 
   ipcMain.handle(
     'projectHostSetups:create',
@@ -1478,12 +1499,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           error: 'Repository was not found in the nested repo scan result'
         })
       )
+      const importedProjectIdsByRepoPath = new Map<string, string>()
+      const importTargetResolver = createNestedRepoImportTargetResolver()
 
       for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
+          let importRepoPath = repoPath
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
-            if (!gitProvider || !(await gitProvider.isGitRepoAsync(repoPath)).isRepo) {
+            const check = gitProvider ? await gitProvider.isGitRepoAsync(repoPath) : null
+            if (!gitProvider || !check?.isRepo) {
               results.push({
                 path: repoPath,
                 status: 'failed',
@@ -1491,8 +1516,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               })
               continue
             }
+            importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
           } else if (!isGitRepo(repoPath)) {
             results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            continue
+          } else {
+            importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+          }
+          const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
+          const alreadyImportedProjectId =
+            importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
+          if (alreadyImportedProjectId) {
+            results.push({
+              path: repoPath,
+              projectId: alreadyImportedProjectId,
+              status: 'already-known'
+            })
             continue
           }
           const existing = store
@@ -1500,26 +1539,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             .find(
               (repo) =>
                 (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                normalizeRuntimePathForComparison(repo.path) ===
-                  normalizeRuntimePathForComparison(repoPath)
+                normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
             )
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
               store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
             }
+            importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
           }
           const detected = await detectRepoIconAndUpstream({
-            repoPath,
+            repoPath: importRepoPath,
             kind: 'git',
             connectionId: args.connectionId
           })
           const repo: Repo = {
             id: randomUUID(),
-            path: repoPath,
-            displayName: getRepoName(repoPath),
+            path: importRepoPath,
+            displayName: getRepoName(importRepoPath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
             ...detected,
             addedAt: Date.now(),
@@ -1539,9 +1578,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           await prepareLocalWorktreeRootForRepo(store, repo)
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
-              rootPath: repoPath
+              rootPath: importRepoPath
             })
           }
+          importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
           // Why: nested-repo import only reaches here after the isGitRepo /
           // isGitRepoAsync guard above confirmed a git repo, so always `true`.
@@ -2069,7 +2109,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   // destination directory that may not be a git repo yet.
   ipcMain.handle('repos:pickDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory']
+      // Why: macOS can materialize typed partial paths when directory creation
+      // is enabled; clone/create actions already create the final path on submit.
+      properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {
       return null
@@ -2423,29 +2465,51 @@ async function searchBaseRefDetailsForRepo(
     try {
       // Why: argv (including the two-remote-glob rationale) lives in
       // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      let result: { stdout: string }
-      try {
-        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
-      } catch (err) {
-        if (!isForEachRefExcludeUnsupportedError(err)) {
-          throw err
-        }
-        result = await provider.exec(
-          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
-          repo.path
-        )
-      }
-      const remotesResult = await remotesPromise
-      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
-      // to the shared helper so the SSH and local paths cannot diverge.
-      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
-      // HEAD-filter rationale.
+      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
-      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
+        try {
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        } catch (err) {
+          if (!isForEachRefExcludeUnsupportedError(err)) {
+            throw err
+          }
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                excludeRemoteHead: false,
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        }
+      }
+      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
+      // to the shared helper so the SSH and local paths cannot diverge.
+      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
+      // HEAD-filter rationale.
+      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
+      if (searchTokens.length > 1) {
+        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
+        return mergeBaseRefSearchResultGroups(
+          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
+          limit
+        )
+      }
+      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
     } catch (err) {
       console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
         path: repo.path,

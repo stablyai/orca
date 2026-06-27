@@ -1,5 +1,6 @@
 import type {
   CreateWorktreeResult,
+  CreateWorktreeArgs,
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
@@ -117,6 +118,7 @@ export type WorktreeSlice = {
     worktreeId: string,
     args: { parentWorktreeId?: string; noParent?: boolean }
   ) => Promise<void>
+  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
@@ -147,12 +149,14 @@ export type WorktreeSlice = {
     linkedBitbucketPR?: number | null,
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
-    compareBaseRef?: string
+    compareBaseRef?: string,
+    // Why: reserved for automation-dispatch flows so host-side provenance can
+    // be minted securely; regular create callers should omit this.
+    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
-  /** Merge a status patch (phase/error/status/loaderVisible) into an existing
-   *  pending entry. */
+  /** Merge a status patch into an existing pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,
     patch: {
@@ -160,6 +164,7 @@ export type WorktreeSlice = {
       status?: 'creating' | 'error'
       error?: string
       loaderVisible?: boolean
+      request?: PendingWorktreeCreation['request']
     }
   ) => void
   /** Drop a pending entry (on success or dismiss), clearing the active surface
@@ -184,6 +189,7 @@ export type WorktreeSlice = {
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
   ) => Promise<void>
+  ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>

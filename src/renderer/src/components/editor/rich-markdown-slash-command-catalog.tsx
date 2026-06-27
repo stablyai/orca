@@ -1,9 +1,6 @@
 import type {} from '@tiptap/extension-mathematics'
 import {
   ChevronRight,
-  Heading1,
-  Heading2,
-  Heading3,
   ImageIcon,
   List,
   ListOrdered,
@@ -22,6 +19,7 @@ import {
   textIcon,
   type SlashCommand
 } from './rich-markdown-slash-command-primitives'
+import { headingSlashCommands } from './rich-markdown-heading-slash-commands'
 
 export type {
   SlashCommand,
@@ -32,96 +30,7 @@ export type {
 } from './rich-markdown-slash-command-primitives'
 
 export const slashCommands: SlashCommand[] = [
-  {
-    id: 'heading-1',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.e66e7f04c6',
-        'Heading 1'
-      )
-    },
-    aliases: ['h1', 'title'],
-    icon: icon(Heading1),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.570611864e',
-        'Large section heading.'
-      )
-    },
-    run: (editor) => {
-      // Use setHeading (not toggleHeading) so the slash command is idempotent —
-      // invoking "/h1" on an existing H1 should keep it as H1, not revert to paragraph.
-      editor.chain().focus().setHeading({ level: 1 }).run()
-    }
-  },
-  {
-    id: 'toggle-h1',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.41482b15ce',
-        'Toggle Heading 1'
-      )
-    },
-    aliases: ['toggle-h1', 'toggle heading', 'details heading', 'collapse heading'],
-    icon: icon(ChevronRight),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.3294a2c0cc',
-        'Create a collapsible section with a large heading summary.'
-      )
-    },
-    run: (editor) => {
-      insertToggle(editor, 'heading-1')
-    }
-  },
-  {
-    id: 'heading-2',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.c209a116b7',
-        'Heading 2'
-      )
-    },
-    aliases: ['h2'],
-    icon: icon(Heading2),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.45cf7ceb3f',
-        'Medium section heading.'
-      )
-    },
-    run: (editor) => {
-      // Use setHeading (not toggleHeading) so the slash command is idempotent —
-      // invoking "/h2" on an existing H2 should keep it as H2, not revert to paragraph.
-      editor.chain().focus().setHeading({ level: 2 }).run()
-    }
-  },
-  {
-    id: 'heading-3',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.30566ee962',
-        'Heading 3'
-      )
-    },
-    aliases: ['h3'],
-    icon: icon(Heading3),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.4920740259',
-        'Small section heading.'
-      )
-    },
-    run: (editor) => {
-      // Use setHeading (not toggleHeading) so the slash command is idempotent —
-      // invoking "/h3" on an existing H3 should keep it as H3, not revert to paragraph.
-      editor.chain().focus().setHeading({ level: 3 }).run()
-    }
-  },
+  ...headingSlashCommands,
   {
     id: 'blockquote',
     get label() {

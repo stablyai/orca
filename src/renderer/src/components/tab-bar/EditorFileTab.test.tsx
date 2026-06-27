@@ -9,7 +9,13 @@ const reactHookRuntime = vi.hoisted(() => ({
 const appStoreMocks = vi.hoisted(() => ({
   openMarkdownPreview: vi.fn(),
   getState: vi.fn(() => ({
-    settings: {}
+    settings: {},
+    unifiedTabsByWorktree: {
+      'wt-1': [{ id: '/repo/untitled-5.md', groupId: 'group-1' }]
+    },
+    groupsByWorktree: {
+      'wt-1': [{ id: 'group-1', tabOrder: ['/repo/untitled-5.md', 'tab-2'] }]
+    }
   }))
 }))
 
@@ -100,6 +106,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   },
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
+  },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
   },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
@@ -217,7 +235,6 @@ async function renderEditorFileTab(
     onCloseAll: () => {},
     onMakePermanent,
     onTogglePin: () => {},
-    onSplitGroup: () => {},
     dragData: {
       kind: 'tab',
       worktreeId: file.worktreeId,

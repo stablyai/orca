@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Copy, RefreshCw, Terminal } from 'lucide-react'
+import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
@@ -18,6 +18,7 @@ type AgentSkillSetupPanelProps = {
   title: string
   description: ReactNode
   command: string
+  installedCommand?: string
   terminalTitle: string
   terminalAriaLabel: string
   terminalWorktreeId: string
@@ -43,6 +44,7 @@ type AgentSkillSetupPanelProps = {
   installLabel?: string
   installedInstallLabel?: string
   actionHint?: ReactNode
+  openingHint?: ReactNode
   footer?: ReactNode
   onRecheck: () => void | Promise<unknown>
 }
@@ -51,6 +53,7 @@ export function AgentSkillSetupPanel({
   title,
   description,
   command,
+  installedCommand,
   terminalTitle,
   terminalAriaLabel,
   terminalWorktreeId,
@@ -74,10 +77,13 @@ export function AgentSkillSetupPanel({
   installLabel = 'Install',
   installedInstallLabel = 'Update',
   actionHint,
+  openingHint,
   footer,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
+  const [terminalOpening, setTerminalOpening] = useState(false)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
     Boolean(preInstallNotice && !installed)
   )
@@ -86,7 +92,10 @@ export function AgentSkillSetupPanel({
     () => (getPrerequisiteStatus ?? window.api.cli.getInstallStatus)(),
     [getPrerequisiteStatus]
   )
-  const actionLabel = installed && preInstallNoticeVisible ? installLabel : installedInstallLabel
+  const activeCommand = installed ? (installedCommand ?? command) : command
+  // Why: the inline terminal auto-inserts when its command changes, so keep an
+  // already-open terminal pinned to the command selected by the user's click.
+  const openTerminalCommand = terminalCommand ?? activeCommand
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -132,22 +141,19 @@ export function AgentSkillSetupPanel({
     }
   }
 
-  const copyInstallCommand = async (): Promise<void> => {
+  const copyActiveCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(command)
+      await window.api.ui.writeClipboardText(openTerminalCommand)
       toast.success(
-        translate(
-          'auto.components.settings.AgentSkillSetupPanel.378ad26865',
-          'Copied install command.'
-        )
+        translate('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
       )
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
           : translate(
-              'auto.components.settings.AgentSkillSetupPanel.a31e2aa302',
-              'Failed to copy install command.'
+              'auto.components.settings.AgentSkillSetupPanel.failedToCopyCommand',
+              'Failed to copy command.'
             )
       )
     }
@@ -161,21 +167,42 @@ export function AgentSkillSetupPanel({
           variant="outline"
           size="sm"
           onClick={() => {
+            if (terminalOpening) {
+              return
+            }
+            const nextCommand = activeCommand
+            setTerminalOpening(true)
             void (async () => {
+              let shouldOpenTerminal = false
               try {
                 await onBeforeOpenTerminal?.()
                 await refreshPreInstallNotice()
+                shouldOpenTerminal = true
+              } catch {
+                shouldOpenTerminal = false
               } finally {
                 if (mountedRef.current) {
-                  setTerminalOpen(true)
+                  setTerminalOpening(false)
+                  if (shouldOpenTerminal) {
+                    setTerminalCommand(nextCommand)
+                    setTerminalOpen(true)
+                  }
                 }
               }
             })()
           }}
-          disabled={terminalOpen || installDisabled}
+          disabled={terminalOpen || installDisabled || terminalOpening}
         >
-          <Terminal className="size-3.5" />
-          {installed ? actionLabel : installLabel}
+          {terminalOpening ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Terminal className="size-3.5" />
+          )}
+          {terminalOpening
+            ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
+            : installed
+              ? installedInstallLabel
+              : installLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
@@ -190,6 +217,15 @@ export function AgentSkillSetupPanel({
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
           {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
+      ) : null}
+      {terminalOpening ? (
+        <p className="basis-full text-[12px] leading-snug text-muted-foreground">
+          {openingHint ??
+            translate(
+              'auto.components.settings.AgentSkillSetupPanel.4c05b9d7cb',
+              'Preparing setup terminal.'
+            )}
+        </p>
       ) : null}
     </div>
   )
@@ -274,7 +310,7 @@ export function AgentSkillSetupPanel({
         >
           <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
             <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-              {command}
+              {openTerminalCommand}
             </code>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -284,10 +320,10 @@ export function AgentSkillSetupPanel({
                   size="icon-sm"
                   className="shrink-0"
                   aria-label={translate(
-                    'auto.components.settings.AgentSkillSetupPanel.817d3f9f18',
-                    'Copy install command'
+                    'auto.components.settings.AgentSkillSetupPanel.copyCommandAria',
+                    'Copy command'
                   )}
-                  onClick={() => void copyInstallCommand()}
+                  onClick={() => void copyActiveCommand()}
                 >
                   <Copy className="size-4" />
                 </Button>
@@ -302,11 +338,11 @@ export function AgentSkillSetupPanel({
           </div>
           <OnboardingInlineCommandTerminal
             worktreeId={terminalWorktreeId}
-            command={command}
+            command={openTerminalCommand}
             title={terminalTitle}
             description={translate(
-              'auto.components.settings.AgentSkillSetupPanel.0b810ec59f',
-              'Press Enter to run the install command.'
+              'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
+              'Press Enter to run the command.'
             )}
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}

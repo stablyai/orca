@@ -11,6 +11,10 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
+import {
+  canClickBlockedCreateReviewReason,
+  resolveHostedReviewAuthInstruction
+} from './source-control-create-review-blocked-action'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -100,17 +104,9 @@ function reviewCopy(
 ): ReturnType<typeof localizedHostedReviewCopy> & {
   authInstruction: string
 } {
-  const authInstruction =
-    provider === 'gitlab'
-      ? 'Run glab auth login'
-      : provider === 'azure-devops'
-        ? 'Set ORCA_AZURE_DEVOPS_TOKEN'
-        : provider === 'gitea'
-          ? 'Set ORCA_GITEA_TOKEN'
-          : 'Run gh auth login'
   return {
     ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
-    authInstruction
+    authInstruction: resolveHostedReviewAuthInstruction(provider ?? 'github')
   }
 }
 
@@ -163,8 +159,6 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
   const publishBlockedByOpenHostedReview = !hasUpstream && hasOpenHostedReview
   const publishBlockedByDetachedHead = !hasUpstream && !hasCurrentBranch
-  const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
-  const publishBlockedByUncommittedChanges = publishBlockedByNoBranchCommits && hasDirtyLocalChanges
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
   const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
@@ -228,7 +222,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
                 (shouldForcePushWithLease
                   ? 'Commit staged changes and force push with lease'
                   : behind > 0
-                    ? 'Use Commit & Sync to pull remote changes before pushing'
+                    ? 'Commit staged changes and try to push'
                     : 'Commit staged changes and push'))
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
@@ -239,7 +233,6 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       upstreamLoading ||
       (!hasUpstream && !canPushUntrackedHostedReview) ||
       publishBlockedByDetachedHead ||
-      (behind > 0 && !shouldForcePushWithLease) ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
       commitDisabledReason !== null
@@ -270,9 +263,6 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         'Use Commit & Force Push — remote only has older copies of local commits'
       )
     }
-    if (behind === 0) {
-      return 'Nothing to pull — use Commit & Push instead'
-    }
     return commitDisabledReason ?? 'Commit, then pull and push'
   })()
   const commitSyncItem: DropdownItem = {
@@ -288,7 +278,6 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       !hasUpstream ||
       publishBlockedByDetachedHead ||
       shouldForcePushWithLease ||
-      behind === 0 ||
       commitDisabledReason !== null
   }
 
@@ -312,7 +301,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
                   : shouldForcePushWithLease
                     ? 'Use Force Push — remote only has older copies of local commits'
                     : behind > 0 && ahead > 0
-                      ? 'Sync first to pull remote changes before pushing'
+                      ? 'Push local commits; git may require syncing first'
                       : ahead === 0
                         ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
                         : describePushCount(ahead),
@@ -321,9 +310,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       upstreamLoading ||
       (!hasUpstream && !canPushUntrackedHostedReview) ||
       publishBlockedByDetachedHead ||
-      (hasUpstream && ahead === 0) ||
-      shouldForcePushWithLease ||
-      (behind > 0 && !shouldForcePushWithLease)
+      shouldForcePushWithLease
   }
 
   const forcePushItem: DropdownItem = {
@@ -344,8 +331,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
                 : shouldForcePushWithLease
                   ? forcePushTitle
                   : formatManualForcePushTitle(ahead, behind, upstreamStatus?.upstreamName),
-    disabled:
-      globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead || ahead === 0
+    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
   }
 
   const pullItem: DropdownItem = {
@@ -366,13 +352,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
                 : behind === 0
                   ? 'Nothing to pull'
                   : describePullCount(behind),
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      !hasUpstream ||
-      publishBlockedByDetachedHead ||
-      behind === 0 ||
-      shouldForcePushWithLease
+    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
   }
 
   const fastForwardItem: DropdownItem = {
@@ -393,16 +373,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
                 : behind === 0
                   ? 'Nothing to fast-forward'
                   : ahead > 0
-                    ? 'Local commits prevent a fast-forward pull'
+                    ? 'Try a fast-forward pull; git may reject local commits'
                     : describeFastForwardCount(behind),
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      !hasUpstream ||
-      publishBlockedByDetachedHead ||
-      behind === 0 ||
-      ahead > 0 ||
-      shouldForcePushWithLease
+    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
   }
 
   const syncItem: DropdownItem = {
@@ -428,8 +401,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       upstreamLoading ||
       !hasUpstream ||
       publishBlockedByDetachedHead ||
-      shouldForcePushWithLease ||
-      (ahead === 0 && behind === 0)
+      shouldForcePushWithLease
   }
 
   const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
@@ -441,20 +413,12 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       if (!rebaseBaseLabel || !hasRemoteBaseRef) {
         return 'Choose a remote base branch to rebase from'
       }
-      if (hasUnresolvedConflicts) {
-        return 'Resolve conflicts before rebasing'
-      }
       if (hasDirtyLocalChanges) {
-        return 'Commit or stash local changes before rebasing'
+        return 'Try rebasing; git may require committing or stashing local changes first'
       }
       return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
     })(),
-    disabled:
-      globalBusy ||
-      !rebaseBaseRef ||
-      !hasRemoteBaseRef ||
-      hasUnresolvedConflicts ||
-      hasDirtyLocalChanges
+    disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef
   }
 
   const fetchItem: DropdownItem = {
@@ -463,8 +427,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       'auto.components.right.sidebar.source.control.dropdown.items.226b85a3a7',
       'Fetch'
     ),
-    title: upstreamLoading ? 'Checking branch status…' : 'Fetch from remote without merging',
-    disabled: globalBusy || upstreamLoading
+    title: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.04d709801d',
+      'Fetch from remote without merging'
+    ),
+    disabled: globalBusy
   }
 
   const publishItem: DropdownItem = {
@@ -476,11 +443,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
           ? 'Linked Review'
           : publishBlockedByDetachedHead
             ? 'No Branch'
-            : publishBlockedByUncommittedChanges
-              ? 'Commit Changes First'
-              : publishBlockedByNoBranchCommits
-                ? 'No Branch Changes'
-                : 'Publish Branch',
+            : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
@@ -493,13 +456,9 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
               : 'Linked review branch target is unavailable'
             : publishBlockedByDetachedHead
               ? 'Check out a branch before publishing commits'
-              : publishBlockedByUncommittedChanges
-                ? 'Commit changes before publishing the branch'
-                : publishBlockedByNoBranchCommits
-                  ? 'Nothing to publish'
-                  : hasUpstream
-                    ? 'Branch is already published'
-                    : 'Publish this branch to origin',
+              : hasUpstream
+                ? 'Branch is already published'
+                : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
@@ -507,8 +466,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
       publishBlockedByOpenHostedReview ||
-      publishBlockedByDetachedHead ||
-      publishBlockedByNoBranchCommits
+      publishBlockedByDetachedHead
   }
 
   const createBlockedHint = (() => {
@@ -550,7 +508,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       ? `Create a ${createReviewCopy.reviewLabel} for this branch`
       : createBlockedHint,
     hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
-    disabled: globalBusy || upstreamLoading || !hostedReviewCreation?.canCreate
+    disabled:
+      globalBusy ||
+      !supportsHostedReviewCreation(hostedReviewCreation?.provider) ||
+      (!hostedReviewCreation?.canCreate &&
+        !canClickBlockedCreateReviewReason(hostedReviewCreation?.blockedReason))
   }
 
   const canPushAndCreate =

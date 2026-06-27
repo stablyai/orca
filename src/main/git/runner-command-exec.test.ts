@@ -288,6 +288,190 @@ describe('runner execFile timeout handling', () => {
     expect(capturedEnv?.GIT_SSH_COMMAND).toContain('BatchMode=yes')
   })
 
+  it('probes core.sshCommand for opted-in network git calls', async () => {
+    const child = createMockChildProcess(1234)
+    const calls: { args: string[]; env: NodeJS.ProcessEnv }[] = []
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      calls.push({ args, env: opts.env })
+      cb(null, args[0] === 'config' ? 'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key\n' : '', '')
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(calls[0]?.args).toEqual(['config', '--get', 'core.sshCommand'])
+    expect(calls[0]?.env.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(calls[0]?.env.GIT_SSH_COMMAND).toBeUndefined()
+    expect(calls[1]?.args).toEqual(['fetch', 'origin'])
+    expect(calls[1]?.env.GIT_SSH_COMMAND).toBe(
+      'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key -o BatchMode=yes'
+    )
+  })
+
+  it('replaces configured BatchMode for opted-in mergeable OpenSSH commands', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      if (args[0] === 'config') {
+        cb(null, 'ssh -o BatchMode=no -i ~/.ssh/personal\n', '')
+      } else {
+        capturedEnv = opts.env
+        cb(null, '', '')
+      }
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -i ~/.ssh/personal -o BatchMode=yes')
+  })
+
+  it('merges quoted ssh.exe command shapes for opted-in network calls', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      if (args[0] === 'config') {
+        cb(null, '"C:/Program Files/Git/usr/bin/ssh.exe" -F ~/.ssh/config\n', '')
+      } else {
+        capturedEnv = opts.env
+        cb(null, '', '')
+      }
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
+      "'C:/Program Files/Git/usr/bin/ssh.exe' -F ~/.ssh/config -o BatchMode=yes"
+    )
+  })
+
+  it('merges unquoted Windows ssh.exe paths for opted-in network calls', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      if (args[0] === 'config') {
+        cb(null, `${String.raw`C:\Git\usr\bin\ssh.exe -i C:\Users\me\.ssh\work_key`}\n`, '')
+      } else {
+        capturedEnv = opts.env
+        cb(null, '', '')
+      }
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
+      String.raw`'C:\Git\usr\bin\ssh.exe' -i 'C:\Users\me\.ssh\work_key' -o BatchMode=yes`
+    )
+  })
+
+  it('passes through unmergeable core.sshCommand wrappers without generic fallback', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      if (args[0] === 'config') {
+        cb(null, '/usr/local/bin/work-ssh-wrapper --account work\n', '')
+      } else {
+        capturedEnv = opts.env
+        cb(null, '', '')
+      }
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(capturedEnv?.GIT_ASKPASS).toBe('')
+    expect(capturedEnv?.SSH_ASKPASS).toBe('')
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBeUndefined()
+  })
+
+  it('passes through shell-expanding OpenSSH configs without changing expansion semantics', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      if (args[0] === 'config') {
+        cb(null, 'ssh -i "$HOME/.ssh/work_key"\n', '')
+      } else {
+        capturedEnv = opts.env
+        cb(null, '', '')
+      }
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBeUndefined()
+  })
+
+  it('falls back to generic batch-mode SSH when opted-in config is unset', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      if (args[0] === 'config') {
+        cb(Object.assign(new Error('missing'), { code: 1 }), '', '')
+      } else {
+        capturedEnv = opts.env
+        cb(null, '', '')
+      }
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: {},
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+  })
+
+  it('preserves explicit GIT_SSH_COMMAND and skips the opted-in config probe', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
+      capturedEnv = opts.env
+      cb(null, '', '')
+      return child
+    })
+
+    await gitExecFileAsync(['fetch', 'origin'], {
+      cwd: '/repo',
+      env: { GIT_SSH_COMMAND: 'custom-ssh -o IdentityAgent=none' },
+      useConfiguredSshCommandForNetwork: true
+    })
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('custom-ssh -o IdentityAgent=none')
+    expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
+  })
+
   it('routes git through the selected WSL distro login shell when requested', async () => {
     await withPlatform('win32', async () => {
       const child = createMockChildProcess(1234)

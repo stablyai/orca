@@ -128,6 +128,10 @@ export type AutomationRun = {
   sessionKind: 'terminal'
   chatSessionId: string | null
   terminalSessionId: string | null
+  /** Why: a terminal tab can later point at a different pane/PTY. Automation
+   *  run reopening must target the pane that actually executed the run. */
+  terminalPaneKey: string | null
+  terminalPtyId: string | null
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
@@ -183,6 +187,7 @@ export type AutomationUpdateInput = Partial<
 export type AutomationDispatchRequest = {
   automation: Automation
   run: AutomationRun
+  dispatchToken: string
 }
 
 export type AutomationDispatchResult = {
@@ -191,6 +196,8 @@ export type AutomationDispatchResult = {
   workspaceId?: string | null
   workspaceDisplayName?: string | null
   terminalSessionId?: string | null
+  terminalPaneKey?: string | null
+  terminalPtyId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null

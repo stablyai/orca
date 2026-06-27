@@ -4,6 +4,7 @@ export const TERMINAL_HTTP_URL_REGEX_SOURCE =
   String.raw`]*[^\s"':,.!?{}|\\^~[\]` +
   '`' +
   String.raw`()<>]`
+export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
 
 export function findUrlAtColumn(lineText: string, col: number): string | null {
   if (typeof lineText !== 'string' || lineText.length === 0) {
@@ -14,7 +15,9 @@ export function findUrlAtColumn(lineText: string, col: number): string | null {
   while ((match = re.exec(lineText)) !== null) {
     const start = match.index
     const end = start + match[0].length
-    if (col >= start && col < end) {
+    // Why: desktop rejects overlong terminal URL candidates before opening;
+    // mobile taps should preserve the same safety bound.
+    if (match[0].length <= TERMINAL_HTTP_URL_MAX_LENGTH && col >= start && col < end) {
       return match[0]
     }
     // Why: protect the injected loop if the regex ever changes to allow empties.
@@ -27,13 +30,14 @@ export function findUrlAtColumn(lineText: string, col: number): string | null {
 
 export const URL_TAP_WEBVIEW_JS = `
   var URL_TAP_RE_SOURCE = ${JSON.stringify(TERMINAL_HTTP_URL_REGEX_SOURCE)};
+  var URL_TAP_MAX_LENGTH = ${TERMINAL_HTTP_URL_MAX_LENGTH};
   function findUrlAtColumn(lineText, col) {
     if (typeof lineText !== 'string' || lineText.length === 0) return null;
     var re = new RegExp(URL_TAP_RE_SOURCE, 'gi');
     var match;
     while ((match = re.exec(lineText)) !== null) {
       var end = match.index + match[0].length;
-      if (col >= match.index && col < end) return match[0];
+      if (match[0].length <= URL_TAP_MAX_LENGTH && col >= match.index && col < end) return match[0];
       if (match[0].length === 0) re.lastIndex++;
     }
     return null;
@@ -59,19 +63,56 @@ export const URL_TAP_WEBVIEW_JS = `
   }
   function oscLinkAtViewportPoint(clientX, clientY) {
     try {
-      var svc = oscLinkService();
-      if (!svc || !svc.getLinkData) return null;
       var cell = viewportToCell(clientX, clientY);
       if (!cell) return null;
       var line = term.buffer.active.getLine(cell.row);
       if (!line) return null;
-      var bufCell = line.getCell(cell.col);
-      var urlId = bufCell && bufCell.extended && bufCell.extended.urlId;
-      if (!urlId) return null;
+      var urlId = oscLinkIdAtCell(line, cell.col);
+      if (!urlId) return initialOscLinkAtCell(cell.row, cell.col);
+      var svc = oscLinkService();
+      if (!svc || !svc.getLinkData) return initialOscLinkAtCell(cell.row, cell.col);
       var data = svc.getLinkData(urlId);
       var uri = data && data.uri;
       return uri && /^https?:/i.test(uri) ? uri : null;
     } catch (e) { return null; }
+  }
+  function initialOscLinkAtCell(row, col) {
+    for (var i = 0; i < initialOscLinks.length; i++) {
+      var link = initialOscLinks[i];
+      if (!link || typeof link.uri !== 'string' || !/^https?:/i.test(link.uri)) continue;
+      if (link.row < initialOscLinkRowOffset) continue;
+      var shiftedRow = link.row - initialOscLinkRowOffset;
+      if (shiftedRow === row && col >= link.startCol && col < link.endCol && initialOscLinkTextStillMatches(link, shiftedRow)) return link.uri;
+    }
+    return null;
+  }
+  function captureInitialOscLinkTexts() {
+    if (!Array.isArray(initialOscLinks)) return;
+    for (var i = 0; i < initialOscLinks.length; i++) {
+      var link = initialOscLinks[i];
+      if (!link || typeof link.text === 'string') continue;
+      link.text = initialOscLinkTextAtRow(link, link.row);
+    }
+  }
+  function initialOscLinkTextStillMatches(link, row) {
+    if (typeof link.text !== 'string') return false;
+    return link.text.length > 0 && initialOscLinkTextAtRow(link, row) === link.text;
+  }
+  function initialOscLinkTextAtRow(link, row) {
+    try {
+      var lineText = getLineText(row);
+      var start = cellColToStringIndex(row, link.startCol);
+      var end = cellColToStringIndex(row, link.endCol);
+      return lineText.slice(start, end);
+    } catch (e) {
+      return '';
+    }
+  }
+  function oscLinkIdAtCell(line, col) {
+    try {
+      var bufCell = line.getCell(col);
+      return bufCell && bufCell.extended && bufCell.extended.urlId ? bufCell.extended.urlId : 0;
+    } catch (e) { return 0; }
   }
 
   function notifyTerminalSurfaceTap(originX, originY) {

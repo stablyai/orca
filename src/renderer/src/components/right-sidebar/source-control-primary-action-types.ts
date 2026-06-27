@@ -1,5 +1,9 @@
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
+import type {
+  SourceControlPrimaryActionKind,
+  SourceControlRemoteOpKind
+} from '../../../../shared/source-control-primary-action-decision-types'
 
 // Why: the primary button collapses to one-label-per-action. Compound
 // kinds ('commit_push', 'commit_sync', 'commit_publish') live in
@@ -8,15 +12,7 @@ import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
 // `handlePrimaryClick` switch exhaustively over only the kinds the
 // primary can actually emit, and it kills the compound-commit branch in
 // the isRemoteOperationActive tooltip below at compile time.
-export type PrimaryActionKind =
-  | 'commit'
-  | 'stage'
-  | 'push'
-  | 'pull'
-  | 'sync'
-  | 'publish'
-  | 'create_pr_intent'
-  | 'create_pr'
+export type PrimaryActionKind = SourceControlPrimaryActionKind
 
 // Why: the in-flight remote op tracker stores which action the user actually
 // triggered, so the primary button can mirror that label/spinner instead of
@@ -24,15 +20,7 @@ export type PrimaryActionKind =
 // kinds are included because they participate in the busy flag, but they are
 // intentionally NOT in PrimaryActionKind — when Fetch is in flight the primary
 // keeps its natural label, while Force Push maps back to the push icon/slot.
-export type RemoteOpKind =
-  | 'push'
-  | 'force_push'
-  | 'pull'
-  | 'sync'
-  | 'fetch'
-  | 'fast_forward'
-  | 'publish'
-  | 'rebase'
+export type RemoteOpKind = SourceControlRemoteOpKind
 
 export type PrimaryAction = {
   kind: PrimaryActionKind
@@ -59,9 +47,8 @@ export type PrimaryActionInputs = {
   // stale label that no longer matches what the slice is doing.
   inFlightRemoteOpKind?: RemoteOpKind | null
   hostedReviewCreation?: HostedReviewCreationEligibility | null
-  // Why: an unpublished branch is only worth publishing when it actually
-  // carries commits beyond the compare base. Undefined preserves the old
-  // behavior while the branch compare request is still unavailable/loading.
+  // Why: branch-compare counts feed Create Review intent eligibility and
+  // force-push labels; publishing itself can push the current HEAD even at 0.
   branchCommitsAhead?: number
   // Why: detached HEAD can look like an unpublished branch from upstream
   // status alone, but it has no branch ref that Publish Branch can push.

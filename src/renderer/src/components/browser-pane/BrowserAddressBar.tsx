@@ -14,6 +14,7 @@ type BrowserAddressBarProps = {
   onSubmit: () => void
   onNavigate: (url: string) => void
   inputRef: React.RefObject<HTMLInputElement | null>
+  dismissSuggestionsRef?: React.MutableRefObject<(() => void) | null>
 }
 
 export default function BrowserAddressBar({
@@ -21,7 +22,8 @@ export default function BrowserAddressBar({
   onChange,
   onSubmit,
   onNavigate,
-  inputRef
+  inputRef,
+  dismissSuggestionsRef
 }: BrowserAddressBarProps): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
@@ -131,10 +133,18 @@ export default function BrowserAddressBar({
     onChange(typed)
   }, [onChange])
 
-  const cancelSuggestionPreview = useCallback((): void => {
+  const dismissSuggestions = useCallback((): void => {
+    if (blurCloseTimerRef.current !== null) {
+      window.clearTimeout(blurCloseTimerRef.current)
+      blurCloseTimerRef.current = null
+    }
     restoreTypedQuery()
     setOpen(false)
   }, [restoreTypedQuery])
+
+  const cancelSuggestionPreview = useCallback((): void => {
+    dismissSuggestions()
+  }, [dismissSuggestions])
 
   const selectedValue =
     selectedValueOverride &&
@@ -272,13 +282,64 @@ export default function BrowserAddressBar({
       if (inputRef.current && document.activeElement === inputRef.current) {
         return
       }
-      restoreTypedQuery()
-      setOpen(false)
+      dismissSuggestions()
     }
-  }, [open, suggestions.length, inputRef, restoreTypedQuery])
+  }, [dismissSuggestions, open, suggestions.length, inputRef])
+
+  // Why: Electron <webview> guests run in a separate process, so clicking the
+  // page never dispatches pointerdown on the renderer document and Radix cannot
+  // detect an outside dismiss. Window blur and focus moves into the guest (the
+  // host <webview> tag) close the dropdown the same way BrowserImportHintButton
+  // does for its popover.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const handleWindowBlur = (): void => {
+      dismissSuggestions()
+    }
+
+    const handleFocusIn = (event: FocusEvent): void => {
+      const target = event.target
+      if (!(target instanceof HTMLElement) || target.tagName !== 'WEBVIEW') {
+        return
+      }
+      dismissSuggestions()
+    }
+
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return
+      }
+      dismissSuggestions()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('focusin', handleFocusIn, true)
+    window.addEventListener('keydown', handleEscape, true)
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('focusin', handleFocusIn, true)
+      window.removeEventListener('keydown', handleEscape, true)
+    }
+  }, [dismissSuggestions, inputRef, open])
+
+  useEffect(() => {
+    if (!dismissSuggestionsRef) {
+      return
+    }
+    dismissSuggestionsRef.current = dismissSuggestions
+    return () => {
+      dismissSuggestionsRef.current = null
+    }
+  }, [dismissSuggestions, dismissSuggestionsRef])
 
   return (
     <Popover
+      modal={false}
       open={open}
       onOpenChange={(next) => {
         // Why: Radix fires onOpenChange(false) when it detects an outside

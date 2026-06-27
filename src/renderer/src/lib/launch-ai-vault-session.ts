@@ -2,12 +2,15 @@ import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string
   command: string
+  env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
   targetGroupId?: string
   splitDirection?: TabSplitDirection
 }): { tabId: string; groupId?: string } {
@@ -22,6 +25,8 @@ export function launchAiVaultSessionInNewTab(args: {
   const tab = store.createTab(args.worktreeId, targetGroupId)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
+    ...(args.env ? { env: args.env } : {}),
+    ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),
       launch_source: 'sidebar',
