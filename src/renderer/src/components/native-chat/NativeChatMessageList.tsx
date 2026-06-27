@@ -69,6 +69,26 @@ function AgentControls({
   )
 }
 
+// Show the optimistic "Queued" affordance only after a send has stayed pending
+// past this delay. A fast turn (local agent) lands well within it, so the label
+// never flashes; a genuinely slow send (busy agent / remote) still surfaces it.
+const NATIVE_CHAT_QUEUED_AFFORDANCE_DELAY_MS = 500
+
+/** True only once `active` has held continuously for `delayMs`. Resets to false
+ *  the instant `active` clears, so the gated chrome never lingers. */
+function useDelayedFlag(active: boolean, delayMs: number): boolean {
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    if (!active) {
+      setShown(false)
+      return
+    }
+    const timer = setTimeout(() => setShown(true), delayMs)
+    return () => clearTimeout(timer)
+  }, [active, delayMs])
+  return shown
+}
+
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
@@ -91,6 +111,9 @@ function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
+  // Only surface the "Queued" affordance once the send has been pending a beat,
+  // so a fast local turn doesn't flash it on its way to the transcript.
+  const showQueued = useDelayedFlag(isPending ?? false, NATIVE_CHAT_QUEUED_AFFORDANCE_DELAY_MS)
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -111,15 +134,16 @@ function MessageRow({
         <div
           className={cn(
             'max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground',
-            // Queued echoes read as muted until the real turn lands (mobile parity).
-            isPending && 'opacity-60'
+            // Queued echoes read as muted only once the affordance is shown (after
+            // the delay), so a fast send doesn't flicker muted→normal.
+            showQueued && 'opacity-60'
           )}
         >
           {markdown ? (
             <CommentMarkdown content={markdown} variant="document" className="text-sm" />
           ) : null}
         </div>
-        {isPending ? (
+        {showQueued ? (
           <span className="pr-1 text-[11px] text-muted-foreground">
             {translate('components.native-chat.queued', 'Queued')}
           </span>
