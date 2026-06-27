@@ -31,10 +31,10 @@ export function NativeChatToggleButton({
             size="icon-xs"
             aria-label={label}
             aria-pressed={isChatViewMode}
-            // Match the pane split/close overlay buttons: a subtle ghost icon that
-            // reads as terminal chrome, with a faint surface so it stays legible
-            // over arbitrary xterm content.
-            className="native-chat-toggle-trigger absolute right-1.5 top-1.5 z-20 bg-card/80 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-accent-foreground"
+            // Identical to the pane split/close controls: a bare ghost icon (no
+            // background/shadow), just positioned beside the split/close cluster
+            // (top-right) so the two sit together without overlapping.
+            className="native-chat-toggle-trigger absolute right-14 top-1.5 z-20 text-muted-foreground hover:text-accent-foreground"
             onPointerDown={(event) => {
               // Why: stop the overlay's group-focus pointer handler from also
               // firing, and prevent the click from stealing terminal focus.
