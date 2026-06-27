@@ -126,10 +126,9 @@ describe('GitHubItemDialog source host boundaries', () => {
     expect(helperSection).toContain('repo: args.sourceContext?.repoId ?? args.repoId')
     expect(helperSection).toContain('sourceContext: args.sourceContext')
     expect(helperSection).toContain('{ local: false }')
+    expect(changeSection).toContain('canUseDetailsRepoContext')
+    expect(changeSection).toContain('repoPath: repoPath ??')
     expect(changeSection).toContain('sourceContext,')
-    expect(changeSection).toContain(
-      '[details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]'
-    )
   })
 
   it('routes comment mutations through runtime source context when needed', () => {

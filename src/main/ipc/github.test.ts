@@ -309,6 +309,32 @@ describe('registerGitHubHandlers', () => {
     })
   })
 
+  it('broadcasts mutation notifications with resolved repo id when called by repo path', async () => {
+    const sendMock = vi.fn()
+    getAllWebContentsMock.mockReturnValue([
+      { id: 1, isDestroyed: () => false, send: vi.fn() },
+      { id: 2, isDestroyed: () => false, send: sendMock }
+    ])
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:notifyWorkItemMutated'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        type: 'issue',
+        number: 7
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith('gh:workItemMutated', {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      type: 'issue',
+      number: 7
+    })
+  })
+
   it('broadcasts PR file viewed mutations with repo id for sibling cache invalidation', async () => {
     const sendMock = vi.fn()
     getAllWebContentsMock.mockReturnValue([

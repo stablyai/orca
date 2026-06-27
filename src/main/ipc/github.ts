@@ -525,7 +525,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       broadcastWorkItemMutated(
         {
           repoPath: repo.path,
-          repoId: args.repoId,
+          repoId: repo.id,
           type: args.type,
           number: args.number
         },
