@@ -94,6 +94,23 @@ function normalizeGitEntry(entry: string): string {
   return entry.replace(/\/+$/, '')
 }
 
+// Translate workspace-root-relative exclude prefixes into prefixes relative to
+// a nested repo at `nestedRelPath`, so the nested walk can prune them during
+// traversal. Prefixes outside the nested repo are dropped (they cannot match).
+function rebaseExcludePrefixesForNestedRepo(
+  excludePathPrefixes: readonly string[],
+  nestedRelPath: string
+): string[] {
+  const base = `${nestedRelPath}/`
+  const rebased: string[] = []
+  for (const prefix of excludePathPrefixes) {
+    if (prefix.startsWith(base)) {
+      rebased.push(prefix.slice(base.length))
+    }
+  }
+  return rebased
+}
+
 async function hasGitEntry(absPath: string): Promise<boolean> {
   try {
     const stat = await lstat(join(absPath, '.git'))
@@ -219,6 +236,10 @@ export async function expandQuickOpenGitFilesWithNestedRepos(opts: {
     }
 
     const nestedFiles = await listQuickOpenFilesWithReaddir(joinRootRel(opts.rootPath, relPath), {
+      // Why: exclude prefixes are workspace-root-relative; rebase them onto the
+      // nested repo so the walk prunes excluded subtrees during traversal
+      // instead of burning the shared budget and filtering them at the end.
+      excludePathPrefixes: rebaseExcludePrefixesForNestedRepo(excludePathPrefixes, relPath),
       budget
     })
     for (const nestedFile of nestedFiles) {

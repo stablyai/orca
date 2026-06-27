@@ -187,6 +187,26 @@ describe('quick-open readdir walk', () => {
     ).rejects.toThrow('File listing exceeded')
   })
 
+  it('prunes excluded nested subtrees during traversal without consuming the budget', async () => {
+    const root = await makeTempRoot()
+    await makeNestedRepo(root, 'packages/app')
+    await writeRel(root, 'packages/app/keep.ts')
+    // A large excluded subtree inside the nested repo: if it were walked before
+    // being filtered, it would exhaust the tiny budget and reject.
+    for (let i = 0; i < 20; i += 1) {
+      await writeRel(root, `packages/app/excluded/file-${i}.ts`)
+    }
+
+    await expect(
+      expandQuickOpenGitFilesWithNestedRepos({
+        rootPath: root,
+        gitPaths: [staged('160000', 'packages/app')],
+        excludePathPrefixes: ['packages/app/excluded'],
+        budget: createQuickOpenReaddirBudget({ maxFiles: 5 })
+      })
+    ).resolves.toEqual(['packages/app/keep.ts'])
+  })
+
   it('identifies budget errors so callers can translate only those to install-rg guidance', () => {
     expect(isQuickOpenReaddirBudgetError(new Error('File listing timed out'))).toBe(true)
     expect(isQuickOpenReaddirBudgetError(new Error('File listing exceeded 10000 files'))).toBe(true)
