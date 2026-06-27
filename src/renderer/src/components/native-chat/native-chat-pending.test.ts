@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
   clearCommandMarkerCacheForTests,
   commandMarkersAsMessages,
   isCommandMarkerId,
@@ -148,5 +149,41 @@ describe('command marker cache', () => {
       '/cmd-8',
       '/cmd-9'
     ])
+  })
+})
+
+describe('applyCommandMarkerBoundaries', () => {
+  it('hides existing transcript messages after a local /clear marker', () => {
+    const messages = [
+      userMessage('before', 'old prompt'),
+      { ...assistantMessage('after', 'new answer'), timestamp: 20 }
+    ]
+
+    expect(
+      applyCommandMarkerBoundaries(messages, [{ id: 'c1', command: '/clear', sentAt: 10 }])
+    ).toEqual([{ ...assistantMessage('after', 'new answer'), timestamp: 20 }])
+  })
+
+  it('keeps messages for non-clear commands like /compact', () => {
+    const messages = [userMessage('before', 'old prompt')]
+
+    expect(
+      applyCommandMarkerBoundaries(messages, [{ id: 'c1', command: '/compact', sentAt: 10 }])
+    ).toBe(messages)
+  })
+
+  it('uses the latest clear marker as the visible boundary', () => {
+    const messages = [
+      { ...userMessage('old', 'old'), timestamp: 5 },
+      { ...userMessage('middle', 'middle'), timestamp: 15 },
+      { ...userMessage('new', 'new'), timestamp: 25 }
+    ]
+
+    expect(
+      applyCommandMarkerBoundaries(messages, [
+        { id: 'c1', command: '/clear', sentAt: 10 },
+        { id: 'c2', command: '/clear', sentAt: 20 }
+      ]).map((message) => message.id)
+    ).toEqual(['new'])
   })
 })

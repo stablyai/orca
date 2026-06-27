@@ -21,6 +21,7 @@ import {
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
 import {
+  applyCommandMarkerBoundaries,
   commandMarkersAsMessages,
   appendCommandMarkerCache,
   pendingSendsAsMessages,
@@ -153,31 +154,36 @@ function NativeChatResolvedView({
     [commandMarkerScope]
   )
 
+  const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
+    const messages = applyCommandMarkerBoundaries(session.messages, commandMarkers)
+    return messages === session.messages ? session : { ...session, messages }
+  }, [session, commandMarkers])
+
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
   const streamingText = useMemo(
     () =>
       deriveNativeChatStreamingText({
-        messages: session.messages,
+        messages: sessionAfterCommandBoundaries.messages,
         previewText: hookPreview,
         working: hookWorking
       }),
-    [session.messages, hookPreview, hookWorking]
+    [sessionAfterCommandBoundaries.messages, hookPreview, hookWorking]
   )
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
-      return session
+      return sessionAfterCommandBoundaries
     }
     return {
-      ...session,
+      ...sessionAfterCommandBoundaries,
       messages: [
-        ...session.messages,
+        ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
         ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
         ...pendingSendsAsMessages(pending)
       ]
     }
-  }, [session, pending, commandMarkers, streamingText])
+  }, [sessionAfterCommandBoundaries, pending, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.

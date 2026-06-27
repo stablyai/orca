@@ -127,6 +127,34 @@ export function clearCommandMarkerCacheForTests(): void {
   commandMarkerCounter = 0
 }
 
+function isClearCommand(command: string): boolean {
+  return command.trim().toLowerCase().split(/\s+/)[0] === '/clear'
+}
+
+function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
+  let latest: number | null = null
+  for (const marker of markers) {
+    if (isClearCommand(marker.command) && (latest === null || marker.sentAt > latest)) {
+      latest = marker.sentAt
+    }
+  }
+  return latest
+}
+
+export function applyCommandMarkerBoundaries(
+  messages: readonly NativeChatMessage[],
+  markers: readonly NativeChatCommandMarker[]
+): NativeChatMessage[] {
+  const clearSentAt = latestClearSentAt(markers)
+  if (clearSentAt === null) {
+    return messages as NativeChatMessage[]
+  }
+  // Why: `/clear` mutates the TUI/transcript asynchronously. Hide the current
+  // transcript immediately so native chat reflects the command before the agent
+  // writes a replacement session or truncates the file.
+  return messages.filter((message) => message.timestamp !== null && message.timestamp > clearSentAt)
+}
+
 /** Render command markers as compact `system` messages. The `system` role draws
  *  as a muted aside (not a user bubble); the text avoids the harness noise
  *  prefixes so stripNoiseMessages keeps it. */
