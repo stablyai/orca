@@ -4696,7 +4696,8 @@
           "d420c43729": "Se importaron {{value0}} cookies de {{value1}}{{value2}} a {{value3}}.",
           "b4c167764d": "Se importaron {{value0}} cookies del archivo a {{value1}}.",
           "a3f8c2d1e0b4": "Se importaron {{value0}} cookies de {{value1}} ({{value2}}) a {{value3}}.",
-          "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}."
+          "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}.",
+          "c5a273a809": "De {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Uso abierto de la computadora",
@@ -4742,7 +4743,8 @@
           "ad8cb0ee22": "Arreglar RUTA",
           "0289434ed6": "Activado",
           "8b3054dac7": "Registrando...",
-          "8f2675c2f3": "Se importaron {{value0}} cookies del archivo."
+          "8f2675c2f3": "Se importaron {{value0}} cookies del archivo.",
+          "5301857d88": "De {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Permite a los agents navegar y verificar páginas en el navegador de Orca.",

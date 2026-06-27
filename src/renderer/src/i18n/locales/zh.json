@@ -4681,7 +4681,8 @@
           "d420c43729": "将 {{value0}} cookie 从 {{value1}}{{value2}} 导入到 {{value3}} 中。",
           "b4c167764d": "已从文件将 {{value0}} 个 Cookie 导入到 {{value1}}。",
           "a3f8c2d1e0b4": "已从 {{value1}} ({{value2}}) 导入 {{value0}} 个 Cookie 到 {{value3}}。",
-          "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}。"
+          "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}。",
+          "c5a273a809": "从 {{value0}}"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "开放计算机使用",
@@ -4727,7 +4728,8 @@
           "ad8cb0ee22": "修复路径",
           "0289434ed6": "启用",
           "8b3054dac7": "注册...",
-          "8f2675c2f3": "已从文件导入 {{value0}} 个 Cookie。"
+          "8f2675c2f3": "已从文件导入 {{value0}} 个 Cookie。",
+          "5301857d88": "从 {{value0}}"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "使智能体能够在 Orca 浏览器中导航和验证页面。",

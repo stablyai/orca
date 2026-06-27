@@ -4681,7 +4681,8 @@
           "d420c43729": "{{value0}} Cookie を {{value1}}{{value2}} から {{value3}} にインポートしました。",
           "b4c167764d": "ファイルから {{value0}} 個の Cookie を {{value1}} にインポートしました。",
           "a3f8c2d1e0b4": "{{value1}} ({{value2}}) から {{value0}} 件の Cookie を {{value3}} にインポートしました。",
-          "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。"
+          "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。",
+          "c5a273a809": "{{value0}} から"
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4727,7 +4728,8 @@
           "ad8cb0ee22": "パスを修正する",
           "0289434ed6": "有効",
           "8b3054dac7": "登録中...",
-          "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。"
+          "8f2675c2f3": "ファイルから {{value0}} 個の Cookie をインポートしました。",
+          "5301857d88": "{{value0}} から"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "agents が Orca のブラウザでページに移動して確認できるようにします。",
