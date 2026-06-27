@@ -1141,7 +1141,7 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              {selectedRepoIsGit && branchesEnabled && advancedOpen ? (
+              {selectedRepoIsGit && branchesEnabled ? (
                 <div className="space-y-1">
                   <label
                     htmlFor={branchNameInputId}

@@ -344,7 +344,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   it('shows a git-only branch name field in Advanced and emits manual edits', () => {
     const changes: (string | undefined)[] = []
     current = renderCard({
-      advancedOpen: true,
+      advancedOpen: false,
       branchesEnabled: true,
       branchNameOverride: 'feature/initial',
       onBranchNameOverrideChange: (next) => changes.push(next)
