@@ -248,23 +248,6 @@ function AgentControls({
   )
 }
 
-// Delay the "Queued" affordance so a fast local turn doesn't flash it before its
-// real turn lands in the transcript. Mirrors desktop NativeChatMessageList.
-const QUEUED_AFFORDANCE_DELAY_MS = 500
-
-function useDelayedFlag(active: boolean, delayMs: number): boolean {
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    if (!active) {
-      setShown(false)
-      return
-    }
-    const timer = setTimeout(() => setShown(true), delayMs)
-    return () => clearTimeout(timer)
-  }, [active, delayMs])
-  return shown
-}
-
 function MobileNativeChatMessageImpl({
   message,
   queued,
@@ -299,8 +282,6 @@ function MobileNativeChatMessageImpl({
     },
     []
   )
-  // Show the "Queued" affordance only after a brief delay (no flash on fast sends).
-  const showQueued = useDelayedFlag(queued ?? false, QUEUED_AFFORDANCE_DELAY_MS)
   // Separate the agent's words from its tool activity: prose renders first, the
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
@@ -340,13 +321,14 @@ function MobileNativeChatMessageImpl({
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      {isUser && showQueued ? <Text style={styles.queuedTag}>Queued</Text> : null}
+      {/* Why: the optimistic echo renders identically to a real user turn (no
+          "Queued" tag/muting) so the swap to the real transcript turn is
+          invisible — a distinct queued style flickered normal→queued→normal. */}
       <View
         style={[
           styles.content,
           isUser && styles.userBubble,
           isReasoning && styles.reasoning,
-          showQueued && styles.queued,
           copied && styles.copied
         ]}
       >

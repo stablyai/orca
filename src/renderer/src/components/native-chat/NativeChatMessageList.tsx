@@ -69,41 +69,18 @@ function AgentControls({
   )
 }
 
-// Show the optimistic "Queued" affordance only after a send has stayed pending
-// past this delay. A fast turn (local agent) lands well within it, so the label
-// never flashes; a genuinely slow send (busy agent / remote) still surfaces it.
-const NATIVE_CHAT_QUEUED_AFFORDANCE_DELAY_MS = 500
-
-/** True only once `active` has held continuously for `delayMs`. Resets to false
- *  the instant `active` clears, so the gated chrome never lingers. */
-function useDelayedFlag(active: boolean, delayMs: number): boolean {
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    if (!active) {
-      setShown(false)
-      return
-    }
-    const timer = setTimeout(() => setShown(true), delayMs)
-    return () => clearTimeout(timer)
-  }, [active, delayMs])
-  return shown
-}
-
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
 function MessageRow({
   message,
   expandSignal,
-  onScrollMessageToTop,
-  isPending
+  onScrollMessageToTop
 }: {
   message: NativeChatMessage
   expandSignal: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
-  /** True when this is an optimistic, not-yet-confirmed composer send. */
-  isPending?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -111,9 +88,6 @@ function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
-  // Only surface the "Queued" affordance once the send has been pending a beat,
-  // so a fast local turn doesn't flash it on its way to the transcript.
-  const showQueued = useDelayedFlag(isPending ?? false, NATIVE_CHAT_QUEUED_AFFORDANCE_DELAY_MS)
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -129,25 +103,18 @@ function MessageRow({
   }
 
   if (isUser) {
+    // Why: an optimistic echo is rendered identically to a real user turn (no
+    // muting, no "Queued" label) so that when the real transcript turn lands and
+    // replaces it, there is no visible state change — the send just appears and
+    // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
+    // transcript caught up.)
     return (
       <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        <div
-          className={cn(
-            'max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground',
-            // Queued echoes read as muted only once the affordance is shown (after
-            // the delay), so a fast send doesn't flicker muted→normal.
-            showQueued && 'opacity-60'
-          )}
-        >
+        <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground">
           {markdown ? (
             <CommentMarkdown content={markdown} variant="document" className="text-sm" />
           ) : null}
         </div>
-        {showQueued ? (
-          <span className="pr-1 text-[11px] text-muted-foreground">
-            {translate('components.native-chat.queued', 'Queued')}
-          </span>
-        ) : null}
       </div>
     )
   }
@@ -185,8 +152,7 @@ export function NativeChatMessageList({
   session,
   isWorking,
   expandSignal,
-  fontScale,
-  pendingMessageIds
+  fontScale
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -194,8 +160,6 @@ export function NativeChatMessageList({
   expandSignal: boolean
   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
   fontScale: number
-  /** Ids of optimistic queued sends, rendered with a muted "Queued" affordance. */
-  pendingMessageIds?: ReadonlySet<string>
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
@@ -325,7 +289,6 @@ export function NativeChatMessageList({
               message={message}
               expandSignal={expandSignal}
               onScrollMessageToTop={scrollMessageToTop}
-              isPending={pendingMessageIds?.has(message.id) ?? false}
             />
           ))}
         </div>

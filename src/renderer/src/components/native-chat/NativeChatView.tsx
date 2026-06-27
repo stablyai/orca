@@ -156,10 +156,6 @@ function NativeChatResolvedView({
       ]
     }
   }, [session, pending, streamingText])
-  const pendingMessageIds = useMemo(
-    () => new Set(pending.map((entry) => `pending:${entry.id}`)),
-    [pending]
-  )
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
@@ -210,7 +206,6 @@ function NativeChatResolvedView({
             isWorking={isWorking}
             expandSignal={toolsExpanded}
             fontScale={fontScale.scale}
-            pendingMessageIds={pendingMessageIds}
           />
         )}
       </div>
