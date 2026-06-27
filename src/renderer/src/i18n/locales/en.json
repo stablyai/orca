@@ -5359,7 +5359,8 @@
           "1e64659126": "Regenerate",
           "new-combobox-placeholder": "Search or type an address…",
           "new-combobox-empty": "No matching interfaces",
-          "use-address-row": "Use \"{{address}}\""
+          "use-address-row": "Use \"{{address}}\"",
+          "new-combobox-listbox": "Network interfaces"
         },
         "MobilePane": {
           "dd3cd78d04": "Scan with Orca Mobile",
