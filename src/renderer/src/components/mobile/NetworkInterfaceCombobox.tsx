@@ -179,6 +179,19 @@ export function NetworkInterfaceCombobox({
                   <li key={`iface-${entry.iface.name}-${entry.iface.address}`} role="presentation">
                     <button
                       type="button"
+                      // Why: bind the commit on pointerdown rather than click.
+                      // Radix Popover closes on the same synthetic click that
+                      // would normally fire `onClick`, but the order in dev
+                      // mode can race — the close handler occasionally runs
+                      // before React's click synthetic dispatch, swallowing
+                      // the commit. Pointerdown fires synchronously before
+                      // any pointer-up / click synthesis, so the parent's
+                      // selectedAddress updates before the popover closes.
+                      onPointerDown={(event) => {
+                        // Prevent text selection on rapid clicks.
+                        event.preventDefault()
+                        handleSelectInterface(entry.iface)
+                      }}
                       onClick={() => handleSelectInterface(entry.iface)}
                       className="flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
                     >
@@ -198,6 +211,13 @@ export function NetworkInterfaceCombobox({
                   ) : null}
                   <button
                     type="button"
+                    // Why: see comment on the interface button above — the
+                    // popover-close race swallows the click commit unless
+                    // we commit on pointerdown.
+                    onPointerDown={(event) => {
+                      event.preventDefault()
+                      handleSelectUseQuery(entry.address)
+                    }}
                     onClick={() => handleSelectUseQuery(entry.address)}
                     className="flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
                   >
