@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this IPC entrypoint intentionally centralizes local and remote preflight handlers. */
 import { ipcMain } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -42,6 +43,14 @@ export type PreflightStatus = {
     baseUrl: string | null
     tokenConfigured: boolean
   }
+}
+
+export type RemoteWindowsTerminalCapabilities = {
+  wslAvailable: boolean
+  wslDistros: string[]
+  pwshAvailable: boolean
+  gitBashAvailable: boolean
+  hostPlatform: NodeJS.Platform | null
 }
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
@@ -265,6 +274,33 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   return uniqueAgentIds(result.agents)
 }
 
+export async function detectRemoteWindowsTerminalCapabilities(args: {
+  connectionId: string
+}): Promise<RemoteWindowsTerminalCapabilities> {
+  const mux = getActiveMultiplexer(args.connectionId)
+  if (!mux || mux.isDisposed()) {
+    return {
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: null
+    }
+  }
+  const result = (await mux.request('preflight.detectWindowsTerminalCapabilities', {})) as
+    | RemoteWindowsTerminalCapabilities
+    | undefined
+  return (
+    result ?? {
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: null
+    }
+  )
+}
+
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
     await (wslTarget
@@ -376,6 +412,13 @@ export function registerPreflightHandlers(): void {
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {
       return detectRemoteAgents(args)
+    }
+  )
+
+  ipcMain.handle(
+    'preflight:detectRemoteWindowsTerminalCapabilities',
+    async (_event, args: { connectionId: string }): Promise<RemoteWindowsTerminalCapabilities> => {
+      return detectRemoteWindowsTerminalCapabilities(args)
     }
   )
 }

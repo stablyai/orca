@@ -307,12 +307,18 @@ function TabBarInner({
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
-  const worktreeHasRemoteConnection = useAppStore((s) => {
+  const worktreeConnectionId = useAppStore((s) => {
     const worktree = Object.values(s.worktreesByRepo ?? {})
       .flat()
       .find((entry) => entry.id === worktreeId)
     const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
-    return Boolean(repo?.connectionId)
+    return repo?.connectionId?.trim() || null
+  })
+  const worktreeRemotePlatform = useAppStore((s) => {
+    if (!worktreeConnectionId) {
+      return null
+    }
+    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
   })
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
@@ -361,29 +367,36 @@ function TabBarInner({
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId
+    activeRuntimeEnvironmentId,
+    worktreeConnectionId
   )
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
   )
   const shouldProbeWindowsShellCapabilities =
-    (isWindows || Boolean(activeRuntimeEnvironmentId?.trim()) || isWebClient) &&
-    !worktreeHasRemoteConnection
+    isWindows ||
+    Boolean(activeRuntimeEnvironmentId?.trim()) ||
+    isWebClient ||
+    Boolean(worktreeConnectionId)
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget
+    runtimeTarget,
+    worktreeConnectionId
   )
+  const shellMenuHostPlatform = worktreeConnectionId
+    ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
+    : windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
     activeRuntimeEnvironmentId,
-    hostPlatform: windowsTerminalCapabilities.hostPlatform,
+    hostPlatform: shellMenuHostPlatform,
     isWindowsClient: isWindows,
-    worktreeHasRemoteConnection
+    worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
   const localProjectRuntime = useMemo(() => {
-    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim()) {
+    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim() || worktreeConnectionId) {
       return undefined
     }
     return getLocalProjectExecutionRuntimeContext(
@@ -414,6 +427,7 @@ function TabBarInner({
     repos,
     settings,
     showWindowsShellMenu,
+    worktreeConnectionId,
     windowsTerminalCapabilities.isLoading,
     windowsTerminalCapabilities.wslAvailable,
     windowsTerminalCapabilities.wslDistros,

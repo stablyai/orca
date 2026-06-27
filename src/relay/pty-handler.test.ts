@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import * as ptyShellUtils from './pty-shell-utils'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -163,6 +164,35 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1' })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('uses an explicit shell override and falls back to the default shell otherwise', async () => {
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue('/default-shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+
+      mockPtySpawn.mockClear()
+
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        '/default-shell',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+    }
   })
 
   it.skipIf(process.platform === 'win32')(

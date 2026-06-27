@@ -139,6 +139,10 @@ export class SshPtyProvider implements IPtyProvider {
       // the shell — but receiving it as a hint lets overlay resolution be
       // per-launch instead of always-Pi.
       ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.shellOverride !== undefined ? { shellOverride: opts.shellOverride } : {}),
+      ...(opts.terminalWindowsWslDistro !== undefined
+        ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
+        : {}),
       ...(opts.startupCommandDelivery
         ? { startupCommandDelivery: opts.startupCommandDelivery }
         : {})

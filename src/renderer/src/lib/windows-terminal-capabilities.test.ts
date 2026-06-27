@@ -258,6 +258,49 @@ describe('windows terminal capabilities', () => {
     )
   })
 
+  it('loads SSH Windows host capabilities through the SSH preflight bridge', async () => {
+    const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32'
+    })
+    vi.stubGlobal('window', {
+      api: {
+        preflight: {
+          detectRemoteWindowsTerminalCapabilities
+        }
+      }
+    })
+
+    await expect(
+      loadWindowsTerminalCapabilities({
+        ownerKey: 'ssh:ssh-1',
+        sshConnectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32',
+      isLoading: false
+    })
+
+    expect(detectRemoteWindowsTerminalCapabilities).toHaveBeenCalledWith({
+      connectionId: 'ssh-1'
+    })
+    expect(getCachedWindowsTerminalCapabilities('ssh:ssh-1')).toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32',
+      isLoading: false
+    })
+  })
+
   it('prunes expired runtime owner capability caches', async () => {
     stubTerminalCapabilityApi({
       wslAvailable: false,

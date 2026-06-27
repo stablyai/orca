@@ -1752,7 +1752,16 @@ const api = {
     refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
       ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args),
+    detectRemoteWindowsTerminalCapabilities: (args: {
+      connectionId: string
+    }): Promise<{
+      wslAvailable: boolean
+      wslDistros: string[]
+      pwshAvailable: boolean
+      gitBashAvailable: boolean
+      hostPlatform: NodeJS.Platform | null
+    }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
   },
 
   notifications: {

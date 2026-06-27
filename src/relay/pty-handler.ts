@@ -421,7 +421,9 @@ export class PtyHandler {
     const rows = (params.rows as number) || 24
     const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
-    const shell = resolveDefaultShell()
+    const shellOverride =
+      typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
+    const shell = shellOverride || resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 
     // Why: server-side augmenter values (ORCA_AGENT_HOOK_* and plugin overlay
