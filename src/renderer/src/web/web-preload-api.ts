@@ -1736,6 +1736,7 @@ function createGitHubApi(): WebGitHubApi {
       }),
     workItemDetails: (args) =>
       route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    notifyWorkItemMutated: () => Promise.resolve(false),
     prFileContents: (args) =>
       route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
     listIssues: (args) =>

@@ -159,6 +159,11 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
+import {
+  emitGitHubWorkItemDetailsCacheMutation,
+  onGitHubWorkItemDetailsCacheMutation
+} from '@/lib/github-work-item-details-cache-events'
+import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   getGitHubPRReviewerRows,
@@ -175,6 +180,7 @@ import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import {
   findGithubIssueWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
@@ -200,6 +206,7 @@ import type {
   PRComment
 } from '../../../shared/types'
 import {
+  getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
@@ -939,12 +946,13 @@ function PRReviewersPanel({
     }
     setSubmitting(true)
     try {
+      const runtimeRepo = sourceContext?.repoId ?? item.repoId
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
@@ -974,6 +982,18 @@ function PRReviewersPanel({
         sourceContext
       })
       onReviewersRequested(nextReviewRequests)
+      if (target.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       setReviewerInput('')
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
@@ -1017,12 +1037,13 @@ function PRReviewersPanel({
     }
     setSubmitting(true)
     try {
+      const runtimeRepo = sourceContext?.repoId ?? item.repoId
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
@@ -1051,6 +1072,18 @@ function PRReviewersPanel({
         sourceContext
       })
       onReviewersRequested(nextReviewRequests)
+      if (target.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       setReviewerInput('')
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
@@ -1365,6 +1398,7 @@ function isPRFileViewed(file: GitHubPRFile): boolean {
 // background refetch on open. See docs/gh-work-item-drawer-cache.md.
 const WORK_ITEM_DETAILS_CACHE_MAX = 50
 const WORK_ITEM_DETAILS_FRESH_MS = 30_000
+const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
 type WorkItemDetailsCacheEntry = {
   details: GitHubWorkItemDetails | null
   fetchedAt: number
@@ -1394,12 +1428,16 @@ function getWorkItemDetailsCacheKey(args: {
   repoPath: string
   repoId: string
   issueSourcePreference: string | undefined
+  sourceCacheScope?: string | null
   type: 'issue' | 'pr'
   number: number
 }): string {
   // Why: include all axes that change which (repo, item) the IPC resolves to.
   // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
-  return [args.repoId, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
+  const keyParts = args.sourceCacheScope
+    ? [args.repoId, args.sourceCacheScope, args.issueSourcePreference ?? 'auto', args.type]
+    : [args.repoId, args.issueSourcePreference ?? 'auto', args.type]
+  return [...keyParts, args.number].join('\0')
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
@@ -1446,7 +1484,6 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   type: 'issue' | 'pr'
   number: number
 }): void {
-  workItemDetailsCacheGeneration += 1
   const suffix = `\0${args.type}\0${args.number}`
   const prefix = `${args.repoId ?? args.repoPath}\0`
   let removed = false
@@ -1457,6 +1494,7 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
     }
   }
   if (removed) {
+    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }
@@ -1541,6 +1579,7 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
 // own cache when any window's mutation lands. We track the unsubscribe so
 // Vite HMR doesn't accumulate listeners across module reloads in dev.
 let workItemMutatedUnsub: (() => void) | undefined
+let workItemDetailsCacheEventUnsub: (() => void) | undefined
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
   workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
     invalidateWorkItemDetailsCacheByMatch({
@@ -1550,10 +1589,14 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
       number: payload.number
     })
   })
+  workItemDetailsCacheEventUnsub = onGitHubWorkItemDetailsCacheMutation((payload) => {
+    invalidateWorkItemDetailsCacheByMatch(payload)
+  })
 }
 if (typeof import.meta !== 'undefined' && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
+    workItemDetailsCacheEventUnsub?.()
   })
 }
 
@@ -1650,14 +1693,20 @@ function touchPRFileContentCache(
 function getPRFileContentCacheKey(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
   baseSha: string
 }): string {
   const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
+  const sourceKey =
+    args.sourceContext?.provider === 'github'
+      ? `source:${getTaskSourceCacheScope(args.sourceContext)}`
+      : 'source:local'
   return [
     repositoryKey,
+    sourceKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -1683,18 +1732,38 @@ function loadPRFileContents(args: {
     return Promise.resolve(cached.value)
   }
   let request: Promise<GitHubPRFileContents>
-  request = window.api.gh
-    .prFileContents({
-      repoPath: args.repoPath,
-      repoId: args.repoId,
-      sourceContext: args.sourceContext,
-      prNumber: args.prNumber,
-      path: args.file.path,
-      oldPath: args.file.oldPath,
-      status: args.file.status,
-      headSha: args.headSha,
-      baseSha: args.baseSha
-    })
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  request = (
+    parsedHost?.kind === 'runtime'
+      ? callRuntimeRpc<GitHubPRFileContents>(
+          { kind: 'environment', environmentId: parsedHost.environmentId },
+          'github.prFileContents',
+          {
+            repo: args.sourceContext?.repoId ?? args.repoId,
+            prNumber: args.prNumber,
+            path: args.file.path,
+            oldPath: args.file.oldPath,
+            status: args.file.status,
+            headSha: args.headSha,
+            baseSha: args.baseSha
+          },
+          { timeoutMs: 30_000 }
+        )
+      : window.api.gh.prFileContents({
+          repoPath: args.repoPath,
+          repoId: args.repoId,
+          sourceContext: args.sourceContext,
+          prNumber: args.prNumber,
+          path: args.file.path,
+          oldPath: args.file.oldPath,
+          status: args.file.status,
+          headSha: args.headSha,
+          baseSha: args.baseSha
+        })
+  )
     .then((contents) => {
       if (prFileContentCache.get(cacheKey)?.value === request) {
         touchPRFileContentCache(cacheKey, contents)
@@ -1721,6 +1790,36 @@ function addIssueCommentForRepo(args: {
   body: string
   type?: 'issue' | 'pr'
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  if (parsedHost?.kind === 'runtime') {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
+      { kind: 'environment', environmentId: parsedHost.environmentId },
+      'github.addIssueComment',
+      {
+        repo: args.sourceContext?.repoId ?? args.repoId,
+        number: args.number,
+        body: args.body
+      },
+      { timeoutMs: 30_000 }
+    ).then((result) => {
+      if (result.ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: args.type ?? 'issue',
+            number: args.number
+          },
+          { local: false }
+        )
+      }
+      return result
+    })
+  }
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -1742,6 +1841,40 @@ function addPRReviewCommentForRepo(args: {
   startLine?: number
   body: string
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  if (parsedHost?.kind === 'runtime') {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>>(
+      { kind: 'environment', environmentId: parsedHost.environmentId },
+      'github.addPRReviewComment',
+      {
+        repo: args.sourceContext?.repoId ?? args.repoId,
+        prNumber: args.prNumber,
+        commitId: args.commitId,
+        path: args.path,
+        line: args.line,
+        startLine: args.startLine,
+        body: args.body
+      },
+      { timeoutMs: 30_000 }
+    ).then((result) => {
+      if (result.ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: 'pr',
+            number: args.prNumber
+          },
+          { local: false }
+        )
+      }
+      return result
+    })
+  }
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -1766,6 +1899,40 @@ function addPRReviewCommentReplyForRepo(args: {
   path?: string
   line?: number
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  if (parsedHost?.kind === 'runtime') {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>>(
+      { kind: 'environment', environmentId: parsedHost.environmentId },
+      'github.addPRReviewCommentReply',
+      {
+        repo: args.sourceContext?.repoId ?? args.repoId,
+        prNumber: args.prNumber,
+        commentId: args.commentId,
+        body: args.body,
+        threadId: args.threadId,
+        path: args.path,
+        line: args.line
+      },
+      { timeoutMs: 30_000 }
+    ).then((result) => {
+      if (result.ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: 'pr',
+            number: args.prNumber
+          },
+          { local: false }
+        )
+      }
+      return result
+    })
+  }
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -1779,8 +1946,31 @@ function addPRReviewCommentReplyForRepo(args: {
   })
 }
 
+function notifyWorkItemDetailsMutation(
+  args: {
+    repoPath: string
+    repoId?: string
+    sourceContext?: TaskSourceContext | null
+    type: 'issue' | 'pr'
+    number: number
+  },
+  options: { local?: boolean } = {}
+): void {
+  if (options.local !== false) {
+    emitGitHubWorkItemDetailsCacheMutation(args)
+  }
+  void window.api.gh
+    .notifyWorkItemMutated({
+      repoPath: args.repoPath,
+      repoId: args.repoId,
+      type: args.type,
+      number: args.number
+    })
+    .catch(() => undefined)
+}
+
 function setPRFileViewedForRepo(args: {
-  repoId?: string
+  repoId: string
   repoPath: string
   sourceContext?: TaskSourceContext | null
   prNumber: number
@@ -1788,6 +1978,37 @@ function setPRFileViewedForRepo(args: {
   path: string
   viewed: boolean
 }): Promise<boolean> {
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  if (parsedHost?.kind === 'runtime') {
+    return callRuntimeRpc<boolean>(
+      { kind: 'environment', environmentId: parsedHost.environmentId },
+      'github.setPRFileViewed',
+      {
+        repo: args.sourceContext?.repoId ?? args.repoId,
+        pullRequestId: args.pullRequestId,
+        path: args.path,
+        viewed: args.viewed
+      },
+      { timeoutMs: 30_000 }
+    ).then((ok) => {
+      if (ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: 'pr',
+            number: args.prNumber
+          },
+          { local: false }
+        )
+      }
+      return ok
+    })
+  }
   return window.api.gh.setPRFileViewed({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -1796,22 +2017,6 @@ function setPRFileViewedForRepo(args: {
     pullRequestId: args.pullRequestId,
     path: args.path,
     viewed: args.viewed
-  })
-}
-
-function getWorkItemDetailsForRepo(args: {
-  repoId?: string
-  repoPath: string
-  sourceContext?: TaskSourceContext | null
-  number: number
-  type: 'issue' | 'pr'
-}): Promise<GitHubWorkItemDetails | null> {
-  return window.api.gh.workItemDetails({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    sourceContext: args.sourceContext,
-    number: args.number,
-    type: args.type
   })
 }
 
@@ -3643,9 +3848,13 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
+  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
-  const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
+  const canMergeWithRepoContext = !!repoPath || mergeTarget.kind === 'environment'
+  const mergeDisabled =
+    !canMergeWithRepoContext || mergePending || !mergePresentation.directMergeAvailable
 
   const patchProjectRowIfNeeded = useCallback(
     (state: GitHubWorkItem['state']) => {
@@ -3727,7 +3936,7 @@ function PRActionsPanel({
   }
 
   const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
-    if (!repoPath || mergeDisabled) {
+    if (mergeDisabled) {
       return
     }
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
@@ -3748,19 +3957,44 @@ function PRActionsPanel({
     }
     setMergePending(true)
     try {
-      const result = await window.api.gh.mergePR({
-        repoPath,
-        repoId: repoId ?? undefined,
-        sourceContext,
-        prNumber: item.number,
-        method,
-        prRepo: item.prRepo ?? null
-      })
+      const result =
+        mergeTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.mergePR>>>(
+              mergeTarget,
+              'github.mergePR',
+              {
+                repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+                prNumber: item.number,
+                method,
+                prRepo: item.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.mergePR({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              method,
+              prRepo: item.prRepo ?? null
+            })
       if (!result.ok) {
         toast.error(result.error)
         return
       }
       applyStatePatch('merged')
+      if (mergeTarget.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
       onMutated()
@@ -3774,24 +4008,50 @@ function PRActionsPanel({
   }
 
   const handleAutoMerge = async (): Promise<void> => {
-    if (!repoPath || !mergePresentation.autoMergeAction) {
+    if (!canMergeWithRepoContext || !mergePresentation.autoMergeAction) {
       return
     }
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMergePending(true)
     try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath,
-        repoId: repoId ?? undefined,
-        sourceContext,
-        prNumber: item.number,
-        enabled,
-        method: enabled ? mergeMethods.defaultMethod : undefined,
-        prRepo: item.prRepo ?? null
-      })
+      const result =
+        mergeTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.setPRAutoMerge>>>(
+              mergeTarget,
+              'github.setPRAutoMerge',
+              {
+                repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+                prNumber: item.number,
+                enabled,
+                method: enabled ? mergeMethods.defaultMethod : undefined,
+                prRepo: item.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRAutoMerge({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              enabled,
+              method: enabled ? mergeMethods.defaultMethod : undefined,
+              prRepo: item.prRepo ?? null
+            })
       if (!result.ok) {
         toast.error(result.error)
         return
+      }
+      if (mergeTarget.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
       }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
@@ -4161,6 +4421,8 @@ function ChecksTab({
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const parsedSourceHost =
+    sourceContext?.provider === 'github' ? parseExecutionHostId(sourceContext.hostId) : null
   const sorted = [...list].sort(
     (a, b) =>
       (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
@@ -4199,14 +4461,27 @@ function ChecksTab({
     }
     setRefreshing(true)
     try {
-      const nextChecks = (await window.api.gh.prChecks({
-        repoPath,
-        repoId: repoId ?? undefined,
-        sourceContext,
-        prNumber: item.number,
-        headSha,
-        noCache: true
-      })) as PRCheckDetail[]
+      const nextChecks = (await (parsedSourceHost?.kind === 'runtime'
+        ? callRuntimeRpc<PRCheckDetail[]>(
+            { kind: 'environment', environmentId: parsedSourceHost.environmentId },
+            'github.prChecks',
+            {
+              repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+              prNumber: item.number,
+              headSha,
+              prRepo,
+              noCache: true
+            },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.prChecks({
+            repoPath,
+            repoId: repoId ?? undefined,
+            sourceContext,
+            prNumber: item.number,
+            headSha,
+            noCache: true
+          }))) as PRCheckDetail[]
       setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
       onChecksUpdated(nextChecks)
       return nextChecks
@@ -4220,7 +4495,17 @@ function ChecksTab({
     } finally {
       setRefreshing(false)
     }
-  }, [headSha, item.number, onChecksUpdated, repoId, repoPath, sourceContext])
+  }, [
+    headSha,
+    item.number,
+    item.repoId,
+    onChecksUpdated,
+    parsedSourceHost,
+    prRepo,
+    repoId,
+    repoPath,
+    sourceContext
+  ])
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
@@ -4229,14 +4514,27 @@ function ChecksTab({
       }
       setRerunning(true)
       try {
-        const result = await window.api.gh.rerunPRChecks({
-          repoPath,
-          repoId: repoId ?? undefined,
-          sourceContext,
-          prNumber: item.number,
-          headSha,
-          failedOnly
-        })
+        const result =
+          parsedSourceHost?.kind === 'runtime'
+            ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
+                { kind: 'environment', environmentId: parsedSourceHost.environmentId },
+                'github.rerunPRChecks',
+                {
+                  repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+                  prNumber: item.number,
+                  headSha,
+                  failedOnly
+                },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.rerunPRChecks({
+                repoPath,
+                repoId: repoId ?? undefined,
+                sourceContext,
+                prNumber: item.number,
+                headSha,
+                failedOnly
+              })
         if (!result.ok) {
           toast.error(result.error)
           return
@@ -4257,7 +4555,17 @@ function ChecksTab({
         setRerunning(false)
       }
     },
-    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath, sourceContext]
+    [
+      handleRefresh,
+      headSha,
+      item.number,
+      item.repoId,
+      parsedSourceHost,
+      rerunning,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
@@ -4337,16 +4645,32 @@ function ChecksTab({
           error: null
         })
       )
-      void window.api.gh
-        .prCheckDetails({
-          repoPath,
-          repoId: repoId ?? undefined,
-          checkRunId: check.checkRunId,
-          workflowRunId: check.workflowRunId,
-          checkName: check.name,
-          url: check.url,
-          prRepo
-        })
+      const detailsRequest =
+        parsedSourceHost?.kind === 'runtime'
+          ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
+              { kind: 'environment', environmentId: parsedSourceHost.environmentId },
+              'github.prCheckDetails',
+              {
+                repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+                checkRunId: check.checkRunId,
+                workflowRunId: check.workflowRunId,
+                checkName: check.name,
+                url: check.url,
+                prRepo
+              },
+              { timeoutMs: 30_000 }
+            )
+          : window.api.gh.prCheckDetails({
+              repoPath,
+              repoId: repoId ?? undefined,
+              sourceContext,
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo
+            })
+      void detailsRequest
         .then((details) => {
           if (!mountedRef.current) {
             return
@@ -4372,7 +4696,16 @@ function ChecksTab({
           )
         })
     },
-    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
+    [
+      detailsByCheckKey,
+      item.repoId,
+      mountedRef,
+      parsedSourceHost,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const refreshAction = (
@@ -4891,7 +5224,11 @@ async function runIssueUpdate(args: {
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
+    const targetSettings =
+      args.sourceContext?.provider === 'github'
+        ? getTaskSourceRuntimeSettings(args.sourceContext)
+        : getGitHubMutationSettings(args.repoId)
+    const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4912,20 +5249,60 @@ async function runIssueUpdate(args: {
     if (!res.ok) {
       throw new Error(res.error.message)
     }
+    if (target.kind === 'environment') {
+      notifyWorkItemDetailsMutation(
+        {
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          type: 'issue',
+          number: args.number
+        },
+        { local: false }
+      )
+    }
     return
   }
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
   }
-  const res = await window.api.gh.updateIssue({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    sourceContext: args.sourceContext,
-    number: args.number,
-    updates: args.updates
-  })
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  const res =
+    parsedHost?.kind === 'runtime'
+      ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssue>>>(
+          { kind: 'environment', environmentId: parsedHost.environmentId },
+          'github.updateIssue',
+          {
+            repo: args.sourceContext?.repoId ?? args.repoId,
+            number: args.number,
+            updates: args.updates
+          },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.gh.updateIssue({
+          repoPath: args.repoPath,
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          number: args.number,
+          updates: args.updates
+        })
   if (!res.ok) {
     throw new Error(res.error)
+  }
+  if (parsedHost?.kind === 'runtime') {
+    notifyWorkItemDetailsMutation(
+      {
+        repoPath: args.repoPath,
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        type: 'issue',
+        number: args.number
+      },
+      { local: false }
+    )
   }
 }
 
@@ -4944,7 +5321,11 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
+    const targetSettings =
+      args.sourceContext?.provider === 'github'
+        ? getTaskSourceRuntimeSettings(args.sourceContext)
+        : getGitHubMutationSettings(args.item.repoId)
+    const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4964,6 +5345,18 @@ async function runWorkItemBodyUpdate(args: {
         : await window.api.gh.updatePullRequestBySlug(updateArgs)
     if (!res.ok) {
       throw new Error(res.error.message)
+    }
+    if (target.kind === 'environment') {
+      notifyWorkItemDetailsMutation(
+        {
+          repoPath: args.repoPath ?? '',
+          repoId: args.item.repoId,
+          sourceContext: args.sourceContext,
+          type: 'pr',
+          number: args.item.number
+        },
+        { local: false }
+      )
     }
     return
   }
@@ -4987,7 +5380,11 @@ async function runPullRequestStateUpdate(args: {
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
+    const targetSettings =
+      args.sourceContext?.provider === 'github'
+        ? getTaskSourceRuntimeSettings(args.sourceContext)
+        : getGitHubMutationSettings(args.repoId)
+    const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -5008,20 +5405,60 @@ async function runPullRequestStateUpdate(args: {
     if (!res.ok) {
       throw new Error(res.error.message)
     }
+    if (target.kind === 'environment') {
+      notifyWorkItemDetailsMutation(
+        {
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          type: 'pr',
+          number: args.number
+        },
+        { local: false }
+      )
+    }
     return
   }
   if (!args.repoPath) {
     throw new Error('No repo context available for this pull request.')
   }
-  const res = await window.api.gh.updatePRState({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    sourceContext: args.sourceContext,
-    prNumber: args.number,
-    updates: args.updates
-  })
+  const parsedHost =
+    args.sourceContext?.provider === 'github'
+      ? parseExecutionHostId(args.sourceContext.hostId)
+      : null
+  const res =
+    parsedHost?.kind === 'runtime'
+      ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
+          { kind: 'environment', environmentId: parsedHost.environmentId },
+          'github.updatePRState',
+          {
+            repo: args.sourceContext?.repoId ?? args.repoId,
+            prNumber: args.number,
+            updates: args.updates
+          },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.gh.updatePRState({
+          repoPath: args.repoPath,
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          prNumber: args.number,
+          updates: args.updates
+        })
   if (!res.ok) {
     throw new Error(res.error)
+  }
+  if (parsedHost?.kind === 'runtime') {
+    notifyWorkItemDetailsMutation(
+      {
+        repoPath: args.repoPath,
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        type: 'pr',
+        number: args.number
+      },
+      { local: false }
+    )
   }
 }
 
@@ -6386,10 +6823,12 @@ export default function GitHubItemDialog({
       repoPath,
       repoId: effectiveRepoId,
       issueSourcePreference,
+      sourceCacheScope:
+        sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null,
       type: workItem.type,
       number: workItem.number
     })
-  }, [repoPath, effectiveRepoId, workItem, issueSourcePreference])
+  }, [repoPath, effectiveRepoId, sourceContext, workItem, issueSourcePreference])
 
   // Why: track comments added optimistically before the detail fetch resolves
   // so they can be merged into the fetch result instead of being overwritten.
@@ -6503,9 +6942,7 @@ export default function GitHubItemDialog({
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
-  const detailsLoaded =
-    Boolean(cachedEntry?.details) ||
-    Boolean(cachedEntry && !cachedEntry.pending && !cachedEntry.error && cachedEntry.fetchedAt > 0)
+  const detailsLoaded = Boolean(cachedEntry?.details)
 
   // Why: if a cross-window mutation invalidates the open drawer's entry
   // (cachedEntry becomes undefined while workItem is still set), the main
@@ -6519,7 +6956,7 @@ export default function GitHubItemDialog({
   }, [workItem, detailsCacheKey, cachedEntry])
 
   useEffect(() => {
-    if (!workItem || !repoPath || !detailsCacheKey) {
+    if (!workItem || !repoPath || !effectiveRepoId || !detailsCacheKey) {
       return
     }
     // Why: only clear optimistic comments when switching to a genuinely
@@ -6546,9 +6983,9 @@ export default function GitHubItemDialog({
     // racing two `gh` subprocesses against each other.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
-      getWorkItemDetailsForRepo({
+      lookupGitHubWorkItemDetailsForSource({
         repoPath,
-        repoId: effectiveRepoId ?? undefined,
+        repoId: effectiveRepoId,
         sourceContext,
         number: workItem.number,
         type: workItem.type
@@ -6577,14 +7014,18 @@ export default function GitHubItemDialog({
           // entry still exists (later open repopulated it) leave it alone too.
           return
         }
-        // Why: 404/unauthorized must not overwrite valid cached data. When the
-        // IPC resolves to null and we already have cached details, keep the
-        // stale data — only blank entries get the null payload.
+        // Why: null means unavailable/not found, not loaded empty content.
         if (result === null && prev?.details) {
           touchWorkItemDetailsCache(detailsCacheKey, {
             details: prev.details,
             fetchedAt: prev.fetchedAt,
             error: undefined
+          })
+        } else if (result === null) {
+          touchWorkItemDetailsCache(detailsCacheKey, {
+            details: null,
+            fetchedAt: 0,
+            error: WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE
           })
         } else {
           touchWorkItemDetailsCache(detailsCacheKey, {

@@ -27,6 +27,8 @@ describe('TaskPage source switching host boundary', () => {
 
     expect(modalSection).toContain('selectedRepoIds={repoSelection}')
     expect(detailSection).toContain('workItem={dialogWorkItem}')
+    expect(detailSection).toContain('<PullRequestPage')
+    expect(detailSection).toContain('sourceContext={dialogSourceContext}')
     expect(detailSection).toContain('<GitHubItemDialog')
     expect(detailSection).toContain('sourceContext={dialogSourceContext}')
     expect(modalSection).not.toContain('<GitHubItemDialog')

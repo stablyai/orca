@@ -1005,6 +1005,13 @@ const api = {
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
 
+    notifyWorkItemMutated: (args: {
+      repoPath: string
+      repoId?: string
+      type: 'issue' | 'pr'
+      number: number
+    }): Promise<boolean> => ipcRenderer.invoke('gh:notifyWorkItemMutated', args),
+
     prFileContents: (args: {
       repoPath: string
       repoId?: string

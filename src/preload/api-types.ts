@@ -1190,6 +1190,12 @@ export type PreloadApi = {
         type?: 'issue' | 'pr'
       }
     ) => Promise<GitHubWorkItemDetails | null>
+    notifyWorkItemMutated: (args: {
+      repoPath: string
+      repoId?: string
+      type: 'issue' | 'pr'
+      number: number
+    }) => Promise<boolean>
     prFileContents: (
       args: GitHubRepoSelectorArgs & {
         prNumber: number
