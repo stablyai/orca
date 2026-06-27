@@ -159,7 +159,7 @@ export function useFileExplorerInlineInput({
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
               const runtimeEnvironmentId =
-                fileContext.settings.activeRuntimeEnvironmentId?.trim() ?? null
+                fileContext.settings.activeRuntimeEnvironmentId?.trim() || null
               openFile(
                 {
                   filePath: fullPath,

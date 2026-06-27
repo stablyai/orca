@@ -126,6 +126,8 @@ export async function activateFileExplorerNode(args: {
     },
     {
       preview: true,
+      // Why: explicit local opens must not inherit the active runtime, so we
+      // encode "no runtime owner" via the fallback-suppression option.
       suppressActiveRuntimeFallback: runtimeEnvironmentId === null
     }
   )
