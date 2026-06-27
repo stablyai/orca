@@ -240,11 +240,10 @@ function NativeChatResolvedView({
       {/* Live interactive cards (question / approval) render just above the
           composer while the agent's interactivePrompt is present (mobile parity). */}
       <NativeChatInteractiveCard paneKey={paneKey} send={interactiveSend} canSend={canSend} />
-      {/* Chrome row locked to the top of the composer area (mobile parity): the
-          working indicator + tool-calls toggle sit above the composer. */}
+      {/* Chrome row locked to the top of the composer area: transcript-wide
+          controls sit above the composer. */}
       {isConversation ? (
         <NativeChatChromeRow
-          isWorking={isWorking}
           toolsExpanded={toolsExpanded}
           onToggleTools={() => setToolsExpanded((v) => !v)}
         />

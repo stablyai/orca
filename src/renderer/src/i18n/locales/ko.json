@@ -11898,7 +11898,7 @@
         "running": "Running…"
       },
       "status": {
-        "working": "Agent is working…"
+        "responding": "Agent is responding"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {

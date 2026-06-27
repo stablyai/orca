@@ -15,6 +15,7 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -65,6 +66,27 @@ function AgentControls({
       >
         <ArrowUp className="size-3.5" />
       </button>
+    </div>
+  )
+}
+
+function TypingIndicatorRow(): React.JSX.Element {
+  return (
+    <div
+      className="flex items-center justify-start"
+      aria-label={translate('components.native-chat.status.responding', 'Agent is responding')}
+      aria-live="polite"
+    >
+      <div className="flex h-8 items-center gap-1.5 rounded-xl rounded-tl-sm bg-muted px-3 text-muted-foreground">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+            // Stagger the three dots so they ripple rather than pulse in unison.
+            style={{ animationDelay: `${i * 160}ms` }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -182,6 +204,8 @@ export function NativeChatMessageList({
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
   )
+  const showTypingIndicator =
+    isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
 
   // When an older page prepends, the scroll content grows above the viewport.
   // Capture the pre-render scroll height so the layout effect can restore the
@@ -241,7 +265,7 @@ export function NativeChatMessageList({
     if (stuckToBottomRef.current) {
       scrollToBottom()
     }
-  }, [messages.length, isWorking, scrollToBottom])
+  }, [messages.length, isWorking, showTypingIndicator, scrollToBottom])
 
   // Keep the affordances in sync if the container resizes (e.g. composer mounts,
   // viewport reflow) without a scroll event.
@@ -291,6 +315,7 @@ export function NativeChatMessageList({
               onScrollMessageToTop={scrollMessageToTop}
             />
           ))}
+          {showTypingIndicator ? <TypingIndicatorRow /> : null}
         </div>
       </div>
       {showJump ? (
