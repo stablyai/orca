@@ -2804,7 +2804,8 @@ export default function SessionScreen() {
           void client
             .sendRequest('session.tabs.activate', {
               worktree: `id:${worktreeId}`,
-              tabId: matchingTab.id
+              tabId: matchingTab.id,
+              notifyClients: false
             })
             .catch(() => {})
         }
@@ -2836,7 +2837,8 @@ export default function SessionScreen() {
           void client
             .sendRequest('session.tabs.activate', {
               worktree: `id:${worktreeId}`,
-              tabId: tab.id
+              tabId: tab.id,
+              notifyClients: false
             })
             .catch(() => {})
         }
@@ -2859,7 +2861,8 @@ export default function SessionScreen() {
         void client
           .sendRequest('session.tabs.activate', {
             worktree: `id:${worktreeId}`,
-            tabId: tab.id
+            tabId: tab.id,
+            notifyClients: false
           })
           .catch(() => {})
       }
@@ -4139,7 +4142,8 @@ export default function SessionScreen() {
       .sendRequest('session.tabs.activate', {
         worktree: `id:${worktreeId}`,
         tabId: activePendingTerminalTab.id,
-        leafId: activePendingTerminalTab.leafId
+        leafId: activePendingTerminalTab.leafId,
+        notifyClients: false
       })
       .then((response) => {
         if (!response.ok) {

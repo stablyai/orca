@@ -9,6 +9,36 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('session tab RPC methods', () => {
+  it('routes mobile-only activation without notifying desktop clients', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateMobileSessionTab: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: 'tab-1',
+        activeTabType: 'terminal',
+        tabs: []
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.activate', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        notifyClients: false
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', 'leaf-1', {
+      notifyClients: false
+    })
+  })
+
   it('dispatches tab moves through the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

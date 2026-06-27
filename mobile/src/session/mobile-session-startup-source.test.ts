@@ -59,10 +59,20 @@ describe('mobile session startup', () => {
     expect(pendingActivationEffect).toContain("sendRequest('session.tabs.activate'")
     expect(pendingActivationEffect).toContain('tabId: activePendingTerminalTab.id')
     expect(pendingActivationEffect).toContain('leafId: activePendingTerminalTab.leafId')
+    expect(pendingActivationEffect).toContain('notifyClients: false')
     expect(pendingActivationEffect).toContain(
       'applySessionTabs((response as RpcSuccess).result as SessionTabsResult)'
     )
     expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
+  })
+
+  it('keeps mobile session tab activation local to the phone', () => {
+    const activationRequests = source.split("sendRequest('session.tabs.activate'").slice(1)
+
+    expect(activationRequests).toHaveLength(4)
+    for (const request of activationRequests) {
+      expect(request.slice(0, request.indexOf('})'))).toContain('notifyClients: false')
+    }
   })
 
   it('keeps dynamic agent rows above fixed New Tab actions', () => {
