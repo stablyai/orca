@@ -224,7 +224,16 @@ export default function MobilePage(): React.JSX.Element {
         addressIsManual
       )
       if (mountedRef.current) {
+        // Why: selectRefreshedNetworkAddress can rewrite selectedAddress
+        // (e.g. when a refresh surfaces a tailnet interface and the user
+        // had been on LAN). Re-derive `addressIsManual` from the new
+        // value so the next refresh doesn't snap the user back to LAN
+        // just because they once picked a non-tailnet interface.
         setSelectedAddress(newAddress)
+        const nextIsManual =
+          newAddress !== undefined &&
+          !result.interfaces.some((iface) => iface.address === newAddress)
+        setAddressIsManual(nextIsManual)
       }
       if (newAddress !== selectedAddress && hasGeneratedRef.current && mountedRef.current) {
         void generatePairing(true, newAddress)

@@ -166,7 +166,13 @@ export function HeroFlow({
                   networkInterfaces={networkInterfaces}
                   selectedAddress={selectedAddress}
                   onSelectedAddressChange={onSelectedAddressChange}
-                  disabled={networkInterfaces.length === 0}
+                  // Why: the combobox must stay interactive even when
+                  // discovery returns zero interfaces (transient failure
+                  // or fresh install) — the only way to enter a manual
+                  // MagicDNS / static IP in that state is via the typeable
+                  // popover input, so disabling the trigger locks users
+                  // out of the very path the PR adds.
+                  disabled={false}
                   className="mp-network-select"
                 />
                 <button
