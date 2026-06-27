@@ -27,6 +27,7 @@ import {
   findSystemSsh,
   spawnSystemSsh,
   spawnSystemSshCommand,
+  spawnSystemSshPortForward,
   uploadDirectoryViaSystemSsh,
   writeFileViaSystemSsh
 } from './ssh-system-fallback'
@@ -249,6 +250,27 @@ describe('spawnSystemSsh', () => {
       SYSTEM_SSH_PATH,
       expect.arrayContaining(['--', 'deploy@fdpass-host', "exec /bin/sh -c 'echo hello'"]),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
+    )
+  })
+
+  it('spawns port forwards before the ssh destination terminator', () => {
+    spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      SYSTEM_SSH_PATH,
+      [
+        '-o',
+        'BatchMode=no',
+        '-T',
+        '-N',
+        '-o',
+        'ExitOnForwardFailure=yes',
+        '-L',
+        '127.0.0.1:5173:127.0.0.1:3000',
+        '--',
+        'deploy@fdpass-host'
+      ],
+      expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
     )
   })
 

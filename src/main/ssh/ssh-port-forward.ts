@@ -1,14 +1,27 @@
+import type { ChildProcess } from 'child_process'
 import { createServer, type Server, type Socket } from 'net'
 import type { SshConnection } from './ssh-connection'
+import { spawnSystemSshPortForward } from './ssh-system-fallback'
 import type { PortForwardEntry } from '../../shared/ssh-types'
 
 export type { PortForwardEntry }
 
 type ActiveForward = {
   entry: PortForwardEntry
-  server: Server
-  activeSockets: Set<Socket>
-}
+} & (
+  | {
+      kind: 'ssh2'
+      server: Server
+      activeSockets: Set<Socket>
+    }
+  | {
+      kind: 'system-ssh'
+      process: ChildProcess
+    }
+)
+
+const SYSTEM_SSH_FORWARD_STARTUP_SETTLE_MS = 250
+const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
 
 export class SshPortForwardManager {
   private forwards = new Map<string, ActiveForward>()
@@ -52,6 +65,20 @@ export class SshPortForwardManager {
     }
 
     const client = conn.getClient()
+    if (!client && conn.usesSystemSshTransport()) {
+      const target = conn.getTarget()
+      const process = spawnSystemSshPortForward(target, localPort, remoteHost, remotePort)
+      await this.waitForSystemSshForwardStartup(process)
+      const forward: ActiveForward = { kind: 'system-ssh', entry, process }
+      process.once('exit', () => {
+        const active = this.forwards.get(id)
+        if (active === forward) {
+          this.forwards.delete(id)
+        }
+      })
+      this.forwards.set(id, forward)
+      return entry
+    }
     if (!client) {
       throw new Error('SSH connection is not established')
     }
@@ -82,8 +109,54 @@ export class SshPortForwardManager {
       })
     })
 
-    this.forwards.set(id, { entry, server, activeSockets })
+    this.forwards.set(id, { kind: 'ssh2', entry, server, activeSockets })
     return entry
+  }
+
+  private waitForSystemSshForwardStartup(process: ChildProcess): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let stderr = ''
+      let settled = false
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        process.off('error', onError)
+        process.off('exit', onExit)
+        process.stderr?.off('data', onStderr)
+      }
+      const finish = (callback: () => void): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        callback()
+      }
+      const onStderr = (chunk: Buffer): void => {
+        stderr += chunk.toString('utf-8')
+      }
+      const onError = (error: Error): void => {
+        finish(() => reject(error))
+      }
+      const onExit = (code: number | null): void => {
+        const detail = stderr.trim()
+        finish(() =>
+          reject(
+            new Error(
+              `System SSH port forward failed${code !== null ? ` (exit ${code})` : ''}${
+                detail ? `: ${detail}` : ''
+              }`
+            )
+          )
+        )
+      }
+      const timer = setTimeout(() => {
+        finish(resolve)
+      }, SYSTEM_SSH_FORWARD_STARTUP_SETTLE_MS)
+
+      process.stderr?.on('data', onStderr)
+      process.once('error', onError)
+      process.once('exit', onExit)
+    })
   }
 
   async updateForward(
@@ -152,16 +225,42 @@ export class SshPortForwardManager {
     if (!forward) {
       return Promise.resolve(null)
     }
+    this.forwards.delete(id)
+    if (forward.kind === 'system-ssh') {
+      return this.waitForSystemSshForwardStop(forward.process).then(() => forward.entry)
+    }
     for (const socket of forward.activeSockets) {
       socket.destroy()
     }
-    this.forwards.delete(id)
     return new Promise((resolve) => {
       forward.server.close(() => resolve(forward.entry))
     })
   }
 
+  private waitForSystemSshForwardStop(process: ChildProcess): Promise<void> {
+    process.kill('SIGTERM')
+    return new Promise((resolve) => {
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        process.off('exit', onExit)
+      }
+      const onExit = (): void => {
+        cleanup()
+        resolve()
+      }
+      const timer = setTimeout(() => {
+        cleanup()
+        resolve()
+      }, SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
+      process.once('exit', onExit)
+    })
+  }
+
   private teardownForward(forward: ActiveForward): void {
+    if (forward.kind === 'system-ssh') {
+      forward.process.kill('SIGTERM')
+      return
+    }
     for (const socket of forward.activeSockets) {
       socket.destroy()
     }
