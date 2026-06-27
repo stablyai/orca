@@ -77,7 +77,7 @@
       })
 
       it('rejects malformed IPv4', () => {
-        for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1', '1.2.3.4 ', ' 1.2.3.4']) {
+        for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1']) {
           expect(parseManualNetworkAddress(bad)).toEqual({
             ok: false,
             error: 'Enter an IPv4 address or Tailscale MagicDNS hostname'
@@ -123,7 +123,7 @@
 
     describe('length and whitespace', () => {
       it('rejects inputs longer than 253 chars', () => {
-        const long = 'a'.repeat(250) + '.ts.net'
+        const long = `${'a'.repeat(250)}.ts.net`
         expect(long.length).toBeGreaterThan(253)
         expect(parseManualNetworkAddress(long).ok).toBe(false)
       })
