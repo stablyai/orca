@@ -76,10 +76,11 @@ export function buildComboboxEntries(
 **Behavior:**
 
 - Trim `query`; if empty, return only `kind: 'interface'` entries from `interfaces` (no `use-query`).
-- If `query` is non-empty:
-  - Filter `interfaces` by case-insensitive substring match on `iface.address` OR `iface.name`. Emit each as `kind: 'interface'`.
-  - Run `parseManualNetworkAddress(query)`. If valid AND `query.trim()` does not already equal an emitted interface address exactly, append `{ kind: 'use-query', address: parsed.address }`. (Suppressing the duplicate when it already matches an interface avoids two visually identical rows when the user types an IP the OS already enumerated.)
-- Order: filtered interfaces first (stable, in input order), then `use-query`.
+- If `query` is non-empty, behavior branches on `parseManualNetworkAddress(query)`:
+  - **Valid query:** skip substring filtering and keep every interface visible (so the user can pivot to an existing interface mid-typing). Emit each as `kind: 'interface'`.
+  - **Invalid query:** filter `interfaces` by case-insensitive substring match on `iface.address` OR `iface.name`. Emit each as `kind: 'interface'`. If the filter yields zero matches, fall back to the full `interfaces` list (so the user always sees the available options, never an empty list mid-typing).
+- After the interface entries, if the query parsed as valid AND no emitted interface has an `address` exactly equal to `parsed.address`, append `{ kind: 'use-query', address: parsed.address }`. (Suppression happens regardless of whether filtering ran, because valid queries skip filtering entirely — the check is against the visible interface list, which for valid queries is the full list.)
+- Order: interface entries first (stable, in input order — either filtered or the full list per the branch above), then the optional `use-query`.
 - The `selectRefreshedNetworkAddress` function is **kept** unchanged — it's still the rule that decides the *initial* `selectedAddress` when no manual entry exists. The UI calls it on mount and on Refresh; afterwards, the combobox owns the selection.
 
 ## Module 3: `MobileNetworkInterfaceSection` UI
@@ -146,7 +147,7 @@ The parent of `MobileNetworkInterfaceSection` (whichever Settings tab owns it) a
 
 ## Edge cases
 
-1. **Duplicate manual entry vs. existing interface** — `buildComboboxEntries` suppresses the `use-query` entry when the query exactly equals one of the filtered interface addresses. The user lands on the existing interface row instead of a duplicate.
+1. **Duplicate manual entry vs. existing interface** — `buildComboboxEntries` suppresses the `use-query` entry whenever the parsed query exactly equals an emitted interface's `address`. For valid queries the visible list is the full interface list (no substring filter runs), so the suppression check is against every interface, not just filtered ones. The user lands on the existing interface row instead of a duplicate.
 2. **OS discovers the manual address later** — If `customAddress === '100.64.1.20'` and a refresh surfaces `100.64.1.20 (tailscale0)`, both are valid options; the user's selection stays. A future iteration may add a "merge" action; out of scope here.
 3. **Empty `networkInterfaces`** — All-interface list is empty. If `query` is also empty, `CommandEmpty` shows. If `query` is valid, the `use-query` entry still appears so the user can type an address even when nothing is enumerated. The trigger shows `No interfaces found`.
 4. **Manual address becomes unreachable at pair time** — Not handled here. The QR generation succeeds; `pair-scan.tsx` already surfaces "Cannot connect — same network?" on failure.
@@ -166,9 +167,9 @@ The parent of `MobileNetworkInterfaceSection` (whichever Settings tab owns it) a
 **`mobile-network-interface-selection.test.ts`**
 
 - `buildComboboxEntries([LAN, TAILNET], '')` returns two interface entries, no `use-query`.
-- `buildComboboxEntries([LAN, TAILNET], '100')` returns the tailnet interface only, plus `use-query` when `'100'` itself is not a valid address (here it is not — too short), so only one entry.
-- `buildComboboxEntries([LAN, TAILNET], '100.64.1.20')` returns tailnet interface only AND suppresses `use-query` because the query equals an existing address.
-- `buildComboboxEntries([LAN, TAILNET], 'my-mac.tail-abcd.ts.net')` returns both LAN and tailnet (substring filter matches `tailscale0` name) plus a `use-query` with the trimmed address.
+- `buildComboboxEntries([LAN, TAILNET], '100')` (invalid query) returns the tailnet interface only — substring filter on `100.64.1.20` matches `100` — and no `use-query` because the query did not parse.
+- `buildComboboxEntries([LAN, TAILNET], '100.64.1.20')` (valid query) returns both interface entries (valid queries skip substring filtering) AND suppresses `use-query` because the parsed address equals an existing interface's `address`.
+- `buildComboboxEntries([LAN, TAILNET], 'my-mac.tail-abcd.ts.net')` (valid query) returns both interface entries (valid queries skip substring filtering) plus a `use-query` with the trimmed address.
 - `buildComboboxEntries([], '1.2.3.4')` returns just `use-query`.
 
 **`MobileNetworkInterfaceSection.test.tsx`** (new)
