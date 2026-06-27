@@ -73,6 +73,7 @@ import {
   onDriverChange
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
+import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
@@ -464,16 +465,42 @@ export default function TerminalPane({
   // layer above the still-mounted terminal, so the terminal's own mobile-driver
   // overlay must not render on top of it; the chat composer's guarded canSend
   // communicates the presence-lock inside the chat surface instead (U9/R8).
+  const unifiedTabId = useAppStore(
+    (store) =>
+      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
+        (t) => t.contentType === 'terminal' && t.entityId === tabId
+      )?.id
+  )
   const isChatViewMode = useAppStore(
     (store) =>
       (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (t) => t.contentType === 'terminal' && t.entityId === tabId
       )?.viewMode === 'chat'
   )
+  // The native-chat toggle joins the pane header's split/close cluster. Eligible
+  // when Orca launched an agent here or one was detected live (any pane of this
+  // tab has an agent-status entry, keyed `${tabId}:…`).
+  const hasDetectedAgent = useAppStore((store) =>
+    Object.keys(store.agentStatusByPaneKey).some((paneKey) => {
+      const sep = paneKey.indexOf(':')
+      return sep > 0 && paneKey.slice(0, sep) === tabId
+    })
+  )
+  const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const terminalTab = useAppStore((store) =>
     getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
+  const canToggleChat = canToggleNativeChat({
+    contentType: 'terminal',
+    launchAgent: terminalTab?.launchAgent,
+    hasDetectedAgent
+  })
+  const handleToggleNativeChat = useCallback(() => {
+    if (unifiedTabId) {
+      toggleTabViewMode(unifiedTabId)
+    }
+  }, [unifiedTabId, toggleTabViewMode])
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const restoredLayout = useMemo(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
@@ -2640,6 +2667,9 @@ export default function TerminalPane({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
+        canToggleNativeChat={canToggleChat}
+        isChatViewMode={isChatViewMode}
+        onToggleNativeChat={handleToggleNativeChat}
         onSplitPane={splitTerminalPaneFromHeader}
         onBeginPaneDrag={beginPaneDragFromHeader}
         onActivatePaneTitleInteraction={activatePaneTitleInteraction}
