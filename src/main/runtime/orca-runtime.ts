@@ -3665,6 +3665,7 @@ export class OrcaRuntimeService {
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    await this.refreshMobileSessionPtyRecords()
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -3692,13 +3693,19 @@ export class OrcaRuntimeService {
       )
       // Why: serve-created tabs can be visible before any renderer has adopted
       // their tab id, so focusing the renderer would silently no-op.
+      // Phone-local activation also needs this path for inactive restored tabs:
+      // desktop focus is intentionally suppressed, but the PTY still must exist.
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        (!this.notifier?.focusTerminal ||
+        (opts.notifyClients === false ||
+          !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+        const targetGroupId = snapshot?.tabGroups?.find((group) =>
+          group.tabOrder.includes(tab.parentTabId)
+        )?.id
         try {
           await this.createHeadlessMobileSessionTerminal(
             worktreeId,
@@ -3712,7 +3719,8 @@ export class OrcaRuntimeService {
               leafId: tab.leafId,
               sessionId
             },
-            tab.launchAgent
+            tab.launchAgent,
+            targetGroupId
           )
         } catch (err) {
           if (sessionId && parseAppSshPtyId(sessionId)) {
