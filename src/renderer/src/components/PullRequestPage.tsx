@@ -6700,7 +6700,7 @@ export default function PullRequestPage({
       .then((result) => {
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
         const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (invalidatedMidFlight) {
+        if (invalidatedMidFlight && prev?.pending !== inflight) {
           // Why: entry was deliberately dropped; do not recreate it. If the
           // entry still exists (later open repopulated it) leave it alone too.
           return
@@ -6729,10 +6729,10 @@ export default function PullRequestPage({
       .catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to load details'
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
-        if (invalidatedMidFlight) {
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
-        const prev = workItemDetailsCache.get(detailsCacheKey)
         // Why: stale-on-error — keep cached data if we have it, drop the
         // pending promise so the next open can retry. Only surface the
         // blocking error when nothing is cached.
@@ -6865,6 +6865,26 @@ export default function PullRequestPage({
     },
     [detailsCacheKey]
   )
+
+  const invalidateCurrentDetailsCache = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    // Why: local repos can invalidate every source-preference variant; runtime-only
+    // entries need their exact source-scoped key because there is no local path.
+    if (repoPath) {
+      invalidateWorkItemDetailsCacheByMatch({
+        repoPath,
+        repoId: effectiveRepoId ?? undefined,
+        type: workItem.type,
+        number: workItem.number
+      })
+      return
+    }
+    if (detailsCacheKey) {
+      invalidateWorkItemDetailsCacheForKey(detailsCacheKey)
+    }
+  }, [detailsCacheKey, effectiveRepoId, repoPath, workItem])
 
   const handlePRFileViewedChange = useCallback(
     async (path: string, viewed: boolean): Promise<boolean> => {
@@ -7145,21 +7165,7 @@ export default function PullRequestPage({
           localLabels={localLabels}
           onStateChange={setLocalState}
           onLabelsChange={setLocalLabels}
-          onMutated={() => {
-            // Why: drop the cached details for this item so the next
-            // open issues a fresh fetch instead of painting pre-edit
-            // state. We invalidate by (repoPath, type, number) match
-            // because a single mutation can affect entries across all
-            // issueSourcePreference values for the same number.
-            if (repoPath) {
-              invalidateWorkItemDetailsCacheByMatch({
-                repoPath,
-                repoId: effectiveRepoId ?? undefined,
-                type: workItem.type,
-                number: workItem.number
-              })
-            }
-          }}
+          onMutated={invalidateCurrentDetailsCache}
           assignees={details?.assignees ?? []}
           onUse={onUse}
         />
@@ -7224,16 +7230,7 @@ export default function PullRequestPage({
                   localState={localState}
                   onStateChange={setLocalState}
                   projectOrigin={projectOrigin}
-                  onMutated={() => {
-                    if (repoPath) {
-                      invalidateWorkItemDetailsCacheByMatch({
-                        repoPath,
-                        repoId: effectiveRepoId ?? undefined,
-                        type: workItem.type,
-                        number: workItem.number
-                      })
-                    }
-                  }}
+                  onMutated={invalidateCurrentDetailsCache}
                   onChecksUpdated={(nextChecks) => {
                     if (detailsCacheKey) {
                       patchCachedPRChecks(detailsCacheKey, nextChecks)
