@@ -225,6 +225,11 @@ describe('createMainWindow', () => {
       { src: 'data:text/html,' } as never
     )
     expect(allowBlankEvent.preventDefault).not.toHaveBeenCalled()
+    expect(allowBlankPrefs).toMatchObject({
+      disableHtmlFullscreenWindowResize: true,
+      partition: 'persist:orca-browser',
+      sandbox: true
+    })
 
     const denyInlineHtmlEvent = { preventDefault: vi.fn() }
     windowHandlers['will-attach-webview'](

@@ -77,6 +77,7 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { rememberLiveBrowserUrl } from './browser-runtime'
 import {
   destroyPersistentWebview,
@@ -3621,7 +3622,7 @@ function BrowserPagePane({
       // Why: the key must be camelCase — Electron's <webview> webpreferences
       // parser spreads keys verbatim into WebPreferences, so a lowercase key is
       // silently ignored.
-      webview.setAttribute('webpreferences', 'disableHtmlFullscreenWindowResize=true')
+      webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
       webview.style.display = 'flex'
       webview.style.flex = '1'
       webview.style.width = '100%'
