@@ -343,9 +343,10 @@
     | { kind: 'use-query'; address: string }
 
   // Why: the UI needs a single ordered list to render inside CommandList.
-  // Interface entries come first (filtered by the user's query), then an
-  // optional 'use-query' row that promotes the typed value to a real
-  // selection when the grammar accepts it.
+  // Behavior branches on whether the query parses as a valid address —
+  // valid queries show the full interface list (so users can pivot to an
+  // existing interface mid-typing), invalid queries substring-filter and
+  // fall back to the full list when nothing matches.
   export function buildComboboxEntries(
     interfaces: readonly MobileNetworkInterface[],
     query: string
@@ -355,20 +356,29 @@
       return interfaces.map((iface) => ({ kind: 'interface' as const, iface }))
     }
 
-    const lowered = trimmed.toLowerCase()
-    const filtered = interfaces.filter(
-      (iface) =>
-        iface.address.toLowerCase().includes(lowered) ||
-        iface.name.toLowerCase().includes(lowered)
-    )
+    const parsed = parseManualNetworkAddress(trimmed)
 
-    const entries: ComboboxEntry[] = filtered.map((iface) => ({
+    let visible: readonly MobileNetworkInterface[]
+    if (parsed.ok) {
+      // Valid address: keep every interface visible.
+      visible = interfaces
+    } else {
+      // Invalid: substring-filter; fall back to full list when nothing matches.
+      const lowered = trimmed.toLowerCase()
+      const filtered = interfaces.filter(
+        (iface) =>
+          iface.address.toLowerCase().includes(lowered) ||
+          iface.name.toLowerCase().includes(lowered)
+      )
+      visible = filtered.length > 0 ? filtered : interfaces
+    }
+
+    const entries: ComboboxEntry[] = visible.map((iface) => ({
       kind: 'interface' as const,
       iface
     }))
 
-    const parsed = parseManualNetworkAddress(trimmed)
-    if (parsed.ok && !filtered.some((iface) => iface.address === parsed.address)) {
+    if (parsed.ok && !visible.some((iface) => iface.address === parsed.address)) {
       entries.push({ kind: 'use-query', address: parsed.address })
     }
 
@@ -392,7 +402,7 @@
   }
   ```
 
-  The relative import paths (`../../../../shared/tailnet-address`, `../../../shared/network/manual-address`) must match the file's location in the tree. If they don't resolve, adjust based on the existing path style in the same directory (e.g. `../foo` vs `@/foo`).
+  The relative import paths (`../../../../shared/tailnet-address`, `../../../../shared/network/manual-address`) must match the file's location in the tree. If they don't resolve, adjust based on the existing path style in the same directory (e.g. `../foo` vs `@/foo`).
 
 - [ ] **Step 5: Run the test file to verify everything passes**
 
