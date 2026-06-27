@@ -59,9 +59,11 @@ async function fileMtimeMs(filePath: string): Promise<number> {
  */
 export async function readNativeChatTranscriptCached(
   agent: AgentType,
-  sessionId: string
+  sessionId: string,
+  /** Hook-reported authoritative transcript path, preferred over the id glob. */
+  transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
-  const filePath = await resolveSessionFilePath(agent, sessionId)
+  const filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}` }
   }

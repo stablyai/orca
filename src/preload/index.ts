@@ -3450,14 +3450,20 @@ const api = {
     readSession: (
       agent: AgentType,
       sessionId: string,
-      limit?: number
+      limit?: number,
+      transcriptPath?: string
     ): Promise<NativeChatReadSessionResult> =>
-      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit }),
+      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
     /** Start live tailing for a transcript. `onAppended` fires with only the
      *  newly-appended messages. Returns an unsubscribe fn that closes the
      *  main-process watcher (subscriptionId routes appends to this caller). */
     subscribe: (
-      args: { subscriptionId: string; agent: AgentType; sessionId: string },
+      args: {
+        subscriptionId: string
+        agent: AgentType
+        sessionId: string
+        transcriptPath?: string
+      },
       onAppended: (messages: NativeChatAppendedMessages) => void
     ): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: NativeChatAppendedPayload) => {

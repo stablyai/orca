@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
-import {
-  applyAppend,
-  createNativeChatMerger,
-  replaceList
-} from './mobile-native-chat-merge'
+import { applyAppend, createNativeChatMerger, replaceList } from './mobile-native-chat-merge'
 
 export type MobileNativeChatStatus = 'idle' | 'loading' | 'waiting-session' | 'ready' | 'error'
 
@@ -36,8 +32,10 @@ export function useMobileNativeChatSession(args: {
   client: RpcClient | null
   agent: string | null
   sessionId: string | null
+  /** Authoritative transcript path from the hook, preferred over the id glob. */
+  transcriptPath?: string | null
 }): MobileNativeChatSession {
-  const { client, agent, sessionId } = args
+  const { client, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const [status, setStatus] = useState<MobileNativeChatStatus>('idle')
   const [error, setError] = useState<string | undefined>(undefined)
@@ -83,7 +81,8 @@ export function useMobileNativeChatSession(args: {
         const response = await client.sendRequest('nativeChat.readSession', {
           agent,
           sessionId,
-          limit: limitRef.current
+          limit: limitRef.current,
+          transcriptPath: transcriptPath ?? undefined
         })
         if (cancelled) {
           return
@@ -112,22 +111,26 @@ export function useMobileNativeChatSession(args: {
       }
     })()
 
-    const unsubscribe = client.subscribe('nativeChat.subscribe', { agent, sessionId }, (raw) => {
-      const frame = raw as AppendedFrame
-      if (cancelled || frame.type !== 'appended' || !Array.isArray(frame.messages)) {
-        return
+    const unsubscribe = client.subscribe(
+      'nativeChat.subscribe',
+      { agent, sessionId, transcriptPath: transcriptPath ?? undefined },
+      (raw) => {
+        const frame = raw as AppendedFrame
+        if (cancelled || frame.type !== 'appended' || !Array.isArray(frame.messages)) {
+          return
+        }
+        // Live turns merge by id (appended at the end) onto the current window;
+        // the cached index keeps this O(incoming).
+        setMessages(applyAppend(mergerRef.current, frame.messages))
+        setStatus('ready')
       }
-      // Live turns merge by id (appended at the end) onto the current window;
-      // the cached index keeps this O(incoming).
-      setMessages(applyAppend(mergerRef.current, frame.messages))
-      setStatus('ready')
-    })
+    )
 
     return () => {
       cancelled = true
       unsubscribe()
     }
-  }, [client, agent, sessionId, setList])
+  }, [client, agent, sessionId, transcriptPath, setList])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlier || !hasMore) {
@@ -143,7 +146,8 @@ export function useMobileNativeChatSession(args: {
         const response = await client.sendRequest('nativeChat.readSession', {
           agent,
           sessionId,
-          limit: nextLimit
+          limit: nextLimit,
+          transcriptPath: transcriptPath ?? undefined
         })
         if (!response.ok) {
           return
@@ -163,7 +167,7 @@ export function useMobileNativeChatSession(args: {
         setLoadingEarlier(false)
       }
     })()
-  }, [client, agent, sessionId, hasMore, loadingEarlier, setList])
+  }, [client, agent, sessionId, transcriptPath, hasMore, loadingEarlier, setList])
 
   return { messages, status, error, hasMore, loadingEarlier, loadEarlier }
 }

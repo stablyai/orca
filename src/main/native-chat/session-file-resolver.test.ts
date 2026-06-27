@@ -110,4 +110,54 @@ describe('resolveSessionFilePath', () => {
   it('returns null for unsupported agents', async () => {
     expect(await resolveSessionFilePath('gemini', 'whatever')).toBeNull()
   })
+
+  it('prefers the hook transcriptPath when it exists (Claude id != file name)', async () => {
+    // Recent Claude Code names the file with a UUID that differs from the hook
+    // session_id, so the id glob would miss it — but transcript_path is exact.
+    const root = await makeRoot('orca-native-chat-resolve-path-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
+    await mkdir(projectDir, { recursive: true })
+    // The real transcript is named by a DIFFERENT id than the hook session id.
+    const realFile = join(projectDir, 'real-file-uuid.jsonl')
+    await writeFile(realFile, '{}\n')
+
+    const resolved = await resolveSessionFilePath('claude', 'hook-session-id', {
+      claudeProjectsDir,
+      transcriptPath: realFile
+    })
+    expect(resolved).toBe(realFile)
+  })
+
+  it('falls back to the id glob when the hook transcriptPath does not exist', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-path-stale-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
+    await mkdir(projectDir, { recursive: true })
+    const target = join(projectDir, 'sess-xyz.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('claude', 'sess-xyz', {
+      claudeProjectsDir,
+      transcriptPath: join(projectDir, 'does-not-exist.jsonl')
+    })
+    expect(resolved).toBe(target)
+  })
+
+  it('ignores a non-jsonl transcriptPath and falls back to the glob', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-path-ext-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
+    await mkdir(projectDir, { recursive: true })
+    const bogus = join(projectDir, 'not-a-transcript.txt')
+    await writeFile(bogus, 'x')
+    const target = join(projectDir, 'sess-ok.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('claude', 'sess-ok', {
+      claudeProjectsDir,
+      transcriptPath: bogus
+    })
+    expect(resolved).toBe(target)
+  })
 })

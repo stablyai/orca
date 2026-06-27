@@ -26,6 +26,9 @@ export type NativeChatPaneResolution = {
   /** The agent's own captured session/conversation id, or null before the
    *  agent has reported one (entry exists but no providerSession yet). */
   sessionId: string | null
+  /** Authoritative transcript path from the hook, when reported. Preferred over
+   *  reconstructing the path from sessionId (recent Claude Code diverges them). */
+  transcriptPath: string | null
   ptyId: string | null
   paneKey: string
 }
@@ -46,6 +49,7 @@ export function resolveNativeChatSession(
   return {
     agent,
     sessionId: input.agentStatusEntry?.providerSession?.id ?? null,
+    transcriptPath: input.agentStatusEntry?.providerSession?.transcriptPath ?? null,
     ptyId: input.ptyId,
     paneKey: input.paneKey
   }

@@ -34,15 +34,21 @@ export type ResolveSessionFileOptions = {
   /** Override the Codex sessions roots, searched in order (tests / isolated
    *  scans). Defaults to the orca-managed home then CODEX_HOME/~/.codex. */
   codexSessionsDirs?: string[]
+  /** Authoritative transcript path reported by the agent hook
+   *  (`providerSession.transcriptPath`). When set and the file exists, it is used
+   *  directly — recent Claude Code names the transcript with a UUID that differs
+   *  from the hook session_id, so the id-based glob below would miss it. */
+  transcriptPath?: string
 }
 
 /**
  * Resolve the on-disk JSONL transcript path for a given agent + session id.
  *
- * Claude nests transcripts by project slug (`~/.claude/projects/<slug>/<id>.jsonl`),
- * so there is no direct path — we glob the projects subdirs for `<id>.jsonl`.
- * Codex stores rollout files under date-nested dirs whose file name embeds the
- * session id, so we match by the session id appearing in the file name.
+ * Prefers the hook-reported `transcriptPath` when it exists on disk (authoritative).
+ * Otherwise: Claude nests transcripts by project slug
+ * (`~/.claude/projects/<slug>/<id>.jsonl`), so we glob the projects subdirs for
+ * `<id>.jsonl`. Codex stores rollout files under date-nested dirs whose file name
+ * embeds the session id, so we match by the session id appearing in the file name.
  * Returns null when no matching transcript exists.
  */
 export async function resolveSessionFilePath(
@@ -50,6 +56,15 @@ export async function resolveSessionFilePath(
   sessionId: string,
   options: ResolveSessionFileOptions = {}
 ): Promise<string | null> {
+  // Why: the hook's transcript_path is the exact file the agent is writing, so it
+  // beats reconstructing a path from the session id. Guard with existsSync so a
+  // stale/remote path falls through to the id-based search rather than returning
+  // a non-existent file.
+  const hookPath = options.transcriptPath?.trim()
+  if (hookPath && extname(hookPath) === '.jsonl' && existsSync(hookPath)) {
+    return hookPath
+  }
+
   const trimmedId = sessionId.trim()
   if (!trimmedId) {
     return null

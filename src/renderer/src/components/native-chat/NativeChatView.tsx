@@ -76,6 +76,7 @@ export default function NativeChatView({
       paneKey={resolution.paneKey}
       agent={resolution.agent}
       sessionId={resolution.sessionId}
+      transcriptPath={resolution.transcriptPath}
       terminalTabId={terminalTabId}
     />
   )
@@ -85,14 +86,16 @@ function NativeChatResolvedView({
   paneKey,
   agent,
   sessionId,
+  transcriptPath,
   terminalTabId
 }: {
   paneKey: string
   agent: NativeChatSession['agent']
   sessionId: string | null
+  transcriptPath: string | null
   terminalTabId: string
 }): React.JSX.Element {
-  const session = useNativeChatLiveSession({ paneKey, agent, sessionId })
+  const session = useNativeChatLiveSession({ paneKey, agent, sessionId, transcriptPath })
   // Live hook state for this pane, selected directly so the working indicator
   // flips the instant the agent reports 'working' — even when switching to chat
   // mid-turn before the transcript merge has caught up.

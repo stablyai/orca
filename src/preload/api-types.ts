@@ -730,16 +730,20 @@ export type NativeChatSubscribeArgs = {
   subscriptionId: string
   agent: AgentType
   sessionId: string
+  /** Authoritative transcript path from the agent hook (providerSession). */
+  transcriptPath?: string
 }
 
 export type NativeChatApi = {
   /** Read the on-disk transcript for an agent + session id, windowed to the most
    *  recent `limit` turns (defaults to the desktop window). The renderer raises
-   *  `limit` to page in older history as it scrolls to the top. */
+   *  `limit` to page in older history as it scrolls to the top. `transcriptPath`
+   *  is the hook-reported authoritative file path, preferred over the id glob. */
   readSession: (
     agent: AgentType,
     sessionId: string,
-    limit?: number
+    limit?: number,
+    transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
   /** Live-tail a transcript: `onAppended` fires with only newly-appended
    *  messages. Returns an unsubscribe fn that closes the main-process watcher. */

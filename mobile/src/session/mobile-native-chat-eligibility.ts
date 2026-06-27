@@ -11,6 +11,9 @@ export type MobileNativeChatResolution = {
   /** The agent's own session id, or null before it has reported one (the view
    *  then shows a waiting state instead of trying to read an unaddressable file). */
   sessionId: string | null
+  /** Authoritative transcript path from the hook (providerSession), preferred
+   *  over reconstructing the path from sessionId (recent Claude Code diverges). */
+  transcriptPath: string | null
 }
 
 type TerminalTabLike = {
@@ -35,7 +38,8 @@ export function resolveMobileNativeChat(
   }
   return {
     agent,
-    sessionId: tab.agentStatus?.providerSession?.id ?? null
+    sessionId: tab.agentStatus?.providerSession?.id ?? null,
+    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
   }
 }
 

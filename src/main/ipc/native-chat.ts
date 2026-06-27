@@ -20,6 +20,9 @@ export type NativeChatReadSessionArgs = {
   /** How many of the most-recent turns to return. The renderer starts at the
    *  default window and raises this to page in older history as it scrolls up. */
   limit?: number
+  /** Authoritative transcript path from the agent hook (providerSession), used to
+   *  locate the file when the session id no longer names it (recent Claude Code). */
+  transcriptPath?: string
 }
 
 // Why: render only the most recent turns so switching to chat view on a long
@@ -41,7 +44,7 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
   // Desktop is full-class: window by count only, no char truncation.
-  const result = await readNativeChatTranscriptCached(agent, sessionId)
+  const result = await readNativeChatTranscriptCached(agent, sessionId, args.transcriptPath)
   return windowTranscript(result, limit)
 }
 
@@ -51,6 +54,8 @@ export type NativeChatSubscribeArgs = {
   subscriptionId: string
   agent: AgentType
   sessionId: string
+  /** Authoritative transcript path from the agent hook (providerSession). */
+  transcriptPath?: string
 }
 
 export type NativeChatAppendedPayload = {
@@ -107,7 +112,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   if (sender.isDestroyed()) {
     return
   }
-  const { subscriptionId, agent, sessionId } = args
+  const { subscriptionId, agent, sessionId, transcriptPath } = args
   // Replace any prior subscription under the same id (session change/resubscribe).
   teardownSubscription(sender.id, subscriptionId)
   registerSenderCleanup(sender)
@@ -115,6 +120,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   const subscription = await subscribeNativeChatTranscript({
     agent,
     sessionId,
+    transcriptPath,
     onAppend: (messages) => {
       if (sender.isDestroyed()) {
         return

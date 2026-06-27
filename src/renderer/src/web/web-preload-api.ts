@@ -992,11 +992,12 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 // undefined on web and the chat view showed no messages.
 function createNativeChatApi(): NativeChatApi {
   return {
-    readSession: (agent, sessionId, limit) =>
+    readSession: (agent, sessionId, limit, transcriptPath) =>
       callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
         agent,
         sessionId,
-        limit
+        limit,
+        transcriptPath
       }),
     subscribe: (args, onAppended) => {
       // No paired runtime yet: nothing to subscribe to, and
@@ -1012,7 +1013,7 @@ function createNativeChatApi(): NativeChatApi {
       void getClientForEnvironment(environment)
         .subscribe(
           'nativeChat.subscribe',
-          { agent: args.agent, sessionId: args.sessionId },
+          { agent: args.agent, sessionId: args.sessionId, transcriptPath: args.transcriptPath },
           {
             onResponse: (response) => {
               if (cancelled || !response.ok) {

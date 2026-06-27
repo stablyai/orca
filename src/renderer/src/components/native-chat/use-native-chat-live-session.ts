@@ -31,6 +31,9 @@ export type UseNativeChatLiveSessionArgs = {
   /** The agent's own session id, or null before the agent has reported one.
    *  With null there is nothing to read/tail; the view shows live hook state. */
   sessionId: string | null
+  /** Authoritative transcript path from the hook (providerSession), preferred
+   *  over reconstructing the path from sessionId. Null when not reported. */
+  transcriptPath?: string | null
 }
 
 /** A live session plus the older-history pagination controls the view needs. */
@@ -96,7 +99,7 @@ type ReadState =
 export function useNativeChatLiveSession(
   args: UseNativeChatLiveSessionArgs
 ): NativeChatLiveSession {
-  const { paneKey, agent, sessionId } = args
+  const { paneKey, agent, sessionId, transcriptPath } = args
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -148,7 +151,7 @@ export function useNativeChatLiveSession(
     setHasMore(false)
 
     void window.api?.nativeChat
-      ?.readSession(agent, sessionId, limitRef.current)
+      ?.readSession(agent, sessionId, limitRef.current, transcriptPath ?? undefined)
       .then((result) => {
         if (cancelled) {
           return
@@ -169,7 +172,7 @@ export function useNativeChatLiveSession(
 
     const subscriptionId = nextSubscriptionId()
     const unsubscribe = window.api?.nativeChat?.subscribe?.(
-      { subscriptionId, agent, sessionId },
+      { subscriptionId, agent, sessionId, transcriptPath: transcriptPath ?? undefined },
       (messages) => {
         if (!cancelled) {
           // Merge by id (re-emits replace in place) then bound to the window so
@@ -203,7 +206,7 @@ export function useNativeChatLiveSession(
         })
       }
     }
-  }, [agent, sessionId])
+  }, [agent, sessionId, transcriptPath])
 
   const loadEarlier = useCallback(() => {
     if (!sessionId || loadingEarlier || !hasMore || read.phase !== 'ready') {
@@ -212,7 +215,7 @@ export function useNativeChatLiveSession(
     const nextLimit = nextNativeChatLimit(limitRef.current)
     setLoadingEarlier(true)
     void window.api?.nativeChat
-      ?.readSession(agent, sessionId, nextLimit)
+      ?.readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
       .then((result) => {
         // Ignore a stale resolve from a session that swapped underneath us.
         if (latestSessionId.current !== sessionId) {
@@ -233,7 +236,7 @@ export function useNativeChatLiveSession(
         // APPLYING the result above is gated on the session-id match.
         setLoadingEarlier(false)
       })
-  }, [agent, sessionId, hasMore, loadingEarlier, read.phase])
+  }, [agent, sessionId, transcriptPath, hasMore, loadingEarlier, read.phase])
 
   // Assembled messages reuse the incremental assembler across appends. Computed
   // outside the status memo: hookState changes only the status override, not the
@@ -280,14 +283,5 @@ export function useNativeChatLiveSession(
       ...(read.phase === 'error' ? { error: read.error } : {})
     })
     return { ...session, hasMore, loadingEarlier, loadEarlier }
-  }, [
-    assembledMessages,
-    read,
-    sessionId,
-    agent,
-    hookState,
-    hasMore,
-    loadingEarlier,
-    loadEarlier
-  ])
+  }, [assembledMessages, read, sessionId, agent, hookState, hasMore, loadingEarlier, loadEarlier])
 }

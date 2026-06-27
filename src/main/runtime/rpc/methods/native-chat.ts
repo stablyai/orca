@@ -27,7 +27,11 @@ const NativeChatSession = z.object({
   // keys the fs-watcher cleanup under it so registration and unsubscribe derive
   // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,
   // which is exactly what existing mobile clients rely on).
-  subscriptionId: z.string().min(1).optional()
+  subscriptionId: z.string().min(1).optional(),
+  // Authoritative transcript path from the agent hook (providerSession), used to
+  // locate the file directly when the session id no longer names it (recent
+  // Claude Code). Optional for back-compat with older clients.
+  transcriptPath: z.string().min(1).optional()
 })
 
 const NativeChatUnsubscribe = z.object({
@@ -101,7 +105,11 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     name: 'nativeChat.readSession',
     params: NativeChatSession,
     handler: async (params, { clientKind }) => {
-      const result = await readNativeChatTranscriptCached(params.agent, params.sessionId)
+      const result = await readNativeChatTranscriptCached(
+        params.agent,
+        params.sessionId,
+        params.transcriptPath
+      )
       // Window to the conversation tail (all clients); clip blocks for mobile only.
       return 'messages' in result
         ? { messages: windowForClient(result.messages, clientKind, params.limit) }
@@ -140,6 +148,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const subscription = await subscribeNativeChatTranscript({
         agent: params.agent,
         sessionId: params.sessionId,
+        transcriptPath: params.transcriptPath,
         onAppend: (messages) => {
           if (closed) {
             return
