@@ -8,11 +8,8 @@
  */
 import { spawn } from 'child_process'
 import { type SearchOptions, type SearchResult } from './fs-handler-utils'
-import {
-  buildGitLsFilesArgsForQuickOpen,
-  shouldExcludeQuickOpenRelPath,
-  shouldIncludeQuickOpenPath
-} from '../shared/quick-open-filter'
+import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
+import { expandQuickOpenGitFilesWithNestedRepos } from '../shared/quick-open-readdir-walk'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -36,7 +33,7 @@ export function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[] = []
 ): Promise<string[]> {
-  const files = new Set<string>()
+  const gitPaths = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ReturnType<typeof spawn>
@@ -53,12 +50,7 @@ export function listFilesWithGit(
         if (!path) {
           return
         }
-        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
-          return
-        }
-        if (shouldIncludeQuickOpenPath(path)) {
-          files.add(path)
-        }
+        gitPaths.add(path)
       }
 
       const child = spawn('git', ['ls-files', ...args], {
@@ -161,7 +153,13 @@ export function listFilesWithGit(
   }
 
   return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)])
-    .then(() => Array.from(files))
+    .then(() =>
+      expandQuickOpenGitFilesWithNestedRepos({
+        rootPath,
+        gitPaths,
+        excludePathPrefixes
+      })
+    )
     .catch((err) => {
       killSurvivors()
       throw err
