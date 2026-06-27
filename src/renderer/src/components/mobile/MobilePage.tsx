@@ -31,6 +31,10 @@ export default function MobilePage(): React.JSX.Element {
   const [pairLoading, setPairLoading] = useState(false)
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
+  // Why: tracks whether `selectedAddress` came from the user typing a
+  // manual value rather than from an OS-enumerated interface, so the
+  // refresh path can keep their choice instead of snapping back to LAN.
+  const [addressIsManual, setAddressIsManual] = useState(false)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
@@ -214,7 +218,11 @@ export default function MobilePage(): React.JSX.Element {
       // Resolve the new address before committing it so we can detect a real
       // change and remint the QR — otherwise the QR keeps encoding the stale
       // endpoint after a network refresh swaps the active interface.
-      const newAddress = selectRefreshedNetworkAddress(selectedAddress, result.interfaces)
+      const newAddress = selectRefreshedNetworkAddress(
+        selectedAddress,
+        result.interfaces,
+        addressIsManual
+      )
       if (mountedRef.current) {
         setSelectedAddress(newAddress)
       }
@@ -228,7 +236,7 @@ export default function MobilePage(): React.JSX.Element {
         setRefreshingNetworkInterfaces(false)
       }
     }
-  }, [selectedAddress, generatePairing, mountedRef])
+  }, [selectedAddress, generatePairing, mountedRef, addressIsManual])
 
   useEffect(() => {
     if (stage !== 'flow') {
@@ -240,10 +248,15 @@ export default function MobilePage(): React.JSX.Element {
   const handleAddressChange = useCallback(
     (address: string) => {
       setSelectedAddress(address)
+      // Why: if the picked address is not in the OS-enumerated list, it is
+      // a user-typed manual entry — remember that so the next refresh does
+      // not snap it back to a tailnet/LAN fallback.
+      const isManual = !networkInterfaces.some((iface) => iface.address === address)
+      setAddressIsManual(isManual)
       // Switching network must remint so the QR encodes the new endpoint.
       void generatePairing(true, address)
     },
-    [generatePairing]
+    [generatePairing, networkInterfaces]
   )
 
   const copyPairingCode = useCallback(async () => {

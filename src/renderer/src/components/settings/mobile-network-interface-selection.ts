@@ -54,12 +54,19 @@ export function buildComboboxEntries(
 
 export function selectRefreshedNetworkAddress(
   currentAddress: string | undefined,
-  interfaces: readonly MobileNetworkInterface[]
+  interfaces: readonly MobileNetworkInterface[],
+  // Why: callers that explicitly know the user picked a manual address
+  // (not an OS-enumerated one) pass this so the refresh path keeps their
+  // selection instead of snapping back to a tailnet/LAN fallback.
+  currentAddressIsManual: boolean = false
 ): string | undefined {
   if (interfaces.length === 0) {
     return undefined
   }
-  if (currentAddress && interfaces.some((iface) => iface.address === currentAddress)) {
+  if (
+    currentAddress &&
+    (currentAddressIsManual || interfaces.some((iface) => iface.address === currentAddress))
+  ) {
     return currentAddress
   }
   return (
