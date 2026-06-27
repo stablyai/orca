@@ -5304,7 +5304,9 @@
           "d536b5e20d": "QR 코드에 광고할 네트워크 주소를 선택하세요. 동일한 네트워크 페어링에는 LAN 주소를 사용하고, 교차 네트워크 액세스에는 오버레이 네트워크 주소(Tailscale, ZeroTier)를 사용하세요.",
           "406a35121c": "네트워크 인터페이스",
           "c541f67790": "QR 코드 생성",
-          "1e64659126": "재생성"
+          "1e64659126": "재생성",
+          "new-combobox-placeholder": "Search or type an address…",
+          "new-combobox-empty": "No matching interfaces"
         },
         "MobilePane": {
           "dd3cd78d04": "Orca 모바일로 스캔",

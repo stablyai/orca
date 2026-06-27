@@ -5341,7 +5341,9 @@
           "d536b5e20d": "QR コードでアドバタイズするネットワーク アドレスを選択します。同一ネットワーク ペアリングには LAN アドレスを使用し、クロスネットワーク アクセスにはオーバーレイ ネットワーク アドレス (Tailscale、ZeroTier) を使用します。",
           "406a35121c": "ネットワークインターフェース",
           "c541f67790": "QRコードの生成",
-          "1e64659126": "再生する"
+          "1e64659126": "再生する",
+          "new-combobox-placeholder": "Search or type an address…",
+          "new-combobox-empty": "No matching interfaces"
         },
         "MobilePane": {
           "dd3cd78d04": "Orca モバイルでスキャン",

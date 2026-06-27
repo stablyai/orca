@@ -5319,7 +5319,9 @@
           "d536b5e20d": "Elija qué dirección de red anunciar en el código QR. Utilice su dirección LAN para el emparejamiento de la misma red o una dirección de red superpuesta (Tailscale, ZeroTier) para el acceso entre redes.",
           "406a35121c": "Interfaz de red",
           "c541f67790": "Generar código QR",
-          "1e64659126": "Regenerado"
+          "1e64659126": "Regenerado",
+          "new-combobox-placeholder": "Search or type an address…",
+          "new-combobox-empty": "No matching interfaces"
         },
         "MobilePane": {
           "dd3cd78d04": "Escanear con Orca Móvil",

@@ -5304,7 +5304,9 @@
           "d536b5e20d": "选择要在 QR 码中公布的网络地址。使用 LAN 地址进行同网络配对，或使用覆盖网络地址（Tailscale、ZeroTier）进行跨网络访问。",
           "406a35121c": "网络接口",
           "c541f67790": "生成二维码",
-          "1e64659126": "再生"
+          "1e64659126": "再生",
+          "new-combobox-placeholder": "Search or type an address…",
+          "new-combobox-empty": "No matching interfaces"
         },
         "MobilePane": {
           "dd3cd78d04": "使用 Orca Mobile 扫描",

@@ -5356,7 +5356,9 @@
           "d536b5e20d": "Choose which network address to advertise in the QR code. Use your LAN address for same-network pairing, or an overlay network address (Tailscale, ZeroTier) for cross-network access.",
           "406a35121c": "Network Interface",
           "c541f67790": "Generate QR Code",
-          "1e64659126": "Regenerate"
+          "1e64659126": "Regenerate",
+          "new-combobox-placeholder": "Search or type an address…",
+          "new-combobox-empty": "No matching interfaces"
         },
         "MobilePane": {
           "dd3cd78d04": "Scan with Orca Mobile",

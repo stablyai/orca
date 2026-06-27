@@ -162,10 +162,15 @@ export function MobileNetworkInterfaceSection({
                         </CommandItem>
                       )
                     }
-                    const isFirstUseQuery = index > 0
+                    // Why: cmdk groups don't visually separate the manual-entry row from
+                    // the auto-discovered interfaces; a separator makes the boundary
+                    // obvious. The separator only renders when at least one interface
+                    // entry has come before, so the layout stays clean when the list is
+                    // empty (use-query only).
+                    const precededByInterface = index > 0
                     return (
                       <div key={`use-${entry.address}`}>
-                        {isFirstUseQuery ? <CommandSeparator /> : null}
+                        {precededByInterface ? <CommandSeparator /> : null}
                         <CommandItem
                           value={`__use__ ${entry.address}`}
                           onSelect={() => handleSelectUseQuery(entry.address)}
@@ -205,7 +210,7 @@ export function MobileNetworkInterfaceSection({
           </Tooltip>
         </div>
         {showInlineError ? (
-          <p className="text-xs text-statusRed" role="status">
+          <p className="text-xs text-destructive" role="status">
             {ERROR_MESSAGE}
           </p>
         ) : null}
