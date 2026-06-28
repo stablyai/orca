@@ -29,6 +29,10 @@ const MOCK_FILE_PATHS = new Set([
   ...MOCK_FILE_LIST.map((entry) => entry.relativePath)
 ])
 
+/**
+ * Mirrors the host terminal-path resolver just enough for mock sessions: only
+ * known worktree-relative files, or their absolute mock-root form, are openable.
+ */
 function resolveMockTerminalPath(pathText: string): string | null {
   const normalized = pathText.replace(/\\/g, '/').replace(/^\.\//, '')
   const rootPrefix = `${MOCK_ROOT_PATH}/`
@@ -42,6 +46,10 @@ function resolveMockTerminalPath(pathText: string): string | null {
   return MOCK_FILE_PATHS.has(relativePath) ? relativePath : null
 }
 
+/**
+ * Serves the file RPC subset that the mobile Files panel and terminal path-tap
+ * flow need, keeping mock development close to the real desktop contract.
+ */
 export function handleMockFilePreviewRequest(
   request: RpcRequest,
   respond: Respond,
