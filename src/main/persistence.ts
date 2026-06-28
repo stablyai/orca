@@ -296,17 +296,36 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
 // Solution: index.ts calls initDataPath() right after configureDevUserDataPath()
 // but before app.setName(), capturing the correct path at the right moment.
 let _dataFile: string | null = null
+let _userDataDir: string | null = null
 
 export function initDataPath(): void {
-  _dataFile = join(app.getPath('userData'), 'orca-data.json')
+  const userDataDir = app.getPath('userData')
+  _userDataDir = userDataDir
+  _dataFile = join(userDataDir, 'orca-data.json')
 }
 
 function getDataFile(): string {
   if (!_dataFile) {
     // Safety fallback — should not be hit in normal startup.
-    _dataFile = join(app.getPath('userData'), 'orca-data.json')
+    const userDataDir = app.getPath('userData')
+    _userDataDir = userDataDir
+    _dataFile = join(userDataDir, 'orca-data.json')
   }
   return _dataFile
+}
+
+// Why: returns the userData directory captured at initDataPath() time, before
+// app.setName() can change how app.getPath('userData') resolves. Subsystems that
+// must share storage with orca-data.json (mobile pairing's DeviceRegistry,
+// E2EE keypair, runtime metadata) read this instead of resolving the path late,
+// which on case-sensitive filesystems lands in a different directory and loses
+// paired devices across restarts/updates.
+export function getCanonicalUserDataPath(): string {
+  if (!_userDataDir) {
+    // Safety fallback — should not be hit in normal startup.
+    _userDataDir = app.getPath('userData')
+  }
+  return _userDataDir
 }
 
 // Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
