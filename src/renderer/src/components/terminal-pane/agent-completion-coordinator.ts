@@ -652,6 +652,14 @@ export function createAgentCompletionCoordinator(
   }
 
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
+    if (options.shouldSuppressHookCompletion?.(payload)) {
+      // Why: a suppressed permission pause must still cancel a provisional 'done'
+      // so the quiet-window timer never fires a false completion notification.
+      if (isAttentionHookState(payload.state)) {
+        clearPendingHookDone()
+      }
+      return
+    }
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }

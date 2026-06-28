@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: notification edge cases share one module-scoped coordinator, so keeping setup and regression cases together prevents brittle cross-file mock resets. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
@@ -25,6 +26,32 @@ type MockStoreState = {
       ptyIdsByLeafId?: Record<string, string>
     }
   >
+  agentLaunchConfigByPaneKey: Record<
+    string,
+    {
+      launchConfig: { agentArgs: string; agentEnv: Record<string, string> }
+      launchToken?: string
+    }
+  >
+  agentStatusByPaneKey: Record<
+    string,
+    {
+      state: ParsedAgentStatusPayload['state']
+      prompt: string
+      paneKey: string
+      updatedAt: number
+      stateStartedAt: number
+      agentType?: ParsedAgentStatusPayload['agentType']
+      stateHistory: []
+    }
+  >
+  getAgentLaunchConfigForStatusEntry: (entry: {
+    paneKey: string
+  }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
+  getAgentLaunchConfigForStatusMetadata: (metadata: {
+    paneKey: string
+    launchToken?: string
+  }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
 }
 
 let mockStoreState: MockStoreState
@@ -46,6 +73,29 @@ function hookStatus(state: ParsedAgentStatusPayload['state']): ParsedAgentStatus
     prompt: 'implement notifications',
     agentType: 'codex',
     lastAssistantMessage: state === 'done' ? 'Done.' : undefined
+  }
+}
+
+function seedCodexPaneLaunchConfig(
+  paneKey: string,
+  agentArgs: string,
+  launchToken = 'launch-token-1'
+): void {
+  mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+    launchConfig: {
+      agentArgs,
+      agentEnv: {}
+    },
+    launchToken
+  }
+  mockStoreState.agentStatusByPaneKey[paneKey] = {
+    state: 'working',
+    prompt: 'implement notifications',
+    paneKey,
+    updatedAt: Date.now(),
+    stateStartedAt: Date.now(),
+    agentType: 'codex',
+    stateHistory: []
   }
 }
 
@@ -71,7 +121,17 @@ describe('agent hook completion notifications', () => {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' }]
       },
-      terminalLayoutsByTabId: {}
+      terminalLayoutsByTabId: {},
+      agentLaunchConfigByPaneKey: {},
+      agentStatusByPaneKey: {},
+      getAgentLaunchConfigForStatusEntry: (entry) =>
+        mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig,
+      getAgentLaunchConfigForStatusMetadata: (metadata) =>
+        metadata.launchToken &&
+        metadata.launchToken ===
+          mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchToken
+          ? mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchConfig
+          : undefined
     }
   })
 
@@ -458,6 +518,89 @@ describe('agent hook completion notifications', () => {
         })
       })
     )
+  })
+
+  it('fails open for Codex auto-approved permission requests without launch proof', async () => {
+    seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'waiting',
+        prompt: 'implement notifications',
+        agentType: 'codex',
+        toolName: 'exec_command',
+        toolInput: 'git status'
+      }
+    })
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('still notifies for manual Codex permission requests', async () => {
+    seedCodexPaneLaunchConfig(paneKey, '')
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'waiting',
+        prompt: 'implement notifications',
+        agentType: 'codex',
+        toolName: 'exec_command',
+        toolInput: 'git status'
+      }
+    })
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        terminalTitle: 'codex'
+      })
+    )
+  })
+
+  it('fails open for Codex auto-approved blocked permission requests without launch proof', async () => {
+    seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'blocked',
+        prompt: 'implement notifications',
+        agentType: 'codex',
+        toolName: 'exec_command',
+        toolInput: 'git status'
+      }
+    })
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
   it('does not notify on Grok routine permission prompt notifications during tool use', async () => {

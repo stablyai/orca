@@ -357,6 +357,13 @@
             }
           }
         },
+        "worktree": {
+          "background": {
+            "terminals": {
+              "setupTitle": "Setup"
+            }
+          }
+        },
         "work": {
           "item": {
             "direct": {
@@ -11766,6 +11773,11 @@
           "chooseHost": "자동화 호스트 선택",
           "adding": "프로젝트 추가 중...",
           "addProject": "프로젝트 추가"
+        },
+        "AutomationSetupDecisionField": {
+          "5a7863909c": "새 워크스페이스마다 설정 실행",
+          "18f000ad4e": "Advanced",
+          "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
       "agent": {

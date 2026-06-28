@@ -11,6 +11,7 @@ import type * as UseNotificationDispatchModule from './use-notification-dispatch
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
 
 // Repro command:
@@ -115,6 +116,7 @@ type StoreState = {
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   agentLaunchConfigByPaneKey: Record<string, { launchConfig: unknown }>
   getAgentLaunchConfigForStatusEntry: ReturnType<typeof vi.fn>
+  getAgentLaunchConfigForStatusMetadata: ReturnType<typeof vi.fn>
   clearSleepingAgentSession: ReturnType<typeof vi.fn>
   registerAgentLaunchConfig: ReturnType<typeof vi.fn>
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>
@@ -552,6 +554,13 @@ describe('connectPanePty', () => {
       getAgentLaunchConfigForStatusEntry: vi.fn((entry: { paneKey: string }) => {
         return mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig
       }),
+      getAgentLaunchConfigForStatusMetadata: vi.fn(
+        (metadata: { paneKey: string; launchToken?: string }) => {
+          return metadata.launchToken
+            ? mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchConfig
+            : undefined
+        }
+      ),
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]
       }),
@@ -4323,6 +4332,7 @@ describe('connectPanePty', () => {
         }
       },
       getAgentLaunchConfigForStatusEntry: vi.fn(() => undefined),
+      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       sleepingAgentSessionsByPaneKey: {
         [paneKey]: {
           paneKey,
@@ -8935,6 +8945,177 @@ describe('connectPanePty', () => {
         paneKey: makePaneKey('tab-1', LEAF_1)
       })
     )
+  })
+
+  it('suppresses PTY-owned Codex auto-approved permission statuses before status or notification work', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: {
+        agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+        agentEnv: {}
+      }
+    }
+
+    const launchConfig = {
+      agentCommand: 'codex',
+      agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+      agentEnv: {}
+    }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      startup: {
+        command: 'codex',
+        launchConfig,
+        launchToken: 'launch-yolo',
+        launchAgent: 'codex'
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const statusHandler = createdTransportOptions[0]?.onAgentStatus as
+      | ((payload: {
+          state: 'waiting'
+          prompt: string
+          agentType: 'codex'
+          toolName: string
+          toolInput: string
+        }) => void)
+      | undefined
+    if (!statusHandler) {
+      throw new Error('Expected onAgentStatus to be registered')
+    }
+
+    statusHandler({
+      state: 'waiting',
+      prompt: 'auto-approved permission',
+      agentType: 'codex',
+      toolName: 'exec_command',
+      toolInput: 'git status'
+    })
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    expect(deps.dispatchNotification).not.toHaveBeenCalled()
+  })
+
+  it('suppresses synthetic Codex auto-approved permission titles before title work', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: {
+        agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+        agentEnv: {}
+      }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+    const deps = createDeps({
+      startup: {
+        command: 'codex',
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+          agentEnv: {}
+        },
+        launchToken: 'launch-yolo',
+        launchAgent: 'codex'
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+    mockStoreState.getAgentLaunchConfigForStatusMetadata.mockClear()
+
+    titleHandler('Codex - action required', 'Codex - action required')
+
+    expect(mockStoreState.getAgentLaunchConfigForStatusMetadata).toHaveBeenCalledTimes(1)
+    expect(deps.setRuntimePaneTitle).not.toHaveBeenCalled()
+    expect(deps.updateTabTitle).not.toHaveBeenCalled()
+    expect(manager.setPaneGpuRendering).not.toHaveBeenCalled()
+  })
+
+  it('does not resolve launch config for ordinary title changes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+    mockStoreState.getAgentLaunchConfigForStatusMetadata.mockClear()
+
+    for (let index = 0; index < 100; index += 1) {
+      titleHandler(`build output ${index}`, `build output ${index}`)
+    }
+
+    expect(mockStoreState.getAgentLaunchConfigForStatusMetadata).not.toHaveBeenCalled()
+  })
+
+  it('preserves synthetic Codex manual permission titles', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: {
+        agentArgs: '',
+        agentEnv: {}
+      }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+    const deps = createDeps({
+      startup: {
+        command: 'codex',
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '',
+          agentEnv: {}
+        },
+        launchToken: 'launch-manual',
+        launchAgent: 'codex'
+      }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+
+    titleHandler('Codex - action required', 'Codex - action required')
+
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Codex - action required')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Codex - action required')
   })
 
   it('resolves synthetic terminal titles for remote hook status updates', async () => {

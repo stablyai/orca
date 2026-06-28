@@ -2305,6 +2305,7 @@ export class OrcaRuntimeService {
       workspaceMode: target.workspaceMode,
       workspaceId: target.workspaceId,
       baseBranch: input.baseBranch,
+      setupDecision: input.setupDecision,
       reuseSession: input.reuseSession,
       timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
       rrule: input.rrule,
@@ -2340,6 +2341,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'baseBranch')) {
       patch.baseBranch = updates.baseBranch
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'setupDecision')) {
+      patch.setupDecision = updates.setupDecision
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'reuseSession')) {
       patch.reuseSession = updates.reuseSession
@@ -11945,6 +11949,102 @@ export class OrcaRuntimeService {
       })
   }
 
+  private async createDefaultTabTerminals(
+    worktreeSelector: string,
+    worktreeId: string,
+    defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined
+  ): Promise<string[]> {
+    if (!defaultTabs || defaultTabs.tabs.length === 0 || !this.ptyController?.spawn) {
+      return []
+    }
+    const handles: string[] = []
+    for (const template of defaultTabs.tabs) {
+      try {
+        const command = template.command?.trim()
+        const terminal = await this.createTerminal(worktreeSelector, {
+          ...(template.title ? { title: template.title } : {}),
+          ...(command && defaultTabs.runCommands ? { command } : {})
+        })
+        handles.push(terminal.handle)
+        if (template.color && terminal.tabId) {
+          await this.setMobileSessionTabProps(`id:${worktreeId}`, {
+            tabId: terminal.tabId,
+            color: template.color
+          })
+        }
+      } catch (error) {
+        console.warn(`[worktree-create] Failed to create default tab for ${worktreeId}:`, error)
+      }
+    }
+    return handles
+  }
+
+  private async provisionManagedWorktreeTerminals(args: {
+    worktreeSelector: string
+    worktreeId: string
+    worktreePath: string
+    setup?: CreateWorktreeResult['setup']
+    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    primaryTerminalHandle?: string | null
+    hasStartupTerminal: boolean
+    setupCommandPlatform: 'windows' | 'posix'
+    // Why: when the agent startup is sequenced to wait for setup
+    // (waitForAgentStartup), the startup PTY runs a wrapper that already embeds
+    // the setup command. Pass that wrapped command through so the Setup tab runs
+    // the same script the agent is waiting on instead of a bare runner.
+    wrappedSetupCommand?: string
+  }): Promise<{ setupSpawned: boolean }> {
+    if (!this.ptyController?.spawn) {
+      return { setupSpawned: false }
+    }
+    let setupSpawned = false
+    try {
+      const defaultTabHandles = await this.createDefaultTabTerminals(
+        args.worktreeSelector,
+        args.worktreeId,
+        args.defaultTabs
+      )
+      let primaryTerminalHandle = args.primaryTerminalHandle ?? defaultTabHandles[0] ?? null
+      const setupLaunchMode =
+        (
+          this.requireStore().getSettings() as Partial<
+            Pick<GlobalSettings, 'setupScriptLaunchMode'>
+          >
+        ).setupScriptLaunchMode ?? 'new-tab'
+      if (!args.hasStartupTerminal && !primaryTerminalHandle) {
+        const terminal = await this.createTerminal(args.worktreeSelector)
+        primaryTerminalHandle = terminal.handle
+      }
+      if (args.setup) {
+        const setupCommand =
+          args.wrappedSetupCommand ??
+          buildSetupRunnerCommand(args.setup.runnerScriptPath, args.setupCommandPlatform)
+        const shouldSplitSetup =
+          primaryTerminalHandle &&
+          (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal')
+        await (shouldSplitSetup
+          ? this.splitTerminal(primaryTerminalHandle!, {
+              direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
+              command: setupCommand,
+              env: args.setup.envVars,
+              activate: false
+            })
+          : this.createTerminal(args.worktreeSelector, {
+              title: 'Setup',
+              command: setupCommand,
+              env: args.setup.envVars
+            }))
+        setupSpawned = true
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.warn(
+        `[worktree-create] Failed to create setup/default terminals for ${args.worktreePath}: ${message}`
+      )
+    }
+    return { setupSpawned }
+  }
+
   private async waitForStartupFollowupReady(
     handle: string,
     expectedProcess: string
@@ -12780,6 +12880,10 @@ export class OrcaRuntimeService {
     this.notifyWorktreesChanged(repo.id)
     const shouldActivate = args.activate === true || args.runHooks === true
     let didSpawnStartup = false
+    // Why: tracks whether runtime itself launched the setup script (via
+    // provisionManagedWorktreeTerminals). When true, renderer activation and the
+    // RPC return value must omit setup so the client does not spawn it a second
+    // time. Mirrors the wait-for-agent setup contract from #6298.
     let didSpawnSetup = false
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
@@ -12847,53 +12951,39 @@ export class OrcaRuntimeService {
         console.warn(`[worktree-create] ${warning}`)
       }
     }
-    if (didSpawnStartup && setup && this.ptyController?.spawn) {
-      try {
-        // Why: reveal-on-adopt can create the startup tab before renderer
-        // activation handles setup. Honor the same split-vs-tab setting here
-        // because renderer activation will skip setup once the startup tab exists.
-        const setupCommand =
-          wrappedSetupCommandStr ??
-          buildSetupRunnerCommand(
-            setup.runnerScriptPath,
-            getSetupRunnerCommandPlatformForPath(
-              setup.runnerScriptPath,
-              process.platform === 'win32' ? 'windows' : 'posix'
-            )
-          )
-        const setupLaunchMode =
-          (this.store.getSettings() as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-            .setupScriptLaunchMode ?? 'new-tab'
-        if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
-          if (!startupTerminalHandle) {
-            throw new Error('startup_terminal_missing')
-          }
-          await this.splitTerminal(startupTerminalHandle, {
-            direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-            command: setupCommand,
-            env: setup.envVars,
-            activate: false
-          })
-        } else {
-          await this.createTerminal(`id:${worktree.id}`, {
-            title: 'Setup',
-            command: setupCommand,
-            env: setup.envVars
-          })
-        }
-        didSpawnSetup = true
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        warning = warning
-          ? `${warning} Also failed to create the setup terminal for ${worktreePath}: ${message}`
-          : `Failed to create the setup terminal for ${worktreePath}: ${message}`
-        console.warn(`[worktree-create] ${warning}`)
-      }
-    }
     if (shouldActivate) {
       // Why: plain CLI creates should not steal the user's current workspace.
       // Explicit activation and hook-running still use renderer activation so
       // the user can watch prompts/output in a visible pane.
+      const runtimeWillProvisionTerminals = didSpawnStartup && Boolean(setup || defaultTabs)
+      if (runtimeWillProvisionTerminals) {
+        // Why: once runtime spawned the startup PTY, renderer activation may see
+        // an existing terminal and skip setup/default tabs. Await provisioning so
+        // a failed setup spawn falls back to renderer activation (which still
+        // carries the wrapped command for retry); #6298's wait-for-setup
+        // guarantee is enforced by the shell marker, not by spawn timing.
+        const provisioned = await this.provisionManagedWorktreeTerminals({
+          worktreeSelector: `id:${worktree.id}`,
+          worktreeId: worktree.id,
+          worktreePath,
+          ...(setup ? { setup } : {}),
+          ...(defaultTabs ? { defaultTabs } : {}),
+          primaryTerminalHandle: startupTerminalHandle,
+          hasStartupTerminal: didSpawnStartup,
+          setupCommandPlatform: setup
+            ? isWindowsAbsolutePathLike(setup.runnerScriptPath)
+              ? 'windows'
+              : 'posix'
+            : 'posix',
+          // Why: carry the wait-for-agent wrapped setup command (#6298) so the
+          // Setup tab runs the same script the sequenced agent waits on.
+          ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
+        })
+        didSpawnSetup = provisioned.setupSpawned
+      }
+      // Why: when runtime spawned setup, omit it from activation. When setup
+      // spawn failed, fall through with the wrapped command so renderer
+      // activation retries it.
       const activationSetup = didSpawnSetup
         ? undefined
         : setup
@@ -12904,54 +12994,50 @@ export class OrcaRuntimeService {
                 : {})
             }
           : undefined
+      const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : defaultTabs
       if (effectiveStartup && !didSpawnStartup) {
         this.notifyActivateWorktree(
           repo.id,
           worktree.id,
           activationSetup,
           effectiveStartup,
-          defaultTabs
+          activationDefaultTabs
         )
       } else {
-        this.notifyActivateWorktree(repo.id, worktree.id, activationSetup, undefined, defaultTabs)
+        this.notifyActivateWorktree(
+          repo.id,
+          worktree.id,
+          activationSetup,
+          undefined,
+          activationDefaultTabs
+        )
+      }
+    } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
+      // Why: inactive terminal materialization matches normal worktree creation,
+      // but setup/default tab failures must not gate automation dispatch.
+      void this.provisionManagedWorktreeTerminals({
+        worktreeSelector: `id:${worktree.id}`,
+        worktreeId: worktree.id,
+        worktreePath,
+        ...(setup ? { setup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        primaryTerminalHandle: startupTerminalHandle,
+        hasStartupTerminal: didSpawnStartup,
+        setupCommandPlatform: setup
+          ? isWindowsAbsolutePathLike(setup.runnerScriptPath)
+            ? 'windows'
+            : 'posix'
+          : 'posix',
+        ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
+      })
+      // Why: runtime owns setup spawning here, so the RPC result must omit setup
+      // to keep the headless/mobile caller from launching it a second time.
+      if (setup) {
+        didSpawnSetup = true
       }
     } else if (this.ptyController?.spawn) {
       try {
-        let initialTerminalHandle: string | null = null
-        if (!didSpawnStartup) {
-          const terminal = await this.createTerminal(`id:${worktree.id}`)
-          initialTerminalHandle = terminal.handle
-        }
-        if (setup && !didSpawnSetup) {
-          const setupCommand =
-            wrappedSetupCommandStr ??
-            buildSetupRunnerCommand(
-              setup.runnerScriptPath,
-              getSetupRunnerCommandPlatformForPath(
-                setup.runnerScriptPath,
-                process.platform === 'win32' ? 'windows' : 'posix'
-              )
-            )
-          const setupLaunchMode =
-            (this.store.getSettings() as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-              .setupScriptLaunchMode ?? 'new-tab'
-          const shouldSplitSetup =
-            initialTerminalHandle &&
-            (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal')
-          await (shouldSplitSetup
-            ? this.splitTerminal(initialTerminalHandle!, {
-                direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-                command: setupCommand,
-                env: setup.envVars,
-                activate: false
-              })
-            : this.createTerminal(`id:${worktree.id}`, {
-                title: 'Setup',
-                command: setupCommand,
-                env: setup.envVars
-              }))
-          didSpawnSetup = true
-        }
+        await this.createTerminal(`id:${worktree.id}`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
@@ -13101,6 +13187,8 @@ export class OrcaRuntimeService {
 
     let warning = result.warning
     let didSpawnStartup = false
+    // Why: same no-double-spawn contract as the local path — once runtime
+    // provisions setup, omit it from activation and the RPC result.
     let didSpawnSetup = false
     let startupTerminalHandle: string | null = null
     let startupTerminalTabId: string | null = null
@@ -13164,48 +13252,35 @@ export class OrcaRuntimeService {
       }
     }
 
-    if (didSpawnStartup && result.setup && this.ptyController?.spawn) {
-      try {
-        // Why: remote/mobile task creates spawn the agent terminal in runtime,
-        // so renderer activation never receives the setup payload. Runtime
-        // must apply the same user-selected split-vs-tab setup placement.
-        const setupCommand =
-          wrappedSetupCommandStr ??
-          buildSetupRunnerCommand(
-            result.setup.runnerScriptPath,
-            getSetupRunnerCommandPlatformForPath(result.setup.runnerScriptPath, 'posix')
-          )
-        const setupLaunchMode =
-          (this.store.getSettings() as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-            .setupScriptLaunchMode ?? 'new-tab'
-        if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
-          if (!startupTerminalHandle) {
-            throw new Error('startup_terminal_missing')
-          }
-          await this.splitTerminal(startupTerminalHandle, {
-            direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-            command: setupCommand,
-            env: result.setup.envVars,
-            activate: false
-          })
-        } else {
-          await this.createTerminal(`path:${result.worktree.path}`, {
-            title: 'Setup',
-            command: setupCommand,
-            env: result.setup.envVars
-          })
-        }
-        didSpawnSetup = true
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        warning = warning
-          ? `${warning} Also failed to create the setup terminal for ${result.worktree.path}: ${message}`
-          : `Failed to create the setup terminal for ${result.worktree.path}: ${message}`
-      }
-    }
-
     const shouldActivate = args.activate === true || args.runHooks === true
     if (shouldActivate) {
+      const runtimeWillProvisionTerminals =
+        didSpawnStartup && Boolean(result.setup || result.defaultTabs)
+      if (runtimeWillProvisionTerminals) {
+        // Why: remote/mobile task creates spawn the agent terminal in runtime,
+        // so renderer activation may not materialize setup/default tabs. Await so
+        // a failed setup spawn falls back to renderer activation for retry.
+        const provisioned = await this.provisionManagedWorktreeTerminals({
+          worktreeSelector: `path:${result.worktree.path}`,
+          worktreeId: result.worktree.id,
+          worktreePath: result.worktree.path,
+          ...(result.setup ? { setup: result.setup } : {}),
+          ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
+          primaryTerminalHandle: startupTerminalHandle,
+          hasStartupTerminal: didSpawnStartup,
+          setupCommandPlatform: result.setup
+            ? isWindowsAbsolutePathLike(result.setup.runnerScriptPath)
+              ? 'windows'
+              : 'posix'
+            : 'posix',
+          // Why: carry the wait-for-agent wrapped setup command (#6298) so the
+          // remote Setup tab runs the same script the sequenced agent waits on.
+          ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
+        })
+        didSpawnSetup = provisioned.setupSpawned
+      }
+      // Why: omit setup from activation when runtime spawned it; on spawn
+      // failure fall through with the wrapped command so renderer retries.
       const activationSetup = didSpawnSetup
         ? undefined
         : result.setup
@@ -13216,13 +13291,14 @@ export class OrcaRuntimeService {
                 : {})
             }
           : undefined
+      const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
       if (args.startup && !didSpawnStartup) {
         this.notifyActivateWorktree(
           repo.id,
           result.worktree.id,
           activationSetup,
           args.startup,
-          result.defaultTabs
+          activationDefaultTabs
         )
       } else {
         this.notifyActivateWorktree(
@@ -13230,36 +13306,41 @@ export class OrcaRuntimeService {
           result.worktree.id,
           activationSetup,
           undefined,
-          result.defaultTabs
+          activationDefaultTabs
         )
       }
     }
 
-    if (!args.startup && !shouldActivate && this.ptyController?.spawn) {
+    if (
+      !shouldActivate &&
+      this.ptyController?.spawn &&
+      (result.setup || result.defaultTabs || didSpawnStartup)
+    ) {
+      // Why: inactive terminal materialization matches normal worktree creation,
+      // but setup/default tab failures must not gate automation dispatch.
+      void this.provisionManagedWorktreeTerminals({
+        worktreeSelector: `path:${result.worktree.path}`,
+        worktreeId: result.worktree.id,
+        worktreePath: result.worktree.path,
+        ...(result.setup ? { setup: result.setup } : {}),
+        ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
+        primaryTerminalHandle: startupTerminalHandle,
+        hasStartupTerminal: didSpawnStartup,
+        setupCommandPlatform: result.setup
+          ? isWindowsAbsolutePathLike(result.setup.runnerScriptPath)
+            ? 'windows'
+            : 'posix'
+          : 'posix',
+        ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
+      })
+      // Why: runtime owns setup spawning here, so omit setup from the RPC result
+      // to keep the headless/mobile caller from launching it a second time.
+      if (result.setup) {
+        didSpawnSetup = true
+      }
+    } else if (!shouldActivate && this.ptyController?.spawn) {
       try {
-        const terminal = await this.createTerminal(`path:${result.worktree.path}`)
-        if (result.setup && !didSpawnSetup) {
-          const setupCommand = buildSetupRunnerCommand(
-            result.setup.runnerScriptPath,
-            getSetupRunnerCommandPlatformForPath(result.setup.runnerScriptPath, 'posix')
-          )
-          const setupLaunchMode =
-            (this.store.getSettings() as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-              .setupScriptLaunchMode ?? 'new-tab'
-          await (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal'
-            ? this.splitTerminal(terminal.handle, {
-                direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-                command: setupCommand,
-                env: result.setup.envVars,
-                activate: false
-              })
-            : this.createTerminal(`path:${result.worktree.path}`, {
-                title: 'Setup',
-                command: setupCommand,
-                env: result.setup.envVars
-              }))
-          didSpawnSetup = true
-        }
+        await this.createTerminal(`path:${result.worktree.path}`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         warning = warning
@@ -17979,6 +18060,20 @@ export class OrcaRuntimeService {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
   }
 
+  getAgentStatusLaunchConfigForPaneKey(
+    paneKey: string,
+    args?: { launchToken?: string }
+  ): SleepingAgentLaunchConfig | undefined {
+    const pty = this.getPtyRecordForPaneKey(paneKey)
+    if (!pty?.launchConfig) {
+      return undefined
+    }
+    if (pty.launchToken === null || pty.launchToken !== args?.launchToken) {
+      return undefined
+    }
+    return copySleepingAgentLaunchConfig(pty.launchConfig)
+  }
+
   private buildAgentOrchestrationByPaneKey():
     | Record<string, AgentStatusOrchestrationContext>
     | undefined {
@@ -18084,6 +18179,23 @@ export class OrcaRuntimeService {
     for (const pty of this.ptysById.values()) {
       if (pty.paneKey === paneKey) {
         return this.issuePtyHandle(pty)
+      }
+    }
+    return null
+  }
+
+  private getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
+    const parsed = parsePaneKey(paneKey)
+    if (parsed) {
+      const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
+      const pty = leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+      if (pty) {
+        return pty
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.paneKey === paneKey) {
+        return pty
       }
     }
     return null

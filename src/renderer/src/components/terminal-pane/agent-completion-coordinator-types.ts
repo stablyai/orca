@@ -29,6 +29,7 @@ export type AgentCompletionCoordinatorOptions = {
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
+  shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }
 
 export type AgentCompletionCoordinator = {

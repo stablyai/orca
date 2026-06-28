@@ -731,11 +731,25 @@ function normalizeAutomationPrecheckResult(
 }
 
 function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  const setupDecision = normalizeAutomationSetupDecisionForWorkspaceMode(
+    automation.workspaceMode,
+    automation.setupDecision
+  )
   return {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
+    setupDecision,
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
+}
+
+function normalizeAutomationSetupDecisionForWorkspaceMode(
+  workspaceMode: Automation['workspaceMode'],
+  setupDecision: unknown
+): Automation['setupDecision'] {
+  return workspaceMode === 'new_per_run' && (setupDecision === 'run' || setupDecision === 'skip')
+    ? setupDecision
+    : undefined
 }
 
 function getAutomationContextsForRepo(
@@ -4061,6 +4075,10 @@ export class Store {
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
+        input.workspaceMode,
+        input.setupDecision
+      ),
       reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
       timezone: input.timezone,
       rrule: input.rrule,
@@ -4128,6 +4146,12 @@ export class Store {
             ? (updates.baseBranch ?? null)
             : (current.baseBranch ?? null)
           : null,
+      setupDecision:
+        workspaceMode === 'new_per_run'
+          ? Object.hasOwn(updates, 'setupDecision')
+            ? normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, updates.setupDecision)
+            : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
+          : undefined,
       reuseSession:
         workspaceMode === 'existing'
           ? (updates.reuseSession ?? current.reuseSession ?? false)

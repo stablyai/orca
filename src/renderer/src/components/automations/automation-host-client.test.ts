@@ -95,6 +95,7 @@ describe('automation host client', () => {
       projectId: automation.projectId,
       workspaceMode: automation.workspaceMode,
       workspaceId: null,
+      setupDecision: 'run',
       timezone: automation.timezone,
       rrule: automation.rrule,
       dtstart: automation.dtstart
@@ -115,6 +116,7 @@ describe('automation host client', () => {
       expect.objectContaining({
         repo: 'repo-1',
         workspace: undefined,
+        setupDecision: 'run',
         runContext: automation.runContext
       }),
       { timeoutMs: 15_000 }

@@ -124,6 +124,48 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
   })
 
+  it('can queue setup and default tabs without activating created tabs', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({ createTab })
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      {
+        runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+        envVars: { ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1' }
+      },
+      undefined,
+      {
+        runCommands: true,
+        tabs: [{ title: 'Dev', command: 'pnpm dev' }]
+      },
+      { activateCreatedTabs: false }
+    )
+
+    expect(result).toBe('tab-1')
+    expect(createTab).toHaveBeenNthCalledWith(1, 'wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
+      activate: false
+    })
+    expect(createTab).toHaveBeenNthCalledWith(2, 'wt-1', undefined, undefined, {
+      recordInteraction: false,
+      activate: false
+    })
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
+      recordInteraction: false
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'pnpm dev' })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+      command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
+      env: { ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1' }
+    })
+  })
+
   it('does not run default tab commands when command execution is not approved', () => {
     const store = createMockStore()
 

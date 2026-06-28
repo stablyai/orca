@@ -111,6 +111,7 @@ import {
   resetAgentHookCompletionNotificationCoordinators,
   syncAgentHookCompletionNotificationSettings
 } from './agent-hook-completion-notifications'
+import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
@@ -2891,6 +2892,20 @@ export function useIpcEvents(): void {
       ) {
         // Why: renderer may receive an old/stale main-process child completion.
         // Keep the defensive store guard and completion notification path in sync.
+        return 'dropped'
+      }
+      if (
+        shouldSuppressCodexAutoApprovalStatus(statusPayload, {
+          paneKey: data.paneKey,
+          tabId: data.tabId,
+          terminalHandle: data.terminalHandle,
+          launchToken: data.launchToken,
+          providerSession: data.providerSession,
+          existingProviderSession: existingStatus?.providerSession
+        })
+      ) {
+        // Why: Codex yolo permission hooks are not user-actionable, and must
+        // not drive status, synthetic titles, unread badges, or notifications.
         return 'dropped'
       }
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)

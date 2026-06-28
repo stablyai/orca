@@ -357,6 +357,13 @@
             }
           }
         },
+        "worktree": {
+          "background": {
+            "terminals": {
+              "setupTitle": "Setup"
+            }
+          }
+        },
         "work": {
           "item": {
             "direct": {
@@ -11766,6 +11773,11 @@
           "chooseHost": "选择自动化主机",
           "adding": "正在添加项目…",
           "addProject": "添加项目"
+        },
+        "AutomationSetupDecisionField": {
+          "5a7863909c": "为每个新工作区运行设置",
+          "18f000ad4e": "Advanced",
+          "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
       "agent": {
