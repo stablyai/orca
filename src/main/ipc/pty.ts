@@ -2224,6 +2224,7 @@ export function registerPtyHandlers(
       lastTitle?: string
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
     } | null> => {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
         return null

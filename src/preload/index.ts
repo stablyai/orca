@@ -79,6 +79,7 @@ import type {
   RateLimitState
 } from '../shared/rate-limit-types'
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
+import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -668,7 +669,24 @@ const api = {
   } satisfies PreloadApi['worktrees'],
 
   workspaceCleanup: {
-    scan: (args) => ipcRenderer.invoke('workspaceCleanup:scan', args),
+    scan: (args, onProgress) => {
+      if (!onProgress) {
+        return ipcRenderer.invoke('workspaceCleanup:scan', args)
+      }
+      const scanId = args?.scanId ?? crypto.randomUUID()
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: WorkspaceCleanupScanProgress
+      ): void => {
+        if (progress.scanId === scanId) {
+          onProgress(progress)
+        }
+      }
+      ipcRenderer.on('workspaceCleanup:scanProgress', listener)
+      return ipcRenderer
+        .invoke('workspaceCleanup:scan', { ...args, scanId })
+        .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
+    },
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
@@ -791,6 +809,7 @@ const api = {
       cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -2410,6 +2429,27 @@ const api = {
       connectionId: string
     }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
       ipcRenderer.invoke('fs:downloadFile', args),
+    saveDownloadedFile: (args: {
+      suggestedName: string
+      content: string
+      encoding: 'utf8' | 'base64'
+    }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:saveDownloadedFile', args),
+    startDownloadedFile: (args: {
+      suggestedName: string
+    }): Promise<
+      { canceled: true } | { canceled: false; transferId: string; destinationPath: string }
+    > => ipcRenderer.invoke('fs:startDownloadedFile', args),
+    appendDownloadedFileChunk: (args: {
+      transferId: string
+      contentBase64: string
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('fs:appendDownloadedFileChunk', args),
+    finishDownloadedFile: (args: {
+      transferId: string
+    }): Promise<{ canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:finishDownloadedFile', args),
+    cancelDownloadedFile: (args: { transferId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('fs:cancelDownloadedFile', args),
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string

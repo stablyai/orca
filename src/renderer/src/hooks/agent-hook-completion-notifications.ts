@@ -159,6 +159,17 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       })
     },
+    dispatchAttention: (title, meta) => {
+      // Why: native notification settings still label this channel as "agent
+      // task complete"; the snapshot state makes the banner read "needs input".
+      dispatchTerminalNotification(worktreeId, {
+        source: 'agent-task-complete',
+        terminalTitle: title,
+        paneKey,
+        suppressOsNotification: !isAgentTaskCompleteNotificationEnabled(),
+        agentStatusSnapshot: meta.agentStatus
+      })
+    },
     isLive: () => paneCanReceiveHookCompletion(paneKey)
   })
 }

@@ -4,10 +4,11 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
-import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
 import { translate } from '@/i18n/i18n'
 import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
+import { CheckRunAnnotations } from './CheckRunAnnotations'
+import { CheckRunJobs } from './CheckRunJobs'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {
@@ -263,95 +264,10 @@ export function CheckRunDetailsPanel({
             )}
 
             {hasAnnotations && (
-              <section className="rounded-md border border-border bg-background">
-                <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                  {translate(
-                    'auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f',
-                    'Annotations'
-                  )}
-                </div>
-                <div className="divide-y divide-border/50">
-                  {details!.annotations.map((annotation, index) => (
-                    <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">
-                          {annotation.path ??
-                            translate(
-                              'auto.components.editor.CheckRunDetailsPanel.cdbfda4dec',
-                              'Annotation'
-                            )}
-                          {annotation.startLine ? `:${annotation.startLine}` : ''}
-                        </span>
-                        {annotation.annotationLevel && (
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {annotation.annotationLevel}
-                          </span>
-                        )}
-                      </div>
-                      {annotation.title && (
-                        <div className="mt-2 text-sm font-medium text-foreground">
-                          {annotation.title}
-                        </div>
-                      )}
-                      <div className="mt-2 break-words text-sm text-foreground">
-                        {annotation.message}
-                      </div>
-                      {annotation.rawDetails && (
-                        <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-muted-foreground scrollbar-sleek">
-                          {annotation.rawDetails}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
+              <CheckRunAnnotations annotations={details!.annotations} worktreeId={worktreeId} />
             )}
 
-            {hasJobs && (
-              <section className="rounded-md border border-border bg-background">
-                <div className="border-b border-border px-3 py-2 text-sm font-medium">
-                  {failedJobs.length > 0
-                    ? translate(
-                        'auto.components.editor.CheckRunDetailsPanel.066fedd446',
-                        'Failed jobs'
-                      )
-                    : translate('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
-                </div>
-                <div className="divide-y divide-border/50">
-                  {jobs.map((job, index) => (
-                    <div key={`${job.name}-${index}`} className="px-3 py-3">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                          {job.name}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {job.conclusion ??
-                            job.status ??
-                            translate(
-                              'auto.components.editor.CheckRunDetailsPanel.ee07b33924',
-                              'unknown'
-                            )}
-                        </span>
-                      </div>
-                      {job.steps.length > 0 && (
-                        <div className="mt-2 grid gap-1">
-                          {job.steps.map((step) => (
-                            <div
-                              key={step.name}
-                              className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
-                            >
-                              <span className="min-w-0 flex-1 truncate">{step.name}</span>
-                              <span className="shrink-0">{step.conclusion ?? step.status}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {hasJobs && <CheckRunJobs jobs={jobs} hasFailedJobs={failedJobs.length > 0} />}
 
             {!error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-sm text-muted-foreground">

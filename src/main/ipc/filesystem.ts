@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'fs/promises'
+import type { FileHandle } from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { dirname, extname, join, resolve } from 'path'
 import type { ChildProcess } from 'child_process'
@@ -162,6 +163,24 @@ function sanitizeSaveDialogFilename(remoteBasename: string): string {
   }
   return sanitized
 }
+
+function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
+  if (encoding === 'base64') {
+    return Buffer.from(content, 'base64')
+  }
+  return Buffer.from(content, 'utf8')
+}
+
+type DownloadSession = {
+  destinationPath: string
+  tempPath: string
+  destinationExisted: boolean
+  handle: FileHandle
+  cleanupTimer: ReturnType<typeof setTimeout>
+  senderId: number
+}
+
+const DOWNLOAD_SESSION_TTL_MS = 30 * 60 * 1000
 
 function createSiblingTransferPath(destinationPath: string, suffix: string): string {
   return join(dirname(destinationPath), `.${randomUUID()}.${suffix}`)
@@ -430,6 +449,32 @@ export function registerFilesystemHandlers(
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
   const activeTextSearches = new Map<string, ChildProcess>()
+  const downloadSessions = new Map<string, DownloadSession>()
+
+  async function closeDownloadSession(
+    transferId: string,
+    cleanupTemp: boolean
+  ): Promise<DownloadSession | null> {
+    const session = downloadSessions.get(transferId)
+    if (!session) {
+      return null
+    }
+    downloadSessions.delete(transferId)
+    clearTimeout(session.cleanupTimer)
+    await session.handle.close().catch(() => {})
+    if (cleanupTemp) {
+      await cleanupLocalTransferPath(session.tempPath)
+    }
+    return session
+  }
+
+  function cleanupDownloadSessionsForSender(senderId: number): void {
+    for (const [transferId, session] of Array.from(downloadSessions)) {
+      if (session.senderId === senderId) {
+        void closeDownloadSession(transferId, true)
+      }
+    }
+  }
 
   // ─── Filesystem ─────────────────────────────────────────
   ipcMain.handle(
@@ -549,6 +594,153 @@ export function registerFilesystemHandlers(
           await cleanupLocalTransferPath(tempPath)
         }
       }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:saveDownloadedFile',
+    async (
+      event,
+      args: { suggestedName?: string; content?: string; encoding?: 'utf8' | 'base64' }
+    ): Promise<DownloadFileResult> => {
+      const suggestedName = sanitizeSaveDialogFilename(
+        validateRequiredString(args?.suggestedName, 'suggestedName')
+      )
+      if (typeof args?.content !== 'string') {
+        throw new Error('content is required')
+      }
+      const content = args.content
+      const encoding = args?.encoding === 'base64' ? 'base64' : 'utf8'
+      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const dialogResult = parentWindow
+        ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
+        : await dialog.showSaveDialog({ defaultPath: suggestedName })
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return { canceled: true }
+      }
+
+      const destinationPath = dialogResult.filePath
+      const { existed } = await inspectDownloadDestination(destinationPath)
+      const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      let promoted = false
+      try {
+        await writeFile(tempPath, decodeDownloadedFileContent(content, encoding))
+        await promoteDownloadedFile(tempPath, destinationPath, existed)
+        promoted = true
+        return { canceled: false, destinationPath }
+      } finally {
+        if (!promoted) {
+          await cleanupLocalTransferPath(tempPath)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:startDownloadedFile',
+    async (
+      event,
+      args: { suggestedName?: string }
+    ): Promise<
+      | { canceled: true }
+      | {
+          canceled: false
+          transferId: string
+          destinationPath: string
+        }
+    > => {
+      const suggestedName = sanitizeSaveDialogFilename(
+        validateRequiredString(args?.suggestedName, 'suggestedName')
+      )
+      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const dialogResult = parentWindow
+        ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
+        : await dialog.showSaveDialog({ defaultPath: suggestedName })
+      if (dialogResult.canceled || !dialogResult.filePath) {
+        return { canceled: true }
+      }
+
+      const destinationPath = dialogResult.filePath
+      const { existed } = await inspectDownloadDestination(destinationPath)
+      const tempPath = createSiblingTransferPath(destinationPath, 'download')
+      const transferId = randomUUID()
+      try {
+        const handle = await open(tempPath, 'wx')
+        const senderId = typeof event.sender.id === 'number' ? event.sender.id : Number.NaN
+        const cleanupTimer = setTimeout(() => {
+          void closeDownloadSession(transferId, true)
+        }, DOWNLOAD_SESSION_TTL_MS)
+        if (typeof cleanupTimer.unref === 'function') {
+          cleanupTimer.unref()
+        }
+        downloadSessions.set(transferId, {
+          destinationPath,
+          tempPath,
+          destinationExisted: existed,
+          handle,
+          cleanupTimer,
+          senderId
+        })
+        event.sender.once?.('destroyed', () => cleanupDownloadSessionsForSender(senderId))
+        return { canceled: false, transferId, destinationPath }
+      } catch (error) {
+        await cleanupLocalTransferPath(tempPath)
+        throw error
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:appendDownloadedFileChunk',
+    async (
+      _event,
+      args: { transferId?: string; contentBase64?: string }
+    ): Promise<{ ok: true }> => {
+      const transferId = validateRequiredString(args?.transferId, 'transferId')
+      const contentBase64 = validateRequiredString(args?.contentBase64, 'contentBase64')
+      const session = downloadSessions.get(transferId)
+      if (!session) {
+        throw new Error('Download session not found')
+      }
+      await session.handle.writeFile(Buffer.from(contentBase64, 'base64'))
+      return { ok: true }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:finishDownloadedFile',
+    async (
+      _event,
+      args: { transferId?: string }
+    ): Promise<{ canceled: false; destinationPath: string }> => {
+      const transferId = validateRequiredString(args?.transferId, 'transferId')
+      const session = await closeDownloadSession(transferId, false)
+      if (!session) {
+        throw new Error('Download session not found')
+      }
+      let promoted = false
+      try {
+        await promoteDownloadedFile(
+          session.tempPath,
+          session.destinationPath,
+          session.destinationExisted
+        )
+        promoted = true
+        return { canceled: false, destinationPath: session.destinationPath }
+      } finally {
+        if (!promoted) {
+          await cleanupLocalTransferPath(session.tempPath)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'fs:cancelDownloadedFile',
+    async (_event, args: { transferId?: string }): Promise<{ ok: true }> => {
+      const transferId = validateRequiredString(args?.transferId, 'transferId')
+      await closeDownloadSession(transferId, true)
+      return { ok: true }
     }
   )
 

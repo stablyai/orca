@@ -1,10 +1,10 @@
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  getForegroundTerminalWorktreeIds,
-  resetForegroundTerminalWorktreeIdsForTests
-} from '@/lib/foreground-terminal-worktrees'
-import { useVisibleTerminalWorktreeClaim } from './use-visible-terminal-worktree-claim'
+  getForegroundTerminalTabIds,
+  resetForegroundTerminalTabIdsForTests
+} from '@/lib/foreground-terminal-tabs'
+import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 
 const reactEffects = vi.hoisted(() => ({
   layoutEffects: [] as (() => void | (() => void))[],
@@ -25,30 +25,30 @@ vi.mock('react', async (importOriginal) => {
 })
 
 afterEach(() => {
-  resetForegroundTerminalWorktreeIdsForTests()
+  resetForegroundTerminalTabIdsForTests()
   reactEffects.layoutEffects = []
   reactEffects.passiveEffects = []
 })
 
-describe('useVisibleTerminalWorktreeClaim', () => {
+describe('useVisibleTerminalTabClaim', () => {
   it('registers visible panes through a layout effect', () => {
-    useVisibleTerminalWorktreeClaim({ isVisible: true, worktreeId: 'wt-visible' })
+    useVisibleTerminalTabClaim({ isVisible: true, tabId: 'tab-visible' })
 
     expect(reactEffects.passiveEffects).toHaveLength(0)
     expect(reactEffects.layoutEffects).toHaveLength(1)
 
     const cleanup = reactEffects.layoutEffects[0]()
-    expect(getForegroundTerminalWorktreeIds()).toEqual(['wt-visible'])
+    expect(getForegroundTerminalTabIds()).toEqual(['tab-visible'])
 
     cleanup?.()
-    expect(getForegroundTerminalWorktreeIds()).toEqual([])
+    expect(getForegroundTerminalTabIds()).toEqual([])
   })
 
   it('does not claim hidden panes', () => {
-    useVisibleTerminalWorktreeClaim({ isVisible: false, worktreeId: 'wt-hidden' })
+    useVisibleTerminalTabClaim({ isVisible: false, tabId: 'tab-hidden' })
 
     reactEffects.layoutEffects[0]()
 
-    expect(getForegroundTerminalWorktreeIds()).toEqual([])
+    expect(getForegroundTerminalTabIds()).toEqual([])
   })
 })

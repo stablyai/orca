@@ -283,6 +283,7 @@ async function refreshWebRuntimeSessionTabsSnapshot(
 export async function activateWebRuntimeSessionWorktree(args: {
   worktreeId: string
   environmentId?: string | null
+  notifyDesktop?: boolean
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -297,7 +298,8 @@ export async function activateWebRuntimeSessionWorktree(args: {
       selector: environmentId,
       method: 'worktree.activate',
       params: {
-        worktree: toRuntimeWorktreeSelector(args.worktreeId)
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        notifyClients: args.notifyDesktop !== false
       },
       timeoutMs: 15_000
     })

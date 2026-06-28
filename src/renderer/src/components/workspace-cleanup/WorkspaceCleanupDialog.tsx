@@ -1,19 +1,20 @@
-/* eslint-disable max-lines -- Why: cleanup scanning, safety review, and
-   confirmation stay together so destructive workspace deletion remains
-   auditable. */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+/* eslint-disable max-lines -- Why: the cleanup dialog keeps scan status,
+   filters, row actions, localized review copy, and force-aware confirmation
+   in one modal flow. */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
   EyeOff,
   Loader2,
-  Minus,
   RefreshCcw,
   Search,
+  SlidersHorizontal,
   Trash2,
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useShallow } from 'zustand/react/shallow'
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,20 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -36,8 +51,23 @@ import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupScanError,
-  type WorkspaceCleanupTier
+  type WorkspaceCleanupScanProgress
 } from '../../../../shared/workspace-cleanup'
+import {
+  filterWorkspaceCleanupCandidates,
+  getWorkspaceCleanupGitLabel,
+  getWorkspaceCleanupReviewInfo,
+  hasWorkspaceCleanupLocalContext,
+  sortWorkspaceCleanupCandidates,
+  type WorkspaceCleanupContextFilter,
+  type WorkspaceCleanupFilters,
+  type WorkspaceCleanupGitFilter,
+  type WorkspaceCleanupReviewFilter,
+  type WorkspaceCleanupReviewInfo,
+  type WorkspaceCleanupSortDirection,
+  type WorkspaceCleanupSortKey,
+  type WorkspaceCleanupTimeFilter
+} from './workspace-cleanup-presentation'
 import {
   resolveWorkspaceCleanupActiveView,
   type WorkspaceCleanupView,
@@ -45,10 +75,20 @@ import {
 } from './workspace-cleanup-view-selection'
 import { translate } from '@/i18n/i18n'
 
-const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
-  ready: 'Suggested cleanup',
-  review: 'Needs a closer look',
-  protected: 'Not suggested for cleanup'
+const DEFAULT_FILTERS: WorkspaceCleanupFilters = {
+  query: '',
+  time: 'all',
+  review: 'all',
+  git: 'all',
+  context: 'all'
+}
+
+const EMPTY_REVIEW_INFO: WorkspaceCleanupReviewInfo = {
+  hasReview: false,
+  label: null,
+  state: null,
+  provider: null,
+  title: null
 }
 
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
@@ -142,45 +182,23 @@ function formatScanErrorReason(message: string | undefined): string {
   return message.replace(/\.$/, '')
 }
 
-function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate): boolean {
-  if (candidate.blockers.includes('main-worktree') || candidate.blockers.includes('folder-repo')) {
-    return false
-  }
-  return candidate.reasons.includes('archived') || candidate.reasons.includes('idle-clean')
-}
-
-function compareCleanupCandidates(
-  a: WorkspaceCleanupCandidate,
-  b: WorkspaceCleanupCandidate
-): number {
-  const priorityA = getCleanupCandidatePriority(a)
-  const priorityB = getCleanupCandidatePriority(b)
-  if (priorityA !== priorityB) {
-    return priorityA - priorityB
-  }
-  return a.lastActivityAt - b.lastActivityAt
-}
-
-function getCleanupCandidatePriority(candidate: WorkspaceCleanupCandidate): number {
-  if (candidate.tier === 'ready') {
-    return 0
-  }
-  if (candidate.reasons.length > 0) {
-    return 1
-  }
-  if (isOldWorkspaceCandidate(candidate)) {
-    return 2
-  }
-  return 3
-}
-
 export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
+  const openModal = useAppStore((s) => s.openModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const scan = useAppStore((s) => s.workspaceCleanupScan)
+  const scanProgress = useAppStore((s) => s.workspaceCleanupProgress)
   const loading = useAppStore((s) => s.workspaceCleanupLoading)
   const error = useAppStore((s) => s.workspaceCleanupError)
   const repos = useAppStore((s) => s.repos)
+  const reviewStateInputs = useAppStore(
+    useShallow((s) => ({
+      worktreesByRepo: s.worktreesByRepo,
+      hostedReviewCache: s.hostedReviewCache,
+      repos: s.repos,
+      settings: s.settings
+    }))
+  )
   const scanWorkspaceCleanup = useAppStore((s) => s.scanWorkspaceCleanup)
   const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
   const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
@@ -188,35 +206,104 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const removeCandidates = useAppStore((s) => s.removeWorkspaceCleanupCandidates)
 
   const open = activeModal === 'workspace-cleanup'
+  const openRef = useRef(open)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [activeView, setActiveView] = useState<WorkspaceCleanupView>('ready')
   const [confirming, setConfirming] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(() => new Set())
+  const [filters, setFilters] = useState<WorkspaceCleanupFilters>(DEFAULT_FILTERS)
+  const [sortKey, setSortKey] = useState<WorkspaceCleanupSortKey>('activity')
+  const [sortDirection, setSortDirection] = useState<WorkspaceCleanupSortDirection>('asc')
+  const selectedDefaultsScanAtRef = useRef<number | null>(null)
+  const autoScanAttemptedForOpenRef = useRef(false)
+  const latestReadyToastScanAtRef = useRef<number | null>(null)
+  const wasOpenRef = useRef(false)
   const mountedRef = useMountedRef()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
 
   useEffect(() => {
-    if (open) {
+    openRef.current = open
+  }, [open])
+
+  const startWorkspaceCleanupScan = useCallback(
+    (options: { notifyWhenReady?: boolean } = {}) => {
       setRowFailures({})
-      setActiveView('ready')
-      void scanWorkspaceCleanup().catch((err: unknown) => {
-        if (mountedRef.current) {
-          toast.error(
+      void scanWorkspaceCleanup()
+        .then((result) => {
+          if (!mountedRef.current || !options.notifyWhenReady || openRef.current) {
+            return
+          }
+          if (latestReadyToastScanAtRef.current === result.scannedAt) {
+            return
+          }
+          latestReadyToastScanAtRef.current = result.scannedAt
+          const suggestedCount = result.candidates.filter(
+            (candidate) => candidate.selectedByDefault
+          ).length
+          toast.success(
             translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.662b8ec3f8',
-              'Workspace cleanup scan failed'
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0e2d235c63',
+              'Inactive workspace scan ready'
             ),
             {
-              description: err instanceof Error ? err.message : String(err)
+              description: formatWorkspaceCleanupReadyToastDescription(
+                result.candidates.length,
+                suggestedCount
+              ),
+              action: {
+                label: translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4a35c08764',
+                  'Review'
+                ),
+                onClick: () => openModal('workspace-cleanup')
+              }
             }
           )
-        }
-      })
+        })
+        .catch((err: unknown) => {
+          if (mountedRef.current) {
+            toast.error(
+              translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.662b8ec3f8',
+                'Workspace cleanup scan failed'
+              ),
+              {
+                description: err instanceof Error ? err.message : String(err)
+              }
+            )
+          }
+        })
+    },
+    [mountedRef, openModal, scanWorkspaceCleanup]
+  )
+
+  useEffect(() => {
+    if (!open) {
+      wasOpenRef.current = false
+      autoScanAttemptedForOpenRef.current = false
+      return
     }
-  }, [mountedRef, open, scanWorkspaceCleanup])
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true
+      autoScanAttemptedForOpenRef.current = false
+      setActiveView('ready')
+      setConfirming(false)
+      setRowFailures({})
+      setFilters(DEFAULT_FILTERS)
+      setSortKey('activity')
+      setSortDirection('asc')
+      if (scan) {
+        setSelectedIds(getDefaultSelectedWorkspaceCleanupIds(scan.candidates))
+      }
+    }
+    if (!loading && !autoScanAttemptedForOpenRef.current) {
+      autoScanAttemptedForOpenRef.current = true
+      startWorkspaceCleanupScan({ notifyWhenReady: true })
+    }
+  }, [loading, open, scan, startWorkspaceCleanupScan])
 
   useEffect(() => {
     if (!open) {
@@ -226,6 +313,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }, [eligibleRepoIds, open])
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
+  const reviewInfoByWorktreeId = useMemo(() => {
+    const infos = new Map<string, WorkspaceCleanupReviewInfo>()
+    for (const candidate of candidates) {
+      infos.set(candidate.worktreeId, getWorkspaceCleanupReviewInfo(candidate, reviewStateInputs))
+    }
+    return infos
+  }, [candidates, reviewStateInputs])
   const effectiveRepoSelection = useMemo<ReadonlySet<string>>(() => {
     if (repoSelection.size > 0 || eligibleRepoIds.length === 0) {
       return repoSelection
@@ -243,29 +337,28 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }, [candidates, effectiveRepoSelection, eligibleRepoIds.length])
 
   useEffect(() => {
-    if (!open || !scan) {
+    if (!scan || selectedDefaultsScanAtRef.current === scan.scannedAt) {
       return
     }
-    setSelectedIds(
-      new Set(
-        candidates
-          .filter((candidate) => candidate.selectedByDefault)
-          .map((candidate) => candidate.worktreeId)
-      )
-    )
+    selectedDefaultsScanAtRef.current = scan.scannedAt
+    setSelectedIds(getDefaultSelectedWorkspaceCleanupIds(scan.candidates))
     setConfirming(false)
-  }, [open, scan, scan?.scannedAt, candidates])
+    setRowFailures({})
+  }, [scan])
 
   const visibleCandidates = useMemo(() => {
     const rows = filteredCandidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
-    return [...rows].sort(compareCleanupCandidates)
-  }, [filteredCandidates])
+    return sortWorkspaceCleanupCandidates(rows, 'activity', 'asc', reviewInfoByWorktreeId)
+  }, [filteredCandidates, reviewInfoByWorktreeId])
   const hiddenCandidates = useMemo(
     () =>
-      filteredCandidates
-        .filter((candidate) => candidate.blockers.includes('dismissed'))
-        .sort(compareCleanupCandidates),
-    [filteredCandidates]
+      sortWorkspaceCleanupCandidates(
+        filteredCandidates.filter((candidate) => candidate.blockers.includes('dismissed')),
+        'activity',
+        'asc',
+        reviewInfoByWorktreeId
+      ),
+    [filteredCandidates, reviewInfoByWorktreeId]
   )
   const groups = useMemo(
     () => ({
@@ -275,19 +368,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     }),
     [visibleCandidates]
   )
-  const selectedCandidates = useMemo(() => {
-    const byId = new Map(filteredCandidates.map((candidate) => [candidate.worktreeId, candidate]))
-    return [...selectedIds]
-      .map((id) => byId.get(id))
-      .filter(
-        (candidate): candidate is WorkspaceCleanupCandidate =>
-          candidate != null && canQueueWorkspaceCleanupCandidate(candidate)
-      )
-  }, [filteredCandidates, selectedIds])
-
-  const hiddenByKeepCount = filteredCandidates.filter((candidate) =>
-    candidate.blockers.includes('dismissed')
-  ).length
   const cleanupViewCounts = useMemo<WorkspaceCleanupViewCounts>(
     () => ({
       ready: groups.ready.length,
@@ -316,28 +396,50 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     () => formatScanNoticeMessage(selectedScanErrors, repoNameById),
     [repoNameById, selectedScanErrors]
   )
-  const readyCount = groups.ready.length
-  const protectedCount = groups.protected.length
-  const inactiveCount = filteredCandidates.length
   const hasAnyCandidates = candidates.length > 0
-  const initialLoading = loading && !scan
-  const activeRows = resolvedActiveView === 'hidden' ? hiddenCandidates : groups[resolvedActiveView]
-  const activeQueueableRows = useMemo(
-    () => activeRows.filter(canQueueWorkspaceCleanupCandidate),
+  const initialLoading = loading && !hasAnyCandidates
+  const activeBaseRows =
+    resolvedActiveView === 'hidden' ? hiddenCandidates : groups[resolvedActiveView]
+  const activeRows = useMemo(
+    () =>
+      sortWorkspaceCleanupCandidates(
+        filterWorkspaceCleanupCandidates(
+          activeBaseRows,
+          filters,
+          reviewInfoByWorktreeId,
+          scan?.scannedAt ?? Date.now()
+        ),
+        sortKey,
+        sortDirection,
+        reviewInfoByWorktreeId
+      ),
+    [activeBaseRows, filters, reviewInfoByWorktreeId, scan?.scannedAt, sortDirection, sortKey]
+  )
+  const activeRowIds = useMemo(
+    () => new Set(activeRows.map((candidate) => candidate.worktreeId)),
     [activeRows]
   )
-  const activeQueueableSelected = useMemo(
-    () => activeQueueableRows.filter((candidate) => selectedIds.has(candidate.worktreeId)).length,
-    [activeQueueableRows, selectedIds]
-  )
-  const allActiveQueueableSelected =
-    activeQueueableRows.length > 0 && activeQueueableSelected === activeQueueableRows.length
-  const someActiveQueueableSelected = activeQueueableSelected > 0
-  const activeSelectionState = allActiveQueueableSelected
-    ? 'checked'
-    : someActiveQueueableSelected
-      ? 'mixed'
-      : 'unchecked'
+  const activeFilters = hasActiveWorkspaceCleanupFilters(filters)
+  const selectedCandidates = useMemo(() => {
+    const byId = new Map(activeRows.map((candidate) => [candidate.worktreeId, candidate]))
+    return [...selectedIds]
+      .map((id) => byId.get(id))
+      .filter(
+        (candidate): candidate is WorkspaceCleanupCandidate =>
+          candidate != null && canQueueWorkspaceCleanupCandidate(candidate)
+      )
+  }, [activeRows, selectedIds])
+  useEffect(() => {
+    if (!open || confirming) {
+      return
+    }
+    // Why: destructive selection must stay scoped to the rows the user can
+    // currently review after tier/filter changes.
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => activeRowIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [activeRowIds, confirming, open])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -349,40 +451,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   )
 
   const refresh = useCallback(() => {
-    setRowFailures({})
-    void scanWorkspaceCleanup().catch((err: unknown) => {
-      if (mountedRef.current) {
-        toast.error(
-          translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.662b8ec3f8',
-            'Workspace cleanup scan failed'
-          ),
-          {
-            description: err instanceof Error ? err.message : String(err)
-          }
-        )
-      }
-    })
-  }, [mountedRef, scanWorkspaceCleanup])
-
-  const toggleActiveSelection = useCallback(() => {
-    if (activeQueueableRows.length === 0) {
-      return
-    }
-    setSelectedIds((current) => {
-      const next = new Set(current)
-      if (allActiveQueueableSelected) {
-        for (const candidate of activeQueueableRows) {
-          next.delete(candidate.worktreeId)
-        }
-      } else {
-        for (const candidate of activeQueueableRows) {
-          next.add(candidate.worktreeId)
-        }
-      }
-      return next
-    })
-  }, [activeQueueableRows, allActiveQueueableSelected])
+    startWorkspaceCleanupScan({ notifyWhenReady: true })
+  }, [startWorkspaceCleanupScan])
 
   const ignoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
@@ -492,12 +562,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       'Delete Inactive Workspaces'
                     )}
                   </DialogTitle>
-                  <DialogDescription className="mt-1 text-xs">
-                    {translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e0b5a4deaa',
-                      'Review inactive workspaces before deleting their local files and Orca state.'
-                    )}
-                  </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Tooltip>
@@ -545,14 +609,17 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   <div className="text-xs font-medium text-foreground">
                     {translate(
                       'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968',
-                      'Checking workspace safety'
+                      'Checking inactive workspaces'
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.8b74d4ea6e',
-                      'Scanning worktrees and git state, then combining open tab, terminal, live agent, and remote availability signals before suggesting deletions.'
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.47123d0108',
+                      'Scanning inactive workspaces. You can close this and come back.'
                     )}
+                  </div>
+                  <div className="mt-1 text-xs font-medium text-muted-foreground">
+                    {formatWorkspaceCleanupProgress(scanProgress)}
                   </div>
                 </div>
               </div>
@@ -566,40 +633,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       'selected'
                     )}
                   </div>
-                  <StatusPill>
-                    {inactiveCount}{' '}
-                    {translate(
-                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.2b31bf68de',
-                      'inactive'
-                    )}
-                  </StatusPill>
-                  {readyCount > 0 ? (
-                    <StatusPill tone="ready">
-                      {readyCount}{' '}
-                      {translate(
-                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b299f201b9',
-                        'safe to remove'
-                      )}
-                    </StatusPill>
-                  ) : null}
-                  {groups.review.length > 0 ? (
-                    <StatusPill tone="review">
-                      {groups.review.length}{' '}
-                      {translate(
-                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569',
-                        'need review'
-                      )}
-                    </StatusPill>
-                  ) : null}
-                  {protectedCount > 0 ? (
-                    <StatusPill>
-                      {protectedCount}{' '}
-                      {translate(
-                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.37ab28277e',
-                        'not suggested'
-                      )}
-                    </StatusPill>
-                  ) : null}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   {eligibleRepos.length > 1 ? (
@@ -629,6 +662,23 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               </div>
             ) : null}
 
+            {loading && scan && hasAnyCandidates ? (
+              <div className="border-b border-border bg-muted/25 px-5 py-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                  <span>
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9a3be9f2df',
+                      'Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.'
+                    )}
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {formatWorkspaceCleanupProgress(scanProgress)}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
             {error ? (
               <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
                 {error}
@@ -647,68 +697,20 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 onViewChange={setActiveView}
               />
               <div className="flex min-h-0 min-w-0 flex-col border-t border-border md:border-l md:border-t-0">
-                <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    {resolvedActiveView !== 'hidden' && activeQueueableRows.length > 0 ? (
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={
-                          activeSelectionState === 'mixed' ? 'mixed' : allActiveQueueableSelected
-                        }
-                        aria-label={
-                          allActiveQueueableSelected
-                            ? translate(
-                                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.73690b0031',
-                                'Unselect all in {{value0}}',
-                                { value0: TIER_LABELS[resolvedActiveView] }
-                              )
-                            : translate(
-                                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.06cf78521e',
-                                'Select all in {{value0}}',
-                                { value0: TIER_LABELS[resolvedActiveView] }
-                              )
-                        }
-                        onClick={toggleActiveSelection}
-                        className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent"
-                      >
-                        {activeSelectionState === 'checked' ? (
-                          <Check className="size-3" strokeWidth={3} />
-                        ) : activeSelectionState === 'mixed' ? (
-                          <Minus className="size-3" strokeWidth={3} />
-                        ) : null}
-                      </button>
-                    ) : null}
-                    <div className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                      {resolvedActiveView === 'hidden'
-                        ? translate(
-                            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0c6672f5e3',
-                            'Ignored cleanup suggestions'
-                          )
-                        : TIER_LABELS[resolvedActiveView]}
-                    </div>
-                  </div>
-                  {resolvedActiveView === 'hidden' && hiddenByKeepCount > 0 ? (
-                    <Button
-                      variant="link"
-                      size="xs"
-                      className="h-auto shrink-0 px-0 text-xs"
-                      onClick={() => void resetDismissals()}
-                    >
-                      {translate(
-                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.aaee139eab',
-                        'Restore ignored suggestions'
-                      )}
-                    </Button>
-                  ) : (
-                    <div className="shrink-0 text-xs text-muted-foreground">
-                      {translate(
-                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.592fbab446',
-                        'Sorted by oldest activity'
-                      )}
-                    </div>
-                  )}
-                </div>
+                {filteredCandidates.length > 0 ? (
+                  <WorkspaceCleanupFilterToolbar
+                    filters={filters}
+                    showRestoreIgnored={
+                      resolvedActiveView === 'hidden' && hiddenCandidates.length > 0
+                    }
+                    sortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onFiltersChange={setFilters}
+                    onSortKeyChange={setSortKey}
+                    onSortDirectionChange={setSortDirection}
+                    onRestoreIgnored={() => void resetDismissals()}
+                  />
+                ) : null}
                 <ScrollArea className="min-h-0 flex-1">
                   <div>
                     {initialLoading ? <SkeletonRows /> : null}
@@ -754,7 +756,28 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                         onAction={() => setActiveView('hidden')}
                       />
                     ) : null}
-                    {!loading && scan && activeRows.length === 0 && visibleCandidates.length > 0 ? (
+                    {!loading &&
+                    scan &&
+                    activeRows.length === 0 &&
+                    activeBaseRows.length > 0 &&
+                    activeFilters ? (
+                      <EmptyState
+                        title={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3d957ff117',
+                          'No workspaces match these filters.'
+                        )}
+                        actionLabel={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e94b1f8bb4',
+                          'Clear filters'
+                        )}
+                        onAction={() => setFilters(DEFAULT_FILTERS)}
+                      />
+                    ) : null}
+                    {!loading &&
+                    scan &&
+                    activeRows.length === 0 &&
+                    visibleCandidates.length > 0 &&
+                    !activeFilters ? (
                       <EmptyState
                         title={translate(
                           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.f68d538c63',
@@ -766,6 +789,9 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       <CandidateRow
                         key={candidate.worktreeId}
                         candidate={candidate}
+                        reviewInfo={
+                          reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO
+                        }
                         last={index === activeRows.length - 1}
                         selected={selectedIds.has(candidate.worktreeId)}
                         failure={rowFailures[candidate.worktreeId]}
@@ -788,6 +814,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
         ) : (
           <ConfirmRemove
             candidates={selectedCandidates}
+            reviewInfoByWorktreeId={reviewInfoByWorktreeId}
             removing={removing}
             onCancel={() => setConfirming(false)}
             onConfirm={() => void confirmRemove()}
@@ -823,6 +850,233 @@ function StatusPill({
     >
       {children}
     </span>
+  )
+}
+
+function WorkspaceCleanupFilterToolbar({
+  filters,
+  showRestoreIgnored,
+  sortKey,
+  sortDirection,
+  onFiltersChange,
+  onSortKeyChange,
+  onSortDirectionChange,
+  onRestoreIgnored
+}: {
+  filters: WorkspaceCleanupFilters
+  showRestoreIgnored: boolean
+  sortKey: WorkspaceCleanupSortKey
+  sortDirection: WorkspaceCleanupSortDirection
+  onFiltersChange: (filters: WorkspaceCleanupFilters) => void
+  onSortKeyChange: (sortKey: WorkspaceCleanupSortKey) => void
+  onSortDirectionChange: (direction: WorkspaceCleanupSortDirection) => void
+  onRestoreIgnored: () => void
+}): React.JSX.Element {
+  const updateFilter = <K extends keyof WorkspaceCleanupFilters>(
+    key: K,
+    value: WorkspaceCleanupFilters[K]
+  ): void => {
+    onFiltersChange({ ...filters, [key]: value })
+  }
+  const hasHiddenControls = hasActiveWorkspaceCleanupPanelControls(filters, sortKey, sortDirection)
+  const resetPanelControls = (): void => {
+    onFiltersChange({
+      ...filters,
+      time: 'all',
+      review: 'all',
+      git: 'all',
+      context: 'all'
+    })
+    onSortKeyChange('activity')
+    onSortDirectionChange('asc')
+  }
+
+  return (
+    <div className="flex items-center gap-2 border-b border-border bg-muted/15 px-3 py-2">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={filters.query}
+          onChange={(event) => updateFilter('query', event.target.value)}
+          placeholder="Search workspaces"
+          className="h-8 pl-8 text-xs"
+        />
+      </div>
+      <DropdownMenu modal={false}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                type="button"
+                aria-label={translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.efb3843e75',
+                  'Filter and sort workspaces'
+                )}
+                className="relative shrink-0"
+              >
+                <SlidersHorizontal className="size-3.5" />
+                {hasHiddenControls ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary"
+                  />
+                ) : null}
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.efb3843e75',
+              'Filter and sort workspaces'
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end" sideOffset={6} className="w-64 pb-2">
+          <DropdownMenuLabel>
+            {translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.93b7381d50',
+              'Filters'
+            )}
+          </DropdownMenuLabel>
+          <WorkspaceCleanupMenuSub<WorkspaceCleanupTimeFilter>
+            label="Age"
+            value={filters.time}
+            options={[
+              ['all', 'Any age'],
+              ['30d', '30d+'],
+              ['90d', '90d+'],
+              ['archived', 'Archived']
+            ]}
+            onChange={(value) => updateFilter('time', value)}
+          />
+          <WorkspaceCleanupMenuSub<WorkspaceCleanupReviewFilter>
+            label="Review"
+            value={filters.review}
+            options={[
+              ['all', 'Any review'],
+              ['no-review', 'No PR/MR'],
+              ['has-review', 'Has PR/MR'],
+              ['open-review', 'Open'],
+              ['closed-review', 'Closed']
+            ]}
+            onChange={(value) => updateFilter('review', value)}
+          />
+          <WorkspaceCleanupMenuSub<WorkspaceCleanupGitFilter>
+            label="Git"
+            value={filters.git}
+            options={[
+              ['all', 'Any git'],
+              ['clean', 'Clean'],
+              ['dirty', 'Dirty'],
+              ['unpushed', 'Unpushed'],
+              ['unknown', 'Unknown']
+            ]}
+            onChange={(value) => updateFilter('git', value)}
+          />
+          <WorkspaceCleanupMenuSub<WorkspaceCleanupContextFilter>
+            label="Context"
+            value={filters.context}
+            options={[
+              ['all', 'Any context'],
+              ['has-context', 'Has context'],
+              ['no-context', 'No context']
+            ]}
+            onChange={(value) => updateFilter('context', value)}
+          />
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>
+            {translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a615e24679',
+              'Sort'
+            )}
+          </DropdownMenuLabel>
+          <WorkspaceCleanupMenuSub<WorkspaceCleanupSortKey>
+            label="Sort by"
+            value={sortKey}
+            options={[
+              ['activity', 'Activity'],
+              ['name', 'Name'],
+              ['repo', 'Repo'],
+              ['review', 'Review'],
+              ['git', 'Git']
+            ]}
+            onChange={onSortKeyChange}
+          />
+          <WorkspaceCleanupMenuSub<WorkspaceCleanupSortDirection>
+            label="Direction"
+            value={sortDirection}
+            options={[
+              ['asc', 'Ascending'],
+              ['desc', 'Descending']
+            ]}
+            onChange={onSortDirectionChange}
+          />
+          {showRestoreIgnored ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onRestoreIgnored}>
+                {translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.aaee139eab',
+                  'Restore ignored suggestions'
+                )}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+          {hasHiddenControls ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={resetPanelControls}>
+                {translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e94b1f8bb4',
+                  'Clear filters'
+                )}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+function WorkspaceCleanupMenuSub<T extends string>({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string
+  value: T
+  options: readonly (readonly [T, string])[]
+  onChange: (value: T) => void
+}): React.JSX.Element {
+  const valueLabel = options.find(([optionValue]) => optionValue === value)?.[1] ?? value
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span className="truncate">{label}</span>
+          <span className="truncate text-[11px] font-medium text-muted-foreground">
+            {valueLabel}
+          </span>
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-44">
+        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onChange(next as T)}>
+          {options.map(([optionValue, optionLabel]) => (
+            <DropdownMenuRadioItem
+              key={optionValue}
+              value={optionValue}
+              onSelect={(event) => event.preventDefault()}
+            >
+              {optionLabel}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }
 
@@ -890,6 +1144,7 @@ function CleanupViewNav({
 
 function CandidateRow({
   candidate,
+  reviewInfo,
   last,
   selected,
   failure,
@@ -899,6 +1154,7 @@ function CandidateRow({
   onRemove
 }: {
   candidate: WorkspaceCleanupCandidate
+  reviewInfo: WorkspaceCleanupReviewInfo
   last: boolean
   selected: boolean
   failure?: string
@@ -913,6 +1169,8 @@ function CandidateRow({
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
   const status = getCandidateStatus(candidate)
+  const gitLabel = getWorkspaceCleanupGitLabel(candidate)
+  const contextPillLabel = getContextPillLabel(candidate)
 
   return (
     <div
@@ -944,6 +1202,11 @@ function CandidateRow({
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            {reviewInfo.label ? (
+              <StatusPill tone={getReviewPillTone(reviewInfo)}>{reviewInfo.label}</StatusPill>
+            ) : null}
+            <StatusPill tone={gitLabel === 'Clean' ? 'ready' : 'review'}>{gitLabel}</StatusPill>
+            {contextPillLabel ? <StatusPill>{contextPillLabel}</StatusPill> : null}
             <span className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
@@ -1122,11 +1385,16 @@ function getCandidateStatus(candidate: WorkspaceCleanupCandidate): {
 }
 
 function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
-  if (candidate.git.clean === true) {
-    return 'Clean git'
-  }
-  if (candidate.git.clean === false) {
-    return 'Dirty git'
+  const label = getWorkspaceCleanupGitLabel(candidate)
+  switch (label) {
+    case 'Clean':
+      return 'Clean git'
+    case 'Dirty':
+      return 'Dirty git'
+    case 'Unpushed':
+      return 'Unpushed commits'
+    case 'Unknown':
+      return 'Git unknown'
   }
   return 'Git unknown'
 }
@@ -1187,11 +1455,13 @@ function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | nu
 
 function ConfirmRemove({
   candidates,
+  reviewInfoByWorktreeId,
   removing,
   onCancel,
   onConfirm
 }: {
   candidates: WorkspaceCleanupCandidate[]
+  reviewInfoByWorktreeId: ReadonlyMap<string, WorkspaceCleanupReviewInfo>
   removing: boolean
   onCancel: () => void
   onConfirm: () => void
@@ -1243,6 +1513,7 @@ function ConfirmRemove({
             <ConfirmRemoveRow
               key={candidate.worktreeId}
               candidate={candidate}
+              reviewInfo={reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO}
               last={index === candidates.length - 1}
             />
           ))}
@@ -1270,13 +1541,17 @@ function ConfirmRemove({
 
 function ConfirmRemoveRow({
   candidate,
+  reviewInfo,
   last
 }: {
   candidate: WorkspaceCleanupCandidate
+  reviewInfo: WorkspaceCleanupReviewInfo
   last: boolean
 }): React.JSX.Element {
   const dirtyLabel = getDirtyGitLabel(candidate)
   const branchDiffersFromName = candidate.branch !== candidate.displayName
+  const contextPillLabel = getContextPillLabel(candidate)
+  const status = getCandidateStatus(candidate)
   return (
     <div className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}>
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -1288,6 +1563,11 @@ function ConfirmRemoveRow({
           )}{' '}
           {formatRelativeTime(candidate.lastActivityAt)}
         </span>
+        <StatusPill tone={status.tone}>{status.label}</StatusPill>
+        {reviewInfo.label ? (
+          <StatusPill tone={getReviewPillTone(reviewInfo)}>{reviewInfo.label}</StatusPill>
+        ) : null}
+        {contextPillLabel ? <StatusPill>{contextPillLabel}</StatusPill> : null}
         {dirtyLabel ? <StatusPill tone="destructive">{dirtyLabel}</StatusPill> : null}
       </div>
       <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
@@ -1307,6 +1587,14 @@ function ConfirmRemoveRow({
 }
 
 function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string | null {
+  if (candidate.blockers.includes('unpushed-commits')) {
+    if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
+      return `${candidate.git.upstreamAhead} unpushed commit${
+        candidate.git.upstreamAhead === 1 ? '' : 's'
+      }`
+    }
+    return 'Unpushed commits'
+  }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return `${candidate.git.upstreamAhead} unpushed commit${
       candidate.git.upstreamAhead === 1 ? '' : 's'
@@ -1315,10 +1603,102 @@ function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string | null {
   if (candidate.git.clean === false) {
     return 'Uncommitted changes'
   }
-  if (candidate.git.clean == null) {
+  if (
+    candidate.git.clean == null ||
+    candidate.blockers.includes('unknown-base') ||
+    candidate.blockers.includes('git-status-error')
+  ) {
     return 'Git status unknown'
   }
   return null
+}
+
+function getReviewPillTone(
+  reviewInfo: WorkspaceCleanupReviewInfo
+): 'neutral' | 'ready' | 'review' | 'destructive' {
+  if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
+    return 'review'
+  }
+  return 'neutral'
+}
+
+function getContextPillLabel(candidate: WorkspaceCleanupCandidate): string | null {
+  if (!hasWorkspaceCleanupLocalContext(candidate)) {
+    return null
+  }
+  const count =
+    candidate.localContext.terminalTabCount +
+    candidate.localContext.cleanEditorTabCount +
+    candidate.localContext.browserTabCount +
+    candidate.localContext.diffCommentCount +
+    candidate.localContext.retainedDoneAgentCount
+  return `${count} context`
+}
+
+function hasActiveWorkspaceCleanupFilters(filters: WorkspaceCleanupFilters): boolean {
+  return (
+    filters.query.trim() !== '' ||
+    filters.time !== 'all' ||
+    filters.review !== 'all' ||
+    filters.git !== 'all' ||
+    filters.context !== 'all'
+  )
+}
+
+function hasActiveWorkspaceCleanupPanelControls(
+  filters: WorkspaceCleanupFilters,
+  sortKey: WorkspaceCleanupSortKey,
+  sortDirection: WorkspaceCleanupSortDirection
+): boolean {
+  return (
+    filters.time !== 'all' ||
+    filters.review !== 'all' ||
+    filters.git !== 'all' ||
+    filters.context !== 'all' ||
+    sortKey !== 'activity' ||
+    sortDirection !== 'asc'
+  )
+}
+
+function getDefaultSelectedWorkspaceCleanupIds(
+  candidates: readonly WorkspaceCleanupCandidate[]
+): Set<string> {
+  return new Set(
+    candidates
+      .filter((candidate) => candidate.selectedByDefault)
+      .map((candidate) => candidate.worktreeId)
+  )
+}
+
+function formatWorkspaceCleanupReadyToastDescription(
+  inactiveCount: number,
+  suggestedCount: number
+): string {
+  if (inactiveCount === 0) {
+    return 'No inactive workspaces found.'
+  }
+  const inactiveNoun = inactiveCount === 1 ? 'workspace' : 'workspaces'
+  const suggestedNoun = suggestedCount === 1 ? 'suggestion' : 'suggestions'
+  return `${inactiveCount} inactive ${inactiveNoun} found, with ${suggestedCount} cleanup ${suggestedNoun}.`
+}
+
+function formatWorkspaceCleanupProgress(progress: WorkspaceCleanupScanProgress | null): string {
+  if (!progress || progress.totalWorktreeCount === 0) {
+    return translate(
+      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4cc5b73efe',
+      'Finding inactive workspaces...'
+    )
+  }
+  const noun = progress.totalWorktreeCount === 1 ? 'workspace' : 'workspaces'
+  return translate(
+    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.5bf2e88480',
+    '{{value0}}/{{value1}} {{value2}} scanned',
+    {
+      value0: progress.scannedWorktreeCount,
+      value1: progress.totalWorktreeCount,
+      value2: noun
+    }
+  )
 }
 
 function SkeletonRows(): React.JSX.Element {

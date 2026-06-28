@@ -1998,6 +1998,9 @@ const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' 
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
+  // Why: compare merged implicit PRs against the inspected worktree HEAD, not
+  // the main repo HEAD, without adding a worktree-scoped git call.
+  currentHeadOid?: string | null
 }
 
 function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
@@ -2314,15 +2317,31 @@ export function __resetTrackedUpstreamBranchCacheForTests(): void {
   trackedUpstreamSnapshotGenerations.clear()
 }
 
-function parseTrackedUpstreamBranch(
-  upstreamRef: string,
-  branchName: string
-): TrackedUpstreamBranch | null {
+function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
   const parsed = splitRemoteBranchName(upstreamRef.trim())
-  if (!parsed || parsed.branchName === branchName) {
+  if (!parsed) {
     return null
   }
   return parsed
+}
+
+function prOwnerRepoKey(ownerRepo: OwnerRepo): string {
+  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
+}
+
+function shouldRetryTrackedUpstreamBranch(
+  upstreamBranch: TrackedUpstreamBranch,
+  branchName: string,
+  upstreamHeadRepo: OwnerRepo,
+  headRepo: OwnerRepo | null
+): boolean {
+  if (upstreamBranch.branchName !== branchName) {
+    return true
+  }
+  if (!headRepo) {
+    return true
+  }
+  return prOwnerRepoKey(upstreamHeadRepo) !== prOwnerRepoKey(headRepo)
 }
 
 async function getTrackedUpstreamBranch(
@@ -2513,27 +2532,21 @@ function parseTrackedUpstreamBranches(stdout: string): Map<string, TrackedUpstre
     if (!localBranchName) {
       continue
     }
-    upstreamsByBranchName.set(
-      localBranchName,
-      parseTrackedUpstreamRef(upstreamRef ?? '', localBranchName)
-    )
+    upstreamsByBranchName.set(localBranchName, parseTrackedUpstreamRef(upstreamRef ?? ''))
   }
   return upstreamsByBranchName
 }
 
-function parseTrackedUpstreamRef(
-  upstreamRef: string,
-  branchName: string
-): TrackedUpstreamBranch | null {
+function parseTrackedUpstreamRef(upstreamRef: string): TrackedUpstreamBranch | null {
   const remoteRefPrefix = 'refs/remotes/'
   const normalizedRef = upstreamRef.trim()
   if (normalizedRef.startsWith(remoteRefPrefix)) {
-    return parseTrackedUpstreamBranch(normalizedRef.slice(remoteRefPrefix.length), branchName)
+    return parseTrackedUpstreamBranch(normalizedRef.slice(remoteRefPrefix.length))
   }
   if (normalizedRef.startsWith('refs/heads/')) {
     return null
   }
-  return parseTrackedUpstreamBranch(normalizedRef, branchName)
+  return parseTrackedUpstreamBranch(normalizedRef)
 }
 
 async function lookupPRByBranchName(args: {
@@ -2767,15 +2780,21 @@ export async function getPRForBranchOutcome(
     let dataHeadRepo: OwnerRepo | null = headRepo
     let currentHeadOidForMergedImplicit: string | null | undefined
 
+    const explicitCurrentHeadOid =
+      typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
+        ? options.currentHeadOid.trim()
+        : null
     const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
-      currentHeadOidForMergedImplicit ??= await getCurrentHeadOid(
-        repoPath,
-        connectionId,
-        localGitOptions
-      )
+      // Why: prefer the caller-supplied worktree HEAD; only shell out (against
+      // the main repo path) when no explicit oid is available, matching legacy
+      // behavior. This keeps merged-at-head PRs visible for secondary worktrees.
+      currentHeadOidForMergedImplicit ??=
+        explicitCurrentHeadOid !== null
+          ? explicitCurrentHeadOid
+          : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
       return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
     }
 
@@ -2799,8 +2818,8 @@ export async function getPRForBranchOutcome(
       data = branchLookup.data
       dataRepo = branchLookup.dataRepo
       if (!data) {
-        // Why: worktrees can have a short local branch tracking a differently
-        // named remote PR head; after the local miss, try that configured head.
+        // Why: the tracked upstream can identify the real PR head by branch
+        // name or by fork owner even when branch names match locally.
         const upstreamBranch = await getTrackedUpstreamBranch(
           repoPath,
           branchName,
@@ -2815,16 +2834,21 @@ export async function getPRForBranchOutcome(
               connectionId,
               ...localGitArgs
             )) ?? headRepo
-          const upstreamLookup = await lookupPRByBranchName({
-            candidates,
-            headRepo: upstreamHeadRepo,
-            branchName: upstreamBranch.branchName,
-            ghOptions
-          })
-          data = upstreamLookup.data
-          dataRepo = upstreamLookup.dataRepo
-          if (data) {
-            dataHeadRepo = upstreamHeadRepo
+          if (
+            upstreamHeadRepo &&
+            shouldRetryTrackedUpstreamBranch(upstreamBranch, branchName, upstreamHeadRepo, headRepo)
+          ) {
+            const upstreamLookup = await lookupPRByBranchName({
+              candidates,
+              headRepo: upstreamHeadRepo,
+              branchName: upstreamBranch.branchName,
+              ghOptions
+            })
+            data = upstreamLookup.data
+            dataRepo = upstreamLookup.dataRepo
+            if (data) {
+              dataHeadRepo = upstreamHeadRepo
+            }
           }
         }
       }
@@ -2852,14 +2876,16 @@ export async function getPRForBranchOutcome(
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
+    const explicitHeadHidesMergedImplicitPR =
+      explicitCurrentHeadOid !== null &&
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+    const shouldPreserveMergedFallback =
+      !explicitHeadHidesMergedImplicitPR &&
+      (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if (
-      (await hideMergedImplicitPR(data)) &&
-      !fallbackConfirmedMergedBranch &&
-      options.acceptMergedFallbackPR !== true
-    ) {
+    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 

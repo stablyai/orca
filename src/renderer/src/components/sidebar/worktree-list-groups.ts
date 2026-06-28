@@ -361,11 +361,11 @@ export function getPRGroupKey(
           branch,
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
-  const canUseLegacyPRCache =
-    repo !== undefined && !settings?.activeRuntimeEnvironmentId?.trim() && !repo.connectionId
+  const canUseLegacyPRCache = repo !== undefined && !repo.connectionId && !repo.executionHostId
   const legacyRepoScopedCacheKey =
     canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch) : ''
   const legacyPathScopedCacheKey =

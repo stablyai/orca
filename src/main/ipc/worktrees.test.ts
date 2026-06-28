@@ -5440,6 +5440,139 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('recovers forced Windows long-path worktree removal through local deletion and prune', async () => {
+    setPlatform('win32')
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-long-path-'))
+    const repoPath = join(parentDir, 'repo')
+    const worktreePath = join(parentDir, 'feature-wt')
+    await mkdir(worktreePath, { recursive: true })
+    await writeFile(join(worktreePath, 'scratch.txt'), 'delete me')
+    mockKnownFeatureWorktree(worktreePath, repoPath)
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    const longPathError = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'error: failed to delete deep/file.txt: Filename too long'
+    })
+    removeWorktreeMock.mockRejectedValue(longPathError)
+    const worktreeId = `repo-1::${worktreePath}`
+
+    try {
+      const result = await handlers['worktrees:remove'](null, {
+        worktreeId,
+        force: true
+      })
+
+      expect(result).toEqual({
+        preservedBranch: { branchName: 'feature', head: 'feature' }
+      })
+      if (ORIGINAL_PLATFORM === 'win32') {
+        await expect(lstat(worktreePath)).rejects.toMatchObject({ code: 'ENOENT' })
+      }
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
+        cwd: '/workspace/repo'
+      })
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+        repoId: 'repo-1'
+      })
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not create a preserved-branch target when long-path recovery preserves branch by policy', async () => {
+    setPlatform('win32')
+    mockKnownFeatureWorktree()
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ preserveBranchOnDelete: true }))
+    removeWorktreeMock.mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: 'error: failed to delete deep/file.txt: Filename too long'
+      })
+    )
+
+    const result = await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      force: true
+    })
+
+    expect(result).toEqual({})
+    await expect(
+      handlers['worktrees:forceDeletePreservedBranch'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        branchName: 'feature',
+        expectedHead: 'feature'
+      })
+    ).rejects.toThrow('No preserved branch cleanup is pending')
+  })
+
+  it('does not recover Windows long-path worktree removal without force', async () => {
+    setPlatform('win32')
+    mockKnownFeatureWorktree()
+    const longPathError = Object.assign(new Error('git worktree remove failed'), {
+      stderr: 'error: failed to delete deep/file.txt: Filename too long'
+    })
+    removeWorktreeMock.mockRejectedValue(longPathError)
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt'
+      })
+    ).rejects.toThrow('Failed to delete worktree at /workspace/feature-wt.')
+
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('keeps metadata when Windows long-path recovery deletes the directory but prune fails', async () => {
+    setPlatform('win32')
+    mockKnownFeatureWorktree()
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    removeWorktreeMock.mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: 'error: failed to delete deep/file.txt: Filename too long'
+      })
+    )
+    gitExecFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('git prune failed'), {
+        stderr: 'fatal: unable to lock worktree admin dir'
+      })
+    )
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        force: true
+      })
+    ).rejects.toThrow('Git still has stale worktree registration')
+
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
+  it('retries stale Git registration cleanup after prior local filesystem recovery', async () => {
+    setPlatform('win32')
+    const missingWorktreePath = 'C:\\workspace\\already-removed'
+    const worktreeId = `repo-1::${missingWorktreePath}`
+    mockKnownFeatureWorktree(missingWorktreePath)
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+
+    const result = await handlers['worktrees:remove'](null, {
+      worktreeId,
+      force: true
+    })
+
+    expect(result).toEqual({
+      preservedBranch: { branchName: 'feature', head: 'feature' }
+    })
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
+      cwd: '/workspace/repo'
+    })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+  })
+
   it('refuses to delete the root workspace for folder-mode repos', async () => {
     store.getRepo.mockReturnValue({
       id: 'repo-folder',

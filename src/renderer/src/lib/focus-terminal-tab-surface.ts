@@ -20,6 +20,15 @@ function cancelPendingFocusFrames(): void {
   pendingFocusFrameIds = []
 }
 
+function canUseSinglePaneStaleLeafFallback(tabId: string, leafId: string): boolean {
+  const tabElement = document.querySelector(`[data-terminal-tab-id="${cssAttributeString(tabId)}"]`)
+  const expectedLeafIds = tabElement
+    ?.getAttribute('data-terminal-layout-leaf-ids')
+    ?.split(' ')
+    .filter(Boolean)
+  return expectedLeafIds?.length === 1 && !expectedLeafIds.includes(leafId)
+}
+
 export function focusTerminalTabSurface(tabId: string, leafId?: string | null): void {
   cancelPendingFocusFrames()
   const firstFrameId = requestAnimationFrame(() => {
@@ -41,8 +50,21 @@ export function focusTerminalTabSurface(tabId: string, leafId?: string | null): 
         return
       }
       if (leafId) {
-        // Why: exact mobile split-pane focus must not silently focus a sibling
-        // pane when the requested UUID leaf has not mounted yet.
+        if (!canUseSinglePaneStaleLeafFallback(tabId, leafId)) {
+          // Why: exact mobile split-pane focus must not silently focus a sibling
+          // pane when the requested UUID leaf has not mounted yet.
+          return
+        }
+        // Why: old single-pane remounts could remint the leaf id. Only recover
+        // after the tab layout no longer expects the requested leaf.
+        const tabScopedHelpers = document.querySelectorAll(
+          `[data-terminal-tab-id="${escapedTabId}"] .xterm-helper-textarea`
+        )
+        if (tabScopedHelpers.length === 1) {
+          const fallback = tabScopedHelpers.item(0) as HTMLElement | null
+          fallback?.focus()
+          return
+        }
         return
       }
       const fallback = document.querySelector('.xterm-helper-textarea') as HTMLElement | null

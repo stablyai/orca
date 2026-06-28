@@ -1066,7 +1066,7 @@ export default function NewWorkspaceComposerCard({
             role="switch"
             aria-checked={createMultiple}
             onClick={() => onCreateMultipleChange?.(!createMultiple)}
-            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <span
               aria-hidden
@@ -1082,7 +1082,7 @@ export default function NewWorkspaceComposerCard({
                 )}
               />
             </span>
-            <span>
+            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
               {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>
           </button>

@@ -168,6 +168,7 @@ export type IFilesystemProvider = {
 export type GitProviderStatusOptions = {
   includeIgnored?: boolean
   bypassEffectiveUpstreamNegativeCache?: boolean
+  signal?: AbortSignal
 }
 
 export type IGitProvider = {

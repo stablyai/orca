@@ -591,6 +591,85 @@ describe('useTabAgent', () => {
     expect(getForegroundProcess).toHaveBeenCalledTimes(2)
   })
 
+  it('retries helper foreground so daemon-derived agent beats stale launch identity', async () => {
+    vi.useFakeTimers()
+    getForegroundProcess.mockResolvedValueOnce('uv').mockResolvedValueOnce('claude')
+
+    try {
+      await renderHookProbe({ ...baseTab, launchAgent: 'opencode' })
+
+      expect(latestHookAgent).toBe('opencode')
+      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+      expect(latestHookAgent).toBe('claude')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retry unknown helper foreground without launch intent', async () => {
+    vi.useFakeTimers()
+    getForegroundProcess.mockResolvedValue('uv')
+
+    try {
+      await renderHookProbe({ ...baseTab, launchAgent: undefined })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+      expect(latestHookAgent).toBeNull()
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps one post-throttle shell retry to observe daemon-derived launch identity', async () => {
+    vi.useFakeTimers()
+    getForegroundProcess
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('claude')
+
+    try {
+      await renderHookProbe({ ...baseTab, launchAgent: 'opencode' })
+
+      expect(latestHookAgent).toBe('opencode')
+      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250 + 1250 + 3500)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(4)
+      expect(latestHookAgent).toBe('opencode')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(5)
+      expect(latestHookAgent).toBe('claude')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
   it('uses completed local hook status as launch lifecycle evidence after remount', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     getForegroundProcess.mockResolvedValueOnce('zsh')

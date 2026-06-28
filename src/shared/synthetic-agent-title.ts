@@ -26,6 +26,16 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     permissionLabel: 'OpenCode - action required',
     idleLabel: 'OpenCode ready'
   },
+  pi: {
+    workingLabel: 'Pi',
+    permissionLabel: 'Pi - action required',
+    idleLabel: 'Pi ready'
+  },
+  omp: {
+    workingLabel: 'OMP',
+    permissionLabel: 'OMP - action required',
+    idleLabel: 'OMP ready'
+  },
   droid: {
     workingLabel: 'Droid',
     permissionLabel: 'Droid - action required',

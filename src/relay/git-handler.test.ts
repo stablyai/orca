@@ -1661,6 +1661,97 @@ describe('GitHandler', () => {
     })
 
     it.skipIf(process.platform === 'win32')(
+      'normalizes the main worktree path for a separate-git-dir repo',
+      async () => {
+        const sourcePath = path.join(tmpDir, 'source')
+        const worktreePath = path.join(tmpDir, 'worktree')
+        const gitDirPath = path.join(tmpDir, 'git-store', 'project.git')
+        mkdirSync(sourcePath)
+        mkdirSync(path.dirname(gitDirPath), { recursive: true })
+        gitInit(sourcePath)
+        writeFileSync(path.join(sourcePath, 'file.txt'), 'hello')
+        gitCommit(sourcePath, 'initial')
+
+        execFileSync('git', [
+          'clone',
+          '--quiet',
+          `--separate-git-dir=${gitDirPath}`,
+          sourcePath,
+          worktreePath
+        ])
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: await fs.realpath(worktreePath)
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(worktreePath),
+          isMainWorktree: true
+        })
+        expect(mainWorktree?.path).not.toBe(await fs.realpath(gitDirPath))
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves an ordinary repo reached via a symlinked path unchanged',
+      async () => {
+        // A symlink alias defeats the path-string gate (git reports the
+        // realpath toplevel); the git-common-dir gate must still skip the
+        // rewrite for an ordinary repo so the reported path is untouched.
+        const repoPath = path.join(tmpDir, 'plain-repo')
+        mkdirSync(repoPath)
+        gitInit(repoPath)
+        writeFileSync(path.join(repoPath, 'file.txt'), 'hello')
+        gitCommit(repoPath, 'initial')
+        const linkedRepoPath = path.join(tmpDir, 'linked-repo')
+        symlinkSync(repoPath, linkedRepoPath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: linkedRepoPath
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(repoPath),
+          isMainWorktree: true
+        })
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves the main entry unchanged when scanned via a linked worktree',
+      async () => {
+        // A linked worktree has a `.git` pointer file like a separate-git-dir
+        // checkout, but its porcelain main entry is the real main working root.
+        // The git-common-dir gate must skip the rewrite so the main entry is
+        // not overwritten with the linked worktree's own toplevel.
+        const repoPath = path.join(tmpDir, 'main-repo')
+        mkdirSync(repoPath)
+        gitInit(repoPath)
+        writeFileSync(path.join(repoPath, 'file.txt'), 'hello')
+        gitCommit(repoPath, 'initial')
+        const linkedWorktreePath = path.join(tmpDir, 'linked-wt')
+        execFileSync('git', ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'], {
+          cwd: repoPath,
+          stdio: 'pipe'
+        })
+        const resolvedLinked = await fs.realpath(linkedWorktreePath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: resolvedLinked
+        })) as Record<string, unknown>[]
+        const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
+
+        expect(mainWorktree).toMatchObject({
+          path: await fs.realpath(repoPath),
+          isMainWorktree: true
+        })
+        expect(mainWorktree?.path).not.toBe(resolvedLinked)
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
       'lists worktrees whose paths contain newlines',
       async () => {
         gitInit(tmpDir)

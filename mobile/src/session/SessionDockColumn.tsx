@@ -8,6 +8,7 @@ import { MobilePrViewPanel } from '../components/pr-sidebar/MobilePrViewPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
+import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 
 type Props = {
   activePanel: Exclude<ActivePanel, null>
@@ -18,6 +19,7 @@ type Props = {
   connState: ConnectionState
   branch: string | null
   headSha: string | null
+  gitStatus: MobileGitStatusResult | null
   isGithubRepo: boolean
   branchContextLoaded: boolean
   availableWidth: number
@@ -40,6 +42,7 @@ export function SessionDockColumn({
   connState,
   branch,
   headSha,
+  gitStatus,
   isGithubRepo,
   branchContextLoaded,
   availableWidth,
@@ -60,6 +63,7 @@ export function SessionDockColumn({
         connState={connState}
         branch={branch}
         headSha={headSha}
+        gitStatus={gitStatus}
         isGithubRepo={isGithubRepo}
         branchContextLoaded={branchContextLoaded}
         onRequestClose={onRequestClose}
@@ -79,6 +83,7 @@ const DockPanelContent = memo(function DockPanelContent({
   connState,
   branch,
   headSha,
+  gitStatus,
   isGithubRepo,
   branchContextLoaded,
   onRequestClose
@@ -113,6 +118,7 @@ const DockPanelContent = memo(function DockPanelContent({
       worktreeId={worktreeId}
       branch={branch}
       headSha={headSha}
+      gitStatus={gitStatus}
       isGithubRepo={isGithubRepo}
       branchContextLoaded={branchContextLoaded}
       embedded

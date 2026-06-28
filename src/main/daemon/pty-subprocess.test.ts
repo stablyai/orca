@@ -31,6 +31,22 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
+// Resolve PowerShell family names to deterministic absolute paths so these
+// tests run on non-Windows CI. The real resolver (which skips the Store App
+// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+vi.mock('../providers/windows-powershell-executable', () => ({
+  resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
+  resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe'
+      ? [PWSH7_ABS, WINDOWS_POWERSHELL_ABS, CMD_ABS]
+      : [WINDOWS_POWERSHELL_ABS, CMD_ABS],
+  getWindowsCmdPath: () => CMD_ABS
+}))
+
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
@@ -345,6 +361,42 @@ describe('createPtySubprocess', () => {
 
       resolveForeground('codex')
       await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('serves Unix agent foreground when node-pty reports an agent child process', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'uv'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('uv')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'uv',
+        expect.any(Object)
+      )
+
+      resolveForeground('claude')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('claude'))
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
@@ -1251,7 +1303,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      WINDOWS_POWERSHELL_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
@@ -1280,7 +1332,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'pwsh.exe',
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
@@ -1309,7 +1361,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      WINDOWS_POWERSHELL_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
@@ -1338,7 +1390,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      WINDOWS_POWERSHELL_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
@@ -1512,7 +1564,7 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      'powershell.exe',
+      WINDOWS_POWERSHELL_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.objectContaining({ cwd: 'C:\\Users\\alice\\project' })
     )

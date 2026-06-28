@@ -414,6 +414,10 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
+  pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
+  recoverLocalWindowsLongPathWorktreeRemoval
+} from '../local-worktree-removal-recovery'
+import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
@@ -663,6 +667,7 @@ import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
+import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
@@ -3654,12 +3659,14 @@ export class OrcaRuntimeService {
   async activateMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
-    leafId?: string
+    leafId?: string,
+    opts: { notifyClients?: boolean } = {}
   ): Promise<RuntimeMobileSessionTabsResult> {
     const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    await this.refreshMobileSessionPtyRecords()
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -3687,13 +3694,19 @@ export class OrcaRuntimeService {
       )
       // Why: serve-created tabs can be visible before any renderer has adopted
       // their tab id, so focusing the renderer would silently no-op.
+      // Phone-local activation also needs this path for inactive restored tabs:
+      // desktop focus is intentionally suppressed, but the PTY still must exist.
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        (!this.notifier?.focusTerminal ||
+        (opts.notifyClients === false ||
+          !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+        const targetGroupId = snapshot?.tabGroups?.find((group) =>
+          group.tabOrder.includes(tab.parentTabId)
+        )?.id
         try {
           await this.createHeadlessMobileSessionTerminal(
             worktreeId,
@@ -3707,7 +3720,8 @@ export class OrcaRuntimeService {
               leafId: tab.leafId,
               sessionId
             },
-            tab.launchAgent
+            tab.launchAgent,
+            targetGroupId
           )
         } catch (err) {
           if (sessionId && parseAppSshPtyId(sessionId)) {
@@ -3729,6 +3743,10 @@ export class OrcaRuntimeService {
                 candidate.isActive
             )
       const targetTab = activeSibling ?? tab
+      if (opts.notifyClients === false) {
+        this.activateMobileSessionTabForRemoteClient(worktreeId, snapshot!, targetTab)
+        return this.getMobileSessionTabsForWorktree(worktreeId)
+      }
       if (!this.notifier?.focusTerminal) {
         if (
           !targetTab.isActive &&
@@ -3740,13 +3758,55 @@ export class OrcaRuntimeService {
       }
       this.notifier?.focusTerminal(targetTab.parentTabId, worktreeId, targetTab.leafId)
     } else if (tab.type === 'browser') {
+      if (opts.notifyClients === false) {
+        this.activateMobileSessionTabForRemoteClient(worktreeId, snapshot!, tab)
+        return this.getMobileSessionTabsForWorktree(worktreeId)
+      }
       // Why: browser mobile tabs are renderer-owned unified tabs; focusing the
       // session tab keeps desktop tab order/group state authoritative.
       this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     } else {
+      if (opts.notifyClients === false) {
+        this.activateMobileSessionTabForRemoteClient(worktreeId, snapshot!, tab)
+        return this.getMobileSessionTabsForWorktree(worktreeId)
+      }
       this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     }
     return this.getMobileSessionTabsForWorktree(worktreeId)
+  }
+
+  private activateMobileSessionTabForRemoteClient(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    activeTab: RuntimeMobileSessionSnapshotTab
+  ): void {
+    // Why: phone tab selection should update the mobile snapshot without
+    // asking desktop renderers to focus the phone's background worktree.
+    const activeTopLevelId = activeTab.type === 'terminal' ? activeTab.parentTabId : activeTab.id
+    const tabs = snapshot.tabs.map((tab) => ({
+      ...tab,
+      isActive: tab.id === activeTab.id
+    }))
+    const tabGroups = snapshot.tabGroups?.map((group) =>
+      group.tabOrder.includes(activeTopLevelId)
+        ? { ...group, activeTabId: activeTopLevelId }
+        : group
+    )
+    const activeGroupId =
+      tabGroups?.find((group) => group.tabOrder.includes(activeTopLevelId))?.id ??
+      snapshot.activeGroupId
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: `mobile-local:${Date.now().toString(36)}`,
+      snapshotVersion: snapshot.snapshotVersion + 1,
+      activeGroupId,
+      activeTabId: activeTab.id,
+      activeTabType: activeTab.type,
+      ...(tabGroups ? { tabGroups } : {}),
+      tabs
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 
   private shouldMaterializeHeadlessMobileSessionTab(
@@ -4658,6 +4718,8 @@ export class OrcaRuntimeService {
     this.fileCommands.watchFileExplorer.bind(this.fileCommands)
   readFileExplorerPreview: RuntimeFileCommands['readFileExplorerPreview'] =
     this.fileCommands.readFileExplorerPreview.bind(this.fileCommands)
+  readFileExplorerChunk: RuntimeFileCommands['readFileExplorerChunk'] =
+    this.fileCommands.readFileExplorerChunk.bind(this.fileCommands)
   writeFileExplorerFile: RuntimeFileCommands['writeFileExplorerFile'] =
     this.fileCommands.writeFileExplorerFile.bind(this.fileCommands)
   writeFileExplorerFileBase64: RuntimeFileCommands['writeFileExplorerFileBase64'] =
@@ -5208,6 +5270,7 @@ export class OrcaRuntimeService {
     seq?: number
     source?: 'headless' | 'renderer'
     oscLinks?: TerminalOscLinkRange[]
+    alternateScreen?: boolean
   } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
@@ -5224,6 +5287,7 @@ export class OrcaRuntimeService {
     seq?: number
     source?: 'headless' | 'renderer'
     oscLinks?: TerminalOscLinkRange[]
+    alternateScreen?: boolean
   } | null> {
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
@@ -5240,6 +5304,7 @@ export class OrcaRuntimeService {
     seq?: number
     source?: 'headless' | 'renderer'
     oscLinks?: TerminalOscLinkRange[]
+    alternateScreen?: boolean
   } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
       ...opts,
@@ -5486,6 +5551,7 @@ export class OrcaRuntimeService {
     seq?: number
     source?: 'headless' | 'renderer'
     oscLinks?: TerminalOscLinkRange[]
+    alternateScreen?: boolean
   } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
@@ -5596,6 +5662,7 @@ export class OrcaRuntimeService {
     seq?: number
     source?: 'headless'
     oscLinks?: TerminalOscLinkRange[]
+    alternateScreen?: boolean
   } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
@@ -5610,7 +5677,8 @@ export class OrcaRuntimeService {
     // caller can request scrollback so the user can scroll up to see prior
     // agent output.
     const requested = opts.scrollbackRows ?? 0
-    const scrollbackRows = state.emulator.isAlternateScreen ? 0 : requested
+    const isAlternateScreen = state.emulator.isAlternateScreen
+    const scrollbackRows = isAlternateScreen ? 0 : requested
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 || opts.includeEmpty === true
@@ -5622,7 +5690,11 @@ export class OrcaRuntimeService {
           lastTitle: snapshot.lastTitle,
           seq: state.outputSequence,
           source: 'headless',
-          oscLinks: snapshot.oscLinks
+          oscLinks: snapshot.oscLinks,
+          // Why: lets the renderer skip the destructive scrollback clear when
+          // restoring an alt-screen snapshot — clearing wipes xterm's own
+          // history that the TUI relies on for scroll-up after a tab return.
+          alternateScreen: isAlternateScreen
         }
       : null
   }
@@ -9296,27 +9368,41 @@ export class OrcaRuntimeService {
         error: 'Repository was not found in the nested repo scan result'
       })
     )
+    const importedProjectIdsByRepoPath = new Map<string, string>()
+    const importTargetResolver = createNestedRepoImportTargetResolver()
     for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
       try {
         if (!isGitRepo(repoPath)) {
           results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
           continue
         }
+        const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+        const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
+        const alreadyImportedProjectId = importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
+        if (alreadyImportedProjectId) {
+          results.push({
+            path: repoPath,
+            projectId: alreadyImportedProjectId,
+            status: 'already-known'
+          })
+          continue
+        }
         const existing = this.store
           .getRepos()
-          .find((repo) => runtimePathsEqual(repo.path, repoPath))
+          .find((repo) => normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath)
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
           if (group) {
             this.store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
           }
+          importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
           results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
           continue
         }
         const repo: Repo = {
           id: randomUUID(),
-          path: repoPath,
-          displayName: getRepoName(repoPath),
+          path: importRepoPath,
+          displayName: getRepoName(importRepoPath),
           badgeColor: DEFAULT_REPO_BADGE_COLOR,
           addedAt: Date.now(),
           kind: 'git',
@@ -9330,6 +9416,7 @@ export class OrcaRuntimeService {
             : {})
         }
         this.store.addRepo(repo)
+        importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
         results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
       } catch (error) {
         results.push({
@@ -10193,6 +10280,7 @@ export class OrcaRuntimeService {
   async getHostedReviewForBranch(args: {
     repoSelector: string
     branch: string
+    currentHeadOid?: string | null
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
@@ -10206,6 +10294,7 @@ export class OrcaRuntimeService {
       repoPath: repo.path,
       connectionId: repo.connectionId ?? null,
       branch: args.branch,
+      currentHeadOid: args.currentHeadOid ?? null,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
@@ -11519,7 +11608,10 @@ export class OrcaRuntimeService {
     return { worktreeId: worktree.id }
   }
 
-  async activateManagedWorktree(worktreeSelector: string): Promise<{
+  async activateManagedWorktree(
+    worktreeSelector: string,
+    opts: { notifyClients?: boolean } = {}
+  ): Promise<{
     repoId: string
     worktreeId: string
     activated: boolean
@@ -11531,9 +11623,19 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
 
-    // Why: inactive worktree terminal panes are renderer-owned and may not have
-    // live PTYs until the desktop activates the worktree and mounts them.
-    this.notifyActivateWorktree(repo.id, worktree.id)
+    if (opts.notifyClients !== false) {
+      // Why: inactive worktree terminal panes are renderer-owned and may not have
+      // live PTYs until the desktop activates the worktree and mounts them.
+      this.notifyActivateWorktree(repo.id, worktree.id)
+    } else {
+      // Why: mobile/web selection needs fresh session surfaces without forcing
+      // every attached desktop renderer to navigate to the phone's workspace.
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
+        allowAttachedWindow: true
+      })
+      await this.refreshMobileSessionPtyRecords()
+      this.notifyMobileSessionTabsChanged(worktree.id)
+    }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true }
   }
 
@@ -14294,6 +14396,44 @@ export class OrcaRuntimeService {
       }
       const canonicalWorktreePath = registeredWorktree.path
       const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+
+      // Why: a prior forced Windows recovery can delete the directory but leave
+      // Git's stale registration; retry by pruning instead of removing a missing path.
+      if (
+        !repo.connectionId &&
+        force === true &&
+        process.platform === 'win32' &&
+        (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
+        removedMeta &&
+        (await isRuntimeWorktreePathMissing(repo, canonicalWorktreePath, localWorktreeGitOptions))
+      ) {
+        const removalResult = await pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval({
+          canonicalWorktreePath,
+          repoPath: repo.path,
+          localWorktreeGitOptions,
+          registeredWorktree,
+          deleteBranch
+        })
+        await cleanupUnusedWorktreePushTargetRemote(
+          repo.path,
+          removalTarget.id,
+          removedPushTarget,
+          store,
+          localWorktreeGitOptions
+        )
+        this.rememberPreservedBranchCleanupTarget(
+          removalTarget.id,
+          removalResult,
+          registeredWorktree.head,
+          removedPushTarget
+        )
+        this.clearOptimisticReconcileToken(removalTarget.id)
+        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+        this.invalidateResolvedWorktreeCache()
+        invalidateAuthorizedRootsCache()
+        this.notifyWorktreesChanged(repo.id)
+        return removalResult ?? {}
+      }
       if (repo.connectionId) {
         const rawRemovalResult = await (deleteBranch
           ? provider!.removeWorktree(canonicalWorktreePath, force)
@@ -14404,7 +14544,24 @@ export class OrcaRuntimeService {
           registeredWorktree.head
         )
       } catch (error) {
-        if (isOrphanedWorktreeError(error)) {
+        // Why: Git for Windows can fail long-path directory deletion after
+        // Orca has already validated the target and explicit force delete.
+        const recoveredRemovalResult = await recoverLocalWindowsLongPathWorktreeRemoval({
+          error,
+          force,
+          canonicalWorktreePath,
+          repoPath: repo.path,
+          localWorktreeGitOptions,
+          registeredWorktree,
+          deleteBranch,
+          closeWatcher: (worktreePath) =>
+            closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
+              console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
+            })
+        })
+        if (recoveredRemovalResult) {
+          removalResult = recoveredRemovalResult
+        } else if (isOrphanedWorktreeError(error)) {
           const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
           if (
             await canSafelyRemoveOrphanedWorktreeDirectory(
@@ -14449,8 +14606,9 @@ export class OrcaRuntimeService {
           return {
             ...(warning ? { warning } : {})
           }
+        } else {
+          throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
         }
-        throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
 
       await cleanupUnusedWorktreePushTargetRemote(

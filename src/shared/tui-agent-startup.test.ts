@@ -136,6 +136,23 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches Qwen Code through the installed qwen executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'qwen-code',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'qwen-code',
+      launchCommand: 'qwen',
+      expectedProcess: 'qwen',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'qwen', agentArgs: '', agentEnv: {} }
+    })
+  })
+
   it('leaves Claude command overrides untouched', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

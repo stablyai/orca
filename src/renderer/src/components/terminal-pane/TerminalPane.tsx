@@ -22,7 +22,11 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
-import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
+import {
+  collectLeafIdsInOrder,
+  EMPTY_LAYOUT,
+  serializeTerminalLayout
+} from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   applyExpandedLayoutTo,
@@ -116,7 +120,7 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
-import { useVisibleTerminalWorktreeClaim } from './use-visible-terminal-worktree-claim'
+import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -277,7 +281,7 @@ export default function TerminalPane({
   const isVisibleRef = useRef(isVisible)
   isVisibleRef.current = isVisible
 
-  useVisibleTerminalWorktreeClaim({ isVisible, worktreeId })
+  useVisibleTerminalTabClaim({ isVisible, tabId })
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   // Why: tracked in React state (not derived from managerRef.getPanes().length)
@@ -550,6 +554,12 @@ export default function TerminalPane({
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
     [savedLayout, terminalTab]
   )
+  const expectedLayoutLeafIds = useMemo(
+    () => collectLeafIdsInOrder(restoredLayout.root),
+    [restoredLayout.root]
+  )
+  const expectedLayoutLeafIdsAttr =
+    expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
@@ -2363,14 +2373,17 @@ export default function TerminalPane({
   }, [])
 
   const restorePaneTerminalFit = useCallback(
-    async (pane: ManagedPane): Promise<void> => {
+    async (pane: ManagedPane, ptyId: string): Promise<void> => {
       // Why: local and remote runtime PTYs use different transports, but the
       // desktop reclaim button should have one visible recovery behavior.
-      const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!id) {
+      // Why: the banner was rendered for this PTY; stale portals must disappear
+      // before they can reclaim a different terminal that reused this pane slot.
+      const currentPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      if (currentPtyId !== ptyId) {
+        setOverrideTick((n) => n + 1)
         return
       }
-      const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
+      const restored = await restoreTerminalFitToDesktop(ptyId, settingsRef.current ?? undefined)
       if (restored) {
         scheduleRestoredTerminalRefit()
         // Why: after the overlay unmounts, focus would otherwise stay on the
@@ -2632,6 +2645,7 @@ export default function TerminalPane({
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
+        data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
@@ -2757,6 +2771,7 @@ export default function TerminalPane({
         canToggleNativeChat={canToggleChat}
         isNativeChatView={contextMenuIsChatView}
         onToggleNativeChat={handleContextMenuToggleNativeChat}
+        onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         repoQuickCommands={repoQuickCommands}
         globalQuickCommands={globalQuickCommands}
         quickCommandRepoLabel={quickCommandRepoLabel}
@@ -2855,7 +2870,7 @@ export default function TerminalPane({
             driver={driver}
             hasFitOverride={hasFitOverride}
             rootClassName="mobile-driver-banner"
-            onAction={() => restorePaneTerminalFit(pane)}
+            onAction={() => restorePaneTerminalFit(pane, ptyId)}
             onAllAction={() => restoreAllTerminalFits(pane)}
           />,
           pane.container,

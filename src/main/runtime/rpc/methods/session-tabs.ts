@@ -28,7 +28,9 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     name: 'session.tabs.activate',
     params: ActivateTab,
     handler: async (params, { runtime }) =>
-      runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId)
+      runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId, {
+        notifyClients: params.notifyClients !== false
+      })
   }),
   defineMethod({
     name: 'session.tabs.close',

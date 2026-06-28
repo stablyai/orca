@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   mapRestoredPaneTitlesByPaneId,
+  scheduleVisibilityReconcilePass,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
@@ -180,5 +181,42 @@ describe('suppressIntentionalPaneCloseExit', () => {
 
     expect(suppressIntentionalPaneCloseExit(transport, suppressPtyExit)).toBeNull()
     expect(suppressPtyExit).not.toHaveBeenCalled()
+  })
+})
+
+describe('scheduleVisibilityReconcilePass', () => {
+  it('schedules a reconcile pass over the bindings when becoming visible', async () => {
+    const reconcileIfSessionDead = vi.fn()
+    const listSessions = vi
+      .fn<() => Promise<{ id: string; cwd: string; title: string }[]>>()
+      .mockResolvedValue([{ id: 'live-1', cwd: '/a', title: 'a' }])
+
+    const scheduled = scheduleVisibilityReconcilePass({
+      isVisible: true,
+      bindings: [{ reconcileIfSessionDead }],
+      listSessions
+    })
+
+    expect(scheduled).toBe(true)
+    // Fire-and-forget: let the async listSessions resolve before asserting.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(listSessions).toHaveBeenCalledTimes(1)
+    expect(reconcileIfSessionDead).toHaveBeenCalledWith(new Set(['live-1']))
+  })
+
+  it('self-gates: does not schedule when hiding (isVisible false)', () => {
+    const listSessions = vi
+      .fn<() => Promise<{ id: string; cwd: string; title: string }[]>>()
+      .mockResolvedValue([])
+
+    const scheduled = scheduleVisibilityReconcilePass({
+      isVisible: false,
+      bindings: [{ reconcileIfSessionDead: vi.fn() }],
+      listSessions
+    })
+
+    expect(scheduled).toBe(false)
+    expect(listSessions).not.toHaveBeenCalled()
   })
 })

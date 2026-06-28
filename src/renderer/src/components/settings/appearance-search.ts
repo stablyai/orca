@@ -245,6 +245,25 @@ export function getSystemTrayEntries(options: SystemTraySearchOptions = {}): Set
   return shouldShowSystemTrayEntries(options) ? getSystemTrayEntryCatalog() : []
 }
 
+const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('auto.components.settings.AppearancePane.interfaceTitle', 'Interface')
+  },
+  {
+    title: translate('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
+  },
+  {
+    title: translate(
+      'auto.components.settings.AppearancePane.windowSidebarTitle',
+      'Window & Sidebar'
+    ),
+    description: translate(
+      'auto.components.settings.AppearancePane.windowSidebarSummary',
+      'Sidebar, status bar, and file explorer'
+    )
+  }
+])
+
 type AppearancePaneSearchOptions = {
   showWarpImport?: boolean
   showSystemTray?: boolean
@@ -254,6 +273,7 @@ function buildAppearancePaneSearchEntries(
   options: AppearancePaneSearchOptions
 ): SettingsSearchEntry[] {
   return [
+    ...getAppearanceSectionEntries(),
     ...getThemeEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),
