@@ -2254,6 +2254,20 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+  type WindowsTerminalCapabilityBridgeResult = {
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }
+  const fallbackWindowsTerminalCapabilities = {
+    wslAvailable: false,
+    wslDistros: [],
+    pwshAvailable: false,
+    gitBashAvailable: false,
+    hostPlatform: null
+  }
   return {
     check: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
@@ -2276,7 +2290,14 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
-        : []
+        : [],
+    detectRemoteWindowsTerminalCapabilities: async (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(
+            'preflight.detectRemoteWindowsTerminalCapabilities',
+            args
+          ).catch(() => fallbackWindowsTerminalCapabilities)
+        : Promise.resolve(fallbackWindowsTerminalCapabilities)
   }
 }
 

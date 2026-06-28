@@ -1,6 +1,8 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
+import { resolveWindowsGitBashShellPath } from '../main/git-bash'
+import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
@@ -127,6 +129,32 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR1',
   'SIGUSR2'
 ])
+
+const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
+  'powershell.exe',
+  'powershell',
+  'pwsh.exe',
+  'pwsh',
+  'cmd.exe',
+  'cmd',
+  'wsl.exe',
+  'wsl',
+  WINDOWS_GIT_BASH_SHELL
+])
+
+function resolvePtyShellOverride(shellOverride: string): string {
+  if (!shellOverride) {
+    return ''
+  }
+  if (process.platform !== 'win32') {
+    return ''
+  }
+  const normalized = shellOverride.toLowerCase()
+  if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
+    throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
+  }
+  return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
+}
 
 type SerializedPtyEntry = {
   id: string
@@ -497,7 +525,10 @@ export class PtyHandler {
     const rows = (params.rows as number) || 24
     const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
-    const shell = resolveDefaultShell()
+    const shellOverride =
+      typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
+    const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
+    const shell = resolvedShellOverride || resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 
     // Why: server-side augmenter values (ORCA_AGENT_HOOK_* and plugin overlay
@@ -509,6 +540,8 @@ export class PtyHandler {
     // because no renderer TerminalPane exists to type the command.
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
+    const terminalWindowsWslDistro =
+      typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
@@ -523,6 +556,7 @@ export class PtyHandler {
     // Why: renderer- and provider-delivered startup commands both use this
     // marker; the side responsible for delivery also strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
+      terminalWindowsWslDistro,
       emitReadyMarker: shouldEmitShellReadyMarker
     })
 

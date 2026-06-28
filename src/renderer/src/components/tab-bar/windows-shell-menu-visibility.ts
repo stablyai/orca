@@ -8,9 +8,8 @@ export function shouldShowWindowsShellMenu(args: {
   // to be Windows, local Windows shell choices would advertise the wrong target.
   const runtimeHostIsNotKnownWindows =
     Boolean(args.activeRuntimeEnvironmentId?.trim()) && args.hostPlatform !== 'win32'
-  return (
-    (args.isWindowsClient || args.hostPlatform === 'win32') &&
-    !args.worktreeHasRemoteConnection &&
-    !runtimeHostIsNotKnownWindows
-  )
+  if (args.worktreeHasRemoteConnection) {
+    return args.hostPlatform === 'win32'
+  }
+  return (args.isWindowsClient || args.hostPlatform === 'win32') && !runtimeHostIsNotKnownWindows
 }

@@ -47,7 +47,19 @@ function hasBracketedPasteModeSequence(data: string): boolean {
 // the bracketed-paste frame early and run the tail as keystrokes. Replacing ESC
 // with its printable substitute (\u241b, U+241B) neutralizes every framing escape.
 export function sanitizeBracketedPasteText(text: string): string {
-  return text.split(ESCAPE).join('\u241b')
+  let escapeIndex = text.indexOf(ESCAPE)
+  if (escapeIndex === -1) {
+    return text
+  }
+
+  let sanitized = ''
+  let start = 0
+  while (escapeIndex !== -1) {
+    sanitized += `${text.slice(start, escapeIndex)}\u241b`
+    start = escapeIndex + ESCAPE.length
+    escapeIndex = text.indexOf(ESCAPE, start)
+  }
+  return sanitized + text.slice(start)
 }
 
 export function sanitizeTerminalPasteText(text: string): string {

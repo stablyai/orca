@@ -4,6 +4,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import * as gitBash from '../main/git-bash'
+import * as ptyShellUtils from './pty-shell-utils'
 import {
   resolveSetupAgentSequenceLaunchCommand,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
@@ -167,6 +169,155 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1' })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('uses an explicit shell override and falls back to the default shell otherwise', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue('/default-shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+
+      mockPtySpawn.mockClear()
+
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        '/default-shell',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('ignores Windows shell overrides on non-Windows relay hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue('/default-shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        '/default-shell',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('rejects unsupported shell overrides on Windows relay hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await expect(
+        dispatcher.callRequest('pty.spawn', {
+          cols: 80,
+          rows: 24,
+          shellOverride: 'notepad.exe'
+        })
+      ).rejects.toThrow('Unsupported Windows shell override')
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('resolves the Git Bash sentinel to the remote bash.exe path on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const resolveGitBashSpy = vi
+      .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
+      .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'git-bash'
+      })
+
+      expect(resolveGitBashSpy).toHaveBeenCalledWith('git-bash')
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'C:\\Program Files\\Git\\bin\\bash.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveGitBashSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('passes the selected WSL distro to relay launches on Windows', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu-24.04'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu-24.04'],
+        expect.any(Object)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 
   it('keeps SSH spawn commands as hints unless provider delivery is requested', async () => {

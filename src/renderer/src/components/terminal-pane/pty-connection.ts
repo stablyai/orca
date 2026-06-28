@@ -2125,20 +2125,41 @@ export function connectPanePty(
     spawnCols: number,
     spawnRows: number
   ): void => {
-    requestAnimationFrame(() => {
+    // Why: a single post-spawn frame is not enough — the pane's real layout can
+    // keep changing for several frames (split equalize, sidebar/title reflow),
+    // so a one-shot re-fit can still measure a stale width and leave the PTY
+    // pinned. Poll across frames and forward the settled size to the PTY
+    // whenever it differs from what the PTY was last told, mirroring the
+    // ResizeObserver stability loop. Each resize is gated on an actual change,
+    // so a TUI sees at most a couple of SIGWINCH during startup, not a loop.
+    const MAX_RECONCILE_FRAMES = 12
+    let lastSentCols = spawnCols
+    let lastSentRows = spawnRows
+    let frame = 0
+    const tick = (): void => {
       if (disposed || transport.getPtyId() !== ptyId) {
         return
       }
+      // Mobile legitimately parks the PTY at phone dims; never fight that.
       if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
         return
       }
       safeFit(pane)
       const cols = pane.terminal.cols
       const rows = pane.terminal.rows
-      if (cols > 0 && rows > 0 && (cols !== spawnCols || rows !== spawnRows)) {
+      if (cols > 0 && rows > 0 && (cols !== lastSentCols || rows !== lastSentRows)) {
+        // Initial spawn-time sync is authoritative, so it bypasses the
+        // visibility gate that onResize honors (but not the mobile guards above).
         transport.resize(cols, rows)
+        lastSentCols = cols
+        lastSentRows = rows
       }
-    })
+      frame += 1
+      if (frame < MAX_RECONCILE_FRAMES) {
+        requestAnimationFrame(tick)
+      }
+    }
+    requestAnimationFrame(tick)
   }
 
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate

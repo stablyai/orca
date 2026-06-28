@@ -167,6 +167,16 @@ function getAutomationHostTargetKey(target: AutomationHostTarget): string {
   return target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
 }
 
+function getAutomationHostTargetFromKey(key: string | null): AutomationHostTarget | null {
+  if (!key) {
+    return null
+  }
+  if (key.startsWith('environment:')) {
+    return { kind: 'environment', environmentId: key.slice('environment:'.length) }
+  }
+  return { kind: 'local' }
+}
+
 function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
 }
@@ -547,6 +557,10 @@ export default function AutomationsPage(): React.JSX.Element {
     () => worktreesByRepo[draft.projectId] ?? [],
     [draft.projectId, worktreesByRepo]
   )
+  const automationHostTarget = useMemo(
+    () => getAutomationHostTargetFromKey(automationHostTargetKey),
+    [automationHostTargetKey]
+  )
 
   useEffect(() => {
     for (const [workspaceId, worktree] of worktreeMap) {
@@ -801,6 +815,7 @@ export default function AutomationsPage(): React.JSX.Element {
         projectHostSetups,
         sshConnectionStates,
         runtimeStatusByEnvironmentId,
+        automationHostTarget,
         sourceHostAvailability: automationSourceHostAvailabilityById.get(selected.id)
       })
     : null
@@ -969,7 +984,7 @@ export default function AutomationsPage(): React.JSX.Element {
       pendingAutomationRunNavigation.hostId
         ? getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
         : selected
-          ? getAutomationOwnerTarget(selected)
+          ? getAutomationOwnerTarget(selected, automationHostTarget)
           : getAutomationListTarget(settings)
     void listAutomationRunsForTarget(target, automationId).then((nextRuns) => {
       if (!cancelled) {
@@ -979,7 +994,7 @@ export default function AutomationsPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [pendingAutomationRunNavigation, selected, selected?.id, runs, settings])
+  }, [automationHostTarget, pendingAutomationRunNavigation, selected, selected?.id, runs, settings])
 
   useEffect(() => {
     const onAutomationsChanged = (): void => {
@@ -1478,7 +1493,7 @@ export default function AutomationsPage(): React.JSX.Element {
       }
       const automation = editingAutomationId
         ? currentAutomation
-          ? await updateAutomationForTarget(currentAutomation, updates)
+          ? await updateAutomationForTarget(currentAutomation, updates, automationHostTarget)
           : await window.api.automations.update({
               id: editingAutomationId,
               updates
@@ -1539,12 +1554,16 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const toggleAutomation = async (automation: Automation): Promise<void> => {
-    await updateAutomationForTarget(automation, { enabled: !automation.enabled })
+    await updateAutomationForTarget(
+      automation,
+      { enabled: !automation.enabled },
+      automationHostTarget
+    )
     await refresh()
   }
 
   const deleteAutomation = async (automation: Automation): Promise<void> => {
-    await deleteAutomationForTarget(automation)
+    await deleteAutomationForTarget(automation, automationHostTarget)
     if (useAppStore.getState().selectedAutomationId === automation.id) {
       selectAutomationId(null)
     }
@@ -1616,13 +1635,14 @@ export default function AutomationsPage(): React.JSX.Element {
       projectHostSetups,
       sshConnectionStates,
       runtimeStatusByEnvironmentId,
+      automationHostTarget,
       sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
     })
     if (!availability.canRunNow) {
       toast.error(availability.message)
       return
     }
-    await runAutomationNowForTarget(automation)
+    await runAutomationNowForTarget(automation, automationHostTarget)
     useAppStore.getState().recordFeatureInteraction('automation-run')
     await hydratePersistedUIState()
     await refresh()
@@ -1640,7 +1660,7 @@ export default function AutomationsPage(): React.JSX.Element {
     rerunRunIdsInFlightRef.current.add(runId)
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
     try {
-      await runAutomationNowForTarget(automation)
+      await runAutomationNowForTarget(automation, automationHostTarget)
       await hydratePersistedUIState()
       await refresh()
       toast.message(
@@ -2217,6 +2237,7 @@ export default function AutomationsPage(): React.JSX.Element {
                 projectHostSetups,
                 sshConnectionStates,
                 runtimeStatusByEnvironmentId,
+                automationHostTarget,
                 sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
               })
               const workspaceLabel =

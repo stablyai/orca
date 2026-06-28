@@ -549,6 +549,13 @@ export type PreflightApi = {
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+  detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }>
 }
 
 // Why: renderer-facing mirror of the daemon's `SessionInfo` + protocolVersion
