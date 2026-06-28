@@ -159,6 +159,31 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('uses bundled ConPTY for native Windows daemon terminals', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: 'C:\\Windows\\System32\\cmd.exe' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls.at(-1)?.[2]).toEqual(
+      expect.objectContaining({ useConptyDll: true })
+    )
+  })
+
   it('suppresses the first-run Powerlevel10k wizard for daemon terminals', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

@@ -636,7 +636,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       cols: size.cols,
       rows: size.rows,
       cwd: spawnCwd,
-      env
+      env,
+      // Why: bundled ConPTY has the modern wrap-marker behavior xterm expects;
+      // legacy system ConPTY can corrupt full-width TUI rows in scrollback.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
   } catch (err) {
     if (process.platform === 'win32') {

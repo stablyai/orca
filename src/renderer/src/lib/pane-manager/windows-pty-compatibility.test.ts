@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { Terminal } from '@xterm/headless'
 import {
   buildWindowsPtyCompatibilityOptions,
   isLocalNativeWindowsConpty,
   isLocalNativeWindowsPty
 } from './windows-pty-compatibility'
+
+function writeTerminal(terminal: Terminal, data: string): Promise<void> {
+  return new Promise((resolve) => terminal.write(data, resolve))
+}
 
 describe('buildWindowsPtyCompatibilityOptions', () => {
   it('returns ConPTY compatibility options for local Windows terminals', () => {
@@ -34,6 +39,40 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     ).toEqual({
       windowsPty: { backend: 'conpty' }
     })
+  })
+
+  it('omits old Windows build numbers so xterm does not enable lossy wrap heuristics', () => {
+    expect(
+      buildWindowsPtyCompatibilityOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.19045',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: null,
+        executionHostId: 'local'
+      })
+    ).toEqual({
+      windowsPty: { backend: 'conpty' }
+    })
+  })
+
+  it('keeps full-width status rows from being falsely joined to following scrollback', async () => {
+    const cols = 20
+    const windowsPty = buildWindowsPtyCompatibilityOptions({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      osRelease: '10.0.19045',
+      connectionId: null,
+      cwd: 'C:\\repo',
+      shellOverride: null,
+      executionHostId: 'local'
+    }).windowsPty
+    const terminal = new Terminal({ cols, rows: 5, windowsPty })
+
+    await writeTerminal(terminal, `${'S'.repeat(cols)}\r\nNEXT\r\n`)
+
+    expect(terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('S'.repeat(cols))
+    expect(terminal.buffer.active.getLine(1)?.translateToString(true)).toBe('NEXT')
+    expect(terminal.buffer.active.getLine(1)?.isWrapped).toBe(false)
   })
 
   it('skips compatibility options for SSH-backed Windows terminals', () => {

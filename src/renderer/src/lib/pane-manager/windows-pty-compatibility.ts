@@ -31,6 +31,17 @@ function parseWindowsBuildNumber(osRelease: string | null | undefined): number |
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+function buildXtermWindowsPtyOptions(
+  buildNumber: number | undefined
+): NonNullable<ITerminalOptions['windowsPty']> {
+  // Why: old system ConPTY does not provide reliable wrap markers; passing the
+  // low build number makes xterm mark full-width status rows as wrapped.
+  if (buildNumber === undefined || buildNumber < 21376) {
+    return { backend: 'conpty' }
+  }
+  return { backend: 'conpty', buildNumber }
+}
+
 /**
  * xterm options that select the native-Windows ConPTY backend, returned only for
  * a genuine local Windows pane and `{}` otherwise.
@@ -47,10 +58,7 @@ export function buildWindowsPtyCompatibilityOptions(
   }
   const buildNumber = parseWindowsBuildNumber(context.osRelease)
   return {
-    // Why: native Windows shells are backed by ConPTY, and xterm's dedicated
-    // compatibility heuristics need the OS build to choose the right wrap path.
-    windowsPty:
-      buildNumber === undefined ? { backend: 'conpty' } : { backend: 'conpty', buildNumber }
+    windowsPty: buildXtermWindowsPtyOptions(buildNumber)
   }
 }
 
