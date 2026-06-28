@@ -27,6 +27,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
@@ -169,14 +170,28 @@ function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 }
 
+function isAllowedRemoteWindowsTerminalShell(shell: string | undefined): boolean {
+  return (
+    shell === 'powershell.exe' ||
+    shell === 'pwsh.exe' ||
+    shell === 'cmd.exe' ||
+    shell === 'wsl.exe' ||
+    shell === WINDOWS_GIT_BASH_SHELL
+  )
+}
+
 function resolveCreatedTabShellOverride(
   explicitShellOverride: string | undefined,
   defaultWindowsShell: string | undefined,
   isRemoteWorktree: boolean,
+  remotePlatform: NodeJS.Platform | null,
   isWslWorktree: boolean,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
 ): string | undefined {
   if (isRemoteWorktree) {
+    if (remotePlatform === 'win32' && isAllowedRemoteWindowsTerminalShell(explicitShellOverride)) {
+      return explicitShellOverride
+    }
     return undefined
   }
   if (isWindowsRendererRuntime()) {
@@ -229,6 +244,27 @@ export function worktreeUsesRemoteConnection(
     .find((entry) => entry.id === worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   return Boolean(repo?.connectionId)
+}
+
+function getRemoteConnectionIdForWorktree(
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
+  worktreeId: string
+): string | null {
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null
+  }
+  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
+  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
+  if (directRepo) {
+    return directRepo.connectionId?.trim() || null
+  }
+
+  const worktree = Object.values(state.worktreesByRepo)
+    .flat()
+    .find((entry) => entry.id === worktreeId)
+  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  return repo?.connectionId?.trim() || null
 }
 
 function resolveTerminalStopRuntimeEnvironmentId(
@@ -686,7 +722,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       const quickCommandLabel = options?.quickCommandLabel?.trim()
-      const isRemoteWorktree = worktreeUsesRemoteConnection(s, worktreeId)
+      const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
+      const isRemoteWorktree = Boolean(remoteConnectionId)
       const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
@@ -694,6 +731,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // Why: SSH PTYs ignore local Windows shell selection; persisting a
         // local shell icon would mislabel a remote terminal.
         isRemoteWorktree,
+        remoteConnectionId
+          ? ((s.sshConnectionStates.get(remoteConnectionId)
+              ?.remotePlatform as NodeJS.Platform | null) ?? null)
+          : null,
         // Why: WSL UNC worktrees are repo-scoped WSL environments. New default
         // terminals should enter that distro even when the global Windows shell
         // preference is PowerShell or cmd.exe.

@@ -2,6 +2,7 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
+import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
@@ -110,6 +111,32 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR1',
   'SIGUSR2'
 ])
+
+const ALLOWED_WINDOWS_SHELL_OVERRIDES = new Set([
+  'powershell.exe',
+  'powershell',
+  'pwsh.exe',
+  'pwsh',
+  'cmd.exe',
+  'cmd',
+  'wsl.exe',
+  'wsl',
+  WINDOWS_GIT_BASH_SHELL
+])
+
+function resolvePtyShellOverride(shellOverride: string): string {
+  if (!shellOverride) {
+    return ''
+  }
+  if (process.platform !== 'win32') {
+    return ''
+  }
+  const normalized = shellOverride.toLowerCase()
+  if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
+    throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
+  }
+  return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
+}
 
 type SerializedPtyEntry = {
   id: string
@@ -424,10 +451,7 @@ export class PtyHandler {
     const env = params.env as Record<string, string> | undefined
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
-    const resolvedShellOverride =
-      process.platform === 'win32'
-        ? (resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride)
-        : shellOverride
+    const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
     const shell = resolvedShellOverride || resolveDefaultShell()
     const id = `pty-${this.nextId++}`
 

@@ -168,6 +168,11 @@ describe('PtyHandler', () => {
   })
 
   it('uses an explicit shell override and falls back to the default shell otherwise', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     const resolveDefaultShellSpy = vi
       .spyOn(ptyShellUtils, 'resolveDefaultShell')
       .mockReturnValue('/default-shell')
@@ -193,6 +198,63 @@ describe('PtyHandler', () => {
       )
     } finally {
       resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('ignores Windows shell overrides on non-Windows relay hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+    const resolveDefaultShellSpy = vi
+      .spyOn(ptyShellUtils, 'resolveDefaultShell')
+      .mockReturnValue('/default-shell')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        '/default-shell',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolveDefaultShellSpy.mockRestore()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('rejects unsupported shell overrides on Windows relay hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    try {
+      await expect(
+        dispatcher.callRequest('pty.spawn', {
+          cols: 80,
+          rows: 24,
+          shellOverride: 'notepad.exe'
+        })
+      ).rejects.toThrow('Unsupported Windows shell override')
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
     }
   })
 
