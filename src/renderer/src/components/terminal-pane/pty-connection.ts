@@ -1070,7 +1070,63 @@ export function connectPanePty(
         .inferInterrupt(request)
         .then((applied) => {
           if (applied) {
-            clearInferredInterruptWorkingTitle()
+            const state = useAppStore.getState()
+            const current = state.agentStatusByPaneKey[cacheKey]
+            const sameBaseline =
+              current?.state === 'working' &&
+              current.agentType === request.baselineAgentType &&
+              current.prompt === request.baselinePrompt &&
+              current.updatedAt === request.baselineUpdatedAt &&
+              current.stateStartedAt === request.baselineStateStartedAt
+            const sameInterruptedCompletion =
+              current?.state === 'done' &&
+              current.interrupted === true &&
+              current.agentType === request.baselineAgentType &&
+              current.prompt === request.baselinePrompt &&
+              current.stateHistory?.some(
+                (history) =>
+                  history.state === 'working' &&
+                  history.prompt === request.baselinePrompt &&
+                  history.startedAt === request.baselineStateStartedAt
+              ) === true
+            const sleepingRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
+            const sameSleepingBaseline =
+              sleepingRecord?.state === 'working' &&
+              sleepingRecord.agent === request.baselineAgentType &&
+              sleepingRecord.prompt === request.baselinePrompt &&
+              sleepingRecord.updatedAt === request.baselineUpdatedAt
+
+            if (sameBaseline) {
+              const inferredAt = Date.now()
+              // Why: sleep capture can run before the main-process inferred
+              // status event round-trips; clear the stale working row locally too.
+              state.setAgentStatus(
+                cacheKey,
+                {
+                  state: 'done',
+                  prompt: current.prompt,
+                  agentType: current.agentType,
+                  interrupted: true
+                },
+                current.terminalTitle,
+                {
+                  updatedAt: inferredAt,
+                  stateStartedAt: inferredAt
+                },
+                {
+                  tabId: deps.tabId,
+                  worktreeId: current.worktreeId ?? deps.worktreeId,
+                  terminalHandle: current.terminalHandle
+                },
+                current.providerSession ? { providerSession: current.providerSession } : undefined
+              )
+            }
+            if (sameBaseline || sameInterruptedCompletion) {
+              clearInferredInterruptWorkingTitle()
+            }
+            if (sameSleepingBaseline) {
+              state.clearSleepingAgentSession(cacheKey)
+            }
           }
           return applied
         })

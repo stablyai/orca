@@ -333,6 +333,11 @@ function sleepingRecordFromEntry(args: {
   launchConfig?: SleepingAgentLaunchConfig
   origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
+  // Why: an inferred Ctrl+C completion is terminal evidence, not a session
+  // that manual sleep should later resume.
+  if (args.entry.state === 'done' && args.entry.interrupted) {
+    return null
+  }
   const agent = args.entry.agentType
   if (!isResumableTuiAgent(agent) || !args.entry.providerSession) {
     return null
