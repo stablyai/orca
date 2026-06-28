@@ -70,10 +70,8 @@ export function buildSkillDiscoverySources(
         'repo',
         ['claude']
       ),
-      // Why: Orca ships bundled skills in the repo-root `skills/` directory
-      // (e.g. skills/orchestration, skills/orca-cli). Without this source,
-      // those skills are invisible to discovery even though onboarding
-      // confirms them. See https://github.com/stablyai/orca/issues/6638.
+      // Why: Orca bundles built-in skills in `<repo>/skills`, so discovery
+      // must scan that root for agents and Settings to see them.
       source(
         `repo-bundled-${stablePathId(repoPath)}`,
         `${label} skills`,
