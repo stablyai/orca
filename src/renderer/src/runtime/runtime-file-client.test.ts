@@ -313,6 +313,38 @@ describe('runtime file client', () => {
     )
   })
 
+  it('propagates a files.readPreview failure during the binary fallback', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: false,
+          error: { code: 'runtime_error', message: 'binary_file' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-preview',
+        ok: false,
+        error: { code: 'runtime_error', message: 'file_too_large' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/huge.pdf',
+        relativePath: 'huge.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('file_too_large')
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
   it('uses the active runtime id as the dedupe scope', () => {
     expect(getRuntimeFileReadScope({ activeRuntimeEnvironmentId: 'env-1' }, 'ssh-1')).toBe(
       'runtime:env-1'
