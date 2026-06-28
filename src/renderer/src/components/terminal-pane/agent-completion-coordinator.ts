@@ -43,7 +43,17 @@ const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
 
 function isCompletionHookState(state: ParsedAgentStatusPayload['state']): boolean {
-  return state === 'done' || state === 'waiting' || state === 'blocked'
+  // Why: only a genuine 'done' ends a turn. 'waiting'/'blocked' are handled by
+  // isAttentionHookState below.
+  return state === 'done'
+}
+
+function isAttentionHookState(state: ParsedAgentStatusPayload['state']): boolean {
+  // Why: 'waiting' (e.g. a Claude PermissionRequest) and 'blocked' (e.g. a
+  // Copilot elicitation dialog) pause mid-turn — the agent is still alive and
+  // has not completed, so they must not fire agent-task-complete. The "needs
+  // you" notification for these states is raised separately (smart-attention).
+  return state === 'waiting' || state === 'blocked'
 }
 
 export function createAgentCompletionCoordinator(
@@ -622,10 +632,13 @@ export function createAgentCompletionCoordinator(
       dropPendingTitle()
       return
     }
+    if (isAttentionHookState(payload.state)) {
+      // Why: a permission/elicitation pause arriving before the quiet window
+      // must cancel a provisional 'done' so it never becomes a false completion.
+      clearPendingHookDone()
+      return
+    }
     if (isCompletionHookState(payload.state)) {
-      if (payload.state !== 'done') {
-        clearPendingHookDone()
-      }
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
       }
