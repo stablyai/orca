@@ -311,7 +311,7 @@ export function NativeChatMessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="scrollbar-sleek h-full overflow-y-auto px-3 py-4 sm:px-4"
+        className="scrollbar-sleek h-full overflow-y-auto px-3 pt-10 pb-4 sm:px-4"
       >
         <div
           className="mx-auto flex w-full max-w-3xl flex-col gap-3"
