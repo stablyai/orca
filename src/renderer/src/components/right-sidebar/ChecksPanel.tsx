@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the checks panel co-locates PR header, checks, comments,
 merge actions, and conflict state in one component to keep the data flow straightforward. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   LoaderCircle,
   RefreshCw,
@@ -21,7 +22,7 @@ import {
   prCommentsCacheSuffix
 } from '@/store/slices/github'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree, useAllWorktrees, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { Button } from '@/components/ui/button'
@@ -78,6 +79,11 @@ import type {
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import {
+  resolveChecksPanelTerminalPtyId,
+  resolveChecksPanelWorktreeFromTerminalCwd
+} from './checks-panel-terminal-worktree'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
@@ -170,6 +176,7 @@ import {
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
+const TERMINAL_CWD_WORKTREE_REFRESH_MS = 2000
 
 type HostedReviewCreationSnapshot = {
   requestKey: string
@@ -366,8 +373,66 @@ async function resolveGitLabMRDiscussionForChecks(args: {
 }
 
 export default function ChecksPanel(): React.JSX.Element {
-  const activeWorktree = useActiveWorktree()
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const defaultActiveWorktree = useActiveWorktree()
+  const defaultActiveWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const allWorktrees = useAllWorktrees()
+  const activeTerminalPtyId = useAppStore(
+    useShallow((s) =>
+      resolveChecksPanelTerminalPtyId({
+        activeTabId: s.activeTabId,
+        ptyIdsByTabId: s.ptyIdsByTabId,
+        terminalLayoutsByTabId: s.terminalLayoutsByTabId
+      })
+    )
+  )
+  const [terminalCwdSnapshot, setTerminalCwdSnapshot] = useState<{
+    ptyId: string
+    cwd: string
+  } | null>(null)
+
+  // Why: the sidebar stays mounted when closed (for performance). Gate
+  // polling on visibility so we don't fetch checks/comments in the background
+  // when the panel isn't visible to the user.
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
+
+  useEffect(() => {
+    if (!isPanelVisible || !activeTerminalPtyId || isRemoteRuntimePtyId(activeTerminalPtyId)) {
+      setTerminalCwdSnapshot(null)
+      return
+    }
+
+    let disposed = false
+    const refreshTerminalCwd = async (): Promise<void> => {
+      try {
+        const cwd = (await window.api.pty.getCwd(activeTerminalPtyId)).trim()
+        if (!disposed) {
+          setTerminalCwdSnapshot(cwd ? { ptyId: activeTerminalPtyId, cwd } : null)
+        }
+      } catch {
+        if (!disposed) {
+          setTerminalCwdSnapshot(null)
+        }
+      }
+    }
+
+    void refreshTerminalCwd()
+    const interval = window.setInterval(refreshTerminalCwd, TERMINAL_CWD_WORKTREE_REFRESH_MS)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+    }
+  }, [activeTerminalPtyId, isPanelVisible])
+
+  const terminalCwd =
+    terminalCwdSnapshot?.ptyId === activeTerminalPtyId ? terminalCwdSnapshot.cwd : null
+  const terminalCwdWorktree = useMemo(
+    () => resolveChecksPanelWorktreeFromTerminalCwd(terminalCwd, allWorktrees),
+    [allWorktrees, terminalCwd]
+  )
+  const activeWorktree = terminalCwdWorktree ?? defaultActiveWorktree
+  const activeWorktreeId = activeWorktree?.id ?? defaultActiveWorktreeId
   const repo = useRepoById(activeWorktree?.repoId ?? null)
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
@@ -401,13 +466,6 @@ export default function ChecksPanel(): React.JSX.Element {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const openModal = useAppStore((s) => s.openModal)
-
-  // Why: the sidebar stays mounted when closed (for performance). Gate
-  // polling on visibility so we don't fetch checks/comments in the background
-  // when the panel isn't visible to the user.
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRCheckDetails = useAppStore((s) => s.fetchPRCheckDetails)
