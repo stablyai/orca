@@ -1280,6 +1280,10 @@ export function connectPanePty(
         allowDoneDetailAfterGrace: meta?.quietedHookDone,
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
+    dispatchAttention: (title, meta) =>
+      scheduleAgentTaskCompleteNotification(title, {
+        agentStatusSnapshot: meta.agentStatus
+      }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
     isLive: () => {

@@ -1056,12 +1056,14 @@ describe('agent completion coordinator', () => {
 
   it('does not dispatch completion when waiting states arrive mid-turn', () => {
     const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      dispatchAttention,
       isLive: () => true
     })
 
@@ -1093,16 +1095,30 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledTimes(2)
+    expect(dispatchAttention).toHaveBeenLastCalledWith(
+      'cursor',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'cursor',
+          toolInput: 'git status'
+        })
+      })
+    )
   })
 
   it('does not dispatch completion when a blocked state arrives mid-turn', () => {
     const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      dispatchAttention,
       isLive: () => true
     })
 
@@ -1122,16 +1138,29 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'copilot',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'blocked',
+          agentType: 'copilot',
+          toolInput: 'npm install'
+        })
+      })
+    )
   })
 
   it('cancels a pending done timer when a waiting state arrives before the quiet window', () => {
     const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      dispatchAttention,
       isLive: () => true
     })
 
@@ -1156,6 +1185,17 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'cursor',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'cursor',
+          toolInput: 'pnpm test'
+        })
+      })
+    )
   })
 
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {

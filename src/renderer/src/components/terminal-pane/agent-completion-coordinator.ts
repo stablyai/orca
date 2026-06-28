@@ -71,6 +71,7 @@ export function createAgentCompletionCoordinator(
   let lastCompletedTurn: number | null = null
   let lastCompletionSource: CompletionSource | null = null
   let lastCompletionIdentity: LastCompletionIdentity | null = null
+  let lastAttentionToken: string | null = null
   let lastForegroundAgent: RecognizedAgentProcess | null = null
   let requiresFreshWorking = false
   let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -154,6 +155,22 @@ export function createAgentCompletionCoordinator(
 
   function hookCompletionAgentIdentity(payload: AgentCompletionStatusSnapshot): string | null {
     return payload.agentType?.trim().toLowerCase() || null
+  }
+
+  function hookAttentionToken(payload: AgentCompletionStatusSnapshot): string {
+    const identity = hookCompletionIdentity(payload)
+    if (identity) {
+      return `identity:${identity}`
+    }
+    return [
+      'turn',
+      String(currentTurn),
+      payload.state,
+      payload.agentType ?? '',
+      payload.toolName ?? '',
+      payload.toolInput ?? '',
+      payload.prompt
+    ].join(':')
   }
 
   function titleCompletionIdentity(title: string): string {
@@ -255,6 +272,21 @@ export function createAgentCompletionCoordinator(
     } else {
       options.dispatchCompletion(title)
     }
+  }
+
+  function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
+    if (!options.dispatchAttention || !options.isLive() || !hasAgentRunEvidence) {
+      return
+    }
+    const token = hookAttentionToken(payload)
+    if (token === lastAttentionToken) {
+      return
+    }
+    lastAttentionToken = token
+    options.dispatchAttention(payload.agentType ?? options.paneKey, {
+      source: 'hook',
+      agentStatus: payload
+    })
   }
 
   function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
@@ -628,6 +660,7 @@ export function createAgentCompletionCoordinator(
       workingStatusObserved = true
       requiresFreshWorking = false
       lastCompletionIdentity = null
+      lastAttentionToken = null
       currentTurn += 1
       dropPendingTitle()
       return
@@ -636,6 +669,7 @@ export function createAgentCompletionCoordinator(
       // Why: a permission/elicitation pause arriving before the quiet window
       // must cancel a provisional 'done' so it never becomes a false completion.
       clearPendingHookDone()
+      dispatchAttention(payload)
       return
     }
     if (isCompletionHookState(payload.state)) {
@@ -720,6 +754,7 @@ export function createAgentCompletionCoordinator(
     lastCompletedTurn = null
     lastCompletionSource = null
     lastCompletionIdentity = null
+    lastAttentionToken = null
     lastForegroundAgent = null
     requiresFreshWorking = options.requireFreshWorking ?? false
     inspectionGeneration += 1
