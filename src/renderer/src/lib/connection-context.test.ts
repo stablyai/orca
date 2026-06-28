@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   getConnectionId,
   getConnectionIdForFile,
+  getConnectionIdFromState,
   isWorktreeConnectionResolved
 } from './connection-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -394,5 +396,90 @@ describe('getConnectionId', () => {
     expect(
       getConnectionIdForFile(workspaceKey, '/home/neil/platform/api/src/index.ts')
     ).toBeUndefined()
+  })
+})
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    id: 'folder-workspace-1',
+    projectGroupId: 'group-1',
+    name: 'Platform workspace',
+    folderPath: '/home/neil/platform',
+    connectionId: null,
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 1,
+    lastActivityAt: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
+function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
+  return {
+    id: 'group-1',
+    name: 'Platform',
+    parentPath: '/home/neil/platform',
+    connectionId: null,
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
+type ConnectionContextState = Pick<
+  AppState,
+  'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
+>
+
+describe('getConnectionIdFromState', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('resolves a folder workspace connectionId from a passed-in state without reading the global store', () => {
+    // Why: the Quick Open hook subscribes to store slices and must resolve from
+    // the snapshot it receives, not by re-reading useAppStore.getState().
+    const getStateSpy = vi.spyOn(useAppStore, 'getState')
+    const state: ConnectionContextState = {
+      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
+      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
+      repos: [],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, folderWorkspaceKey('folder-workspace-1'))).toBe('ssh-1')
+    expect(getStateSpy).not.toHaveBeenCalled()
+  })
+
+  it('resolves SSH repo provenance for non-folder worktrees from the passed-in state', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-2' })],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
+  })
+
+  it('returns null for a null worktreeId', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, null)).toBeNull()
   })
 })
