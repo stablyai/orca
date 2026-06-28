@@ -15,14 +15,8 @@ export function MobilePageToolbar({
   onToggleMobileSidebarButton
 }: MobilePageToolbarProps): React.JSX.Element {
   const sidebarToggleLabel = showMobileButton
-    ? translate(
-        'auto.components.mobile.MobilePageToolbar.a4f8c2d91e',
-        'Remove Orca Mobile from left sidebar'
-      )
-    : translate(
-        'auto.components.mobile.MobilePageToolbar.b7e3d1c84a',
-        'Show Orca Mobile in left sidebar'
-      )
+    ? translate('auto.components.mobile.MobilePageToolbar.c669abcf8f', 'Hide from sidebar')
+    : translate('auto.components.mobile.MobilePageToolbar.fb5f28330e', 'Show in sidebar')
   const sidebarToggleTooltip = showMobileButton
     ? translate(
         'auto.components.mobile.MobilePageToolbar.e1c7b4a92d',
@@ -30,7 +24,7 @@ export function MobilePageToolbar({
       )
     : translate(
         'auto.components.mobile.MobilePageToolbar.f3d8e5b71a',
-        'Adds the shortcut back to the left sidebar.'
+        'Adds the shortcut back to the sidebar.'
       )
 
   return (

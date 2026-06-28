@@ -18,10 +18,10 @@ describe('MobilePageToolbar', () => {
       <MobilePageToolbar showMobileButton onClose={vi.fn()} onToggleMobileSidebarButton={vi.fn()} />
     )
 
-    expect(html).toContain('Remove Orca Mobile from left sidebar')
+    expect(html).toContain('Hide from sidebar')
     expect(html).toContain('mp-page-toolbar-primary')
     expect(html).toContain('Configure in Settings')
-    expect(html).not.toContain('Hide from sidebar')
+    expect(html).not.toContain('Remove Orca Mobile')
   })
 
   it('labels the restore action explicitly when Orca Mobile is hidden from the sidebar', () => {
@@ -33,7 +33,6 @@ describe('MobilePageToolbar', () => {
       />
     )
 
-    expect(html).toContain('Show Orca Mobile in left sidebar')
-    expect(html).not.toContain('Show in sidebar')
+    expect(html).toContain('Show in sidebar')
   })
 })

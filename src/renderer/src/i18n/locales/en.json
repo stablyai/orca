@@ -9756,9 +9756,9 @@
           "fb5f28330e": "Show in sidebar",
           "c669abcf8f": "Hide from sidebar",
           "e1c7b4a92d": "Configure in Settings > Mobile.",
-          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
-          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
-          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
+          "a4f8c2d91e": "Hide from sidebar",
+          "b7e3d1c84a": "Show in sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal session",
