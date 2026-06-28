@@ -629,9 +629,11 @@ import {
 } from '../ipc/worktree-logic'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaLeftoverDirectory,
   canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
+  isDangerousWorktreeRemovalPath,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   stripOrcaProvenanceMetaUpdates,
@@ -1208,6 +1210,37 @@ async function isRuntimeWorktreePathMissing(
     return false
   }
   return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
+}
+
+async function isLocalRuntimeGitRepository(
+  runtimeWorktreePath: string,
+  localWorktreeGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  try {
+    await gitExecFileAsync(['status', '--short'], {
+      cwd: runtimeWorktreePath,
+      ...localWorktreeGitOptions
+    })
+    return true
+  } catch (error) {
+    return !gitStatusErrorMeansNotRepository(error)
+  }
+}
+
+function gitStatusErrorMeansNotRepository(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : typeof error === 'string'
+          ? error
+          : ''
+  const stderr =
+    error && typeof error === 'object' && 'stderr' in error
+      ? String((error as { stderr: unknown }).stderr)
+      : ''
+  return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
 type RuntimeWorktreeRemovalTarget = {
@@ -14512,19 +14545,18 @@ export class OrcaRuntimeService {
             )
           } else {
             const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-            canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
-              toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
-              toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-              access.statPath,
-              access.readPath
-            )
+            canCleanOrphanedDirectory =
+              !isDangerousWorktreeRemovalPath(removalTarget.path, repo.path) &&
+              (await canSafelyRemoveOrphanedWorktreeDirectory(
+                toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
+                toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                access.statPath,
+                access.readPath
+              ))
           }
         }
         if (canCleanOrphanedDirectory) {
-          assertWorktreeDoesNotContainRegisteredWorktree(
-            toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
-            registeredWorktrees
-          )
+          assertWorktreeDoesNotContainRegisteredWorktree(removalTarget.path, registeredWorktrees)
           if (!force) {
             throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
           }
@@ -14554,6 +14586,48 @@ export class OrcaRuntimeService {
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
+        }
+        if (!repo.connectionId) {
+          const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+          const runtimeWorktreePath = toLocalWorktreeRuntimePath(
+            removalTarget.path,
+            localWorktreeGitOptions
+          )
+          if (
+            await canCleanupUnregisteredOrcaLeftoverDirectory({
+              meta: removedMeta,
+              worktreePath: removalTarget.path,
+              runtimeWorktreePath,
+              repo,
+              runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+              knownOrcaLayouts,
+              registeredWorktrees,
+              statPath: access.statPath,
+              isGitRepository: (path) => isLocalRuntimeGitRepository(path, localWorktreeGitOptions)
+            })
+          ) {
+            if (!force) {
+              throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+            }
+            await closeLocalWatcherForWorktreePath(removalTarget.path).catch((err) => {
+              console.warn(`[filesystem-watcher] failed to close ${removalTarget.path}:`, err)
+            })
+            await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            return {}
+          }
         }
         if (await isRuntimeWorktreePathMissing(repo, removalTarget.path, localWorktreeGitOptions)) {
           if (!force && !removedMeta) {
