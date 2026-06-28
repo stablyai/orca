@@ -20,6 +20,8 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules')
 ]
 
+// Why: nodeModulesPaths enumerates both mobile and root; disable Metro's
+// tree-walk so it doesn't double-resolve the same package from both layers.
 config.resolver.disableHierarchicalLookup = true
 
 module.exports = config
