@@ -137,7 +137,7 @@ function JobCard({ job, index }: { job: PRCheckJob; index: number }): React.JSX.
         </div>
       )}
 
-      {job.logTail && <CheckJobLogTail logTail={job.logTail} />}
+      {job.logTail && <CheckJobLogTail logTail={job.logTail} expanded={jobFailed} />}
     </div>
   )
 }
