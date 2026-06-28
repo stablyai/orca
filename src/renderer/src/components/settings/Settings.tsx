@@ -114,11 +114,6 @@ const SETTINGS_NAV_GROUPS = [
     titleDefault: 'Remote Hosts'
   },
   {
-    id: 'mobile',
-    titleKey: 'auto.components.settings.Settings.mobile_group',
-    titleDefault: 'Mobile'
-  },
-  {
     id: 'security',
     titleKey: 'auto.components.settings.Settings.084d8fac5b',
     titleDefault: 'Privacy & Security'
@@ -1213,6 +1208,21 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
 
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="mobile"
+                    title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
+                    badge="Beta"
+                    description={translate(
+                      'auto.components.settings.Settings.c6c01ac209',
+                      'Control terminals and agents from your phone.'
+                    )}
+                    searchEntries={getSectionSearchEntries('mobile')}
+                  >
+                    {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
+                  </SettingsSection>
+                ) : null}
+
                 <SettingsSection
                   id="git"
                   title={translate(
@@ -1490,32 +1500,17 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
-                  <>
-                    <SettingsSection
-                      id="ssh"
-                      title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
-                      description={translate(
-                        'auto.components.settings.Settings.c2ee313198',
-                        'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-                      )}
-                      searchEntries={getSectionSearchEntries('ssh')}
-                    >
-                      {isSectionMounted('ssh') ? <SshPane /> : null}
-                    </SettingsSection>
-
-                    <SettingsSection
-                      id="mobile"
-                      title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
-                      badge="Beta"
-                      description={translate(
-                        'auto.components.settings.Settings.c6c01ac209',
-                        'Control terminals and agents from your phone.'
-                      )}
-                      searchEntries={getSectionSearchEntries('mobile')}
-                    >
-                      {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
-                    </SettingsSection>
-                  </>
+                  <SettingsSection
+                    id="ssh"
+                    title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
+                    description={translate(
+                      'auto.components.settings.Settings.c2ee313198',
+                      'Use existing machines over SSH for files, terminals, Git, and workspaces.'
+                    )}
+                    searchEntries={getSectionSearchEntries('ssh')}
+                  >
+                    {isSectionMounted('ssh') ? <SshPane /> : null}
+                  </SettingsSection>
                 ) : null}
 
                 {showDesktopOnlySettings && isMac ? (

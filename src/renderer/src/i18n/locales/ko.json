@@ -2378,7 +2378,8 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소"
+            "df766809e0": "창 축소",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -2428,7 +2429,10 @@
                   "38e41edc6e": "이 워크스페이스는 git 작업 트리로 포크할 수 없습니다.",
                   "f867385bb5": "이 포크의 소스 워크스페이스를 찾을 수 없습니다.",
                   "046e8d853c": "포크할 terminal 컨텍스트가 없습니다.",
-                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다."
+                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다.",
+                  "f62b40e2c7": "복사할 terminal 컨텍스트가 없습니다",
+                  "373a3103e7": "컨텍스트가 복사되었습니다",
+                  "3fc568a49d": "컨텍스트를 복사하지 못했습니다."
                 }
               }
             },
@@ -2601,7 +2605,7 @@
             "39676a184c": "모든 파일, URL, agent를 엽니다..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "명령",
+            "a2c7a33831": "빠른 명령 추가...",
             "20bbd75896": "명령 없음",
             "b82e237a4b": "빠른 명령 더 보기",
             "85482c57bc": "빠른 명령 실행",
@@ -4480,7 +4484,9 @@
           "copiedCommand": "명령 복사됨.",
           "failedToCopyCommand": "명령 복사 실패.",
           "copyCommandAria": "명령 복사",
-          "runCommandDescription": "Enter를 눌러 명령을 실행하세요."
+          "runCommandDescription": "Enter를 눌러 명령을 실행하세요.",
+          "5f818f12ab": "준비 중...",
+          "4c05b9d7cb": "설정 터미널을 준비하고 있습니다."
         },
         "AgentsPane": {
           "d83834f5e6": "설치된 agents 감지 중…",
@@ -5272,7 +5278,10 @@
           "4f2205f3b6": "Orca CLI 활성화",
           "ff4b7e65d6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "2a674aa810": "Agent 모바일 에뮬레이터 제어",
-          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다."
+          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다.",
+          "3d34423e88": "Orca CLI를 등록하는 중",
+          "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+          "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "복사",
@@ -5344,7 +5353,10 @@
           "b5a2ed83ff": "앱스토어",
           "c8491c17ef": "QR 코드를 스캔하여 휴대폰에서 Orca를 제어하세요. 베타/초기 미리보기 - 버그 및 주요 변경 사항이 예상됩니다. 다음에서 iOS 앱을 받으세요.",
           "e7a3ae8c4e": "모바일",
-          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요."
+          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "테스트 알림 보내기",
@@ -7413,7 +7425,9 @@
               "f4ed142753": "핸드폰",
               "f213400800": "모바일",
               "671eb4173c": "휴대폰에서 terminals과 agents를 제어하세요.",
-              "ffd52a96e4": "모바일"
+              "ffd52a96e4": "모바일",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9739,7 +9753,12 @@
           "a6cffbbb0b": "코드 생성",
           "e59a252eca": "코드 재생성",
           "d0b52871ce": "휴대전화가 페어링되었습니다.",
-          "051978a785": "휴대전화가 페어링되었습니다."
+          "051978a785": "휴대전화가 페어링되었습니다.",
+          "channel": {
+            "group": "릴리스 채널",
+            "preview": "미리 보기",
+            "stable": "안정 버전"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -9758,7 +9777,11 @@
           "ad2284a9e2": "닫기 · Esc",
           "9883b58693": "Orca 모바일 닫기",
           "fb5f28330e": "사이드바에 표시",
-          "c669abcf8f": "사이드바에서 숨기기"
+          "c669abcf8f": "사이드바에서 숨기기",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal 세션",
@@ -9769,7 +9792,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Android 카메라로 스캔하여 GitHub 릴리스에서 최신 APK를 다운로드하세요.",
-              "432db52b73": "iPhone 카메라로 스캔하여 App Store를 엽니다."
+              "432db52b73": "iPhone 카메라로 스캔하여 App Store를 엽니다.",
+              "preview": {
+                "tagline": "최신 기능, 매일 업데이트."
+              },
+              "stable": {
+                "tagline": "정식 출시 버전, 매주 업데이트."
+              }
             }
           }
         },
@@ -10473,7 +10502,10 @@
             "21f5687c07": "Orca CLI 스킬",
             "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
             "5c59ea96ca": "모바일 에뮬레이터 Orca CLI 스킬 설정",
-            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
+            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal",
+            "3d34423e88": "Orca CLI를 등록하는 중",
+            "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+            "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "닫기",
@@ -11024,7 +11056,8 @@
           "b3e7f9a1c2": "체크 수정 컨텍스트를 사용할 수 없습니다.",
           "d5a8c2f1b9": "이 체크를 수정할 기본 AI agent 시작",
           "e2b4d7c8a1": "이 체크를 처리할 agent 선택",
-          "f1c9e3a6d4": "체크를 수정할 agent 선택"
+          "f1c9e3a6d4": "체크를 수정할 agent 선택",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11045,6 +11078,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "붙여넣기 내용이 너무 큽니다."
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {

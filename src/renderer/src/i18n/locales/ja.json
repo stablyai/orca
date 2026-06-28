@@ -2378,7 +2378,8 @@
             "f3eeb1de13": "コピー",
             "c2f0b72b8d": "入れる",
             "925f49f210": "ペインを展開する",
-            "df766809e0": "ペインを折りたたむ"
+            "df766809e0": "ペインを折りたたむ",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "デーモンを再起動します",
@@ -2428,7 +2429,10 @@
                   "38e41edc6e": "このワークスペースを git ワークツリーにフォークすることはできません。",
                   "f867385bb5": "このフォークのソース ワークスペースが見つかりませんでした。",
                   "046e8d853c": "フォークする terminal コンテキストがありません",
-                  "c00421d320": "フォークコンテキストがコピーされました。agent を起動し、貼り付けてフォークを開始します。"
+                  "c00421d320": "フォークコンテキストがコピーされました。agent を起動し、貼り付けてフォークを開始します。",
+                  "f62b40e2c7": "No terminal context to copy",
+                  "373a3103e7": "Context copied",
+                  "3fc568a49d": "Failed to copy context."
                 }
               }
             },
@@ -2601,7 +2605,7 @@
             "39676a184c": "任意のファイル、URL、agent などを開きます..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "コマンド",
+            "a2c7a33831": "クイックコマンドを追加…",
             "20bbd75896": "コマンドはありません",
             "b82e237a4b": "よりクイックなコマンド",
             "85482c57bc": "クイックコマンドを実行する",
@@ -4480,7 +4484,9 @@
           "copiedCommand": "コマンドをコピーしました。",
           "failedToCopyCommand": "コマンドのコピーに失敗しました。",
           "copyCommandAria": "コマンドをコピー",
-          "runCommandDescription": "Enter を押してコマンドを実行します。"
+          "runCommandDescription": "Enter を押してコマンドを実行します。",
+          "5f818f12ab": "準備中...",
+          "4c05b9d7cb": "セットアップ用ターミナルを準備しています。"
         },
         "AgentsPane": {
           "d83834f5e6": "インストールされている agents を検出しています…",
@@ -5309,7 +5315,10 @@
           "4f2205f3b6": "Orca CLI を有効にする",
           "ff4b7e65d6": "コーディング agents が Orca CLI コマンドを使用してアクティブなモバイル エミュレータを制御できるようにします。",
           "2a674aa810": "Agent モバイル エミュレータ制御",
-          "cdeaed9e37": "Orca CLIをPATHに登録しました。"
+          "cdeaed9e37": "Orca CLIをPATHに登録しました。",
+          "3d34423e88": "Orca CLI を登録しています",
+          "3be27641c9": "agent のシェルからエミュレーターコマンドを実行できるようにします。",
+          "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "コピー",
@@ -5381,7 +5390,10 @@
           "b5a2ed83ff": "アプリストア",
           "c8491c17ef": "QR コードをスキャンしてスマートフォンから Orca を制御します。ベータ/早期プレビュー - バグや重大な変更が予想されます。 iOS アプリを次の場所から入手します。",
           "e7a3ae8c4e": "モバイル",
-          "174f4a3c6d": "スマートフォンから terminals と agents を操作"
+          "174f4a3c6d": "スマートフォンから terminals と agents を操作",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "テスト通知を送信する",
@@ -7450,7 +7462,9 @@
               "f4ed142753": "スマートフォン",
               "f213400800": "モバイル",
               "671eb4173c": "スマートフォンから terminals と agents を操作",
-              "ffd52a96e4": "モバイル"
+              "ffd52a96e4": "モバイル",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9739,7 +9753,12 @@
           "a6cffbbb0b": "コードを生成する",
           "e59a252eca": "コードを再生成する",
           "d0b52871ce": "スマートフォンはペアリングされています。",
-          "051978a785": "スマートフォンはペアリングされています。"
+          "051978a785": "スマートフォンはペアリングされています。",
+          "channel": {
+            "group": "リリースチャンネル",
+            "preview": "プレビュー",
+            "stable": "安定版"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -9758,7 +9777,11 @@
           "ad2284a9e2": "閉じる・Esc",
           "9883b58693": "Orca モバイルを閉じる",
           "fb5f28330e": "サイドバーに表示",
-          "c669abcf8f": "サイドバーから隠す"
+          "c669abcf8f": "サイドバーから隠す",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal セッション",
@@ -9769,7 +9792,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Android カメラでスキャンして、GitHub リリースから最新の APK をダウンロードします。",
-              "432db52b73": "iPhone のカメラでスキャンして App Store を開きます。"
+              "432db52b73": "iPhone のカメラでスキャンして App Store を開きます。",
+              "preview": {
+                "tagline": "最新機能を毎日更新。"
+              },
+              "stable": {
+                "tagline": "一般公開版、毎週更新。"
+              }
             }
           }
         },
@@ -10473,7 +10502,10 @@
             "21f5687c07": "Orca CLI スキル",
             "64fb057667": "このワークツリーの orca エミュレーターコマンドを agents に教えます。",
             "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
-            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal",
+            "3d34423e88": "Orca CLI を登録しています",
+            "3be27641c9": "agent のシェルからエミュレーターコマンドを実行できるようにします。",
+            "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "閉じる",
@@ -11024,7 +11056,8 @@
           "b3e7f9a1c2": "チェック修正コンテキストを利用できません",
           "d5a8c2f1b9": "既定の AI エージェントでこのチェックを修正",
           "e2b4d7c8a1": "このチェックのエージェントを選択",
-          "f1c9e3a6d4": "チェックを修正するエージェントを選択"
+          "f1c9e3a6d4": "チェックを修正するエージェントを選択",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11045,6 +11078,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "貼り付け内容が大きすぎます。"
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {

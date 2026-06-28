@@ -277,9 +277,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
-    detectCmd: 'qwen-code',
-    launchCmd: 'qwen-code',
-    expectedProcess: 'qwen-code',
+    // Why: the upstream package is QwenLM/qwen-code, but its installed CLI
+    // executable on PATH is `qwen`, so detect/launch/recognition must use that.
+    detectCmd: 'qwen',
+    launchCmd: 'qwen',
+    expectedProcess: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
   rovo: {

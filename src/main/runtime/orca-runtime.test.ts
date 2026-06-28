@@ -5267,7 +5267,10 @@ describe('OrcaRuntimeService', () => {
       cols: 90,
       rows: 30,
       seq: 17,
-      source: 'headless'
+      source: 'headless',
+      // Non-alt-screen buffer reports alternateScreen=false so the renderer
+      // keeps its destructive scrollback clear on restore.
+      alternateScreen: false
     })
     expect(serializeBuffer).not.toHaveBeenCalled()
   })

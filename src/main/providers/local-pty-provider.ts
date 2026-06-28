@@ -6,6 +6,7 @@ import { basename, delimiter } from 'path'
 import { win32 as pathWin32 } from 'path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
+import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
@@ -236,6 +237,15 @@ function resolveForegroundFallbackProcess(
   return shellName ?? processName ?? null
 }
 
+/** Basename of the spawned shell path, parsed for the *target* platform rather
+ *  than the host's native separator. Why: on Windows the shell path uses `\`,
+ *  but the POSIX `basename` (used when orchestrating from a non-Windows host or
+ *  CI) would not split it and would store the whole `C:\...\powershell.exe`
+ *  path as the shell name — breaking the foreground/child-process comparison. */
+function getSpawnedShellName(shellPath: string): string {
+  return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
+}
+
 /**
  * Disposes the native PTY handle while avoiding recycled-pid signals on POSIX.
  */
@@ -350,6 +360,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let effectiveCwd: string
     let validationCwd: string
     let startupCommandDeliveredInShellArgs = false
+    let windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts> = []
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -398,24 +409,39 @@ export class LocalPtyProvider implements IPtyProvider {
             }) ?? shellFamily)
           : shellFamily
       }
-      // Why: one-off overrides and persisted shell-family selection keep the
-      // same priority, while the shared resolver chooses which PowerShell
-      // executable is safe to run right now if that family is selected.
-      // Why: both this path and the daemon-subprocess path must derive the
-      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
-      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
-      // wsl.exe /mnt/<drive> cwd translation in one place.
-      const resolved = resolveWindowsShellLaunchArgs(
+      // Why: when the selected shell is a PowerShell family, resolve it to a
+      // real absolute executable and build a PowerShell -> cmd.exe fallback
+      // chain. Handing ConPTY a bare `pwsh.exe` lets Windows resolve it to the
+      // Store App Execution Alias stub, whose spawn fails with error code 5.
+      // The shared launch-args helper inside keeps both this path and the
+      // daemon path producing identical args (chcp 65001 / $PROFILE / wsl cwd).
+      windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
         shellPath,
         cwd,
         defaultCwd,
-        worktreeWslContext ?? preferredWslContext,
-        args.command
-      )
-      shellArgs = resolved.shellArgs
-      effectiveCwd = resolved.effectiveCwd
-      validationCwd = resolved.validationCwd
-      startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+        wslContext: worktreeWslContext ?? preferredWslContext,
+        startupCommand: args.command
+      })
+      const primaryAttempt = windowsFallbackAttempts[0]
+      if (primaryAttempt) {
+        shellPath = primaryAttempt.shellPath
+        shellArgs = primaryAttempt.shellArgs
+        effectiveCwd = primaryAttempt.effectiveCwd
+        validationCwd = primaryAttempt.validationCwd
+        startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
+      } else {
+        const resolved = resolveWindowsShellLaunchArgs(
+          shellPath,
+          cwd,
+          defaultCwd,
+          worktreeWslContext ?? preferredWslContext,
+          args.command
+        )
+        shellArgs = resolved.shellArgs
+        effectiveCwd = resolved.effectiveCwd
+        validationCwd = resolved.validationCwd
+        startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+      }
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -623,9 +649,15 @@ export class LocalPtyProvider implements IPtyProvider {
       // correct filename (see design doc §8).
       onBeforeFallbackSpawn: historyResult?.histFile
         ? (env, fallbackShell) => updateHistFileForFallback(env, fallbackShell)
-        : undefined
+        : undefined,
+      windowsFallbackAttempts
     })
     shellPath = spawnResult.shellPath
+    // Why: a Windows fallback (e.g. cmd.exe) embeds its own startup command in
+    // argv, so honor the winning shell's delivery flag to avoid a double write.
+    if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
+      startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
+    }
     if (args.command && getFallbackShellReadyConfig) {
       shellReadyLaunch = getFallbackShellReadyConfig(shellPath)
     }
@@ -636,7 +668,7 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
-    ptyShellName.set(id, basename(shellPath))
+    ptyShellName.set(id, getSpawnedShellName(shellPath))
     ptyAgentForegroundContextPaths.set(
       id,
       getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })

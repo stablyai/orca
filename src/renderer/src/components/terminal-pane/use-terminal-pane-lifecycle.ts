@@ -70,6 +70,7 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
+import { reconcileDeadSessions, type ReconcilableBinding } from './terminal-dead-session-reconcile'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
@@ -359,6 +360,26 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   return Boolean(
     args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
   )
+}
+
+/**
+ * Self-gating dead-session reconcile pass scheduled from the isVisible effect.
+ * Why self-gate: the effect fires on BOTH isVisible true and false, but we only
+ * reconcile on resume (becoming visible), never on hide. Returns true when the
+ * pass was scheduled so the resume-unit test can assert the gate.
+ */
+export function scheduleVisibilityReconcilePass(args: {
+  isVisible: boolean
+  bindings: Iterable<ReconcilableBinding>
+  listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+}): boolean {
+  if (!args.isVisible) {
+    return false
+  }
+  // Why: fire-and-forget so the async listSessions IPC never blocks the
+  // synchronous WebGL/fit resume work the user sees first.
+  void reconcileDeadSessions({ bindings: args.bindings, listSessions: args.listSessions })
+  return true
 }
 
 export function useTerminalPaneLifecycle({
@@ -1504,9 +1525,25 @@ export function useTerminalPaneLifecycle({
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
         syncProcessTracking?: () => void
+        noteVisibilityResume?: () => void
       }
       bindingWithVisibility.syncProcessTracking?.()
+      // Why: re-arm the once-per-resume input liveness re-check so the typing
+      // hot path stays off the listSessions IPC between resumes (the re-check
+      // is only useful right after a hidden→visible flip).
+      if (isVisible) {
+        bindingWithVisibility.noteVisibilityResume?.()
+      }
     }
+    // Why: the reconcile pass self-gates on becoming visible (resume) — the
+    // effect also fires on hide — and runs fire-and-forget alongside
+    // syncProcessTracking. reconcileDeadSessions re-validates identity at apply
+    // time so a racing reattach is not clobbered.
+    scheduleVisibilityReconcilePass({
+      isVisible,
+      bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
+      listSessions: () => window.api.pty.listSessions()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [isVisible, isVisibleRef, panePtyBindingsRef])
 

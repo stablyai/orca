@@ -6,6 +6,7 @@ import {
   refreshSourceControlAfterRemoteAction,
   resolveSourceControlBaseRef,
   resolveSourceControlPickerBaseRef,
+  shouldRefreshBranchCompareForRemoteStatus,
   shouldRefreshBranchCompareForStatusHead,
   shouldShowCompareSummary
 } from './SourceControl'
@@ -314,6 +315,56 @@ describe('SourceControl compare summary', () => {
         { baseRef: 'origin/main', statusHead: 'old-head', worktreeId: 'wt-1' },
         { baseRef: 'origin/release', statusHead: 'new-head', worktreeId: 'wt-1' }
       )
+    ).toBe(false)
+  })
+
+  it('refreshes branch compare when upstream status changes for the same base', () => {
+    expect(
+      shouldRefreshBranchCompareForRemoteStatus(
+        {
+          ahead: 1,
+          baseRef: 'origin/main',
+          behind: 0,
+          hasUpstream: true,
+          upstreamName: 'origin/main',
+          worktreeId: 'wt-1'
+        },
+        {
+          ahead: 0,
+          baseRef: 'origin/main',
+          behind: 0,
+          hasUpstream: true,
+          upstreamName: 'origin/main',
+          worktreeId: 'wt-1'
+        }
+      )
+    ).toBe(true)
+  })
+
+  it('does not refresh branch compare for initial or unrelated upstream status snapshots', () => {
+    const current = {
+      ahead: 0,
+      baseRef: 'origin/main',
+      behind: 0,
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      worktreeId: 'wt-1'
+    }
+
+    expect(shouldRefreshBranchCompareForRemoteStatus(null, current)).toBe(false)
+    expect(
+      shouldRefreshBranchCompareForRemoteStatus(current, {
+        ...current,
+        baseRef: 'origin/release',
+        ahead: 1
+      })
+    ).toBe(false)
+    expect(
+      shouldRefreshBranchCompareForRemoteStatus(current, {
+        ...current,
+        worktreeId: 'wt-2',
+        ahead: 1
+      })
     ).toBe(false)
   })
 

@@ -144,6 +144,38 @@ describe('pane terminal output scheduler', () => {
     expect(terminal._core.refresh).toHaveBeenLastCalledWith(0, 23, true)
   })
 
+  it('schedules a follow-up repaint for a Claude-style in-place CR redraw without scroll', async () => {
+    // Why: issue #5656/#5653 — Claude Code's plain-ASCII prompt redraw (CR + CHA +
+    // reprint + erase-line, no DEC 2026, no scroll, no cursor hide/show restore)
+    // paints one frame late on Windows ConPTY. A single sync refresh races that
+    // late paint, so the connection layer requests followupForegroundRefresh.
+    // Prove the scheduler turns that into a second next-frame repaint.
+    const scheduledFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, '\r\x1b[3Gzzzx\x1b[K', {
+      foreground: true,
+      latencySensitive: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true
+    })
+
+    expect(terminal._core.refresh).toHaveBeenCalledTimes(1)
+    expect(scheduledFrames).toHaveLength(1)
+
+    scheduledFrames[0]?.(16)
+
+    expect(terminal._core.refresh).toHaveBeenCalledTimes(2)
+    expect(terminal._core.refresh).toHaveBeenLastCalledWith(0, 23, true)
+  })
+
   it('skips forced viewport refresh for ordinary foreground output', async () => {
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createForegroundTerminal()

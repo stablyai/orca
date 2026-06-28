@@ -1,194 +1,175 @@
-import * as path from 'path'
+import { EventEmitter } from 'events'
+import { PassThrough } from 'stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { readdirMock } = vi.hoisted(() => ({
-  readdirMock: vi.fn()
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn()
 }))
 
-vi.mock('fs/promises', () => ({
-  readdir: readdirMock
+vi.mock('child_process', () => ({
+  spawn: spawnMock
 }))
 
 import { createWslWatcher } from './filesystem-watcher-wsl'
-import type { WatchedRoot } from './filesystem-watcher-wsl'
+import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
+
+const SNAPSHOT_START = '\x1e'
+const SNAPSHOT_END = '\x1f'
+const ROOT_KEY = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+
+class FakeChildProcess extends EventEmitter {
+  stdin = new PassThrough()
+  stdout = new PassThrough()
+  stderr = new PassThrough()
+  kill = vi.fn(() => {
+    this.emit('close', null, 'SIGTERM')
+    return true
+  })
+}
+
+function snapshotFrame(entries: [type: string, mtime: string, path: string][]): string {
+  return `${SNAPSHOT_START}${entries
+    .map(([type, mtime, entryPath]) => `${type}\t${mtime}\t${entryPath}\0`)
+    .join('')}${SNAPSHOT_END}`
+}
+
+type ScheduleBatchFlush = (rootKey: string, root: WatchedRoot) => void
+type ScheduleBatchFlushMock = ReturnType<typeof vi.fn<ScheduleBatchFlush>>
+
+function makeDeps(
+  scheduleBatchFlush: ScheduleBatchFlushMock = vi.fn<ScheduleBatchFlush>()
+): WslWatcherDeps & {
+  scheduleBatchFlush: ScheduleBatchFlushMock
+  watchedRoots: Map<string, WatchedRoot>
+} {
+  return {
+    ignoreDirs: ['node_modules', '.git'],
+    scheduleBatchFlush,
+    watchedRoots: new Map()
+  }
+}
+
+function startWatcher(deps = makeDeps()): {
+  child: FakeChildProcess
+  promise: Promise<WatchedRoot>
+  deps: ReturnType<typeof makeDeps>
+} {
+  const child = new FakeChildProcess()
+  spawnMock.mockReturnValueOnce(child)
+  const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, deps)
+  return { child, promise, deps }
+}
+
+async function resolveInitialSnapshot(
+  child: FakeChildProcess,
+  promise: Promise<WatchedRoot>
+): Promise<WatchedRoot> {
+  child.stdout.write(snapshotFrame([['f', '1.0', '/home/me/repo/README.md']]))
+  return promise
+}
 
 describe('createWslWatcher', () => {
-  const rootPath = '/mnt/wsl/repo'
-  const rootKey = rootPath
-
   beforeEach(() => {
-    vi.useFakeTimers()
-    readdirMock.mockReset()
+    spawnMock.mockReset()
   })
 
   afterEach(() => {
-    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
-  function deps(scheduleBatchFlush: (rootKey: string, root: WatchedRoot) => void) {
-    return {
-      ignoreDirs: ['node_modules', '.git'],
-      scheduleBatchFlush,
-      watchedRoots: new Map<string, WatchedRoot>()
-    }
-  }
+  it('spawns a WSL-native snapshot process for the distro path', async () => {
+    const { child, promise } = startWatcher()
+    child.stdout.write(snapshotFrame([]))
 
-  function releasePollWith(
-    releasePoll: ((entries: ReturnType<typeof dirent>[]) => void) | null,
-    entries: ReturnType<typeof dirent>[]
-  ): void {
-    if (!releasePoll) {
-      throw new Error('expected an in-flight poll')
-    }
-    releasePoll(entries)
-  }
+    await promise
 
-  function dirent(name: string, type: 'dir' | 'file' | 'symlink' = 'file') {
-    return {
-      name,
-      isDirectory: () => type === 'dir',
-      isSymbolicLink: () => type === 'symlink'
-    }
-  }
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'sh', '-s', '--', '/home/me/repo'],
+      expect.objectContaining({
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true
+      })
+    )
+  })
 
-  it('does not overlap polling when a WSL snapshot scan is still in flight', async () => {
+  it('diffs WSL snapshots into create, update, and delete events', async () => {
     const scheduleBatchFlush = vi.fn()
-    let rootReads = 0
-    let releasePoll: ((entries: ReturnType<typeof dirent>[]) => void) | null = null
+    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
 
-    readdirMock.mockImplementation((dirPath: string) => {
-      if (dirPath !== rootPath) {
-        return Promise.resolve([])
-      }
-      rootReads += 1
-      if (rootReads === 1) {
-        return Promise.resolve([dirent('src', 'dir')])
-      }
-      if (rootReads === 2) {
-        return new Promise<ReturnType<typeof dirent>[]>((resolve) => {
-          releasePoll = resolve
-        })
-      }
-      return Promise.resolve([dirent('src', 'dir')])
-    })
-
-    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
-
-    expect(rootReads).toBe(1)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(rootReads).toBe(2)
-    await vi.advanceTimersByTimeAsync(4_000)
-    expect(rootReads).toBe(2)
-
-    releasePollWith(releasePoll, [dirent('src', 'dir'), dirent('new-file.ts')])
-    await vi.advanceTimersByTimeAsync(0)
+    child.stdout.write(
+      snapshotFrame([
+        ['f', '1.0', '/home/me/repo/README.md'],
+        ['f', '1.0', '/home/me/repo/old.txt']
+      ])
+    )
+    const root = await promise
+    child.stdout.write(
+      snapshotFrame([
+        ['f', '2.0', '/home/me/repo/README.md'],
+        ['f', '1.0', '/home/me/repo/new.txt']
+      ])
+    )
 
     expect(scheduleBatchFlush).toHaveBeenCalledOnce()
-    await root.subscription.unsubscribe()
+    expect(root.batch.events).toEqual([
+      { type: 'update', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\README.md' },
+      { type: 'create', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\new.txt' },
+      { type: 'delete', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\old.txt' }
+    ])
   })
 
-  it('does not flush a poll that completes after unsubscribe', async () => {
+  it('turns watcher exit into an overflow refresh without retaining UNC paths', async () => {
     const scheduleBatchFlush = vi.fn()
-    let rootReads = 0
-    let releasePoll: ((entries: ReturnType<typeof dirent>[]) => void) | null = null
+    const deps = makeDeps(scheduleBatchFlush)
+    const { child, promise } = startWatcher(deps)
+    const root = await resolveInitialSnapshot(child, promise)
+    deps.watchedRoots.set(ROOT_KEY, root)
 
-    readdirMock.mockImplementation((dirPath: string) => {
-      if (dirPath !== rootPath) {
-        return Promise.resolve([])
-      }
-      rootReads += 1
-      if (rootReads === 1) {
-        return Promise.resolve([dirent('src', 'dir')])
-      }
-      return new Promise<ReturnType<typeof dirent>[]>((resolve) => {
-        releasePoll = resolve
-      })
-    })
+    child.emit('close', null, 'SIGTERM')
 
-    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
-    await vi.advanceTimersByTimeAsync(2_000)
+    expect(scheduleBatchFlush).toHaveBeenCalledOnce()
+    expect(root.batch.events).toEqual([])
+    expect(root.batch.overflowed).toBe(true)
+    expect(deps.watchedRoots.has(ROOT_KEY)).toBe(false)
+  })
+
+  it('kills the WSL child on unsubscribe without emitting a shutdown refresh', async () => {
+    const scheduleBatchFlush = vi.fn()
+    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
+    const root = await resolveInitialSnapshot(child, promise)
+
     await root.subscription.unsubscribe()
 
-    releasePollWith(releasePoll, [dirent('src', 'dir'), dirent('late-file.ts')])
-    await vi.advanceTimersByTimeAsync(0)
-
+    expect(child.kill).toHaveBeenCalledOnce()
     expect(scheduleBatchFlush).not.toHaveBeenCalled()
   })
 
-  it('does not probe root-level files during WSL snapshots', async () => {
-    const scheduleBatchFlush = vi.fn()
+  it('rejects when the WSL process exits before the first snapshot', async () => {
+    const { child, promise } = startWatcher()
 
-    readdirMock.mockImplementation((dirPath: string) => {
-      if (dirPath === rootPath) {
-        return Promise.resolve([
-          dirent('src', 'dir'),
-          dirent('README.md'),
-          dirent('package.json'),
-          dirent('linked-dir', 'symlink')
-        ])
-      }
-      return Promise.resolve([])
-    })
+    child.stderr.write('find failed')
+    child.emit('close', 1, null)
 
-    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
-
-    const readPaths = readdirMock.mock.calls.map(([dirPath]) => dirPath)
-    expect(readPaths).toEqual([
-      rootPath,
-      path.join(rootPath, 'src'),
-      path.join(rootPath, 'linked-dir')
-    ])
-    expect(readPaths).not.toContain(path.join(rootPath, 'README.md'))
-    expect(readPaths).not.toContain(path.join(rootPath, 'package.json'))
-    await root.subscription.unsubscribe()
+    await expect(promise).rejects.toThrow('WSL watcher exited before first snapshot')
   })
 
-  it('limits concurrent child directory reads during WSL snapshots', async () => {
+  it('does not emit a shutdown refresh after a startup error', async () => {
     const scheduleBatchFlush = vi.fn()
-    const childDirs = Array.from({ length: 40 }, (_, index) => dirent(`dir-${index}`, 'dir'))
-    let activeChildReads = 0
-    let maxActiveChildReads = 0
+    const { child, promise } = startWatcher(makeDeps(scheduleBatchFlush))
 
-    readdirMock.mockImplementation((dirPath: string) => {
-      if (dirPath === rootPath) {
-        return Promise.resolve(childDirs)
-      }
-      activeChildReads += 1
-      maxActiveChildReads = Math.max(maxActiveChildReads, activeChildReads)
-      return new Promise<ReturnType<typeof dirent>[]>((resolve) => {
-        setTimeout(() => {
-          activeChildReads -= 1
-          resolve([])
-        }, 1)
-      })
-    })
+    child.emit('error', new Error('spawn failed'))
+    child.emit('close', 1, null)
 
-    const rootPromise = createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(maxActiveChildReads).toBeLessThanOrEqual(8)
-    for (let i = 0; i < childDirs.length; i += 1) {
-      await vi.advanceTimersByTimeAsync(1)
-    }
-
-    const root = await rootPromise
-    expect(maxActiveChildReads).toBeLessThanOrEqual(8)
-    await root.subscription.unsubscribe()
+    await expect(promise).rejects.toThrow('spawn failed')
+    expect(scheduleBatchFlush).not.toHaveBeenCalled()
   })
 
-  it('marks a large WSL poll event batch for overflow without retaining every event', async () => {
-    const scheduleBatchFlush = vi.fn()
-    const initialEntries = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.ts`))
+  it('rejects startup when WSL exits before reading the snapshot script', async () => {
+    const { child, promise } = startWatcher()
 
-    readdirMock.mockResolvedValueOnce(initialEntries).mockResolvedValueOnce([])
+    child.stdin.emit('error', new Error('write EPIPE'))
 
-    const root = await createWslWatcher(rootKey, rootPath, deps(scheduleBatchFlush))
-    await vi.advanceTimersByTimeAsync(2_000)
-
-    expect(scheduleBatchFlush).toHaveBeenCalledOnce()
-    expect(root.batch.events).toHaveLength(0)
-    expect(root.batch.overflowed).toBe(true)
-    await root.subscription.unsubscribe()
+    await expect(promise).rejects.toThrow('write EPIPE')
   })
 })

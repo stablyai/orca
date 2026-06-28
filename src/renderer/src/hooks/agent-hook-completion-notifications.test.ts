@@ -415,6 +415,51 @@ describe('agent hook completion notifications', () => {
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
+  it('notifies when a Claude permission request needs input without completing the task', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'edit package.json',
+        agentType: 'claude',
+        stateStartedAt: 1_700_000_000_000
+      }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'waiting',
+        prompt: 'edit package.json',
+        agentType: 'claude',
+        toolName: 'Edit',
+        toolInput: 'package.json',
+        stateStartedAt: 1_700_000_010_000
+      }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'claude',
+          prompt: 'edit package.json',
+          toolName: 'Edit',
+          toolInput: 'package.json'
+        })
+      })
+    )
+  })
+
   it('does not notify on Grok routine permission prompt notifications during tool use', async () => {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')

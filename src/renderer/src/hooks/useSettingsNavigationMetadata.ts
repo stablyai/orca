@@ -225,6 +225,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getIntegrationsPaneSearchEntries(),
       group: 'setup'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'mobile',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
+              'Control terminals and agents from your phone.'
+            ),
+            icon: Smartphone,
+            searchEntries: getMobileSettingsPaneSearchEntries(),
+            group: 'setup'
+          }
+        ]
+      : []),
     {
       id: 'git',
       title: translate(
@@ -413,17 +428,6 @@ export function buildSettingsNavigationMetadata({
             icon: Cable,
             searchEntries: getSshPaneSearchEntries(),
             group: 'remote'
-          },
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'mobile'
           }
         ]
       : []),

@@ -20,12 +20,15 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
+import { shouldReconcileDeadSession } from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
+  nativeWindowsRewriteNeedsFollowupRenderRefresh,
+  terminalOutputContainsEastAsianRendererRisk,
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
   terminalRewriteOutputPrefersRenderRefresh
@@ -506,6 +509,8 @@ let inactiveForegroundImmediateBudgetWindowStart = 0
 
 type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
+  noteVisibilityResume: () => void
+  reconcileIfSessionDead: (liveSessionIds: Set<string>) => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
@@ -1281,6 +1286,10 @@ export function connectPanePty(
         allowDoneDetailAfterGrace: meta?.quietedHookDone,
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
+    dispatchAttention: (title, meta) =>
+      scheduleAgentTaskCompleteNotification(title, {
+        agentStatusSnapshot: meta.agentStatus
+      }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
     isLive: () => {
@@ -1294,7 +1303,20 @@ export function connectPanePty(
     }
   })
 
+  // Why: the transport's own exit handler (pty-transport.ts) normally makes
+  // onExit run-at-most-once by clearing connected/ptyId + unregistering BEFORE
+  // calling it. reconcileIfSessionDead drives onExit directly (bypassing that),
+  // so this guards the body so reconcile and any racing real/synthetic pty:exit
+  // for the same id close the pane exactly once. Scoped to the exiting ptyId
+  // (not a bare boolean): an intentional suppressed restart keeps the pane
+  // mounted and rebinds to a NEW ptyId, and that replacement's later real exit
+  // must still run — a one-shot boolean would strand the pane on rebind.
+  let handledExitPtyId: string | null = null
   const onExit = (ptyId: string): void => {
+    if (handledExitPtyId === ptyId) {
+      return
+    }
+    handledExitPtyId = ptyId
     agentCompletionCoordinator.dispose()
     clearPanePtyFitBinding()
     const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId)
@@ -1771,6 +1793,7 @@ export function connectPanePty(
     executionHostId
   })
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
+  const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
 
   const restoredPtyIdForTransport =
@@ -1925,6 +1948,11 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
+    // Why (Defect #2): a keystroke against a pane whose daemon session was
+    // reaped while hidden is silently dropped — sendInput still returns true.
+    // Kick off a fire-and-forget liveness re-check so the dead pane is cleaned
+    // up without relying on (the never-occurring) sendInput false return.
+    recheckLivenessAfterInput()
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -2732,23 +2760,42 @@ export function connectPanePty(
       return decision.prefersRenderRefresh
     }
 
-    function shouldForceForegroundRenderRefresh(data: string): boolean {
+    function shouldForceForegroundRenderRefresh(data: string): {
+      refresh: boolean
+      inPlaceRewrite: boolean
+    } {
       const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
+      const recentInput =
+        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (foregroundAnsiOutputPrefersRenderRefresh(data)) {
         // Why: Codex-style background SGR panels can paint cell fills while
         // glyphs lag behind; refresh only renderer-risk ANSI chunks, not all output.
-        return true
+        return { refresh: true, inPlaceRewrite: rewriteOutputPrefersRenderRefresh }
       }
       if (rewriteOutputPrefersRenderRefresh) {
         // Why: resize fixes these panes because xterm's buffer is right but
         // in-place redraw cells can remain stale in the renderer until repaint.
-        return true
+        return { refresh: true, inPlaceRewrite: true }
       }
-      return (
-        shouldApplyNativeWindowsRewriteRefresh &&
-        containsNonAsciiOutput(data) &&
-        containsWindowsRewriteControl(data)
-      )
+      if (
+        shouldApplyWindowsRendererUnicodeRefresh &&
+        recentInput &&
+        data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
+        terminalOutputContainsEastAsianRendererRisk(data)
+      ) {
+        // Why: Microsoft Pinyin commits can surface as plain CJK foreground
+        // bytes; the prompt model is correct, but the local Windows renderer
+        // can leave individual glyph cells blank until repaint. Keep this
+        // scoped to recent East Asian text input, not all Unicode output.
+        return { refresh: true, inPlaceRewrite: false }
+      }
+      return {
+        refresh:
+          shouldApplyNativeWindowsRewriteRefresh &&
+          containsNonAsciiOutput(data) &&
+          containsWindowsRewriteControl(data),
+        inPlaceRewrite: false
+      }
     }
 
     function writePtyOutputToXterm(
@@ -2785,8 +2832,18 @@ export function connectPanePty(
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
       const foregroundOutput = foreground || parseHiddenStartupOutput
-      const foregroundRenderRefreshNeeded =
-        foregroundOutput && shouldForceForegroundRenderRefresh(data)
+      const renderRefreshDecision = foregroundOutput
+        ? shouldForceForegroundRenderRefresh(data)
+        : { refresh: false, inPlaceRewrite: false }
+      const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
+      // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
+      // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
+      // follow-up repaint corrects the column desync without a window resize.
+      const nativeWindowsInPlaceRewriteFollowup = nativeWindowsRewriteNeedsFollowupRenderRefresh({
+        isNativeWindowsConpty: shouldApplyNativeWindowsRewriteRefresh,
+        isForeground: foreground,
+        isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
+      })
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (!foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
@@ -2802,7 +2859,8 @@ export function connectPanePty(
           (synchronizedForegroundOutput ||
             nativeWindowsCursorRestore ||
             foregroundRenderRefreshNeeded),
-        followupForegroundRefresh: nativeWindowsCursorRestore,
+        followupForegroundRefresh:
+          nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
@@ -3218,6 +3276,7 @@ export function connectPanePty(
       cols: number
       rows: number
       seq?: number
+      alternateScreen?: boolean
     }): void {
       const scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
       const colsBeforeReplay = pane.terminal.cols
@@ -3242,7 +3301,13 @@ export function connectPanePty(
           suppressSnapshotReplayPtyResize = false
         }
       }
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      if (!snapshot.alternateScreen) {
+        // Why: this clear (incl. \x1b[3J) wipes xterm's scrollback. Alt-screen
+        // TUIs (Claude Code, vim) keep their scroll history in xterm, so
+        // clearing on restore loses scroll-up after a hidden->visible return.
+        // Mirrors the attach-time guard in pty-transport.ts.
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      }
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       hiddenRendererStateDirty = false
@@ -4188,10 +4253,94 @@ export function connectPanePty(
     scheduleRuntimeGraphSync()
   })
 
+  // Why: on visibility resume a pane may still be bound to a daemon session
+  // reaped while hidden (the missed-exit defect). Route it through the SAME
+  // teardown a real onExit runs. Re-validate identity at apply time so a
+  // reattach racing the listSessions snapshot is never clobbered, and respect
+  // the remote/SSH guards. Suppression semantics come for free via onExit
+  // (which consults consumeSuppressedPtyExit) plus the per-ptyId guard above.
+  const reconcileIfSessionDead = (liveSessionIds: Set<string>): void => {
+    if (disposed) {
+      return
+    }
+    const currentPtyId = transport.getPtyId()
+    if (
+      !currentPtyId ||
+      // Why: the current ptyId's exit was already handled — onExit guards this
+      // too, but skipping here avoids a redundant shouldReconcile evaluation.
+      handledExitPtyId === currentPtyId ||
+      !shouldReconcileDeadSession({
+        ptyId: currentPtyId,
+        connectionId: transport.getConnectionId?.(),
+        liveSessionIds
+      })
+    ) {
+      return
+    }
+    onExit(currentPtyId)
+  }
+
+  // Why (perf): the only moment a daemon session can be reaped behind the
+  // renderer's back is while the pane was surface-hidden. So the input-driven
+  // re-check is only useful in the window right after a resume — once it (or
+  // the resume pass) has confirmed liveness for this resume, re-polling on
+  // every subsequent keystroke is pure waste: listSessions() is a
+  // renderer→main→daemon round-trip (DaemonPtyAdapter.listProcesses requests
+  // `listSessions` from the daemon subprocess), so an ungated per-keystroke
+  // re-check would put a process-enumeration round-trip on the typing hot path
+  // for every healthy local pane. Fire at most ONCE per resume window; reset
+  // on the next hide→show. This preserves the "reduces not eliminates the
+  // first-keystroke drop" intent — the first keystroke after a resume still
+  // triggers exactly one re-check.
+  let livenessRecheckFiredSinceResume = false
+
+  // Why (Defect #2 defense-in-depth): in the broken state sendInput returns
+  // true (connected/ptyId still set) so the dropped keystroke is invisible to
+  // the renderer. A fire-and-forget liveness re-check on the FIRST input after
+  // a resume cleans the pane up promptly instead of waiting for the resume
+  // pass alone. It REDUCES but cannot eliminate the first-keystroke drop (that
+  // byte is already gone daemon-side).
+  const recheckLivenessAfterInput = (): void => {
+    if (disposed || livenessRecheckFiredSinceResume) {
+      return
+    }
+    const currentPtyId = transport.getPtyId()
+    const currentConnectionId = transport.getConnectionId?.()
+    if (
+      !currentPtyId ||
+      // Why: this ptyId's exit was already handled — nothing left to reconcile.
+      handledExitPtyId === currentPtyId ||
+      // Why: `remote:` web-runtime liveness is owned by the host snapshot, not
+      // listSessions; skip here so a remote pane's keystrokes never put a local
+      // daemon round-trip on the typing hot path (reconcile would no-op anyway).
+      isRemoteRuntimePtyId(currentPtyId) ||
+      (currentConnectionId !== null && currentConnectionId !== undefined)
+    ) {
+      return
+    }
+    // Why: set BEFORE the IPC so concurrent keystrokes coalesce to one in-flight
+    // request rather than fanning out a round-trip per byte typed.
+    livenessRecheckFiredSinceResume = true
+    void window.api.pty
+      .listSessions()
+      .then((sessions) => {
+        reconcileIfSessionDead(new Set(sessions.map((session) => session.id)))
+      })
+      // Why: a rejected listing is "unknown" — never close a pane on it.
+      .catch(() => {})
+  }
+
   return {
     syncProcessTracking() {
       agentCompletionCoordinator.startProcessTracking()
     },
+    // Why: re-arm the once-per-resume input re-check when the pane becomes
+    // visible again. Called from the lifecycle visibility effect; the gate
+    // keeps the typing hot path off the listSessions IPC between resumes.
+    noteVisibilityResume() {
+      livenessRecheckFiredSinceResume = false
+    },
+    reconcileIfSessionDead,
     dispose() {
       disposed = true
       if (terminalKeyTargetSupportsEvents) {

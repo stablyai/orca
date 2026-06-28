@@ -2378,7 +2378,8 @@
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
-            "df766809e0": "Contraer panel"
+            "df766809e0": "Contraer panel",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar demonio",
@@ -2428,7 +2429,10 @@
                   "38e41edc6e": "Este espacio de trabajo no se puede bifurcar en un árbol de trabajo de git.",
                   "f867385bb5": "No se pudo encontrar el espacio de trabajo de origen para esta bifurcación.",
                   "046e8d853c": "No hay contexto de terminal para bifurcar",
-                  "c00421d320": "Se copió el contexto de la bifurcación. Inicie un agente y péguelo para iniciar la bifurcación."
+                  "c00421d320": "Se copió el contexto de la bifurcación. Inicie un agente y péguelo para iniciar la bifurcación.",
+                  "f62b40e2c7": "No hay contexto de terminal para copiar",
+                  "373a3103e7": "Contexto copiado",
+                  "3fc568a49d": "No se pudo copiar el contexto."
                 }
               }
             },
@@ -2601,7 +2605,7 @@
             "39676a184c": "Abra cualquier archivo, URL, agente, ..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Comando",
+            "a2c7a33831": "Agregar comando rápido…",
             "20bbd75896": "Sin comandos",
             "b82e237a4b": "Comandos más rápidos",
             "85482c57bc": "Ejecutar comando rápido",
@@ -4495,7 +4499,9 @@
           "copiedCommand": "Comando copiado.",
           "failedToCopyCommand": "No se pudo copiar el comando.",
           "copyCommandAria": "Copiar comando",
-          "runCommandDescription": "Presiona Enter para ejecutar el comando."
+          "runCommandDescription": "Presiona Enter para ejecutar el comando.",
+          "5f818f12ab": "Preparando...",
+          "4c05b9d7cb": "Preparando el terminal de configuración."
         },
         "AgentsPane": {
           "d83834f5e6": "Detectando agents instalados…",
@@ -5287,7 +5293,10 @@
           "4f2205f3b6": "Habilitar CLI de Orca",
           "ff4b7e65d6": "Deje que los agents de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
           "2a674aa810": "Control del emulador móvil del Agent",
-          "cdeaed9e37": "Registré Orca CLI en PATH."
+          "cdeaed9e37": "Registré Orca CLI en PATH.",
+          "3d34423e88": "Registrando la CLI de Orca",
+          "3be27641c9": "para que los comandos del emulador se puedan ejecutar desde shells de agents.",
+          "3941719a56": "Comprobando la CLI de Orca antes de abrir la configuración de la skill."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "Copiar",
@@ -5359,7 +5368,10 @@
           "b5a2ed83ff": "Tienda de aplicaciones",
           "c8491c17ef": "Controla Orca desde tu teléfono escaneando un código QR. Beta/vista previa anticipada: espere errores y cambios importantes. Obtenga la aplicación para iOS desde",
           "e7a3ae8c4e": "Móvil",
-          "174f4a3c6d": "Controla terminales y agents desde tu teléfono."
+          "174f4a3c6d": "Controla terminales y agents desde tu teléfono.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -7428,7 +7440,9 @@
               "f4ed142753": "teléfono",
               "f213400800": "móvil",
               "671eb4173c": "Controla terminales y agents desde tu teléfono.",
-              "ffd52a96e4": "Móvil"
+              "ffd52a96e4": "Móvil",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9739,7 +9753,12 @@
           "a6cffbbb0b": "Generar código",
           "e59a252eca": "regenerar código",
           "d0b52871ce": "Tus teléfonos están emparejados.",
-          "051978a785": "Tu teléfono está emparejado."
+          "051978a785": "Tu teléfono está emparejado.",
+          "channel": {
+            "group": "Canal de versión",
+            "preview": "Vista previa",
+            "stable": "Estable"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -9758,7 +9777,11 @@
           "ad2284a9e2": "Cerrar · Esc",
           "9883b58693": "Cerrar Orca Móvil",
           "fb5f28330e": "Mostrar en la barra lateral",
-          "c669abcf8f": "Ocultar de la barra lateral"
+          "c669abcf8f": "Ocultar de la barra lateral",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Sesión terminal",
@@ -9769,7 +9792,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Escanee con su cámara Android para descargar el último APK de GitHub Releases.",
-              "432db52b73": "Escanee con la cámara de su iPhone para abrir la App Store."
+              "432db52b73": "Escanee con la cámara de su iPhone para abrir la App Store.",
+              "preview": {
+                "tagline": "Las funciones más recientes, actualizadas a diario."
+              },
+              "stable": {
+                "tagline": "La versión pública, actualizada semanalmente."
+              }
             }
           }
         },
@@ -10473,7 +10502,10 @@
             "21f5687c07": "Skill del CLI de Orca",
             "64fb057667": "Enseña a los agents los comandos del emulador orca para este worktree.",
             "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
-            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal",
+            "3d34423e88": "Registrando la CLI de Orca",
+            "3be27641c9": "para que los comandos del emulador se puedan ejecutar desde shells de agents.",
+            "3941719a56": "Comprobando la CLI de Orca antes de abrir la configuración de la skill."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "Descartar",
@@ -11024,7 +11056,8 @@
           "b3e7f9a1c2": "El contexto de corrección de la comprobación no está disponible",
           "d5a8c2f1b9": "Iniciar el agente de IA predeterminado para corregir esta comprobación",
           "e2b4d7c8a1": "Elige un agente para esta comprobación",
-          "f1c9e3a6d4": "Elige un agente para corregir la comprobación"
+          "f1c9e3a6d4": "Elige un agente para corregir la comprobación",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11045,6 +11078,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "El contenido pegado es demasiado grande."
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {
