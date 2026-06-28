@@ -13,7 +13,7 @@ import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-qu
 import type { GitMutationMethod } from '../session/mobile-diff-review-screen-model'
 import { colors, spacing } from '../theme/mobile-theme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 
 type Props = {
   busyAction: string | null

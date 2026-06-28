@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 
 type Props = {
   visible: boolean

@@ -3,7 +3,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Code, Eye } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 
 type Props = {
   html: string

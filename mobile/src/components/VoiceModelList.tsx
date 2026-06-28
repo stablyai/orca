@@ -6,7 +6,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 
 type Props = {
   setup: MobileSpeechSetup

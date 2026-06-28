@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 import { SHORTCUT_MODIFIERS, SPECIAL_KEY_GROUPS, indexSpecialKeys } from './custom-key-modal-data'
 import {
   buildTerminalShortcutKey,

@@ -10,7 +10,7 @@ import {
   type ReviewDiffState
 } from '../session/mobile-diff-review-screen-model'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 
 type Props = {
   currentIndex: number

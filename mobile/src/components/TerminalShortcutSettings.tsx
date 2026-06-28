@@ -15,7 +15,7 @@ import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { CustomKeyModal, loadCustomKeys, saveCustomKeys, type CustomKey } from './CustomKeyModal'
 import { DragReorderList } from './DragReorderList'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { T } from './i18n/T'
+import { T } from '../i18n/T'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
