@@ -8,7 +8,12 @@ import os from 'node:os'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
-import { Store, initDataPath, getCanonicalUserDataPath } from './persistence'
+import {
+  Store,
+  initDataPath,
+  getCanonicalUserDataPath,
+  migrateMobilePairingDataToCanonicalUserDataPath
+} from './persistence'
 import { applyAppIcon } from './app-icon'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
@@ -1645,6 +1650,10 @@ app.whenReady().then(async () => {
     app.exit(1)
     return
   }
+  // Why: existing installs may have already written mobile pairing credentials
+  // under the late app.getPath('userData') directory. Copy any missing files
+  // forward before the runtime switches exclusively to the canonical path.
+  migrateMobilePairingDataToCanonicalUserDataPath(app.getPath('userData'))
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Why: mobile pairing (DeviceRegistry + E2EE keypair + runtime metadata)

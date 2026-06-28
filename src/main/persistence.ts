@@ -298,6 +298,8 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
 let _dataFile: string | null = null
 let _userDataDir: string | null = null
 
+const MOBILE_PAIRING_USERDATA_FILES = ['orca-devices.json', 'orca-e2ee-keypair.json'] as const
+
 export function initDataPath(): void {
   const userDataDir = app.getPath('userData')
   _userDataDir = userDataDir
@@ -326,6 +328,27 @@ export function getCanonicalUserDataPath(): string {
     _userDataDir = app.getPath('userData')
   }
   return _userDataDir
+}
+
+// Why: existing installs may already have mobile pairing credentials in the
+// late app.getPath('userData') directory. Before switching the runtime server
+// to the canonical path, copy missing credentials forward non-destructively so
+// an update does not force one last re-pair.
+export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
+  const targetUserDataDir = getCanonicalUserDataPath()
+  if (resolve(sourceUserDataDir) === resolve(targetUserDataDir)) {
+    return
+  }
+
+  for (const fileName of MOBILE_PAIRING_USERDATA_FILES) {
+    const sourcePath = join(sourceUserDataDir, fileName)
+    const targetPath = join(targetUserDataDir, fileName)
+    if (!existsSync(sourcePath) || existsSync(targetPath)) {
+      continue
+    }
+    mkdirSync(dirname(targetPath), { recursive: true })
+    copyFileSync(sourcePath, targetPath)
+  }
 }
 
 // Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
