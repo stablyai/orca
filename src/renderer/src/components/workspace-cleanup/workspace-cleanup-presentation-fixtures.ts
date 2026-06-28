@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { translate } from '@/i18n/i18n'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo, Worktree } from '../../../../shared/types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
@@ -84,7 +85,10 @@ export function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedRev
   return {
     provider: 'github',
     number: 42,
-    title: 'Review alpha cleanup',
+    title: translate(
+      'components.workspace.cleanup.presentationFixtures.reviewAlphaCleanup',
+      'Review alpha cleanup'
+    ),
     state: 'open',
     url: 'https://example.test/review/42',
     status: 'neutral',

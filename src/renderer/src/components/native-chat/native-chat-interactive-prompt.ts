@@ -17,6 +17,7 @@ import type {
   AskQuestion,
   InteractiveQuestionParser
 } from '../../../../shared/native-chat-ask-types'
+import { translate } from '@/i18n/i18n'
 
 export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
 
@@ -160,11 +161,13 @@ export function parseApprovalFromStatus(
   }
   const summary = (approval as { summary?: unknown }).summary
   return {
-    title: `Allow ${tool}?`,
+    title: translate('components.native-chat.approval.title', 'Allow {{value0}}?', {
+      value0: tool
+    }),
     detail: typeof summary === 'string' && summary.length > 0 ? summary : undefined,
     options: [
-      { label: 'Allow', send: '1' },
-      { label: 'Deny', send: ESCAPE }
+      { label: translate('components.native-chat.approval.allow', 'Allow'), send: '1' },
+      { label: translate('components.native-chat.approval.deny', 'Deny'), send: ESCAPE }
     ]
   }
 }

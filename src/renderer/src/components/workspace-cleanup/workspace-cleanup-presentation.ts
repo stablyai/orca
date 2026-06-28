@@ -1,6 +1,7 @@
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import type { AppState } from '@/store/types'
+import { translate } from '@/i18n/i18n'
 import type { HostedReviewInfo, HostedReviewProvider } from '../../../../shared/hosted-review'
 import type { Repo, Worktree } from '../../../../shared/types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
@@ -110,10 +111,24 @@ function getLinkedReviewFallback(worktree: Worktree | null): {
     return null
   }
   if (worktree.linkedGitLabMR != null) {
-    return { label: `MR #${worktree.linkedGitLabMR}`, provider: 'gitlab' }
+    return {
+      label: translate(
+        'components.workspace.cleanup.presentation.gitlabMergeRequestNumber',
+        'MR #{{value0}}',
+        { value0: worktree.linkedGitLabMR }
+      ),
+      provider: 'gitlab'
+    }
   }
   if (worktree.linkedPR != null) {
-    return { label: `PR #${worktree.linkedPR}`, provider: 'github' }
+    return {
+      label: translate(
+        'components.workspace.cleanup.presentation.githubPullRequestNumber',
+        'PR #{{value0}}',
+        { value0: worktree.linkedPR }
+      ),
+      provider: 'github'
+    }
   }
   return null
 }

@@ -1,5 +1,6 @@
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
@@ -128,7 +129,10 @@ export function NativeChatComposerField({
                     <button
                       type="button"
                       onClick={() => onRemoveImageAttachment(attachment.id)}
-                      aria-label="Remove attachment"
+                      aria-label={translate(
+                        'components.native-chat.composer.removeAttachment',
+                        'Remove attachment'
+                      )}
                       className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <X className="size-3" />

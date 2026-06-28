@@ -1,9 +1,12 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
 import { getExperimentalSearchEntry } from './experimental-search'
+
+type NativeChatDefaultView = 'terminal-chat' | 'native-chat'
 
 type NativeChatExperimentalSettingProps = {
   settings: GlobalSettings
@@ -16,6 +19,7 @@ export function NativeChatExperimentalSetting({
 }: NativeChatExperimentalSettingProps): React.JSX.Element {
   const nativeChatEnabled = settings.experimentalNativeChat === true
   const openByDefault = settings.openAgentTabsInChatByDefault === true
+  const defaultView: NativeChatDefaultView = openByDefault ? 'native-chat' : 'terminal-chat'
 
   return (
     <SearchableSetting
@@ -60,28 +64,49 @@ export function NativeChatExperimentalSetting({
               <Label>
                 {translate(
                   'auto.components.settings.ExperimentalPane.nativeChat.defaultTitle',
-                  'Open new agent tabs in chat view'
+                  'Default view'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.nativeChat.defaultCopy',
-                  'New Claude and Codex terminal tabs start in native chat. You can still switch back to the terminal.'
+                  'Choose how new Claude and Codex terminal tabs open.'
                 )}
               </p>
             </div>
-            <SettingsSwitch
-              checked={openByDefault}
-              ariaLabel={translate(
-                'auto.components.settings.ExperimentalPane.nativeChat.defaultToggleLabel',
-                'Open new agent tabs in native chat by default'
-              )}
-              onChange={() =>
+            <Select
+              value={defaultView}
+              onValueChange={(value: NativeChatDefaultView) => {
                 updateSettings({
-                  openAgentTabsInChatByDefault: !openByDefault
+                  openAgentTabsInChatByDefault: value === 'native-chat'
                 })
-              }
-            />
+              }}
+            >
+              <SelectTrigger
+                aria-label={translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.defaultViewLabel',
+                  'Default native chat view'
+                )}
+                className="w-36"
+                size="sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="terminal-chat">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.defaultViewTerminal',
+                    'Terminal chat'
+                  )}
+                </SelectItem>
+                <SelectItem value="native-chat">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.defaultViewNative',
+                    'Native chat'
+                  )}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       ) : null}

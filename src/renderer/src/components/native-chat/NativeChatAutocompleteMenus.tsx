@@ -70,7 +70,7 @@ export function NativeChatSkillMenu({
   }, [activeIndex, suggestions])
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
+    <div className="scrollbar-sleek absolute bottom-full left-0 right-0 mb-1 max-h-64 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-md">
       {suggestions.length === 0 ? (
         <div className="px-2 py-1.5 text-xs text-muted-foreground">
           {translate('components.native-chat.composer.noSkills', 'No matching skills')}

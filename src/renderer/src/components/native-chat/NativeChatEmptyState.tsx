@@ -68,8 +68,7 @@ function emptyStateCopy(
           'This terminal is not running a recognized coding agent.'
         )
       }
-    case 'empty':
-    default:
+    case 'empty': {
       const agentName = agent ? formatAgentTypeLabel(agent) : 'the agent'
       return {
         title: translate(
@@ -83,5 +82,6 @@ function emptyStateCopy(
           { value0: agentName }
         )
       }
+    }
   }
 }

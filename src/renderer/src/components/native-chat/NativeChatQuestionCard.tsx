@@ -113,8 +113,8 @@ export function NativeChatQuestionCard({
               >
                 <span className="max-w-[10rem] truncate">
                   {qq.header ||
-                    translate('components.native-chat.question.step', `Step ${i + 1}`, {
-                      n: i + 1
+                    translate('components.native-chat.question.step', 'Step {{value0}}', {
+                      value0: i + 1
                     })}
                 </span>
                 {answerFor(i).length > 0 ? (
