@@ -361,6 +361,7 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
+      isRemote: false,
       platform: 'win32'
     })
     expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
@@ -475,6 +476,7 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
+      isRemote: true,
       platform: 'linux'
     })
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
@@ -483,6 +485,7 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
+      isRemote: true,
       platform: 'linux',
       allowEmptyPromptLaunch: true
     })
