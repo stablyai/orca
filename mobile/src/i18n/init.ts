@@ -17,8 +17,15 @@ const FALLBACK_LANGUAGE: MobileResolvedLanguage = 'en'
 export function resolveSystemLanguage(): MobileResolvedLanguage {
   try {
     const locales = Localization.getLocales?.()
-    const primary = locales?.[0]?.languageCode
-    return primary === 'zh' ? 'zh' : FALLBACK_LANGUAGE
+    const primary = locales?.[0]
+    const code = primary?.languageCode
+    const tag = primary?.languageTag?.toLowerCase()
+    // Match zh and any zh-* variant (zh-CN, zh-TW, zh-Hans, zh-Hant). The languageTag
+    // fallback handles SDKs that don't normalize the primary code.
+    if (code === 'zh' || tag?.startsWith('zh')) {
+      return 'zh'
+    }
+    return FALLBACK_LANGUAGE
   } catch {
     return FALLBACK_LANGUAGE
   }
@@ -37,6 +44,9 @@ export function resolveLanguage(lang: MobileUiLanguage): MobileResolvedLanguage 
 let instance: I18nInstance | null = null
 
 export async function initI18n(language: MobileUiLanguage): Promise<I18nInstance> {
+  // Why: single-caller contract — _layout.tsx is the only invoker at boot,
+  // so this short-circuit is sufficient. A concurrent caller would race past
+  // the guard and trip i18next's "already initialized" error.
   if (instance) {
     return instance
   }

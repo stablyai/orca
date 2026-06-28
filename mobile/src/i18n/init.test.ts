@@ -30,6 +30,20 @@ describe('resolveLanguage', () => {
     expect(resolveLanguage('system')).toBe('zh')
   })
 
+  it('returns "zh" in system mode when device tag is zh-TW', () => {
+    vi.mocked(Localization.getLocales).mockReturnValue([
+      {
+        languageCode: 'en',
+        languageTag: 'zh-TW',
+        regionCode: 'TW',
+        textDirection: 'ltr',
+        decimalSeparator: '.',
+        digitGroupingSeparator: ','
+      }
+    ] as unknown as Array<{ languageCode: string }>)
+    expect(resolveLanguage('system')).toBe('zh')
+  })
+
   it('returns "en" in system mode when device language is not zh', () => {
     vi.mocked(Localization.getLocales).mockReturnValue([
       {
