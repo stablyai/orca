@@ -12,6 +12,7 @@ import {
   type MobileCommitRow
 } from '../../../../src/source-control/mobile-git-history'
 import type { GitBranchChangeEntry } from '../../../../../src/shared/types'
+import { T } from '../../../../src/i18n/T'
 
 function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
@@ -108,7 +109,7 @@ export default function HistoryScreen() {
               {files === 'loading' || files === undefined ? (
                 <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : files.length === 0 ? (
-                <Text style={styles.empty}>No file changes</Text>
+                <T style={styles.empty}>No file changes</T>
               ) : (
                 files.map((file) => (
                   <View key={file.path} style={styles.fileRow}>
@@ -136,7 +137,7 @@ export default function HistoryScreen() {
         <Pressable style={styles.back} onPress={() => router.back()} accessibilityLabel="Back">
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.title}>Commit History</Text>
+        <T style={styles.title}>Commit History</T>
       </View>
       {error ? (
         <View style={styles.state}>
@@ -148,7 +149,7 @@ export default function HistoryScreen() {
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.state}>
-          <Text style={styles.stateText}>No commits.</Text>
+          <T style={styles.stateText}>No commits.</T>
         </View>
       ) : (
         <FlatList
