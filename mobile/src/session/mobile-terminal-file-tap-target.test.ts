@@ -63,9 +63,36 @@ describe('getMobileTerminalFileTapTarget', () => {
       getMobileTerminalFileTapTarget({
         hostId: 'host-1',
         worktreeId: 'wt-1',
-        resolved: resolved({ relativePath: 'report.html', absolutePath: '/repo/report.html' })
+        resolved: resolved({
+          relativePath: 'report.html',
+          absolutePath: '/repo/my report.html'
+        })
       })
-    ).toEqual({ kind: 'browser', url: 'file:///repo/report.html' })
+    ).toEqual({ kind: 'browser', url: 'file:///repo/my%20report.html' })
+  })
+
+  it('formats Windows and UNC HTML file URLs', () => {
+    expect(
+      getMobileTerminalFileTapTarget({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        resolved: resolved({
+          relativePath: 'report.html',
+          absolutePath: 'C:\\repo\\my report.html'
+        })
+      })
+    ).toEqual({ kind: 'browser', url: 'file:///C:/repo/my%20report.html' })
+
+    expect(
+      getMobileTerminalFileTapTarget({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        resolved: resolved({
+          relativePath: 'report.html',
+          absolutePath: '\\\\server\\share\\repo\\report.html'
+        })
+      })
+    ).toEqual({ kind: 'browser', url: 'file://server/share/repo/report.html' })
   })
 
   it('ignores missing files, directories, and paths outside the worktree', () => {

@@ -3177,7 +3177,7 @@ export default function SessionScreen() {
           // Why: HTML opens in a browser pane (streamed from the desktop),
           // matching desktop's terminal-click behavior, instead of a file view.
           if (target.kind === 'browser') {
-            void handleCreateBrowser(target.url)
+            void handleCreateBrowserRef.current?.(target.url)
             return
           }
           navigateToMobileFilePreview(router, target.params)
