@@ -1,7 +1,3 @@
-import {
-  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
-  renderSourceControlActionCommandTemplate
-} from './source-control-ai-actions'
 import type { GitStatusEntry } from './types'
 
 const FALLBACK_COMMIT_FAILURE_SUMMARY = 'Commit failed.'
@@ -224,22 +220,4 @@ export function appendCommitFailureCustomInstruction(
   // Why: keep ad hoc user guidance before the required response format so the
   // final line remains the agent's reporting contract.
   return `${prompt.slice(0, -COMMIT_FAILURE_REPLY_INSTRUCTION.length)}${customInstructionBlock}${COMMIT_FAILURE_REPLY_INSTRUCTION}`
-}
-
-export function buildCommitFailureAgentCommandInput({
-  promptOverride,
-  commandInputTemplate,
-  basePrompt
-}: {
-  promptOverride?: string
-  commandInputTemplate?: string | null
-  basePrompt: string
-}): string {
-  return (
-    promptOverride ??
-    renderSourceControlActionCommandTemplate(
-      commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixCommitFailure,
-      { basePrompt }
-    )
-  ).trim()
 }
