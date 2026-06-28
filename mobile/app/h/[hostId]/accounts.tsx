@@ -26,6 +26,7 @@ import {
   hasActiveProviderUsage,
   UsageBar
 } from '../../../src/components/AccountUsage'
+import { T } from '../../../src/i18n/T'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -151,8 +152,8 @@ export default function AccountsScreen() {
             disabled={busyAccountId !== null || connState !== 'connected'}
           >
             <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>System default</Text>
-              <Text style={styles.rowSubtitle}>Use the agent's own login</Text>
+              <T style={styles.rowTitle}>System default</T>
+              <T style={styles.rowSubtitle}>Use the agent's own login</T>
               {/* Why: when system default is the active selection, activeUsage
                   holds the system-default login's rate limits — surface them
                   here so non-managed users still see their usage. */}
@@ -248,7 +249,7 @@ export default function AccountsScreen() {
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.titleWrap}>
-          <Text style={styles.heading}>Accounts</Text>
+          <T style={styles.heading}>Accounts</T>
           {hostName ? (
             <Text style={styles.subheading} numberOfLines={1}>
               {hostName}
@@ -290,7 +291,7 @@ export default function AccountsScreen() {
         ) : !snapshot ? (
           <View style={styles.placeholder}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Loading accounts…</Text>
+            <T style={styles.placeholderText}>Loading accounts…</T>
           </View>
         ) : (
           <>
@@ -298,9 +299,9 @@ export default function AccountsScreen() {
             {renderProviderSection('codex', 'Codex')}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
-              <Text style={styles.footerHintText}>
+              <T style={styles.footerHintText}>
                 Add or re-authenticate accounts from desktop Settings → Accounts.
-              </Text>
+              </T>
             </View>
           </>
         )}

@@ -53,6 +53,7 @@ import {
   type TaskProvider
 } from '../src/tasks/mobile-task-providers'
 import { useResponsiveLayout } from '../src/layout/responsive-layout'
+import { T } from '../src/i18n/T'
 
 function endpointLabel(endpoint: string): string {
   try {
@@ -655,7 +656,7 @@ export default function HomeScreen() {
         <ListTodo size={18} color={colors.textSecondary} />
       </View>
       <View style={styles.taskHomeMain}>
-        <Text style={styles.taskHomeTitle}>Tasks</Text>
+        <T style={styles.taskHomeTitle}>Tasks</T>
         <Text style={styles.taskHomeSubtitle} numberOfLines={1}>
           {primaryTaskProviders.length > 0
             ? primaryTaskProviders.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
@@ -750,19 +751,19 @@ export default function HomeScreen() {
           ]}
         >
           <View style={styles.emptyHero}>
-            <Text style={styles.emptyTitle}>Connect your desktop</Text>
-            <Text style={styles.emptyBody}>
+            <T style={styles.emptyTitle}>Connect your desktop</T>
+            <T style={styles.emptyBody}>
               Pair with Orca on your computer to check on your agents, jump into any terminal, and
               drive work from your phone.
-            </Text>
+            </T>
             <Pressable style={styles.primaryButton} onPress={() => router.push('/pair-scan')}>
               <QrCode size={17} color={colors.bgBase} />
-              <Text style={styles.primaryButtonText}>Pair Desktop</Text>
+              <T style={styles.primaryButtonText}>Pair Desktop</T>
             </Pressable>
           </View>
 
           <View style={styles.stepsSection}>
-            <Text style={styles.sectionHeading}>How it works</Text>
+            <T style={styles.sectionHeading}>How it works</T>
             {ONBOARDING_STEPS.map((step, i) => (
               <View key={step.title} style={[styles.stepRow, i > 0 && styles.stepRowBorder]}>
                 <View style={styles.stepNum}>
@@ -792,7 +793,7 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <View>
               <View style={styles.hero}>
-                <Text style={styles.heroTitle}>Welcome back</Text>
+                <T style={styles.heroTitle}>Welcome back</T>
               </View>
 
               {stats && (
@@ -801,20 +802,20 @@ export default function HomeScreen() {
                     <Text style={styles.statValue}>
                       {stats.totalAgentsSpawned.toLocaleString()}
                     </Text>
-                    <Text style={styles.statLabel}>Agents spawned</Text>
+                    <T style={styles.statLabel}>Agents spawned</T>
                   </View>
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>{formatDuration(stats.totalAgentTimeMs)}</Text>
-                    <Text style={styles.statLabel}>Agent time</Text>
+                    <T style={styles.statLabel}>Agent time</T>
                   </View>
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>{stats.totalPRsCreated.toLocaleString()}</Text>
-                    <Text style={styles.statLabel}>PRs created</Text>
+                    <T style={styles.statLabel}>PRs created</T>
                   </View>
                 </View>
               )}
 
-              <Text style={styles.sectionHeading}>Desktops</Text>
+              <T style={styles.sectionHeading}>Desktops</T>
             </View>
           }
           ItemSeparatorComponent={CardGap}
@@ -875,7 +876,7 @@ export default function HomeScreen() {
               {/* ─── Resume card ─── */}
               {resumeWorktree ? (
                 <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Resume</Text>
+                  <T style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Resume</T>
                   <Pressable
                     style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
                     onPress={() =>
@@ -907,18 +908,18 @@ export default function HomeScreen() {
                     </View>
                     <ChevronRight size={16} color={colors.textMuted} />
                   </Pressable>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  <T style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</T>
                   {renderTaskHomeCard()}
                 </>
               ) : (
                 <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  <T style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</T>
                   {renderTaskHomeCard()}
                 </>
               )}
 
               {/* ─── Quick actions ─── */}
-              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
+              <T style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</T>
               <View style={styles.quickActions}>
                 <Pressable
                   style={({ pressed }) => [styles.quickAction, pressed && styles.hostCardPressed]}
@@ -927,7 +928,7 @@ export default function HomeScreen() {
                   <View style={styles.quickActionIcon}>
                     <QrCode size={16} color={colors.textSecondary} />
                   </View>
-                  <Text style={styles.quickActionLabel}>Pair Desktop</Text>
+                  <T style={styles.quickActionLabel}>Pair Desktop</T>
                 </Pressable>
                 <Pressable
                   disabled={!primaryConnectedHost}
@@ -945,16 +946,14 @@ export default function HomeScreen() {
                   <View style={styles.quickActionIcon}>
                     <Plus size={16} color={colors.textSecondary} />
                   </View>
-                  <Text style={styles.quickActionLabel}>New Workspace</Text>
+                  <T style={styles.quickActionLabel}>New Workspace</T>
                 </Pressable>
               </View>
 
               {/* ─── Account usage ─── */}
               {accountsHosts.length > 0 ? (
                 <>
-                  <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
-                    Account usage
-                  </Text>
+                  <T style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Account usage</T>
                   {accountsHosts.map(({ host, snapshot }) => {
                     const claudeActiveId = snapshot.claude.activeAccountId
                     const claudeActive =
