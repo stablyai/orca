@@ -53,12 +53,19 @@ export function ClosedReviewActions({
 }
 
 export function MergedReviewActions({
+  isMainWorktree,
   isDeletingWorktree,
   onDeleteWorktree
 }: {
+  isMainWorktree: boolean
   isDeletingWorktree: boolean
   onDeleteWorktree: () => void
 }): React.JSX.Element {
+  // Why: the main worktree is the project root, not a workspace — deleting it
+  // routes to the project-removal dialog, so the label must match that.
+  const deleteLabel = isMainWorktree
+    ? translate('auto.components.right.sidebar.HostedReviewActions.b1a767b1ae', 'Remove Project')
+    : translate('auto.components.right.sidebar.HostedReviewActions.e4aca40024', 'Delete Workspace')
   return (
     <Button
       type="button"
@@ -77,10 +84,7 @@ export function MergedReviewActions({
       )}
       {isDeletingWorktree
         ? translate('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
-        : translate(
-            'auto.components.right.sidebar.HostedReviewActions.e4aca40024',
-            'Delete Workspace'
-          )}
+        : deleteLabel}
     </Button>
   )
 }
