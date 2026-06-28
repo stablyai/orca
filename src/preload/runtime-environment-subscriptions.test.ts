@@ -21,23 +21,37 @@ type SubscriptionEvent =
       type: 'response'
       response: { ok: true; id: string; result: unknown; _meta: { runtimeId: string } }
     }
+  | { subscriptionId: string; type: 'binary'; bytes: Uint8Array<ArrayBufferLike> }
   | { subscriptionId: string; type: 'error'; code: string; message: string }
   | { subscriptionId: string; type: 'close' }
 
+type SubscriptionEventListener = (_event: unknown, payload: SubscriptionEvent) => void
+
 function createIpc() {
+  const listeners = new Set<SubscriptionEventListener>()
   return {
     invoke: vi.fn((_channel: string, _args?: unknown) => Promise.resolve({}) as Promise<unknown>),
     send: vi.fn(),
-    on: vi.fn(),
-    removeListener: vi.fn()
+    on: vi.fn((_channel: string, listener: SubscriptionEventListener) => {
+      listeners.add(listener)
+    }),
+    removeListener: vi.fn((_channel: string, listener: SubscriptionEventListener) => {
+      listeners.delete(listener)
+    }),
+    emitSubscriptionEvent: (event: SubscriptionEvent): void => {
+      const currentListeners = Array.from(listeners)
+      for (const listener of currentListeners) {
+        listener(null, event)
+      }
+    },
+    listenerCount: (): number => listeners.size
   }
 }
 
 function dispatch(ipc: ReturnType<typeof createIpc>, event: SubscriptionEvent): void {
   // A single shared channel listener is registered for the ipc instance; route
   // through it the same way the real ipcRenderer would deliver the frame.
-  const listener = ipc.on.mock.calls[0][1] as (_event: unknown, payload: SubscriptionEvent) => void
-  listener(null, event)
+  ipc.emitSubscriptionEvent(event)
 }
 
 describe('subscribeRuntimeEnvironmentFromPreload', () => {
@@ -50,11 +64,12 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
         : (Promise.resolve({}) as Promise<unknown>)
     )
     const onResponse = vi.fn()
+    const onBinary = vi.fn()
 
     const cleanupPromise = subscribeRuntimeEnvironmentFromPreload(
       ipc,
       { selector: 'desk', method: 'terminal.subscribe' },
-      { onResponse },
+      { onResponse, onBinary },
       () => 'sub-1'
     )
 
@@ -84,6 +99,13 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       result: { type: 'subscribed' },
       _meta: { runtimeId: 'rt' }
     })
+    const inboundBytes = new Uint8Array([4, 5, 6])
+    dispatch(ipc, {
+      subscriptionId: 'sub-1',
+      type: 'binary',
+      bytes: inboundBytes
+    })
+    expect(onBinary).toHaveBeenCalledWith(inboundBytes)
 
     subscription.resolve({ subscriptionId: 'sub-1', requestId: 'rpc-1' })
     const cleanup = await cleanupPromise
@@ -97,6 +119,11 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
       subscriptionId: 'sub-1'
     })
+    expect(ipc.removeListener).toHaveBeenCalledWith(
+      'runtimeEnvironments:subscriptionEvent',
+      ipc.on.mock.calls[0][1]
+    )
+    expect(ipc.listenerCount()).toBe(0)
 
     // After unsubscribe, frames for the released id must no longer reach the
     // consumer (the dispatcher dropped its closure).
@@ -121,21 +148,44 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     )
 
     let counter = 0
+    const onResponses = Array.from({ length: 25 }, () => vi.fn())
     const handles = await Promise.all(
-      Array.from({ length: 25 }, () =>
+      onResponses.map((onResponse) =>
         subscribeRuntimeEnvironmentFromPreload(
           ipc,
           { selector: 'desk', method: 'session.tabs.subscribe' },
-          { onResponse: vi.fn() },
+          { onResponse },
           () => `sub-${counter++}`
         )
       )
     )
 
-    // O(1) attached listeners regardless of subscription count — the leak guard.
+    // O(1) attached listeners regardless of subscription count - the leak guard.
     expect(ipc.on).toHaveBeenCalledTimes(1)
     expect(ipc.removeListener).not.toHaveBeenCalled()
     expect(handles).toHaveLength(25)
+
+    handles[0].unsubscribe()
+    dispatch(ipc, {
+      subscriptionId: 'sub-0',
+      type: 'response',
+      response: { id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+    })
+    dispatch(ipc, {
+      subscriptionId: 'sub-1',
+      type: 'response',
+      response: { id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+    })
+    expect(onResponses[0]).not.toHaveBeenCalled()
+    expect(onResponses[1]).toHaveBeenCalledTimes(1)
+    expect(ipc.removeListener).not.toHaveBeenCalled()
+    expect(ipc.listenerCount()).toBe(1)
+
+    for (const handle of handles.slice(1)) {
+      handle.unsubscribe()
+    }
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
   })
 
   it('keeps the subscription mapped on error frames but releases it on unsubscribe', async () => {
@@ -168,13 +218,16 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     }
     expect(onError).toHaveBeenCalledTimes(50)
     expect(ipc.removeListener).not.toHaveBeenCalled()
+    expect(ipc.listenerCount()).toBe(1)
 
     // The consumer's unsubscribe is the single release path. After it, error
-    // frames for the same id no longer reach the consumer — no retained closure.
+    // frames for the same id no longer reach the consumer - no retained closure.
     cleanup.unsubscribe()
     expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
       subscriptionId: 'sub-err'
     })
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
     onError.mockClear()
     dispatch(ipc, {
       subscriptionId: 'sub-err',
@@ -205,10 +258,40 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     const error = new Error('subscribe failed')
     subscription.reject(error)
     await expect(cleanupPromise).rejects.toThrow(error)
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
 
     // A rejected subscribe must not leave a routable entry behind.
     dispatch(ipc, {
       subscriptionId: 'sub-2',
+      type: 'response',
+      response: { id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+    })
+    expect(onResponse).not.toHaveBeenCalled()
+  })
+
+  it('releases the subscription from dispatch when main resolves a different id', async () => {
+    const ipc = createIpc()
+    ipc.invoke.mockImplementation((channel: string) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? Promise.resolve({ subscriptionId: 'sub-other', requestId: 'rpc' })
+        : (Promise.resolve({}) as Promise<unknown>)
+    )
+    const onResponse = vi.fn()
+
+    await expect(
+      subscribeRuntimeEnvironmentFromPreload(
+        ipc,
+        { selector: 'desk', method: 'terminal.subscribe' },
+        { onResponse },
+        () => 'sub-expected'
+      )
+    ).rejects.toThrow('Runtime environment subscription id mismatch')
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
+
+    dispatch(ipc, {
+      subscriptionId: 'sub-expected',
       type: 'response',
       response: { id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
     })
@@ -236,9 +319,10 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
 
     dispatch(ipc, { subscriptionId: 'sub-closed', type: 'close' })
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
 
-    // The shared listener stays attached for other subscriptions; only the
-    // entry is gone. A redundant unsubscribe is still safe.
+    // The entry is already gone. A redundant unsubscribe is still safe.
     onClose.mockClear()
     cleanup.unsubscribe()
     dispatch(ipc, { subscriptionId: 'sub-closed', type: 'close' })
@@ -246,5 +330,31 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
       subscriptionId: 'sub-closed'
     })
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases close frames before calling onClose', async () => {
+    const ipc = createIpc()
+    ipc.invoke.mockImplementation((channel: string) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? Promise.resolve({ subscriptionId: 'sub-throw', requestId: 'rpc-throw' })
+        : (Promise.resolve({}) as Promise<unknown>)
+    )
+    const onClose = vi.fn(() => {
+      throw new Error('close failed')
+    })
+
+    await subscribeRuntimeEnvironmentFromPreload(
+      ipc,
+      { selector: 'desk', method: 'terminal.subscribe' },
+      { onResponse: vi.fn(), onClose },
+      () => 'sub-throw'
+    )
+
+    expect(() => dispatch(ipc, { subscriptionId: 'sub-throw', type: 'close' })).toThrow(
+      'close failed'
+    )
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    expect(ipc.listenerCount()).toBe(0)
   })
 })

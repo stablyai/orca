@@ -41,11 +41,10 @@ type RuntimeEnvironmentSubscriptionIpc = {
 const SUBSCRIPTION_EVENT_CHANNEL = 'runtimeEnvironments:subscriptionEvent'
 
 // Why: each subscribe() previously attached its own channel listener that the
-// 'error' branch never detached, so shared-control subscriptions that survive
-// reconnects (and emit per-error frames) leaked one listener + closure each,
-// pinning the renderer heap. A single shared dispatcher per ipc instance routes
-// every frame by subscriptionId, bounding attached listeners to O(1) regardless
-// of subscription churn; the map entry is the only per-subscription state.
+// 'error' branch never detached, so reconnecting shared-control subscriptions
+// leaked listener closures that pinned renderer state. One active dispatcher per
+// ipc instance keeps listener retention O(1) while per-subscription state lives
+// only in this map.
 type RuntimeEnvironmentSubscriptionDispatcher = {
   callbacks: Map<string, RuntimeEnvironmentSubscriptionCallbacks>
   listener: (event: unknown, payload: RuntimeEnvironmentSubscriptionEvent) => void
@@ -55,6 +54,29 @@ const subscriptionDispatchers = new WeakMap<
   RuntimeEnvironmentSubscriptionIpc,
   RuntimeEnvironmentSubscriptionDispatcher
 >()
+
+function releaseIdleDispatcher(
+  ipc: RuntimeEnvironmentSubscriptionIpc,
+  callbacks: Map<string, RuntimeEnvironmentSubscriptionCallbacks>,
+  listener: RuntimeEnvironmentSubscriptionDispatcher['listener']
+): void {
+  if (callbacks.size > 0) {
+    return
+  }
+  ipc.removeListener(SUBSCRIPTION_EVENT_CHANNEL, listener)
+  subscriptionDispatchers.delete(ipc)
+}
+
+function releaseSubscription(
+  ipc: RuntimeEnvironmentSubscriptionIpc,
+  dispatcher: RuntimeEnvironmentSubscriptionDispatcher,
+  subscriptionId: string
+): void {
+  if (!dispatcher.callbacks.delete(subscriptionId)) {
+    return
+  }
+  releaseIdleDispatcher(ipc, dispatcher.callbacks, dispatcher.listener)
+}
 
 function getOrCreateDispatcher(
   ipc: RuntimeEnvironmentSubscriptionIpc
@@ -76,13 +98,14 @@ function getOrCreateDispatcher(
     } else if (event.type === 'error') {
       // Why: errors are non-terminal for shared-control subscriptions (they
       // survive reconnects), so the entry stays mapped until the consumer
-      // unsubscribes — this is what keeps the dispatcher bounded under flapping.
+      // unsubscribes.
       subscriptionCallbacks.onError?.({ code: event.code, message: event.message })
     } else {
-      subscriptionCallbacks.onClose?.()
-      // Why: main has already dropped the remote subscription on close, so the
-      // entry can be released immediately without waiting for unsubscribe().
+      // Why: close is terminal; release before the callback so a throwing or
+      // re-entrant onClose cannot keep renderer state mapped.
       callbacks.delete(event.subscriptionId)
+      releaseIdleDispatcher(ipc, callbacks, listener)
+      subscriptionCallbacks.onClose?.()
     }
   }
   const dispatcher: RuntimeEnvironmentSubscriptionDispatcher = { callbacks, listener }
@@ -110,8 +133,8 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   // resolves, so the dispatcher must be routing this id before invoking.
   const dispatcher = getOrCreateDispatcher(ipc)
   dispatcher.callbacks.set(subscriptionId, callbacks)
-  const releaseSubscription = (): void => {
-    dispatcher.callbacks.delete(subscriptionId)
+  const releaseCurrentSubscription = (): void => {
+    releaseSubscription(ipc, dispatcher, subscriptionId)
   }
   try {
     const result = (await ipc.invoke('runtimeEnvironments:subscribe', {
@@ -119,17 +142,17 @@ export async function subscribeRuntimeEnvironmentFromPreload(
       subscriptionId
     })) as { subscriptionId: string; requestId: string }
     if (result.subscriptionId !== subscriptionId) {
-      releaseSubscription()
+      releaseCurrentSubscription()
       throw new Error('Runtime environment subscription id mismatch')
     }
   } catch (error) {
-    releaseSubscription()
+    releaseCurrentSubscription()
     throw error
   }
 
   return {
     unsubscribe: () => {
-      releaseSubscription()
+      releaseCurrentSubscription()
       void ipc.invoke('runtimeEnvironments:unsubscribe', { subscriptionId })
     },
     sendBinary: (bytes) => {
