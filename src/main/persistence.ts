@@ -78,6 +78,7 @@ import {
   buildWorkspaceRunContext
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
+import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
@@ -298,8 +299,6 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
 let _dataFile: string | null = null
 let _userDataDir: string | null = null
 
-const MOBILE_PAIRING_USERDATA_FILES = ['orca-devices.json', 'orca-e2ee-keypair.json'] as const
-
 export function initDataPath(): void {
   const userDataDir = app.getPath('userData')
   _userDataDir = userDataDir
@@ -332,21 +331,27 @@ export function getCanonicalUserDataPath(): string {
 
 // Why: existing installs may already have mobile pairing credentials in the
 // late app.getPath('userData') directory. Before switching the runtime server
-// to the canonical path, copy missing credentials forward non-destructively so
-// an update does not force one last re-pair.
+// to the canonical path, copy the registry + E2EE keypair forward as a pair so
+// an update does not force one last re-pair or mix devices with the wrong key.
 export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
   const targetUserDataDir = getCanonicalUserDataPath()
   if (resolve(sourceUserDataDir) === resolve(targetUserDataDir)) {
     return
   }
 
-  for (const fileName of MOBILE_PAIRING_USERDATA_FILES) {
-    const sourcePath = join(sourceUserDataDir, fileName)
-    const targetPath = join(targetUserDataDir, fileName)
-    if (!existsSync(sourcePath) || existsSync(targetPath)) {
-      continue
-    }
-    mkdirSync(dirname(targetPath), { recursive: true })
+  const migrations = MOBILE_PAIRING_USERDATA_FILES.map((fileName) => ({
+    sourcePath: join(sourceUserDataDir, fileName),
+    targetPath: join(targetUserDataDir, fileName)
+  }))
+  if (migrations.some(({ sourcePath }) => !existsSync(sourcePath))) {
+    return
+  }
+  if (migrations.some(({ targetPath }) => existsSync(targetPath))) {
+    return
+  }
+
+  mkdirSync(targetUserDataDir, { recursive: true })
+  for (const { sourcePath, targetPath } of migrations) {
     copyFileSync(sourcePath, targetPath)
   }
 }

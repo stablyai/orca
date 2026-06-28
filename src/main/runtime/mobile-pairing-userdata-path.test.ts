@@ -81,7 +81,7 @@ describe('mobile pairing userData path stability', () => {
     expect(existsSync(join(lateDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
   })
 
-  it('migrates existing mobile pairing files from the late path without overwriting canonical files', async () => {
+  it('migrates existing mobile pairing files from the late path as an all-or-nothing pair', async () => {
     appState.userData = canonicalDir
     const {
       initDataPath,
@@ -121,6 +121,43 @@ describe('mobile pairing userData path stability', () => {
     writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), JSON.stringify([]))
     migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)
     expect(readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')).toBe(lateDevices)
+  })
+
+  it('skips legacy migration when only part of the canonical credential pair exists', async () => {
+    appState.userData = canonicalDir
+    const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
+      await import('../persistence')
+    initDataPath()
+
+    appState.userData = lateDir
+    const lateDevices = JSON.stringify([
+      {
+        deviceId: 'late-phone',
+        name: 'iPhone',
+        token: 'late-token',
+        scope: 'mobile',
+        pairedAt: 1,
+        lastSeenAt: 2
+      }
+    ])
+    const lateKeypair = JSON.stringify({
+      v: 1,
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+      secretKeyB64: Buffer.from(new Uint8Array(32).fill(2)).toString('base64')
+    })
+    const canonicalKeypair = JSON.stringify({
+      v: 1,
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(3)).toString('base64'),
+      secretKeyB64: Buffer.from(new Uint8Array(32).fill(4)).toString('base64')
+    })
+    writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), lateDevices)
+    writeFileSync(join(lateDir, E2EE_KEYPAIR_FILENAME), lateKeypair)
+    writeFileSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME), canonicalKeypair)
+
+    migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)
+
+    expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
+    expect(readFileSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME), 'utf-8')).toBe(canonicalKeypair)
   })
 
   it('a previously paired device is still found after a restart on the canonical path', async () => {
