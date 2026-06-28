@@ -4,6 +4,7 @@
 import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import type { WebPairingOffer } from './web-pairing'
+import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
 import {
   decrypt,
   decryptBytes,
@@ -356,7 +357,14 @@ export class WebRuntimeClient {
     ws.onclose = () => this.handleSocketClosed(ws)
     ws.onerror = () => {
       if (this.state === 'connecting') {
-        this.rejectAllWaiters(new Error('Could not connect to the remote Orca runtime.'))
+        this.rejectAllWaiters(
+          new Error(
+            withRemoteRuntimeTailscaleHint(
+              'Could not connect to the remote Orca runtime.',
+              this.pairing.endpoint
+            )
+          )
+        )
       }
     }
   }
@@ -504,7 +512,14 @@ export class WebRuntimeClient {
         if (index !== -1) {
           this.waiters.splice(index, 1)
         }
-        reject(new Error('Timed out while connecting to the remote Orca runtime.'))
+        reject(
+          new Error(
+            withRemoteRuntimeTailscaleHint(
+              'Timed out while connecting to the remote Orca runtime.',
+              this.pairing.endpoint
+            )
+          )
+        )
       }, timeoutMs)
       this.waiters.push({
         resolve: () => {
