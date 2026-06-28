@@ -14,6 +14,11 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
+import {
+  addJujutsuWorkspace,
+  shouldUseJujutsuWorkspace,
+  type AddJujutsuWorkspaceInput
+} from '../jujutsu/workspace'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -39,6 +44,11 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
     branch: string
     ref: string
   }
+  // Injectable jj hooks (default to the real filesystem probe and runner) so a
+  // pure-jj repo spawns sessions via `jj workspace add` instead of
+  // `git worktree add`. Overridable in tests; see src/main/jujutsu/workspace.ts.
+  detectJujutsuWorkspace?: (repoPath: string) => boolean | Promise<boolean>
+  runJujutsuWorkspaceAdd?: (input: AddJujutsuWorkspaceInput) => Promise<void>
 }
 
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
@@ -651,6 +661,17 @@ export async function addWorktree(
   noCheckout = false,
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
+  // Pure-jj repos manage parallel working copies with `jj workspace`, not git
+  // worktrees, so delegate before any git-specific command runs. Colocated
+  // repos return false here and keep the git path so their status/diff/history
+  // stay intact (jj workspaces are invisible to git — jj-vcs/jj#8052).
+  const detectJujutsu = options.detectJujutsuWorkspace ?? shouldUseJujutsuWorkspace
+  if (await detectJujutsu(repoPath)) {
+    const runJujutsuAdd = options.runJujutsuWorkspaceAdd ?? addJujutsuWorkspace
+    await runJujutsuAdd({ repoPath, worktreePath, name: branch, baseRef: baseBranch })
+    return {}
+  }
+
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = ['worktree', 'add']
