@@ -58,6 +58,14 @@ export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
  *  a dedicated pty:replay IPC channel so the renderer can engage the replay
  *  guard and suppress xterm auto-replies during replay. */
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
+
+// Why: track the highest output sequence number delivered to the renderer per
+// PTY. Used to deduplicate pty:replay payloads that overlap with already-
+// rendered live data during SSH reconnect (the relay's replay buffer may
+// contain bytes that were already forwarded via pty:data before the
+// disconnect). Without this, the reconnect window renders overlapping bytes
+// twice, producing garbled TUI display.
+const lastDeliveredSeqById = new Map<string, number>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
 const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
 /** Per-PTY teardown callbacks registered by each transport to clear closure
@@ -129,6 +137,12 @@ export function ensurePtyDispatcher(): void {
       if (typeof payload.seq === 'number') {
         meta ??= {}
         meta.seq = payload.seq
+        // Why: update the per-PTY high-water mark so that subsequent
+        // pty:replay payloads can be trimmed of already-rendered bytes.
+        const prev = lastDeliveredSeqById.get(payload.id) ?? 0
+        if (payload.seq > prev) {
+          lastDeliveredSeqById.set(payload.id, payload.seq)
+        }
       }
       if (typeof payload.rawLength === 'number') {
         meta ??= {}
@@ -162,6 +176,18 @@ export function ensurePtyDispatcher(): void {
     }
   })
   window.api.pty.onReplay((payload) => {
+    // Why: on SSH reconnect, the relay replays its buffered output. If the
+    // renderer has already received some of those bytes via live pty:data
+    // (tracked in lastDeliveredSeqById), skip the replay entirely — the
+    // main process already trimmed the replay data, but this is a defense-in-
+    // depth guard in case the seq math doesn't perfectly align or the replay
+    // arrives out of order.
+    if (typeof payload.seq === 'number') {
+      const lastSeq = lastDeliveredSeqById.get(payload.id) ?? 0
+      if (lastSeq > 0 && payload.seq <= lastSeq) {
+        return
+      }
+    }
     ptyReplayHandlers.get(payload.id)?.(payload.data)
   })
   window.api.pty.onExit((payload) => {

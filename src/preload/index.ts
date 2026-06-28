@@ -849,9 +849,11 @@ const api = {
       return () => ipcRenderer.removeListener('pty:data', listener)
     },
 
-    onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
-        callback(data)
+    onReplay: (callback: (data: { id: string; data: string; seq?: number }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { id: string; data: string; seq?: number }
+      ) => callback(data)
       ipcRenderer.on('pty:replay', listener)
       return () => ipcRenderer.removeListener('pty:replay', listener)
     },

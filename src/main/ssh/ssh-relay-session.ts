@@ -76,6 +76,11 @@ type RemoteCliBridgeEnv = {
 type ForwardedReplayFingerprint = {
   fingerprint: string
   deliveredAt: number
+  /** Cumulative output byte count at the time this replay was forwarded. Used
+   *  to trim already-forwarded bytes from subsequent reattach replays on
+   *  rapid reconnect flaps where the fingerprint changes but the prefix
+   *  overlaps. */
+  deliveredSeq: number
 }
 
 const RECONNECT_REPLAY_DUPLICATE_WINDOW_MS = 1000
@@ -952,7 +957,14 @@ export class SshRelaySession {
     ptyProvider.onReplay((payload) => {
       const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
-        win.webContents.send('pty:replay', payload)
+        // Why: include the output-seq on replay so the renderer can skip
+        // live pty:data chunks that overlap with replayed bytes during the
+        // reconnect window when both channels are in flight.
+        const replaySeq = this.runtime?.getPtyOutputSequence(payload.id)
+        win.webContents.send('pty:replay', {
+          ...payload,
+          ...(typeof replaySeq === 'number' ? { seq: replaySeq } : {})
+        })
       }
     })
     ptyProvider.onExit((payload) => {
@@ -975,25 +987,92 @@ export class SshRelaySession {
     return `${data.length}:${head}:${tail}`
   }
 
-  private shouldForwardReattachReplay(appPtyId: string, data: string): boolean {
+  /** Compute how many prefix bytes of `replayData` have already been
+   *  forwarded to the renderer via live `pty:data` events. The runtime's
+   *  ptyOutputSequenceById tracks the cumulative byte count of live output
+   *  delivered. On reconnect, the relay's replay buffer may contain bytes
+   *  that were already sent live before the disconnect — trimming them
+   *  prevents the garbled display from double-rendering. */
+  private computeReplayDedupSlice(appPtyId: string, replayData: string): string | null {
+    if (!replayData) {
+      return null
+    }
+    const alreadyForwardedSeq = this.runtime?.getPtyOutputSequence(appPtyId) ?? 0
+    // Why: if no live data has been forwarded yet, the entire replay buffer
+    // is new — replay it all.
+    if (alreadyForwardedSeq === 0) {
+      return replayData
+    }
+    const replayByteLength = replayData.length
+    // Why: the replay buffer holds the LAST replayByteLength bytes of output.
+    // Its start-position in the global output stream is:
+    //   globalSeqAtReplayStart = alreadyForwardedSeq - replayByteLength
+    //   (clamped to 0 for the initial case where replayByteLength > globalSeq)
+    // If alreadyForwardedSeq >= replayByteLength, the replay buffer starts
+    // at global offset (alreadyForwardedSeq - replayByteLength), and bytes
+    // up to alreadyForwardedSeq have already been sent live.
+    // The new portion starts at offset alreadyForwardedSeq within the replay.
+    const globalSeqAtReplayStart = Math.max(0, alreadyForwardedSeq - replayByteLength)
+    const deduplicatedBytes = alreadyForwardedSeq - globalSeqAtReplayStart
+    // Why: if the renderer has already seen everything in the replay buffer,
+    // there's nothing new to forward.
+    if (deduplicatedBytes >= replayByteLength) {
+      return null
+    }
+    return replayData.slice(deduplicatedBytes)
+  }
+
+  private shouldForwardReattachReplay(
+    appPtyId: string,
+    data: string
+  ): { forward: boolean; dedupedData: string } {
     const now = Date.now()
     const fingerprint = this.replayFingerprint(data)
     const previous = this.forwardedReattachReplayByPty.get(appPtyId)
-    this.forwardedReattachReplayByPty.set(appPtyId, { fingerprint, deliveredAt: now })
-    return (
-      !previous ||
-      previous.fingerprint !== fingerprint ||
-      now - previous.deliveredAt > RECONNECT_REPLAY_DUPLICATE_WINDOW_MS
-    )
+    // Why: track the cumulative output seq at the time of this replay so
+    // future reconnect flaps can trim already-forwarded prefix bytes.
+    const currentSeq = this.runtime?.getPtyOutputSequence(appPtyId) ?? 0
+    this.forwardedReattachReplayByPty.set(appPtyId, {
+      fingerprint,
+      deliveredAt: now,
+      deliveredSeq: currentSeq
+    })
+    // Why: if the fingerprint matches and it's within the dedup window, the
+    // replay data is identical to what we already sent — skip entirely.
+    const isDuplicateBurst =
+      previous &&
+      previous.fingerprint === fingerprint &&
+      now - previous.deliveredAt <= RECONNECT_REPLAY_DUPLICATE_WINDOW_MS
+    if (isDuplicateBurst) {
+      return { forward: false, dedupedData: '' }
+    }
+    // Why: even when the fingerprint differs (new output since last replay),
+    // the prefix of the replay may overlap with already-forwarded live data.
+    // Trim the overlap so only genuinely new bytes reach the renderer.
+    const dedupedData = this.computeReplayDedupSlice(appPtyId, data) ?? ''
+    return { forward: dedupedData.length > 0, dedupedData }
   }
 
   private forwardReattachReplay(appPtyId: string, data: string): void {
-    if (!data || !this.shouldForwardReattachReplay(appPtyId, data)) {
+    if (!data) {
+      return
+    }
+    const { forward, dedupedData } = this.shouldForwardReattachReplay(appPtyId, data)
+    if (!forward) {
       return
     }
     const win = this.getMainWindow()
     if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:replay', { id: appPtyId, data })
+      // Why: include the output-seq at the start of the deduped replay so
+      // the renderer can drop any live pty:data chunks whose seq falls
+      // within the replayed range (prevents overlap during the reconnect
+      // window when both replay and live data are in flight).
+      const replaySeq = this.runtime?.getPtyOutputSequence(appPtyId)
+      win.webContents.send('pty:replay', {
+        id: appPtyId,
+        data: dedupedData,
+        ...(typeof replaySeq === 'number' ? { seq: replaySeq } : {})
+      })
     }
   }
 

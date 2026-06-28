@@ -1102,7 +1102,7 @@ export type PreloadApi = {
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void
-    onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
+    onReplay: (callback: (data: { id: string; data: string; seq?: number }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onSerializeBufferRequest: (
       callback: (data: {

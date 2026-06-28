@@ -6,6 +6,7 @@ import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 
@@ -105,7 +106,7 @@ const { registerSshFilesystemProvider, unregisterSshFilesystemProvider } =
 const { registerSshGitProvider, unregisterSshGitProvider } =
   await import('../providers/ssh-git-dispatch')
 
-function createMockDeps() {
+function createMockDeps(runtime?: Partial<OrcaRuntimeService>) {
   const mockConn = {} as SshConnection
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
@@ -121,7 +122,7 @@ function createMockDeps() {
     webContents: { send: vi.fn() }
   }
   const getMainWindow = vi.fn().mockReturnValue(mockWindow)
-  return { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow }
+  return { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow, runtime }
 }
 
 function mockDeploySuccess() {
@@ -741,5 +742,198 @@ describe('SshRelaySession', () => {
     mockDeploySuccess()
     await session.reconnect(mockConn)
     expect(session.getState()).toBe('ready')
+  })
+
+  describe('SSH reconnect PTY replay dedup (U2)', () => {
+    it('trims replay bytes already forwarded via live pty:data', async () => {
+      // Why: simulate a reconnect where 400 bytes have already been sent live
+      // and the replay buffer holds 1000 bytes. Only the last 600 bytes should
+      // be forwarded as replay.
+      const outputSeqByPty = new Map<string, number>([['ssh:target-1@@pty-1', 400]])
+      const mockRuntime = {
+        getPtyOutputSequence: (ptyId: string) => outputSeqByPty.get(ptyId) ?? 0,
+        onPtyData: (ptyId: string, data: string) => {
+          const prev = outputSeqByPty.get(ptyId) ?? 0
+          const next = prev + data.length
+          outputSeqByPty.set(ptyId, next)
+          return next
+        },
+        onPtyExit: vi.fn()
+      }
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } =
+        createMockDeps(mockRuntime)
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        mockRuntime as unknown as OrcaRuntimeService
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      // Why: replay data is 1000 bytes. 400 bytes already sent live.
+      // The dedup should slice off the first 400 bytes, forwarding only the
+      // remaining 600.
+      const fullReplay = 'a'.repeat(400) + 'b'.repeat(600)
+      const mockAttach = vi.fn().mockResolvedValue({ replay: fullReplay })
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+      await session.reconnect(mockConn)
+
+      const replaySends = vi
+        .mocked(mockWindow.webContents.send)
+        .mock.calls.filter(([channel]) => channel === 'pty:replay')
+      expect(replaySends).toHaveLength(1)
+      // Why: only the 600-byte tail should be forwarded
+      expect(replaySends[0][1].data).toBe('b'.repeat(600))
+      // Why: seq should be present on the replay payload
+      expect(typeof replaySends[0][1].seq).toBe('number')
+    })
+
+    it('drops entire replay when renderer has already seen all output', async () => {
+      // Why: if the renderer's output sequence counter is >= the replay buffer
+      // length, the entire buffer has already been sent live — skip the replay
+      // entirely (nothing new to forward).
+      const outputSeqByPty = new Map<string, number>([['ssh:target-1@@pty-1', 2000]])
+      const mockRuntime = {
+        getPtyOutputSequence: (ptyId: string) => outputSeqByPty.get(ptyId) ?? 0,
+        onPtyData: (ptyId: string, data: string) => {
+          const prev = outputSeqByPty.get(ptyId) ?? 0
+          const next = prev + data.length
+          outputSeqByPty.set(ptyId, next)
+          return next
+        },
+        onPtyExit: vi.fn()
+      }
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } =
+        createMockDeps(mockRuntime)
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        mockRuntime as unknown as OrcaRuntimeService
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      const mockAttach = vi.fn().mockResolvedValue({ replay: 'x'.repeat(500) })
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+      await session.reconnect(mockConn)
+
+      const replaySends = vi
+        .mocked(mockWindow.webContents.send)
+        .mock.calls.filter(([channel]) => channel === 'pty:replay')
+      // Why: all 500 bytes of the replay have already been sent live (renderer
+      // is at seq 2000). Nothing to forward.
+      expect(replaySends).toHaveLength(0)
+    })
+
+    it('forwards full replay when no live data has been sent yet', async () => {
+      // Why: on a fresh reconnect after app restart, no live data has reached
+      // the renderer (seq is 0), so the entire replay buffer is new.
+      const outputSeqByPty = new Map<string, number>()
+      const mockRuntime = {
+        getPtyOutputSequence: (ptyId: string) => outputSeqByPty.get(ptyId) ?? 0,
+        onPtyData: (ptyId: string, data: string) => {
+          const prev = outputSeqByPty.get(ptyId) ?? 0
+          const next = prev + data.length
+          outputSeqByPty.set(ptyId, next)
+          return next
+        },
+        onPtyExit: vi.fn()
+      }
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } =
+        createMockDeps(mockRuntime)
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        mockRuntime as unknown as OrcaRuntimeService
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      const mockAttach = vi.fn().mockResolvedValue({ replay: 'full-buffer-content' })
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+      await session.reconnect(mockConn)
+
+      const replaySends = vi
+        .mocked(mockWindow.webContents.send)
+        .mock.calls.filter(([channel]) => channel === 'pty:replay')
+      expect(replaySends).toHaveLength(1)
+      expect(replaySends[0][1].data).toBe('full-buffer-content')
+    })
+
+    it('handles partial overlap when live seq falls within the replay buffer', async () => {
+      // Why: for a 100KB replay buffer, if the renderer has seen the first 50KB
+      // live, only the last 50KB needs to be replayed. This is the common
+      // reconnect scenario where the SSH drop occurs mid-session.
+      const outputSeqByPty = new Map<string, number>([['ssh:target-1@@pty-1', 50000]])
+      const mockRuntime = {
+        getPtyOutputSequence: (ptyId: string) => outputSeqByPty.get(ptyId) ?? 0,
+        onPtyData: (ptyId: string, data: string) => {
+          const prev = outputSeqByPty.get(ptyId) ?? 0
+          const next = prev + data.length
+          outputSeqByPty.set(ptyId, next)
+          return next
+        },
+        onPtyExit: vi.fn()
+      }
+      const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } =
+        createMockDeps(mockRuntime)
+      const session = new SshRelaySession(
+        'target-1',
+        getMainWindow,
+        mockStore,
+        mockPortForward,
+        mockRuntime as unknown as OrcaRuntimeService
+      )
+      await session.establish(mockConn)
+      vi.clearAllMocks()
+      mockDeploySuccess()
+
+      const { getSshPtyProvider } = await import('../ipc/pty')
+      // Why: 100KB buffer, renderer has seen first 50KB live
+      const oldPart = 'o'.repeat(50000)
+      const newPart = 'n'.repeat(50000)
+      const fullReplay = oldPart + newPart
+      const mockAttach = vi.fn().mockResolvedValue({ replay: fullReplay })
+      vi.mocked(getSshPtyProvider).mockReturnValue({
+        attachForReconnect: mockAttach,
+        dispose: vi.fn()
+      } as unknown as ReturnType<typeof getSshPtyProvider>)
+      vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+
+      await session.reconnect(mockConn)
+
+      const replaySends = vi
+        .mocked(mockWindow.webContents.send)
+        .mock.calls.filter(([channel]) => channel === 'pty:replay')
+      expect(replaySends).toHaveLength(1)
+      expect(replaySends[0][1].data).toBe('n'.repeat(50000))
+    })
   })
 })
