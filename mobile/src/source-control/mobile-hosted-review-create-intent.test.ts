@@ -186,6 +186,40 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
     ])
   })
 
+  it('returns the attempted commit message and staged snapshot when commit fails', async () => {
+    const client = clientWith([
+      ok(status([entry('unstaged')])),
+      ok({ success: true }),
+      ok(status([entry('staged')])),
+      ok({ success: true, message: 'Generated mobile commit' }),
+      ok({ success: false, error: 'lint-staged failed' })
+    ])
+
+    await expect(
+      prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {
+        branch: 'feature/x',
+        title: 'feature/x',
+        status: null
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'lint-staged failed',
+      committed: false,
+      commitMessage: 'Generated mobile commit',
+      status: expect.objectContaining({
+        entries: [expect.objectContaining({ area: 'staged' })]
+      })
+    })
+
+    expect(client.calls.map((call) => call.method)).toEqual([
+      'git.status',
+      'git.bulkStage',
+      'git.status',
+      'git.generateCommitMessage',
+      'git.commit'
+    ])
+  })
+
   it('blocks unresolved conflicts before attempting a commit', async () => {
     const client = clientWith([ok(status([entry('staged'), unresolvedEntry('unstaged')]))])
 

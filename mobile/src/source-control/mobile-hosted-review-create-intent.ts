@@ -15,6 +15,14 @@ export type MobileHostedReviewCreateIntentProgress =
   | 'force_pushing'
   | 'creating_review'
 
+type MobileHostedReviewCreateIntentFailure = {
+  ok: false
+  error: string
+  committed?: boolean
+  status?: MobileGitStatusResult | null
+  commitMessage?: string
+}
+
 export type MobileHostedReviewCreateIntentOutcome =
   | {
       ok: true
@@ -22,7 +30,7 @@ export type MobileHostedReviewCreateIntentOutcome =
       status: MobileGitStatusResult | null
       committed: boolean
     }
-  | { ok: false; error: string; committed?: boolean; status?: MobileGitStatusResult | null }
+  | MobileHostedReviewCreateIntentFailure
 
 type PrepareInput = {
   branch: string
@@ -66,10 +74,7 @@ async function readStatus(
 
 function branchStillMatches(inputBranch: string, status: MobileGitStatusResult | null): boolean {
   const branch = status?.branch
-  if (!branch) {
-    return false
-  }
-  return branch === inputBranch || branch === `refs/heads/${inputBranch}`
+  return Boolean(branch && (branch === inputBranch || branch === `refs/heads/${inputBranch}`))
 }
 
 function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
@@ -137,7 +142,7 @@ async function ensureLocalChangesCommitted(
   currentStatus: MobileGitStatusResult | null
 ): Promise<
   | { ok: true; status: MobileGitStatusResult | null; committed: boolean }
-  | { ok: false; error: string; committed?: boolean; status?: MobileGitStatusResult | null }
+  | MobileHostedReviewCreateIntentFailure
 > {
   if ((currentStatus?.entries.length ?? 0) === 0) {
     return { ok: true, status: currentStatus, committed: false }
@@ -202,7 +207,7 @@ async function ensureLocalChangesCommitted(
   input.onProgress?.('committing')
   const committed = await commitStagedChanges(client, worktreeId, message)
   if (!committed.ok) {
-    return { ...committed, committed: false, status: currentStatus }
+    return { ...committed, committed: false, status: currentStatus, commitMessage: message }
   }
   currentStatus = await readStatus(client, worktreeId)
   if (!branchStillMatches(input.branch, currentStatus)) {

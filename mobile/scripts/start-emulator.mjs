@@ -9,7 +9,7 @@
  * Options:
  *   --worktree <path>  Worktree path (default: auto-detect)
  *   --device <name>    Device name (default: 'iPhone 17 Pro')
- *   --port <port>      Metro port (default: Expo default)
+ *   --port <port>      Metro port (default: first available from 8081)
  *   --no-open          Don't open the app URL automatically
  *   --no-pair          Don't create a temporary paired desktop runtime
  *   --wait-for-ready   Wait for Metro to be ready before opening URL
@@ -17,7 +17,7 @@
  */
 
 import { spawn, execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import net from 'node:net'
 import os from 'node:os'
 import { promisify } from 'node:util'
 import path from 'node:path'
@@ -27,8 +27,11 @@ import {
   registerWorktreeForPairingRuntime,
   startHeadlessPairingRuntime
 } from './start-emulator-pairing-runtime.mjs'
+import { ensureMobileExpoCli, getMobileExpoExecutablePath } from './mobile-expo-cli.mjs'
 
 const execFileAsync = promisify(execFile)
+const DEFAULT_METRO_PORT = 8081
+const METRO_PORT_SEARCH_LIMIT = 100
 
 // Parse CLI arguments
 const args = process.argv.slice(2)
@@ -64,7 +67,7 @@ for (let i = 0; i < args.length; i++) {
 Options:
   --worktree <path>  Worktree path (default: auto-detect)
   --device <name>    Device name (default: 'iPhone 17 Pro')
-  --port <port>      Metro port (default: Expo default)
+  --port <port>      Metro port (default: first available from 8081)
   --no-open          Don't open the app URL automatically
   --no-pair          Don't create a temporary paired desktop runtime
   --wait-for-ready   Wait for Metro to be ready before opening URL
@@ -159,28 +162,7 @@ function getMobileDir(worktree) {
 
 async function ensureMobileDependencies(worktree) {
   const mobileDir = getMobileDir(worktree)
-  const expoPath = path.join(mobileDir, 'node_modules', '.bin', 'expo')
-  if (existsSync(expoPath)) {
-    return
-  }
-
-  logStep('deps', 'Installing mobile dependencies...')
-  await new Promise((resolve, reject) => {
-    const install = spawn('pnpm', ['install'], {
-      cwd: mobileDir,
-      env: process.env,
-      stdio: 'inherit'
-    })
-    install.on('error', reject)
-    install.on('exit', (code) => {
-      if (code === 0) {
-        resolve()
-      } else {
-        reject(new Error(`pnpm install exited with code ${code}`))
-      }
-    })
-  })
-  logSuccess('Mobile dependencies installed')
+  await ensureMobileExpoCli(mobileDir, { logStep, logSuccess })
 }
 
 // Attach to emulator
@@ -326,11 +308,55 @@ function devClientUrlForMetroUrl(url) {
   return `exp+orca-mobile://expo-development-client/?url=${encodeURIComponent(url)}`
 }
 
+function canListenOnPort(port) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer()
+    server.unref()
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+        resolve(false)
+        return
+      }
+      reject(error)
+    })
+    server.listen({ port, host: '0.0.0.0' }, () => {
+      server.close(() => resolve(true))
+    })
+  })
+}
+
+async function findAvailableMetroPort(startPort) {
+  const endPort = startPort + METRO_PORT_SEARCH_LIMIT
+  for (let port = startPort; port < endPort; port++) {
+    if (await canListenOnPort(port)) {
+      return port
+    }
+  }
+  throw new Error(`No available Metro port found from ${startPort} to ${endPort - 1}`)
+}
+
+async function resolveMetroPort() {
+  if (options.port) {
+    const requestedPort = Number(options.port)
+    if (!Number.isInteger(requestedPort) || requestedPort <= 0 || requestedPort > 65535) {
+      throw new Error(`Invalid Metro port: ${options.port}`)
+    }
+    return requestedPort
+  }
+
+  const port = await findAvailableMetroPort(DEFAULT_METRO_PORT)
+  if (port !== DEFAULT_METRO_PORT) {
+    logInfo(`Port ${DEFAULT_METRO_PORT} is already in use; using ${port} instead`)
+  }
+  return port
+}
+
 // Start Metro bundler
 async function startMetro(worktree) {
   logStep('2', 'Starting Metro bundler...')
 
   const mobileDir = getMobileDir(worktree)
+  const metroPort = await resolveMetroPort()
 
   return new Promise((resolve, reject) => {
     const env = {
@@ -339,11 +365,12 @@ async function startMetro(worktree) {
     }
 
     // Use local expo CLI directly instead of pnpm start to avoid workspace issues
-    const expoPath = path.join(mobileDir, 'node_modules', '.bin', 'expo')
-    const expoArgs = ['start', '--host', 'lan']
-    if (options.port) {
-      expoArgs.push('--port', options.port)
+    const expoPath = getMobileExpoExecutablePath(mobileDir)
+    if (!expoPath) {
+      reject(new Error('Mobile Expo CLI is missing after dependency setup.'))
+      return
     }
+    const expoArgs = ['start', '--host', 'lan', '--port', String(metroPort)]
     logInfo(`Using expo at: ${expoPath}`)
     const metro = spawn(expoPath, expoArgs, {
       cwd: mobileDir,
