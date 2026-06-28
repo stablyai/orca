@@ -3038,6 +3038,35 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           if (didUpdatePRCache) {
             debouncedSaveCache(get())
           }
+          // Why: branch-name auto-discovery is the only reliable way Orca finds a
+          // PR created outside its own flow (e.g. raw `gh pr create`). Persisting
+          // the number to linkedPR keeps the worktree linked after the remote
+          // branch is deleted (e.g. on squash-merge), when branch lookups can no
+          // longer find it but `gh pr view <number>` still can.
+          const updateWorktreeMeta = get().updateWorktreeMeta
+          if (
+            outcome.kind === 'found' &&
+            pr &&
+            linkedPRNumber == null &&
+            options?.worktreeId &&
+            typeof updateWorktreeMeta === 'function'
+          ) {
+            const worktreeId = options.worktreeId
+            const prNumber = pr.number
+            void updateWorktreeMeta(
+              worktreeId,
+              { linkedPR: prNumber },
+              {
+                shouldApply: (currentWorktree) =>
+                  Boolean(
+                    currentWorktree &&
+                    !currentWorktree.isBare &&
+                    !currentWorktree.isArchived &&
+                    currentWorktree.linkedPR == null
+                  )
+              }
+            )
+          }
         }
         if (
           shouldPreserveExistingPRForFallbackMiss({

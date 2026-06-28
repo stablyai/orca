@@ -82,11 +82,36 @@ function resetRemoteRuntimeMocks() {
 
 function createTestStore() {
   return create<AppState>()(
-    (...a) =>
+    (set, get, store) =>
       ({
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a)
-      }) as AppState
+        ...createGitHubSlice(set, get, store),
+        ...createHostedReviewSlice(set, get, store),
+        // Minimal stand-in for the worktrees slice: applies linkedPR updates so
+        // tests can assert branch-name discovery persists the worktree↔PR link.
+        updateWorktreeMeta: async (
+          worktreeId: string,
+          updates: Partial<Worktree>,
+          options?: { shouldApply?: (worktree: Worktree | undefined) => boolean }
+        ) => {
+          set((s) => {
+            const next = { ...s.worktreesByRepo }
+            for (const [repoId, worktrees] of Object.entries(next)) {
+              const index = worktrees.findIndex((w) => w.id === worktreeId)
+              if (index === -1) {
+                continue
+              }
+              if (options?.shouldApply && !options.shouldApply(worktrees[index])) {
+                return s
+              }
+              const updated = [...worktrees]
+              updated[index] = { ...updated[index], ...updates }
+              next[repoId] = updated
+              return { worktreesByRepo: next }
+            }
+            return s
+          })
+        }
+      }) as unknown as AppState
   )
 }
 
@@ -2131,6 +2156,96 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(request).resolves.toBeNull()
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toBeUndefined()
+  })
+
+  it('persists linkedPR when branch-name discovery finds a PR for an unlinked worktree', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/auto-link'
+    const worktreeId = 'wt-auto-link'
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [makePRRefreshWorktree({ id: worktreeId, repoId, branch, linkedPR: null })]
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ number: 6599, title: 'Improve failed CI check details panel' }),
+      fetchedAt: Date.now()
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId
+    })
+
+    expect(
+      store.getState().worktreesByRepo[repoId]?.find((w) => w.id === worktreeId)?.linkedPR
+    ).toBe(6599)
+  })
+
+  it('persists linkedPR even when the discovered PR is already merged', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/auto-link-merged'
+    const worktreeId = 'wt-auto-link-merged'
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [makePRRefreshWorktree({ id: worktreeId, repoId, branch, linkedPR: null })]
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ number: 6599, state: 'merged' }),
+      fetchedAt: Date.now()
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId
+    })
+
+    expect(
+      store.getState().worktreesByRepo[repoId]?.find((w) => w.id === worktreeId)?.linkedPR
+    ).toBe(6599)
+  })
+
+  it('does not overwrite an existing linkedPR on branch-name discovery', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/already-linked'
+    const worktreeId = 'wt-already-linked'
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [makePRRefreshWorktree({ id: worktreeId, repoId, branch, linkedPR: 42 })]
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: makePR({ number: 99 }),
+      fetchedAt: Date.now()
+    })
+
+    await store.getState().fetchPRForBranch(repoPath, branch, {
+      force: true,
+      repoId,
+      worktreeId
+    })
+
+    expect(
+      store.getState().worktreesByRepo[repoId]?.find((w) => w.id === worktreeId)?.linkedPR
+    ).toBe(42)
   })
 
   it('preserves cached PR data when a forced coordinator refresh errors', async () => {
