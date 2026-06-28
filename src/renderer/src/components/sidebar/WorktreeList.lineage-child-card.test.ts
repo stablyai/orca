@@ -33,13 +33,17 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
 }
 
 vi.mock('@/store', () => {
+  const getMockState = (): Record<string, unknown> => ({
+    detectedWorktreesByRepo: {},
+    ...mockStore.state
+  })
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
+    selector(getMockState())) as ((
     selector: (state: Record<string, unknown>) => unknown
   ) => unknown) & {
     getState: () => Record<string, unknown>
   }
-  useAppStore.getState = () => mockStore.state
+  useAppStore.getState = () => getMockState()
   return { useAppStore }
 })
 

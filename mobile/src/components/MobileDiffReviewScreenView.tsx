@@ -32,6 +32,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   // Inline-dock the sidebar only when wide and the repo is GitHub; otherwise it
   // lives in the RightDrawer overlay toggled by showPRSidebar.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
+  const gitStatus = controller.screenState.kind === 'ready' ? controller.screenState.status : null
 
   // The docked sidebar has no trigger to tap, so load its PR data once it becomes
   // visible (the overlay loads on trigger press instead).
@@ -120,6 +121,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               connState={controller.connState}
               worktreeId={controller.worktreeId}
               gitBranch={controller.prSidebarBranch}
+              gitStatus={gitStatus}
               headSha={controller.prSidebarHeadSha}
               bottomInset={insets.bottom}
             />
@@ -140,6 +142,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             connState={controller.connState}
             worktreeId={controller.worktreeId}
             gitBranch={controller.prSidebarBranch}
+            gitStatus={gitStatus}
             headSha={controller.prSidebarHeadSha}
           />
         </RightDrawer>

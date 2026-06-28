@@ -20,6 +20,28 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('worktree RPC methods', () => {
+  it('routes mobile session-only activation without notifying desktop clients', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateManagedWorktree: vi
+        .fn()
+        .mockResolvedValue({ repoId: 'repo-1', worktreeId: 'wt-1', activated: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('worktree.activate', {
+        worktree: 'id:wt-1',
+        notifyClients: false
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      notifyClients: false
+    })
+  })
+
   it('routes create options to the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

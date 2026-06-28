@@ -2264,14 +2264,17 @@ export default function TerminalPane({
   }, [])
 
   const restorePaneTerminalFit = useCallback(
-    async (pane: ManagedPane): Promise<void> => {
+    async (pane: ManagedPane, ptyId: string): Promise<void> => {
       // Why: local and remote runtime PTYs use different transports, but the
       // desktop reclaim button should have one visible recovery behavior.
-      const id = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!id) {
+      // Why: the banner was rendered for this PTY; stale portals must disappear
+      // before they can reclaim a different terminal that reused this pane slot.
+      const currentPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      if (currentPtyId !== ptyId) {
+        setOverrideTick((n) => n + 1)
         return
       }
-      const restored = await restoreTerminalFitToDesktop(id, settingsRef.current ?? undefined)
+      const restored = await restoreTerminalFitToDesktop(ptyId, settingsRef.current ?? undefined)
       if (restored) {
         scheduleRestoredTerminalRefit()
         // Why: after the overlay unmounts, focus would otherwise stay on the
@@ -2590,6 +2593,7 @@ export default function TerminalPane({
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
+        onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         repoQuickCommands={repoQuickCommands}
         globalQuickCommands={globalQuickCommands}
         quickCommandRepoLabel={quickCommandRepoLabel}
@@ -2678,7 +2682,7 @@ export default function TerminalPane({
             driver={driver}
             hasFitOverride={hasFitOverride}
             rootClassName="mobile-driver-banner"
-            onAction={() => restorePaneTerminalFit(pane)}
+            onAction={() => restorePaneTerminalFit(pane, ptyId)}
             onAllAction={() => restoreAllTerminalFits(pane)}
           />,
           pane.container,

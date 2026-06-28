@@ -17,6 +17,7 @@ import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/stor
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
+import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
@@ -62,6 +63,7 @@ import {
   suppressDevEducationForStore
 } from './startup/dev-education-suppression'
 import { maybeRedirectAppImageCliLaunch } from './startup/appimage-cli-redirect'
+import { maybeRedirectPackagedCliEntryLaunch } from './startup/packaged-cli-entry-redirect'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
@@ -183,6 +185,18 @@ let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
+// Why: on Windows a CLI-shaped launch (Orca.exe <unpacked CLI entry>) that lost
+// ELECTRON_RUN_AS_NODE would otherwise boot the GUI, lose the single-instance
+// lock to a running window, and exit silently. Redirect it to node mode here,
+// before the lock gate below can bounce it.
+const packagedCliEntryRedirect = maybeRedirectPackagedCliEntryLaunch({
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  execPath: process.execPath
+})
+if (packagedCliEntryRedirect.redirected) {
+  app.exit(packagedCliEntryRedirect.status)
+}
 const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
@@ -973,9 +987,16 @@ function shutdownWatchersOnce(): Promise<void> {
   if (!watcherShutdownPromise) {
     // Why: @parcel/watcher tears down native async work during unsubscribe.
     // Electron must wait for that cleanup before Node's environment exits.
-    watcherShutdownPromise = closeAllWatchers()
-      .catch((error) => {
-        console.error('[filesystem-watcher] shutdown failed:', error)
+    watcherShutdownPromise = Promise.allSettled([
+      closeAllWatchers(),
+      disposeWorktreeBaseDirectoryWatchers()
+    ])
+      .then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.error('[filesystem-watcher] shutdown failed:', result.reason)
+          }
+        }
       })
       .then(() => {
         watcherShutdownDone = true

@@ -412,7 +412,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
           settings,
           repo.id,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   const prCacheKey =
@@ -423,7 +424,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
           branch,
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   const issueCacheKey =
@@ -434,7 +436,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
           worktree.linkedIssue,
           settings,
           repo.connectionId,
-          repo.executionHostId
+          repo.executionHostId,
+          true
         )
       : ''
   // Why: use 'all' to fetch from all Linear workspaces. The issue might belong
@@ -482,11 +485,28 @@ const WorktreeCard = React.memo(function WorktreeCard({
     cachedBranchPR,
     worktree
   )
+  const cachedBranchFallbackGitHubPRNumber =
+    linkedGitHubPR === null &&
+    !hasNonGitHubLinkedReview &&
+    cachedBranchPR?.number !== undefined &&
+    (cachedBranchPR.state !== 'merged' || cachedMergedBranchPRMatchesCurrentHead)
+      ? cachedBranchPR.number
+      : null
+  const cachedBranchPRCanDriveDisplay =
+    cachedBranchPR?.state !== 'merged' || cachedMergedBranchPRMatchesCurrentHead
+  const hostedReviewMatchesHeadMatchedCachedMergedPR =
+    cachedMergedBranchPRMatchesCurrentHead &&
+    cachedBranchPR !== null &&
+    cachedBranchPR !== undefined &&
+    hostedReview?.provider === 'github' &&
+    hostedReview.number === cachedBranchPR.number
   const useCachedBranchReview =
     cachedBranchPR !== undefined &&
     cachedBranchPR !== null &&
     !hasNonGitHubLinkedReview &&
+    cachedBranchPRCanDriveDisplay &&
     (hostedReview === undefined ||
+      (cachedMergedBranchPRMatchesCurrentHead && !hostedReviewMatchesHeadMatchedCachedMergedPR) ||
       (hostedReview === null &&
         ((cachedBranchPRFetchedAt !== undefined &&
           cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)) ||
@@ -503,7 +523,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedGiteaPR,
     {
       reviewHintKey:
-        useCachedBranchReview && !hasLinkedReview ? '' : hostedReviewEntry?.linkedReviewHintKey
+        (useCachedBranchReview || cachedMergedBranchPRMatchesCurrentHead) && !hasLinkedReview
+          ? ''
+          : hostedReviewEntry?.linkedReviewHintKey
     }
   )
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
@@ -633,6 +655,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
+        ...(cachedBranchFallbackGitHubPRNumber !== null
+          ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
+          : {}),
+        currentHeadOid: worktree.head ?? null,
         linkedGitLabMR,
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
@@ -651,6 +677,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     isFolder,
     worktree.isBare,
     worktree.linkedPR,
+    worktree.head,
+    cachedBranchFallbackGitHubPRNumber,
     linkedGitLabMR,
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
@@ -680,6 +708,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
       linkedGitHubPR: worktree.linkedPR ?? null,
+      ...(cachedBranchFallbackGitHubPRNumber !== null
+        ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
+        : {}),
+      currentHeadOid: worktree.head ?? null,
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
@@ -694,6 +726,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     isFolder,
     worktree.isBare,
     worktree.linkedPR,
+    worktree.head,
+    cachedBranchFallbackGitHubPRNumber,
     linkedGitLabMR,
     linkedBitbucketPR,
     linkedAzureDevOpsPR,

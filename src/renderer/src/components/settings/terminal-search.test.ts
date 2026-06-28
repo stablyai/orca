@@ -180,6 +180,8 @@ describe('getTerminalPaneSearchEntries', () => {
 
     expect(getSidebarEntries()).toContainEqual(entry)
     expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
+    expect(entry.description).toBe('Workspace cards can use compact or detailed layouts.')
+    expect(entry.description).not.toContain('options menu')
   })
 
   it.each(['compact', 'compact display', 'workspace cards', 'sidebar', 'card layout'])(

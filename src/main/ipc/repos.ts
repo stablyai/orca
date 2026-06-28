@@ -79,6 +79,7 @@ import { getSshGitUsername } from '../git/git-username'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
@@ -1926,10 +1927,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'forkSyncMode'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
+            | 'externalWorktreeInboxBaselinePaths'
+            | 'importedExternalWorktreePaths'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
-        > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+        > & {
+          sourceControlAi?: Repo['sourceControlAi'] | null
+          externalWorktreeDiscoverySuppressedAt?:
+            | Repo['externalWorktreeDiscoverySuppressedAt']
+            | null
+        }
       }
     ) => {
       // Why: validate the persisted preference string at the IPC boundary
@@ -2008,6 +2016,38 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           !Number.isFinite(updates.externalWorktreeVisibilityPromptDismissedAt))
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
+      }
+      // Why: null is the transport sentinel for clearing discovery suppression.
+      if (
+        'externalWorktreeDiscoverySuppressedAt' in updates &&
+        updates.externalWorktreeDiscoverySuppressedAt === null
+      ) {
+        updates.externalWorktreeDiscoverySuppressedAt = undefined
+      } else if (
+        'externalWorktreeDiscoverySuppressedAt' in updates &&
+        updates.externalWorktreeDiscoverySuppressedAt !== undefined &&
+        (typeof updates.externalWorktreeDiscoverySuppressedAt !== 'number' ||
+          !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
+      ) {
+        delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if (
+        'externalWorktreeInboxBaselinePaths' in updates &&
+        updates.externalWorktreeInboxBaselinePaths !== undefined
+      ) {
+        const value = updates.externalWorktreeInboxBaselinePaths as unknown
+        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+          delete updates.externalWorktreeInboxBaselinePaths
+        }
+      }
+      if (
+        'importedExternalWorktreePaths' in updates &&
+        updates.importedExternalWorktreePaths !== undefined
+      ) {
+        const value = updates.importedExternalWorktreePaths as unknown
+        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+          delete updates.importedExternalWorktreePaths
+        }
       }
       // Why: null is the transport sentinel for clearing Source Control AI.
       // Other invalid fields are deleted; this one must flow as undefined.
@@ -2525,6 +2565,7 @@ function notifyReposChanged(mainWindow: BrowserWindow): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
+  scheduleCurrentWorktreeBaseDirectoryWatcherSync()
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {

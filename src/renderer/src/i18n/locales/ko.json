@@ -534,7 +534,8 @@
         "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
         "chooseOrAddProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 선택하거나 추가하세요.",
         "folderWorkspaceCreateFailedTitle": "폴더 워크스페이스를 만들지 못했습니다",
-        "folderWorkspaceCreateFailedMessage": "폴더 워크스페이스를 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요."
+        "folderWorkspaceCreateFailedMessage": "폴더 워크스페이스를 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요.",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
@@ -1123,7 +1124,9 @@
         "notePasteTooLarge": "메모 필드에 붙여넣을 내용이 너무 큽니다.",
         "reuseExistingBranch": "브랜치 재사용",
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
-        "createMultiple": "더 만들기"
+        "createMultiple": "더 만들기",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -2234,7 +2237,32 @@
             "2ddbd6fe8a": "확인됨",
             "ee81adfcef": "보기",
             "4d0b72481c": "무시",
-            "9cc26c019d": "제거"
+            "9cc26c019d": "제거",
+            "0e2d235c63": "Inactive workspace scan ready",
+            "4a35c08764": "Review",
+            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
+            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "3d957ff117": "No workspaces match these filters.",
+            "e94b1f8bb4": "Clear filters",
+            "efb3843e75": "Filter and sort workspaces",
+            "93b7381d50": "Filters",
+            "a615e24679": "Sort",
+            "4cc5b73efe": "Finding inactive workspaces...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
+            "4361f1534c": "Search workspaces",
+            "6cd8439929": "Age",
+            "38422e7b8d": "Review",
+            "6359dc079a": "Git",
+            "7644af86b2": "Context",
+            "e343b9e9ce": "Sort by",
+            "27acbc2efe": "Direction"
+          },
+          "presentation": {
+            "0bb8d1aa02": "MR #",
+            "b1f1a02943": "PR #"
+          },
+          "presentationFixtures": {
+            "5ed71d83ef": "Review alpha cleanup"
           }
         }
       },
@@ -2378,7 +2406,8 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소"
+            "df766809e0": "창 축소",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -2428,7 +2457,10 @@
                   "38e41edc6e": "이 워크스페이스는 git 작업 트리로 포크할 수 없습니다.",
                   "f867385bb5": "이 포크의 소스 워크스페이스를 찾을 수 없습니다.",
                   "046e8d853c": "포크할 terminal 컨텍스트가 없습니다.",
-                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다."
+                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다.",
+                  "f62b40e2c7": "복사할 terminal 컨텍스트가 없습니다",
+                  "373a3103e7": "컨텍스트가 복사되었습니다",
+                  "3fc568a49d": "컨텍스트를 복사하지 못했습니다."
                 }
               }
             },
@@ -2601,7 +2633,7 @@
             "39676a184c": "모든 파일, URL, agent를 엽니다..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "명령",
+            "a2c7a33831": "빠른 명령 추가...",
             "20bbd75896": "명령 없음",
             "b82e237a4b": "빠른 명령 더 보기",
             "85482c57bc": "빠른 명령 실행",
@@ -4332,6 +4364,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "브랜치"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "{{value0}}의 외부 워크트리를 영구적으로 숨기기",
+          "d9f7b2a14c": "{{value0}}의 외부에서 생성된 새 워크트리 접기",
+          "e2c4a8d91f": "{{value0}}의 외부에서 생성된 새 워크트리 펼치기",
+          "7c4e9b2a81": "외부에서 생성된 새 워크트리",
+          "5e1b8d3f62": "외부 워크트리를 영구적으로 숨기기",
+          "4d7a1c9e53": "이 워크트리는 Orca 외부에서 생성되었습니다.",
+          "8b3f2e1d74": "가져오기",
+          "1c9e7a4b28": "숨긴 상태 유지",
+          "6f2d8c1e95": "모두 가져오기",
+          "c3e8a1f4b2": "다시 표시하지 않기"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "외부 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
+          "b7e4d1a062": "외부 워크트리를 가져올 수 없습니다. 다시 시도하세요.",
+          "c94f0b3a15": "외부 워크트리를 영구적으로 숨길 수 없습니다. 다시 시도하세요."
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "외부 워크트리를 숨길까요?",
+          "6e91b3c4d2": "{{value0}}에서는 나중에 생성되는 항목을 포함해 외부 워크트리가 사이드바나 이 목록에 더 이상 표시되지 않습니다.",
+          "1f8a5d9e73": "나중에 프로젝트 설정에서 다시 켤 수 있습니다.",
+          "8c0b2e7a41": "Non-Orca 워크트리 설정 열기",
+          "5d1c9f0a82": "취소",
+          "3b7e4a1c96": "외부 워크트리 숨기기"
         }
       },
       "shared": {
@@ -4480,7 +4537,9 @@
           "copiedCommand": "명령 복사됨.",
           "failedToCopyCommand": "명령 복사 실패.",
           "copyCommandAria": "명령 복사",
-          "runCommandDescription": "Enter를 눌러 명령을 실행하세요."
+          "runCommandDescription": "Enter를 눌러 명령을 실행하세요.",
+          "5f818f12ab": "준비 중...",
+          "4c05b9d7cb": "설정 터미널을 준비하고 있습니다."
         },
         "AgentsPane": {
           "d83834f5e6": "설치된 agents 감지 중…",
@@ -4576,7 +4635,16 @@
             "tintOpacity": "색조 강도",
             "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
           },
-          "workspaceCardLayoutGuidance": "워크스페이스 사이드바 옵션 메뉴 > 카드 레이아웃 > 컴팩트를 사용하세요."
+          "workspaceCardLayoutGuidance": "워크스페이스 사이드바에서 관리됩니다.",
+          "interfaceDefaultFont": "기본 글꼴",
+          "terminalDefaultFont": "기본 글꼴",
+          "interfaceTitle": "인터페이스",
+          "terminalTitle": "터미널",
+          "windowSidebarTitle": "창 및 사이드바",
+          "windowSidebarSummary": "사이드바, 상태 표시줄 및 파일 탐색기",
+          "statusBarCount": "{{value0}}개 표시기가 보입니다.",
+          "gitIgnoredGlossary": ".gitignore와 일치하는 파일.",
+          "statusBarDescription": "Choose which indicators appear in the status bar."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -5263,7 +5331,10 @@
           "4f2205f3b6": "Orca CLI 활성화",
           "ff4b7e65d6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "2a674aa810": "Agent 모바일 에뮬레이터 제어",
-          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다."
+          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다.",
+          "3d34423e88": "Orca CLI를 등록하는 중",
+          "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+          "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "복사",
@@ -5335,7 +5406,10 @@
           "b5a2ed83ff": "앱스토어",
           "c8491c17ef": "QR 코드를 스캔하여 휴대폰에서 Orca를 제어하세요. 베타/초기 미리보기 - 버그 및 주요 변경 사항이 예상됩니다. 다음에서 iOS 앱을 받으세요.",
           "e7a3ae8c4e": "모바일",
-          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요."
+          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "테스트 알림 보내기",
@@ -5585,7 +5659,9 @@
           "2b6356e744": "저장됨",
           "81057d5f71": "저장 중...",
           "da37d6f10e": "복사",
-          "3149964b66": "복사됨"
+          "3149964b66": "복사됨",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
@@ -6184,7 +6260,9 @@
           "4415beb958": "비활성",
           "4e7d41a9f0": "활성화됨",
           "e90afcc44f": "끔",
-          "16c471ee03": "켜짐"
+          "16c471ee03": "켜짐",
+          "typographyAdvanced": "타이포그래피",
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -6714,7 +6792,7 @@
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",
             "workspaceCardLayout": {
               "title": "워크스페이스 카드 레이아웃",
-              "description": "워크스페이스 사이드바 옵션 메뉴에서 워크스페이스 카드를 컴팩트 또는 상세 보기로 전환합니다.",
+              "description": "워크스페이스 카드는 컴팩트 또는 상세 레이아웃을 사용할 수 있습니다.",
               "compact": "컴팩트",
               "compactDisplay": "컴팩트 보기",
               "workspaceCards": "워크스페이스 카드",
@@ -7402,7 +7480,9 @@
               "f4ed142753": "핸드폰",
               "f213400800": "모바일",
               "671eb4173c": "휴대폰에서 terminals과 agents를 제어하세요.",
-              "ffd52a96e4": "모바일"
+              "ffd52a96e4": "모바일",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -8346,6 +8426,9 @@
           "wslUnavailable": "WSL is not available on this machine.",
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+        },
+        "AppearanceAdvancedDisclosure": {
+          "advanced": "고급"
         }
       },
       "right": {
@@ -9725,7 +9808,12 @@
           "a6cffbbb0b": "코드 생성",
           "e59a252eca": "코드 재생성",
           "d0b52871ce": "휴대전화가 페어링되었습니다.",
-          "051978a785": "휴대전화가 페어링되었습니다."
+          "051978a785": "휴대전화가 페어링되었습니다.",
+          "channel": {
+            "group": "릴리스 채널",
+            "preview": "미리 보기",
+            "stable": "안정 버전"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -9744,7 +9832,11 @@
           "ad2284a9e2": "닫기 · Esc",
           "9883b58693": "Orca 모바일 닫기",
           "fb5f28330e": "사이드바에 표시",
-          "c669abcf8f": "사이드바에서 숨기기"
+          "c669abcf8f": "사이드바에서 숨기기",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal 세션",
@@ -9755,7 +9847,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Android 카메라로 스캔하여 GitHub 릴리스에서 최신 APK를 다운로드하세요.",
-              "432db52b73": "iPhone 카메라로 스캔하여 App Store를 엽니다."
+              "432db52b73": "iPhone 카메라로 스캔하여 App Store를 엽니다.",
+              "preview": {
+                "tagline": "최신 기능, 매일 업데이트."
+              },
+              "stable": {
+                "tagline": "정식 출시 버전, 매주 업데이트."
+              }
             }
           }
         },
@@ -10459,7 +10557,10 @@
             "21f5687c07": "Orca CLI 스킬",
             "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
             "5c59ea96ca": "모바일 에뮬레이터 Orca CLI 스킬 설정",
-            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
+            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal",
+            "3d34423e88": "Orca CLI를 등록하는 중",
+            "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+            "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "닫기",
@@ -11010,7 +11111,8 @@
           "b3e7f9a1c2": "체크 수정 컨텍스트를 사용할 수 없습니다.",
           "d5a8c2f1b9": "이 체크를 수정할 기본 AI agent 시작",
           "e2b4d7c8a1": "이 체크를 처리할 agent 선택",
-          "f1c9e3a6d4": "체크를 수정할 agent 선택"
+          "f1c9e3a6d4": "체크를 수정할 agent 선택",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11031,6 +11133,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "붙여넣기 내용이 너무 큽니다."
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {

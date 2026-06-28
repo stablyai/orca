@@ -37,6 +37,10 @@ import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-rel
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import {
+  scheduleWorktreeBaseDirectoryWatcherSync,
+  setWorktreeBaseDirectoryWatcherSyncContext
+} from '../ipc/worktree-base-directory-watcher'
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
@@ -60,6 +64,9 @@ export function attachMainWindowServices(
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
+  // Why: repo/settings mutations resync watchers through this attached main-window context.
+  setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
+  scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,

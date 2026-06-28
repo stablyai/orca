@@ -1998,6 +1998,9 @@ const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' 
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
+  // Why: compare merged implicit PRs against the inspected worktree HEAD, not
+  // the main repo HEAD, without adding a worktree-scoped git call.
+  currentHeadOid?: string | null
 }
 
 function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
@@ -2777,15 +2780,21 @@ export async function getPRForBranchOutcome(
     let dataHeadRepo: OwnerRepo | null = headRepo
     let currentHeadOidForMergedImplicit: string | null | undefined
 
+    const explicitCurrentHeadOid =
+      typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
+        ? options.currentHeadOid.trim()
+        : null
     const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
-      currentHeadOidForMergedImplicit ??= await getCurrentHeadOid(
-        repoPath,
-        connectionId,
-        localGitOptions
-      )
+      // Why: prefer the caller-supplied worktree HEAD; only shell out (against
+      // the main repo path) when no explicit oid is available, matching legacy
+      // behavior. This keeps merged-at-head PRs visible for secondary worktrees.
+      currentHeadOidForMergedImplicit ??=
+        explicitCurrentHeadOid !== null
+          ? explicitCurrentHeadOid
+          : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
       return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
     }
 
@@ -2867,14 +2876,16 @@ export async function getPRForBranchOutcome(
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
+    const explicitHeadHidesMergedImplicitPR =
+      explicitCurrentHeadOid !== null &&
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+    const shouldPreserveMergedFallback =
+      !explicitHeadHidesMergedImplicitPR &&
+      (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if (
-      (await hideMergedImplicitPR(data)) &&
-      !fallbackConfirmedMergedBranch &&
-      options.acceptMergedFallbackPR !== true
-    ) {
+    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 

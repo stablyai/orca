@@ -534,7 +534,8 @@
         "ba6cb77082": "No se pudo conectar al proyecto.",
         "chooseOrAddProjectBeforeWorkspace": "Elige o agrega un proyecto antes de crear un espacio de trabajo.",
         "folderWorkspaceCreateFailedTitle": "No se pudo crear el espacio de trabajo de carpeta",
-        "folderWorkspaceCreateFailedMessage": "No se pudo crear el espacio de trabajo de carpeta. Revisa los detalles del error de arriba e inténtalo de nuevo."
+        "folderWorkspaceCreateFailedMessage": "No se pudo crear el espacio de trabajo de carpeta. Revisa los detalles del error de arriba e inténtalo de nuevo.",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "No se pudieron cargar los archivos eliminados.",
@@ -1123,7 +1124,9 @@
         "notePasteTooLarge": "El contenido pegado es demasiado grande para el campo de nota.",
         "reuseExistingBranch": "Reutilizar rama",
         "reuseExistingBranchHint": "Hacer checkout de la rama existente en lugar de crear una nueva a partir de ella.",
-        "createMultiple": "Crear más"
+        "createMultiple": "Crear más",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Crear árbol de trabajo",
@@ -2234,7 +2237,32 @@
             "2ddbd6fe8a": "comprobado",
             "ee81adfcef": "Vista",
             "4d0b72481c": "Ignorar",
-            "9cc26c019d": "Eliminar"
+            "9cc26c019d": "Eliminar",
+            "0e2d235c63": "Inactive workspace scan ready",
+            "4a35c08764": "Review",
+            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
+            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "3d957ff117": "No workspaces match these filters.",
+            "e94b1f8bb4": "Clear filters",
+            "efb3843e75": "Filter and sort workspaces",
+            "93b7381d50": "Filters",
+            "a615e24679": "Sort",
+            "4cc5b73efe": "Finding inactive workspaces...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
+            "4361f1534c": "Search workspaces",
+            "6cd8439929": "Age",
+            "38422e7b8d": "Review",
+            "6359dc079a": "Git",
+            "7644af86b2": "Context",
+            "e343b9e9ce": "Sort by",
+            "27acbc2efe": "Direction"
+          },
+          "presentation": {
+            "0bb8d1aa02": "MR #",
+            "b1f1a02943": "PR #"
+          },
+          "presentationFixtures": {
+            "5ed71d83ef": "Review alpha cleanup"
           }
         }
       },
@@ -2378,7 +2406,8 @@
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
-            "df766809e0": "Contraer panel"
+            "df766809e0": "Contraer panel",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar demonio",
@@ -2428,7 +2457,10 @@
                   "38e41edc6e": "Este espacio de trabajo no se puede bifurcar en un árbol de trabajo de git.",
                   "f867385bb5": "No se pudo encontrar el espacio de trabajo de origen para esta bifurcación.",
                   "046e8d853c": "No hay contexto de terminal para bifurcar",
-                  "c00421d320": "Se copió el contexto de la bifurcación. Inicie un agente y péguelo para iniciar la bifurcación."
+                  "c00421d320": "Se copió el contexto de la bifurcación. Inicie un agente y péguelo para iniciar la bifurcación.",
+                  "f62b40e2c7": "No hay contexto de terminal para copiar",
+                  "373a3103e7": "Contexto copiado",
+                  "3fc568a49d": "No se pudo copiar el contexto."
                 }
               }
             },
@@ -2601,7 +2633,7 @@
             "39676a184c": "Abra cualquier archivo, URL, agente, ..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "Comando",
+            "a2c7a33831": "Agregar comando rápido…",
             "20bbd75896": "Sin comandos",
             "b82e237a4b": "Comandos más rápidos",
             "85482c57bc": "Ejecutar comando rápido",
@@ -4332,6 +4364,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Rama"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "Ocultar árboles de trabajo externos permanentemente para {{value0}}",
+          "d9f7b2a14c": "Contraer árboles de trabajo creados externamente para {{value0}}",
+          "e2c4a8d91f": "Expandir árboles de trabajo creados externamente para {{value0}}",
+          "7c4e9b2a81": "Nuevos árboles de trabajo creados externamente",
+          "5e1b8d3f62": "Ocultar árboles de trabajo externos permanentemente",
+          "4d7a1c9e53": "Estos árboles de trabajo se crearon fuera de Orca.",
+          "8b3f2e1d74": "Importar",
+          "1c9e7a4b28": "Mantener ocultos",
+          "6f2d8c1e95": "Importar todo",
+          "c3e8a1f4b2": "No volver a mostrar"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "No se pudieron mantener ocultos los árboles de trabajo externos. Inténtalo de nuevo.",
+          "b7e4d1a062": "No se pudieron importar los árboles de trabajo externos. Inténtalo de nuevo.",
+          "c94f0b3a15": "No se pudieron ocultar permanentemente los árboles de trabajo externos. Inténtalo de nuevo."
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "¿Ocultar árboles de trabajo externos?",
+          "6e91b3c4d2": "Los árboles de trabajo externos ya no se mostrarán en la barra lateral ni en esta lista para {{value0}}, incluidos los que se creen más adelante.",
+          "1f8a5d9e73": "Puedes volver a activarlo más tarde desde los ajustes del proyecto.",
+          "8c0b2e7a41": "Abrir ajustes de árboles de trabajo no pertenecientes a Orca",
+          "5d1c9f0a82": "Cancelar",
+          "3b7e4a1c96": "Ocultar árboles de trabajo externos"
         }
       },
       "shared": {
@@ -4495,7 +4552,9 @@
           "copiedCommand": "Comando copiado.",
           "failedToCopyCommand": "No se pudo copiar el comando.",
           "copyCommandAria": "Copiar comando",
-          "runCommandDescription": "Presiona Enter para ejecutar el comando."
+          "runCommandDescription": "Presiona Enter para ejecutar el comando.",
+          "5f818f12ab": "Preparando...",
+          "4c05b9d7cb": "Preparando el terminal de configuración."
         },
         "AgentsPane": {
           "d83834f5e6": "Detectando agents instalados…",
@@ -4588,10 +4647,19 @@
             "tintOpacity": "Intensidad del tinte",
             "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
           },
-          "workspaceCardLayoutGuidance": "Usa el menú de opciones de la barra lateral de espacios de trabajo > Diseño de tarjeta > Compacto.",
+          "workspaceCardLayoutGuidance": "Gestionado desde la barra lateral del espacio de trabajo.",
           "872af9556e": "Bandeja del sistema",
           "2edf606c46": "Minimizar a la bandeja al cerrar",
-          "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir."
+          "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+          "interfaceDefaultFont": "Fuente predeterminada",
+          "terminalDefaultFont": "Fuente predeterminada",
+          "interfaceTitle": "Interfaz",
+          "terminalTitle": "Terminal",
+          "windowSidebarTitle": "Ventana y barra lateral",
+          "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",
+          "statusBarCount": "Indicadores visibles: {{value0}}.",
+          "gitIgnoredGlossary": "Archivos coincidentes con .gitignore.",
+          "statusBarDescription": "Choose which indicators appear in the status bar."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -5278,7 +5346,10 @@
           "4f2205f3b6": "Habilitar CLI de Orca",
           "ff4b7e65d6": "Deje que los agents de codificación controlen el emulador móvil activo con los comandos CLI de Orca.",
           "2a674aa810": "Control del emulador móvil del Agent",
-          "cdeaed9e37": "Registré Orca CLI en PATH."
+          "cdeaed9e37": "Registré Orca CLI en PATH.",
+          "3d34423e88": "Registrando la CLI de Orca",
+          "3be27641c9": "para que los comandos del emulador se puedan ejecutar desde shells de agents.",
+          "3941719a56": "Comprobando la CLI de Orca antes de abrir la configuración de la skill."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "Copiar",
@@ -5350,7 +5421,10 @@
           "b5a2ed83ff": "Tienda de aplicaciones",
           "c8491c17ef": "Controla Orca desde tu teléfono escaneando un código QR. Beta/vista previa anticipada: espere errores y cambios importantes. Obtenga la aplicación para iOS desde",
           "e7a3ae8c4e": "Móvil",
-          "174f4a3c6d": "Controla terminales y agents desde tu teléfono."
+          "174f4a3c6d": "Controla terminales y agents desde tu teléfono.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -5600,7 +5674,9 @@
           "2b6356e744": "Guardado",
           "81057d5f71": "Ahorro...",
           "da37d6f10e": "Copiar",
-          "3149964b66": "copiado"
+          "3149964b66": "copiado",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utilice el color del repo {{value0}}",
@@ -6199,7 +6275,9 @@
           "4415beb958": "desactivado",
           "4e7d41a9f0": "activado",
           "e90afcc44f": "apagado",
-          "16c471ee03": "en"
+          "16c471ee03": "activado",
+          "typographyAdvanced": "Tipografía",
+          "dimUnfocusedPanes": "Atenuar paneles sin foco."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "píxeles",
@@ -6727,7 +6805,7 @@
             },
             "workspaceCardLayout": {
               "title": "Diseño de tarjetas de espacios de trabajo",
-              "description": "Cambia entre tarjetas de espacios de trabajo compactas y detalladas desde el menú de opciones de la barra lateral de espacios de trabajo.",
+              "description": "Las tarjetas de espacios de trabajo pueden usar diseños compactos o detallados.",
               "compact": "compacto",
               "compactDisplay": "vista compacta",
               "workspaceCards": "tarjetas de espacios de trabajo",
@@ -7417,7 +7495,9 @@
               "f4ed142753": "teléfono",
               "f213400800": "móvil",
               "671eb4173c": "Controla terminales y agents desde tu teléfono.",
-              "ffd52a96e4": "Móvil"
+              "ffd52a96e4": "Móvil",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -8346,6 +8426,9 @@
           "wslUnavailable": "WSL is not available on this machine.",
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+        },
+        "AppearanceAdvancedDisclosure": {
+          "advanced": "Avanzado"
         }
       },
       "right": {
@@ -9725,7 +9808,12 @@
           "a6cffbbb0b": "Generar código",
           "e59a252eca": "regenerar código",
           "d0b52871ce": "Tus teléfonos están emparejados.",
-          "051978a785": "Tu teléfono está emparejado."
+          "051978a785": "Tu teléfono está emparejado.",
+          "channel": {
+            "group": "Canal de versión",
+            "preview": "Vista previa",
+            "stable": "Estable"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -9744,7 +9832,11 @@
           "ad2284a9e2": "Cerrar · Esc",
           "9883b58693": "Cerrar Orca Móvil",
           "fb5f28330e": "Mostrar en la barra lateral",
-          "c669abcf8f": "Ocultar de la barra lateral"
+          "c669abcf8f": "Ocultar de la barra lateral",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Sesión terminal",
@@ -9755,7 +9847,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Escanee con su cámara Android para descargar el último APK de GitHub Releases.",
-              "432db52b73": "Escanee con la cámara de su iPhone para abrir la App Store."
+              "432db52b73": "Escanee con la cámara de su iPhone para abrir la App Store.",
+              "preview": {
+                "tagline": "Las funciones más recientes, actualizadas a diario."
+              },
+              "stable": {
+                "tagline": "La versión pública, actualizada semanalmente."
+              }
             }
           }
         },
@@ -10459,7 +10557,10 @@
             "21f5687c07": "Skill del CLI de Orca",
             "64fb057667": "Enseña a los agents los comandos del emulador orca para este worktree.",
             "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
-            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal",
+            "3d34423e88": "Registrando la CLI de Orca",
+            "3be27641c9": "para que los comandos del emulador se puedan ejecutar desde shells de agents.",
+            "3941719a56": "Comprobando la CLI de Orca antes de abrir la configuración de la skill."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "Descartar",
@@ -11010,7 +11111,8 @@
           "b3e7f9a1c2": "El contexto de corrección de la comprobación no está disponible",
           "d5a8c2f1b9": "Iniciar el agente de IA predeterminado para corregir esta comprobación",
           "e2b4d7c8a1": "Elige un agente para esta comprobación",
-          "f1c9e3a6d4": "Elige un agente para corregir la comprobación"
+          "f1c9e3a6d4": "Elige un agente para corregir la comprobación",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11031,6 +11133,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "El contenido pegado es demasiado grande."
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {

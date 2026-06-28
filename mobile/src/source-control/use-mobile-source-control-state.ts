@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
 import { getWorktreeLabel } from '../session/worktree-label'
-import type { MobilePrPrefill } from './mobile-pr-create'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
@@ -25,6 +24,8 @@ import {
   isMobileGitStageableEntry,
   type MobileGitStatusEntry
 } from './mobile-git-status'
+import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
+import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
 import {
   formatBranchLabel,
   type MobileBranchEntryView,
@@ -50,12 +51,10 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const [generatingMessage, setGeneratingMessage] = useState(false)
-  const [showPrSheet, setShowPrSheet] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)
   const [localBranches, setLocalBranches] = useState<MobileGitLocalBranches | null>(null)
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
   const [createdPrWarning, setCreatedPrWarning] = useState<string | null>(null)
-  const [prPrefill, setPrPrefill] = useState<MobilePrPrefill | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -63,6 +62,11 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const busyActionRef = useRef<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
+  const { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure } =
+    useMobileSourceControlCommitFailure({ client, connState, worktreeId })
+  const clearCommitFailureRecovery = useCallback(() => {
+    recordCommitFailure(null)
+  }, [recordCommitFailure])
 
   const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus } =
     useMobileSourceControlLoaders({
@@ -70,7 +74,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       connState,
       statusIdentityKey,
       worktreeId,
-      setActionError
+      setActionError,
+      onStatusLoadSuccess: clearCommitFailureRecovery
     })
 
   const {
@@ -158,6 +163,10 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const stageablePaths = useMemo(() => getStageablePaths(entries), [entries])
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
+  const stagedEntriesForRecovery = useMemo(
+    () => getMobileCommitFailureStagedEntries(entries),
+    [entries]
+  )
   const unstagedCount = useMemo(() => countUnstagedEntries(entries), [entries])
   const hasUnresolvedConflicts = useMemo(
     () => entries.some((entry) => entry.conflictStatus === 'unresolved'),
@@ -186,6 +195,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     status,
     branchLabel,
     commitMessage,
+    stagedEntries: stagedEntriesForRecovery,
     generatingMessage,
     stageablePaths,
     unstageablePaths,
@@ -203,8 +213,9 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setShowActionSheet,
     setLocalBranches,
     setShowBranchPicker,
-    setPrPrefill,
-    setShowPrSheet
+    setCreatedPrUrl,
+    setCreatedPrWarning,
+    recordCommitFailure
   })
   const primaryAction = useMemo(
     () =>
@@ -261,8 +272,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     commitMessage,
     setCommitMessage,
     generatingMessage,
-    showPrSheet,
-    setShowPrSheet,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,
@@ -270,12 +279,13 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setCreatedPrUrl,
     createdPrWarning,
     setCreatedPrWarning,
-    prPrefill,
     discardTarget,
     setDiscardTarget,
     showActionSheet,
     setShowActionSheet,
     actionError,
+    commitFailureRecovery,
+    commitFailureRecoveryAction,
     keyboardLift,
     openingPath,
     openingBranchPath,

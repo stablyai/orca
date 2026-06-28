@@ -36,6 +36,11 @@ export type PtyBufferSnapshot = {
   rows: number
   seq?: number
   source?: 'headless' | 'renderer'
+  /** True when the snapshot captures an alternate-screen TUI (Claude Code,
+   *  vim). Restore must NOT clear xterm's buffer in that case — the TUI's
+   *  scrollback lives in xterm and a clear destroys scroll-up after a tab
+   *  return. Mirrors the attach-time guard in pty-transport.ts. */
+  alternateScreen?: boolean
 }
 
 export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }

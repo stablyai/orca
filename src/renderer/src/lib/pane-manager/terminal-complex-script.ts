@@ -51,6 +51,21 @@ function isRendererRiskCodePoint(value: number): boolean {
   )
 }
 
+function isEastAsianRendererRiskCodePoint(value: number): boolean {
+  return (
+    isInRange(value, 0x1100, 0x11ff) ||
+    isInRange(value, 0x2e80, 0x9fff) ||
+    isInRange(value, 0xa960, 0xa97f) ||
+    isInRange(value, 0xac00, 0xd7ff) ||
+    isInRange(value, 0xf900, 0xfaff) ||
+    isInRange(value, 0xfe10, 0xfe1f) ||
+    isInRange(value, 0xfe30, 0xfe4f) ||
+    isInRange(value, 0xff00, 0xffef) ||
+    isInRange(value, 0x20000, 0x2fa1f) ||
+    isInRange(value, 0x30000, 0x3134f)
+  )
+}
+
 function sgrParamCode(param: string | undefined): number | null {
   if (!param) {
     return null
@@ -194,6 +209,27 @@ export function terminalRewriteOutputRenderRefreshDecision(
   }
 }
 
+/**
+ * Whether a native-Windows ConPTY foreground chunk that forces a render refresh
+ * should ALSO schedule a follow-up next-frame repaint.
+ *
+ * Why: Claude Code echoes prompt keystrokes by redrawing the input line in place
+ * (CR + CHA/erase + reprint) without DEC 2026 synchronized output. xterm's buffer
+ * ends up correct, but its DOM renderer can paint these rapid rewrites one frame
+ * late — surfacing a phantom first char or an overwritten cell ("zzzx" rendered as
+ * "zzx") that only a window resize clears. A single synchronous refresh races that
+ * late paint; a follow-up next-frame repaint corrects the column desync the way the
+ * existing cursor-restore and scroll cases already do. Scoped to in-place rewrites
+ * on native Windows so plain shells and non-Windows renderers are unaffected.
+ */
+export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
+  isNativeWindowsConpty: boolean
+  isForeground: boolean
+  isInPlaceRewrite: boolean
+}): boolean {
+  return args.isNativeWindowsConpty && args.isForeground && args.isInPlaceRewrite
+}
+
 export function terminalOutputPrefersRenderRefresh(data: string): boolean {
   if (containsBackgroundSgr(data)) {
     return true
@@ -221,6 +257,22 @@ export function terminalOutputPrefersRenderRefresh(data: string): boolean {
       continue
     }
     if (isRendererRiskCodePoint(codePoint)) {
+      return true
+    }
+    if (codePoint > 0xffff) {
+      i += 1
+    }
+  }
+  return false
+}
+
+export function terminalOutputContainsEastAsianRendererRisk(data: string): boolean {
+  for (let i = 0; i < data.length; i += 1) {
+    const codePoint = data.codePointAt(i)
+    if (codePoint === undefined) {
+      continue
+    }
+    if (isEastAsianRendererRiskCodePoint(codePoint)) {
       return true
     }
     if (codePoint > 0xffff) {

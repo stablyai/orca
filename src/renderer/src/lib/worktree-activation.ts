@@ -12,6 +12,8 @@ import type { StartupCommandDelivery } from '../../../shared/codex-startup-deliv
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
+import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
+import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { CLIENT_PLATFORM } from './new-workspace'
@@ -306,11 +308,12 @@ export function activateAndRevealWorktree(
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection state. The desktop host
-    // must also activate the worktree so hidden renderer-owned terminal panes
-    // mount and publish session surfaces back to the web client.
+    // should publish session surfaces for the phone without treating that as a
+    // desktop navigation command.
     void activateWebRuntimeSessionWorktree({
       worktreeId,
-      environmentId: ownerRuntimeEnvironmentId
+      environmentId: ownerRuntimeEnvironmentId,
+      notifyDesktop: (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
     })
   }
 
@@ -439,26 +442,76 @@ export function ensureWorktreeHasInitialTerminal(
   // Why: activation can now restore editor- or browser-only worktrees from the
   // reconciled tab-group model. Creating a terminal just because the legacy
   // terminal slice is empty would reopen worktrees with an unexpected extra tab.
-  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
-    return null
-  }
-  // Why: remote web clients mirror the runtime server's session tabs. A local
-  // activation fallback can spawn a second host terminal before the mirror lands.
   const ownerState =
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
       : useAppStore.getState()
+  let sequencedStartup = startup
+  let wrappedSetupCommandStr: string | undefined
+
+  if (startup && setup?.waitForAgentStartup === true) {
+    const platform = getSetupRunnerCommandPlatformForPath(
+      setup.runnerScriptPath,
+      navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
+    )
+    const sequenced = createSequencedSetupAgentCommands({
+      runnerScriptPath: setup.runnerScriptPath,
+      startupCommand: startup.command,
+      platform
+    })
+    sequencedStartup = {
+      ...startup,
+      command: sequenced.startupCommand,
+      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
+    }
+    wrappedSetupCommandStr = sequenced.setupCommand
+  }
+
+  // Why: remote web clients mirror the runtime server's session tabs. A local
+  // activation fallback can spawn a second host terminal before the mirror lands,
+  // but returned setup fallbacks still need to run on an already mirrored tab.
   if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))) {
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+    if (existingTerminalTabId && (setup || issueCommand)) {
+      queueSetupAndIssueCommands(
+        store,
+        worktreeId,
+        existingTerminalTabId,
+        setup,
+        issueCommand,
+        wrappedSetupCommandStr
+      )
+      return existingTerminalTabId
+    }
+    return null
+  }
+
+  if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+    if (existingTerminalTabId && (setup || issueCommand)) {
+      // Why: main may have already adopted the startup tab but failed to spawn
+      // setup; renderer activation must still launch the returned fallback setup.
+      queueSetupAndIssueCommands(
+        store,
+        worktreeId,
+        existingTerminalTabId,
+        setup,
+        issueCommand,
+        wrappedSetupCommandStr
+      )
+      return existingTerminalTabId
+    }
     return null
   }
 
   const templatedTabId = applyDefaultTerminalTabs(
     store,
     worktreeId,
-    startup,
+    sequencedStartup,
     setup,
     issueCommand,
-    defaultTabs
+    defaultTabs,
+    wrappedSetupCommandStr
   )
   if (templatedTabId) {
     return templatedTabId
@@ -471,11 +524,13 @@ export function ensureWorktreeHasInitialTerminal(
   //
   // Why: the initial terminal can be seeded with a coding agent (new-workspace
   // flow, or reopening an empty worktree created with an agent). The startup
-  // payload only carries telemetry's agent_kind, so reverse it back to a
-  // TuiAgent to stamp the tab — giving it the provider icon before any hook.
-  const launchAgent = startup?.telemetry
-    ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
-    : undefined
+  // payload may carry explicit launchAgent; older flows only carry telemetry's
+  // agent_kind, so reverse that back to a TuiAgent when needed for the icon.
+  const launchAgent =
+    sequencedStartup?.launchAgent ??
+    (sequencedStartup?.telemetry
+      ? (agentKindToTuiAgent(sequencedStartup.telemetry.agent_kind) ?? undefined)
+      : undefined)
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
     ...(launchAgent ? { launchAgent } : {})
@@ -486,10 +541,17 @@ export function ensureWorktreeHasInitialTerminal(
   // coding agent and user prompt. Queue that startup command on the initial
   // pane so the main terminal begins in the requested agent session instead of
   // opening to an idle shell and forcing the user to repeat the same prompt.
-  if (startup) {
-    store.queueTabStartupCommand(terminalTab.id, startup)
+  if (sequencedStartup) {
+    store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
   }
-  queueSetupAndIssueCommands(store, worktreeId, terminalTab.id, setup, issueCommand)
+  queueSetupAndIssueCommands(
+    store,
+    worktreeId,
+    terminalTab.id,
+    setup,
+    issueCommand,
+    wrappedSetupCommandStr
+  )
 
   return terminalTab.id
 }
@@ -500,7 +562,8 @@ function applyDefaultTerminalTabs(
   startup: WorktreeStartupPayload | undefined,
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
-  defaultTabs: WorktreeDefaultTabsLaunch | undefined
+  defaultTabs: WorktreeDefaultTabsLaunch | undefined,
+  wrappedSetupCommandStr?: string
 ): string | null {
   if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
     return null
@@ -538,7 +601,14 @@ function applyDefaultTerminalTabs(
   if (startup) {
     store.queueTabStartupCommand(firstTabId, startup)
   }
-  queueSetupAndIssueCommands(store, worktreeId, firstTabId, setup, issueCommand)
+  queueSetupAndIssueCommands(
+    store,
+    worktreeId,
+    firstTabId,
+    setup,
+    issueCommand,
+    wrappedSetupCommandStr
+  )
   return firstTabId
 }
 
@@ -547,7 +617,8 @@ function queueSetupAndIssueCommands(
   worktreeId: string,
   terminalTabId: string,
   setup: WorktreeSetupLaunch | undefined,
-  issueCommand: IssueCommandLaunch | undefined
+  issueCommand: IssueCommandLaunch | undefined,
+  wrappedSetupCommandStr?: string
 ): void {
   // Why: the setup script launch location is user-configurable. The default
   // 'new-tab' creates a separate background tab titled "Setup" without
@@ -557,7 +628,8 @@ function queueSetupAndIssueCommands(
   if (setup) {
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
-      command: buildSetupRunnerCommand(setup.runnerScriptPath),
+      command:
+        wrappedSetupCommandStr ?? setup.command ?? buildSetupRunnerCommand(setup.runnerScriptPath),
       env: setup.envVars
     }
     if (mode === 'new-tab') {

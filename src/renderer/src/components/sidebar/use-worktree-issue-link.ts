@@ -46,7 +46,8 @@ export function useWorktreeIssueLink(args: { worktreeId: string; issueInput: str
           issueNumber,
           s.settings,
           issueRepo.connectionId,
-          issueRepo.executionHostId
+          issueRepo.executionHostId,
+          true
         )
       ]?.data?.url ?? null
     )

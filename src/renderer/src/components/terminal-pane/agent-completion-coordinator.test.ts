@@ -1054,14 +1054,16 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
-  it('would spam Cursor notifications if shell hooks still mapped to waiting', () => {
+  it('does not dispatch completion when waiting states arrive mid-turn', () => {
     const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      dispatchAttention,
       isLive: () => true
     })
 
@@ -1070,6 +1072,7 @@ describe('agent completion coordinator', () => {
       agentType: 'cursor' as const
     }
 
+    // 'waiting' (e.g. a PermissionRequest) is mid-turn, not a completion.
     coordinator.observeHookStatus({ state: 'working', ...turn })
     coordinator.observeHookStatus({
       state: 'waiting',
@@ -1089,8 +1092,110 @@ describe('agent completion coordinator', () => {
       toolName: 'Shell',
       toolInput: 'git status'
     })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
-    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledTimes(2)
+    expect(dispatchAttention).toHaveBeenLastCalledWith(
+      'cursor',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'cursor',
+          toolInput: 'git status'
+        })
+      })
+    )
+  })
+
+  it('does not dispatch completion when a blocked state arrives mid-turn', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'copilot' as const
+    }
+
+    // 'blocked' (e.g. a Copilot elicitation dialog) is mid-turn, not a completion.
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'blocked',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'npm install'
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'copilot',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'blocked',
+          agentType: 'copilot',
+          toolInput: 'npm install'
+        })
+      })
+    )
+  })
+
+  it('cancels a pending done timer when a waiting state arrives before the quiet window', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Done.' })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
+
+    // A permission/elicitation pause arrives before the 1.5s quiet window
+    // expires; it must cancel the pending 'done' so no completion fires.
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'cursor',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'cursor',
+          toolInput: 'pnpm test'
+        })
+      })
+    )
   })
 
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {

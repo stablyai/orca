@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   Clipboard,
+  ClipboardCopy,
   Copy,
   Eraser,
   GitFork,
@@ -52,6 +53,7 @@ type TerminalContextMenuProps = {
   onClosePane: () => void
   onClearScreen: () => void
   onForkAgentSession: () => void
+  onCopyAgentSessionContext: () => void
   repoQuickCommands: TerminalQuickCommand[]
   globalQuickCommands: TerminalQuickCommand[]
   quickCommandRepoLabel: string | null
@@ -81,6 +83,7 @@ export default function TerminalContextMenu({
   onClosePane,
   onClearScreen,
   onForkAgentSession,
+  onCopyAgentSessionContext,
   repoQuickCommands,
   globalQuickCommands,
   quickCommandRepoLabel,
@@ -245,6 +248,13 @@ export default function TerminalContextMenu({
           {translate(
             'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
             'Fork Agent Session…'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopyAgentSessionContext}>
+          <ClipboardCopy />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.cff67afad1',
+            'Copy Context'
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />

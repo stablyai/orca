@@ -836,6 +836,7 @@ type GitStreamOptions = {
   cwd: string
   env?: NodeJS.ProcessEnv
   wslDistro?: string
+  signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
   /**
@@ -863,6 +864,10 @@ export async function gitStreamStdout(
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   return withGitSpan({ args, cwd: options.cwd }, async () => {
     return new Promise<GitStreamResult>((resolve, reject) => {
+      if (options.signal?.aborted) {
+        reject(createAbortError())
+        return
+      }
       const child = gitSpawn(args, {
         cwd: options.cwd,
         env: nonInteractiveGitEnv(options.env),
@@ -887,6 +892,7 @@ export async function gitStreamStdout(
         child.stderr?.off('data', onStderrData)
         child.off('error', onError)
         child.off('close', onClose)
+        options.signal?.removeEventListener('abort', onAbort)
         // Flush any bytes the decoders were holding for an incomplete sequence.
         stdoutDecoder.end()
         stderrDecoder.end()
@@ -953,11 +959,19 @@ export async function gitStreamStdout(
         }
         finish(new Error(`git exited with ${code}: ${stderr}`))
       }
+      function onAbort(): void {
+        killSpawnedCommandTree(child)
+        finish(createAbortError())
+      }
 
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
       child.on('error', onError)
       child.on('close', onClose)
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      if (options.signal?.aborted) {
+        onAbort()
+      }
     })
   })
 }
