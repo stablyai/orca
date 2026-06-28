@@ -121,9 +121,13 @@ export function spawnSystemSshPortForward(
   if (destinationIndex === -1) {
     args.unshift(...forwardArgs)
   } else {
+    // Why: OpenSSH parses options only before `--`; after it, args are the
+    // destination and optional remote command.
     args.splice(destinationIndex, 0, ...forwardArgs)
   }
 
+  // Why: port-forward ssh processes are not wired to Orca credential prompts;
+  // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
   return spawn(sshPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true

@@ -51,9 +51,13 @@ function createFakeSystemSshProcess() {
   const process = new EventEmitter() as EventEmitter & {
     stderr: EventEmitter
     kill: ReturnType<typeof vi.fn>
+    exitCode: number | null
+    signalCode: NodeJS.Signals | null
   }
   process.stderr = new EventEmitter()
   process.kill = vi.fn()
+  process.exitCode = null
+  process.signalCode = null
   return process
 }
 
@@ -164,6 +168,55 @@ describe('SshPortForwardManager', () => {
     expect(manager.removeForward(entry.id)).toMatchObject({ id: entry.id })
     expect(process.kill).toHaveBeenCalledWith('SIGTERM')
     expect(manager.listForwards('conn-1')).toHaveLength(0)
+  })
+
+  it('waits for system SSH tunnels to exit before async removal resolves', async () => {
+    vi.useFakeTimers()
+    const process = createFakeSystemSshProcess()
+    spawnSystemSshPortForwardMock.mockReturnValue(process)
+    const conn = createSystemSshConn()
+
+    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    await vi.advanceTimersByTimeAsync(250)
+    await pending
+
+    let resolved = false
+    const removal = manager.removeAllForwards('conn-1').then(() => {
+      resolved = true
+    })
+
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(process.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(resolved).toBe(false)
+
+    process.emit('exit', null)
+    await removal
+    expect(resolved).toBe(true)
+  })
+
+  it('escalates stuck system SSH tunnels to SIGKILL before async removal resolves', async () => {
+    vi.useFakeTimers()
+    const process = createFakeSystemSshProcess()
+    spawnSystemSshPortForwardMock.mockReturnValue(process)
+    const conn = createSystemSshConn()
+
+    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    await vi.advanceTimersByTimeAsync(250)
+    await pending
+
+    let resolved = false
+    const removal = manager.removeAllForwards('conn-1').then(() => {
+      resolved = true
+    })
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(process.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(process.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(resolved).toBe(false)
+
+    process.emit('exit', null)
+    await removal
+    expect(resolved).toBe(true)
   })
 
   it('lists forwards filtered by connectionId', async () => {

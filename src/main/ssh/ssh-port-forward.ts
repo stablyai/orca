@@ -238,21 +238,44 @@ export class SshPortForwardManager {
   }
 
   private waitForSystemSshForwardStop(process: ChildProcess): Promise<void> {
-    process.kill('SIGTERM')
     return new Promise((resolve) => {
+      let settled = false
       const cleanup = (): void => {
-        clearTimeout(timer)
+        clearTimeout(escalationTimer)
         process.off('exit', onExit)
       }
-      const onExit = (): void => {
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
         cleanup()
         resolve()
       }
-      const timer = setTimeout(() => {
-        cleanup()
-        resolve()
+      const onExit = (): void => {
+        finish()
+      }
+      const hasExited = (): boolean => process.exitCode !== null || process.signalCode !== null
+      const kill = (signal: NodeJS.Signals): void => {
+        try {
+          const sent = process.kill(signal)
+          if (!sent && hasExited()) {
+            finish()
+          }
+        } catch {
+          if (hasExited()) {
+            finish()
+          }
+        }
+      }
+      const escalationTimer = setTimeout(() => {
+        // Why: update/reconnect callers must not rebind while a stubborn ssh -L
+        // process still owns the local port.
+        kill('SIGKILL')
       }, SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
+
       process.once('exit', onExit)
+      kill('SIGTERM')
     })
   }
 
