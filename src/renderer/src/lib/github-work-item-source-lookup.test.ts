@@ -54,6 +54,29 @@ describe('GitHub source lookup routing', () => {
     expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
   })
 
+  // Regression for #6429: a runtime-sourced details lookup must never reach the
+  // local Electron IPC, which rejects unregistered remote repos with
+  // "Access denied: unknown repository path". On main this routed through
+  // window.api.gh.workItemDetails and surfaced that error.
+  it('does not invoke the local IPC (which throws access-denied) for runtime sources', async () => {
+    vi.mocked(callRuntimeRpc).mockResolvedValue(null)
+    vi.mocked(window.api.gh.workItemDetails).mockRejectedValue(
+      new Error('Access denied: unknown repository path')
+    )
+
+    await expect(
+      lookupGitHubWorkItemDetailsForSource({
+        repoPath: '/home/runtime/app',
+        repoId: 'renderer-repo',
+        sourceContext: runtimeSourceContext,
+        number: 42,
+        type: 'issue'
+      })
+    ).resolves.toBeNull()
+
+    expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
+  })
+
   it('uses the renderer repo id for runtime details when the source has no repo id', async () => {
     vi.mocked(callRuntimeRpc).mockResolvedValue(null)
 
