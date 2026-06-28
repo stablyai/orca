@@ -17,5 +17,6 @@ export const STREAMING_CHUNKS = [
   'Reading src/auth/session.ts...\n',
   '\nI see the current implementation uses express-session.\n',
   "I'll replace it with jsonwebtoken.\n",
-  '\nUpdating src/auth/middleware.ts...\n'
+  '\nUpdating src/auth/middleware.ts...\n',
+  '\nGenerated visual artifact: artifacts/screenshot.png\n'
 ]
