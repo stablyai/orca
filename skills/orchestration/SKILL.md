@@ -8,7 +8,11 @@ description: >-
   terminal control, lightweight terminal prompts, shell commands, Orca worktree
   management, reading or waiting on terminals, and automation of the browser
   embedded inside Orca. Use Computer Use for browser windows, webviews, Orca app
-  UI, or desktop UI outside Orca's embedded browser.
+  UI, or desktop UI outside Orca's embedded browser. Also triggers on the compact
+  shortcuts `/orchestration review <agents>`, `/orchestration oracle <agents>`,
+  and `/orchestration handoff <agent>` for fanning out a code review, getting a
+  second opinion, or handing the current work to another agent (see Recognized
+  Shortcuts).
 ---
 
 # Orca Inter-Agent Orchestration
@@ -23,6 +27,7 @@ Use this skill when coordination state matters. For lightweight terminal prompts
 - Dispatch structured tasks to workers and wait for `worker_done` or `escalation`.
 - Track task DAGs with dependencies.
 - Run coordinator loops or decision gates.
+- Run a compact shortcut: `/orchestration review <agents>`, `/orchestration oracle <agents>`, or `/orchestration handoff <agent>` (see Recognized Shortcuts).
 
 ## Preconditions
 
@@ -30,6 +35,51 @@ Use this skill when coordination state matters. For lightweight terminal prompts
 - `orca` must be on PATH (`orca-ide` on Linux).
 - The orchestration experimental feature must be enabled in Settings > Experimental.
 - `orca orchestration` commands are RPC calls to the running Orca runtime.
+
+## Recognized Shortcuts
+
+These three verbs are an optional fast-path — a compact phrasing for orchestration moves you can already trigger with a full natural-language prompt. Natural-language orchestration still works exactly as before; the shortcuts add shorthand, they do not replace it. Each acts on the current task/branch in the active worktree, and each maps onto the lower-level commands documented later in this skill.
+
+Grammar: `/orchestration <verb> <agents>`, where `<verb>` is `review`, `oracle`, or `handoff`. `<agents>` is one or more agent names from the catalog, delimited by a comma or `and` (e.g. `/orchestration oracle cursor and claude`). Agents are always named explicitly — there is no `all agents` form. `review` and `oracle` accept one or more agents; `handoff` takes a single agent. If a named agent cannot be launched or never reports back within the wait window, surface it as unavailable/incomplete in the result — best-effort; do not hang indefinitely or silently drop it.
+
+### `review <agents>` and `oracle <agents>` — ephemeral children
+
+`review` fans out a code review of the current changes; `oracle` gets a second opinion on the decision/task at hand. Both spawn ephemeral children, collect their reports, synthesize, and tear the children down — you stay in the current session. For each named agent:
+
+```bash
+orca terminal create --worktree active --title <verb>-<agent> --command "<agent>" --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
+orca orchestration task-create --spec "<review or oracle instruction for the current task>" --json
+orca orchestration dispatch --task <task_id> --to <handle> --inject --json
+```
+
+Collect each child's report, best-effort, with a bounded wait (one wait per dispatched child):
+
+```bash
+orca orchestration check --wait --types worker_done,escalation --timeout-ms 900000 --json
+```
+
+Consolidate every report into a single de-duped digest written back into this session — do not make the user open the child tabs. Then tear each child down (`orca terminal close` lives in `orca-cli`):
+
+```bash
+orca terminal close --terminal <handle> --json
+```
+
+- `review` instruction: review the current changes/diff and report findings only. Children are advisory and read-only — they must not edit the working tree, since all children share this worktree and edits would collide.
+- `oracle` instruction: give a second opinion on the current decision/task; consolidate the opinions and factor them into your next response.
+- Children appear under the current worktree (the existing child-spawn path); no new worktree handling is involved. Completion is best-effort: a child that does not report `worker_done` within the wait is noted as incomplete in the digest rather than waited on indefinitely. `--inject` reports `worker_done` only for recognized agent CLIs, so a named agent that is not injection-recognized may come back incomplete.
+
+### `handoff <agent>` — new persistent tab
+
+`handoff` moves the work to another agent in the same worktree. Open a new persistent tab running the named agent and seed it with a context brief. This is a full ownership transfer, so do NOT use `--inject` and do not create lifecycle obligations:
+
+```bash
+orca terminal create --worktree active --title handoff-<agent> --command "<agent>" --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
+orca terminal send --terminal <handle> --text "<context brief>" --enter --json
+```
+
+The brief summarizes the current conversation so a fresh agent can continue the work. Do not duplicate content already captured in other artifacts (PRDs, plans, issues, commits) — reference them by path or URL instead. Unlike a worktree handoff (see Full Handoffs), this stays in the current worktree as a new tab; the user moves to that tab to continue.
 
 ## Ownership
 
