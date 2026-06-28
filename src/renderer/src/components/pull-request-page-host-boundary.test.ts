@@ -31,7 +31,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(section).toContain(
       'patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {'
     )
-    expect(section).toContain('const runtimeRepo = sourceContext?.repoId ?? item.repoId')
+    expect(section).toContain(
+      'const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)'
+    )
     expect(section).toContain("'github.requestPRReviewers'")
     expect(section).toContain("'github.removePRReviewers'")
     expect(section).toContain('{ repo: runtimeRepo, prNumber: item.number, reviewers: logins }')
@@ -149,9 +151,9 @@ describe('PullRequestPage host boundaries', () => {
       'const ownerRepo = parseOwnerRepoFromItemUrl'
     )
 
-    expect(helperSection).toContain('parseExecutionHostId(args.sourceContext.hostId)')
+    expect(helperSection).toContain('getGitHubSourceRuntimeHost(args.sourceContext)')
     expect(helperSection).toContain("'github.setPRFileViewed'")
-    expect(helperSection).toContain('repo: args.sourceContext?.repoId ?? args.repoId')
+    expect(helperSection).toContain('repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId)')
     expect(helperSection).toContain('sourceContext: args.sourceContext')
     expect(helperSection).toContain('{ local: false }')
     expect(changeSection).toContain('canUseDetailsRepoContext')
@@ -182,11 +184,11 @@ describe('PullRequestPage host boundaries', () => {
       'const canSubmitComment ='
     )
 
-    expect(helperSection).toContain('parseExecutionHostId(args.sourceContext.hostId)')
+    expect(helperSection).toContain('getGitHubSourceRuntimeHost(args.sourceContext)')
     expect(helperSection).toContain("'github.addIssueComment'")
     expect(helperSection).toContain("'github.addPRReviewComment'")
     expect(helperSection).toContain("'github.addPRReviewCommentReply'")
-    expect(helperSection).toContain('repo: args.sourceContext?.repoId ?? args.repoId')
+    expect(helperSection).toContain('repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId)')
     expect(helperSection).toContain('sourceContext: args.sourceContext')
     expect(helperSection).toContain('notifyWorkItemDetailsMutation(')
     expect(helperSection).toContain('{ local: false }')
@@ -218,7 +220,9 @@ describe('PullRequestPage host boundaries', () => {
       'source:${getTaskSourceCacheScope(args.sourceContext)}'
     )
     expect(fileContentsSection).toContain("'github.prFileContents'")
-    expect(fileContentsSection).toContain('repo: args.sourceContext?.repoId ?? args.repoId')
+    expect(fileContentsSection).toContain(
+      'repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId)'
+    )
     expect(fileContentsSection).toContain('sourceContext: args.sourceContext')
     expect(fileContentsSection).toContain('sourceContext,')
     expect(listenerSection).toContain('onGitHubWorkItemDetailsCacheMutation')
@@ -238,7 +242,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(checksSection).toContain("'github.prChecks'")
     expect(checksSection).toContain("'github.rerunPRChecks'")
     expect(checksSection).toContain("'github.prCheckDetails'")
-    expect(checksSection).toContain('repo: sourceContext?.repoId ?? repoId ?? item.repoId')
+    expect(checksSection).toContain(
+      'repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId)'
+    )
     expect(checksSection).toContain('window.api.gh.prChecks({')
     expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
     expect(checksSection).toContain('prCheckDetails({')
@@ -264,7 +270,9 @@ describe('PullRequestPage host boundaries', () => {
     expect(editHelperSection).toContain('sourceContext?: TaskSourceContext | null')
     expect(editHelperSection).toContain("args.sourceContext?.provider === 'github'")
     expect(editHelperSection).toContain('getTaskSourceRuntimeSettings(args.sourceContext)')
-    expect(editHelperSection).toContain('repo: args.sourceContext?.repoId ?? args.repoId')
+    expect(editHelperSection).toContain(
+      "repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? '')"
+    )
     expect(editHelperSection).toContain('{ local: false }')
     expect(editSection).toContain('getTaskSourceRuntimeSettings(sourceContext)')
     expect(editSection).toContain('sourceContext,')
@@ -285,7 +293,9 @@ describe('PullRequestPage host boundaries', () => {
     )
     expect(actionsSection).toContain("'github.mergePR'")
     expect(actionsSection).toContain("'github.setPRAutoMerge'")
-    expect(actionsSection).toContain('repo: sourceContext?.repoId ?? repoId ?? item.repoId')
+    expect(actionsSection).toContain(
+      'repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId)'
+    )
     expect(actionsSection).toContain('sourceContext,')
     expect(actionsSection).toContain('notifyWorkItemDetailsMutation(')
     expect(actionsSection).toContain('{ local: false }')

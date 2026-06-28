@@ -1,8 +1,11 @@
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  getGitHubRuntimeRepoId,
+  getGitHubSourceRuntimeHost,
+  getGitHubSourceRuntimeTarget
+} from './github-source-runtime-context'
 
 type GitHubWorkItemLookupArgs = {
   repoPath: string
@@ -27,13 +30,13 @@ type GitHubWorkItemDetailsLookupArgs = {
 }
 
 function runtimeRepoId(args: Pick<GitHubWorkItemLookupArgs, 'repoId' | 'sourceContext'>): string {
-  return args.sourceContext?.repoId ?? args.repoId
+  return getGitHubRuntimeRepoId(args.sourceContext, args.repoId)
 }
 
 export async function lookupGitHubWorkItemForSource(
   args: GitHubWorkItemLookupArgs
 ): Promise<GitHubWorkItem | null> {
-  const target = getActiveRuntimeTarget(getTaskSourceRuntimeSettings(args.sourceContext))
+  const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -58,7 +61,7 @@ export async function lookupGitHubWorkItemForSource(
 export async function lookupGitHubWorkItemByOwnerRepoForSource(
   args: GitHubWorkItemByOwnerRepoLookupArgs
 ): Promise<GitHubWorkItem | null> {
-  const target = getActiveRuntimeTarget(getTaskSourceRuntimeSettings(args.sourceContext))
+  const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -88,14 +91,13 @@ export function lookupGitHubWorkItemDetailsForSource(
   args: GitHubWorkItemDetailsLookupArgs
 ): Promise<GitHubWorkItemDetails | null> {
   const sourceContext = args.sourceContext
-  const parsedHost =
-    sourceContext?.provider === 'github' ? parseExecutionHostId(sourceContext.hostId) : null
-  if (parsedHost?.kind === 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
+  if (runtimeHost) {
     return callRuntimeRpc<GitHubWorkItemDetails | null>(
-      { kind: 'environment', environmentId: parsedHost.environmentId },
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
       'github.workItemDetails',
       {
-        repo: sourceContext?.repoId ?? args.repoId,
+        repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
         number: args.number,
         type: args.type
       },

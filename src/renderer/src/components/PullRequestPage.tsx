@@ -165,12 +165,16 @@ import {
   onGitHubWorkItemDetailsCacheMutation
 } from '@/lib/github-work-item-details-cache-events'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
+import {
+  canUseGitHubRepoContext,
+  getGitHubRuntimeRepoId,
+  getGitHubSourceRuntimeHost
+} from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
-import { parseExecutionHostId } from '../../../shared/execution-host'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
@@ -988,7 +992,7 @@ function PRReviewersPanel({
     }
     setSubmitting(true)
     try {
-      const runtimeRepo = sourceContext?.repoId ?? item.repoId
+      const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
@@ -1078,7 +1082,7 @@ function PRReviewersPanel({
     }
     setSubmitting(true)
     try {
-      const runtimeRepo = sourceContext?.repoId ?? item.repoId
+      const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
@@ -1772,17 +1776,14 @@ function loadPRFileContents(args: {
     return Promise.resolve(cached.value)
   }
   let request: Promise<GitHubPRFileContents>
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
   request = (
-    parsedHost?.kind === 'runtime'
+    runtimeHost
       ? callRuntimeRpc<GitHubPRFileContents>(
-          { kind: 'environment', environmentId: parsedHost.environmentId },
+          { kind: 'environment', environmentId: runtimeHost.environmentId },
           'github.prFileContents',
           {
-            repo: args.sourceContext?.repoId ?? args.repoId,
+            repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
             prNumber: args.prNumber,
             path: args.file.path,
             oldPath: args.file.oldPath,
@@ -1830,16 +1831,13 @@ function addIssueCommentForRepo(args: {
   body: string
   type?: 'issue' | 'pr'
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
-  if (parsedHost?.kind === 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
-      { kind: 'environment', environmentId: parsedHost.environmentId },
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
       'github.addIssueComment',
       {
-        repo: args.sourceContext?.repoId ?? args.repoId,
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         number: args.number,
         body: args.body
       },
@@ -1881,16 +1879,13 @@ function addPRReviewCommentForRepo(args: {
   startLine?: number
   body: string
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
-  if (parsedHost?.kind === 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>>(
-      { kind: 'environment', environmentId: parsedHost.environmentId },
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
       'github.addPRReviewComment',
       {
-        repo: args.sourceContext?.repoId ?? args.repoId,
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         prNumber: args.prNumber,
         commitId: args.commitId,
         path: args.path,
@@ -1939,16 +1934,13 @@ function addPRReviewCommentReplyForRepo(args: {
   path?: string
   line?: number
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
-  if (parsedHost?.kind === 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>>(
-      { kind: 'environment', environmentId: parsedHost.environmentId },
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
       'github.addPRReviewCommentReply',
       {
-        repo: args.sourceContext?.repoId ?? args.repoId,
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         prNumber: args.prNumber,
         commentId: args.commentId,
         body: args.body,
@@ -2018,16 +2010,13 @@ function setPRFileViewedForRepo(args: {
   path: string
   viewed: boolean
 }): Promise<boolean> {
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
-  if (parsedHost?.kind === 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
     return callRuntimeRpc<boolean>(
-      { kind: 'environment', environmentId: parsedHost.environmentId },
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
       'github.setPRFileViewed',
       {
-        repo: args.sourceContext?.repoId ?? args.repoId,
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         pullRequestId: args.pullRequestId,
         path: args.path,
         viewed: args.viewed
@@ -3240,9 +3229,7 @@ function ConversationTab({
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
-  const parsedSourceHost =
-    sourceContext?.provider === 'github' ? parseExecutionHostId(sourceContext.hostId) : null
-  const canUseRepoMutationContext = !!repoPath || parsedSourceHost?.kind === 'runtime'
+  const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
@@ -3966,7 +3953,7 @@ function PRActionsPanel({
               mergeTarget,
               'github.mergePR',
               {
-                repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 method,
                 prRepo: item.prRepo ?? null
@@ -4022,7 +4009,7 @@ function PRActionsPanel({
               mergeTarget,
               'github.setPRAutoMerge',
               {
-                repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 enabled,
                 method: enabled ? mergeMethods.defaultMethod : undefined,
@@ -4535,9 +4522,8 @@ function ChecksTab({
     [item, targetRepoId]
   )
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
-  const parsedSourceHost =
-    sourceContext?.provider === 'github' ? parseExecutionHostId(sourceContext.hostId) : null
-  const canUseChecksRepoContext = !!repoPath || parsedSourceHost?.kind === 'runtime'
+  const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
+  const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const sorted = [...list].sort(
     (a, b) =>
       (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
@@ -4576,12 +4562,12 @@ function ChecksTab({
     }
     setRefreshing(true)
     try {
-      const nextChecks = (await (parsedSourceHost?.kind === 'runtime'
+      const nextChecks = (await (runtimeHost
         ? callRuntimeRpc<PRCheckDetail[]>(
-            { kind: 'environment', environmentId: parsedSourceHost.environmentId },
+            { kind: 'environment', environmentId: runtimeHost.environmentId },
             'github.prChecks',
             {
-              repo: sourceContext?.repoId ?? repoId ?? item.repoId,
+              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
               prNumber: item.number,
               headSha,
               prRepo,
@@ -4616,7 +4602,7 @@ function ChecksTab({
     item.number,
     item.repoId,
     onChecksUpdated,
-    parsedSourceHost,
+    runtimeHost,
     prRepo,
     repoId,
     repoPath,
@@ -4630,27 +4616,26 @@ function ChecksTab({
       }
       setRerunning(true)
       try {
-        const result =
-          parsedSourceHost?.kind === 'runtime'
-            ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
-                { kind: 'environment', environmentId: parsedSourceHost.environmentId },
-                'github.rerunPRChecks',
-                {
-                  repo: sourceContext?.repoId ?? repoId ?? item.repoId,
-                  prNumber: item.number,
-                  headSha,
-                  failedOnly
-                },
-                { timeoutMs: 30_000 }
-              )
-            : await window.api.gh.rerunPRChecks({
-                repoPath: repoPath ?? '',
-                repoId: repoId ?? undefined,
-                sourceContext,
+        const result = runtimeHost
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
+              { kind: 'environment', environmentId: runtimeHost.environmentId },
+              'github.rerunPRChecks',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 headSha,
                 failedOnly
-              })
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.rerunPRChecks({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              headSha,
+              failedOnly
+            })
         if (!result.ok) {
           toast.error(result.error)
           return
@@ -4677,7 +4662,7 @@ function ChecksTab({
       headSha,
       item.number,
       item.repoId,
-      parsedSourceHost,
+      runtimeHost,
       rerunning,
       repoId,
       repoPath,
@@ -4756,31 +4741,30 @@ function ChecksTab({
           error: null
         })
       )
-      const detailsRequest =
-        parsedSourceHost?.kind === 'runtime'
-          ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
-              { kind: 'environment', environmentId: parsedSourceHost.environmentId },
-              'github.prCheckDetails',
-              {
-                repo: sourceContext?.repoId ?? repoId ?? item.repoId,
-                checkRunId: check.checkRunId,
-                workflowRunId: check.workflowRunId,
-                checkName: check.name,
-                url: check.url,
-                prRepo
-              },
-              { timeoutMs: 30_000 }
-            )
-          : window.api.gh.prCheckDetails({
-              repoPath: repoPath ?? '',
-              repoId: repoId ?? undefined,
-              sourceContext,
+      const detailsRequest = runtimeHost
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
+            { kind: 'environment', environmentId: runtimeHost.environmentId },
+            'github.prCheckDetails',
+            {
+              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
               checkRunId: check.checkRunId,
               workflowRunId: check.workflowRunId,
               checkName: check.name,
               url: check.url,
               prRepo
-            })
+            },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.prCheckDetails({
+            repoPath: repoPath ?? '',
+            repoId: repoId ?? undefined,
+            sourceContext,
+            checkRunId: check.checkRunId,
+            workflowRunId: check.workflowRunId,
+            checkName: check.name,
+            url: check.url,
+            prRepo
+          })
       void detailsRequest
         .then((details) => {
           if (!mountedRef.current) {
@@ -4812,7 +4796,7 @@ function ChecksTab({
       detailsByCheckKey,
       item.repoId,
       mountedRef,
-      parsedSourceHost,
+      runtimeHost,
       prRepo,
       repoId,
       repoPath,
@@ -5560,36 +5544,32 @@ async function runIssueUpdate(args: {
     }
     return
   }
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
-  if (!args.repoPath && parsedHost?.kind !== 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (!args.repoPath && !runtimeHost) {
     throw new Error('No repo context available for this edit.')
   }
-  const res =
-    parsedHost?.kind === 'runtime'
-      ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssue>>>(
-          { kind: 'environment', environmentId: parsedHost.environmentId },
-          'github.updateIssue',
-          {
-            repo: args.sourceContext?.repoId ?? args.repoId,
-            number: args.number,
-            updates: args.updates
-          },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.gh.updateIssue({
-          repoPath: args.repoPath ?? '',
-          repoId: args.repoId ?? undefined,
-          sourceContext: args.sourceContext,
+  const res = runtimeHost
+    ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssue>>>(
+        { kind: 'environment', environmentId: runtimeHost.environmentId },
+        'github.updateIssue',
+        {
+          repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
           number: args.number,
           updates: args.updates
-        })
+        },
+        { timeoutMs: 30_000 }
+      )
+    : await window.api.gh.updateIssue({
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        number: args.number,
+        updates: args.updates
+      })
   if (!res.ok) {
     throw new Error(res.error)
   }
-  if (parsedHost?.kind === 'runtime') {
+  if (runtimeHost) {
     notifyWorkItemDetailsMutation(
       {
         repoPath: args.repoPath ?? '',
@@ -5716,36 +5696,32 @@ async function runPullRequestStateUpdate(args: {
     }
     return
   }
-  const parsedHost =
-    args.sourceContext?.provider === 'github'
-      ? parseExecutionHostId(args.sourceContext.hostId)
-      : null
-  if (!args.repoPath && parsedHost?.kind !== 'runtime') {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (!args.repoPath && !runtimeHost) {
     throw new Error('No repo context available for this pull request.')
   }
-  const res =
-    parsedHost?.kind === 'runtime'
-      ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
-          { kind: 'environment', environmentId: parsedHost.environmentId },
-          'github.updatePRState',
-          {
-            repo: args.sourceContext?.repoId ?? args.repoId,
-            prNumber: args.number,
-            updates: args.updates
-          },
-          { timeoutMs: 30_000 }
-        )
-      : await window.api.gh.updatePRState({
-          repoPath: args.repoPath ?? '',
-          repoId: args.repoId ?? undefined,
-          sourceContext: args.sourceContext,
+  const res = runtimeHost
+    ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
+        { kind: 'environment', environmentId: runtimeHost.environmentId },
+        'github.updatePRState',
+        {
+          repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
           prNumber: args.number,
           updates: args.updates
-        })
+        },
+        { timeoutMs: 30_000 }
+      )
+    : await window.api.gh.updatePRState({
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        prNumber: args.number,
+        updates: args.updates
+      })
   if (!res.ok) {
     throw new Error(res.error)
   }
-  if (parsedHost?.kind === 'runtime') {
+  if (runtimeHost) {
     notifyWorkItemDetailsMutation(
       {
         repoPath: args.repoPath ?? '',
@@ -6458,9 +6434,7 @@ export default function PullRequestPage({
     return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
       ?.issueSourcePreference
   })
-  const detailsSourceHost =
-    sourceContext?.provider === 'github' ? parseExecutionHostId(sourceContext.hostId) : null
-  const canUseDetailsRepoContext = !!repoPath || detailsSourceHost?.kind === 'runtime'
+  const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
