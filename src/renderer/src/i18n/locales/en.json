@@ -9735,7 +9735,12 @@
           "a6cffbbb0b": "Generate code",
           "e59a252eca": "Regenerate code",
           "d0b52871ce": "Your phones are paired.",
-          "051978a785": "Your phone is paired."
+          "051978a785": "Your phone is paired.",
+          "channel": {
+            "group": "Release channel",
+            "preview": "Preview",
+            "stable": "Stable"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -9769,7 +9774,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Scan with your Android camera to download the latest APK from GitHub Releases.",
-              "432db52b73": "Scan with your iPhone camera to open the App Store."
+              "432db52b73": "Scan with your iPhone camera to open the App Store.",
+              "preview": {
+                "tagline": "Newest features, updated daily."
+              },
+              "stable": {
+                "tagline": "The public release, updated weekly."
+              }
             }
           }
         },

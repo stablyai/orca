@@ -9735,7 +9735,12 @@
           "a6cffbbb0b": "生成代码",
           "e59a252eca": "重新生成代码",
           "d0b52871ce": "您的手机已配对。",
-          "051978a785": "您的手机已配对。"
+          "051978a785": "您的手机已配对。",
+          "channel": {
+            "group": "发布渠道",
+            "preview": "预览版",
+            "stable": "稳定版"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -9769,7 +9774,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "使用 Android 相机扫描以从 GitHub Releases 下载最新的 APK。",
-              "432db52b73": "使用 iPhone 相机扫描以打开 App Store。"
+              "432db52b73": "使用 iPhone 相机扫描以打开 App Store。",
+              "preview": {
+                "tagline": "最新功能，每日更新。"
+              },
+              "stable": {
+                "tagline": "公开发布版，每周更新。"
+              }
             }
           }
         },

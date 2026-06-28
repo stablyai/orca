@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { type PairedDevice, type Platform, type StepIndex } from './MobileHero'
-import { PLATFORM_COPY } from './mobile-platform-copy'
+import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
@@ -19,12 +19,13 @@ import { MobilePageContent } from './MobilePageContent'
 import { useMobileInstallQr } from './use-mobile-install-qr'
 
 export default function MobilePage(): React.JSX.Element {
-  // Why: stage starts unresolved so we don't flash the intro before we know
-  // whether any devices are already paired.
   const [stage, setStage] = useState<FlowStage | null>(null)
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
   const [platform, setPlatform] = useState<Platform>('ios')
+  // Default iOS users to the preview track — it ships daily, so newcomers land
+  // on the freshest build unless they deliberately pick the public release.
+  const [iosChannel, setIosChannel] = useState<IosChannel>('preview')
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
@@ -42,7 +43,7 @@ export default function MobilePage(): React.JSX.Element {
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const installQrUrl = useMobileInstallQr(stage, platform)
+  const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
 
   const setPairingDeviceBaseline = useCallback(
     (count: number | null): void => {
@@ -332,12 +333,12 @@ export default function MobilePage(): React.JSX.Element {
   }
 
   const openInstallUrl = (): void => {
-    void window.api.shell.openUrl(PLATFORM_COPY[platform].url)
+    void window.api.shell.openUrl(getInstallCopy(platform, iosChannel).url)
   }
 
   const copyInstallUrl = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
+      await window.api.ui.writeClipboardText(getInstallCopy(platform, iosChannel).url)
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')
@@ -380,6 +381,8 @@ export default function MobilePage(): React.JSX.Element {
       handleBack={handleBack}
       handleContinue={handleContinue}
       installQrUrl={installQrUrl}
+      iosChannel={iosChannel}
+      setIosChannel={setIosChannel}
       loadNetworkInterfaces={() => void loadNetworkInterfaces()}
       networkInterfaces={networkInterfaces}
       openInstallUrl={openInstallUrl}

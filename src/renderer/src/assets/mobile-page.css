@@ -680,6 +680,42 @@
   border-bottom-color: var(--foreground);
 }
 
+/* iOS release-channel switch (Preview vs Stable), shown above the install CTA */
+.mobile-page-root .mp-channel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: -8px 0 18px;
+  flex-wrap: wrap;
+}
+
+.mobile-page-root .mp-channel-toggle button {
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.mobile-page-root .mp-channel-toggle button.is-active {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  color: var(--foreground);
+}
+
+.mobile-page-root .mp-channel-tagline {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .mobile-page-root .mp-inline-actions {
   display: flex;
   align-items: center;

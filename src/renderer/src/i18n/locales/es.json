@@ -9735,7 +9735,12 @@
           "a6cffbbb0b": "Generar código",
           "e59a252eca": "regenerar código",
           "d0b52871ce": "Tus teléfonos están emparejados.",
-          "051978a785": "Tu teléfono está emparejado."
+          "051978a785": "Tu teléfono está emparejado.",
+          "channel": {
+            "group": "Canal de versión",
+            "preview": "Vista previa",
+            "stable": "Estable"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -9769,7 +9774,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Escanee con su cámara Android para descargar el último APK de GitHub Releases.",
-              "432db52b73": "Escanee con la cámara de su iPhone para abrir la App Store."
+              "432db52b73": "Escanee con la cámara de su iPhone para abrir la App Store.",
+              "preview": {
+                "tagline": "Las funciones más recientes, actualizadas a diario."
+              },
+              "stable": {
+                "tagline": "La versión pública, actualizada semanalmente."
+              }
             }
           }
         },
