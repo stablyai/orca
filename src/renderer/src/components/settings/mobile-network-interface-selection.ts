@@ -20,3 +20,33 @@ export function selectRefreshedNetworkAddress(
     interfaces[0]!.address
   )
 }
+
+function isNetworkInterfaceAddress(
+  address: string | undefined,
+  interfaces: readonly MobileNetworkInterface[]
+): boolean {
+  return Boolean(address && interfaces.some((iface) => iface.address === address))
+}
+
+export function selectRefreshedConnectionAddress({
+  currentAddress,
+  previousInterfaces,
+  nextInterfaces
+}: {
+  currentAddress: string | undefined
+  previousInterfaces: readonly MobileNetworkInterface[]
+  nextInterfaces: readonly MobileNetworkInterface[]
+}): string | undefined {
+  const normalizedAddress = currentAddress?.trim()
+  // Preserve a user-entered overlay/proxy address even when the OS does not
+  // expose it as a network interface.
+  if (
+    currentAddress &&
+    normalizedAddress &&
+    !isNetworkInterfaceAddress(normalizedAddress, previousInterfaces) &&
+    !isNetworkInterfaceAddress(normalizedAddress, nextInterfaces)
+  ) {
+    return currentAddress
+  }
+  return selectRefreshedNetworkAddress(normalizedAddress, nextInterfaces)
+}

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { type PairedDevice, type Platform, type StepIndex } from './MobileHero'
 import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import {
-  selectRefreshedNetworkAddress,
+  selectRefreshedConnectionAddress,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
 import { useMobilePairingDevicePolling } from '../settings/mobile-pairing-device-polling'
@@ -29,16 +29,22 @@ export default function MobilePage(): React.JSX.Element {
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [endpoint, setEndpoint] = useState<string | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
-  const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
+  const [connectionAddress, setConnectionAddress] = useState('')
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
+  const connectionAddressRef = useRef('')
+  const networkInterfacesRef = useRef<MobileNetworkInterface[]>([])
+  const pairingRequestIdRef = useRef(0)
+  const scheduledPairingRegenerationRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
   const stageRef = useRef<FlowStage | null>(null)
+  const stepIdxRef = useRef<StepIndex>(0)
   const deviceCountAtPairStartRef = useRef<number | null>(null)
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
@@ -65,6 +71,10 @@ export default function MobilePage(): React.JSX.Element {
     [mountedRef]
   )
 
+  useEffect(() => {
+    stepIdxRef.current = stepIdx
+  }, [stepIdx])
+
   const showPairedDevices = useCallback(
     (deviceCount: number): void => {
       // Why: paired-view polling uses this baseline; setting it with the
@@ -74,6 +84,27 @@ export default function MobilePage(): React.JSX.Element {
     },
     [setPairingDeviceBaseline, showStage]
   )
+
+  const updateConnectionAddress = useCallback((address: string): void => {
+    connectionAddressRef.current = address
+    setConnectionAddress(address)
+  }, [])
+
+  const invalidatePairingOffer = useCallback((): void => {
+    pairingRequestIdRef.current += 1
+    hasGeneratedRef.current = false
+    setPairQrDataUrl(null)
+    setPairingUrl(null)
+    setEndpoint(null)
+    setPairLoading(false)
+  }, [])
+
+  const clearScheduledPairingRegeneration = useCallback((): void => {
+    if (scheduledPairingRegenerationRef.current !== null) {
+      window.clearTimeout(scheduledPairingRegenerationRef.current)
+      scheduledPairingRegenerationRef.current = null
+    }
+  }, [])
 
   const loadDevices = useCallback(async (): Promise<PairedDevice[]> => {
     try {
@@ -160,33 +191,37 @@ export default function MobilePage(): React.JSX.Element {
 
   const generatePairing = useCallback(
     async (rotate: boolean, addressOverride?: string) => {
+      const requestId = ++pairingRequestIdRef.current
       if (mountedRef.current) {
         setPairLoading(true)
       }
       try {
-        const address = addressOverride ?? selectedAddress
+        const address = (addressOverride ?? connectionAddressRef.current).trim()
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
           ...(rotate ? { rotate: true } : {})
         })
-        if (result.available) {
-          if (mountedRef.current) {
-            setPairQrDataUrl(result.qrDataUrl)
-            setPairingUrl(result.pairingUrl)
-          }
-          hasGeneratedRef.current = true
-        } else {
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.mobile.MobilePage.b353e18de1',
-                'WebSocket transport is not running'
-              )
-            )
-          }
+        if (!mountedRef.current || pairingRequestIdRef.current !== requestId) {
+          return
         }
+        if (result.available) {
+          setPairQrDataUrl(result.qrDataUrl)
+          setPairingUrl(result.pairingUrl)
+          setEndpoint(result.endpoint)
+          setPairLoading(false)
+          hasGeneratedRef.current = true
+          return
+        }
+        setPairLoading(false)
+        toast.error(
+          translate(
+            'auto.components.mobile.MobilePage.b353e18de1',
+            'WebSocket transport is not running'
+          )
+        )
       } catch {
-        if (mountedRef.current) {
+        if (mountedRef.current && pairingRequestIdRef.current === requestId) {
+          setPairLoading(false)
           toast.error(
             translate(
               'auto.components.mobile.MobilePage.4c8bd11c1a',
@@ -194,13 +229,23 @@ export default function MobilePage(): React.JSX.Element {
             )
           )
         }
-      } finally {
-        if (mountedRef.current) {
-          setPairLoading(false)
-        }
       }
     },
-    [mountedRef, selectedAddress]
+    [mountedRef]
+  )
+
+  const schedulePairingRegeneration = useCallback(
+    (address: string): void => {
+      clearScheduledPairingRegeneration()
+      scheduledPairingRegenerationRef.current = window.setTimeout(() => {
+        scheduledPairingRegenerationRef.current = null
+        if (stageRef.current !== 'flow' || stepIdxRef.current !== 1) {
+          return
+        }
+        void generatePairing(false, address)
+      }, 350)
+    },
+    [clearScheduledPairingRegeneration, generatePairing]
   )
 
   const loadNetworkInterfaces = useCallback(async () => {
@@ -209,18 +254,26 @@ export default function MobilePage(): React.JSX.Element {
     }
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
+      const previousInterfaces = networkInterfacesRef.current
       if (mountedRef.current) {
+        networkInterfacesRef.current = result.interfaces
         setNetworkInterfaces(result.interfaces)
       }
-      // Resolve the new address before committing it so we can detect a real
-      // change and remint the QR — otherwise the QR keeps encoding the stale
-      // endpoint after a network refresh swaps the active interface.
-      const newAddress = selectRefreshedNetworkAddress(selectedAddress, result.interfaces)
+      const currentAddress = connectionAddressRef.current
+      const newAddress = selectRefreshedConnectionAddress({
+        currentAddress,
+        previousInterfaces,
+        nextInterfaces: result.interfaces
+      })
+      const addressChanged = newAddress !== currentAddress
       if (mountedRef.current) {
-        setSelectedAddress(newAddress)
+        if (addressChanged) {
+          invalidatePairingOffer()
+        }
+        updateConnectionAddress(newAddress ?? '')
       }
-      if (newAddress !== selectedAddress && hasGeneratedRef.current && mountedRef.current) {
-        void generatePairing(true, newAddress)
+      if (addressChanged && stageRef.current === 'flow' && stepIdxRef.current === 1) {
+        void generatePairing(false, newAddress)
       }
     } catch {
       // Network list is non-critical; the QR will still mint with default routing.
@@ -229,7 +282,7 @@ export default function MobilePage(): React.JSX.Element {
         setRefreshingNetworkInterfaces(false)
       }
     }
-  }, [selectedAddress, generatePairing, mountedRef])
+  }, [generatePairing, invalidatePairingOffer, mountedRef, updateConnectionAddress])
 
   useEffect(() => {
     if (stage !== 'flow') {
@@ -240,12 +293,21 @@ export default function MobilePage(): React.JSX.Element {
 
   const handleAddressChange = useCallback(
     (address: string) => {
-      setSelectedAddress(address)
-      // Switching network must remint so the QR encodes the new endpoint.
-      void generatePairing(true, address)
+      updateConnectionAddress(address)
+      invalidatePairingOffer()
+      schedulePairingRegeneration(address)
     },
-    [generatePairing]
+    [invalidatePairingOffer, schedulePairingRegeneration, updateConnectionAddress]
   )
+
+  useEffect(() => {
+    if (stage === 'flow' && stepIdx === 1) {
+      return
+    }
+    clearScheduledPairingRegeneration()
+  }, [clearScheduledPairingRegeneration, stage, stepIdx])
+
+  useEffect(() => clearScheduledPairingRegeneration, [clearScheduledPairingRegeneration])
 
   const copyPairingCode = useCallback(async () => {
     if (!pairingUrl) {
@@ -268,18 +330,13 @@ export default function MobilePage(): React.JSX.Element {
     }
   }, [mountedRef, pairingUrl])
 
-  // Why: when Step 2 first becomes visible, mint a pairing offer so the
-  // user sees a real QR immediately. Subsequent visits keep the existing
-  // token unless they hit Regenerate.
   useEffect(() => {
     if (stage !== 'flow' || stepIdx !== 1 || hasGeneratedRef.current) {
       return
     }
     void generatePairing(false)
-  }, [stage, stepIdx, generatePairing])
+  }, [stage, stepIdx, generatePairing, hasGeneratedRef])
 
-  // Why: poll for new pairings while the user is on Step 2 so we can
-  // auto-transition to the paired summary the moment their phone connects.
   const polledLoadDevices = useCallback(async () => {
     await loadDevices()
   }, [loadDevices])
@@ -300,9 +357,7 @@ export default function MobilePage(): React.JSX.Element {
     // Force the auto-generate effect to mint a fresh pairing token on next
     // entry into Step 2, and clear stale QR state so we never flash an
     // expired code from a previous session.
-    hasGeneratedRef.current = false
-    setPairQrDataUrl(null)
-    setPairingUrl(null)
+    invalidatePairingOffer()
     showStage('flow')
   }
 
@@ -312,9 +367,7 @@ export default function MobilePage(): React.JSX.Element {
     setStepIdx(1)
     setPairingDeviceBaseline(devices.length)
     // Same reset as enterFlow — re-entering must mint a fresh pairing offer.
-    hasGeneratedRef.current = false
-    setPairQrDataUrl(null)
-    setPairingUrl(null)
+    invalidatePairingOffer()
     showStage('flow')
   }
 
@@ -375,6 +428,7 @@ export default function MobilePage(): React.JSX.Element {
       copyInstallUrl={() => void copyInstallUrl()}
       copyPairingCode={() => void copyPairingCode()}
       devices={devices}
+      endpoint={endpoint}
       enterFlow={enterFlow}
       generatePairing={(rotate) => void generatePairing(rotate)}
       handleAddressChange={handleAddressChange}
@@ -394,7 +448,7 @@ export default function MobilePage(): React.JSX.Element {
       refreshingNetworkInterfaces={refreshingNetworkInterfaces}
       revokeDevice={(id) => void revokeDevice(id)}
       revokingDeviceIds={revokingDeviceIds}
-      selectedAddress={selectedAddress}
+      connectionAddress={connectionAddress}
       setPlatform={setPlatform}
       showMobileButton={showMobileButton}
       showPairedDevices={showPairedDevices}

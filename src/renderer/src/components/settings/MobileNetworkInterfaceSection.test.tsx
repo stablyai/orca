@@ -56,8 +56,8 @@ describe('MobileNetworkInterfaceSection', () => {
         { name: 'en0', address: '192.168.1.24' },
         { name: 'tailscale0', address: '100.64.1.20' }
       ],
-      selectedAddress: '192.168.1.24',
-      onSelectedAddressChange: vi.fn(),
+      connectionAddress: '192.168.1.24',
+      onConnectionAddressChange: vi.fn(),
       refreshingNetworkInterfaces: false,
       onRefreshNetworkInterfaces,
       loading: false,
@@ -65,12 +65,33 @@ describe('MobileNetworkInterfaceSection', () => {
       onGenerateQr: vi.fn()
     })
 
-    expect(collectText(tree)).toContain('100.64.1.20 (tailscale0)')
+    expect(collectText(tree)).toContain('100.64.1.20')
+    expect(collectText(tree)).toContain('tailscale0')
 
-    const refreshButton = findByAriaLabel(tree, 'Refresh network interfaces')
+    const refreshButton = findByAriaLabel(tree, 'Refresh connection addresses')
     const onClick = refreshButton.props.onClick as () => void
     onClick()
 
     expect(onRefreshNetworkInterfaces).toHaveBeenCalledTimes(1)
+  })
+
+  it('wires the connection address input', () => {
+    const onConnectionAddressChange = vi.fn()
+    const tree = MobileNetworkInterfaceSection({
+      networkInterfaces: [],
+      connectionAddress: '100.66.1.1',
+      onConnectionAddressChange,
+      refreshingNetworkInterfaces: false,
+      onRefreshNetworkInterfaces: vi.fn(),
+      loading: false,
+      hasQrCode: true,
+      onGenerateQr: vi.fn()
+    })
+
+    const input = findByAriaLabel(tree, 'Connection address')
+    const onChange = input.props.onChange as (event: { target: { value: string } }) => void
+    onChange({ target: { value: '100.66.1.2' } })
+
+    expect(onConnectionAddressChange).toHaveBeenCalledWith('100.66.1.2')
   })
 })

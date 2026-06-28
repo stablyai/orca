@@ -1,7 +1,13 @@
-import { ExternalLink, Loader2, QrCode, RefreshCw, Wifi } from 'lucide-react'
+import { ChevronDown, ExternalLink, Loader2, QrCode, RefreshCw, Wifi } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion'
 import { Button } from '../ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu'
+import { Input } from '../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { translate } from '@/i18n/i18n'
@@ -10,8 +16,8 @@ const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
 type MobileNetworkInterfaceSectionProps = {
   networkInterfaces: MobileNetworkInterface[]
-  selectedAddress: string | undefined
-  onSelectedAddressChange: (address: string) => void
+  connectionAddress: string
+  onConnectionAddressChange: (address: string) => void
   refreshingNetworkInterfaces: boolean
   onRefreshNetworkInterfaces: () => void
   loading: boolean
@@ -19,14 +25,10 @@ type MobileNetworkInterfaceSectionProps = {
   onGenerateQr: () => void
 }
 
-function formatInterfaceLabel(iface: MobileNetworkInterface): string {
-  return `${iface.address} (${iface.name})`
-}
-
 export function MobileNetworkInterfaceSection({
   networkInterfaces,
-  selectedAddress,
-  onSelectedAddressChange,
+  connectionAddress,
+  onConnectionAddressChange,
   refreshingNetworkInterfaces,
   onRefreshNetworkInterfaces,
   loading,
@@ -40,35 +42,65 @@ export function MobileNetworkInterfaceSection({
         <span className="text-sm font-medium">
           {translate(
             'auto.components.settings.MobileNetworkInterfaceSection.406a35121c',
-            'Network Interface'
+            'Connection Address'
           )}
         </span>
       </div>
       <p className="text-muted-foreground mb-3 text-xs">
         {translate(
           'auto.components.settings.MobileNetworkInterfaceSection.d536b5e20d',
-          'Choose which network address to advertise in the QR code. Use your LAN address for same-network pairing, or an overlay network address (Tailscale, ZeroTier) for cross-network access.'
+          'Enter the address your phone can reach. Pick a discovered interface or type an overlay network address for cross-network access.'
         )}
       </p>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedAddress} onValueChange={onSelectedAddressChange}>
-            <SelectTrigger size="sm" className="min-w-[220px]">
-              <SelectValue
+          <div className="min-w-[220px] flex-1 sm:max-w-[320px]">
+            <div className="flex min-w-0">
+              <Input
+                value={connectionAddress}
+                onChange={(event) => onConnectionAddressChange(event.target.value)}
                 placeholder={translate(
                   'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
-                  'No interfaces found'
+                  'Enter an address'
                 )}
+                aria-label={translate(
+                  'auto.components.settings.MobileNetworkInterfaceSection.829f63c4bd',
+                  'Connection address'
+                )}
+                className="rounded-r-none font-mono"
               />
-            </SelectTrigger>
-            <SelectContent>
-              {networkInterfaces.map((iface) => (
-                <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-                  {formatInterfaceLabel(iface)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              {networkInterfaces.length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="rounded-l-none border-l-0"
+                      aria-label={translate(
+                        'auto.components.settings.MobileNetworkInterfaceSection.0a789fb3f8',
+                        'Choose discovered address'
+                      )}
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[260px]">
+                    {networkInterfaces.map((iface) => (
+                      <DropdownMenuItem
+                        key={`${iface.name}-${iface.address}`}
+                        onSelect={() => onConnectionAddressChange(iface.address)}
+                        className="justify-between gap-4 font-mono"
+                      >
+                        <span>{iface.address}</span>
+                        <span className="font-sans text-muted-foreground">{iface.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
+          </div>
           {/* Why: VPN/tailnet interfaces can appear after this pane mounts.
               Re-enumerating OS state here avoids requiring an Orca restart. */}
           <Tooltip>
@@ -81,7 +113,7 @@ export function MobileNetworkInterfaceSection({
                 disabled={refreshingNetworkInterfaces}
                 aria-label={translate(
                   'auto.components.settings.MobileNetworkInterfaceSection.a9db5d771d',
-                  'Refresh network interfaces'
+                  'Refresh connection addresses'
                 )}
                 className="text-muted-foreground"
               >
@@ -91,14 +123,14 @@ export function MobileNetworkInterfaceSection({
             <TooltipContent side="bottom" sideOffset={6}>
               {translate(
                 'auto.components.settings.MobileNetworkInterfaceSection.a9db5d771d',
-                'Refresh network interfaces'
+                'Refresh connection addresses'
               )}
             </TooltipContent>
           </Tooltip>
         </div>
         <Button
           onClick={onGenerateQr}
-          disabled={loading || !selectedAddress}
+          disabled={loading || !connectionAddress.trim()}
           size="sm"
           className="gap-1.5"
         >
@@ -166,7 +198,7 @@ export function MobileNetworkInterfaceSection({
               <li>
                 {translate(
                   'auto.components.settings.MobileNetworkInterfaceSection.87985ba6f5',
-                  'In this Network Interface menu, choose the Tailscale address, usually a 100.x.y.z IP.'
+                  'In Connection Address, choose or enter the Tailscale address, usually a 100.x.y.z IP.'
                 )}
               </li>
               <li>

@@ -613,6 +613,16 @@
   cursor: not-allowed;
 }
 
+.mobile-page-root .mp-pairing-endpoint {
+  max-width: 220px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
 /* Step 1 (Get the app) — borderless layout, page-1 typography */
 .mobile-page-root .mp-step2-layout {
   display: grid;
@@ -766,10 +776,52 @@
   font-weight: 600;
 }
 
-.mobile-page-root .mp-network-select {
+.mobile-page-root .mp-network-address-control {
+  display: flex;
   flex: 1 1 180px;
   min-width: 0;
+  max-width: 272px;
+}
+
+.mobile-page-root .mp-network-address-control.is-standalone {
   max-width: 240px;
+}
+
+.mobile-page-root .mp-network-address-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.mobile-page-root .mp-network-address-control.is-standalone .mp-network-address-input {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.mobile-page-root .mp-network-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--input);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.mobile-page-root .mp-network-picker:hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
 }
 
 .mobile-page-root .mp-network-refresh {

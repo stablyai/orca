@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { selectRefreshedNetworkAddress } from './mobile-network-interface-selection'
+import {
+  selectRefreshedConnectionAddress,
+  selectRefreshedNetworkAddress
+} from './mobile-network-interface-selection'
 
 const LAN = { name: 'en0', address: '192.168.1.24' }
 const TAILNET = { name: 'tailscale0', address: '100.64.1.20' }
@@ -27,5 +30,27 @@ describe('selectRefreshedNetworkAddress', () => {
 
   it('clears the selection when no interfaces are available', () => {
     expect(selectRefreshedNetworkAddress(LAN.address, [])).toBeUndefined()
+  })
+})
+
+describe('selectRefreshedConnectionAddress', () => {
+  it('keeps a user-entered address that is not exposed as an interface', () => {
+    expect(
+      selectRefreshedConnectionAddress({
+        currentAddress: '100.66.1.1',
+        previousInterfaces: [LAN],
+        nextInterfaces: [LAN, TAILNET]
+      })
+    ).toBe('100.66.1.1')
+  })
+
+  it('updates an old interface address when that interface disappears', () => {
+    expect(
+      selectRefreshedConnectionAddress({
+        currentAddress: LAN.address,
+        previousInterfaces: [LAN],
+        nextInterfaces: [TAILNET]
+      })
+    ).toBe(TAILNET.address)
   })
 })

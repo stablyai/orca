@@ -1,7 +1,13 @@
-import { ArrowLeft, ArrowRight, Copy, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu'
+import { Input } from '../ui/input'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
 export { HeroIntro } from './MobileHeroIntro'
@@ -35,12 +41,13 @@ type HeroFlowProps = {
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  endpoint: string | null
   pairLoading: boolean
   onRegeneratePairing: () => void
   onCopyPairingCode: () => void
   networkInterfaces: readonly MobileNetworkInterface[]
-  selectedAddress: string | undefined
-  onSelectedAddressChange: (address: string) => void
+  connectionAddress: string
+  onConnectionAddressChange: (address: string) => void
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
   onBack: () => void
@@ -60,12 +67,13 @@ export function HeroFlow({
   onCopyInstallUrl,
   pairQrDataUrl,
   pairingUrl,
+  endpoint,
   pairLoading,
   onRegeneratePairing,
   onCopyPairingCode,
   networkInterfaces,
-  selectedAddress,
-  onSelectedAddressChange,
+  connectionAddress,
+  onConnectionAddressChange,
   onRefreshNetworkInterfaces,
   refreshingNetworkInterfaces,
   onBack,
@@ -186,45 +194,64 @@ export function HeroFlow({
                 {getDeviceLabel()}.
               </h2>
               <p className="mp-lead-sm">
-                {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
-                <strong>
-                  {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
-                </strong>
-                {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
+                {translate(
+                  'auto.components.mobile.MobileHero.d1495e5e64',
+                  'Use Orca Mobile to scan the pairing QR code below.'
+                )}
               </p>
 
               <div className="mp-network-row">
                 <span className="mp-network-label">
-                  {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
+                  {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Address')}
                 </span>
-                <Select
-                  value={selectedAddress ?? ''}
-                  onValueChange={onSelectedAddressChange}
-                  disabled={networkInterfaces.length === 0}
+                <div
+                  className={cn(
+                    'mp-network-address-control',
+                    networkInterfaces.length === 0 && 'is-standalone'
+                  )}
                 >
-                  <SelectTrigger
-                    size="sm"
-                    className="mp-network-select"
+                  <Input
+                    value={connectionAddress}
+                    onChange={(event) => onConnectionAddressChange(event.target.value)}
+                    className="mp-network-address-input"
                     aria-label={translate(
                       'auto.components.mobile.MobileHero.79d2f480da',
-                      'Network interface to advertise'
+                      'Connection address to advertise'
                     )}
-                  >
-                    <SelectValue
-                      placeholder={translate(
-                        'auto.components.mobile.MobileHero.ca85e595a7',
-                        'No interfaces found'
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {networkInterfaces.map((iface) => (
-                      <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-                        {iface.address} ({iface.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    placeholder={translate(
+                      'auto.components.mobile.MobileHero.ca85e595a7',
+                      'Enter an address'
+                    )}
+                  />
+                  {networkInterfaces.length > 0 ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="mp-network-picker"
+                          aria-label={translate(
+                            'auto.components.mobile.MobileHero.b0d785a6f6',
+                            'Choose discovered address'
+                          )}
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="min-w-[260px]">
+                        {networkInterfaces.map((iface) => (
+                          <DropdownMenuItem
+                            key={`${iface.name}-${iface.address}`}
+                            onSelect={() => onConnectionAddressChange(iface.address)}
+                            className="justify-between gap-4 font-mono"
+                          >
+                            <span>{iface.address}</span>
+                            <span className="font-sans text-muted-foreground">{iface.name}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
                 <button
                   type="button"
                   className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
@@ -232,11 +259,11 @@ export function HeroFlow({
                   disabled={refreshingNetworkInterfaces}
                   aria-label={translate(
                     'auto.components.mobile.MobileHero.85067b9e06',
-                    'Refresh network interfaces'
+                    'Refresh connection addresses'
                   )}
                   title={translate(
                     'auto.components.mobile.MobileHero.85067b9e06',
-                    'Refresh network interfaces'
+                    'Refresh connection addresses'
                   )}
                 >
                   <RefreshCw className="size-3.5" />
@@ -290,6 +317,7 @@ export function HeroFlow({
                     ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
                     : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
               </button>
+              {endpoint ? <span className="mp-pairing-endpoint">{endpoint}</span> : null}
             </div>
           </div>
         </div>

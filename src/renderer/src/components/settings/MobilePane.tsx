@@ -4,7 +4,7 @@ import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
 import {
-  selectRefreshedNetworkAddress,
+  selectRefreshedConnectionAddress,
   type MobileNetworkInterface
 } from './mobile-network-interface-selection'
 import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
@@ -24,12 +24,15 @@ export function MobilePane(): React.JSX.Element {
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [qrEnlarged, setQrEnlarged] = useState(false)
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
-  const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
+  const [connectionAddress, setConnectionAddress] = useState('')
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
   const devicesRef = useRef<PairedDevice[]>([])
+  const connectionAddressRef = useRef('')
+  const networkInterfacesRef = useRef<MobileNetworkInterface[]>([])
   const codeCopiedResetTimerRef = useRef<number | null>(null)
+  const pairingRequestIdRef = useRef(0)
   const mountedRef = useMountedRef()
 
   const clearCodeCopiedResetTimer = useCallback((): void => {
@@ -38,6 +41,28 @@ export function MobilePane(): React.JSX.Element {
       codeCopiedResetTimerRef.current = null
     }
   }, [])
+
+  const clearPairingOffer = useCallback((): void => {
+    pairingRequestIdRef.current += 1
+    setQrDataUrl(null)
+    setPairingUrl(null)
+    setEndpoint(null)
+    setLoading(false)
+    setDeviceCountAtQr(null)
+    clearCodeCopiedResetTimer()
+    setCodeCopied(false)
+  }, [clearCodeCopiedResetTimer])
+
+  const updateConnectionAddress = useCallback(
+    (address: string): void => {
+      if (address !== connectionAddressRef.current) {
+        clearPairingOffer()
+      }
+      connectionAddressRef.current = address
+      setConnectionAddress(address)
+    },
+    [clearPairingOffer]
+  )
 
   const loadDevices = useCallback(async () => {
     try {
@@ -56,10 +81,16 @@ export function MobilePane(): React.JSX.Element {
       setRefreshingNetworkInterfaces(true)
       try {
         const result = await window.api.mobile.listNetworkInterfaces()
+        const previousInterfaces = networkInterfacesRef.current
         if (mountedRef.current) {
+          networkInterfacesRef.current = result.interfaces
           setNetworkInterfaces(result.interfaces)
-          setSelectedAddress((currentAddress) =>
-            selectRefreshedNetworkAddress(currentAddress, result.interfaces)
+          updateConnectionAddress(
+            selectRefreshedConnectionAddress({
+              currentAddress: connectionAddressRef.current,
+              previousInterfaces,
+              nextInterfaces: result.interfaces
+            }) ?? ''
           )
         }
       } catch {
@@ -77,40 +108,41 @@ export function MobilePane(): React.JSX.Element {
         }
       }
     },
-    [mountedRef]
+    [mountedRef, updateConnectionAddress]
   )
 
   const generateQR = useCallback(
     async (opts: { rotate?: boolean } = {}) => {
+      const requestId = ++pairingRequestIdRef.current
       setLoading(true)
       try {
+        const address = connectionAddressRef.current.trim()
         const result = await window.api.mobile.getPairingQR({
-          ...(selectedAddress ? { address: selectedAddress } : {}),
+          ...(address ? { address } : {}),
           ...(opts.rotate ? { rotate: true } : {})
         })
+        if (!mountedRef.current || pairingRequestIdRef.current !== requestId) {
+          return
+        }
         if (result.available) {
           useAppStore.getState().recordFeatureInteraction('mobile-pairing')
-          if (mountedRef.current) {
-            setQrDataUrl(result.qrDataUrl)
-            setPairingUrl(result.pairingUrl)
-            setEndpoint(result.endpoint)
-            setDeviceCountAtQr(devicesRef.current.length)
-            clearCodeCopiedResetTimer()
-            setCodeCopied(false)
-            void loadDevices()
-          }
+          setQrDataUrl(result.qrDataUrl)
+          setPairingUrl(result.pairingUrl)
+          setEndpoint(result.endpoint)
+          setDeviceCountAtQr(devicesRef.current.length)
+          clearCodeCopiedResetTimer()
+          setCodeCopied(false)
+          void loadDevices()
         } else {
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.settings.MobilePane.cb9067c1c1',
-                'WebSocket transport is not running'
-              )
+          toast.error(
+            translate(
+              'auto.components.settings.MobilePane.cb9067c1c1',
+              'WebSocket transport is not running'
             )
-          }
+          )
         }
       } catch {
-        if (mountedRef.current) {
+        if (mountedRef.current && pairingRequestIdRef.current === requestId) {
           toast.error(
             translate(
               'auto.components.settings.MobilePane.e3c427e020',
@@ -119,12 +151,12 @@ export function MobilePane(): React.JSX.Element {
           )
         }
       } finally {
-        if (mountedRef.current) {
+        if (mountedRef.current && pairingRequestIdRef.current === requestId) {
           setLoading(false)
         }
       }
     },
-    [clearCodeCopiedResetTimer, loadDevices, mountedRef, selectedAddress]
+    [clearCodeCopiedResetTimer, loadDevices, mountedRef]
   )
 
   useEffect(() => {
@@ -162,8 +194,8 @@ export function MobilePane(): React.JSX.Element {
     <div className="space-y-6">
       <MobileNetworkInterfaceSection
         networkInterfaces={networkInterfaces}
-        selectedAddress={selectedAddress}
-        onSelectedAddressChange={setSelectedAddress}
+        connectionAddress={connectionAddress}
+        onConnectionAddressChange={updateConnectionAddress}
         refreshingNetworkInterfaces={refreshingNetworkInterfaces}
         onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ notifyOnError: true })}
         loading={loading}
