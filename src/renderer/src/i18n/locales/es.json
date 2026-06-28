@@ -5355,7 +5355,10 @@
           "b5a2ed83ff": "Tienda de aplicaciones",
           "c8491c17ef": "Controla Orca desde tu teléfono escaneando un código QR. Beta/vista previa anticipada: espere errores y cambios importantes. Obtenga la aplicación para iOS desde",
           "e7a3ae8c4e": "Móvil",
-          "174f4a3c6d": "Controla terminales y agents desde tu teléfono."
+          "174f4a3c6d": "Controla terminales y agents desde tu teléfono.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -7422,7 +7425,9 @@
               "f4ed142753": "teléfono",
               "f213400800": "móvil",
               "671eb4173c": "Controla terminales y agents desde tu teléfono.",
-              "ffd52a96e4": "Móvil"
+              "ffd52a96e4": "Móvil",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9749,7 +9754,11 @@
           "ad2284a9e2": "Cerrar · Esc",
           "9883b58693": "Cerrar Orca Móvil",
           "fb5f28330e": "Mostrar en la barra lateral",
-          "c669abcf8f": "Ocultar de la barra lateral"
+          "c669abcf8f": "Ocultar de la barra lateral",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Sesión terminal",

@@ -5340,7 +5340,10 @@
           "b5a2ed83ff": "应用商店",
           "c8491c17ef": "通过扫描二维码从手机控制 Orca。 Beta/早期预览 - 预计会出现错误和重大更改。从以下位置获取 iOS 应用程序",
           "e7a3ae8c4e": "移动端",
-          "174f4a3c6d": "通过手机控制终端和智能体。"
+          "174f4a3c6d": "通过手机控制终端和智能体。",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "发送测试通知",
@@ -7407,7 +7410,9 @@
               "f4ed142753": "手机",
               "f213400800": "移动端",
               "671eb4173c": "通过手机控制终端和智能体。",
-              "ffd52a96e4": "移动端"
+              "ffd52a96e4": "移动端",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9749,7 +9754,11 @@
           "ad2284a9e2": "关闭 · Esc",
           "9883b58693": "关闭 Orca 手机",
           "fb5f28330e": "在侧边栏中显示",
-          "c669abcf8f": "从侧边栏隐藏"
+          "c669abcf8f": "从侧边栏隐藏",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "终端会话",

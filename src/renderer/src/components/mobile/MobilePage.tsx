@@ -354,7 +354,16 @@ export default function MobilePage(): React.JSX.Element {
   }
 
   const toggleMobileSidebarButton = useCallback(() => {
-    void updateSettings({ showMobileButton: !showMobileButton })
+    const nextShowMobileButton = !showMobileButton
+    void updateSettings({ showMobileButton: nextShowMobileButton })
+    if (!nextShowMobileButton) {
+      toast.message(
+        translate(
+          'auto.components.mobile.MobilePageToolbar.e1c7b4a92d',
+          'Configure in Settings > Mobile.'
+        )
+      )
+    }
   }, [showMobileButton, updateSettings])
 
   useMobilePageEscape(closeMobilePage)

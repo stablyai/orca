@@ -5392,7 +5392,10 @@
           "b5a2ed83ff": "App Store",
           "c8491c17ef": "Control Orca from your phone by scanning a QR code. Beta / early preview - expect bugs and breaking changes. Get the iOS app from the",
           "e7a3ae8c4e": "Mobile",
-          "174f4a3c6d": "Control terminals and agents from your phone."
+          "174f4a3c6d": "Control terminals and agents from your phone.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "Send Test Notification",
@@ -7459,7 +7462,9 @@
               "f4ed142753": "phone",
               "f213400800": "mobile",
               "671eb4173c": "Control terminals and agents from your phone.",
-              "ffd52a96e4": "Mobile"
+              "ffd52a96e4": "Mobile",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9749,7 +9754,11 @@
           "ad2284a9e2": "Close · Esc",
           "9883b58693": "Close Orca Mobile",
           "fb5f28330e": "Show in sidebar",
-          "c669abcf8f": "Hide from sidebar"
+          "c669abcf8f": "Hide from sidebar",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal session",

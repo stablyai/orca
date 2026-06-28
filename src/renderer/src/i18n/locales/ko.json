@@ -5340,7 +5340,10 @@
           "b5a2ed83ff": "앱스토어",
           "c8491c17ef": "QR 코드를 스캔하여 휴대폰에서 Orca를 제어하세요. 베타/초기 미리보기 - 버그 및 주요 변경 사항이 예상됩니다. 다음에서 iOS 앱을 받으세요.",
           "e7a3ae8c4e": "모바일",
-          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요."
+          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "테스트 알림 보내기",
@@ -7407,7 +7410,9 @@
               "f4ed142753": "핸드폰",
               "f213400800": "모바일",
               "671eb4173c": "휴대폰에서 terminals과 agents를 제어하세요.",
-              "ffd52a96e4": "모바일"
+              "ffd52a96e4": "모바일",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -9749,7 +9754,11 @@
           "ad2284a9e2": "닫기 · Esc",
           "9883b58693": "Orca 모바일 닫기",
           "fb5f28330e": "사이드바에 표시",
-          "c669abcf8f": "사이드바에서 숨기기"
+          "c669abcf8f": "사이드바에서 숨기기",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal 세션",
