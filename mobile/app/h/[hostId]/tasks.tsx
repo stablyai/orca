@@ -134,6 +134,7 @@ import type {
   TuiAgent
 } from '../../../../src/shared/types'
 import type { SshConnectionState } from '../../../../src/shared/ssh-types'
+import { T } from '../../../src/i18n/T'
 
 type RepoSummary = {
   id: string
@@ -2042,7 +2043,7 @@ function GitHubPrFileDiff({
   const hiddenDiffLineCount = Math.max(0, diffPreview.totalLineCount - visibleDiffLines.length)
 
   if (diffPreview.totalLineCount === 0) {
-    return <Text style={styles.detailMuted}>No text changes found.</Text>
+    return <T style={styles.detailMuted}>No text changes found.</T>
   }
 
   return (
@@ -8234,7 +8235,7 @@ export default function MobileTasksScreen() {
                 disabled={mutatingStatus || !(itemReplyDrafts[String(comment.id)] ?? '').trim()}
                 onPress={() => void replyToGitHubComment(actionItem, comment)}
               >
-                <Text style={styles.inlineSaveText}>Reply</Text>
+                <T style={styles.inlineSaveText}>Reply</T>
               </Pressable>
             </>
           ) : null}
@@ -8678,7 +8679,7 @@ export default function MobileTasksScreen() {
           </Pressable>
           <View style={styles.titleWrap}>
             <StatusDot state={connState} verdict={headerVerdict} />
-            <Text style={styles.title}>Tasks</Text>
+            <T style={styles.title}>Tasks</T>
           </View>
           <Pressable
             style={styles.iconButton}
@@ -9023,7 +9024,7 @@ export default function MobileTasksScreen() {
                   setShowLinearDisplayPicker(true)
                 }}
               >
-                <Text style={styles.segmentSecondaryText}>Display</Text>
+                <T style={styles.segmentSecondaryText}>Display</T>
               </Pressable>
             </>
           )}
@@ -9193,19 +9194,15 @@ export default function MobileTasksScreen() {
       githubProjectTable?.parentFieldDropped === true ? (
         <View style={styles.projectDataNotice}>
           <AlertTriangle size={15} color={colors.statusAmber} />
-          <Text style={styles.projectDataNoticeText}>
-            Sub-issue data is unavailable for your token.
-          </Text>
+          <T style={styles.projectDataNoticeText}>Sub-issue data is unavailable for your token.</T>
         </View>
       ) : null}
 
       {!tasksSupported ? (
         tasksUnsupported ? (
           <View style={styles.centered}>
-            <Text style={styles.emptyText}>Update Orca desktop</Text>
-            <Text style={styles.centeredHint}>
-              This mobile Tasks view needs a newer desktop runtime.
-            </Text>
+            <T style={styles.emptyText}>Update Orca desktop</T>
+            <T style={styles.centeredHint}>This mobile Tasks view needs a newer desktop runtime.</T>
           </View>
         ) : (
           <View style={styles.centered}>
@@ -9215,10 +9212,10 @@ export default function MobileTasksScreen() {
       ) : provider === 'linear' && !linearConnected ? (
         <View style={styles.centered}>
           <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Connect your Linear account</Text>
-          <Text style={styles.centeredHint}>
+          <T style={styles.emptyText}>Connect your Linear account</T>
+          <T style={styles.centeredHint}>
             Browse and start work on your assigned Linear issues directly from Tasks.
-          </Text>
+          </T>
           <Pressable
             style={[styles.targetButton, styles.centerActionButton]}
             disabled={!taskUiReady}
@@ -9232,7 +9229,7 @@ export default function MobileTasksScreen() {
               setShowLinearConnect(true)
             }}
           >
-            <Text style={styles.targetButtonText}>Connect Linear</Text>
+            <T style={styles.targetButtonText}>Connect Linear</T>
           </Pressable>
         </View>
       ) : provider === 'github' && githubMode === 'project' ? (
@@ -9242,7 +9239,7 @@ export default function MobileTasksScreen() {
           </View>
         ) : !activeGitHubProject ? (
           <View style={styles.centered}>
-            <Text style={styles.emptyText}>Choose a GitHub project</Text>
+            <T style={styles.emptyText}>Choose a GitHub project</T>
             <Pressable
               style={[styles.targetButton, styles.centerActionButton]}
               disabled={!taskUiReady}
@@ -9253,7 +9250,7 @@ export default function MobileTasksScreen() {
                 setShowGitHubProjectPicker(true)
               }}
             >
-              <Text style={styles.targetButtonText}>Browse projects</Text>
+              <T style={styles.targetButtonText}>Browse projects</T>
             </Pressable>
           </View>
         ) : githubProjectError ? (
@@ -9266,7 +9263,7 @@ export default function MobileTasksScreen() {
           </View>
         ) : !githubProjectTable || visibleGitHubProjectRows.length === 0 ? (
           <View style={styles.centered}>
-            <Text style={styles.emptyText}>No project items</Text>
+            <T style={styles.emptyText}>No project items</T>
           </View>
         ) : (
           <FlatList
@@ -9821,8 +9818,8 @@ export default function MobileTasksScreen() {
         onClose={() => setShowRepoPicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Repositories</Text>
-          <Text style={styles.sheetSubtitle}>Choose which repositories to query.</Text>
+          <T style={styles.sheetTitle}>Repositories</T>
+          <T style={styles.sheetSubtitle}>Choose which repositories to query.</T>
         </View>
 
         <View style={styles.repoPickerGroup}>
@@ -9835,7 +9832,7 @@ export default function MobileTasksScreen() {
             }}
           >
             <View style={styles.repoPickerTextWrap}>
-              <Text style={styles.repoPickerTitle}>All repositories</Text>
+              <T style={styles.repoPickerTitle}>All repositories</T>
               <Text style={styles.repoPickerSubtitle}>{repositoryCount(hostedRepos.length)}</Text>
             </View>
             {selectedRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
@@ -9877,16 +9874,16 @@ export default function MobileTasksScreen() {
         onClose={() => setShowGitHubIssueSourcePicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>GitHub Issue Sources</Text>
-          <Text style={styles.sheetSubtitle}>
+          <T style={styles.sheetTitle}>GitHub Issue Sources</T>
+          <T style={styles.sheetSubtitle}>
             Choose whether each repository queries and creates work from upstream or origin.
-          </Text>
+          </T>
         </View>
 
         <View style={styles.repoPickerGroup}>
           {githubIssueSourceRows.length === 0 ? (
             <View style={styles.drawerLoadingRow}>
-              <Text style={styles.detailMuted}>No alternate issue sources available.</Text>
+              <T style={styles.detailMuted}>No alternate issue sources available.</T>
             </View>
           ) : (
             githubIssueSourceRows.map(({ repo, sources }, index) => {
@@ -10003,8 +10000,8 @@ export default function MobileTasksScreen() {
         onClose={() => setShowGitHubPagePicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>GitHub Pages</Text>
-          <Text style={styles.sheetSubtitle}>Jump to a loaded or available result page.</Text>
+          <T style={styles.sheetTitle}>GitHub Pages</T>
+          <T style={styles.sheetSubtitle}>Jump to a loaded or available result page.</T>
         </View>
         <ScrollView style={styles.pagePickerList}>
           {githubPagePickerPages.map((index) => {
@@ -10038,8 +10035,8 @@ export default function MobileTasksScreen() {
         onClose={() => setShowGitHubProjectPicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>GitHub Projects</Text>
-          <Text style={styles.sheetSubtitle}>Choose a project view for the Tasks page.</Text>
+          <T style={styles.sheetTitle}>GitHub Projects</T>
+          <T style={styles.sheetSubtitle}>Choose a project view for the Tasks page.</T>
         </View>
 
         <View style={styles.projectPickerControls}>
@@ -10093,9 +10090,7 @@ export default function MobileTasksScreen() {
                   ? `Couldn't load projects from ${githubProjectPartialFailures[0]!.owner}.`
                   : `Some organizations didn't load (${githubProjectPartialFailures.length}).`}
               </Text>
-              <Text style={styles.projectWarningText}>
-                Use Add by URL to reach missing projects.
-              </Text>
+              <T style={styles.projectWarningText}>Use Add by URL to reach missing projects.</T>
               <Text style={styles.projectWarningText} numberOfLines={2}>
                 {githubProjectPartialFailures
                   .map(
@@ -10127,15 +10122,15 @@ export default function MobileTasksScreen() {
               }
             >
               <View style={styles.repoPickerTextWrap}>
-                <Text style={styles.repoPickerTitle}>No projects loaded</Text>
-                <Text style={styles.repoPickerSubtitle}>Tap to retry.</Text>
+                <T style={styles.repoPickerTitle}>No projects loaded</T>
+                <T style={styles.repoPickerSubtitle}>Tap to retry.</T>
               </View>
             </Pressable>
           ) : (
             <>
               {pinnedGitHubProjects.length > 0 ? (
                 <>
-                  <Text style={styles.linearStatesTitle}>Pinned</Text>
+                  <T style={styles.linearStatesTitle}>Pinned</T>
                   {pinnedGitHubProjects.map((project, index) => {
                     const key = githubProjectKey(project)
                     const selected =
@@ -10170,7 +10165,7 @@ export default function MobileTasksScreen() {
                               })
                             }}
                           >
-                            <Text style={styles.inlineSaveText}>Remove</Text>
+                            <T style={styles.inlineSaveText}>Remove</T>
                           </Pressable>
                           {selected ? <Check size={15} color={colors.textPrimary} /> : null}
                         </Pressable>
@@ -10182,7 +10177,7 @@ export default function MobileTasksScreen() {
 
               {recentGitHubProjects.length > 0 ? (
                 <>
-                  <Text style={styles.linearStatesTitle}>Recent</Text>
+                  <T style={styles.linearStatesTitle}>Recent</T>
                   {recentGitHubProjects.map((project, index) => {
                     const key = githubProjectKey(project)
                     const selected =
@@ -10223,7 +10218,7 @@ export default function MobileTasksScreen() {
                                 })
                               }}
                             >
-                              <Text style={styles.inlineSaveText}>Pin</Text>
+                              <T style={styles.inlineSaveText}>Pin</T>
                             </Pressable>
                           ) : null}
                           {selected ? <Check size={15} color={colors.textPrimary} /> : null}
@@ -10332,14 +10327,12 @@ export default function MobileTasksScreen() {
         onClose={() => setShowGitHubProjectFieldsPicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Project Fields</Text>
-          <Text style={styles.sheetSubtitle}>
-            Choose which Project fields appear on item cards.
-          </Text>
+          <T style={styles.sheetTitle}>Project Fields</T>
+          <T style={styles.sheetSubtitle}>Choose which Project fields appear on item cards.</T>
         </View>
         <View style={styles.repoPickerGroup}>
           {githubProjectAvailableSummaryFields.length === 0 ? (
-            <Text style={styles.repoPickerSubtitle}>This view has no extra fields to show.</Text>
+            <T style={styles.repoPickerSubtitle}>This view has no extra fields to show.</T>
           ) : (
             githubProjectAvailableSummaryFields.map((field, index) => {
               const visible = !githubProjectHiddenFieldIds.has(field.id)
@@ -10433,8 +10426,8 @@ export default function MobileTasksScreen() {
         onClose={() => setShowLinearTeamPicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Linear Teams</Text>
-          <Text style={styles.sheetSubtitle}>Choose which teams appear in Tasks.</Text>
+          <T style={styles.sheetTitle}>Linear Teams</T>
+          <T style={styles.sheetSubtitle}>Choose which teams appear in Tasks.</T>
         </View>
         <View style={styles.repoPickerGroup}>
           <Pressable
@@ -10446,7 +10439,7 @@ export default function MobileTasksScreen() {
             }}
           >
             <View style={styles.repoPickerTextWrap}>
-              <Text style={styles.repoPickerTitle}>All teams</Text>
+              <T style={styles.repoPickerTitle}>All teams</T>
               <Text style={styles.repoPickerSubtitle}>{linearTeams.length} teams</Text>
             </View>
             {selectedLinearTeamIds.size === linearTeams.length ? (
@@ -10497,7 +10490,7 @@ export default function MobileTasksScreen() {
         zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Change Status</Text>
+          <T style={styles.sheetTitle}>Change Status</T>
           <Text style={styles.sheetSubtitle}>
             {linearStatusPickerItem?.source.identifier ?? 'Linear issue'}
           </Text>
@@ -10506,10 +10499,10 @@ export default function MobileTasksScreen() {
           {linearStatesLoading ? (
             <View style={styles.detailLoadingInline}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
-              <Text style={styles.detailMuted}>Loading states...</Text>
+              <T style={styles.detailMuted}>Loading states...</T>
             </View>
           ) : linearStates.length === 0 ? (
-            <Text style={styles.emptyInlineText}>No states available</Text>
+            <T style={styles.emptyInlineText}>No states available</T>
           ) : (
             linearStates.map((state, index) => {
               const selected =
@@ -10585,7 +10578,7 @@ export default function MobileTasksScreen() {
         onClose={() => setShowLinearDisplayPicker(false)}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Display Properties</Text>
+          <T style={styles.sheetTitle}>Display Properties</T>
         </View>
         <View style={styles.repoPickerGroup}>
           {LINEAR_DISPLAY_OPTIONS.map((property, index) => {
@@ -10688,7 +10681,7 @@ export default function MobileTasksScreen() {
           selectedCreateRepo &&
           hasGitHubIssueSourceChoice(selectedCreateGitHubSources) ? (
             <View style={styles.issueSourceBox}>
-              <Text style={styles.fieldLabel}>Issue source</Text>
+              <T style={styles.fieldLabel}>Issue source</T>
               <Text style={styles.issueSourceHint} numberOfLines={2}>
                 File in{' '}
                 {selectedCreateIssuePreference === 'origin'
@@ -10732,7 +10725,7 @@ export default function MobileTasksScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.fieldLabel}>Title</Text>
+          <T style={styles.fieldLabel}>Title</T>
           <TextInput
             style={styles.input}
             value={createTitle}
@@ -10743,7 +10736,7 @@ export default function MobileTasksScreen() {
             returnKeyType="next"
           />
 
-          <Text style={styles.fieldLabel}>Description</Text>
+          <T style={styles.fieldLabel}>Description</T>
           <TextInput
             style={[styles.input, styles.bodyInput]}
             value={createBody}
@@ -10765,7 +10758,7 @@ export default function MobileTasksScreen() {
             {creatingTask ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={styles.createButtonText}>Create Issue</Text>
+              <T style={styles.createButtonText}>Create Issue</T>
             )}
           </Pressable>
         </View>
@@ -10801,14 +10794,14 @@ export default function MobileTasksScreen() {
         <View style={styles.sheetHeader}>
           <View style={styles.sheetTitleRow}>
             <TaskProviderLogo provider="linear" size={16} color={colors.textPrimary} />
-            <Text style={styles.sheetTitle}>Connect Linear workspace</Text>
+            <T style={styles.sheetTitle}>Connect Linear workspace</T>
           </View>
-          <Text style={styles.sheetSubtitle}>
+          <T style={styles.sheetSubtitle}>
             Paste a Personal API key to browse issues from that workspace.
-          </Text>
+          </T>
         </View>
         <View style={styles.createForm}>
-          <Text style={styles.fieldLabel}>Personal API key</Text>
+          <T style={styles.fieldLabel}>Personal API key</T>
           <TextInput
             style={styles.input}
             value={linearApiKeyDraft}
@@ -10835,13 +10828,13 @@ export default function MobileTasksScreen() {
             onPress={() => void Linking.openURL('https://linear.app/settings/account/security')}
           >
             <ExternalLink size={13} color={colors.textSecondary} />
-            <Text style={styles.inlineTextLinkText}>Linear Settings / Security / New API key</Text>
+            <T style={styles.inlineTextLinkText}>Linear Settings / Security / New API key</T>
           </Pressable>
           <View style={styles.securityHintRow}>
             <Lock size={13} color={colors.textMuted} />
-            <Text style={styles.securityHintText}>
+            <T style={styles.securityHintText}>
               Your key is encrypted via the host OS keychain and stored locally.
-            </Text>
+            </T>
           </View>
           <Pressable
             style={[
@@ -10855,7 +10848,7 @@ export default function MobileTasksScreen() {
             {linearConnectState === 'connecting' ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={styles.createButtonText}>Connect</Text>
+              <T style={styles.createButtonText}>Connect</T>
             )}
           </Pressable>
         </View>
@@ -10884,7 +10877,7 @@ export default function MobileTasksScreen() {
         {workspaceCreateDraft ? (
           <View>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Create Workspace</Text>
+              <T style={styles.sheetTitle}>Create Workspace</T>
               <Text style={styles.sheetSubtitle} numberOfLines={2}>
                 {workspaceCreateDraft.item.title}
               </Text>
@@ -10892,7 +10885,7 @@ export default function MobileTasksScreen() {
 
             <View style={styles.workspaceCreateForm}>
               <View style={styles.workspaceCreateField}>
-                <Text style={styles.workspaceCreateLabel}>Repository</Text>
+                <T style={styles.workspaceCreateLabel}>Repository</T>
                 <Pressable
                   style={styles.fieldButton}
                   disabled={!workspaceCreateCanPickRepo}
@@ -10928,7 +10921,7 @@ export default function MobileTasksScreen() {
 
               {workspaceCreateTargetConnectionId ? (
                 <View style={styles.workspaceCreateField}>
-                  <Text style={styles.workspaceCreateLabel}>SSH Connection</Text>
+                  <T style={styles.workspaceCreateLabel}>SSH Connection</T>
                   <View style={styles.sshConnectCard}>
                     <View style={styles.sshStatusRow}>
                       <View
@@ -10975,7 +10968,7 @@ export default function MobileTasksScreen() {
 
               <View style={styles.workspaceCreateField}>
                 <Text style={styles.workspaceCreateLabel}>
-                  Workspace Name <Text style={styles.workspaceCreateLabelHint}>[Optional]</Text>
+                  Workspace Name <T style={styles.workspaceCreateLabelHint}>[Optional]</T>
                 </Text>
                 <MobileWorkspaceNameInput
                   style={styles.input}
@@ -10987,7 +10980,7 @@ export default function MobileTasksScreen() {
               </View>
 
               <View style={styles.workspaceCreateField}>
-                <Text style={styles.workspaceCreateLabel}>Agent</Text>
+                <T style={styles.workspaceCreateLabel}>Agent</T>
                 <Pressable
                   style={[
                     styles.fieldButton,
@@ -11015,7 +11008,7 @@ export default function MobileTasksScreen() {
                 style={styles.workspaceAdvancedToggle}
                 onPress={() => setShowWorkspaceAdvanced((current) => !current)}
               >
-                <Text style={styles.workspaceAdvancedText}>Advanced</Text>
+                <T style={styles.workspaceAdvancedText}>Advanced</T>
                 {showWorkspaceAdvanced ? (
                   <ChevronUp size={14} color={colors.textSecondary} />
                 ) : (
@@ -11025,7 +11018,7 @@ export default function MobileTasksScreen() {
 
               {showWorkspaceAdvanced ? (
                 <View style={styles.workspaceCreateField}>
-                  <Text style={styles.workspaceCreateLabel}>Start from</Text>
+                  <T style={styles.workspaceCreateLabel}>Start from</T>
                   <Pressable
                     style={styles.fieldButton}
                     onPress={() => {
@@ -11145,8 +11138,8 @@ export default function MobileTasksScreen() {
       >
         <View>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Start From</Text>
-            <Text style={styles.sheetSubtitle}>Pick an existing branch or ref.</Text>
+            <T style={styles.sheetTitle}>Start From</T>
+            <T style={styles.sheetSubtitle}>Pick an existing branch or ref.</T>
           </View>
           <View style={styles.detailGroup}>
             <TextInput
@@ -11170,8 +11163,8 @@ export default function MobileTasksScreen() {
                 ) : null}
               </View>
               <View style={styles.pickerContent}>
-                <Text style={styles.pickerLabel}>Default branch</Text>
-                <Text style={styles.pickerSubtitle}>Use this repository's configured base</Text>
+                <T style={styles.pickerLabel}>Default branch</T>
+                <T style={styles.pickerSubtitle}>Use this repository's configured base</T>
               </View>
             </Pressable>
             {workspaceBaseBranchLoading ? (
@@ -11181,7 +11174,7 @@ export default function MobileTasksScreen() {
             ) : workspaceBaseBranchError ? (
               <Text style={styles.detailError}>{workspaceBaseBranchError}</Text>
             ) : workspaceBaseBranchQuery.trim() && workspaceBaseBranchResults.length === 0 ? (
-              <Text style={styles.detailMuted}>No branches match.</Text>
+              <T style={styles.detailMuted}>No branches match.</T>
             ) : null}
             {workspaceBaseBranchResults.map((branch) => (
               <View key={`${branch.refName}:${branch.localBranchName}`}>
@@ -11221,7 +11214,7 @@ export default function MobileTasksScreen() {
       >
         <View>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Sparse Checkout</Text>
+            <T style={styles.sheetTitle}>Sparse Checkout</T>
           </View>
           <View style={styles.detailGroup}>
             <Pressable
@@ -11237,8 +11230,8 @@ export default function MobileTasksScreen() {
                 ) : null}
               </View>
               <View style={styles.pickerContent}>
-                <Text style={styles.pickerLabel}>Full checkout</Text>
-                <Text style={styles.pickerSubtitle}>Use the whole repository</Text>
+                <T style={styles.pickerLabel}>Full checkout</T>
+                <T style={styles.pickerSubtitle}>Use the whole repository</T>
               </View>
             </Pressable>
             {workspaceSparsePresets.map((preset) => (
@@ -11288,7 +11281,7 @@ export default function MobileTasksScreen() {
             disabled={!workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading}
             onPress={startNewWorkspaceSparsePreset}
           >
-            <Text style={styles.inlineSaveText}>New preset</Text>
+            <T style={styles.inlineSaveText}>New preset</T>
           </Pressable>
         </View>
       </BottomDrawer>
@@ -11311,7 +11304,7 @@ export default function MobileTasksScreen() {
             </View>
             <View style={styles.detailGroup}>
               <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Name</Text>
+                <T style={styles.detailSectionTitle}>Name</T>
                 <TextInput
                   style={styles.input}
                   value={workspaceSparseDraft.name}
@@ -11326,7 +11319,7 @@ export default function MobileTasksScreen() {
                 />
               </View>
               <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Directories</Text>
+                <T style={styles.detailSectionTitle}>Directories</T>
                 <TextInput
                   style={[styles.input, styles.bodyInput, styles.monoInput]}
                   value={workspaceSparseDraft.directoriesText}
@@ -11354,7 +11347,7 @@ export default function MobileTasksScreen() {
                 disabled={workspaceSparseSaving}
                 onPress={() => setWorkspaceSparseDraft(null)}
               >
-                <Text style={styles.secondaryActionText}>Cancel</Text>
+                <T style={styles.secondaryActionText}>Cancel</T>
               </Pressable>
               <Pressable
                 style={[
@@ -11367,7 +11360,7 @@ export default function MobileTasksScreen() {
                 {workspaceSparseSaving ? (
                   <ActivityIndicator size="small" color={colors.bgBase} />
                 ) : null}
-                <Text style={styles.primaryActionText}>Save</Text>
+                <T style={styles.primaryActionText}>Save</T>
               </Pressable>
             </View>
           </View>
@@ -11382,7 +11375,7 @@ export default function MobileTasksScreen() {
         {setupPrompt ? (
           <View>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Run Setup Script?</Text>
+              <T style={styles.sheetTitle}>Run Setup Script?</T>
               <Text style={styles.sheetSubtitle}>
                 {setupPrompt.repoName} requires a setup choice before creating this workspace.
               </Text>
@@ -11439,7 +11432,7 @@ export default function MobileTasksScreen() {
                 }
               >
                 <X size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Skip setup and create</Text>
+                <T style={styles.actionText}>Skip setup and create</T>
               </Pressable>
             </View>
           </View>
@@ -11459,10 +11452,10 @@ export default function MobileTasksScreen() {
                   ? `${orcaYamlTrustPrompt.repoName}'s setup script changed`
                   : `Run setup from ${orcaYamlTrustPrompt.repoName}?`}
               </Text>
-              <Text style={styles.sheetSubtitle}>
+              <T style={styles.sheetSubtitle}>
                 This repository's orca.yaml runs on your machine before the workspace starts. Only
                 run it if you trust this repository.
-              </Text>
+              </T>
             </View>
 
             <View style={styles.setupPromptBox}>
@@ -11506,7 +11499,7 @@ export default function MobileTasksScreen() {
                 }
               >
                 <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Run hooks</Text>
+                <T style={styles.actionText}>Run hooks</T>
               </Pressable>
               <View style={styles.actionSeparator} />
               <Pressable
@@ -11540,7 +11533,7 @@ export default function MobileTasksScreen() {
                 }
               >
                 <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Always trust and run</Text>
+                <T style={styles.actionText}>Always trust and run</T>
               </Pressable>
               <View style={styles.actionSeparator} />
               <Pressable
@@ -11563,7 +11556,7 @@ export default function MobileTasksScreen() {
                 }}
               >
                 <X size={16} color={colors.textPrimary} />
-                <Text style={styles.actionText}>Don't run</Text>
+                <T style={styles.actionText}>Don't run</T>
               </Pressable>
             </View>
           </View>
@@ -11579,7 +11572,7 @@ export default function MobileTasksScreen() {
         {projectRepoNotInOrca ? (
           <View>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Repository not in Orca</Text>
+              <T style={styles.sheetTitle}>Repository not in Orca</T>
               <Text style={styles.sheetSubtitle}>
                 {projectRepoNotInOrca.owner}/{projectRepoNotInOrca.repo} is not added to Orca. Add
                 this repository from the desktop app, then refresh mobile Tasks.
@@ -11597,7 +11590,7 @@ export default function MobileTasksScreen() {
                   }}
                 >
                   <ExternalLink size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>Open in GitHub</Text>
+                  <T style={styles.actionText}>Open in GitHub</T>
                 </Pressable>
               ) : null}
               {projectRepoNotInOrca.url ? <View style={styles.actionSeparator} /> : null}
@@ -11645,7 +11638,7 @@ export default function MobileTasksScreen() {
             <View style={styles.detailGroup}>
               <View style={styles.detailMetaGrid}>
                 <View style={styles.detailMetaItem}>
-                  <Text style={styles.detailMetaLabel}>Type</Text>
+                  <T style={styles.detailMetaLabel}>Type</T>
                   <Text style={styles.detailMetaValue}>
                     {projectRowItem.itemType === 'PULL_REQUEST'
                       ? 'Pull request'
@@ -11657,7 +11650,7 @@ export default function MobileTasksScreen() {
                   </Text>
                 </View>
                 <View style={styles.detailMetaItem}>
-                  <Text style={styles.detailMetaLabel}>Status</Text>
+                  <T style={styles.detailMetaLabel}>Status</T>
                   <Text style={styles.detailMetaValue}>
                     {projectRowStatusLabel(projectRowItem)}
                   </Text>
@@ -11684,7 +11677,7 @@ export default function MobileTasksScreen() {
               {SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowItem.itemType === 'ISSUE' ? (
                 <View style={styles.detailSection}>
                   <View style={styles.detailSectionHeader}>
-                    <Text style={styles.detailSectionTitle}>Issue type</Text>
+                    <T style={styles.detailSectionTitle}>Issue type</T>
                     <Text style={styles.detailSectionMeta}>
                       {projectRowItem.content.issueType?.name ?? 'No type'}
                     </Text>
@@ -11692,14 +11685,12 @@ export default function MobileTasksScreen() {
                   {projectIssueTypesLoading ? (
                     <View style={styles.detailLoadingInline}>
                       <ActivityIndicator size="small" color={colors.textSecondary} />
-                      <Text style={styles.detailMuted}>Loading issue types...</Text>
+                      <T style={styles.detailMuted}>Loading issue types...</T>
                     </View>
                   ) : projectIssueTypesError ? (
                     <Text style={styles.detailError}>{projectIssueTypesError}</Text>
                   ) : projectIssueTypes.length === 0 ? (
-                    <Text style={styles.detailMuted}>
-                      No issue types configured for this repository.
-                    </Text>
+                    <T style={styles.detailMuted}>No issue types configured for this repository.</T>
                   ) : (
                     <View style={styles.chipRow}>
                       {projectIssueTypes.map((issueType) => {
@@ -11734,7 +11725,7 @@ export default function MobileTasksScreen() {
                           disabled={projectMutating}
                           onPress={() => void mutateProjectRowIssueType(projectRowItem, null)}
                         >
-                          <Text style={styles.detailChipText}>Clear type</Text>
+                          <T style={styles.detailChipText}>Clear type</T>
                         </Pressable>
                       ) : null}
                     </View>
@@ -11744,7 +11735,7 @@ export default function MobileTasksScreen() {
               {SHOW_MOBILE_PROJECT_METADATA_EDITORS &&
               editableProjectFields(githubProjectTable).length > 0 ? (
                 <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>Project fields</Text>
+                  <T style={styles.detailSectionTitle}>Project fields</T>
                   {editableProjectFields(githubProjectTable).map((field) => {
                     const currentLabel = projectFieldValueLabel(projectRowItem, field)
                     const draftValue = projectFieldDrafts[field.id] ?? ''
@@ -11819,7 +11810,7 @@ export default function MobileTasksScreen() {
                         ) : field.dataType === 'ITERATION' && field.kind === 'iteration' ? (
                           <View style={styles.projectIterationList}>
                             {field.iterations.length === 0 ? (
-                              <Text style={styles.detailMuted}>No iterations available.</Text>
+                              <T style={styles.detailMuted}>No iterations available.</T>
                             ) : (
                               field.iterations.map((iteration) => {
                                 const fieldValue = projectRowItem.fieldValuesByFieldId?.[field.id]
@@ -11881,7 +11872,7 @@ export default function MobileTasksScreen() {
                               disabled={projectMutating}
                               onPress={saveTextField}
                             >
-                              <Text style={styles.inlineSaveText}>Save field</Text>
+                              <T style={styles.inlineSaveText}>Save field</T>
                             </Pressable>
                           </>
                         )}
@@ -11890,7 +11881,7 @@ export default function MobileTasksScreen() {
                           disabled={projectMutating || currentLabel === 'Empty'}
                           onPress={() => void mutateProjectRowField(projectRowItem, field, null)}
                         >
-                          <Text style={styles.inlineSaveText}>Clear field</Text>
+                          <T style={styles.inlineSaveText}>Clear field</T>
                         </Pressable>
                       </View>
                     )
@@ -11900,7 +11891,7 @@ export default function MobileTasksScreen() {
               {SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
                 <View style={styles.detailSection}>
                   <View style={styles.detailSectionHeader}>
-                    <Text style={styles.detailSectionTitle}>Labels</Text>
+                    <T style={styles.detailSectionTitle}>Labels</T>
                     <Text style={styles.detailSectionMeta}>
                       {(projectRowDetail?.provider === 'github'
                         ? projectRowDetail.labels
@@ -11911,12 +11902,12 @@ export default function MobileTasksScreen() {
                   {projectLabelsLoading ? (
                     <View style={styles.detailLoadingInline}>
                       <ActivityIndicator size="small" color={colors.textSecondary} />
-                      <Text style={styles.detailMuted}>Loading labels...</Text>
+                      <T style={styles.detailMuted}>Loading labels...</T>
                     </View>
                   ) : projectLabelsError ? (
                     <Text style={styles.detailError}>{projectLabelsError}</Text>
                   ) : projectAvailableLabels.length === 0 ? (
-                    <Text style={styles.detailMuted}>No labels in this repository.</Text>
+                    <T style={styles.detailMuted}>No labels in this repository.</T>
                   ) : (
                     <View style={styles.chipRow}>
                       {[
@@ -11961,7 +11952,7 @@ export default function MobileTasksScreen() {
               {SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
                 <View style={styles.detailSection}>
                   <View style={styles.detailSectionHeader}>
-                    <Text style={styles.detailSectionTitle}>Assignees</Text>
+                    <T style={styles.detailSectionTitle}>Assignees</T>
                     <Text style={styles.detailSectionMeta}>
                       {(projectRowDetail?.provider === 'github'
                         ? projectRowDetail.assignees
@@ -11972,14 +11963,12 @@ export default function MobileTasksScreen() {
                   {projectAssignableUsersLoading ? (
                     <View style={styles.detailLoadingInline}>
                       <ActivityIndicator size="small" color={colors.textSecondary} />
-                      <Text style={styles.detailMuted}>Loading assignees...</Text>
+                      <T style={styles.detailMuted}>Loading assignees...</T>
                     </View>
                   ) : projectAssignableUsersError ? (
                     <Text style={styles.detailError}>{projectAssignableUsersError}</Text>
                   ) : projectAssignableUsers.length === 0 ? (
-                    <Text style={styles.detailMuted}>
-                      No assignable users found for this repository.
-                    </Text>
+                    <T style={styles.detailMuted}>No assignable users found for this repository.</T>
                   ) : (
                     <View style={styles.chipRow}>
                       {[
@@ -12041,7 +12030,7 @@ export default function MobileTasksScreen() {
                   {SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
                     <>
                       <View style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>Title</Text>
+                        <T style={styles.detailSectionTitle}>Title</T>
                         <TextInput
                           style={styles.input}
                           value={projectTitleDraft}
@@ -12061,11 +12050,11 @@ export default function MobileTasksScreen() {
                             })
                           }
                         >
-                          <Text style={styles.inlineSaveText}>Save title</Text>
+                          <T style={styles.inlineSaveText}>Save title</T>
                         </Pressable>
                       </View>
                       <View style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>Description</Text>
+                        <T style={styles.detailSectionTitle}>Description</T>
                         <TextInput
                           style={[styles.input, styles.bodyInput]}
                           value={projectBodyDraft}
@@ -12090,7 +12079,7 @@ export default function MobileTasksScreen() {
                             })
                           }
                         >
-                          <Text style={styles.inlineSaveText}>Save description</Text>
+                          <T style={styles.inlineSaveText}>Save description</T>
                         </Pressable>
                         <MobileMarkdown content={projectBodyDraft} fallback="No description." />
                       </View>
@@ -12098,11 +12087,11 @@ export default function MobileTasksScreen() {
                   ) : (
                     <>
                       <View style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>Title</Text>
+                        <T style={styles.detailSectionTitle}>Title</T>
                         <Text style={styles.detailLine}>{projectRowItem.content.title}</Text>
                       </View>
                       <View style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>Description</Text>
+                        <T style={styles.detailSectionTitle}>Description</T>
                         <MobileMarkdown content={projectBodyDraft} fallback="No description." />
                       </View>
                     </>
@@ -12114,13 +12103,13 @@ export default function MobileTasksScreen() {
                     <>
                       <View style={styles.detailSection}>
                         <View style={styles.detailSectionHeader}>
-                          <Text style={styles.detailSectionTitle}>Reviewers</Text>
+                          <T style={styles.detailSectionTitle}>Reviewers</T>
                           <Text style={styles.detailSectionMeta}>
                             {getGitHubReviewSummary(projectRowDetail)}
                           </Text>
                         </View>
                         {getGitHubReviewerRows(projectRowDetail).length === 0 ? (
-                          <Text style={styles.detailMuted}>No reviewers requested.</Text>
+                          <T style={styles.detailMuted}>No reviewers requested.</T>
                         ) : (
                           getGitHubReviewerRows(projectRowDetail).map((reviewer) => (
                             <View key={reviewer.login} style={styles.reviewerRow}>
@@ -12146,12 +12135,12 @@ export default function MobileTasksScreen() {
                         {projectAssignableUsersLoading ? (
                           <View style={styles.detailLoadingInline}>
                             <ActivityIndicator size="small" color={colors.textSecondary} />
-                            <Text style={styles.detailMuted}>Loading reviewers...</Text>
+                            <T style={styles.detailMuted}>Loading reviewers...</T>
                           </View>
                         ) : projectAssignableUsersError ? (
                           <Text style={styles.detailError}>{projectAssignableUsersError}</Text>
                         ) : projectReviewerCandidates.length === 0 ? (
-                          <Text style={styles.detailMuted}>No reviewer suggestions found.</Text>
+                          <T style={styles.detailMuted}>No reviewer suggestions found.</T>
                         ) : (
                           <View style={styles.chipRow}>
                             {projectReviewerCandidates.map((user) => {
@@ -12196,21 +12185,21 @@ export default function MobileTasksScreen() {
                           }
                           onPress={() => void requestProjectGitHubReviewers(projectRowItem)}
                         >
-                          <Text style={styles.inlineSaveText}>Request review</Text>
+                          <T style={styles.inlineSaveText}>Request review</T>
                         </Pressable>
                       </View>
 
                       {projectRowType(projectRowItem) === 'pr' ? (
                         <View style={styles.detailSection}>
                           <View style={styles.detailSectionHeader}>
-                            <Text style={styles.detailSectionTitle}>Checks</Text>
+                            <T style={styles.detailSectionTitle}>Checks</T>
                             <View style={styles.inlineActionRow}>
                               <Pressable
                                 style={styles.inlineSaveButtonCompact}
                                 disabled={projectMutating}
                                 onPress={() => void refreshProjectGitHubChecks(projectRowItem)}
                               >
-                                <Text style={styles.inlineSaveText}>Refresh</Text>
+                                <T style={styles.inlineSaveText}>Refresh</T>
                               </Pressable>
                               <Pressable
                                 style={styles.inlineSaveButtonCompact}
@@ -12220,19 +12209,19 @@ export default function MobileTasksScreen() {
                                 }
                                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, true)}
                               >
-                                <Text style={styles.inlineSaveText}>Rerun failed</Text>
+                                <T style={styles.inlineSaveText}>Rerun failed</T>
                               </Pressable>
                               <Pressable
                                 style={styles.inlineSaveButtonCompact}
                                 disabled={projectMutating || projectRowDetail.checks.length === 0}
                                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, false)}
                               >
-                                <Text style={styles.inlineSaveText}>Rerun all</Text>
+                                <T style={styles.inlineSaveText}>Rerun all</T>
                               </Pressable>
                             </View>
                           </View>
                           {projectRowDetail.checks.length === 0 ? (
-                            <Text style={styles.detailMuted}>No checks found.</Text>
+                            <T style={styles.detailMuted}>No checks found.</T>
                           ) : (
                             projectRowDetail.checks.map((check) => (
                               <Pressable
@@ -12259,7 +12248,7 @@ export default function MobileTasksScreen() {
 
                       {projectRowDetail.files.length > 0 ? (
                         <View style={styles.detailSection}>
-                          <Text style={styles.detailSectionTitle}>Changed files</Text>
+                          <T style={styles.detailSectionTitle}>Changed files</T>
                           {projectRowDetail.files.map((file) => (
                             <View key={file.path} style={styles.fileCard}>
                               <Pressable
@@ -12299,7 +12288,7 @@ export default function MobileTasksScreen() {
                                     <ActivityIndicator size="small" color={colors.textSecondary} />
                                   ) : prFileContents[file.path]?.originalIsBinary ||
                                     prFileContents[file.path]?.modifiedIsBinary ? (
-                                    <Text style={styles.detailMuted}>Binary file.</Text>
+                                    <T style={styles.detailMuted}>Binary file.</T>
                                   ) : prFileContents[file.path] ? (
                                     <GitHubPrFileDiff
                                       filePath={file.path}
@@ -12321,9 +12310,7 @@ export default function MobileTasksScreen() {
                                       }
                                     />
                                   ) : (
-                                    <Text style={styles.detailMuted}>
-                                      File contents unavailable.
-                                    </Text>
+                                    <T style={styles.detailMuted}>File contents unavailable.</T>
                                   )}
                                 </View>
                               ) : null}
@@ -12336,13 +12323,13 @@ export default function MobileTasksScreen() {
                   {projectRowDetail?.provider === 'github' ? (
                     <View style={styles.detailSection}>
                       <View style={styles.detailSectionHeader}>
-                        <Text style={styles.detailSectionTitle}>Discussion</Text>
+                        <T style={styles.detailSectionTitle}>Discussion</T>
                         <Text style={styles.detailSectionMeta}>
                           {discussionSummary(projectRowDetail.comments.length)}
                         </Text>
                       </View>
                       {projectRowDetail.comments.length === 0 ? (
-                        <Text style={styles.detailMuted}>No comments.</Text>
+                        <T style={styles.detailMuted}>No comments.</T>
                       ) : (
                         projectDetailCommentGroups.map((group) => {
                           const groupId = detailCommentGroupId(group)
@@ -12423,7 +12410,7 @@ export default function MobileTasksScreen() {
                                           void updateProjectRowComment(projectRowItem, comment)
                                         }
                                       >
-                                        <Text style={styles.inlineSaveText}>Save</Text>
+                                        <T style={styles.inlineSaveText}>Save</T>
                                       </Pressable>
                                       <Pressable
                                         style={styles.inlineSaveButtonCompact}
@@ -12433,7 +12420,7 @@ export default function MobileTasksScreen() {
                                           setProjectEditingCommentDraft('')
                                         }}
                                       >
-                                        <Text style={styles.inlineSaveText}>Cancel</Text>
+                                        <T style={styles.inlineSaveText}>Cancel</T>
                                       </Pressable>
                                     </View>
                                   </>
@@ -12489,7 +12476,7 @@ export default function MobileTasksScreen() {
                                             )
                                           }
                                         >
-                                          <Text style={styles.inlineSaveText}>Reply</Text>
+                                          <T style={styles.inlineSaveText}>Reply</T>
                                         </Pressable>
                                         <Pressable
                                           style={styles.inlineSaveButtonCompact}
@@ -12499,7 +12486,7 @@ export default function MobileTasksScreen() {
                                             setProjectEditingCommentDraft(comment.body)
                                           }}
                                         >
-                                          <Text style={styles.inlineSaveText}>Edit</Text>
+                                          <T style={styles.inlineSaveText}>Edit</T>
                                         </Pressable>
                                         <Pressable
                                           style={styles.inlineSaveButtonCompact}
@@ -12508,7 +12495,7 @@ export default function MobileTasksScreen() {
                                             void deleteProjectRowComment(projectRowItem, comment)
                                           }
                                         >
-                                          <Text style={styles.inlineDeleteText}>Delete</Text>
+                                          <T style={styles.inlineDeleteText}>Delete</T>
                                         </Pressable>
                                       </View>
                                     ) : null}
@@ -12552,12 +12539,12 @@ export default function MobileTasksScreen() {
                   onPress={() => void createWorkspaceFromProjectRow(projectRowItem)}
                 >
                   <Plus size={16} color={colors.textPrimary} />
-                  <Text style={styles.actionText}>Create Workspace</Text>
+                  <T style={styles.actionText}>Create Workspace</T>
                 </Pressable>
               ) : (
-                <Text style={styles.emptyInlineText}>
+                <T style={styles.emptyInlineText}>
                   Workspaces can only be created from GitHub issues and pull requests.
-                </Text>
+                </T>
               )}
 
               {projectRowItem.content.url ? (
@@ -12574,7 +12561,7 @@ export default function MobileTasksScreen() {
                     }}
                   >
                     <ExternalLink size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>Open in GitHub</Text>
+                    <T style={styles.actionText}>Open in GitHub</T>
                   </Pressable>
                   <View style={styles.actionSeparator} />
                   <Pressable
@@ -12645,12 +12632,10 @@ export default function MobileTasksScreen() {
                     onPress={() => setMergeMethodProjectRow(projectRowItem)}
                   >
                     <GitBranch size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>Merge pull request</Text>
+                    <T style={styles.actionText}>Merge pull request</T>
                   </Pressable>
                   {!projectRowHostedRepo ? (
-                    <Text style={styles.emptyInlineText}>
-                      Merge requires this repository in Orca.
-                    </Text>
+                    <T style={styles.emptyInlineText}>Merge requires this repository in Orca.</T>
                   ) : null}
                 </>
               ) : null}
@@ -12700,29 +12685,29 @@ export default function MobileTasksScreen() {
                 <>
                   <View style={styles.detailMetaGrid}>
                     <View style={styles.detailMetaItem}>
-                      <Text style={styles.detailMetaLabel}>Type</Text>
+                      <T style={styles.detailMetaLabel}>Type</T>
                       <Text style={styles.detailMetaValue}>{taskKindLabel(actionItem)}</Text>
                     </View>
                     <View style={styles.detailMetaItem}>
-                      <Text style={styles.detailMetaLabel}>Status</Text>
+                      <T style={styles.detailMetaLabel}>Status</T>
                       <Text style={styles.detailMetaValue}>{actionItem.status}</Text>
                     </View>
                     {detailPayload.provider === 'linear' && detailPayload.assignee ? (
                       <View style={styles.detailMetaItem}>
-                        <Text style={styles.detailMetaLabel}>Assignee</Text>
+                        <T style={styles.detailMetaLabel}>Assignee</T>
                         <Text style={styles.detailMetaValue}>{detailPayload.assignee}</Text>
                       </View>
                     ) : null}
                     {detailPayload.provider === 'linear' && detailPayload.project ? (
                       <View style={styles.detailMetaItem}>
-                        <Text style={styles.detailMetaLabel}>Project</Text>
+                        <T style={styles.detailMetaLabel}>Project</T>
                         <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
                       </View>
                     ) : null}
                     {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
                     detailPayload.assignees.length > 0 ? (
                       <View style={styles.detailMetaItem}>
-                        <Text style={styles.detailMetaLabel}>Assignees</Text>
+                        <T style={styles.detailMetaLabel}>Assignees</T>
                         <Text style={styles.detailMetaValue}>
                           {detailPayload.assignees.join(', ')}
                         </Text>
@@ -12741,7 +12726,7 @@ export default function MobileTasksScreen() {
                   ) : null}
 
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Description</Text>
+                    <T style={styles.detailSectionTitle}>Description</T>
                     {SHOW_MOBILE_DETAIL_METADATA_EDITORS &&
                     ((actionItem.provider === 'github' &&
                       detailPayload.provider === 'github' &&
@@ -12793,7 +12778,7 @@ export default function MobileTasksScreen() {
                             }
                           }}
                         >
-                          <Text style={styles.inlineSaveText}>Save description</Text>
+                          <T style={styles.inlineSaveText}>Save description</T>
                         </Pressable>
                         <MobileMarkdown content={itemBodyDraft} fallback="No description." />
                       </>
@@ -12818,7 +12803,7 @@ export default function MobileTasksScreen() {
                       detailPayload.provider === 'gitlab')) ? (
                     <>
                       <View style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>Title</Text>
+                        <T style={styles.detailSectionTitle}>Title</T>
                         <TextInput
                           style={styles.input}
                           value={itemTitleDraft}
@@ -12856,13 +12841,13 @@ export default function MobileTasksScreen() {
                             }
                           }}
                         >
-                          <Text style={styles.inlineSaveText}>Save title</Text>
+                          <T style={styles.inlineSaveText}>Save title</T>
                         </Pressable>
                       </View>
 
                       <View style={styles.detailSection}>
                         <View style={styles.detailSectionHeader}>
-                          <Text style={styles.detailSectionTitle}>Labels</Text>
+                          <T style={styles.detailSectionTitle}>Labels</T>
                           <Text style={styles.detailSectionMeta}>
                             {detailPayload.labels.length || 'None'}
                           </Text>
@@ -12871,12 +12856,12 @@ export default function MobileTasksScreen() {
                           itemLabelsLoading ? (
                             <View style={styles.detailLoadingInline}>
                               <ActivityIndicator size="small" color={colors.textSecondary} />
-                              <Text style={styles.detailMuted}>Loading labels...</Text>
+                              <T style={styles.detailMuted}>Loading labels...</T>
                             </View>
                           ) : itemLabelsError ? (
                             <Text style={styles.detailError}>{itemLabelsError}</Text>
                           ) : itemAvailableLabels.length === 0 ? (
-                            <Text style={styles.detailMuted}>No labels in this repository.</Text>
+                            <T style={styles.detailMuted}>No labels in this repository.</T>
                           ) : (
                             <View style={styles.chipRow}>
                               {[...new Set([...itemAvailableLabels, ...detailPayload.labels])].map(
@@ -12943,7 +12928,7 @@ export default function MobileTasksScreen() {
                                 })
                               }
                             >
-                              <Text style={styles.inlineSaveText}>Update labels</Text>
+                              <T style={styles.inlineSaveText}>Update labels</T>
                             </Pressable>
                           </>
                         )}
@@ -12951,7 +12936,7 @@ export default function MobileTasksScreen() {
 
                       <View style={styles.detailSection}>
                         <View style={styles.detailSectionHeader}>
-                          <Text style={styles.detailSectionTitle}>Assignees</Text>
+                          <T style={styles.detailSectionTitle}>Assignees</T>
                           <Text style={styles.detailSectionMeta}>
                             {detailPayload.assignees.length || 'None'}
                           </Text>
@@ -12960,14 +12945,14 @@ export default function MobileTasksScreen() {
                           itemAssignableUsersLoading ? (
                             <View style={styles.detailLoadingInline}>
                               <ActivityIndicator size="small" color={colors.textSecondary} />
-                              <Text style={styles.detailMuted}>Loading assignees...</Text>
+                              <T style={styles.detailMuted}>Loading assignees...</T>
                             </View>
                           ) : itemAssignableUsersError ? (
                             <Text style={styles.detailError}>{itemAssignableUsersError}</Text>
                           ) : itemAssignableUsers.length === 0 ? (
-                            <Text style={styles.detailMuted}>
+                            <T style={styles.detailMuted}>
                               No assignable users found for this repository.
-                            </Text>
+                            </T>
                           ) : (
                             <View style={styles.chipRow}>
                               {[
@@ -13043,7 +13028,7 @@ export default function MobileTasksScreen() {
                                 })
                               }
                             >
-                              <Text style={styles.inlineSaveText}>Update assignees</Text>
+                              <T style={styles.inlineSaveText}>Update assignees</T>
                             </Pressable>
                           </>
                         ) : null}
@@ -13056,7 +13041,7 @@ export default function MobileTasksScreen() {
                   actionItem.source.type === 'pr' ? (
                     <View style={styles.detailSection}>
                       <View style={styles.detailSectionHeader}>
-                        <Text style={styles.detailSectionTitle}>Reviewers</Text>
+                        <T style={styles.detailSectionTitle}>Reviewers</T>
                         {detailPayload.provider === 'github' ? (
                           <Text style={styles.detailSectionMeta}>
                             {getGitHubReviewSummary(detailPayload)}
@@ -13065,7 +13050,7 @@ export default function MobileTasksScreen() {
                       </View>
                       {detailPayload.provider === 'github' ? (
                         getGitHubReviewerRows(detailPayload).length === 0 ? (
-                          <Text style={styles.detailMuted}>No reviewers requested.</Text>
+                          <T style={styles.detailMuted}>No reviewers requested.</T>
                         ) : (
                           getGitHubReviewerRows(detailPayload).map((reviewer) => (
                             <View key={reviewer.login} style={styles.reviewerRow}>
@@ -13092,12 +13077,12 @@ export default function MobileTasksScreen() {
                       {itemAssignableUsersLoading ? (
                         <View style={styles.detailLoadingInline}>
                           <ActivityIndicator size="small" color={colors.textSecondary} />
-                          <Text style={styles.detailMuted}>Loading reviewers...</Text>
+                          <T style={styles.detailMuted}>Loading reviewers...</T>
                         </View>
                       ) : itemAssignableUsersError ? (
                         <Text style={styles.detailError}>{itemAssignableUsersError}</Text>
                       ) : itemReviewerCandidates.length === 0 ? (
-                        <Text style={styles.detailMuted}>No reviewer suggestions found.</Text>
+                        <T style={styles.detailMuted}>No reviewer suggestions found.</T>
                       ) : (
                         <View style={styles.chipRow}>
                           {itemReviewerCandidates.map((user) => {
@@ -13140,7 +13125,7 @@ export default function MobileTasksScreen() {
                         }
                         onPress={() => void requestGitHubReviewers(actionItem)}
                       >
-                        <Text style={styles.inlineSaveText}>Request review</Text>
+                        <T style={styles.inlineSaveText}>Request review</T>
                       </Pressable>
                     </View>
                   ) : null}
@@ -13151,14 +13136,14 @@ export default function MobileTasksScreen() {
                   actionItem.source.type === 'pr' ? (
                     <View style={styles.detailSection}>
                       <View style={styles.detailSectionHeader}>
-                        <Text style={styles.detailSectionTitle}>Checks</Text>
+                        <T style={styles.detailSectionTitle}>Checks</T>
                         <View style={styles.inlineActionRow}>
                           <Pressable
                             style={styles.inlineSaveButtonCompact}
                             disabled={mutatingStatus}
                             onPress={() => void refreshGitHubChecks(actionItem)}
                           >
-                            <Text style={styles.inlineSaveText}>Refresh</Text>
+                            <T style={styles.inlineSaveText}>Refresh</T>
                           </Pressable>
                           <Pressable
                             style={styles.inlineSaveButtonCompact}
@@ -13167,19 +13152,19 @@ export default function MobileTasksScreen() {
                             }
                             onPress={() => void rerunGitHubChecks(actionItem, true)}
                           >
-                            <Text style={styles.inlineSaveText}>Rerun failed</Text>
+                            <T style={styles.inlineSaveText}>Rerun failed</T>
                           </Pressable>
                           <Pressable
                             style={styles.inlineSaveButtonCompact}
                             disabled={mutatingStatus || detailPayload.checks.length === 0}
                             onPress={() => void rerunGitHubChecks(actionItem, false)}
                           >
-                            <Text style={styles.inlineSaveText}>Rerun all</Text>
+                            <T style={styles.inlineSaveText}>Rerun all</T>
                           </Pressable>
                         </View>
                       </View>
                       {detailPayload.checks.length === 0 ? (
-                        <Text style={styles.detailMuted}>No checks found.</Text>
+                        <T style={styles.detailMuted}>No checks found.</T>
                       ) : (
                         detailPayload.checks.map((check) => (
                           <Pressable
@@ -13208,7 +13193,7 @@ export default function MobileTasksScreen() {
                   detailPayload.provider === 'github' &&
                   detailPayload.files.length > 0 ? (
                     <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Changed files</Text>
+                      <T style={styles.detailSectionTitle}>Changed files</T>
                       {detailPayload.files.map((file) =>
                         actionItem.provider === 'github' && actionItem.source.type === 'pr' ? (
                           <View key={file.path} style={styles.fileCard}>
@@ -13245,7 +13230,7 @@ export default function MobileTasksScreen() {
                                   <ActivityIndicator size="small" color={colors.textSecondary} />
                                 ) : prFileContents[file.path]?.originalIsBinary ||
                                   prFileContents[file.path]?.modifiedIsBinary ? (
-                                  <Text style={styles.detailMuted}>Binary file.</Text>
+                                  <T style={styles.detailMuted}>Binary file.</T>
                                 ) : prFileContents[file.path] ? (
                                   <GitHubPrFileDiff
                                     filePath={file.path}
@@ -13263,7 +13248,7 @@ export default function MobileTasksScreen() {
                                     }
                                   />
                                 ) : (
-                                  <Text style={styles.detailMuted}>File contents unavailable.</Text>
+                                  <T style={styles.detailMuted}>File contents unavailable.</T>
                                 )}
                               </View>
                             ) : null}
@@ -13287,7 +13272,7 @@ export default function MobileTasksScreen() {
                   actionItem.source.type === 'mr' ? (
                     <View style={styles.detailSection}>
                       <View style={styles.detailSectionHeader}>
-                        <Text style={styles.detailSectionTitle}>Pipeline</Text>
+                        <T style={styles.detailSectionTitle}>Pipeline</T>
                         <Text style={styles.detailSectionMeta}>
                           {detailPayload.pipelineJobs.length
                             ? `${detailPayload.pipelineJobs.length} jobs`
@@ -13295,7 +13280,7 @@ export default function MobileTasksScreen() {
                         </Text>
                       </View>
                       {detailPayload.pipelineJobs.length === 0 ? (
-                        <Text style={styles.detailMuted}>No pipeline runs for this MR.</Text>
+                        <T style={styles.detailMuted}>No pipeline runs for this MR.</T>
                       ) : (
                         detailPayload.pipelineJobs.map((job) => {
                           const duration = formatDurationSeconds(job.duration)
@@ -13338,13 +13323,13 @@ export default function MobileTasksScreen() {
                   actionItem.provider === 'linear' ? (
                     <View style={styles.detailSection}>
                       <View style={styles.detailSectionHeader}>
-                        <Text style={styles.detailSectionTitle}>Sub-issues</Text>
+                        <T style={styles.detailSectionTitle}>Sub-issues</T>
                         <Text style={styles.detailSectionMeta}>
                           {detailPayload.children.length || 'None'}
                         </Text>
                       </View>
                       {detailPayload.children.length === 0 ? (
-                        <Text style={styles.detailMuted}>No sub-issues.</Text>
+                        <T style={styles.detailMuted}>No sub-issues.</T>
                       ) : (
                         detailPayload.children.map((child) => (
                           <Pressable
@@ -13358,7 +13343,7 @@ export default function MobileTasksScreen() {
                             <Text style={styles.detailLine}>
                               {child.identifier} · {child.title}
                             </Text>
-                            <Text style={styles.detailSectionMeta}>Open</Text>
+                            <T style={styles.detailSectionMeta}>Open</T>
                           </Pressable>
                         ))
                       )}
@@ -13374,20 +13359,20 @@ export default function MobileTasksScreen() {
                         disabled={mutatingStatus || linearSubIssueTitle.trim().length === 0}
                         onPress={() => void createLinearSubIssue(actionItem)}
                       >
-                        <Text style={styles.inlineSaveText}>Add sub-issue</Text>
+                        <T style={styles.inlineSaveText}>Add sub-issue</T>
                       </Pressable>
                     </View>
                   ) : null}
 
                   <View style={styles.detailSection}>
                     <View style={styles.detailSectionHeader}>
-                      <Text style={styles.detailSectionTitle}>Discussion</Text>
+                      <T style={styles.detailSectionTitle}>Discussion</T>
                       <Text style={styles.detailSectionMeta}>
                         {discussionSummary(detailPayload.comments.length)}
                       </Text>
                     </View>
                     {detailPayload.comments.length === 0 ? (
-                      <Text style={styles.detailMuted}>No comments.</Text>
+                      <T style={styles.detailMuted}>No comments.</T>
                     ) : (
                       detailCommentGroups.map(renderDetailCommentGroup)
                     )}
@@ -13519,10 +13504,10 @@ export default function MobileTasksScreen() {
                     }
                   >
                     <GitBranch size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>Merge pull request</Text>
+                    <T style={styles.actionText}>Merge pull request</T>
                   </Pressable>
                   {isGitHubPrMergeBlocked(actionItem) ? (
-                    <Text style={styles.emptyInlineText}>GitHub reports merge conflicts.</Text>
+                    <T style={styles.emptyInlineText}>GitHub reports merge conflicts.</T>
                   ) : null}
                 </>
               ) : null}
@@ -13569,7 +13554,7 @@ export default function MobileTasksScreen() {
                     }
                   >
                     <GitBranch size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>Merge merge request</Text>
+                    <T style={styles.actionText}>Merge merge request</T>
                   </Pressable>
                 </>
               ) : null}
@@ -13587,7 +13572,7 @@ export default function MobileTasksScreen() {
                     }}
                   >
                     <GitBranch size={16} color={colors.textPrimary} />
-                    <Text style={styles.actionText}>Change status</Text>
+                    <T style={styles.actionText}>Change status</T>
                   </Pressable>
                 </>
               ) : null}

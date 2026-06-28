@@ -205,6 +205,7 @@ import {
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing } from '../../../../src/theme/mobile-theme'
 import { styles } from './mobile-session-styles'
+import { T } from '../../../../src/i18n/T'
 import type { DiffComment } from '../../../../../src/shared/types'
 import type {
   DiffCommentActions,
@@ -345,7 +346,7 @@ function MarkdownReader({
         <Text style={styles.markdownError}>{doc.message}</Text>
         <Pressable style={styles.markdownRefreshButton} onPress={onRefresh}>
           <RefreshCw size={14} color={colors.textPrimary} />
-          <Text style={styles.markdownRefreshText}>Retry</Text>
+          <T style={styles.markdownRefreshText}>Retry</T>
         </Pressable>
       </View>
     )
@@ -399,18 +400,18 @@ function MarkdownReader({
           <View style={styles.markdownFloatingActions}>
             {showCopy ? (
               <Pressable style={styles.markdownFloatingButton} onPress={onCopy}>
-                <Text style={styles.markdownFloatingButtonText}>Copy</Text>
+                <T style={styles.markdownFloatingButtonText}>Copy</T>
               </Pressable>
             ) : null}
             {showRefresh ? (
               <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
                 <RefreshCw size={13} color={colors.textPrimary} />
-                <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
+                <T style={styles.markdownFloatingButtonText}>Refresh</T>
               </Pressable>
             ) : null}
             {doc.isDirty ? (
               <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
-                <Text style={styles.markdownFloatingButtonText}>Discard</Text>
+                <T style={styles.markdownFloatingButtonText}>Discard</T>
               </Pressable>
             ) : null}
             {showSave ? (
@@ -426,7 +427,7 @@ function MarkdownReader({
                 {doc.saving ? (
                   <ActivityIndicator size="small" color={colors.textPrimary} />
                 ) : (
-                  <Text style={styles.markdownFloatingButtonText}>Save</Text>
+                  <T style={styles.markdownFloatingButtonText}>Save</T>
                 )}
               </Pressable>
             ) : null}
@@ -555,7 +556,7 @@ function DiffLineRow({
               disabled={commentsBusy}
               onPress={onCancelComment}
             >
-              <Text style={styles.diffCommentSecondaryText}>Cancel</Text>
+              <T style={styles.diffCommentSecondaryText}>Cancel</T>
             </Pressable>
             <Pressable
               style={[
@@ -569,7 +570,7 @@ function DiffLineRow({
                 }
               }}
             >
-              <Text style={styles.diffCommentPrimaryText}>Save note</Text>
+              <T style={styles.diffCommentPrimaryText}>Save note</T>
             </Pressable>
           </View>
         </View>
@@ -763,7 +764,7 @@ function FileReader({
                 accessibilityLabel="Copy review notes"
               >
                 <Copy size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Copy</Text>
+                <T style={styles.diffNotesActionText}>Copy</T>
               </Pressable>
               <Pressable
                 style={[
@@ -775,7 +776,7 @@ function FileReader({
                 accessibilityLabel="Send review notes to AI"
               >
                 <Send size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                <Text style={styles.diffNotesActionText}>Send</Text>
+                <T style={styles.diffNotesActionText}>Send</T>
               </Pressable>
             </View>
           </View>
@@ -4690,7 +4691,7 @@ export default function SessionScreen() {
               </View>
             ) : showEmptyState ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No tabs in this session</Text>
+                <T style={styles.emptyText}>No tabs in this session</T>
                 {createError ? <Text style={styles.createError}>{createError}</Text> : null}
                 <View style={styles.emptyActions}>
                   <Pressable
@@ -4923,14 +4924,14 @@ export default function SessionScreen() {
                         onPress={() => void handlePaste()}
                         accessibilityLabel="Paste from clipboard"
                       >
-                        <Text
+                        <T
                           style={[
                             styles.accessoryKeyText,
                             !canSend && styles.accessoryKeyTextDisabled
                           ]}
                         >
                           Paste
-                        </Text>
+                        </T>
                       </Pressable>
                     )}
                     {visibleBuiltInAccessoryKeys.map((key) => (
