@@ -17,7 +17,8 @@ import {
   normalizeGitLabIssueAssignee,
   normalizeGitLabIssueListState,
   normalizeGitLabMRListState,
-  normalizeGitLabPositiveInteger
+  normalizeGitLabPositiveInteger,
+  normalizeGitLabSearchQuery
 } from '../gitlab/gitlab-preload-args'
 import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
 import {
@@ -165,6 +166,7 @@ export function registerGitLabHandlers(store: Store): void {
         state?: 'opened' | 'merged' | 'closed' | 'all'
         page?: number
         perPage?: number
+        query?: string
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -177,7 +179,7 @@ export function registerGitLabHandlers(store: Store): void {
         page,
         perPage,
         repo.issueSourcePreference,
-        undefined,
+        normalizeGitLabSearchQuery(args.query),
         repoConnectionId(repo),
         ...localGitOptionArgs(store, repo)
       )
@@ -326,6 +328,7 @@ export function registerGitLabHandlers(store: Store): void {
         state?: 'opened' | 'merged' | 'closed' | 'all'
         page?: number
         perPage?: number
+        query?: string
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
@@ -335,7 +338,7 @@ export function registerGitLabHandlers(store: Store): void {
         normalizeGitLabPositiveInteger(args.page, 1, 10_000),
         normalizeGitLabPositiveInteger(args.perPage, 20, 100),
         repo.issueSourcePreference,
-        undefined,
+        normalizeGitLabSearchQuery(args.query),
         repoConnectionId(repo),
         ...localGitOptionArgs(store, repo)
       )

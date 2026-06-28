@@ -14120,17 +14120,27 @@ export class OrcaRuntimeService {
         ? sshGitProvider.fetchRemoteTrackingRef(repo.path, remote, branch, ref)
         : gitExec(['fetch', remote, `+refs/heads/${branch}:${ref}`]))
     }
-    const fetchTargetBranch = async (): Promise<{ error: string } | null> => {
+    // Why: the target/compare branch is optional (it only powers the diff
+    // base). A merged MR may have had its target ref deleted, so a fetch
+    // failure must NOT abort the whole resolution — that would discard the
+    // already-verified source-branch base and silently fall back to the repo
+    // default branch. Degrade gracefully by dropping compareBaseRef instead.
+    const fetchCompareBaseRef = async (): Promise<boolean> => {
       if (!targetBranch || !compareBaseRef) {
-        return null
+        return false
       }
       try {
         await fetchRemoteTrackingRef(targetBranch, compareBaseRef)
+        return true
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { error: `Failed to fetch ${remote}/${targetBranch}: ${message.split('\n')[0]}` }
+        console.warn('[runtime:resolveManagedMrBase] optional compare-base fetch failed', {
+          remote,
+          targetBranch,
+          mrIid: args.mrIid,
+          error: error instanceof Error ? error.message.split('\n')[0] : String(error)
+        })
+        return false
       }
-      return null
     }
 
     if (isCrossRepository) {
@@ -14155,11 +14165,8 @@ export class OrcaRuntimeService {
       if (!sha) {
         return { error: `Empty SHA resolving fork MR !${args.mrIid} head.` }
       }
-      const targetFetchError = await fetchTargetBranch()
-      if (targetFetchError) {
-        return targetFetchError
-      }
-      return { baseBranch: sha, ...(compareBaseRef ? { compareBaseRef } : {}) }
+      const compareBaseFetched = await fetchCompareBaseRef()
+      return { baseBranch: sha, ...(compareBaseFetched ? { compareBaseRef } : {}) }
     }
 
     try {
@@ -14175,13 +14182,10 @@ export class OrcaRuntimeService {
     } catch {
       return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
     }
-    const targetFetchError = await fetchTargetBranch()
-    if (targetFetchError) {
-      return targetFetchError
-    }
+    const compareBaseFetched = await fetchCompareBaseRef()
     return {
       baseBranch: remoteRef,
-      ...(compareBaseRef ? { compareBaseRef } : {}),
+      ...(compareBaseFetched ? { compareBaseRef } : {}),
       pushTarget: { remoteName: remote, branchName: sourceBranch }
     }
   }

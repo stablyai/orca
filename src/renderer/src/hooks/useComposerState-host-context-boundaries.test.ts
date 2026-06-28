@@ -45,6 +45,11 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('worktree.resolveMrBase')
     expect(section).toContain('repo: runRepo.id')
     expect(section).not.toContain('repoId: repoForItem.id')
+    // Why (#6263): an unresolved MR base must surface a toast and clear stale
+    // state instead of silently dropping the worktree onto origin/master.
+    expect(section).toContain('toast.error(result.error)')
+    expect(section).toContain("'Failed to resolve MR base.'")
+    expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
   })
 
   it('does not use local SSH gates for runtime-owned folder targets', () => {
