@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import type { MobileUiLanguage } from '../i18n/init'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
@@ -178,3 +179,38 @@ export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
   await AsyncStorage.setItem(PINS_PREFIX + hostId, JSON.stringify([...ids]))
 }
+
+const UI_LANGUAGE_KEY = 'orca:uiLanguage'
+
+const DEFAULT_UI_LANGUAGE: MobileUiLanguage = 'system'
+
+function normalizeUiLanguage(value: unknown): MobileUiLanguage {
+  return value === 'en' || value === 'zh' || value === 'system' ? value : DEFAULT_UI_LANGUAGE
+}
+
+export async function loadUiLanguage(): Promise<MobileUiLanguage> {
+  try {
+    const raw = await AsyncStorage.getItem(UI_LANGUAGE_KEY)
+    if (raw === null) {
+      return DEFAULT_UI_LANGUAGE
+    }
+    return normalizeUiLanguage(raw)
+  } catch {
+    return DEFAULT_UI_LANGUAGE
+  }
+}
+
+export async function saveUiLanguage(lang: MobileUiLanguage): Promise<void> {
+  try {
+    await AsyncStorage.setItem(UI_LANGUAGE_KEY, lang)
+  } catch (error) {
+    // Why: a failed write should not block the language switch — the in-memory
+    // i18n state already reflects the new language. The user gets the new
+    // language now and we just don't persist it across launches.
+    console.warn('[preferences] saveUiLanguage failed', error)
+  }
+}
+
+// Re-export so call sites can `import { MobileUiLanguage } from '../storage/preferences'`
+// without reaching into i18n internals.
+export type { MobileUiLanguage }
