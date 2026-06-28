@@ -6,6 +6,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { T } from './i18n/T'
 
 type Props = {
   setup: MobileSpeechSetup
@@ -67,7 +68,7 @@ export function VoiceModelList({
                   <Text style={styles.modelLabel} numberOfLines={1}>
                     {model.label}
                   </Text>
-                  {model.recommended ? <Text style={styles.recommended}>Recommended</Text> : null}
+                  {model.recommended ? <T style={styles.recommended}>Recommended</T> : null}
                 </View>
                 <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
               </View>
@@ -80,7 +81,7 @@ export function VoiceModelList({
                   {isSelected ? (
                     <View style={styles.selectedTag}>
                       <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                      <Text style={styles.selectedText}>In use</Text>
+                      <T style={styles.selectedText}>In use</T>
                     </View>
                   ) : (
                     <Pressable
@@ -94,7 +95,7 @@ export function VoiceModelList({
                       {selectBusy ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} />
                       ) : (
-                        <Text style={styles.actionText}>Use</Text>
+                        <T style={styles.actionText}>Use</T>
                       )}
                     </Pressable>
                   )}

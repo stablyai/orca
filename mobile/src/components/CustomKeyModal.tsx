@@ -4,12 +4,13 @@ import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { T } from './i18n/T'
+import { SHORTCUT_MODIFIERS, SPECIAL_KEY_GROUPS, indexSpecialKeys } from './custom-key-modal-data'
 import {
   buildTerminalShortcutKey,
   normalizeShortcutKeyInput,
   TERMINAL_SHORTCUT_SPECIAL_KEYS,
-  type TerminalShortcutModifier,
-  type TerminalShortcutSpecialKey
+  type TerminalShortcutModifier
 } from '../terminal/terminal-accessory-keys'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
@@ -23,39 +24,7 @@ export type CustomKey = {
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
-// Why: Alt is rendered with the ⌥ glyph because on macOS hosts the Option key
-// is the only modifier that produces an ESC-prefixed byte sequence terminals
-// can read. Cmd is intentionally absent — macOS swallows it before keystrokes
-// reach the shell, so there's nothing to encode.
-const SHORTCUT_MODIFIERS: { id: TerminalShortcutModifier; label: string; glyph?: string }[] = [
-  { id: 'ctrl', label: 'Ctrl' },
-  { id: 'alt', label: 'Alt', glyph: '⌥' },
-  { id: 'shift', label: 'Shift' }
-]
-
-// Why: special keys are grouped by purpose so the picker reads as three small
-// fixed grids rather than one ragged wrap row that clipped F7-F12.
-const SPECIAL_KEY_GROUPS: { title: string; ids: string[]; columns: number }[] = [
-  {
-    title: 'Editing',
-    ids: ['escape', 'tab', 'enter', 'backspace', 'delete', 'insert', 'space'],
-    columns: 4
-  },
-  {
-    title: 'Navigation',
-    ids: ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight', 'home', 'end', 'pageUp', 'pageDown'],
-    columns: 4
-  },
-  {
-    title: 'Function',
-    ids: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'],
-    columns: 6
-  }
-]
-
-const SPECIAL_KEY_BY_ID: Record<string, TerminalShortcutSpecialKey> = Object.fromEntries(
-  TERMINAL_SHORTCUT_SPECIAL_KEYS.map((key) => [key.id, key])
-)
+const SPECIAL_KEY_BY_ID = indexSpecialKeys(TERMINAL_SHORTCUT_SPECIAL_KEYS)
 
 type Props = {
   visible: boolean
@@ -212,16 +181,16 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => setStep('shortcut-combo')}
           >
-            <Text style={styles.rowLabel}>Shortcut Combo</Text>
-            <Text style={styles.rowHint}>Build Ctrl, Alt, and Shift key chords</Text>
+            <T style={styles.rowLabel}>Shortcut Combo</T>
+            <T style={styles.rowHint}>Build Ctrl, Alt, and Shift key chords</T>
           </Pressable>
           <View style={styles.separator} />
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => setStep('text-macro')}
           >
-            <Text style={styles.rowLabel}>Text Macro</Text>
-            <Text style={styles.rowHint}>Send custom text command</Text>
+            <T style={styles.rowLabel}>Text Macro</T>
+            <T style={styles.rowHint}>Send custom text command</T>
           </Pressable>
           {onManageShortcuts ? (
             <>
@@ -230,8 +199,8 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
                 style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 onPress={onManageShortcuts}
               >
-                <Text style={styles.rowLabel}>Manage Shortcuts</Text>
-                <Text style={styles.rowHint}>Show, hide, or reorder shortcut keys</Text>
+                <T style={styles.rowLabel}>Manage Shortcuts</T>
+                <T style={styles.rowHint}>Show, hide, or reorder shortcut keys</T>
               </Pressable>
             </>
           ) : null}
@@ -258,7 +227,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Modifiers</Text>
+            <T style={styles.sectionLabel}>Modifiers</T>
             <View style={styles.mods}>
               {SHORTCUT_MODIFIERS.map((modifier) => {
                 const selected = shortcutModifiers.includes(modifier.id)
@@ -289,7 +258,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Key</Text>
+            <T style={styles.sectionLabel}>Key</T>
             <TextInput
               style={styles.keyInput}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
@@ -304,7 +273,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               style={({ pressed }) => [styles.moreLink, pressed && styles.moreLinkPressed]}
               onPress={() => setStep('special-keys')}
             >
-              <Text style={styles.moreLinkText}>More keys — Tab, arrows, F1–F12…</Text>
+              <T style={styles.moreLinkText}>More keys — Tab, arrows, F1–F12…</T>
             </Pressable>
           </View>
 
@@ -363,7 +332,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
       {step === 'text-macro' && (
         <View style={styles.group}>
           <View style={styles.macroForm}>
-            <Text style={styles.fieldLabel}>Label</Text>
+            <T style={styles.fieldLabel}>Label</T>
             <TextInput
               style={styles.fieldInput}
               value={macroLabel}
@@ -373,7 +342,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Text style={styles.fieldLabel}>Command</Text>
+            <T style={styles.fieldLabel}>Command</T>
             <TextInput
               style={styles.fieldInput}
               value={macroText}
@@ -384,7 +353,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               autoCorrect={false}
             />
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Press Enter</Text>
+              <T style={styles.switchLabel}>Press Enter</T>
               <Switch
                 value={macroEnter}
                 onValueChange={setMacroEnter}
@@ -397,11 +366,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               disabled={!macroText.trim()}
               onPress={handleMacroSave}
             >
-              <Text
+              <T
                 style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
               >
                 Add Shortcut
-              </Text>
+              </T>
             </Pressable>
           </View>
         </View>

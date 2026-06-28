@@ -15,6 +15,7 @@ import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { CustomKeyModal, loadCustomKeys, saveCustomKeys, type CustomKey } from './CustomKeyModal'
 import { DragReorderList } from './DragReorderList'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { T } from './i18n/T'
 import {
   TERMINAL_ACCESSORY_KEYS,
   type TerminalAccessoryKey
@@ -222,11 +223,11 @@ export function TerminalShortcutSettings({
 
   return (
     <>
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
-      <Text style={styles.groupDescription}>
+      <T style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</T>
+      <T style={styles.groupDescription}>
         Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
         the terminal shortcut bar.
-      </Text>
+      </T>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
           items={orderedAccessoryKeys}
@@ -250,20 +251,18 @@ export function TerminalShortcutSettings({
           onPress={resetBuiltInKeys}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Reset Defaults</Text>
-            <Text style={styles.rowSublabel}>
-              Show every built-in shortcut key in the original order
-            </Text>
+            <T style={styles.rowLabel}>Reset Defaults</T>
+            <T style={styles.rowSublabel}>Show every built-in shortcut key in the original order</T>
           </View>
         </Pressable>
       </View>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
+      <T style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</T>
       <View style={[styles.section, styles.sectionTopGap]}>
         {customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
+              <T style={styles.emptyText}>No custom shortcuts defined yet.</T>
             </View>
             <View style={styles.separator} />
           </>
@@ -306,8 +305,8 @@ export function TerminalShortcutSettings({
           onPress={() => setShowCustomKeyModal(true)}
         >
           <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>Add Custom Shortcut…</Text>
-            <Text style={styles.rowSublabel}>Create key combo or text macro</Text>
+            <T style={styles.rowLabel}>Add Custom Shortcut…</T>
+            <T style={styles.rowSublabel}>Create key combo or text macro</T>
           </View>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>

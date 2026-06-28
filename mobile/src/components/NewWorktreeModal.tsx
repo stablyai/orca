@@ -15,6 +15,7 @@ import type { RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import { PickerListDrawer } from './PickerListDrawer'
+import { T } from './i18n/T'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { MobileWorkspaceNameInput } from './MobileWorkspaceNameInput'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -671,10 +672,8 @@ function NewWorktreeModalContent({
     <>
       <BottomDrawer visible={visible} onClose={onClose}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create Workspace</Text>
-          <Text style={styles.subtitle}>
-            Pick a repository and agent to spin up a new workspace.
-          </Text>
+          <T style={styles.title}>Create Workspace</T>
+          <T style={styles.subtitle}>Pick a repository and agent to spin up a new workspace.</T>
         </View>
 
         {loading ? (
@@ -683,12 +682,12 @@ function NewWorktreeModalContent({
           </View>
         ) : repos.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.emptyText}>No repositories found</Text>
+            <T style={styles.emptyText}>No repositories found</T>
           </View>
         ) : (
           <>
             <View style={styles.field}>
-              <Text style={styles.label}>Repository</Text>
+              <T style={styles.label}>Repository</T>
               <Pressable style={styles.fieldButton} onPress={() => setShowRepoPicker(true)}>
                 {selectedRepo ? (
                   <View
@@ -707,7 +706,7 @@ function NewWorktreeModalContent({
 
             {selectedRepoConnectionId ? (
               <View style={styles.field}>
-                <Text style={styles.label}>SSH Connection</Text>
+                <T style={styles.label}>SSH Connection</T>
                 <View style={styles.sshBox}>
                   <View style={styles.sshRow}>
                     <View
@@ -771,7 +770,7 @@ function NewWorktreeModalContent({
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Agent</Text>
+              <T style={styles.label}>Agent</T>
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
@@ -786,7 +785,7 @@ function NewWorktreeModalContent({
             </View>
 
             <Pressable style={styles.advancedToggle} onPress={() => setShowAdvanced(!showAdvanced)}>
-              <Text style={styles.advancedText}>Advanced</Text>
+              <T style={styles.advancedText}>Advanced</T>
               {showAdvanced ? (
                 <ChevronUp size={14} color={colors.textSecondary} />
               ) : (
@@ -797,7 +796,7 @@ function NewWorktreeModalContent({
             {showAdvanced && (
               <>
                 <View style={styles.field}>
-                  <Text style={styles.label}>Note</Text>
+                  <T style={styles.label}>Note</T>
                   <TextInput
                     style={styles.input}
                     value={note}
@@ -812,7 +811,7 @@ function NewWorktreeModalContent({
                 {setupCommand ? (
                   <View style={styles.field}>
                     <View style={styles.setupHeader}>
-                      <Text style={styles.label}>Setup script</Text>
+                      <T style={styles.label}>Setup script</T>
                       {setupSource && (
                         <View style={styles.sourceBadge}>
                           <Text style={styles.sourceBadgeText}>
@@ -831,7 +830,7 @@ function NewWorktreeModalContent({
                             ]}
                             onPress={() => setSetupDecisionChoice('run')}
                           >
-                            <Text style={styles.setupChoiceText}>Run</Text>
+                            <T style={styles.setupChoiceText}>Run</T>
                           </Pressable>
                           <Pressable
                             style={[
@@ -840,12 +839,12 @@ function NewWorktreeModalContent({
                             ]}
                             onPress={() => setSetupDecisionChoice('skip')}
                           >
-                            <Text style={styles.setupChoiceText}>Skip</Text>
+                            <T style={styles.setupChoiceText}>Skip</T>
                           </Pressable>
                         </View>
                       ) : (
                         <View style={styles.setupToggleRow}>
-                          <Text style={styles.setupToggleLabel}>Run setup command</Text>
+                          <T style={styles.setupToggleLabel}>Run setup command</T>
                           <Switch
                             value={runSetup}
                             onValueChange={setRunSetup}
@@ -962,7 +961,7 @@ function NewWorktreeModalContent({
                 }
               >
                 <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.trustActionText}>Run hooks</Text>
+                <T style={styles.trustActionText}>Run hooks</T>
               </Pressable>
               <View style={styles.trustActionSeparator} />
               <Pressable
@@ -989,7 +988,7 @@ function NewWorktreeModalContent({
                 }
               >
                 <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.trustActionText}>Always trust and run</Text>
+                <T style={styles.trustActionText}>Always trust and run</T>
               </Pressable>
               <View style={styles.trustActionSeparator} />
               <Pressable
@@ -1000,7 +999,7 @@ function NewWorktreeModalContent({
                   void handleCreate({ setupOverride: 'skip' })
                 }}
               >
-                <Text style={styles.trustActionText}>Don't run</Text>
+                <T style={styles.trustActionText}>Don't run</T>
               </Pressable>
             </View>
           </View>

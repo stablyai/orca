@@ -13,6 +13,7 @@ import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-qu
 import type { GitMutationMethod } from '../session/mobile-diff-review-screen-model'
 import { colors, spacing } from '../theme/mobile-theme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { T } from './i18n/T'
 
 type Props = {
   busyAction: string | null
@@ -46,7 +47,7 @@ export function MobileDiffReviewFooter({
             accessibilityLabel="Stage file"
           >
             <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.secondaryButtonText}>Stage</Text>
+            <T style={styles.secondaryButtonText}>Stage</T>
           </Pressable>
         ) : null}
         {item.canUnstage ? (
@@ -58,7 +59,7 @@ export function MobileDiffReviewFooter({
             accessibilityLabel="Unstage file"
           >
             <Undo2 size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.secondaryButtonText}>Unstage</Text>
+            <T style={styles.secondaryButtonText}>Unstage</T>
           </Pressable>
         ) : null}
         {item.canDiscard ? (
@@ -70,7 +71,7 @@ export function MobileDiffReviewFooter({
             accessibilityLabel="Discard file"
           >
             <Trash2 size={14} color={colors.statusRed} strokeWidth={2.2} />
-            <Text style={styles.destructiveText}>Discard</Text>
+            <T style={styles.destructiveText}>Discard</T>
           </Pressable>
         ) : null}
       </View>
@@ -90,7 +91,7 @@ export function MobileDiffReviewFooter({
           accessibilityLabel="Add file note"
         >
           <FileText size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.footerButtonText}>Note</Text>
+          <T style={styles.footerButtonText}>Note</T>
         </Pressable>
         <Pressable
           style={({ pressed }) => [

@@ -10,6 +10,7 @@ import {
   type ReviewDiffState
 } from '../session/mobile-diff-review-screen-model'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { T } from './i18n/T'
 
 type Props = {
   currentIndex: number
@@ -73,8 +74,8 @@ export function MobileDiffReviewFileSummary({
         <Text style={styles.fileMeta}>
           {currentIndex + 1}/{filteredCount}
         </Text>
-        {item.isReviewed ? <Text style={styles.reviewedPill}>Reviewed</Text> : null}
-        {item.changedSinceReview ? <Text style={styles.stalePill}>Changed</Text> : null}
+        {item.isReviewed ? <T style={styles.reviewedPill}>Reviewed</T> : null}
+        {item.changedSinceReview ? <T style={styles.stalePill}>Changed</T> : null}
         {item.noteCount > 0 ? (
           <Text style={styles.fileMeta}>
             {mobileReviewCountLabel(item.noteCount, 'note', 'notes')}
@@ -97,7 +98,7 @@ export function MobileDiffReviewFileSummary({
               <Text style={styles.fileNoteText} numberOfLines={2}>
                 {note.body}
               </Text>
-              {staleCommentIds.has(note.id) ? <Text style={styles.staleText}>Stale</Text> : null}
+              {staleCommentIds.has(note.id) ? <T style={styles.staleText}>Stale</T> : null}
             </Pressable>
           ))}
         </View>
@@ -111,7 +112,7 @@ export function MobileDiffReviewFileSummary({
           accessibilityLabel="Previous hunk"
         >
           <ArrowUp size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>Hunk</Text>
+          <T style={styles.hunkButtonText}>Hunk</T>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.hunkButton, pressed && styles.hunkButtonPressed]}
@@ -121,7 +122,7 @@ export function MobileDiffReviewFileSummary({
           accessibilityLabel="Next hunk"
         >
           <ArrowDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>Hunk</Text>
+          <T style={styles.hunkButtonText}>Hunk</T>
         </Pressable>
       </View>
     </View>
