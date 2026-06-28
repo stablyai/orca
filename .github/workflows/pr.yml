@@ -53,10 +53,12 @@ jobs:
           fi
 
       - name: Install dependencies
-        # Why: pnpm 10.24's headless fast path can fail on fresh Ubuntu runners
-        # while creating the root node_modules; keep the lockfile strict but use
-        # the normal installer path.
-        run: pnpm install --frozen-lockfile --prefer-frozen-lockfile=false
+        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
+        # runners while creating the root node_modules. Use the normal resolver
+        # path, then verify package metadata stayed unchanged.
+        run: |
+          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
+          git diff --exit-code package.json pnpm-lock.yaml
 
       - name: Lint
         run: pnpm exec oxlint --format github
