@@ -12,6 +12,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -65,6 +67,14 @@ export function buildAiVaultResumeStartupForWorktree(args: {
 }): AiVaultResumeStartup {
   const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
+  // Why: the queued command is typed verbatim into the freshly spawned tab whose
+  // live shell is the configured Windows shell (default PowerShell). Hardcoding
+  // cmd quoting made PowerShell mis-parse the `""`-doubled wrapper (#6152), so
+  // resolve the actual shell to quote per-shell instead.
+  const queuedShell: AgentStartupShell | undefined =
+    platform === 'win32'
+      ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
+      : undefined
   if (isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -74,9 +84,7 @@ export function buildAiVaultResumeStartupForWorktree(args: {
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
       },
       platform,
-      // Why: copied AI Vault commands are shell-wrapped for portability; the
-      // same inner command must be queued so drag/click resume match copy.
-      shell: platform === 'win32' ? 'cmd' : undefined,
+      shell: queuedShell,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
         args.state.settings?.agentDefaultArgs
@@ -89,7 +97,8 @@ export function buildAiVaultResumeStartupForWorktree(args: {
           resumeCommand: startupPlan.launchCommand,
           cwd: args.session.cwd,
           platform,
-          codexHome
+          codexHome,
+          shell: queuedShell
         }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         launchConfig: startupPlan.launchConfig
