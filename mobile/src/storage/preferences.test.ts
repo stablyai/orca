@@ -163,6 +163,7 @@ describe('loadUiLanguage / saveUiLanguage', () => {
     vi.mocked(AsyncStorage.setItem).mockResolvedValueOnce(undefined)
     vi.mocked(AsyncStorage.getItem).mockResolvedValueOnce('zh')
     await saveUiLanguage('zh')
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:uiLanguage', 'zh')
     await expect(loadUiLanguage()).resolves.toBe('zh')
   })
 
