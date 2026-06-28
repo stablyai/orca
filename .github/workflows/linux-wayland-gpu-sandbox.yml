@@ -13,11 +13,13 @@ jobs:
   verify:
     name: wayland terminal input
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Install native build tools and Wayland compositor
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh weston
@@ -42,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify terminal input under Wayland GPU sandbox workaround
+      - name: Start Weston
         run: |
           set -euo pipefail
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg-runtime"
@@ -50,6 +52,11 @@ jobs:
           chmod 700 "$XDG_RUNTIME_DIR"
           unset DISPLAY
           weston --backend=headless-backend.so --socket=wayland-1 --idle-time=0 --log="$RUNNER_TEMP/weston.log" &
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "WAYLAND_DISPLAY=wayland-1" >> "$GITHUB_ENV"
+          echo "XDG_SESSION_TYPE=wayland" >> "$GITHUB_ENV"
+          echo "ELECTRON_OZONE_PLATFORM_HINT=wayland" >> "$GITHUB_ENV"
+          echo "ORCA_WAYLAND_GPU_VERBOSE=1" >> "$GITHUB_ENV"
           for _ in $(seq 1 50); do
             if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
               break
@@ -57,11 +64,22 @@ jobs:
             sleep 0.2
           done
           test -S "$XDG_RUNTIME_DIR/wayland-1"
-          env WAYLAND_DISPLAY=wayland-1 \
-            XDG_SESSION_TYPE=wayland \
-            ELECTRON_OZONE_PLATFORM_HINT=wayland \
-            ORCA_WAYLAND_GPU_VERBOSE=1 \
-            node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+
+      - name: Reproduce terminal input freeze without the workaround
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          git checkout "${{ github.event.pull_request.base.sha }}" -- src/main/startup/configure-process.ts
+          rm -rf out
+          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs --mode=expect-repro
+
+      - name: Verify terminal input under Wayland GPU sandbox workaround
+        run: |
+          set -euo pipefail
+          git checkout --force "$GITHUB_SHA"
+          rm -rf out
+          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
 
       - name: Upload Weston log
         if: always()
