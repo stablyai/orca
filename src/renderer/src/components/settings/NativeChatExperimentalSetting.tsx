@@ -92,7 +92,7 @@ export function NativeChatExperimentalSetting({
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
                 <SelectItem value="terminal-chat">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.defaultViewTerminal',
