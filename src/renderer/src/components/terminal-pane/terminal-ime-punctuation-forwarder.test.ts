@@ -353,7 +353,7 @@ describe('installTerminalImePunctuationForwarder', () => {
       expect(sendInput).not.toHaveBeenCalled()
     })
 
-    it('does not forward when a key event preceded the insert but produced no keypress', () => {
+    it('does not forward when a plain keydown produced the same insert without keypress', () => {
       const sendInput = vi.fn()
       const forwarder = installTerminalImePunctuationForwarder({
         terminalElement: element,
@@ -364,6 +364,52 @@ describe('installTerminalImePunctuationForwarder', () => {
       expect(forwarder.claimKeyEvent(keyEvent({ key: 'a' }))).toBe(false)
       dispatchInsertText(textarea, 'a')
       expect(sendInput).not.toHaveBeenCalled()
+    })
+
+    it('forwards injected text after a placeholder keydown with no printable key', () => {
+      const sendInput = vi.fn()
+      const forwarder = installTerminalImePunctuationForwarder({
+        terminalElement: element,
+        isComposing: () => false,
+        sendInput
+      })
+
+      expect(forwarder.claimKeyEvent(keyEvent({ key: 'Unidentified' }))).toBe(false)
+      dispatchInsertText(textarea, 'dictated text')
+      expect(sendInput).toHaveBeenCalledExactlyOnceWith('dictated text')
+    })
+
+    it('does not forward an immediate insert after a printable keydown with different text', () => {
+      const sendInput = vi.fn()
+      const forwarder = installTerminalImePunctuationForwarder({
+        terminalElement: element,
+        isComposing: () => false,
+        sendInput
+      })
+
+      expect(forwarder.claimKeyEvent(keyEvent({ key: 'a' }))).toBe(false)
+      dispatchInsertText(textarea, 'dictated text')
+      expect(sendInput).not.toHaveBeenCalled()
+    })
+
+    it('forwards a later injected insert after a printable keydown produced no input', () => {
+      vi.useFakeTimers()
+      try {
+        const sendInput = vi.fn()
+        const forwarder = installTerminalImePunctuationForwarder({
+          terminalElement: element,
+          isComposing: () => false,
+          sendInput
+        })
+
+        expect(forwarder.claimKeyEvent(keyEvent({ key: 'a' }))).toBe(false)
+        vi.runOnlyPendingTimers()
+        dispatchInsertText(textarea, 'dictated text')
+
+        expect(sendInput).toHaveBeenCalledExactlyOnceWith('dictated text')
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('does not forward a composition commit as injected text', () => {

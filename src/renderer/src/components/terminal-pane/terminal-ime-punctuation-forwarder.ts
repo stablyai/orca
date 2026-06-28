@@ -10,8 +10,8 @@ import type { IDisposable } from '@xterm/xterm'
 //      keydowns (claimKeyEvent) so the native input pipeline runs, then forward
 //      the committed glyph from the input event straight to the PTY.
 //   2. OS-level text injection (dictation, text expanders, accessibility,
-//      CGEvent keyboardSetUnicodeString) that arrives as a standalone
-//      non-composing `insertText` with no normally-processed keydown. xterm's
+//      CGEvent keyboardSetUnicodeString) that arrives as non-composing
+//      `insertText` without an immediate printable keyboard text path. xterm's
 //      preventDefault-on-keydown would otherwise drop it silently. We forward
 //      that injected text from the input event too.
 // In both cases we stopImmediatePropagation so xterm's own `_inputEvent`
@@ -79,6 +79,13 @@ export function isImePunctuationCandidate(
   return isAsciiPunctuationKey(event.key)
 }
 
+function textFromKeyboardEvent(event: ImePunctuationKeyEvent): string | null {
+  if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing === true) {
+    return null
+  }
+  return Array.from(event.key).length === 1 ? event.key : null
+}
+
 export function installTerminalImePunctuationForwarder(args: {
   terminalElement: HTMLElement | null | undefined
   isComposing: () => boolean
@@ -94,24 +101,74 @@ export function installTerminalImePunctuationForwarder(args: {
   const terminalElement = args.terminalElement
   let pendingForward = false
   let claimedPress = false
-  // Why: distinguishes keyboard-driven `insertText` from injected text. Any key
-  // event (claimed or not) belongs to a keystroke that xterm — or our claimed
-  // punctuation path — already owns, so the `insertText` it produces must not be
-  // re-forwarded by the injection path (that would double-send). OS-level
-  // injection (dictation, text expanders, accessibility, CGEvent
-  // keyboardSetUnicodeString) instead fires a standalone `insertText` with no
-  // preceding key event, which is the case the injection path recovers. Set on
-  // every observed key event; cleared once an `input` event resolves it.
-  let keyActivitySinceInput = false
+  // Why: normal typing can still emit an immediate textarea `insertText`; that
+  // must not be re-forwarded after xterm already handled the keydown. Track the
+  // actual printable key briefly instead of treating every key event as ownership
+  // so arrows/placeholders/stale keydowns do not suppress later OS injection.
+  let keyboardTextSinceInput: string | null = null
+  let keypressSinceInput = false
+  let keyboardAttributionTimer: number | null = null
+  let suppressNextClaimedInsert = false
+  let suppressClaimedInsertTimer: number | null = null
   // Why: a composition emits `insertCompositionText` (preedit) and resolves with
   // a final `insertText` whose committed text belongs to the IME, not injection.
   // Mark composition so that resolving commit is not mistaken for injected text.
   let compositionInProgress = false
 
-  const claimKeyEvent = (event: ImePunctuationKeyEvent): boolean => {
-    if (event.type === 'keydown' || event.type === 'keypress' || event.type === 'keyup') {
-      keyActivitySinceInput = true
+  const clearKeyboardAttribution = (): void => {
+    keyboardTextSinceInput = null
+    keypressSinceInput = false
+    if (keyboardAttributionTimer !== null) {
+      window.clearTimeout(keyboardAttributionTimer)
+      keyboardAttributionTimer = null
     }
+  }
+
+  const scheduleKeyboardAttributionClear = (): void => {
+    if (keyboardAttributionTimer !== null) {
+      window.clearTimeout(keyboardAttributionTimer)
+    }
+    keyboardAttributionTimer = window.setTimeout(() => {
+      keyboardAttributionTimer = null
+      keyboardTextSinceInput = null
+      keypressSinceInput = false
+    }, 0)
+  }
+
+  const clearClaimedInsertSuppression = (): void => {
+    suppressNextClaimedInsert = false
+    if (suppressClaimedInsertTimer !== null) {
+      window.clearTimeout(suppressClaimedInsertTimer)
+      suppressClaimedInsertTimer = null
+    }
+  }
+
+  const scheduleClaimedInsertSuppressionClear = (): void => {
+    if (suppressClaimedInsertTimer !== null) {
+      window.clearTimeout(suppressClaimedInsertTimer)
+    }
+    suppressClaimedInsertTimer = window.setTimeout(() => {
+      suppressClaimedInsertTimer = null
+      suppressNextClaimedInsert = false
+    }, 0)
+  }
+
+  const recordKeyboardAttribution = (event: ImePunctuationKeyEvent): void => {
+    if (event.type !== 'keydown' && event.type !== 'keypress') {
+      return
+    }
+    const keyboardText = textFromKeyboardEvent(event)
+    if (keyboardText === null) {
+      clearKeyboardAttribution()
+      return
+    }
+    keyboardTextSinceInput = keyboardText
+    keypressSinceInput = event.type === 'keypress'
+    scheduleKeyboardAttributionClear()
+  }
+
+  const claimKeyEvent = (event: ImePunctuationKeyEvent): boolean => {
+    recordKeyboardAttribution(event)
     if (!isImePunctuationCandidate(event, args.isComposing())) {
       return false
     }
@@ -130,6 +187,11 @@ export function installTerminalImePunctuationForwarder(args: {
       // Also bypass so the kitty release sequence for the swallowed press cannot
       // leak.
       pendingForward = false
+      clearKeyboardAttribution()
+      // The claimed press ended without an input commit. Ignore only an
+      // immediate trailing insert; a later standalone injection should recover.
+      suppressNextClaimedInsert = true
+      scheduleClaimedInsertSuppressionClear()
       return true
     }
     if (event.type === 'keypress') {
@@ -157,8 +219,11 @@ export function installTerminalImePunctuationForwarder(args: {
     if (!(event instanceof InputEvent)) {
       return
     }
-    const sawKeyActivity = keyActivitySinceInput
-    keyActivitySinceInput = false
+    const keyboardText = keyboardTextSinceInput
+    const sawKeypress = keypressSinceInput
+    const suppressedClaimInsert = suppressNextClaimedInsert
+    clearKeyboardAttribution()
+    clearClaimedInsertSuppression()
     const wasComposing = compositionInProgress
     // Composition inserts belong to xterm's CompositionHelper / the IME preedit;
     // leave them alone in every path.
@@ -179,14 +244,19 @@ export function installTerminalImePunctuationForwarder(args: {
       return
     }
     // Injected text (dictation, text expanders, accessibility, CGEvent
-    // keyboardSetUnicodeString) arrives as a standalone non-composing
-    // `insertText` with no preceding key event. With kitty mode active xterm
-    // would drop it on keydown preventDefault, so forward it here. Skip it when
-    // xterm (or our claimed punctuation press, still open until keyup) already
-    // owns this `insertText` — a preceding key event, an unresolved claimed
-    // press, an active composition, or a composition that just resolved — to
-    // avoid a double-send.
-    if (sawKeyActivity || claimedPress || wasComposing || event.inputType !== 'insertText') {
+    // keyboardSetUnicodeString) arrives as non-composing `insertText` that does
+    // not belong to the immediate printable keyboard path. With kitty mode active
+    // xterm would drop it on keydown preventDefault, so forward it here. Skip it
+    // when xterm (or our claimed punctuation press, still open until keyup)
+    // already owns this `insertText` to avoid a double-send.
+    if (
+      sawKeypress ||
+      keyboardText !== null ||
+      suppressedClaimInsert ||
+      claimedPress ||
+      wasComposing ||
+      event.inputType !== 'insertText'
+    ) {
       return
     }
     if (args.isComposing()) {
@@ -198,7 +268,8 @@ export function installTerminalImePunctuationForwarder(args: {
   const cancelPending = (): void => {
     pendingForward = false
     claimedPress = false
-    keyActivitySinceInput = false
+    clearKeyboardAttribution()
+    clearClaimedInsertSuppression()
     compositionInProgress = false
   }
 
@@ -208,6 +279,8 @@ export function installTerminalImePunctuationForwarder(args: {
   return {
     claimKeyEvent,
     dispose: () => {
+      clearKeyboardAttribution()
+      clearClaimedInsertSuppression()
       terminalElement.removeEventListener('input', forwardCommittedText, true)
       terminalElement.removeEventListener('blur', cancelPending, true)
     }

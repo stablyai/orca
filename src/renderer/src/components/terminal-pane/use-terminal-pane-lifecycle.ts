@@ -702,7 +702,7 @@ export function useTerminalPaneLifecycle({
         // Not gated to CJK input sources: the drop affects every locale (see
         // #6513). Safe for ordinary typing because claimKeyEvent only bypasses
         // unmodified ASCII punctuation keydowns, and the injected-text path
-        // skips any input event that followed a normally-processed keydown.
+        // skips the immediate insertText already attributable to keyboard text.
         const imePunctuationForwarder = isMac
           ? installTerminalImePunctuationForwarder({
               terminalElement: pane.terminal.element,
