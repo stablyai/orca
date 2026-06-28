@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { T } from '../src/i18n/T'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
@@ -202,12 +203,12 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Voice</Text>
+        <T style={styles.heading}>Voice</T>
       </View>
 
       {!client ? (
         <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.emptyText}>Connect to a desktop to manage voice settings.</Text>
+          <T style={styles.emptyText}>Connect to a desktop to manage voice settings.</T>
         </View>
       ) : loading && setup === null ? (
         <View style={styles.loading}>
@@ -222,14 +223,14 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.groupHeading}>DICTATION</Text>
+          <T style={styles.groupHeading}>DICTATION</T>
           <View style={[styles.section, styles.sectionTopGap]}>
             <View style={styles.row}>
               <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Enable Voice Dictation</Text>
-                <Text style={styles.rowSublabel}>
+                <T style={styles.rowLabel}>Enable Voice Dictation</T>
+                <T style={styles.rowSublabel}>
                   Dictate text into any focused pane on your desktop.
-                </Text>
+                </T>
               </View>
               <Switch
                 value={enabled}
@@ -246,10 +247,10 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
               pointerEvents={enabled ? 'auto' : 'none'}
             >
               <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Dictation Mode</Text>
-                <Text style={styles.rowSublabel}>
+                <T style={styles.rowLabel}>Dictation Mode</T>
+                <T style={styles.rowSublabel}>
                   Toggle: press once to start, again to stop. Hold: dictate while held.
-                </Text>
+                </T>
               </View>
               <View style={styles.segmented}>
                 {DICTATION_MODES.map((mode) => {
@@ -270,7 +271,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
             </View>
           </View>
 
-          <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
+          <T style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</T>
           <View style={[styles.section, styles.sectionTopGap]}>
             <Pressable
               style={({ pressed }) => [
@@ -282,7 +283,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
               onPress={() => setModelDrawerOpen(true)}
             >
               <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Speech Model</Text>
+                <T style={styles.rowLabel}>Speech Model</T>
                 <Text style={styles.rowSublabel} numberOfLines={1}>
                   {selectedModelLabel}
                 </Text>
@@ -296,7 +297,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       )}
 
       <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
-        <Text style={styles.drawerTitle}>Speech Model</Text>
+        <T style={styles.drawerTitle}>Speech Model</T>
         {setup ? (
           <VoiceModelList
             setup={setup}

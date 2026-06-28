@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Globe } from 'lucide-react-native'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
+import { T } from '../src/i18n/T'
 import {
   loadTerminalLinkOpenMode,
   saveTerminalLinkOpenMode,
@@ -51,14 +52,14 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Browser</Text>
+        <T style={styles.heading}>Browser</T>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.groupHeading}>LINKS</Text>
-        <Text style={styles.groupDescription}>
+        <T style={styles.groupHeading}>LINKS</T>
+        <T style={styles.groupDescription}>
           Choose where HTTP(S) links tapped in terminal output open.
-        </Text>
+        </T>
         <View style={[styles.section, styles.sectionTopGap]}>
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -66,7 +67,7 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
           >
             <Globe size={16} color={colors.textSecondary} />
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Open terminal links</Text>
+              <T style={styles.rowLabel}>Open terminal links</T>
               <Text style={styles.rowSublabel}>{linkModeLabel(linkMode)}</Text>
             </View>
             <ChevronRight size={16} color={colors.textMuted} />

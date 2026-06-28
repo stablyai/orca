@@ -10,6 +10,7 @@ import Animated, {
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { T } from '../src/i18n/T'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useAllHostClients } from '../src/transport/client-context'
@@ -259,7 +260,7 @@ export default function TerminalSettingsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Terminal</Text>
+        <T style={styles.heading}>Terminal</T>
       </View>
 
       <Animated.ScrollView
@@ -272,19 +273,19 @@ export default function TerminalSettingsScreen() {
           scrollContentHeight.value = height
         }}
       >
-        <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
-        <Text style={styles.groupDescription}>
+        <T style={styles.groupHeading}>WHEN YOU LEAVE THE APP</T>
+        <T style={styles.groupDescription}>
           While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
           you close the app or switch away, this controls whether it stays at phone size (so
           interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
           use Restore this terminal or Restore all terminals on the banner to resize manually.
-        </Text>
+        </T>
 
         {hosts.length === 0 ? (
           <View style={[styles.section, styles.sectionTopGap]}>
-            <Text style={styles.emptyText}>
+            <T style={styles.emptyText}>
               No paired desktops yet. Pair one to control terminal behavior.
-            </Text>
+            </T>
           </View>
         ) : (
           <View style={[styles.section, styles.sectionTopGap]}>
@@ -305,13 +306,13 @@ export default function TerminalSettingsScreen() {
           </View>
         )}
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEXT SIZE</Text>
-        <Text style={styles.groupDescription}>
+        <T style={[styles.groupHeading, styles.inputGroupGap]}>TEXT SIZE</T>
+        <T style={styles.groupDescription}>
           Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes
           show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal
           itself, which updates this setting. Per-device display only; doesn&apos;t change the
           desktop terminal.
-        </Text>
+        </T>
         <View style={[styles.section, styles.sectionTopGap]}>
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -319,24 +320,24 @@ export default function TerminalSettingsScreen() {
           >
             <Type size={16} color={colors.textSecondary} />
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Text size</Text>
+              <T style={styles.rowLabel}>Text size</T>
               <Text style={styles.rowSublabel}>{textSizeSummary(textScale)}</Text>
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
         </View>
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
-        <Text style={styles.groupDescription}>
+        <T style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</T>
+        <T style={styles.groupDescription}>
           Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
           command bar. Off by default so the keyboard never rewrites commands, flags, or paths.
           Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes,
           so suggestions don&apos;t apply there.
-        </Text>
+        </T>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Autocomplete &amp; autocorrect</Text>
+              <T style={styles.rowLabel}>Autocomplete &amp; autocorrect</T>
               <Text style={styles.rowSublabel}>{autocompleteEnabled ? 'On' : 'Off'}</Text>
             </View>
             <Switch

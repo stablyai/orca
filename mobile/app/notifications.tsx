@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react'
-import { AppState, Linking, View, Text, StyleSheet, Pressable, Switch } from 'react-native'
+import { AppState, Linking, View, StyleSheet, Pressable, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { T } from '../src/i18n/T'
 import {
   loadPushNotificationsEnabled,
   savePushNotificationsEnabled
@@ -67,9 +68,6 @@ export default function NotificationsScreen() {
 
   const switchEnabled = pushEnabled && permissionState.granted
   const notificationsBlocked = permissionState.status === 'denied'
-  const hint = notificationsBlocked
-    ? 'Notifications are disabled in system settings.'
-    : 'Receive notifications when an agent task completes on your desktop.'
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -77,12 +75,12 @@ export default function NotificationsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Notifications</Text>
+        <T style={styles.heading}>Notifications</T>
       </View>
 
       <View style={styles.section}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Push Notifications</Text>
+          <T style={styles.rowLabel}>Push Notifications</T>
           <Switch
             value={switchEnabled}
             disabled={notificationsBlocked}
@@ -91,7 +89,13 @@ export default function NotificationsScreen() {
             thumbColor={colors.textPrimary}
           />
         </View>
-        <Text style={styles.hint}>{hint}</Text>
+        {notificationsBlocked ? (
+          <T style={styles.hint}>Notifications are disabled in system settings.</T>
+        ) : (
+          <T style={styles.hint}>
+            Receive notifications when an agent task completes on your desktop.
+          </T>
+        )}
         {notificationsBlocked && (
           <Pressable
             style={({ pressed }) => [
@@ -100,7 +104,7 @@ export default function NotificationsScreen() {
             ]}
             onPress={() => void Linking.openSettings()}
           >
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
+            <T style={styles.settingsButtonText}>Open Settings</T>
           </Pressable>
         )}
       </View>
