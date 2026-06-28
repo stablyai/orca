@@ -37,6 +37,7 @@ import {
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { sliceCheckLogTail } from './check-job-log-tail-slice'
 import { getPRConflictSummary } from './conflict-summary'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -98,8 +99,6 @@ type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
 const ORCA_REPO = 'stablyai/orca'
-const PR_CHECK_LOG_TAIL_LINES = 200
-const PR_CHECK_LOG_TAIL_BYTES = 16 * 1024
 const PR_CHECK_LOG_TAIL_JOB_LIMIT = 5
 // Why: each entry holds up to 16KB of log text; bound the cache so a long
 // session reviewing many failing checks can't grow it without limit.
@@ -3153,15 +3152,6 @@ function isCheckJobFailureState(state: string | null | undefined): boolean {
     state === 'startup_failure' ||
     state === 'timed_out'
   )
-}
-
-function sliceCheckLogTail(logText: string): string {
-  const lineTail = logText.split(/\r?\n/).slice(-PR_CHECK_LOG_TAIL_LINES).join('\n')
-  const bytes = Buffer.from(lineTail, 'utf8')
-  if (bytes.byteLength <= PR_CHECK_LOG_TAIL_BYTES) {
-    return lineTail
-  }
-  return bytes.subarray(bytes.byteLength - PR_CHECK_LOG_TAIL_BYTES).toString('utf8')
 }
 
 function getCheckJobLogTailCacheKey(job: PRCheckRunDetails['jobs'][number]): string | null {
