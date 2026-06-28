@@ -297,6 +297,46 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
+  it('disables the GPU sandbox on Linux to avoid the exit-8704 Wayland crash', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.disableHardwareAcceleration).mockClear()
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+    enableMainProcessGpuFeatures()
+
+    // Why: #5319 — the GPU-process sandbox crashes (exit 8704) on newer Linux
+    // kernels + Wayland, freezing terminal input; disabling it keeps hardware
+    // acceleration while preventing the crash.
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    // Hardware acceleration must stay on outside the E2E path.
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+    )
+  })
+
+  it('does not disable the GPU sandbox on macOS or Windows', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+
+    for (const platform of ['darwin', 'win32'] as const) {
+      setPlatform(platform)
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+
+      // The sandbox crash is Linux-specific; don't perturb mac/Windows startup.
+      expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+    }
+  })
+
   it('disables the GPU process for Linux E2E runs', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
