@@ -264,6 +264,12 @@ export type Repo = {
   externalWorktreeVisibilityLegacy?: boolean
   /** One-shot guard for the optional existing-user visibility prompt. */
   externalWorktreeVisibilityPromptDismissedAt?: number
+  /** Hidden external worktree paths acknowledged by Keep hidden on the inbox. */
+  externalWorktreeInboxBaselinePaths?: string[]
+  /** External worktree paths explicitly imported while global visibility stays hide. */
+  importedExternalWorktreePaths?: string[]
+  /** User permanently opted out of the new-external-worktree inbox for this repo. */
+  externalWorktreeDiscoverySuppressedAt?: number
   /** Paths (relative to the primary checkout) that should be symlinked into
    *  newly created worktrees of this repo. Consumed only when the global
    *  `experimentalWorktreeSymlinks` flag is on — the per-repo list is the
@@ -383,6 +389,7 @@ export type ProjectGroupImportResult = {
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
+export type SetupAgentStartupPolicy = 'start-immediately' | 'wait-for-setup'
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
 
@@ -1928,6 +1935,7 @@ export type RepoHookSettings = {
   // hook UI. Keep it in the shape so existing local state reads without a migration.
   mode: 'auto' | 'override'
   setupRunPolicy?: SetupRunPolicy
+  setupAgentStartupPolicy?: SetupAgentStartupPolicy
   commandSourcePolicy?: HookCommandSourcePolicy
   scripts: {
     setup: string
@@ -1938,6 +1946,8 @@ export type RepoHookSettings = {
 export type WorktreeSetupLaunch = {
   runnerScriptPath: string
   envVars: Record<string, string>
+  command?: string
+  waitForAgentStartup?: boolean
 }
 
 export type WorktreeStartupLaunch = {

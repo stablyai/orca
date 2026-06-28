@@ -1020,6 +1020,40 @@ describe('runHook', () => {
   })
 })
 
+describe('createSetupRunnerScript', () => {
+  const makeRepo = (setupAgentStartupPolicy?: 'start-immediately' | 'wait-for-setup') =>
+    ({
+      id: 'test-id',
+      path: '/test/repo',
+      displayName: 'Test Repo',
+      badgeColor: '#000',
+      addedAt: Date.now(),
+      hookSettings: {
+        mode: 'auto',
+        setupAgentStartupPolicy,
+        scripts: { setup: '', archive: '' }
+      }
+    }) as unknown as Repo
+
+  it('omits waitForAgentStartup unless the repo explicitly waits for setup', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
+    const { createSetupRunnerScript } = await import('./hooks')
+
+    expect(
+      createSetupRunnerScript(makeRepo(), '/test/worktree', 'echo setup').waitForAgentStartup
+    ).toBeUndefined()
+    expect(
+      createSetupRunnerScript(makeRepo('start-immediately'), '/test/worktree', 'echo setup')
+        .waitForAgentStartup
+    ).toBeUndefined()
+    expect(
+      createSetupRunnerScript(makeRepo('wait-for-setup'), '/test/worktree', 'echo setup')
+        .waitForAgentStartup
+    ).toBe(true)
+  })
+})
+
 describe('shouldRunSetupForCreate', () => {
   const makeRepo = (setupRunPolicy?: 'ask' | 'run-by-default' | 'skip-by-default') =>
     ({

@@ -17,6 +17,7 @@ import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/stor
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
+import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
@@ -986,9 +987,16 @@ function shutdownWatchersOnce(): Promise<void> {
   if (!watcherShutdownPromise) {
     // Why: @parcel/watcher tears down native async work during unsubscribe.
     // Electron must wait for that cleanup before Node's environment exits.
-    watcherShutdownPromise = closeAllWatchers()
-      .catch((error) => {
-        console.error('[filesystem-watcher] shutdown failed:', error)
+    watcherShutdownPromise = Promise.allSettled([
+      closeAllWatchers(),
+      disposeWorktreeBaseDirectoryWatchers()
+    ])
+      .then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.error('[filesystem-watcher] shutdown failed:', result.reason)
+          }
+        }
       })
       .then(() => {
         watcherShutdownDone = true

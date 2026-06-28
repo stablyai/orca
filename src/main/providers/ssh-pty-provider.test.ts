@@ -102,6 +102,28 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('forwards provider command delivery to the relay', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-provider-command' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        command: 'echo from-runtime',
+        commandDelivery: 'provider',
+        startupCommandDelivery: 'shell-ready'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        command: 'echo from-runtime',
+        commandDelivery: 'provider',
+        startupCommandDelivery: 'shell-ready'
+      })
+    })
+
     it('injects the relay-backed Orca CLI bridge into remote PTY env', async () => {
       mux.request.mockResolvedValue({ id: 'pty-bridge' })
       provider = new SshPtyProvider('conn-1', mux as never, {

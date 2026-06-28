@@ -11,6 +11,7 @@ import type * as UseNotificationDispatchModule from './use-notification-dispatch
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
 
 // Repro command:
 //   pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts -t "OpenTUI-style small ANSI redraw"
@@ -2874,6 +2875,64 @@ describe('connectPanePty', () => {
       }
 
       expect(transport.sendInput).toHaveBeenCalledWith("codex --prefill 'linked issue context'\r")
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('uses the sequenced startup command hint for SSH shell-ready detection', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+
+      const capturedDataCallback: { current: ((data: string) => void) | null } = {
+        current: null
+      }
+      const transport = createMockTransport('pty-id')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-ssh-1'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+      }
+
+      const wrapperCommand = 'bash -lc wait-for-setup-wrapper'
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps({
+        startup: {
+          command: wrapperCommand,
+          env: {
+            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --prefill 'linked issue context'"
+          }
+        }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      capturedDataCallback.current?.('user@remote $ ')
+      for (const fn of pendingTimeouts.splice(0)) {
+        fn()
+      }
+      expect(transport.sendInput).not.toHaveBeenCalled()
+
+      capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+      for (const fn of pendingTimeouts.splice(0)) {
+        fn()
+      }
+
+      expect(transport.sendInput).toHaveBeenCalledWith(`${wrapperCommand}\r`)
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }

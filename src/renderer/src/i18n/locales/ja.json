@@ -535,7 +535,8 @@
         "ba6cb77082": "プロジェクトへの接続に失敗しました。",
         "chooseOrAddProjectBeforeWorkspace": "ワークスペースを作成する前に、プロジェクトを選択または追加。",
         "folderWorkspaceCreateFailedTitle": "フォルダーワークスペースを作成できませんでした",
-        "folderWorkspaceCreateFailedMessage": "フォルダーワークスペースを作成できませんでした。上のエラー詳細を確認して、もう一度お試しください。"
+        "folderWorkspaceCreateFailedMessage": "フォルダーワークスペースを作成できませんでした。上のエラー詳細を確認して、もう一度お試しください。",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
@@ -1124,7 +1125,9 @@
         "notePasteTooLarge": "メモ欄への貼り付け内容が大きすぎます。",
         "reuseExistingBranch": "ブランチを再利用",
         "reuseExistingBranchHint": "既存のブランチから新しいブランチを作成せず、そのブランチをチェックアウトします。",
-        "createMultiple": "さらに作成"
+        "createMultiple": "さらに作成",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -4355,6 +4358,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "ブランチ"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
+          "d9f7b2a14c": "{{value0}} の外部で作成された新しいワークツリーを折りたたむ",
+          "e2c4a8d91f": "{{value0}} の外部で作成された新しいワークツリーを展開",
+          "7c4e9b2a81": "外部で作成された新しいワークツリー",
+          "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
+          "4d7a1c9e53": "これらのワークツリーは Orca の外部で作成されました。",
+          "8b3f2e1d74": "インポート",
+          "1c9e7a4b28": "非表示のままにする",
+          "6f2d8c1e95": "すべてインポート",
+          "c3e8a1f4b2": "今後表示しない"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "外部ワークツリーを非表示のままにできませんでした。もう一度お試しください。",
+          "b7e4d1a062": "外部ワークツリーをインポートできませんでした。もう一度お試しください。",
+          "c94f0b3a15": "外部ワークツリーを永続的に非表示にできませんでした。もう一度お試しください。"
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "外部ワークツリーを非表示にしますか?",
+          "6e91b3c4d2": "{{value0}} では、今後作成されるものを含め、外部ワークツリーはサイドバーにもこのリストにも表示されません。",
+          "1f8a5d9e73": "後でプロジェクト設定から再度有効にできます。",
+          "8c0b2e7a41": "Non-Orca ワークツリー設定を開く",
+          "5d1c9f0a82": "キャンセル",
+          "3b7e4a1c96": "外部ワークツリーを非表示"
         }
       },
       "shared": {
@@ -5673,7 +5701,9 @@
           "2b6356e744": "保存されました",
           "81057d5f71": "保存中...",
           "da37d6f10e": "コピー",
-          "3149964b66": "コピーされました"
+          "3149964b66": "コピーされました",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo カラーを使用する",

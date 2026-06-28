@@ -830,11 +830,16 @@ export type PreloadApi = {
           | 'issueSourcePreference'
           | 'externalWorktreeVisibility'
           | 'externalWorktreeVisibilityPromptDismissedAt'
+          | 'externalWorktreeInboxBaselinePaths'
+          | 'importedExternalWorktreePaths'
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'
         >
-      > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+      > & {
+        sourceControlAi?: Repo['sourceControlAi'] | null
+        externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
     pickFolders: () => Promise<string[]>

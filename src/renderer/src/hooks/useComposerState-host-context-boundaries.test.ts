@@ -187,6 +187,36 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('saves setup startup policy before creating a workspace', () => {
+    const persistSection = sourceBetween(
+      HOOK_SOURCE,
+      'const persistSetupAgentStartupPolicy = useCallback',
+      'const handleSetupAgentStartupPolicyChange'
+    )
+    expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
+    expect(persistSection).toContain('pendingSave?.repoId === currentRepo.id')
+    expect(persistSection).toContain('pendingSave.policy === policy')
+    expect(persistSection).toContain('await pendingSave.promise')
+    expect(persistSection).toContain('continue')
+    expect(HOOK_SOURCE).toContain('setupAgentStartupPolicyDraftRef.current')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
+    expect(fullPolicySave).toBeGreaterThanOrEqual(0)
+    expect(fullCreate).toBeGreaterThan(fullPolicySave)
+
+    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
+    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
+    expect(quickPolicySave).toBeGreaterThanOrEqual(0)
+    expect(quickCreate).toBeGreaterThan(quickPolicySave)
+  })
+
   it('resolves submit-time GitHub smart input when folder child repos exist', () => {
     expect(
       canResolveFolderSmartGitHubSubmit({

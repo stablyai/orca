@@ -351,6 +351,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       { projects: [project], projectHostSetups }
     )
@@ -441,6 +442,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       {
         projects: projection.projects,
@@ -458,6 +460,95 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'item', worktree: { id: localWorktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: sshWorktree.id }, hostContextLabel: 'build server' },
       { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev-container' }
+    ])
+  })
+
+  it('keeps mixed-host project item order while inserting inbox rows before worktrees', () => {
+    const localRepo: Repo = {
+      ...repo,
+      id: 'local-sample-app',
+      displayName: 'sample-app',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
+    }
+    const sshRepo: Repo = {
+      ...repo,
+      id: 'ssh-sample-app',
+      path: '/home/alice/src/sample-app',
+      displayName: 'sample-app',
+      connectionId: 'build server',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.test/team/sample-app',
+        remoteName: 'origin',
+        remoteUrl: 'https://git.company.test/team/sample-app.git'
+      }
+    }
+    const localFirst: Worktree = {
+      ...worktree,
+      id: 'wt-local-first',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-a'
+    }
+    const sshWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-ssh',
+      repoId: sshRepo.id,
+      path: '/home/alice/src/sample-app-b'
+    }
+    const localSecond: Worktree = {
+      ...worktree,
+      id: 'wt-local-second',
+      repoId: localRepo.id,
+      path: '/Users/alice/work/sample-app-c'
+    }
+    const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+    const rows = buildRows(
+      'repo',
+      [localFirst, sshWorktree, localSecond],
+      new Map([
+        [localRepo.id, localRepo],
+        [sshRepo.id, sshRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [localFirst.id, localFirst],
+        [sshWorktree.id, sshWorktree],
+        [localSecond.id, localSecond]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([
+        [
+          localRepo.id,
+          { repo: localRepo, inboxWorktrees: [makeDetectedWorktree({ id: 'local-inbox' })] }
+        ],
+        [sshRepo.id, { repo: sshRepo, inboxWorktrees: [makeDetectedWorktree({ id: 'ssh-inbox' })] }]
+      ]),
+      [],
+      {
+        projects: projection.projects,
+        projectHostSetups: projection.setups
+      }
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header' },
+      { type: 'new-external-worktrees-inbox', repo: { id: localRepo.id } },
+      { type: 'new-external-worktrees-inbox', repo: { id: sshRepo.id } },
+      { type: 'item', worktree: { id: localFirst.id } },
+      { type: 'item', worktree: { id: sshWorktree.id } },
+      { type: 'item', worktree: { id: localSecond.id } }
     ])
   })
 
@@ -519,6 +610,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       {
         projects: [project, analyticsProject],
@@ -574,6 +666,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [],
       {
@@ -642,6 +735,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [],
       {
@@ -722,6 +816,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       {
         projects: [{ ...project, sourceRepoIds: [windowsRepo.id, wslRepo.id] }],
@@ -780,6 +875,7 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [],
       { projects: [project], projectHostSetups: [projectHostSetups[0]!, runtimeSetup] },
       [],
@@ -820,6 +916,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [],
       {
@@ -1033,6 +1130,117 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
+  })
+
+  it('emits a new external worktrees inbox row before repo worktree rows', () => {
+    const inboxWorktrees = [
+      makeDetectedWorktree({ id: 'inbox-1', displayName: 'payments-refactor' }),
+      makeDetectedWorktree({ id: 'inbox-2', displayName: 'auth-cache-debug' })
+    ]
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1' },
+      {
+        type: 'new-external-worktrees-inbox',
+        key: 'new-external-worktrees-inbox:repo-1',
+        repo: { id: 'repo-1' },
+        inboxWorktrees: [{ id: 'inbox-1' }, { id: 'inbox-2' }]
+      },
+      { type: 'item', worktree: { id: 'wt-1' } }
+    ])
+  })
+
+  it('suppresses the new external worktrees inbox row when the repo group is collapsed', () => {
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      repoMap,
+      null,
+      new Set(['repo:repo-1']),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([{ type: 'header', key: 'repo:repo-1' }])
+  })
+
+  it('emits a repo header and inbox row when no visible worktree rows remain', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1' },
+      {
+        type: 'new-external-worktrees-inbox',
+        key: 'new-external-worktrees-inbox:repo-1'
+      }
+    ])
+  })
+
+  it('does not emit new external worktrees inbox rows outside repo grouping', () => {
+    const rows = buildRows(
+      'workspace-status',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows.some((row) => row.type === 'new-external-worktrees-inbox')).toBe(false)
   })
 
   it('emits imported worktree cards in repo groups when visible rows are pinned', () => {
@@ -2186,6 +2394,7 @@ describe('project groups', () => {
       [group],
       new Set(),
       new Map(),
+      new Map(),
       [],
       undefined,
       [folderWorkspace]
@@ -2263,6 +2472,7 @@ describe('project groups', () => {
       [rootGroup, childGroup],
       new Set(),
       new Map(),
+      new Map(),
       [],
       undefined,
       [folderWorkspace]
@@ -2331,6 +2541,7 @@ describe('project groups', () => {
       undefined,
       [group],
       new Set(),
+      new Map(),
       new Map(),
       [],
       undefined,
@@ -2774,6 +2985,7 @@ describe('buildRows pending creations', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [makePendingCreation('c1', repo.id)]
     )
 
@@ -2805,6 +3017,7 @@ describe('buildRows pending creations', () => {
       [],
       new Set(),
       new Map(),
+      new Map(),
       [makePendingCreation('c1', repo.id)]
     )
 
@@ -2827,6 +3040,7 @@ describe('buildRows pending creations', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [makePendingCreation('c1', repo.id)]
     )
@@ -2853,6 +3067,7 @@ describe('buildRows pending creations', () => {
       undefined,
       [],
       new Set(),
+      new Map(),
       new Map(),
       [makePendingCreation('c1', repo.id)]
     )

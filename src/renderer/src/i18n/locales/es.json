@@ -535,7 +535,8 @@
         "ba6cb77082": "No se pudo conectar al proyecto.",
         "chooseOrAddProjectBeforeWorkspace": "Elige o agrega un proyecto antes de crear un espacio de trabajo.",
         "folderWorkspaceCreateFailedTitle": "No se pudo crear el espacio de trabajo de carpeta",
-        "folderWorkspaceCreateFailedMessage": "No se pudo crear el espacio de trabajo de carpeta. Revisa los detalles del error de arriba e inténtalo de nuevo."
+        "folderWorkspaceCreateFailedMessage": "No se pudo crear el espacio de trabajo de carpeta. Revisa los detalles del error de arriba e inténtalo de nuevo.",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "No se pudieron cargar los archivos eliminados.",
@@ -1124,7 +1125,9 @@
         "notePasteTooLarge": "El contenido pegado es demasiado grande para el campo de nota.",
         "reuseExistingBranch": "Reutilizar rama",
         "reuseExistingBranchHint": "Hacer checkout de la rama existente en lugar de crear una nueva a partir de ella.",
-        "createMultiple": "Crear más"
+        "createMultiple": "Crear más",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Crear árbol de trabajo",
@@ -4355,6 +4358,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Rama"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "Ocultar árboles de trabajo externos permanentemente para {{value0}}",
+          "d9f7b2a14c": "Contraer árboles de trabajo creados externamente para {{value0}}",
+          "e2c4a8d91f": "Expandir árboles de trabajo creados externamente para {{value0}}",
+          "7c4e9b2a81": "Nuevos árboles de trabajo creados externamente",
+          "5e1b8d3f62": "Ocultar árboles de trabajo externos permanentemente",
+          "4d7a1c9e53": "Estos árboles de trabajo se crearon fuera de Orca.",
+          "8b3f2e1d74": "Importar",
+          "1c9e7a4b28": "Mantener ocultos",
+          "6f2d8c1e95": "Importar todo",
+          "c3e8a1f4b2": "No volver a mostrar"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "No se pudieron mantener ocultos los árboles de trabajo externos. Inténtalo de nuevo.",
+          "b7e4d1a062": "No se pudieron importar los árboles de trabajo externos. Inténtalo de nuevo.",
+          "c94f0b3a15": "No se pudieron ocultar permanentemente los árboles de trabajo externos. Inténtalo de nuevo."
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "¿Ocultar árboles de trabajo externos?",
+          "6e91b3c4d2": "Los árboles de trabajo externos ya no se mostrarán en la barra lateral ni en esta lista para {{value0}}, incluidos los que se creen más adelante.",
+          "1f8a5d9e73": "Puedes volver a activarlo más tarde desde los ajustes del proyecto.",
+          "8c0b2e7a41": "Abrir ajustes de árboles de trabajo no pertenecientes a Orca",
+          "5d1c9f0a82": "Cancelar",
+          "3b7e4a1c96": "Ocultar árboles de trabajo externos"
         }
       },
       "shared": {
@@ -5651,7 +5679,9 @@
           "2b6356e744": "Guardado",
           "81057d5f71": "Ahorro...",
           "da37d6f10e": "Copiar",
-          "3149964b66": "copiado"
+          "3149964b66": "copiado",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utilice el color del repo {{value0}}",

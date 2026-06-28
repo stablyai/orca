@@ -535,7 +535,8 @@
         "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
         "chooseOrAddProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 선택하거나 추가하세요.",
         "folderWorkspaceCreateFailedTitle": "폴더 워크스페이스를 만들지 못했습니다",
-        "folderWorkspaceCreateFailedMessage": "폴더 워크스페이스를 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요."
+        "folderWorkspaceCreateFailedMessage": "폴더 워크스페이스를 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요.",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
@@ -1124,7 +1125,9 @@
         "notePasteTooLarge": "메모 필드에 붙여넣을 내용이 너무 큽니다.",
         "reuseExistingBranch": "브랜치 재사용",
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
-        "createMultiple": "더 만들기"
+        "createMultiple": "더 만들기",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -4355,6 +4358,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "브랜치"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "{{value0}}의 외부 워크트리를 영구적으로 숨기기",
+          "d9f7b2a14c": "{{value0}}의 외부에서 생성된 새 워크트리 접기",
+          "e2c4a8d91f": "{{value0}}의 외부에서 생성된 새 워크트리 펼치기",
+          "7c4e9b2a81": "외부에서 생성된 새 워크트리",
+          "5e1b8d3f62": "외부 워크트리를 영구적으로 숨기기",
+          "4d7a1c9e53": "이 워크트리는 Orca 외부에서 생성되었습니다.",
+          "8b3f2e1d74": "가져오기",
+          "1c9e7a4b28": "숨긴 상태 유지",
+          "6f2d8c1e95": "모두 가져오기",
+          "c3e8a1f4b2": "다시 표시하지 않기"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "외부 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
+          "b7e4d1a062": "외부 워크트리를 가져올 수 없습니다. 다시 시도하세요.",
+          "c94f0b3a15": "외부 워크트리를 영구적으로 숨길 수 없습니다. 다시 시도하세요."
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "외부 워크트리를 숨길까요?",
+          "6e91b3c4d2": "{{value0}}에서는 나중에 생성되는 항목을 포함해 외부 워크트리가 사이드바나 이 목록에 더 이상 표시되지 않습니다.",
+          "1f8a5d9e73": "나중에 프로젝트 설정에서 다시 켤 수 있습니다.",
+          "8c0b2e7a41": "Non-Orca 워크트리 설정 열기",
+          "5d1c9f0a82": "취소",
+          "3b7e4a1c96": "외부 워크트리 숨기기"
         }
       },
       "shared": {
@@ -5636,7 +5664,9 @@
           "2b6356e744": "저장됨",
           "81057d5f71": "저장 중...",
           "da37d6f10e": "복사",
-          "3149964b66": "복사됨"
+          "3149964b66": "복사됨",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
