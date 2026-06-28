@@ -121,6 +121,54 @@ describe('skill discovery', () => {
     expect(result.skills).toEqual([])
   })
 
+  it('discovers bundled skills in the repo-root skills/ directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const bundledSkill = join(repo, 'skills', 'orchestration')
+    await mkdir(bundledSkill, { recursive: true })
+    await writeFile(
+      join(bundledSkill, 'SKILL.md'),
+      ['---', 'name: orchestration', 'description: Multi-agent coordination.', '---', ''].join('\n')
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      repos: [makeRepo(repo)]
+    })
+
+    const skill = result.skills.find((entry) => entry.name === 'orchestration')
+    expect(skill).toBeDefined()
+    expect(skill?.sourceKind).toBe('repo')
+    expect(skill?.providers).toEqual(['claude', 'codex', 'agent-skills'])
+    expect(skill?.directoryPath).toBe(bundledSkill)
+  })
+
+  it('discovers bundled skills in the repo-root skills/ directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const bundledSkill = join(repo, 'skills', 'orchestration')
+    await mkdir(bundledSkill, { recursive: true })
+    await writeFile(
+      join(bundledSkill, 'SKILL.md'),
+      ['---', 'name: orchestration', 'description: Multi-agent coordination.', '---', ''].join('\n')
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      repos: [makeRepo(repo)]
+    })
+
+    const skill = result.skills.find((entry) => entry.name === 'orchestration')
+    expect(skill).toBeDefined()
+    expect(skill?.sourceKind).toBe('repo')
+    expect(skill?.providers).toEqual(['claude', 'codex', 'agent-skills'])
+    expect(skill?.directoryPath).toBe(bundledSkill)
+  })
+
   it('enforces depth limits for valid child directories whose names start with dot-dot', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
