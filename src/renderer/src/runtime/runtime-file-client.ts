@@ -155,18 +155,33 @@ export async function readRuntimeFileContent({
     throw new Error('Remote file is outside the owning runtime worktree')
   }
 
-  const result = await callRuntimeRpc<RuntimeFileReadResult>(
-    target,
-    'files.read',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), relativePath },
-    { timeoutMs: 15_000 }
-  )
-  if (result.truncated) {
-    // Why: the runtime file RPC is preview-sized today; treating a truncated
-    // payload as editable content would make saves overwrite the rest of the file.
-    throw new Error(`Remote file is too large to open in the editor (${result.byteLength} bytes)`)
+  const worktree = toRuntimeWorktreeSelector(worktreeId)
+  try {
+    const result = await callRuntimeRpc<RuntimeFileReadResult>(
+      target,
+      'files.read',
+      { worktree, relativePath },
+      { timeoutMs: 15_000 }
+    )
+    if (result.truncated) {
+      // Why: the runtime file RPC is preview-sized today; treating a truncated
+      // payload as editable content would make saves overwrite the rest of the file.
+      throw new Error(`Remote file is too large to open in the editor (${result.byteLength} bytes)`)
+    }
+    return { content: result.content, isBinary: false }
+  } catch (err) {
+    // Why: files.read rejects binary paths (PDFs/images) with 'binary_file'. Fetch
+    // the previewable base64 payload so the editor renders them like local/SSH do.
+    if (err instanceof Error && err.message === 'binary_file') {
+      return callRuntimeRpc<RuntimeFilePreviewResult>(
+        target,
+        'files.readPreview',
+        { worktree, relativePath },
+        { timeoutMs: 15_000 }
+      )
+    }
+    throw err
   }
-  return { content: result.content, isBinary: false }
 }
 
 export async function readRuntimeFilePreview(
