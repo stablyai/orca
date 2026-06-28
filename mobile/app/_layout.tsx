@@ -43,10 +43,22 @@ export default function RootLayout() {
   // call <T> / useTranslation — otherwise those calls hit getI18n() and throw
   // "i18n not initialized". The loading guard keeps the splash up while we
   // resolve the preference so screens never see a half-initialized i18n.
+  // Why: i18next.init can throw if the bundled translation JSON is corrupt or
+  // the SDK is unavailable. Falling back to English keeps the app usable —
+  // missing keys will show their `defaultValue` (English) rather than crashing.
   useEffect(() => {
     void (async () => {
-      const lang = await loadUiLanguage()
-      await initI18n(lang)
+      try {
+        const lang = await loadUiLanguage()
+        await initI18n(lang)
+      } catch (error) {
+        console.warn('[i18n] init failed; defaulting to en', error)
+        try {
+          await initI18n('en')
+        } catch (fallbackError) {
+          console.error('[i18n] en fallback also failed', fallbackError)
+        }
+      }
       setReady(true)
     })()
   }, [])
