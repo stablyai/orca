@@ -348,7 +348,7 @@ describe('pane terminal output scheduler', () => {
     vi.runOnlyPendingTimers()
 
     expect(terminal.write).toHaveBeenCalledWith(
-      '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?2026ltyped',
+      '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?2026l\x1b[?25htyped',
       expect.any(Function)
     )
   })
@@ -378,12 +378,12 @@ describe('pane terminal output scheduler', () => {
     vi.runOnlyPendingTimers()
 
     expect(terminal.write).toHaveBeenCalledWith(
-      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?2026l',
+      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?2026l\x1b[?25h',
       expect.any(Function)
     )
   })
 
-  it('strips synchronized cursor shows that end before the real cursor restore', async () => {
+  it('defers synchronized cursor shows until after the frame ends', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
@@ -399,7 +399,7 @@ describe('pane terminal output scheduler', () => {
     vi.runOnlyPendingTimers()
 
     expect(terminal.write).toHaveBeenCalledWith(
-      '\x1b[?2026h\x1b[?25l\x1b[26;59H\x1b[?2026l',
+      '\x1b[?2026h\x1b[?25l\x1b[26;59H\x1b[?2026l\x1b[?25h',
       expect.any(Function)
     )
   })
@@ -469,8 +469,8 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).toHaveBeenCalledTimes(2)
     expect(terminal.write.mock.calls.map(([data]) => data)).toEqual([
-      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;3Hx\x1b[?2026l',
-      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;4Hx\x1b[?2026l'
+      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;3Hx\x1b[?2026l\x1b[?25h',
+      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;4Hx\x1b[?2026l\x1b[?25h'
     ])
   })
 
