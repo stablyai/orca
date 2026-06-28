@@ -14,11 +14,6 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  WifiOff,
-  Shield,
-  Monitor,
-  Clock,
-  Globe,
   Activity,
   CheckCircle2,
   XCircle,
@@ -30,7 +25,9 @@ import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
+import { T } from '../src/i18n/T'
 import { formatEndpoint, testHostReachability } from '../src/diagnostics/host-reachability'
+import { sections } from './troubleshoot-sections'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -39,66 +36,6 @@ type CheckResult = {
   status: 'pass' | 'fail' | 'warn'
   detail: string
 }
-
-type TroubleshootSection = {
-  id: string
-  icon: React.ReactNode
-  title: string
-  steps: string[]
-}
-
-const sections: TroubleshootSection[] = [
-  {
-    id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
-    title: 'Different WiFi Networks',
-    steps: [
-      'Both devices must be on the same local network.',
-      'Ethernet and WiFi must share the same subnet.',
-      'Try reconnecting WiFi on both devices.'
-    ]
-  },
-  {
-    id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
-    title: 'Firewall Blocking Port 6768',
-    steps: [
-      'macOS: System Settings → Network → Firewall — allow Orca.',
-      'Windows: Defender Firewall → Allow app — enable Orca for Private networks.',
-      'Linux: sudo ufw allow 6768',
-      'Corporate/school networks may block P2P — try a personal hotspot.'
-    ]
-  },
-  {
-    id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
-    title: 'Desktop App Not Running',
-    steps: [
-      'Orca must be open on your desktop to accept connections.',
-      'Try restarting Orca — the companion server starts on launch.',
-      'After an update, you may need to re-pair via QR code.'
-    ]
-  },
-  {
-    id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
-    title: 'Connection Timeout',
-    steps: [
-      'Check WiFi signal strength on your phone.',
-      'Go back to the host list and tap your host to retry.',
-      'Restart both apps if timeouts persist.'
-    ]
-  },
-  {
-    id: 'vpn',
-    icon: <Globe size={16} color={colors.textSecondary} />,
-    title: 'VPN Interference',
-    steps: [
-      'VPNs can route local traffic through a remote server.',
-      'Disable the VPN or enable split tunneling / "Allow LAN".'
-    ]
-  }
-]
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
   switch (status) {
@@ -242,7 +179,7 @@ export default function TroubleshootScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
+        <T style={styles.heading}>Troubleshooting</T>
       </View>
 
       <ScrollView
@@ -292,7 +229,7 @@ export default function TroubleshootScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionHeading}>Common issues</Text>
+        <T style={styles.sectionHeading}>Common issues</T>
 
         <View style={styles.section}>
           {sections.map((section, i) => (
@@ -314,7 +251,7 @@ export default function TroubleshootScreen() {
                 <View style={styles.accordionBody}>
                   {section.steps.map((step, j) => (
                     <View key={j} style={styles.stepRow}>
-                      <Text style={styles.bullet}>•</Text>
+                      <T style={styles.bullet}>•</T>
                       <Text style={styles.stepText}>{step}</Text>
                     </View>
                   ))}

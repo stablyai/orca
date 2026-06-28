@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Linking } from 'react-native'
+import { View, StyleSheet, Pressable, Linking } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
@@ -14,6 +14,7 @@ import {
   Languages,
   Terminal as TerminalIcon
 } from 'lucide-react-native'
+import { T } from '../src/i18n/T'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 
 export default function SettingsScreen() {
@@ -26,7 +27,7 @@ export default function SettingsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Settings</Text>
+        <T style={styles.heading}>Settings</T>
       </View>
 
       <View style={styles.section}>
@@ -35,7 +36,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/terminal-settings')}
         >
           <TerminalIcon size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Terminal</Text>
+          <T style={styles.rowLabel}>Terminal</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -44,7 +45,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/browser-settings')}
         >
           <Globe size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Browser</Text>
+          <T style={styles.rowLabel}>Browser</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -53,7 +54,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/language-settings')}
         >
           <Languages size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Language</Text>
+          <T style={styles.rowLabel}>Language</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -62,7 +63,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/voice-settings')}
         >
           <Mic size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Voice</Text>
+          <T style={styles.rowLabel}>Voice</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -71,7 +72,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/notifications')}
         >
           <Bell size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Notifications</Text>
+          <T style={styles.rowLabel}>Notifications</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -80,7 +81,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/troubleshoot')}
         >
           <Wrench size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Troubleshooting</Text>
+          <T style={styles.rowLabel}>Troubleshooting</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -89,7 +90,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/about')}
         >
           <Info size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>About</Text>
+          <T style={styles.rowLabel}>About</T>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
       </View>
@@ -100,7 +101,7 @@ export default function SettingsScreen() {
           onPress={() => void Linking.openURL('https://www.onorca.dev/privacy')}
         >
           <Shield size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Privacy Policy</Text>
+          <T style={styles.rowLabel}>Privacy Policy</T>
         </Pressable>
         <View style={styles.separator} />
         <Pressable
@@ -108,7 +109,7 @@ export default function SettingsScreen() {
           onPress={() => void Linking.openURL('https://github.com/stablyai/orca/issues')}
         >
           <LifeBuoy size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Support</Text>
+          <T style={styles.rowLabel}>Support</T>
         </Pressable>
       </View>
     </View>

@@ -5,6 +5,7 @@ import { ChevronLeft, Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
+import { T } from '../src/i18n/T'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 
 // Why: read version + native build identifier from expo-constants at
@@ -46,13 +47,13 @@ export default function AboutScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>About</Text>
+        <T style={styles.heading}>About</T>
       </View>
 
       <View style={styles.brand}>
         <OrcaLogo size={28} />
-        <Text style={styles.brandName}>Orca</Text>
-        <Text style={styles.brandSub}>Open-source agent IDE for 100x builders</Text>
+        <T style={styles.brandName}>Orca</T>
+        <T style={styles.brandSub}>Open-source agent IDE for 100x builders</T>
       </View>
 
       <View style={styles.section}>
