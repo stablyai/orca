@@ -592,6 +592,10 @@ const TerminalRead = TerminalHandle.extend({
   limit: OptionalFiniteNumber
 })
 
+const TerminalReadAnsi = TerminalHandle.extend({
+  scrollbackRows: OptionalFiniteNumber
+})
+
 // Why: the legacy handler allowed `title: string | null` and rejected every
 // other shape (including `undefined`) with a specific message, which is how
 // the CLI signals an intentional "reset". Preserve that distinction exactly.
@@ -841,6 +845,24 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         limit: params.limit
       })
     })
+  }),
+  // Why: non-streaming ANSI/SGR screen read for the local CLI. The streaming
+  // subscribe/multiplex methods are WebSocket-only, so the CLI fetches the
+  // serialized buffer (full ANSI+SGR) over the local Unix socket instead.
+  defineMethod({
+    name: 'terminal.readAnsi',
+    params: TerminalReadAnsi,
+    handler: async (params, { runtime }) => {
+      const leaf = runtime.resolveLeafForHandle(params.terminal)
+      if (!leaf?.ptyId) {
+        return { terminal: null }
+      }
+      const snapshot = await runtime.serializeTerminalBuffer(leaf.ptyId, {
+        // Clamp so a stray negative/huge value can't reach the serializer.
+        scrollbackRows: normalizeMultiplexSnapshotScrollbackRows(params.scrollbackRows)
+      })
+      return { terminal: snapshot }
+    }
   }),
   defineMethod({
     name: 'terminal.inspectProcess',

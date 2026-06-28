@@ -65,6 +65,14 @@ const FileWrite = FileOpen.extend({
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
+// Compare-and-swap write: only commits when the on-disk content still equals
+// expectedContent, so a concurrent external edit isn't silently clobbered.
+const FileWriteIfUnchanged = FileWrite.extend({
+  expectedContent: z
+    .unknown()
+    .refine((v): v is string => typeof v === 'string', { message: 'Missing expected content' })
+})
+
 const FileWriteBase64 = FileOpen.extend({
   contentBase64: z
     .unknown()
@@ -211,6 +219,17 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileWrite,
     handler: async (params, { runtime }) =>
       runtime.writeFileExplorerFile(params.worktree, params.relativePath, params.content)
+  }),
+  defineMethod({
+    name: 'files.writeIfUnchanged',
+    params: FileWriteIfUnchanged,
+    handler: async (params, { runtime }) =>
+      runtime.writeFileExplorerFileIfUnchanged(
+        params.worktree,
+        params.relativePath,
+        params.content,
+        params.expectedContent
+      )
   }),
   defineMethod({
     name: 'files.writeBase64',

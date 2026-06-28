@@ -1,5 +1,6 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "exclude": ["../src/cli/tui/**/*.tsx"],
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",

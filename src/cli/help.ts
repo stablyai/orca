@@ -10,6 +10,7 @@ Startup:
   open                      Launch Orca and wait for the runtime to be reachable
   serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
+  tui                       Launch the interactive worktree dashboard (full-screen TUI)
 
 Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals

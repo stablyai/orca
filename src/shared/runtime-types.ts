@@ -423,6 +423,18 @@ export type RuntimeTerminalRead = {
   returnedLineCount?: number
 }
 
+// Why: non-streaming ANSI/SGR screen read for the local CLI. Mirrors
+// serializeTerminalBuffer's return; null when the terminal has no buffer.
+export type RuntimeTerminalReadAnsi = {
+  data: string
+  cols: number
+  rows: number
+  cwd?: string | null
+  lastTitle?: string
+  seq?: number
+  source?: 'headless' | 'renderer'
+} | null
+
 export type RuntimeTerminalRename = {
   handle: string
   tabId: string

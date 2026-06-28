@@ -36,6 +36,7 @@ export const BOOLEAN_FLAGS = new Set([
   'me',
   'mobile',
   'mobile-pairing',
+  'no-alt-screen',
   'no-pairing',
   'parent-current',
   'ready',
@@ -121,7 +122,7 @@ export function matches(actual: string[], expected: string[]): boolean {
 
 export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   const joined = commandPath.join(' ')
-  if (['open', 'status'].includes(commandPath[0])) {
+  if (['open', 'status', 'tui'].includes(commandPath[0])) {
     return false
   }
   if (
