@@ -282,6 +282,22 @@ describe('registerGitHubHandlers', () => {
     )
   })
 
+  it('trims current HEAD hints before invoking github clients', async () => {
+    getPRForBranchMock.mockResolvedValue(null)
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:prForBranch'](null, {
+      repoPath: '/workspace/repo',
+      branch: '',
+      currentHeadOid: '  abcdef1  '
+    })
+
+    expect(getPRForBranchMock).toHaveBeenCalledWith('/workspace/repo', '', null, null, null, {
+      currentHeadOid: 'abcdef1'
+    })
+  })
+
   it('rejects unknown repository paths', async () => {
     registerGitHubHandlers(store as never, stats as never)
 

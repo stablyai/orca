@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChecksPanelReviewHeader } from './ChecksPanel'
+import { ChecksPanelReviewHeader, shouldRunChecksPanelEntryRefresh } from './ChecksPanel'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -111,5 +111,61 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).not.toContain('More PR actions')
     expect(markup).not.toContain('unlink PR')
     expect(markup).not.toContain('Link another PR')
+  })
+})
+
+describe('shouldRunChecksPanelEntryRefresh', () => {
+  it('allows detached GitHub refreshes when the worktree has head identity', () => {
+    expect(
+      shouldRunChecksPanelEntryRefresh({
+        hasRepo: true,
+        hasReviewLookupIdentity: true,
+        activeWorktreeId: 'repo-1::C:/Users/neil/orca/workspaces/demo-project-6470-detached-24',
+        isGitLabReviewContext: false,
+        branch: ''
+      })
+    ).toBe(true)
+  })
+
+  it('keeps GitLab entry refreshes branch-scoped', () => {
+    expect(
+      shouldRunChecksPanelEntryRefresh({
+        hasRepo: true,
+        hasReviewLookupIdentity: true,
+        activeWorktreeId: 'wt-1',
+        isGitLabReviewContext: true,
+        branch: ''
+      })
+    ).toBe(false)
+  })
+
+  it('requires repo, active worktree, and review lookup identity', () => {
+    expect(
+      shouldRunChecksPanelEntryRefresh({
+        hasRepo: false,
+        hasReviewLookupIdentity: true,
+        activeWorktreeId: 'wt-1',
+        isGitLabReviewContext: false,
+        branch: ''
+      })
+    ).toBe(false)
+    expect(
+      shouldRunChecksPanelEntryRefresh({
+        hasRepo: true,
+        hasReviewLookupIdentity: false,
+        activeWorktreeId: 'wt-1',
+        isGitLabReviewContext: false,
+        branch: ''
+      })
+    ).toBe(false)
+    expect(
+      shouldRunChecksPanelEntryRefresh({
+        hasRepo: true,
+        hasReviewLookupIdentity: true,
+        activeWorktreeId: null,
+        isGitLabReviewContext: false,
+        branch: ''
+      })
+    ).toBe(false)
   })
 })

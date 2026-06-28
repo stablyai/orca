@@ -3521,22 +3521,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       .filter((item) => item.start < viewportBottom && item.end > viewportTop)
       .map((item) => renderRows[item.index])
       .filter((row): row is WorktreeItemRow => row?.type === 'item')
-      .filter((row) => row.repo?.kind === 'git' && !row.worktree.isBare && row.worktree.branch)
+      .filter((row) => row.repo?.kind === 'git' && hasGitHubPRRefreshIdentity(row.worktree))
     const visibleWorktreeIds = new Set(visibleRows.map((row) => row.worktree.id))
     if (
       shouldTrackSidebarWorktree &&
       currentWorktree &&
-      !currentWorktree.isBare &&
-      currentWorktree.branch
+      hasGitHubPRRefreshIdentity(currentWorktree)
     ) {
       visibleWorktreeIds.add(currentWorktree.id)
     }
     const visibleIdentity = visibleRows
-      .map((row) => `${row.worktree.id}:${row.worktree.branch}:${row.worktree.linkedPR ?? ''}`)
+      .map((row) => getGitHubPRRefreshIdentity(row.worktree))
       .join('|')
     const sidebarIdentity =
       shouldTrackSidebarWorktree && currentWorktree
-        ? `${currentWorktree.id}:${currentWorktree.branch}:${currentWorktree.linkedPR ?? ''}`
+        ? getGitHubPRRefreshIdentity(currentWorktree)
         : ''
     const key = `${visibleIdentity}:${sidebarIdentity}:${sshConnectedGeneration}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
     if (!key || key === lastVisibleRefreshKeyRef.current) {
@@ -4897,6 +4896,19 @@ type WorktreeListProps = {
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange)
   return () => document.removeEventListener('visibilitychange', onChange)
+}
+
+export function hasGitHubPRRefreshIdentity(
+  worktree: Pick<Worktree, 'isBare' | 'branch' | 'head'>
+): boolean {
+  return !worktree.isBare && Boolean(worktree.branch || worktree.head)
+}
+
+export function getGitHubPRRefreshIdentity(
+  worktree: Pick<Worktree, 'id' | 'branch' | 'head' | 'linkedPR'>
+): string {
+  const gitIdentity = worktree.branch || worktree.head || ''
+  return `${worktree.id}:${gitIdentity}:${worktree.linkedPR ?? ''}`
 }
 
 const WorktreeList = React.memo(function WorktreeList({

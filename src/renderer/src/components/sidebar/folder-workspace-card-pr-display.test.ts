@@ -145,6 +145,66 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
 
     expect(display).toMatchObject({ number: 4, status: 'success' })
   })
+
+  it('uses detached HEAD-scoped PR cache for attached worktrees', () => {
+    const detached = makeWorktree({
+      id: 'detached',
+      branch: '',
+      head: 'merge-commit',
+      linkedPR: null
+    })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [detached.id]: makeWorkspaceLineage(detached) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[detached.id, detached]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: {
+        'local::repo-1::__detached_head__:merge-commit': { data: null }
+      },
+      prCache: {
+        'repo-1::__detached_head__:merge-commit': {
+          data: makePr(24, 'failure')
+        }
+      }
+    })
+
+    expect(display).toMatchObject({
+      provider: 'github',
+      number: 24,
+      status: 'failure'
+    })
+  })
+
+  it('uses detached HEAD PR cache when the owner prefix differs', () => {
+    const detached = makeWorktree({
+      id: 'detached',
+      branch: '',
+      head: 'merge-commit',
+      linkedPR: null
+    })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [detached.id]: makeWorkspaceLineage(detached) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[detached.id, detached]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'runtime:windows::other-repo-id::__detached_head__:merge-commit': {
+          data: makePr(24, 'failure')
+        }
+      }
+    })
+
+    expect(display).toMatchObject({
+      provider: 'github',
+      number: 24,
+      status: 'failure'
+    })
+  })
 })
 
 function makePr(number: number, checksStatus: CheckStatus) {

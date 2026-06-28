@@ -10239,13 +10239,17 @@ export class OrcaRuntimeService {
     branch: string,
     linkedPRNumber?: number | null,
     fallbackPRNumber?: number | null,
-    acceptMergedFallbackPR?: boolean
+    acceptMergedFallbackPR?: boolean,
+    currentHeadOid?: string | null
   ): Promise<Awaited<ReturnType<typeof getPRForBranch>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     const options: GitHubPRBranchLookupOptions = this.getHostedReviewExecutionOptions(repo) ?? {}
     const lookupOptions = { ...options }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
+    }
+    if (typeof currentHeadOid === 'string') {
+      lookupOptions.currentHeadOid = currentHeadOid
     }
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []

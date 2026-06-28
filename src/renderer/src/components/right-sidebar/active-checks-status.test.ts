@@ -38,6 +38,29 @@ describe('getActiveChecksStatus', () => {
     expect(getActiveChecksStatus(state)).toBe('success')
   })
 
+  it('uses detached-head PR cache entries for active checks status', () => {
+    const state = {
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            branch: '',
+            head: 'abc1234'
+          }
+        ]
+      },
+      prCache: {
+        'repo-1::__detached_head__:abc1234': { data: makePR('failure'), fetchedAt: 2 },
+        'repo-1::': { data: makePR('success'), fetchedAt: 999 }
+      }
+    } as unknown as Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo' | 'prCache'>
+
+    expect(getActiveChecksStatus(state)).toBe('failure')
+  })
+
   it('uses GitLab MR pipeline status when the active branch has no GitHub PR cache entry', () => {
     const state = {
       activeWorktreeId: 'wt-1',

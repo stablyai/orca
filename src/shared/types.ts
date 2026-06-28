@@ -1139,6 +1139,7 @@ export type GitHubPRRefreshAlias = {
   repoPath: string
   branch: string
   worktreeId?: string
+  worktreeHead?: string | null
   connectionId?: string | null
   executionHostId?: string | null
   linkedPRNumber?: number | null

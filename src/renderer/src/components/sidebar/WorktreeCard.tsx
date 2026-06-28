@@ -3,7 +3,11 @@ import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import {
+  getGitHubPRCacheBranch,
+  getGitHubPRCacheKey,
+  getLegacyGitHubPRCacheKey
+} from '@/store/slices/github-cache-key'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -132,6 +136,7 @@ type WorktreeCardProps = {
 
 const EMPTY_WORKSPACE_PORTS = []
 const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
+type WorktreeCardPRCacheEntry = { data?: PRInfo | null; fetchedAt?: number }
 
 export function shouldBeginWorktreeRename(
   request: WorktreeRenameRequest | null,
@@ -150,7 +155,13 @@ function formatSparseDirectoryPreview(directories: string[]): string {
 }
 
 function isWebClient(): boolean {
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+  if (typeof window === 'undefined') {
+    return false
+  }
+  return (
+    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
+    window.location.pathname.endsWith('/web-index.html')
+  )
 }
 
 function isCachedMergedBranchPRCurrentForWorktree(
@@ -165,6 +176,23 @@ function isCachedMergedBranchPRCurrentForWorktree(
     worktree.head.length > 0 &&
     cachedPR.headSha === worktree.head
   )
+}
+
+function isDetachedHeadCacheBranch(cacheBranch: string): boolean {
+  return cacheBranch.startsWith('__detached_head__:')
+}
+
+function findDetachedPRCacheEntry(
+  prCache: Record<string, WorktreeCardPRCacheEntry> | undefined,
+  cacheBranch: string
+): WorktreeCardPRCacheEntry | undefined {
+  if (!prCache || !isDetachedHeadCacheBranch(cacheBranch)) {
+    return undefined
+  }
+  // Why: imported/folder workspaces can observe the same detached PR under a
+  // different repo owner key; the HEAD-scoped suffix is still exact.
+  const suffix = `::${cacheBranch}`
+  return Object.entries(prCache).find(([key, entry]) => key.endsWith(suffix) && entry?.data)?.[1]
 }
 
 function getDirectoryName(folderPath: string): string {
@@ -404,11 +432,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
     : isFolder
+  const prCacheBranch = getGitHubPRCacheBranch(branch, worktree.head)
   const hostedReviewCacheKey =
-    repo && branch
+    repo && prCacheBranch
       ? getHostedReviewCacheKey(
           repo.path,
-          branch,
+          prCacheBranch,
           settings,
           repo.id,
           repo.connectionId,
@@ -417,16 +446,25 @@ const WorktreeCard = React.memo(function WorktreeCard({
         )
       : ''
   const prCacheKey =
-    repo && branch
+    repo && prCacheBranch
       ? getGitHubPRCacheKey(
           repo.path,
           repo.id,
-          branch,
+          prCacheBranch,
           settings,
           repo.connectionId,
           repo.executionHostId,
           true
         )
+      : ''
+  const canUseLegacyPRCache = repo !== undefined && !repo.connectionId && !repo.executionHostId
+  const legacyRepoScopedPRCacheKey =
+    canUseLegacyPRCache && prCacheBranch
+      ? getLegacyGitHubPRCacheKey(repo.path, repo.id, prCacheBranch)
+      : ''
+  const legacyPathScopedPRCacheKey =
+    canUseLegacyPRCache && prCacheBranch
+      ? getLegacyGitHubPRCacheKey(repo.path, undefined, prCacheBranch)
       : ''
   const issueCacheKey =
     repo && worktree.linkedIssue
@@ -448,7 +486,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hostedReviewEntry = useAppStore((s) =>
     hostedReviewCacheKey ? s.hostedReviewCache[hostedReviewCacheKey] : undefined
   )
-  const prCacheEntry = useAppStore((s) => (prCacheKey ? s.prCache?.[prCacheKey] : undefined))
+  const prCacheEntry = useAppStore(
+    (s) =>
+      (prCacheKey ? s.prCache?.[prCacheKey] : undefined) ??
+      (legacyRepoScopedPRCacheKey ? s.prCache?.[legacyRepoScopedPRCacheKey] : undefined) ??
+      (legacyPathScopedPRCacheKey ? s.prCache?.[legacyPathScopedPRCacheKey] : undefined) ??
+      findDetachedPRCacheEntry(s.prCache, prCacheBranch)
+  )
   const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
   const linearIssueEntry = useAppStore((s) =>
     linearIssueCacheKey ? s.linearIssueCache[linearIssueCacheKey] : undefined
@@ -478,9 +522,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // Why: ChecksPanel can discover a branch PR before hosted-review metadata
   // warms, and transient older hosted-review misses can race with that cache.
   // A newer miss only yields to merged PR cache when the stored worktree head
-  // proves the cached PR still describes the checked-out commit.
+  // proves the cached PR still describes the checked-out commit. Detached
+  // cache entries are already scoped by the checked-out HEAD merge commit.
   const cachedBranchPR = prCacheEntry?.data
   const cachedBranchPRFetchedAt = prCacheEntry?.fetchedAt
+  const cachedBranchPRIsHeadScoped = branch.length === 0 && isDetachedHeadCacheBranch(prCacheBranch)
   const cachedMergedBranchPRMatchesCurrentHead = isCachedMergedBranchPRCurrentForWorktree(
     cachedBranchPR,
     worktree
@@ -493,10 +539,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
       (hostedReview === null &&
         ((cachedBranchPRFetchedAt !== undefined &&
           cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)) ||
+          cachedBranchPRIsHeadScoped ||
           cachedMergedBranchPRMatchesCurrentHead)))
   const cachedBranchReview = useCachedBranchReview
     ? hostedReviewInfoFromGitHubPRInfo(cachedBranchPR)
     : hostedReview
+  const detachedHostedReviewMatchesCachedHeadPR =
+    cachedBranchPRIsHeadScoped &&
+    cachedBranchPR !== undefined &&
+    cachedBranchPR !== null &&
+    hostedReview?.provider === 'github' &&
+    hostedReview.number === cachedBranchPR.number &&
+    !hasNonGitHubLinkedReview
+  const reviewHintKey =
+    (useCachedBranchReview || detachedHostedReviewMatchesCachedHeadPR) && !hasLinkedReview
+      ? ''
+      : hostedReviewEntry?.linkedReviewHintKey
   const prDisplay = getWorktreeCardPrDisplay(
     cachedBranchReview,
     linkedGitHubPR,
@@ -505,8 +563,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedAzureDevOpsPR,
     linkedGiteaPR,
     {
-      reviewHintKey:
-        useCachedBranchReview && !hasLinkedReview ? '' : hostedReviewEntry?.linkedReviewHintKey
+      reviewHintKey
     }
   )
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
@@ -608,6 +665,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
+  const canPassivelyRefreshHostedReview =
+    !isWebClient() && repo !== undefined && !isMacAppDataPath(repo.path)
+  const hostedReviewLookupPending =
+    newCardStyle &&
+    shouldRefreshHostedReview &&
+    canPassivelyRefreshHostedReview &&
+    repo !== undefined &&
+    !isFolder &&
+    !worktree.isBare &&
+    hostedReviewCacheKey.length > 0 &&
+    hostedReviewEntry === undefined
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
@@ -1147,7 +1215,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel
-  const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
+  // Why: a detached merge commit can still have PR context; once shown, the PR
+  // status is the higher-signal sidebar identity than the raw commit badge.
+  const showDetachedHeadInMetaRow =
+    !compactCards && !isFolder && detachedHeadDisplay !== null && statusLaneReview === null
   const showBranch =
     !isFolder &&
     branch.length > 0 &&
@@ -1357,7 +1428,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
             onToggleUnread={handleToggleUnreadQuick}
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
-            hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            // Why: an unresolved branch-review lookup means "unknown", not
+            // "no PR"; showing the branch glyph here causes visible PR flicker.
+            hasBranchIdentity={Boolean(branchIdentityDisplay) && !hostedReviewLookupPending}
           />
         </div>
       ) : null}

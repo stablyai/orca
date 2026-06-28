@@ -114,9 +114,11 @@ import {
   setPRAutoMerge,
   updatePRState,
   updatePRTitle,
+  getPRForBranchOutcome,
   _getMergeQueueCacheSizeForTests,
   _resetOwnerRepoCache,
   _resetMergeQueueCacheForTests,
+  __resetCommitAssociatedPRCacheForTests,
   __resetTrackedUpstreamBranchCacheForTests
 } from './client'
 import { __resetPRConflictSummaryGitCapabilityCacheForTests } from './conflict-summary'
@@ -189,6 +191,7 @@ describe('getPRForBranch', () => {
     acquireMock.mockResolvedValue(undefined)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+    __resetCommitAssociatedPRCacheForTests()
     __resetTrackedUpstreamBranchCacheForTests()
     __resetPRConflictSummaryGitCapabilityCacheForTests()
   })
@@ -833,6 +836,402 @@ describe('getPRForBranch', () => {
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 42, title: 'Fallback PR lookup' })
+  })
+
+  it('returns a merged PR by exact merge commit when branch lookup misses', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 87,
+            title: 'Wrong associated PR',
+            state: 'closed',
+            merged_at: '2026-06-20T04:53:05Z',
+            merge_commit_sha: 'bbbbbbbb',
+            html_url: 'https://github.com/acme/widgets/pull/87',
+            updated_at: '2026-06-20T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/old', sha: 'old-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          },
+          {
+            number: 88,
+            title: 'Merged by commit association',
+            state: 'closed',
+            merged_at: '2026-06-21T04:53:05Z',
+            merge_commit_sha: 'aaaaaaaa',
+            html_url: 'https://github.com/acme/widgets/pull/88',
+            updated_at: '2026-06-21T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/test', sha: 'pr-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 88,
+          title: 'Hydrated merge commit PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/88',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-21T04:53:05Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'pr-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, null, {
+      currentHeadOid: 'aaaaaaaa'
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/acme/widgets/commits/aaaaaaaa/pulls?per_page=100'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      [
+        'pr',
+        'view',
+        '88',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({
+      number: 88,
+      title: 'Hydrated merge commit PR',
+      state: 'merged',
+      headSha: 'pr-head-oid'
+    })
+  })
+
+  it('rejects open and merge-commit mismatched associated PRs', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 90,
+            title: 'Open associated PR',
+            state: 'open',
+            merge_commit_sha: 'aaaaaaaa',
+            html_url: 'https://github.com/acme/widgets/pull/90',
+            updated_at: '2026-06-21T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/test', sha: 'open-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          },
+          {
+            number: 91,
+            title: 'Different merge commit PR',
+            state: 'closed',
+            merged_at: '2026-06-21T04:53:05Z',
+            merge_commit_sha: 'bbbbbbbb',
+            html_url: 'https://github.com/acme/widgets/pull/91',
+            updated_at: '2026-06-21T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/test', sha: 'closed-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+
+    await expect(
+      getPRForBranch('/repo-root', 'feature/test', null, null, null, {
+        currentHeadOid: 'aaaaaaaa'
+      })
+    ).resolves.toBeNull()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats a missing GitHub commit association as no PR for local-only commits', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockRejectedValueOnce(new Error('gh: No commit found for SHA: aaaaaaaa (HTTP 422)'))
+
+    await expect(
+      getPRForBranchOutcome('/repo-root', 'feature/test', null, null, null, {
+        currentHeadOid: 'aaaaaaaa'
+      })
+    ).resolves.toMatchObject({ kind: 'no-pr' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not discover merge-commit PRs from repo-root HEAD without an explicit head hint', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\0\n', stderr: '' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    await expect(getPRForBranchOutcome('/repo-root', 'feature/test')).resolves.toMatchObject({
+      kind: 'no-pr'
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('reuses an unavailable HEAD lookup after hiding a stale merged branch PR', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 93,
+            title: 'Historical merged branch PR',
+            state: 'closed',
+            merged_at: '2026-06-22T04:53:05Z',
+            html_url: 'https://github.com/acme/widgets/pull/93',
+            updated_at: '2026-06-22T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/test', sha: 'old-pr-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 93,
+          title: 'Hydrated historical merged branch PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/93',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-22T04:53:05Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/test',
+          baseRefOid: 'base-oid',
+          headRefOid: 'old-pr-head-oid'
+        })
+      })
+
+    await expect(getPRForBranch('/repo-root', 'feature/test')).resolves.toBeNull()
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', 'HEAD'], { cwd: '/repo-root' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('runs the merge-commit fallback for detached HEAD', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 92,
+            title: 'Detached merge commit PR',
+            state: 'closed',
+            merged_at: '2026-06-22T04:53:05Z',
+            merge_commit_sha: 'dddddddd',
+            html_url: 'https://github.com/acme/widgets/pull/92',
+            updated_at: '2026-06-22T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/detached', sha: 'detached-pr-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 92,
+          title: 'Hydrated detached merge commit PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/92',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-22T04:53:05Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/detached',
+          baseRefOid: 'base-oid',
+          headRefOid: 'detached-pr-head-oid'
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', '', null, null, null, {
+      currentHeadOid: 'dddddddd'
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['api', 'repos/acme/widgets/commits/dddddddd/pulls?per_page=100'],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({
+      number: 92,
+      title: 'Hydrated detached merge commit PR',
+      state: 'merged'
+    })
+  })
+
+  it('does not run the merge-commit fallback for linked PR lookups', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 77,
+        title: 'Linked PR lookup',
+        state: 'OPEN',
+        url: 'https://github.com/acme/widgets/pull/77',
+        statusCheckRollup: [],
+        updatedAt: '2026-03-28T00:00:00Z',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        baseRefName: 'main',
+        headRefName: 'feature/test',
+        baseRefOid: 'base-oid',
+        headRefOid: 'linked-head-oid'
+      })
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 77)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(pr).toMatchObject({ number: 77, title: 'Linked PR lookup' })
+  })
+
+  it('coalesces and caches empty merge-commit association lookups across worktree paths', async () => {
+    let resolveAssociatedPRs: (value: { stdout: string }) => void
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAssociatedPRs = resolve
+        })
+    )
+
+    const firstLookup = getPRForBranch('/repo-root-a', '', null, null, null, {
+      currentHeadOid: 'eeeeeeee'
+    })
+    const secondLookup = getPRForBranch('/repo-root-b', '', null, null, null, {
+      currentHeadOid: 'eeeeeeee'
+    })
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    resolveAssociatedPRs!({ stdout: JSON.stringify([]) })
+
+    await expect(Promise.all([firstLookup, secondLookup])).resolves.toEqual([null, null])
+    await expect(
+      getPRForBranch('/repo-root-c', '', null, null, null, {
+        currentHeadOid: 'eeeeeeee'
+      })
+    ).resolves.toBeNull()
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('coalesces positive merge-commit association hydration across worktree paths', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 94,
+            title: 'Merged by shared commit association',
+            state: 'closed',
+            merged_at: '2026-06-22T04:53:05Z',
+            merge_commit_sha: 'eeeeeeee',
+            html_url: 'https://github.com/acme/widgets/pull/94',
+            updated_at: '2026-06-22T04:53:05Z',
+            draft: false,
+            head: { ref: 'feature/shared', sha: 'shared-pr-head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 94,
+          title: 'Hydrated shared merge commit PR',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/94',
+          statusCheckRollup: [],
+          updatedAt: '2026-06-22T04:53:05Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'feature/shared',
+          baseRefOid: 'base-oid',
+          headRefOid: 'shared-pr-head-oid'
+        })
+      })
+
+    const firstLookup = getPRForBranch('/repo-root-a', '', null, null, null, {
+      currentHeadOid: 'eeeeeeee'
+    })
+    const secondLookup = getPRForBranch('/repo-root-b', '', null, null, null, {
+      currentHeadOid: 'eeeeeeee'
+    })
+
+    await expect(Promise.all([firstLookup, secondLookup])).resolves.toEqual([
+      expect.objectContaining({ number: 94, title: 'Hydrated shared merge commit PR' }),
+      expect.objectContaining({ number: 94, title: 'Hydrated shared merge commit PR' })
+    ])
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not use invalid current HEAD hints for merge-commit lookup', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+
+    await expect(
+      getPRForBranch('/repo-root', '', null, null, null, {
+        currentHeadOid: '(initial)'
+      })
+    ).resolves.toBeNull()
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps unproven merge-commit 404s distinct from no-pr misses', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+
+    const outcome = await getPRForBranchOutcome('/repo-root', '', null, null, null, {
+      currentHeadOid: 'dddddddd'
+    })
+
+    expect(outcome).toMatchObject({
+      kind: 'upstream-error',
+      errorType: 'repo_unavailable'
+    })
+  })
+
+  it('treats stale fallback PR misses as accessible before merge-commit 404s', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 404: PR not found'))
+      .mockRejectedValueOnce(new Error('HTTP 404: REST PR not found'))
+      .mockRejectedValueOnce(new Error('HTTP 404: Commit association not found'))
+
+    const outcome = await getPRForBranchOutcome('/repo-root', '', null, null, 123, {
+      currentHeadOid: 'dddddddd'
+    })
+
+    expect(outcome).toMatchObject({ kind: 'no-pr' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
@@ -1942,23 +2341,28 @@ describe('getPRForBranch', () => {
     await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
     await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
 
-    expect(sshGitProvider.exec).toHaveBeenCalledTimes(1)
+    const trackedUpstreamCalls = sshGitProvider.exec.mock.calls.filter(([args]) =>
+      (args as string[]).includes('refs/heads')
+    )
+    expect(trackedUpstreamCalls).toHaveLength(1)
   })
 
   it('refreshes positive tracked-upstream entries for unsigned SSH runtimes after the TTL', async () => {
     vi.useFakeTimers()
     try {
+      let trackedProbeCount = 0
       const sshGitProvider = {
-        exec: vi
-          .fn()
-          .mockResolvedValueOnce({
-            stdout: 'refs/heads/feature\0origin/old-upstream\n',
-            stderr: ''
-          })
-          .mockResolvedValueOnce({
-            stdout: 'refs/heads/feature\0origin/contributor/original\n',
-            stderr: ''
-          })
+        exec: vi.fn(async (args: string[]) => {
+          if (args.includes('refs/heads')) {
+            trackedProbeCount += 1
+            const stdout =
+              trackedProbeCount === 1
+                ? 'refs/heads/feature\0origin/old-upstream\n'
+                : 'refs/heads/feature\0origin/contributor/original\n'
+            return { stdout, stderr: '' }
+          }
+          return { stdout: '3333333\n', stderr: '' }
+        })
       }
       getSshGitProviderMock.mockReturnValue(sshGitProvider)
       getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
@@ -1987,7 +2391,10 @@ describe('getPRForBranch', () => {
       await vi.advanceTimersByTimeAsync(30_001)
       const pr = await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
 
-      expect(sshGitProvider.exec).toHaveBeenCalledTimes(2)
+      const trackedUpstreamCalls = sshGitProvider.exec.mock.calls.filter(([args]) =>
+        (args as string[]).includes('refs/heads')
+      )
+      expect(trackedUpstreamCalls).toHaveLength(2)
       expect(pr).toMatchObject({
         number: 81,
         title: 'Fresh SSH upstream PR'

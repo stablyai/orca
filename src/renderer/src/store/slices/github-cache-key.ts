@@ -80,6 +80,16 @@ export function getGitHubPRCacheKey(
   )
 }
 
+export function getGitHubPRCacheBranch(branch: string, worktreeHead?: string | null): string {
+  const trimmedHead = worktreeHead?.trim()
+  if (branch || !trimmedHead) {
+    return branch
+  }
+  // Why: detached worktrees have no branch, so PR lookup results are keyed by
+  // the commit whose GitHub merge association was probed.
+  return `__detached_head__:${trimmedHead}`
+}
+
 export function getLegacyGitHubPRCacheKey(
   repoPath: string,
   repoId: string | undefined,

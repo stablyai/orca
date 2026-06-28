@@ -4244,6 +4244,16 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('passes runtime PR branch current HEAD hints through to GitHub lookup', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.getRepoPRForBranch('id:repo-1', '', null, null, false, 'abc1234')
+
+    expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, '', null, null, null, {
+      currentHeadOid: 'abc1234'
+    })
+  })
+
   it('rejects hosted review worktree selectors outside the selected repo', async () => {
     vi.mocked(listWorktrees).mockImplementation(async (repoPath: string) => {
       if (repoPath === '/tmp/repo-b') {

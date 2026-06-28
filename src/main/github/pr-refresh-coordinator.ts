@@ -34,7 +34,7 @@ type PRRefreshOutcomeObserver = (
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource'
+  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'worktreeHead'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -51,6 +51,10 @@ function hostedReviewOptionArgs(
   const options: GitHubPRBranchLookupOptions = {}
   if (candidate.localGitOptions?.wslDistro) {
     options.localGitExecOptions = { wslDistro: candidate.localGitOptions.wslDistro }
+  }
+  const worktreeHead = normalizedWorktreeHead(candidate.worktreeHead)
+  if (worktreeHead) {
+    options.currentHeadOid = worktreeHead
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
@@ -175,7 +179,16 @@ function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   if (typeof candidate.linkedPRNumber === 'number') {
     return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
+  const detachedHead = candidate.branch ? null : normalizedWorktreeHead(candidate.worktreeHead)
+  if (detachedHead) {
+    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::head::${detachedHead}`
+  }
   return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
+}
+
+function normalizedWorktreeHead(head: string | null | undefined): string | null {
+  const trimmed = head?.trim()
+  return trimmed ? trimmed : null
 }
 
 function isVisibleKey(key: string): boolean {
@@ -233,7 +246,13 @@ function validateCandidate(
   if (candidate.connectionId && candidate.connectionState === 'disconnected') {
     return 'disconnected'
   }
-  if (!candidate.branch && typeof candidate.linkedPRNumber !== 'number') {
+  // Why: detached worktrees can still resolve a PR from the checked-out merge commit.
+  if (
+    !candidate.branch &&
+    typeof candidate.linkedPRNumber !== 'number' &&
+    typeof candidate.fallbackPRNumber !== 'number' &&
+    !normalizedWorktreeHead(candidate.worktreeHead)
+  ) {
     return 'fresh'
   }
   return null
@@ -273,6 +292,7 @@ function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefres
     repoPath: candidate.repoPath,
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
+    worktreeHead: normalizedWorktreeHead(candidate.worktreeHead),
     connectionId: candidate.connectionId ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:
@@ -460,10 +480,9 @@ function isMergeabilityPendingOutcome(outcome: PRRefreshOutcome): boolean {
 }
 
 function backgroundRefreshBuckets(): ('core' | 'graphql')[] {
-  // Why: branch refreshes prefer REST but can still fall back to `gh pr list`
-  // when local head-owner metadata is unavailable. Guard both buckets until the
-  // client exposes an exact per-lookup cost plan.
-  return ['core', 'graphql']
+  // Why: branch misses can now spend core on both branch and merge-commit REST
+  // probes; keep the coarse queue budget conservative until lookup cost is exact.
+  return ['core', 'core', 'graphql']
 }
 
 function noteBackgroundStart(): void {
@@ -747,6 +766,9 @@ export function enqueuePRRefresh(
   const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
   if (existing) {
     existing.aliases.set(alias.cacheKey, alias)
+    // Why: visible refreshes can sit in the queue while git status advances.
+    // Keep the latest HEAD/cache hints without changing priority or timing.
+    existing.candidate = candidate
     diagnosticsCounters.coalesced += 1
     recordPRRefreshQueueDiagnostic('coalesced', reason)
     const shouldPromoteExisting =
@@ -760,7 +782,6 @@ export function enqueuePRRefresh(
       existing.dueAt = Math.min(existing.dueAt, dueAt)
       existing.queuedAt = nextQueueOrder()
       existing.activeDelayNotified = false
-      existing.candidate = candidate
       existing.windowId = windowId ?? existing.windowId
     }
   } else {

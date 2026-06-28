@@ -1,7 +1,12 @@
 /* eslint-disable max-lines -- Why: GitHub runtime RPC keeps related repo, project, and mutation schemas beside their handlers so the method contract stays reviewable in one place. */
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import {
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString,
+  requiredStringAllowingEmpty
+} from '../schemas'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -50,10 +55,12 @@ const SlugAssignableUsers = SlugRepo.extend({
 })
 
 const PrForBranch = RepoSelector.extend({
-  branch: requiredString('Missing branch'),
+  // Why: detached/merge-commit worktrees have no branch; currentHeadOid can still resolve PR context.
+  branch: requiredStringAllowingEmpty('Missing branch'),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
-  acceptMergedFallbackPR: z.boolean().optional()
+  acceptMergedFallbackPR: z.boolean().optional(),
+  currentHeadOid: z.string().nullable().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -361,7 +368,8 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.branch,
         params.linkedPRNumber,
         params.fallbackPRNumber,
-        params.acceptMergedFallbackPR
+        params.acceptMergedFallbackPR,
+        params.currentHeadOid
       )
   }),
   defineMethod({

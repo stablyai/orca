@@ -1979,6 +1979,7 @@ type RestPullRequest = {
   updated_at?: string
   draft?: boolean
   merged_at?: string | null
+  merge_commit_sha?: string | null
   mergeable?: boolean | null
   mergeable_state?: string | null
   base?: { ref?: string; sha?: string }
@@ -1995,9 +1996,31 @@ const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' 
   squash: 'SQUASH',
   rebase: 'REBASE'
 }
+const COMMIT_ASSOCIATED_PR_POSITIVE_CACHE_TTL_MS = 30_000
+const COMMIT_ASSOCIATED_PR_EMPTY_CACHE_TTL_MS = 5_000
+const COMMIT_ASSOCIATED_PR_CACHE_MAX_ENTRIES = 256
+
+type CommitAssociatedPRProbeResult =
+  | { kind: 'match'; pr: RestPullRequest }
+  | { kind: 'empty' }
+  | { kind: 'inconclusive' }
+
+const commitAssociatedPRCache = new Map<
+  string,
+  { value: Extract<CommitAssociatedPRProbeResult, { kind: 'match' | 'empty' }>; expiresAt: number }
+>()
+const commitAssociatedPRInFlight = new Map<string, Promise<CommitAssociatedPRProbeResult>>()
+const commitAssociatedPRHydrationInFlight = new Map<string, Promise<PullRequestLookupData>>()
+
+export function __resetCommitAssociatedPRCacheForTests(): void {
+  commitAssociatedPRCache.clear()
+  commitAssociatedPRInFlight.clear()
+  commitAssociatedPRHydrationInFlight.clear()
+}
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
+  currentHeadOid?: string | null
 }
 
 function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
@@ -2326,6 +2349,208 @@ function prOwnerRepoKey(ownerRepo: OwnerRepo): string {
   return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
 }
 
+function pruneCommitAssociatedPRCache(now = Date.now()): void {
+  for (const [cacheKey, cached] of commitAssociatedPRCache) {
+    if (cached.expiresAt <= now) {
+      commitAssociatedPRCache.delete(cacheKey)
+    }
+  }
+  while (commitAssociatedPRCache.size > COMMIT_ASSOCIATED_PR_CACHE_MAX_ENTRIES) {
+    const oldestKey = commitAssociatedPRCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    commitAssociatedPRCache.delete(oldestKey)
+  }
+}
+
+function commitAssociatedPRCacheKey(args: {
+  connectionId?: string | null
+  localGitOptions: { wslDistro?: string }
+  ownerRepo: OwnerRepo
+  headOid: string
+}): string {
+  const runtimeKey = args.connectionId
+    ? `ssh:${args.connectionId}`
+    : `local:${args.localGitOptions.wslDistro ?? 'host'}`
+  return [runtimeKey, prOwnerRepoKey(args.ownerRepo), args.headOid].join('\0')
+}
+
+function cacheCommitAssociatedPRResult(
+  cacheKey: string,
+  value: Extract<CommitAssociatedPRProbeResult, { kind: 'match' | 'empty' }>
+): void {
+  const now = Date.now()
+  const ttl =
+    value.kind === 'match'
+      ? COMMIT_ASSOCIATED_PR_POSITIVE_CACHE_TTL_MS
+      : COMMIT_ASSOCIATED_PR_EMPTY_CACHE_TTL_MS
+  pruneCommitAssociatedPRCache(now)
+  commitAssociatedPRCache.delete(cacheKey)
+  commitAssociatedPRCache.set(cacheKey, { value, expiresAt: now + ttl })
+  pruneCommitAssociatedPRCache(now)
+}
+
+function isUsableHeadOid(headOid: string | null): headOid is string {
+  return Boolean(headOid && /^[0-9a-f]{7,64}$/i.test(headOid) && !/^0+$/.test(headOid))
+}
+
+function isExactMergedCommitPR(pr: RestPullRequest, headOid: string): boolean {
+  if (pr.merge_commit_sha !== headOid) {
+    return false
+  }
+  return Boolean(pr.merged_at) || mapPRState(pr.state, pr.draft) === 'merged'
+}
+
+async function lookupCommitAssociatedPRForRepo(args: {
+  ownerRepo: OwnerRepo
+  headOid: string
+  ghOptions: GhExecOptions
+  repoAccessProven: boolean
+  cacheKey: string
+}): Promise<CommitAssociatedPRProbeResult> {
+  const now = Date.now()
+  pruneCommitAssociatedPRCache(now)
+  const cached = commitAssociatedPRCache.get(args.cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return cached.value
+  }
+  if (cached) {
+    commitAssociatedPRCache.delete(args.cacheKey)
+  }
+
+  const inFlight = commitAssociatedPRInFlight.get(args.cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: many worktrees can sit on the same merge commit during polling; share
+  // GitHub's commit-association probe without extending stale "no PR" states.
+  const probe = probeCommitAssociatedPRForRepo(args)
+  commitAssociatedPRInFlight.set(args.cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (commitAssociatedPRInFlight.get(args.cacheKey) === probe) {
+      commitAssociatedPRInFlight.delete(args.cacheKey)
+    }
+  }
+}
+
+async function probeCommitAssociatedPRForRepo(args: {
+  ownerRepo: OwnerRepo
+  headOid: string
+  ghOptions: GhExecOptions
+  repoAccessProven: boolean
+  cacheKey: string
+}): Promise<CommitAssociatedPRProbeResult> {
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        `repos/${args.ownerRepo.owner}/${args.ownerRepo.repo}/commits/${args.headOid}/pulls?per_page=100`
+      ],
+      args.ghOptions
+    )
+    const list = JSON.parse(stdout) as RestPullRequest[]
+    const match = list.find((pr) => isExactMergedCommitPR(pr, args.headOid))
+    const result: Extract<CommitAssociatedPRProbeResult, { kind: 'match' | 'empty' }> = match
+      ? { kind: 'match', pr: match }
+      : { kind: 'empty' }
+    cacheCommitAssociatedPRResult(args.cacheKey, result)
+    return result
+  } catch (err) {
+    if (isMissingCommitAssociatedPRError(err)) {
+      // Why: local/unpushed commits commonly do not exist in GitHub yet; that is
+      // an empty association, not a PR refresh failure.
+      const result: Extract<CommitAssociatedPRProbeResult, { kind: 'empty' }> = { kind: 'empty' }
+      cacheCommitAssociatedPRResult(args.cacheKey, result)
+      return result
+    }
+    if (!isNotFoundGhError(err)) {
+      throw err
+    }
+    if (!args.repoAccessProven) {
+      return { kind: 'inconclusive' }
+    }
+    const result: Extract<CommitAssociatedPRProbeResult, { kind: 'empty' }> = { kind: 'empty' }
+    cacheCommitAssociatedPRResult(args.cacheKey, result)
+    return result
+  }
+}
+
+async function lookupPRByMergeCommit(args: {
+  candidates: OwnerRepo[]
+  headOid: string
+  ghOptions: GhExecOptions
+  repoPath: string
+  connectionId?: string | null
+  localGitOptions: { wslDistro?: string }
+  accessibleRepos: Set<string>
+}): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
+  let sawInconclusiveCandidate = false
+  for (const candidate of args.candidates) {
+    const cacheKey = commitAssociatedPRCacheKey({
+      connectionId: args.connectionId,
+      localGitOptions: args.localGitOptions,
+      ownerRepo: candidate,
+      headOid: args.headOid
+    })
+    const probe = await lookupCommitAssociatedPRForRepo({
+      ownerRepo: candidate,
+      headOid: args.headOid,
+      ghOptions: args.ghOptions,
+      repoAccessProven: args.accessibleRepos.has(prOwnerRepoKey(candidate)),
+      cacheKey
+    })
+    if (probe.kind === 'inconclusive') {
+      sawInconclusiveCandidate = true
+      continue
+    }
+    if (probe.kind === 'empty') {
+      continue
+    }
+
+    const restData = mapRestPullRequest(probe.pr)
+    const data = await hydrateCommitAssociatedPR({
+      ownerRepo: candidate,
+      restData,
+      ghOptions: args.ghOptions,
+      cacheKey
+    })
+    return { data, dataRepo: candidate }
+  }
+  if (sawInconclusiveCandidate) {
+    throw new Error('HTTP 404: GitHub commit-associated pull request lookup was inconclusive')
+  }
+  return { data: null, dataRepo: null }
+}
+
+async function hydrateCommitAssociatedPR(args: {
+  ownerRepo: OwnerRepo
+  restData: PullRequestLookupData
+  ghOptions: GhExecOptions
+  cacheKey: string
+}): Promise<PullRequestLookupData> {
+  const hydrationKey = `${args.cacheKey}\0pr:${args.restData.number}`
+  const inFlight = commitAssociatedPRHydrationInFlight.get(hydrationKey)
+  if (inFlight) {
+    return inFlight
+  }
+  const hydrate = (async () => {
+    const hydratedData = await getPRByNumber(args.ownerRepo, args.restData.number, args.ghOptions)
+    return hydratedData ?? args.restData
+  })()
+  commitAssociatedPRHydrationInFlight.set(hydrationKey, hydrate)
+  try {
+    return await hydrate
+  } finally {
+    if (commitAssociatedPRHydrationInFlight.get(hydrationKey) === hydrate) {
+      commitAssociatedPRHydrationInFlight.delete(hydrationKey)
+    }
+  }
+}
+
 function shouldRetryTrackedUpstreamBranch(
   upstreamBranch: TrackedUpstreamBranch,
   branchName: string,
@@ -2551,6 +2776,7 @@ async function lookupPRByBranchName(args: {
   headRepo: OwnerRepo | null
   branchName: string
   ghOptions: GhExecOptions
+  accessibleRepos?: Set<string>
 }): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
   if (args.candidates.length > 0) {
     for (const candidate of args.candidates) {
@@ -2563,6 +2789,7 @@ async function lookupPRByBranchName(args: {
               args.ghOptions
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+        args.accessibleRepos?.add(prOwnerRepoKey(candidate))
         // Why: REST/list branch lookup identifies the PR cheaply; exact
         // `gh pr view` carries review, merge queue, and auto-merge state.
         const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
@@ -2579,6 +2806,7 @@ async function lookupPRByBranchName(args: {
           args.branchName,
           args.ghOptions
         )
+        args.accessibleRepos?.add(prOwnerRepoKey(candidate))
         const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
         if (data) {
           return { data, dataRepo: candidate }
@@ -2665,10 +2893,12 @@ async function lookupPRByNumber(args: {
   candidates: OwnerRepo[]
   number: number
   ghOptions: ReturnType<typeof ghRepoExecOptions>
+  accessibleRepos?: Set<string>
 }): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
   for (const candidate of args.candidates) {
     try {
       const linkedData = await getPRByNumber(candidate, args.number, args.ghOptions)
+      args.accessibleRepos?.add(prOwnerRepoKey(candidate))
       if (!linkedData) {
         continue
       }
@@ -2707,6 +2937,11 @@ async function lookupPRByNumber(args: {
 function isNotFoundGhError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   return classifyGhError(stderr).type === 'not_found'
+}
+
+function isMissingCommitAssociatedPRError(err: unknown): boolean {
+  const stderr = err instanceof Error ? err.message : String(err)
+  return /no commit found for sha/i.test(stderr) && /http 422/i.test(stderr)
 }
 
 function shouldStopAfterExactLookupError(err: unknown): boolean {
@@ -2755,11 +2990,6 @@ export async function getPRForBranchOutcome(
 ): Promise<PRRefreshOutcome> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
-  // Why: detached HEAD cannot use branch lookup, but an exact linked/fallback
-  // PR number remains safe to query and keeps review state visible.
-  if (!branchName && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber !== 'number') {
-    return { kind: 'no-pr', fetchedAt: Date.now() }
-  }
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
@@ -2776,16 +3006,28 @@ export async function getPRForBranchOutcome(
     let dataRepo: OwnerRepo | null = null
     let dataHeadRepo: OwnerRepo | null = headRepo
     let currentHeadOidForMergedImplicit: string | null | undefined
+    let currentHeadOidResolved = false
+    let acceptedByExactMergeCommit = false
+    const accessibleRepos = new Set<string>()
+    const explicitCurrentHeadOid = isUsableHeadOid(options.currentHeadOid ?? null)
+      ? (options.currentHeadOid ?? null)
+      : null
+
+    const getCurrentHeadOidForLookup = async (): Promise<string | null> => {
+      if (!currentHeadOidResolved) {
+        currentHeadOidForMergedImplicit =
+          explicitCurrentHeadOid ??
+          (await getCurrentHeadOid(repoPath, connectionId, localGitOptions))
+        currentHeadOidResolved = true
+      }
+      return currentHeadOidForMergedImplicit ?? null
+    }
 
     const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
-      currentHeadOidForMergedImplicit ??= await getCurrentHeadOid(
-        repoPath,
-        connectionId,
-        localGitOptions
-      )
+      currentHeadOidForMergedImplicit = await getCurrentHeadOidForLookup()
       return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
     }
 
@@ -2793,7 +3035,8 @@ export async function getPRForBranchOutcome(
       const exactLookup = await lookupPRByNumber({
         candidates,
         number: linkedPRNumber,
-        ghOptions
+        ghOptions,
+        accessibleRepos
       })
       data = exactLookup.data
       dataRepo = exactLookup.dataRepo
@@ -2804,7 +3047,8 @@ export async function getPRForBranchOutcome(
         candidates,
         headRepo,
         branchName,
-        ghOptions
+        ghOptions,
+        accessibleRepos
       })
       data = branchLookup.data
       dataRepo = branchLookup.dataRepo
@@ -2833,7 +3077,8 @@ export async function getPRForBranchOutcome(
               candidates,
               headRepo: upstreamHeadRepo,
               branchName: upstreamBranch.branchName,
-              ghOptions
+              ghOptions,
+              accessibleRepos
             })
             data = upstreamLookup.data
             dataRepo = upstreamLookup.dataRepo
@@ -2855,15 +3100,46 @@ export async function getPRForBranchOutcome(
       const fallbackLookup = await lookupPRByNumber({
         candidates,
         number: fallbackPRNumber,
-        ghOptions
+        ghOptions,
+        accessibleRepos
       })
       data = fallbackLookup.data
       dataRepo = fallbackLookup.dataRepo
     }
+    let fallbackConfirmedMergedBranch =
+      typeof fallbackPRNumber === 'number' &&
+      mergedBranchLookupNumber === fallbackPRNumber &&
+      data?.number === fallbackPRNumber
+    if (
+      data &&
+      (await hideMergedImplicitPR(data)) &&
+      !fallbackConfirmedMergedBranch &&
+      options.acceptMergedFallbackPR !== true
+    ) {
+      data = null
+      dataRepo = null
+      dataHeadRepo = headRepo
+    }
+    if (!data && typeof linkedPRNumber !== 'number') {
+      if (explicitCurrentHeadOid && candidates.length > 0) {
+        const mergeCommitLookup = await lookupPRByMergeCommit({
+          candidates,
+          headOid: explicitCurrentHeadOid,
+          ghOptions,
+          repoPath,
+          connectionId,
+          localGitOptions,
+          accessibleRepos
+        })
+        data = mergeCommitLookup.data
+        dataRepo = mergeCommitLookup.dataRepo
+        acceptedByExactMergeCommit = Boolean(data)
+      }
+    }
     if (!data) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
-    const fallbackConfirmedMergedBranch =
+    fallbackConfirmedMergedBranch =
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
@@ -2873,6 +3149,7 @@ export async function getPRForBranchOutcome(
     if (
       (await hideMergedImplicitPR(data)) &&
       !fallbackConfirmedMergedBranch &&
+      !acceptedByExactMergeCommit &&
       options.acceptMergedFallbackPR !== true
     ) {
       return { kind: 'no-pr', fetchedAt: Date.now() }

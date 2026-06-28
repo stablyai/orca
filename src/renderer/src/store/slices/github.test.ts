@@ -1712,6 +1712,17 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
           connectionId: 'ssh-1'
         }
       ],
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-direct-refresh-head',
+            repoId: 'repo-1',
+            path: `${repoPath}/worktrees/direct-refresh`,
+            branch,
+            head: 'direct-head-oid'
+          })
+        ]
+      },
       prCache: {
         [`repo-1::${branch}`]: {
           data: pr,
@@ -1726,7 +1737,10 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
 
     await expect(
-      store.getState().fetchPRForBranch(repoPath, branch, { force: true })
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        worktreeId: 'wt-direct-refresh-head'
+      })
     ).resolves.toMatchObject({ number: 44 })
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
     expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
@@ -1735,8 +1749,152 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         repoPath,
         branch,
         cacheKey: `ssh:ssh-1::repo-1::${branch}`,
+        worktreeHead: 'direct-head-oid',
         connectionId: 'ssh-1'
       })
+    })
+  })
+
+  it('keys detached-head PR refresh cache entries by worktree head', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const firstPR = makePR({ number: 101, title: 'Detached first' })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: 'wt-detached-one',
+            repoId,
+            branch: '',
+            head: 'detached-head-one'
+          }),
+          makePRRefreshWorktree({
+            id: 'wt-detached-two',
+            repoId,
+            branch: '',
+            head: 'detached-head-two'
+          })
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow
+      .mockResolvedValueOnce({ kind: 'found', pr: firstPR, fetchedAt: 10 })
+      .mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 20 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, '', {
+        force: true,
+        repoId,
+        worktreeId: 'wt-detached-one'
+      })
+    ).resolves.toMatchObject({ number: 101 })
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, '', {
+        force: true,
+        repoId,
+        worktreeId: 'wt-detached-two'
+      })
+    ).resolves.toBeNull()
+
+    expect(mockApi.gh.refreshPRNow).toHaveBeenNthCalledWith(1, {
+      candidate: expect.objectContaining({
+        branch: '',
+        cacheKey: `${repoId}::__detached_head__:detached-head-one`,
+        worktreeHead: 'detached-head-one'
+      })
+    })
+    expect(mockApi.gh.refreshPRNow).toHaveBeenNthCalledWith(2, {
+      candidate: expect.objectContaining({
+        branch: '',
+        cacheKey: `${repoId}::__detached_head__:detached-head-two`,
+        worktreeHead: 'detached-head-two'
+      })
+    })
+    expect(
+      store.getState().prCache[`${repoId}::__detached_head__:detached-head-one`]
+    ).toMatchObject({
+      data: expect.objectContaining({ number: 101 }),
+      fetchedAt: 10
+    })
+    expect(store.getState().prCache[`${repoId}::__detached_head__:detached-head-two`]).toEqual({
+      data: null,
+      fetchedAt: 20
+    })
+  })
+
+  it('does not reuse empty-branch hosted-review fallback across detached HEADs', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const staleEmptyBranchHostedKey = getHostedReviewCacheKey(repoPath, '', null, repoId)
+    const detachedHostedKey = getHostedReviewCacheKey(
+      repoPath,
+      '__detached_head__:detached-head-two',
+      null,
+      repoId
+    )
+    const freshPR = makePR({ number: 202, title: 'Detached second' })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      hostedReviewCache: {
+        [staleEmptyBranchHostedKey]: {
+          data: {
+            provider: 'github',
+            number: 101,
+            title: 'Detached first',
+            state: 'merged',
+            url: 'https://github.com/acme/repo/pull/101',
+            status: 'success',
+            updatedAt: '2026-05-20T00:00:00Z',
+            mergeable: 'UNKNOWN'
+          },
+          fetchedAt: Date.now(),
+          linkedReviewHintKey: 'github:101'
+        }
+      },
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: 'wt-detached-two',
+            repoId,
+            branch: '',
+            head: 'detached-head-two'
+          })
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr: freshPR,
+      fetchedAt: 30
+    })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, '', {
+        force: true,
+        repoId,
+        worktreeId: 'wt-detached-two'
+      })
+    ).resolves.toMatchObject({ number: 202 })
+
+    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        branch: '',
+        cacheKey: `${repoId}::__detached_head__:detached-head-two`,
+        fallbackPRNumber: null,
+        fallbackPRSource: null,
+        worktreeHead: 'detached-head-two'
+      })
+    })
+    expect(store.getState().hostedReviewCache[staleEmptyBranchHostedKey]?.data).toMatchObject({
+      number: 101
+    })
+    expect(store.getState().hostedReviewCache[detachedHostedKey]?.data).toMatchObject({
+      number: 202
     })
   })
 
@@ -3902,18 +4060,38 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           connectionId: null,
           executionHostId: 'runtime:env-1'
         }
-      ]
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [
+          makePRRefreshWorktree({
+            id: 'wt-runtime-owner',
+            repoId: 'repo-runtime',
+            branch,
+            head: 'runtime-head-oid'
+          })
+        ]
+      }
     } as unknown as Partial<AppState>)
 
     await expect(
-      store.getState().fetchPRForBranch(repoPath, branch, { repoId: 'repo-runtime' })
+      store
+        .getState()
+        .fetchPRForBranch(repoPath, branch, {
+          repoId: 'repo-runtime',
+          worktreeId: 'wt-runtime-owner'
+        })
     ).resolves.toMatchObject({ number: 23 })
 
     expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null },
+      params: {
+        repo: 'repo-runtime',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: 'runtime-head-oid'
+      },
       timeoutMs: 30_000
     })
     expect(store.getState().prCache[`runtime:env-1::repo-runtime::${branch}`]?.data).toMatchObject({

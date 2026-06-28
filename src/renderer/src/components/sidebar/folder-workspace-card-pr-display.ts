@@ -1,6 +1,10 @@
 import type { AppState } from '@/store/types'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import {
+  getGitHubPRCacheBranch,
+  getGitHubPRCacheKey,
+  getLegacyGitHubPRCacheKey
+} from '@/store/slices/github-cache-key'
 import { branchName } from '@/lib/git-utils'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type {
@@ -162,13 +166,14 @@ function getAttachedWorktreePrDisplay({
   }
 
   const branch = branchName(worktree.branch).trim()
-  if (!branch) {
+  const cacheBranch = getGitHubPRCacheBranch(branch, worktree.head)
+  if (!cacheBranch) {
     return getLinkedReviewDisplay(worktree)
   }
 
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     repo.path,
-    branch,
+    cacheBranch,
     settings,
     repo.id,
     repo.connectionId,
@@ -193,7 +198,7 @@ function getAttachedWorktreePrDisplay({
     return hostedReviewDisplay
   }
 
-  const cachedGitHubPr = getCachedGitHubPr({ worktree, repo, branch, prCache, settings })
+  const cachedGitHubPr = getCachedGitHubPr({ worktree, repo, cacheBranch, prCache, settings })
   if (cachedGitHubPr) {
     return {
       provider: 'github',
@@ -222,24 +227,24 @@ function getLinkedReviewDisplay(worktree: Worktree): WorktreeCardPrDisplay | nul
 function getCachedGitHubPr({
   worktree,
   repo,
-  branch,
+  cacheBranch,
   prCache,
   settings
 }: {
   worktree: Worktree
   repo: Repo
-  branch: string
+  cacheBranch: string
   prCache: Record<string, unknown> | null
   settings?: AppState['settings']
 }): PRInfo | null {
-  if (!prCache || worktree.linkedPR === null) {
+  if (!prCache || (worktree.linkedPR === null && !cacheBranch.startsWith('__detached_head__:'))) {
     return null
   }
 
   const cacheKey = getGitHubPRCacheKey(
     repo.path,
     repo.id,
-    branch,
+    cacheBranch,
     settings,
     repo.connectionId,
     repo.executionHostId,
@@ -247,10 +252,10 @@ function getCachedGitHubPr({
   )
   const canUseLegacyPRCache = !repo.connectionId && !repo.executionHostId
   const legacyRepoScopedCacheKey = canUseLegacyPRCache
-    ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch)
+    ? getLegacyGitHubPRCacheKey(repo.path, repo.id, cacheBranch)
     : ''
   const legacyPathScopedCacheKey = canUseLegacyPRCache
-    ? getLegacyGitHubPRCacheKey(repo.path, undefined, branch)
+    ? getLegacyGitHubPRCacheKey(repo.path, undefined, cacheBranch)
     : ''
   const entry =
     (prCache[cacheKey] as PrCacheEntry | undefined) ??
@@ -259,9 +264,32 @@ function getCachedGitHubPr({
       : undefined) ??
     (legacyPathScopedCacheKey
       ? (prCache[legacyPathScopedCacheKey] as PrCacheEntry | undefined)
-      : undefined)
+      : undefined) ??
+    findDetachedPRCacheEntry(prCache, cacheBranch)
   const pr = entry?.data ?? null
-  return pr?.number === worktree.linkedPR ? pr : null
+  if (!pr) {
+    return null
+  }
+  if (cacheBranch.startsWith('__detached_head__:')) {
+    return pr
+  }
+  return pr.number === worktree.linkedPR ? pr : null
+}
+
+function findDetachedPRCacheEntry(
+  prCache: Record<string, unknown>,
+  cacheBranch: string
+): PrCacheEntry | undefined {
+  if (!cacheBranch.startsWith('__detached_head__:')) {
+    return undefined
+  }
+  // Why: folder/import aggregate rows may represent a different repo identity
+  // than the active worktree, but a detached HEAD cache suffix is unambiguous.
+  const suffix = `::${cacheBranch}`
+  return Object.entries(prCache).find(([key, entry]) => {
+    const data = (entry as PrCacheEntry | undefined)?.data
+    return key.endsWith(suffix) && data
+  })?.[1] as PrCacheEntry | undefined
 }
 
 function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardPrDisplay): number {

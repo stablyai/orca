@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type {
   GlobalSettings,
   PRInfo,
@@ -125,6 +126,21 @@ function makePRInfo(overrides: Partial<PRInfo> = {}): PRInfo {
   }
 }
 
+function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
+  return {
+    provider: 'github',
+    number: 6340,
+    title: 'Merged PR still checked out',
+    state: 'merged',
+    url: 'https://github.com/acme/orca/pull/6340',
+    status: 'success',
+    updatedAt: '2026-05-17T00:00:00.000Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'abc123',
+    ...overrides
+  }
+}
+
 function renderWorktreeCardMarkup(element: ReactNode): string {
   return renderToStaticMarkup(<>{element}</>)
 }
@@ -162,6 +178,179 @@ describe('WorktreeCard merged PR fallback display', () => {
 
     expect(markup).toContain('Linked PR #6340')
     expect(markup).not.toContain('Branch')
+  })
+
+  it('shows cached merged PR for detached HEAD-scoped cache entries', async () => {
+    hostedReviewCache = {
+      'local::repo-1::__detached_head__:merge-commit': {
+        data: null,
+        fetchedAt: 200
+      }
+    }
+    prCache = {
+      'repo-1::__detached_head__:merge-commit': {
+        data: makePRInfo({
+          headSha: 'pr-head-before-merge'
+        }),
+        fetchedAt: 100
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
+    expect(markup).not.toContain('Detached HEAD @ merge-c')
+  })
+
+  it('shows detached PRs from legacy path-scoped cache entries', async () => {
+    hostedReviewCache = {
+      'local::repo-1::__detached_head__:merge-commit': {
+        data: null,
+        fetchedAt: 200
+      }
+    }
+    prCache = {
+      '/repo::__detached_head__:merge-commit': {
+        data: makePRInfo({
+          headSha: 'pr-head-before-merge'
+        }),
+        fetchedAt: 100
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
+    expect(markup).not.toContain('Detached HEAD @ merge-c')
+  })
+
+  it('shows detached PRs when cache owner prefix differs', async () => {
+    hostedReviewCache = {
+      'local::repo-1::__detached_head__:merge-commit': {
+        data: null,
+        fetchedAt: 200
+      }
+    }
+    prCache = {
+      'runtime:windows::other-repo-id::__detached_head__:merge-commit': {
+        data: makePRInfo({
+          headSha: 'pr-head-before-merge'
+        }),
+        fetchedAt: 100
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #6340')
+    expect(markup).not.toContain('Detached HEAD @ merge-c')
+  })
+
+  it('shows detached hosted PRs even when the cache entry was warmed from a linked hint', async () => {
+    hostedReviewCache = {
+      'local::repo-1::__detached_head__:merge-commit': {
+        data: makeHostedReview({
+          number: 24,
+          title: 'Validate Orca PR status fallback',
+          headSha: 'pr-head-before-merge',
+          status: 'failure'
+        }),
+        fetchedAt: 200,
+        linkedReviewHintKey: 'github:24'
+      }
+    }
+    prCache = {
+      'repo-1::__detached_head__:merge-commit': {
+        data: makePRInfo({
+          number: 24,
+          title: 'Validate Orca PR status fallback',
+          headSha: 'pr-head-before-merge',
+          checksStatus: 'failure'
+        }),
+        fetchedAt: 100
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked PR #24')
+    expect(markup).not.toContain('Detached HEAD @ merge-c')
+  })
+
+  it('keeps linked-hint detached hosted PRs hidden without HEAD-scoped PR proof', async () => {
+    hostedReviewCache = {
+      'local::repo-1::__detached_head__:merge-commit': {
+        data: makeHostedReview({
+          number: 24,
+          title: 'Stale manually linked PR',
+          headSha: 'pr-head-before-merge'
+        }),
+        fetchedAt: 200,
+        linkedReviewHintKey: 'github:24'
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Linked PR #24')
+    expect(markup).toContain('Detached HEAD @ merge-c')
+  })
+
+  it('hides detached HEAD badge when the parent list supplies PR status', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ branch: '', linkedPR: null, head: 'merge-commit' })}
+        repo={makeRepo()}
+        isActive={false}
+        statusPrDisplay={{
+          provider: 'github',
+          number: 24,
+          title: 'Detached PR from parent status',
+          state: 'merged',
+          status: 'failure',
+          url: 'https://github.com/acme/orca/pull/24'
+        }}
+      />
+    )
+
+    expect(markup).not.toContain('Detached HEAD @ merge-c')
   })
 
   it('suppresses cached merged PR after a newer hosted-review miss when the worktree head moved', async () => {

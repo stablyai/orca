@@ -155,7 +155,7 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null },
+      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
       timeoutMs: 30_000
     })
   })
@@ -228,7 +228,45 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null },
+      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('routes detached post-push refreshes with the current HEAD hint', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 27 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    seed(store, {
+      repos: [
+        makeRepo({
+          id: 'repo-runtime',
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [makeWorktree('repo-runtime', '', 'wt-runtime-detached')]
+      }
+    })
+
+    store.getState().refreshGitHubForWorktree('wt-runtime-detached')
+
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: {
+        repo: 'repo-runtime',
+        branch: '',
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid'
+      },
       timeoutMs: 30_000
     })
   })
@@ -272,7 +310,52 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch: 'feature/runtime', linkedPRNumber: null },
+      params: {
+        repo: 'repo-runtime',
+        branch: 'feature/runtime',
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid'
+      },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('routes detached runtime PR refreshes with the current HEAD hint', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 26 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    seed(store, {
+      settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+      repos: [
+        makeRepo({
+          id: 'repo-runtime',
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [makeWorktree('repo-runtime', '', 'wt-runtime-detached')]
+      },
+      groupBy: 'pr-status'
+    })
+
+    store.getState().refreshGitHubForWorktreeIfStale('wt-runtime-detached')
+
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: {
+        repo: 'repo-runtime',
+        branch: '',
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid'
+      },
       timeoutMs: 30_000
     })
   })

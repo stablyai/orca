@@ -278,23 +278,26 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         linkedPRNumber?: number | null
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
+        currentHeadOid?: string | null
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const localGitOptions = localGitOptionArgs(store, repo)[0]
       const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
         localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
-      const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptionArgs[0]
+      const lookupOptions: GitHubPRBranchLookupOptions = hostedReviewOptionArgs[0]
         ? { ...hostedReviewOptionArgs[0] }
-        : args.acceptMergedFallbackPR === true
-          ? {}
-          : undefined
-      if (lookupOptions && args.acceptMergedFallbackPR === true) {
+        : {}
+      if (args.acceptMergedFallbackPR === true) {
         lookupOptions.acceptMergedFallbackPR = true
       }
-      const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
-        ? [lookupOptions]
-        : []
+      const currentHeadOid =
+        typeof args.currentHeadOid === 'string' ? args.currentHeadOid.trim() : ''
+      if (currentHeadOid) {
+        lookupOptions.currentHeadOid = currentHeadOid
+      }
+      const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
+        Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
       const pr = await getPRForBranch(
         repo.path,
         args.branch,

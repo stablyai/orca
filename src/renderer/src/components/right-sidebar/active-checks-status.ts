@@ -1,7 +1,7 @@
 import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type { CheckStatus } from '../../../../shared/types'
-import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
+import { getGitHubPRCacheBranch, getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 
 type ActiveChecksStatusState = Pick<
@@ -28,16 +28,17 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   }
 
   const branch = branchDisplayName(activeWorktree.branch)
-  if (!branch) {
+  if (!branch && !activeWorktree.head) {
     return null
   }
+  const prCacheBranch = getGitHubPRCacheBranch(branch, activeWorktree.head)
 
   // Why: PR refreshes are written under repo-id scoped keys so repo path
   // changes and legacy duplicates cannot leave the activity indicator stale.
   const prCacheKey = getGitHubPRCacheKey(
     activeRepo.path,
     activeRepo.id,
-    branch,
+    prCacheBranch,
     state.settings,
     activeRepo.connectionId,
     activeRepo.executionHostId,
@@ -45,7 +46,7 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   )
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     activeRepo.path,
-    branch,
+    prCacheBranch,
     state.settings,
     activeRepo.id,
     activeRepo.connectionId,

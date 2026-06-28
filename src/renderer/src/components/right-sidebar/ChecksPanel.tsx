@@ -20,7 +20,11 @@ import {
   prChecksCacheSuffix,
   prCommentsCacheSuffix
 } from '@/store/slices/github'
-import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import {
+  getGitHubPRCacheBranch,
+  getGitHubPRCacheKey,
+  getGitHubRepoCacheKey
+} from '@/store/slices/github-cache-key'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -199,6 +203,25 @@ type ChecksPanelReviewHeaderProps = {
   onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
   onUnlinkPullRequest: () => void
   onLinkAnotherPullRequest: () => void
+}
+
+export function shouldRunChecksPanelEntryRefresh({
+  hasRepo,
+  hasReviewLookupIdentity,
+  activeWorktreeId,
+  isGitLabReviewContext,
+  branch
+}: {
+  hasRepo: boolean
+  hasReviewLookupIdentity: boolean
+  activeWorktreeId: string | null | undefined
+  isGitLabReviewContext: boolean
+  branch: string
+}): boolean {
+  if (!hasRepo || !hasReviewLookupIdentity || !activeWorktreeId) {
+    return false
+  }
+  return !isGitLabReviewContext || branch.length > 0
 }
 
 export function ChecksPanelReviewHeader({
@@ -498,7 +521,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const gitStatusSnapshotRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
-  const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
+  const branch = gitIdentityDisplay?.kind === 'branch' ? (gitIdentityDisplay.branchName ?? '') : ''
   const activeWorktreePath = activeWorktree?.path ?? null
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
@@ -599,12 +622,14 @@ export default function ChecksPanel(): React.JSX.Element {
 
   // Find active worktree and repo
   const isFolder = repo ? isFolderRepo(repo) : false
+  const prCacheBranch = getGitHubPRCacheBranch(branch, activeWorktree?.head)
+  const hasReviewLookupIdentity = Boolean(branch || activeWorktree?.head)
   const prCacheKey =
-    repo && branch
+    repo && hasReviewLookupIdentity
       ? getGitHubPRCacheKey(
           repo.path,
           repo.id,
-          branch,
+          prCacheBranch,
           settings,
           repo.connectionId,
           repo.executionHostId,
@@ -612,10 +637,10 @@ export default function ChecksPanel(): React.JSX.Element {
         )
       : ''
   const hostedReviewCacheKey =
-    repo && branch
+    repo && hasReviewLookupIdentity
       ? getHostedReviewCacheKey(
           repo.path,
-          branch,
+          prCacheBranch,
           settings,
           repo.id,
           repo.connectionId,
@@ -1158,7 +1183,7 @@ export default function ChecksPanel(): React.JSX.Element {
     [setPrTitle]
   )
   const stateRequestKey =
-    repo && branch
+    repo && hasReviewLookupIdentity
       ? activeGitLabReview
         ? checksPanelHostedReviewAsyncResultKey(
             hostedReviewCacheKey,
@@ -1186,17 +1211,19 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [agentComposerState?.commentResolution, stateRequestKey])
 
   useEffect(() => {
-    if (isPanelVisible && repo && !isFolder && branch) {
-      void fetchHostedReviewForBranch(repo.path, branch, {
-        repoId: repo.id,
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
-        staleWhileRevalidate: true
-      })
+    if (isPanelVisible && repo && !isFolder && hasReviewLookupIdentity) {
+      if (branch) {
+        void fetchHostedReviewForBranch(repo.path, branch, {
+          repoId: repo.id,
+          linkedGitHubPR: linkedPR,
+          fallbackGitHubPR: fallbackGitHubPRNumber,
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          staleWhileRevalidate: true
+        })
+      }
       if (activeWorktreeId && !isGitLabReviewContext) {
         enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
       }
@@ -1207,6 +1234,7 @@ export default function ChecksPanel(): React.JSX.Element {
     enqueueGitHubPRRefresh,
     fallbackGitHubPRNumber,
     fetchHostedReviewForBranch,
+    hasReviewLookupIdentity,
     isFolder,
     isGitLabReviewContext,
     isPanelVisible,
@@ -1834,7 +1862,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
 
   const handleRefresh = useCallback(async () => {
-    if (!repo || !branch) {
+    if (!repo || !hasReviewLookupIdentity || (isGitLabReviewContext && !branch)) {
       return
     }
     const initialRequestKey = checksPanelAsyncResultKey(
@@ -1920,17 +1948,19 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!isCurrentRequest()) {
         return
       }
-      await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-        repoPath: repo.path,
-        repoId: repo.id,
-        branch,
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR
-      })
+      if (branch) {
+        await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+          repoPath: repo.path,
+          repoId: repo.id,
+          branch,
+          linkedGitHubPR: linkedPR,
+          fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
+          linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR,
+          linkedGiteaPR
+        })
+      }
       if (!isCurrentRequest()) {
         return
       }
@@ -2057,6 +2087,7 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedPR,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
+    hasReviewLookupIdentity,
     linkedAzureDevOpsPR,
     linkedBitbucketPR,
     linkedGiteaPR,
@@ -2072,7 +2103,20 @@ export default function ChecksPanel(): React.JSX.Element {
 
   const handleEntryRefresh = useCallback(
     (options: { refreshChecks: boolean; refreshComments: boolean }) => {
-      if (!repo || !branch || !activeWorktreeId) {
+      const refreshRepo = repo
+      const refreshWorktreeId = activeWorktreeId
+      if (
+        !shouldRunChecksPanelEntryRefresh({
+          hasRepo: Boolean(refreshRepo),
+          hasReviewLookupIdentity,
+          activeWorktreeId: refreshWorktreeId,
+          isGitLabReviewContext,
+          branch
+        })
+      ) {
+        return
+      }
+      if (!refreshRepo || !refreshWorktreeId) {
         return
       }
       // Why: entering the Checks tab is automatic UI behavior, not an explicit
@@ -2080,9 +2124,12 @@ export default function ChecksPanel(): React.JSX.Element {
       // guards still apply; only force detail panes that the entry freshness rule
       // already proved stale, so tab entry stays fresh without broad fan-out.
       if (isGitLabReviewContext) {
-        void fetchHostedReviewForBranch(repo.path, branch, {
+        if (!branch) {
+          return
+        }
+        void fetchHostedReviewForBranch(refreshRepo.path, branch, {
           force: true,
-          repoId: repo.id,
+          repoId: refreshRepo.id,
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
           linkedGitLabMR,
@@ -2095,7 +2142,7 @@ export default function ChecksPanel(): React.JSX.Element {
         }
         return
       }
-      enqueueGitHubPRRefresh(activeWorktreeId, 'active', 80)
+      enqueueGitHubPRRefresh(refreshWorktreeId, 'active', 80)
       if (options.refreshChecks) {
         void fetchChecks({ force: true })
       }
@@ -2113,6 +2160,7 @@ export default function ChecksPanel(): React.JSX.Element {
       fetchComments,
       fetchGitLabDetails,
       fetchHostedReviewForBranch,
+      hasReviewLookupIdentity,
       isGitLabReviewContext,
       linkedAzureDevOpsPR,
       linkedBitbucketPR,
@@ -2129,7 +2177,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // duplicate fetches from rapid show/hide toggles. See
   // docs/refresh-on-checks-tab.md.
   const entryKey =
-    isPanelVisible && repo && !isFolder && branch
+    isPanelVisible && repo && !isFolder && hasReviewLookupIdentity
       ? `${activeWorktreeId ?? ''}::${activeGitLabReview ? hostedReviewCacheKey : prCacheKey}`
       : ''
   const lastEntryKeyRef = useRef<string>('')
