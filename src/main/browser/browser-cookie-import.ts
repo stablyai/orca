@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
   appendFileSync,
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdtempSync,
@@ -1538,8 +1539,13 @@ export async function importCookiesFromBrowser(
     `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
   )
   try {
-    mkdirSync(stagingDir, { recursive: true })
+    // Why: the staged copy is a full cookie DB (session tokens). Lock the dir
+    // and file to the current user so another local account cannot read them —
+    // recursive mkdir leaves an existing dir's mode untouched, so set it too.
+    mkdirSync(stagingDir, { recursive: true, mode: 0o700 })
+    chmodSync(stagingDir, 0o700)
     copyFileSync(liveCookiesPath, stagingCookiesPath)
+    chmodSync(stagingCookiesPath, 0o600)
   } catch {
     rmSync(tmpDir, { recursive: true, force: true })
     return { ok: false, reason: 'Could not create staging cookie database.' }

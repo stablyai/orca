@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import WebSocket from 'ws'
+import { request as httpRequest } from 'http'
 import { CdpWsProxy } from './cdp-ws-proxy'
 
 vi.mock('electron', () => ({
@@ -89,8 +90,8 @@ describe('CdpWsProxy', () => {
     })
   }
 
-  it('starts on a random port and returns ws:// URL', () => {
-    expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
+  it('starts on a random port and returns a token-scoped ws:// URL', () => {
+    expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{36}$/)
     expect(proxy.getPort()).toBeGreaterThan(0)
   })
 
@@ -369,5 +370,80 @@ describe('CdpWsProxy', () => {
 
     resolveCommand!({})
     client.close()
+  })
+
+  // ── Authentication: only the local token-bearing agent-browser client may
+  //    reach the debugger; web content (which always sends Origin) and any
+  //    client lacking the path token must be rejected. ──
+
+  function closeCodeFor(url: string, options?: WebSocket.ClientOptions): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(url, options)
+      ws.on('close', (code) => resolve(code))
+      // Why: a rejected client must never receive a forwarded CDP response.
+      ws.on('message', () => reject(new Error('rejected client received a CDP message')))
+      ws.on('error', () => resolve(-1))
+    })
+  }
+
+  function jsonRequest(
+    path: string,
+    headers: Record<string, string>
+  ): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const req = httpRequest(
+        { host: '127.0.0.1', port: proxy.getPort(), path, method: 'GET', headers },
+        (res) => {
+          let body = ''
+          res.on('data', (chunk) => (body += chunk))
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body }))
+        }
+      )
+      req.on('error', reject)
+      req.end()
+    })
+  }
+
+  it('rejects a WebSocket client that omits the path token', async () => {
+    const code = await closeCodeFor(`ws://127.0.0.1:${proxy.getPort()}`)
+    expect(code === 1008 || code === -1).toBe(true)
+  })
+
+  it('rejects a WebSocket client presenting the wrong token', async () => {
+    const code = await closeCodeFor(`ws://127.0.0.1:${proxy.getPort()}/${'0'.repeat(36)}`)
+    expect(code === 1008 || code === -1).toBe(true)
+  })
+
+  it('rejects a token-bearing WebSocket upgrade that carries a browser Origin', async () => {
+    const code = await closeCodeFor(endpoint, { origin: 'https://evil.example' })
+    expect(code === 1008 || code === -1).toBe(true)
+  })
+
+  it('accepts the local client on the correct token with no Origin', async () => {
+    mock.webContents.debugger.sendCommand.mockResolvedValueOnce({ tree: 'ok' })
+    const client = await connect()
+    const response = await sendAndReceive(client, {
+      id: 1,
+      method: 'Accessibility.getFullAXTree',
+      params: {}
+    })
+    expect(response.result).toEqual({ tree: 'ok' })
+    client.close()
+  })
+
+  it('serves the tokenized debugger URL from /json discovery for a loopback client', async () => {
+    const { status, body } = await jsonRequest('/json/version', {})
+    expect(status).toBe(200)
+    expect(JSON.parse(body).webSocketDebuggerUrl).toBe(endpoint)
+  })
+
+  it('rejects /json discovery from a browser Origin (port oracle)', async () => {
+    const { status } = await jsonRequest('/json/version', { origin: 'https://evil.example' })
+    expect(status).toBe(403)
+  })
+
+  it('rejects /json discovery with a non-loopback Host (DNS rebinding)', async () => {
+    const { status } = await jsonRequest('/json/version', { host: 'evil.example' })
+    expect(status).toBe(403)
   })
 })

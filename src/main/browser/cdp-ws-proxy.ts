@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http'
+import { randomBytes, timingSafeEqual } from 'crypto'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
@@ -12,6 +13,11 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
+  // Why: per-proxy secret embedded in the debugger URL path. CDP grants full
+  // control of the tab, so the local agent-browser client (which receives the
+  // URL over the trusted CLI channel) must present this 144-bit token; page JS
+  // that merely discovers the port cannot guess it.
+  private authToken = ''
   private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
   private debuggerLease: ElectronDebuggerLease | null = null
@@ -23,6 +29,9 @@ export class CdpWsProxy {
 
   async start(): Promise<string> {
     await this.attachDebugger()
+    // Why: fresh token per start so a debugger URL leaked from a previous tab
+    // cannot drive a newly-bound proxy on a recycled port.
+    this.authToken = randomBytes(18).toString('hex')
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
       this.wss = new WebSocketServer({ server: this.httpServer })
@@ -40,7 +49,14 @@ export class CdpWsProxy {
       const onListenError = (error: Error): void => {
         failStart(error)
       }
-      this.wss.on('connection', (ws) => {
+      this.wss.on('connection', (ws, req) => {
+        if (!this.isAuthorizedClient(req)) {
+          // Why: CDP grants full control of the tab (Runtime.evaluate, cookie
+          // theft, navigation). Reject browser-origin upgrades and any client
+          // lacking the path token before wiring message forwarding.
+          ws.close(1008, 'Unauthorized')
+          return
+        }
         this.closeClient()
         this.client = ws
         const onMessage = (data: WebSocket.RawData): void => {
@@ -68,7 +84,7 @@ export class CdpWsProxy {
         const addr = this.httpServer!.address()
         if (typeof addr === 'object' && addr) {
           this.port = addr.port
-          resolve(`ws://127.0.0.1:${this.port}`)
+          resolve(this.debuggerUrl())
         } else {
           failStart(new Error('Failed to bind proxy server'))
         }
@@ -128,7 +144,44 @@ export class CdpWsProxy {
     }
   }
 
+  private debuggerUrl(): string {
+    return `ws://127.0.0.1:${this.port}/${this.authToken}`
+  }
+
+  private isAuthorizedClient(req: IncomingMessage): boolean {
+    // Why: browsers always send an Origin header on WebSocket handshakes; the
+    // local agent-browser client (ws library, non-browser) never does. Refusing
+    // any Origin-bearing upgrade keeps the debugger unreachable from page JS even
+    // if it discovers the port and token.
+    if (req.headers.origin != null) {
+      return false
+    }
+    return this.matchesToken(req.url)
+  }
+
+  private matchesToken(rawUrl: string | undefined): boolean {
+    if (!this.authToken) {
+      return false
+    }
+    // Why: tolerate an optional query string a client may append to the URL.
+    const path = (rawUrl ?? '').split('?')[0]
+    const expected = `/${this.authToken}`
+    if (path.length !== expected.length) {
+      return false
+    }
+    return timingSafeEqual(Buffer.from(path), Buffer.from(expected))
+  }
+
   private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+    // Why: the /json discovery endpoints disclose the tokenized debugger URL.
+    // Reject a non-loopback Host (DNS-rebinding) or any browser Origin so only a
+    // local non-browser client (agent-browser) can read the token; page JS that
+    // tries to use /json as a port oracle gets a flat 403.
+    if (!isLoopbackHost(req.headers.host) || req.headers.origin != null) {
+      res.writeHead(403)
+      res.end()
+      return
+    }
     const url = req.url ?? ''
     if (url === '/json/version' || url === '/json/version/') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -142,7 +195,7 @@ export class CdpWsProxy {
         JSON.stringify({
           Browser: `Chrome/${chromeVersion}`,
           'Protocol-Version': '1.3',
-          webSocketDebuggerUrl: `ws://127.0.0.1:${this.port}`
+          webSocketDebuggerUrl: this.debuggerUrl()
         })
       )
       return
@@ -154,7 +207,7 @@ export class CdpWsProxy {
           {
             ...this.buildTargetInfo(),
             id: 'orca-proxy-target',
-            webSocketDebuggerUrl: `ws://127.0.0.1:${this.port}`
+            webSocketDebuggerUrl: this.debuggerUrl()
           }
         ])
       )
@@ -360,4 +413,18 @@ export class CdpWsProxy {
       (message) => this.sendError(clientId, message, client)
     )
   }
+}
+
+// Why: a request whose Host is a real hostname (not a loopback literal) is the
+// signature of DNS rebinding — a page that rebound its domain to 127.0.0.1.
+// Allow only loopback Host headers so discovery cannot be reached that way.
+function isLoopbackHost(host: string | undefined): boolean {
+  if (!host) {
+    return false
+  }
+  const hostname = host
+    .replace(/:\d+$/, '')
+    .replace(/^\[|\]$/g, '')
+    .toLowerCase()
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1'
 }
