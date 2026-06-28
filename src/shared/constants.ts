@@ -266,6 +266,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInApp: false,
     openLinksInAppPreferencePrompted: false,
     openAgentTabsInChatByDefault: false,
+    experimentalNativeChat: false,
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,

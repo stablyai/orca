@@ -1,7 +1,7 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import type { Tab, TabGroup, TerminalTab, TuiAgent } from '../../../../shared/types'
+import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
@@ -11,14 +11,12 @@ import {
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import NativeChatView from '../native-chat/NativeChatView'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
   groupId: string
   isActiveInGroup: boolean
-  viewMode: 'terminal' | 'chat'
 }
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
@@ -56,10 +54,6 @@ type TerminalOverlaySlotProps = {
   isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
-  /** Native chat is shown as a sibling overlay while the terminal stays mounted. */
-  isChatViewMode: boolean
-  /** Launch-time agent hint, forwarded to the native chat view for resolution. */
-  launchAgent: TuiAgent | null | undefined
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -76,8 +70,6 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isWorktreeActive,
   isVisible,
   isActive,
-  isChatViewMode,
-  launchAgent,
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
@@ -264,11 +256,6 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     )
   }
 
-  // Why: only mount chat chrome when the terminal is the active, visible pane.
-  // Keeping TerminalPane mounted (above) preserves the live PTY/xterm; the chat
-  // surface is an absolutely-positioned sibling toggled by viewMode, never a
-  // remount of the terminal (R2).
-  const showChatAffordances = isVisible && activityTerminalPortal === null
   return (
     <div
       ref={overlayRef}
@@ -278,11 +265,6 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       onFocusCapture={focusGroup}
     >
       {terminalPane}
-      {showChatAffordances && isChatViewMode ? (
-        <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-          <NativeChatView terminalTabId={terminalTabId} launchAgent={launchAgent} />
-        </div>
-      ) : null}
       {/* The chat/terminal toggle now lives in the pane header's action cluster
           (TerminalPaneHeaderOverlay), beside split/close — not as a separate
           floating overlay. */}
@@ -356,8 +338,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       entries.set(tab.entityId, {
         unifiedTabId: tab.id,
         groupId: tab.groupId,
-        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id,
-        viewMode: tab.viewMode ?? 'terminal'
+        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
       })
     }
     return entries
@@ -388,8 +369,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isWorktreeActive={isWorktreeActive}
             isVisible={isVisible}
             isActive={isActive}
-            isChatViewMode={assignment?.viewMode === 'chat'}
-            launchAgent={terminalTab.launchAgent}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}

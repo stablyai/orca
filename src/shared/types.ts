@@ -2555,6 +2555,9 @@ export type GlobalSettings = {
    *  view instead of the raw terminal. Off by default so existing workflows are
    *  unchanged. Optional for legacy-settings compatibility; defaults applied. */
   openAgentTabsInChatByDefault?: boolean
+  /** Experimental: native chat surface for Claude/Codex terminal sessions.
+   *  Off by default while the desktop UX is still being exercised. */
+  experimentalNativeChat?: boolean
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */

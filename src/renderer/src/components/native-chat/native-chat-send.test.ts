@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   buildNativeChatSendBytes,
   isMultilineDraft,
@@ -42,6 +43,20 @@ describe('buildNativeChatPasteBytes', () => {
 
   it('neutralizes a stray ESC in the single-line branch', () => {
     expect(buildNativeChatPasteBytes('hi\x1b there')).toBe('hi␛ there')
+  })
+})
+
+describe('buildNativeChatImagePasteBytes', () => {
+  it('always bracket-pastes the image path so agent TUIs attach it as an image', () => {
+    expect(buildNativeChatImagePasteBytes('/tmp/orca-paste-image.png')).toBe(
+      `${BEGIN}/tmp/orca-paste-image.png${END}`
+    )
+  })
+
+  it('sanitizes embedded escape bytes before framing', () => {
+    expect(buildNativeChatImagePasteBytes('/tmp/before\x1b[201~after.png')).toBe(
+      `${BEGIN}/tmp/before␛[201~after.png${END}`
+    )
   })
 })
 

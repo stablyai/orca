@@ -78,6 +78,7 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -439,6 +440,7 @@ function TabBarInner({
   // its panes (paneKey = `${unifiedTabId}:…`), mirroring the toggle button's gate.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const tabIdsWithLiveAgent = useMemo(() => {
     const ids = new Set<string>()
     for (const paneKey of Object.keys(agentStatusByPaneKey ?? {})) {
@@ -1094,12 +1096,18 @@ function TabBarInner({
                   )
                 }
                 const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
+                const hasResolvedAgent =
+                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') !== null ||
+                  resolveTabAgentFromTitle(terminalTab.title) !== null
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
+                    experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
                     launchAgent: terminalTab.launchAgent,
-                    hasDetectedAgent: tabIdsWithLiveAgent.has(unifiedTabForItem.id)
+                    hasDetectedAgent: tabIdsWithLiveAgent.has(unifiedTabForItem.id),
+                    hasResolvedAgent,
+                    isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (
                   <SortableTab
@@ -1109,7 +1117,7 @@ function TabBarInner({
                     groupId={resolvedGroupId}
                     tabCount={orderedItems.length}
                     canToggleViewMode={canToggleViewMode}
-                    isChatView={unifiedTabForItem?.viewMode === 'chat'}
+                    isChatView={nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'}
                     onToggleViewMode={
                       unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
                     }

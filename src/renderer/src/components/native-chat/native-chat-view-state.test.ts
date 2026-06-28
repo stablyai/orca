@@ -22,7 +22,16 @@ function session(overrides: Partial<NativeChatSession>): NativeChatSession {
 
 describe('selectNativeChatViewState', () => {
   it('maps loading', () => {
-    expect(selectNativeChatViewState(session({ status: 'loading' })).kind).toBe('loading')
+    expect(selectNativeChatViewState(session({ messages: [], status: 'loading' })).kind).toBe(
+      'loading'
+    )
+  })
+
+  it('keeps rendering messages while the session reports loading', () => {
+    expect(selectNativeChatViewState(session({ status: 'loading' }))).toEqual({
+      kind: 'ready',
+      isWorking: false
+    })
   })
 
   it('maps error with its message', () => {

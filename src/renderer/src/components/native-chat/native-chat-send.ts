@@ -46,6 +46,12 @@ export function buildNativeChatPasteBytes(text: string): string {
   return safe
 }
 
+/** Image attachments must look like a real terminal image paste to Claude/Codex
+ *  TUIs. A plain typed path (or @file mention) is treated as text/file-read. */
+export function buildNativeChatImagePasteBytes(filePath: string): string {
+  return `${BRACKETED_PASTE_BEGIN}${sanitizeBracketedPasteText(filePath)}${BRACKETED_PASTE_END}`
+}
+
 /**
  * Compute the bytes to write for `text` + Enter in ONE write:
  *  - single-line → `text\r`

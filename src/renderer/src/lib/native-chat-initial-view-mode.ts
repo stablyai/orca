@@ -1,4 +1,4 @@
-import type { Tab } from '../../../shared/types'
+import type { GlobalSettings, Tab } from '../../../shared/types'
 
 /**
  * Decide the initial `viewMode` for a newly launched agent tab from the
@@ -10,7 +10,20 @@ import type { Tab } from '../../../shared/types'
  * function so the decision can be unit-tested without the store or launch path.
  */
 export function decideInitialAgentTabViewMode(
+  experimentalNativeChat: boolean | undefined,
   openAgentTabsInChatByDefault: boolean | undefined
 ): Tab['viewMode'] {
-  return openAgentTabsInChatByDefault === true ? 'chat' : undefined
+  return experimentalNativeChat === true && openAgentTabsInChatByDefault === true
+    ? 'chat'
+    : undefined
+}
+
+export function initialAgentTabViewModeProps(
+  settings: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
+): { viewMode?: Tab['viewMode'] } {
+  const viewMode = decideInitialAgentTabViewMode(
+    settings?.experimentalNativeChat,
+    settings?.openAgentTabsInChatByDefault
+  )
+  return viewMode ? { viewMode } : {}
 }

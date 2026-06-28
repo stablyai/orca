@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { basename } from '@/lib/path'
 import {
   isTextBlock,
   type NativeChatBlock,
@@ -27,16 +28,35 @@ function proseToMarkdown(blocks: NativeChatBlock[]): string {
       if (isTextBlock(block)) {
         return block.text
       }
-      // image-ref blocks: surface a compact reference rather than embedding the
-      // raw path as prose. Input-image rendering is out of scope (plan U8/defer).
-      if (block.type === 'image-ref') {
-        const label = block.alt || block.path || block.url || 'image'
-        return `\`[image: ${label}]\``
-      }
       return ''
     })
     .filter((part) => part.length > 0)
     .join('\n\n')
+}
+
+function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.JSX.Element | null {
+  const images = blocks.filter((block) => block.type === 'image-ref')
+  if (images.length === 0) {
+    return null
+  }
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {images.map((image, index) => {
+        const label = image.alt ?? image.path ?? image.url ?? 'Image'
+        const name = image.path ? basename(image.path) : label
+        return (
+          <div
+            key={`${label}-${index}`}
+            className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
+            title={label}
+          >
+            <ImageIcon className="size-3.5 shrink-0" />
+            <span className="truncate">{name}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /** Inline controls for an agent message (mobile AgentControls parity): copy the
@@ -77,7 +97,7 @@ function TypingIndicatorRow(): React.JSX.Element {
       aria-label={translate('components.native-chat.status.responding', 'Agent is responding')}
       aria-live="polite"
     >
-      <div className="flex h-8 items-center gap-1.5 rounded-xl rounded-tl-sm bg-muted px-3 text-muted-foreground">
+      <div className="flex h-8 items-center gap-1.5 text-muted-foreground">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
@@ -107,6 +127,7 @@ function MessageRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
   const markdown = proseToMarkdown(prose)
+  const hasImages = prose.some((block) => block.type === 'image-ref')
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -117,10 +138,10 @@ function MessageRow({
     }
   }, [onScrollMessageToTop])
 
-  // Skip rows with nothing renderable (e.g. an image-ref-only turn, which we
-  // don't render inline yet) so the transcript shows no empty/ghost bubble.
+  // Skip rows with nothing renderable so the transcript shows no empty/ghost
+  // bubble.
   // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && tools.length === 0) {
+  if (markdown.length === 0 && !hasImages && tools.length === 0) {
     return null
   }
 
@@ -134,8 +155,13 @@ function MessageRow({
       <div ref={rowRef} className="flex flex-col items-end gap-0.5">
         <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground">
           {markdown ? (
-            <CommentMarkdown content={markdown} variant="document" className="text-sm" />
-          ) : null}
+            <>
+              <ImageAttachmentRefs blocks={prose} />
+              <CommentMarkdown content={markdown} variant="document" className="text-sm" />
+            </>
+          ) : (
+            <ImageAttachmentRefs blocks={prose} />
+          )}
         </div>
       </div>
     )
@@ -162,6 +188,7 @@ function MessageRow({
           className="absolute -top-1 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         />
       ) : null}
+      <ImageAttachmentRefs blocks={prose} />
       {markdown ? (
         <CommentMarkdown content={markdown} variant="document" className="text-sm" />
       ) : null}

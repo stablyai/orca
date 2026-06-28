@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
+  appendPendingSendCache,
   appendCommandMarkerCache,
   applyCommandMarkerBoundaries,
   clearCommandMarkerCacheForTests,
+  clearPendingSendCacheForTests,
   commandMarkersAsMessages,
   isCommandMarkerId,
   isPendingMessageId,
   pendingSendsAsMessages,
   prunePendingSends,
   readCommandMarkerCache,
+  readPendingSendCache,
+  writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
 import { stripNoiseMessages } from './native-chat-noise'
@@ -42,15 +46,38 @@ describe('prunePendingSends', () => {
     expect(prunePendingSends(pending, [userMessage('m1', 'hi')])).toBe(pending)
   })
 
-  it('drops a pending send once its user turn lands in the transcript', () => {
+  it('keeps a pending send while only its user turn has landed', () => {
     const pending = [pendingOf('p1', 'fix the bug')]
     const next = prunePendingSends(pending, [userMessage('m1', 'fix the bug')])
+    expect(next).toBe(pending)
+  })
+
+  it('drops a pending send once the transcript advances beyond its user turn', () => {
+    const pending = [pendingOf('p1', 'fix the bug')]
+    const next = prunePendingSends(pending, [
+      userMessage('m1', 'fix the bug'),
+      assistantMessage('m2', 'working on it')
+    ])
     expect(next).toEqual([])
   })
 
-  it('matches ignoring surrounding/collapsed whitespace', () => {
+  it('matches advanced turns ignoring surrounding/collapsed whitespace', () => {
     const pending = [pendingOf('p1', '  do   the   thing ')]
-    const next = prunePendingSends(pending, [userMessage('m1', 'do the thing')])
+    const next = prunePendingSends(pending, [
+      userMessage('m1', 'do the thing'),
+      assistantMessage('m2', 'done')
+    ])
+    expect(next).toEqual([])
+  })
+
+  it('drops an attachment pending send once a prefixed transcript prompt advances', () => {
+    const pending = [
+      { ...pendingOf('p1', 'what do you see'), imagePaths: ['/Users/me/Downloads/3d.png'] }
+    ]
+    const next = prunePendingSends(pending, [
+      userMessage('m1', '[Image #1] what do you see'),
+      assistantMessage('m2', 'an image')
+    ])
     expect(next).toEqual([])
   })
 
@@ -68,7 +95,10 @@ describe('prunePendingSends', () => {
 
   it('prunes only the matched entry, keeping others', () => {
     const pending = [pendingOf('p1', 'first'), pendingOf('p2', 'second')]
-    const next = prunePendingSends(pending, [userMessage('m1', 'first')])
+    const next = prunePendingSends(pending, [
+      userMessage('m1', 'first'),
+      assistantMessage('m2', 'first answer')
+    ])
     expect(next).toEqual([pendingOf('p2', 'second')])
   })
 })
@@ -85,6 +115,46 @@ describe('pendingSendsAsMessages', () => {
         source: 'scrape'
       }
     ])
+  })
+
+  it('includes image refs for pending attachment sends', () => {
+    const messages = pendingSendsAsMessages([
+      { id: 'p1', text: 'what do you see?', imagePaths: ['/tmp/shot.png'], sentAt: 42 }
+    ])
+    expect(messages[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/shot.png' },
+      { type: 'text', text: 'what do you see?' }
+    ])
+  })
+
+  it('hides a pending send while its real user turn is visible', () => {
+    const pending = [pendingOf('p1', 'first prompt')]
+
+    expect(pendingSendsAsMessages(pending, [userMessage('u1', 'first prompt')])).toEqual([])
+    expect(pendingSendsAsMessages(pending, [])).toHaveLength(1)
+  })
+})
+
+describe('pending send cache', () => {
+  it('persists optimistic sends for the same pane and agent', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+
+    const appended = appendPendingSendCache(scope, pendingOf('p1', 'first prompt'))
+
+    expect(appended).toEqual([pendingOf('p1', 'first prompt')])
+    expect(readPendingSendCache(scope)).toEqual(appended)
+    expect(readPendingSendCache({ ...scope, agent: 'claude' })).toEqual([])
+  })
+
+  it('clears cached pending sends when pruning removes all entries', () => {
+    clearPendingSendCacheForTests()
+    const scope = { paneKey: 'tab-a:leaf-a', agent: 'codex' }
+    appendPendingSendCache(scope, pendingOf('p1', 'first prompt'))
+
+    writePendingSendCache(scope, [])
+
+    expect(readPendingSendCache(scope)).toEqual([])
   })
 })
 

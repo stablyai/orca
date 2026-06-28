@@ -1,14 +1,18 @@
 import { MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
+import type { NativeChatSession } from '../../../../shared/native-chat-types'
 
 export function NativeChatEmptyState({
   kind,
-  message
+  message,
+  agent
 }: {
   kind: 'loading' | 'empty' | 'error' | 'not-agent'
   message?: string
+  agent?: NativeChatSession['agent']
 }): React.JSX.Element {
-  const copy = emptyStateCopy(kind, message)
+  const copy = emptyStateCopy(kind, message, agent)
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -25,15 +29,18 @@ export function NativeChatEmptyState({
         )}
       </div>
       <p className="text-sm font-medium text-foreground">{copy.title}</p>
-      <p className="max-w-xs text-xs text-muted-foreground">{copy.subtitle}</p>
+      {copy.subtitle ? (
+        <p className="max-w-sm text-balance text-xs text-muted-foreground">{copy.subtitle}</p>
+      ) : null}
     </div>
   )
 }
 
 function emptyStateCopy(
   kind: 'loading' | 'empty' | 'error' | 'not-agent',
-  message?: string
-): { title: string; subtitle: string } {
+  message?: string,
+  agent?: NativeChatSession['agent']
+): { title: string; subtitle: string | null } {
   switch (kind) {
     case 'loading':
       return {
@@ -63,11 +70,17 @@ function emptyStateCopy(
       }
     case 'empty':
     default:
+      const agentName = agent ? formatAgentTypeLabel(agent) : 'the agent'
       return {
-        title: translate('components.native-chat.state.empty.title', 'No messages yet'),
+        title: translate(
+          'components.native-chat.state.empty.title',
+          'Start a chat with {{value0}}',
+          { value0: agentName }
+        ),
         subtitle: translate(
           'components.native-chat.state.empty.subtitle',
-          'Send a prompt to start the conversation. New turns appear here as the agent works.'
+          'Ask {{value0}} to inspect code, explain output, or make a change.',
+          { value0: agentName }
         )
       }
   }

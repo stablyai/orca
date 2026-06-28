@@ -293,6 +293,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'openLinksInApp',
   'experimentalMobile',
   'experimentalPet',
+  'experimentalNativeChat',
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',

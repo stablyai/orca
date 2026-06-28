@@ -1,7 +1,8 @@
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
-import { ImageOff } from 'lucide-react'
+import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
+import { basename } from '@/lib/path'
 import type { ComposerAutocomplete, SlashCommandSuggestion } from './native-chat-composer-state'
 import {
   NativeChatMentionHint,
@@ -21,9 +22,13 @@ export type NativeChatComposerFieldProps = {
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   notice: string | null
+  imageAttachments: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled: boolean
   isWorking: boolean
   attachDisabled: boolean
+  dictationDisabled: boolean
+  isDictating: boolean
+  isDictationHoldMode: boolean
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
@@ -31,9 +36,18 @@ export type NativeChatComposerFieldProps = {
   onChooseSlash: (command: SlashCommandSuggestion) => void
   onAcceptMention: () => void
   onChooseSkill: (skill: DiscoveredSkill) => void
+  onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
+  onDictationToggle: () => void
+  onDictationHoldStart: () => void
+  onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+}
+
+export type NativeChatComposerImageAttachment = {
+  id: string
+  path: string
 }
 
 export function NativeChatComposerField({
@@ -45,9 +59,13 @@ export function NativeChatComposerField({
   autocomplete,
   activeSuggestion,
   notice,
+  imageAttachments,
   sendButtonDisabled,
   isWorking,
   attachDisabled,
+  dictationDisabled,
+  isDictating,
+  isDictationHoldMode,
   onDraftChange,
   onTextareaSelect,
   onKeyDown,
@@ -55,12 +73,16 @@ export function NativeChatComposerField({
   onChooseSlash,
   onAcceptMention,
   onChooseSkill,
+  onRemoveImageAttachment,
   onAttach,
+  onDictationToggle,
+  onDictationHoldStart,
+  onDictationHoldEnd,
   onSend,
   onStop
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
-    <div className="shrink-0 border-t border-border bg-background">
+    <div className="shrink-0 bg-background">
       <div className="px-3 py-2 sm:px-4">
         <div className="relative mx-auto w-full max-w-3xl">
           {autocomplete.mode === 'slash' && autocomplete.suggestions.length > 0 ? (
@@ -89,15 +111,37 @@ export function NativeChatComposerField({
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             className={cn(
-              'rounded-xl border border-input bg-card p-2 shadow-xs transition-colors',
+              'rounded-xl border border-input bg-card p-1.5 shadow-xs transition-colors',
               'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30'
             )}
           >
+            {imageAttachments.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+                {imageAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
+                    title={attachment.path}
+                  >
+                    <ImageIcon className="size-3.5 shrink-0" />
+                    <span className="max-w-56 truncate">{basename(attachment.path)}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveImageAttachment(attachment.id)}
+                      aria-label="Remove attachment"
+                      className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <textarea
               ref={textareaRef}
               value={draft}
               disabled={disabled}
-              rows={3}
+              rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
@@ -105,17 +149,22 @@ export function NativeChatComposerField({
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
               className={cn(
-                'min-h-20 max-h-40 w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none pointer-coarse:min-h-24',
+                'min-h-12 max-h-28 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <div />
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
                 attachDisabled={attachDisabled}
+                dictationDisabled={dictationDisabled}
                 sendDisabled={sendButtonDisabled}
                 isWorking={isWorking}
+                isDictating={isDictating}
+                isDictationHoldMode={isDictationHoldMode}
                 onAttach={onAttach}
+                onDictationToggle={onDictationToggle}
+                onDictationHoldStart={onDictationHoldStart}
+                onDictationHoldEnd={onDictationHoldEnd}
                 onSend={onSend}
                 onStop={onStop}
               />

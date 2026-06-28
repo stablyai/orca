@@ -1093,6 +1093,9 @@ export function useTerminalPaneLifecycle({
           }
         }
         scheduleRuntimeGraphSync()
+        // Why: active pane lives in PaneManager; React consumers such as the
+        // header chat toggle need a render tick when focus moves between splits.
+        syncPaneLayoutRevision()
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
         }

@@ -91,6 +91,18 @@ function nativeZoomCommandMatchesKeybindings(
   )
 }
 
+function isMacAppPasteInput(input: Electron.Input): boolean {
+  return (
+    process.platform === 'darwin' &&
+    input.type === 'keyDown' &&
+    input.meta &&
+    !input.control &&
+    !input.alt &&
+    !input.shift &&
+    (input.code === 'KeyV' || input.key.toLowerCase() === 'v')
+  )
+}
+
 // Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
 // center of the CSS-centered content sits at ~18 CSS px from the top.
 // At zoom factor z that becomes 18·z window px.  Traffic lights are
@@ -813,6 +825,14 @@ export function createMainWindow(
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+      return
+    }
+
+    if (isMacAppPasteInput(input)) {
+      // Why: native chat/terminal panes can own focus without being native
+      // editable controls, so route Cmd+V through Orca's paste ownership first.
+      event.preventDefault()
+      mainWindow.webContents.send('ui:appMenuPaste')
       return
     }
 

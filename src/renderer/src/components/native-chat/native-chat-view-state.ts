@@ -16,26 +16,21 @@ export type NativeChatViewState =
   | { kind: 'ready'; isWorking: true }
 
 /**
- * Decide which surface to render. Precedence mirrors the session status the
- * assembler/live-merge already derived: error and loading are terminal; an
- * empty conversation shows the empty state even while a hook reports work (there
- * is nothing to render yet); otherwise the list renders, flagged working when
- * the session status is 'working'.
+ * Decide which surface to render. Error is terminal, but any renderable message
+ * wins over loading/empty so optimistic first sends never get replaced by a
+ * full-pane placeholder while transcript discovery catches up.
  */
 export function selectNativeChatViewState(session: NativeChatSession): NativeChatViewState {
   if (session.status === 'error') {
     return { kind: 'error', message: session.error ?? 'Conversation could not be loaded.' }
   }
+  if (session.messages.length > 0) {
+    return { kind: 'ready', isWorking: session.status === 'working' }
+  }
   if (session.status === 'loading') {
     return { kind: 'loading' }
   }
-  if (session.messages.length === 0) {
-    // Empty wins over a transient 'working' hook so a just-toggled, pre-session
-    // pane shows a clear empty state instead of a spinner over nothing.
-    return { kind: 'empty' }
-  }
-  if (session.status === 'working') {
-    return { kind: 'ready', isWorking: true }
-  }
-  return { kind: 'ready', isWorking: false }
+  // Empty wins over a transient 'working' hook so a just-toggled, pre-session
+  // pane shows a clear empty state instead of a spinner over nothing.
+  return { kind: 'empty' }
 }

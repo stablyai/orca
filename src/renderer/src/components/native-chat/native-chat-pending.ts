@@ -4,6 +4,7 @@
 // rule (match on normalized user-message text) is unit-testable without React.
 
 import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
+import { stripImagePromptMarker } from './native-chat-image-transcript-markers'
 
 /** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
@@ -11,12 +12,55 @@ export type NativeChatPendingSend = {
   id: string
   /** The exact draft text the user submitted. */
   text: string
+  /** Image paths that were sent through the TUI image attachment paste path. */
+  imagePaths?: string[]
   /** Epoch ms when the send was issued, so the queued bubble sorts to the end. */
   sentAt: number
 }
 
+export type NativeChatPendingSendScope = {
+  paneKey: string
+  agent: string
+}
+
+const PENDING_SEND_LIMIT = 8
+const pendingSendCache = new Map<string, NativeChatPendingSend[]>()
+
+function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
+  return `${scope.paneKey}\0${scope.agent}`
+}
+
+export function readPendingSendCache(scope: NativeChatPendingSendScope): NativeChatPendingSend[] {
+  return [...(pendingSendCache.get(pendingSendScopeKey(scope)) ?? [])]
+}
+
+export function writePendingSendCache(
+  scope: NativeChatPendingSendScope,
+  pending: NativeChatPendingSend[]
+): NativeChatPendingSend[] {
+  const next = pending.slice(-PENDING_SEND_LIMIT)
+  const key = pendingSendScopeKey(scope)
+  if (next.length === 0) {
+    pendingSendCache.delete(key)
+  } else {
+    pendingSendCache.set(key, next)
+  }
+  return [...next]
+}
+
+export function appendPendingSendCache(
+  scope: NativeChatPendingSendScope,
+  entry: NativeChatPendingSend
+): NativeChatPendingSend[] {
+  return writePendingSendCache(scope, [...readPendingSendCache(scope), entry])
+}
+
+export function clearPendingSendCacheForTests(): void {
+  pendingSendCache.clear()
+}
+
 function normalize(text: string): string {
-  return text.trim().replace(/\s+/g, ' ')
+  return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
 }
 
 /** The prose of a user message, normalized for matching against a pending send. */
@@ -31,10 +75,40 @@ function userMessageText(message: NativeChatMessage): string | null {
   return normalize(text)
 }
 
+function matchingUserMessageTexts(messages: NativeChatMessage[]): Set<string> {
+  const texts = new Set<string>()
+  for (const message of messages) {
+    const text = userMessageText(message)
+    if (text) {
+      texts.add(text)
+    }
+  }
+  return texts
+}
+
+function advancedPastUserMessageTexts(messages: NativeChatMessage[]): Set<string> {
+  const advanced = new Set<string>()
+  const waiting = new Set<string>()
+  for (const message of messages) {
+    if (message.role === 'user') {
+      const text = userMessageText(message)
+      if (text) {
+        waiting.add(text)
+      }
+      continue
+    }
+    for (const text of waiting) {
+      advanced.add(text)
+    }
+  }
+  return advanced
+}
+
 /**
- * Drop any pending send whose text now appears as a real user turn in the
- * transcript. Returns the same array reference when nothing changed so callers
- * can skip a state update (avoids a needless re-render).
+ * Drop any pending send only after the transcript has advanced beyond its real
+ * user turn. Keeping the echo through the user-only transcript phase prevents a
+ * first-turn empty-state flash if the live transcript briefly reports [] before
+ * the assistant response lands.
  */
 export function prunePendingSends(
   pending: NativeChatPendingSend[],
@@ -43,14 +117,8 @@ export function prunePendingSends(
   if (pending.length === 0) {
     return pending
   }
-  const landed = new Set<string>()
-  for (const message of messages) {
-    const text = userMessageText(message)
-    if (text) {
-      landed.add(text)
-    }
-  }
-  const next = pending.filter((entry) => !landed.has(normalize(entry.text)))
+  const advanced = advancedPastUserMessageTexts(messages)
+  const next = pending.filter((entry) => !advanced.has(normalize(entry.text)))
   return next.length === pending.length ? pending : next
 }
 
@@ -60,14 +128,23 @@ export function prunePendingSends(
  * transcript turn always supersedes them if both are briefly present, and the
  * send time as the timestamp so they sort to the end (most recent) of the list.
  */
-export function pendingSendsAsMessages(pending: NativeChatPendingSend[]): NativeChatMessage[] {
-  return pending.map((entry) => ({
-    id: `pending:${entry.id}`,
-    role: 'user' as const,
-    blocks: [{ type: 'text' as const, text: entry.text }],
-    timestamp: entry.sentAt,
-    source: 'scrape' as const
-  }))
+export function pendingSendsAsMessages(
+  pending: NativeChatPendingSend[],
+  existingMessages: NativeChatMessage[] = []
+): NativeChatMessage[] {
+  const represented = matchingUserMessageTexts(existingMessages)
+  return pending
+    .filter((entry) => !represented.has(normalize(entry.text)))
+    .map((entry) => ({
+      id: `pending:${entry.id}`,
+      role: 'user' as const,
+      blocks: [
+        ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path })),
+        ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
+      ],
+      timestamp: entry.sentAt,
+      source: 'scrape' as const
+    }))
 }
 
 /** True when a message id was minted for an optimistic pending send. */

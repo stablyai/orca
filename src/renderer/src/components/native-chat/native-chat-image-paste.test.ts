@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { getAgentImageHandling, resolveImagePaste } from './native-chat-image-paste'
 
 describe('image paste agent map', () => {
-  it('known path-accepting agent injects the temp file path', () => {
-    expect(getAgentImageHandling('claude')).toBe('path')
+  it('known image-capable agent attaches the temp file path', () => {
+    expect(getAgentImageHandling('claude')).toBe('attachment')
     const result = resolveImagePaste('claude', '/tmp/orca-img-123.png')
-    expect(result).toEqual({ kind: 'inject', reference: '/tmp/orca-img-123.png' })
+    expect(result).toEqual({ kind: 'attach', path: '/tmp/orca-img-123.png' })
   })
 
-  it('codex also injects a path', () => {
+  it('codex also attaches image paths', () => {
     expect(resolveImagePaste('codex', '/tmp/x.png')).toEqual({
-      kind: 'inject',
-      reference: '/tmp/x.png'
+      kind: 'attach',
+      path: '/tmp/x.png'
     })
   })
 

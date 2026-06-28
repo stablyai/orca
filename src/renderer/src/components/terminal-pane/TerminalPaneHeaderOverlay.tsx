@@ -33,14 +33,13 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
-  /** When true, this tab can toggle the native chat view; renders a chat/terminal
+  /** When true, this pane can toggle the native chat view; renders a chat/terminal
    *  toggle as the first button in the pane header actions row (beside split/close).
-   *  Native chat is tab-level, so this is gated to the tab's active pane by the
-   *  caller to avoid duplicating it across split panes. */
+   *  The caller gates it to the active pane to avoid duplicating it across splits. */
   canToggleNativeChat?: boolean
-  /** True when the tab is currently showing the native chat view. */
+  /** True when the active pane is currently showing the native chat view. */
   isChatViewMode?: boolean
-  /** Flip the tab between the terminal and the native chat view. */
+  /** Flip the active pane between the terminal and the native chat view. */
   onToggleNativeChat?: () => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
   onBeginPaneDrag: (paneId: number, handle: HTMLElement, event: PointerEvent) => void

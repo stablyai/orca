@@ -6,6 +6,7 @@ import {
   type NativeChatSession,
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
+import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >
  *  scrape) supersede lower ones when they describe the same turn. */
@@ -115,7 +116,7 @@ export function assembleNativeChatSession(
   // Process highest priority first so a later, lower-priority duplicate is
   // dropped rather than overwriting. Within a source, order is preserved.
   const ordered: NativeChatMessage[] = [
-    ...(sources.transcript ?? []),
+    ...normalizeImageTranscriptMessages(sources.transcript ?? []),
     ...(sources.hook ?? []),
     ...(sources.scrape ?? [])
   ]

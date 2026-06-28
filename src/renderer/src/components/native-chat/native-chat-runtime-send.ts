@@ -4,7 +4,11 @@
 
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatImagePasteBytes,
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from './native-chat-send'
 
 // Why: agent TUIs swallow a `\r` bundled into the same pty write as a framed
 // paste, so a one-shot send leaves the text sitting in the input box, unsent.
@@ -15,6 +19,7 @@ import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-sen
 // the message sits "Queued" forever. 500ms is orca-runtime's proven value in
 // writeTerminalAction({enter:true}), so match it here.
 export const NATIVE_CHAT_SUBMIT_DELAY_MS = 500
+export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 // Why: Claude Code's AskUserQuestion is a MULTI-STEP prompt — it renders one
 // question at a time and each Enter advances to the next (the final Enter
@@ -64,6 +69,66 @@ export function sendNativeChatMessage(
     sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
   }, NATIVE_CHAT_SUBMIT_DELAY_MS)
   return { cancel: () => clearTimeout(timer) }
+}
+
+export function sendNativeChatMessageWithImageAttachments(
+  settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
+  ptyId: string,
+  text: string,
+  imagePaths: readonly string[]
+): NativeChatSendHandle {
+  if (imagePaths.length === 0) {
+    return sendNativeChatMessage(settings, ptyId, text)
+  }
+  const timers: ReturnType<typeof setTimeout>[] = []
+  for (const imagePath of imagePaths) {
+    sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
+  }
+  const trimmedText = text.trim()
+  if (trimmedText.length > 0) {
+    timers.push(
+      setTimeout(() => {
+        sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
+      }, NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
+    )
+  }
+  timers.push(
+    setTimeout(
+      () => {
+        sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+      },
+      trimmedText.length > 0
+        ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+        : NATIVE_CHAT_SUBMIT_DELAY_MS
+    )
+  )
+  return {
+    cancel: () => {
+      for (const timer of timers) {
+        clearTimeout(timer)
+      }
+    }
+  }
+}
+
+/** Paste image attachments into the hosted TUI immediately so switching back to
+ *  the terminal shows the same image chips a direct terminal paste would show. */
+export function sendNativeChatImageAttachments(
+  settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
+  ptyId: string,
+  imagePaths: readonly string[]
+): void {
+  for (const imagePath of imagePaths) {
+    sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
+  }
+}
+
+/** Submit a TUI prompt whose image attachments were already pasted earlier. */
+export function submitNativeChatPrompt(
+  settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
+  ptyId: string
+): void {
+  sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
 }
 
 /**

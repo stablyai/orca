@@ -9,13 +9,21 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 import {
   sendNativeChatMessage,
+  sendNativeChatMessageWithImageAttachments,
+  sendNativeChatImageAttachments,
+  submitNativeChatPrompt,
   sendNativeChatAnswer,
   nativeChatQuestionOffsets,
+  NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
   NATIVE_CHAT_ADVANCE_BUFFER_MS
 } from './native-chat-runtime-send'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatImagePasteBytes,
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from './native-chat-send'
 
 const SETTINGS = {} as Parameters<typeof sendNativeChatMessage>[0]
 const PTY = 'pty-1'
@@ -57,6 +65,76 @@ describe('sendNativeChatMessage', () => {
 
   it('matches orca-runtime writeTerminalAction Enter gap (500ms)', () => {
     expect(NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
+  })
+})
+
+describe('sendNativeChatMessageWithImageAttachments', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sendRuntimePtyInput.mockClear()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('bracket-pastes image paths before prompt text so the TUI creates image chips', () => {
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', [
+      '/tmp/orca-paste-image.png'
+    ])
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      buildNativeChatImagePasteBytes('/tmp/orca-paste-image.png')
+    )
+
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      buildNativeChatPasteBytes('what do you see?')
+    )
+
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(3)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+  })
+
+  it('waits the normal submit gap for an attachment-only send', () => {
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', ['/tmp/orca-paste-image.png'])
+
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(1)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+  })
+})
+
+describe('pre-pasted image attachment sends', () => {
+  beforeEach(() => {
+    sendRuntimePtyInput.mockClear()
+  })
+
+  it('pastes image attachments immediately without submitting the prompt', () => {
+    sendNativeChatImageAttachments(SETTINGS, PTY, ['/tmp/orca-paste-image.png'])
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      buildNativeChatImagePasteBytes('/tmp/orca-paste-image.png')
+    )
+  })
+
+  it('submits a prompt whose image attachments were already pasted', () => {
+    submitNativeChatPrompt(SETTINGS, PTY)
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
   })
 })
 

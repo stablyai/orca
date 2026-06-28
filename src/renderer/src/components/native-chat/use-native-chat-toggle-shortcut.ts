@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
+import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 
@@ -37,9 +38,14 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       )
       if (
         !canToggleNativeChat({
+          experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
           launchAgent: terminalTab?.launchAgent,
-          hasDetectedAgent
+          hasDetectedAgent,
+          hasResolvedAgent:
+            resolveTabAgentFromTitle(tab.label ?? '') !== null ||
+            (terminalTab ? resolveTabAgentFromTitle(terminalTab.title) !== null : false),
+          isChatViewMode: tab.viewMode === 'chat'
         })
       ) {
         return

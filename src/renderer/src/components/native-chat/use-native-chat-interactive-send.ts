@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -32,6 +31,7 @@ export type NativeChatInteractiveSend = {
  */
 export function useNativeChatInteractiveSend(
   terminalTabId: string,
+  targetPtyId: string | null,
   agent: AgentType
 ): NativeChatInteractiveSend {
   // The in-flight answer's cancel handle; cleared on a new send, on Stop, and on
@@ -46,13 +46,12 @@ export function useNativeChatInteractiveSend(
 
   const sendRaw = useCallback(
     (raw: string) => {
-      const ptyId = useAppStore.getState().ptyIdsByTabId[terminalTabId]?.[0]
-      if (!ptyId) {
+      if (!targetPtyId) {
         return
       }
-      sendRuntimePtyInput(getSettingsForAgentTabRuntimeOwner(terminalTabId), ptyId, raw)
+      sendRuntimePtyInput(getSettingsForAgentTabRuntimeOwner(terminalTabId), targetPtyId, raw)
     },
-    [terminalTabId]
+    [terminalTabId, targetPtyId]
   )
 
   const sendAnswer = useCallback(
@@ -60,8 +59,7 @@ export function useNativeChatInteractiveSend(
       if (text.trim() === '') {
         return
       }
-      const ptyId = useAppStore.getState().ptyIdsByTabId[terminalTabId]?.[0]
-      if (!ptyId) {
+      if (!targetPtyId) {
         return
       }
       // Cancel any prior in-flight answer before starting a new one.
@@ -76,10 +74,10 @@ export function useNativeChatInteractiveSend(
       // gate the stepping on Claude and send a single body + Enter otherwise.
       inFlightRef.current =
         agent === 'claude'
-          ? sendNativeChatAnswer(settings, ptyId, text.split('\n'))
-          : sendNativeChatMessage(settings, ptyId, text)
+          ? sendNativeChatAnswer(settings, targetPtyId, text.split('\n'))
+          : sendNativeChatMessage(settings, targetPtyId, text)
     },
-    [terminalTabId, agent, cancelInFlight]
+    [terminalTabId, targetPtyId, agent, cancelInFlight]
   )
 
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.

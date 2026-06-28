@@ -11892,7 +11892,10 @@
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
         "placeholder": "Send a message…",
-        "mentionHint": "Referencing file:"
+        "mentionHint": "Referencing file:",
+        "attach": "Attach file",
+        "startDictation": "Start dictation",
+        "stopDictation": "Stop dictation"
       },
       "tool": {
         "running": "Running…"
@@ -11905,7 +11908,6 @@
         "showTerminal": "Show terminal",
         "showChat": "Show chat view"
       },
-      "approximateBanner": "Approximate view — no transcript available yet, so this reflects live status only.",
       "state": {
         "loading": {
           "title": "Loading conversation…",
@@ -11920,8 +11922,8 @@
           "subtitle": "This terminal is not running a recognized coding agent."
         },
         "empty": {
-          "title": "No messages yet",
-          "subtitle": "Send a prompt to start the conversation. New turns appear here as the agent works."
+          "title": "Start a chat with {{value0}}",
+          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
         }
       }
     },

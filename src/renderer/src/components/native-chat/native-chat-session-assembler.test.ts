@@ -84,6 +84,34 @@ describe('assembleNativeChatSession', () => {
     expect(session.messages[0].source).toBe('transcript')
   })
 
+  it('merges Claude image source marker records into the following user prompt', () => {
+    const imageSource = msg({
+      id: 'u-image-source',
+      role: 'user',
+      timestamp: 100,
+      blocks: [{ type: 'text', text: '[Image: source: /Users/me/Downloads/3d.png]' }]
+    })
+    const prompt = msg({
+      id: 'u-prompt',
+      role: 'user',
+      timestamp: 101,
+      blocks: [{ type: 'text', text: '[Image #1] what do you see' }]
+    })
+
+    const session = assembleNativeChatSession({
+      sources: { transcript: [imageSource, prompt] },
+      sessionId: 's1',
+      agent: 'claude'
+    })
+
+    expect(session.messages).toHaveLength(1)
+    expect(session.messages[0]).toMatchObject({ id: 'u-prompt', role: 'user' })
+    expect(session.messages[0].blocks).toEqual([
+      { type: 'image-ref', path: '/Users/me/Downloads/3d.png' },
+      { type: 'text', text: 'what do you see' }
+    ])
+  })
+
   it('drops a scrape duplicate even when scrape is processed first by id', () => {
     const scrape = msg({
       id: 'shared-id',

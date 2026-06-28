@@ -94,6 +94,7 @@ type TerminalMenuState = {
   onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  runForPane: <Result>(paneId: number, action: () => Result) => Result
 }
 
 export function useTerminalPaneContextMenu({
@@ -426,6 +427,16 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const runForPane = <Result>(paneId: number, action: () => Result): Result => {
+    const previousPaneId = contextPaneIdRef.current
+    contextPaneIdRef.current = paneId
+    try {
+      return action()
+    } finally {
+      contextPaneIdRef.current = previousPaneId
+    }
+  }
+
   const openContextMenu = (
     event: React.MouseEvent<HTMLElement>,
     clickedPaneId: number | null,
@@ -522,7 +533,8 @@ export function useTerminalPaneContextMenu({
     onForkAgentSession,
     onQuickCommand,
     onToggleExpand,
-    onSetTitle: handleSetTitle
+    onSetTitle: handleSetTitle,
+    runForPane
   }
 }
 

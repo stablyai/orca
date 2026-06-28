@@ -77,6 +77,43 @@ describe('ExperimentalPane', () => {
     )
   })
 
+  it('shows native chat default-mode as a child setting only when native chat is enabled', async () => {
+    const updateSettings = vi.fn()
+    const disabledSettings = getDefaultSettings('/tmp')
+    const disabledMarkup = renderToStaticMarkup(
+      <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
+    )
+    expect(disabledMarkup).toContain('Native chat')
+    expect(disabledMarkup).not.toContain('Open new agent tabs in chat view')
+
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: false
+    }
+    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
+
+    expect(container.textContent).toContain('Open new agent tabs in chat view')
+    const defaultSwitch = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        '#experimental-native-chat button[role="switch"]'
+      )
+    ).find(
+      (button) =>
+        button.getAttribute('aria-label') === 'Open new agent tabs in native chat by default'
+    )
+    if (!defaultSwitch) {
+      throw new Error('Native chat default-mode switch was not rendered')
+    }
+
+    await act(async () => {
+      defaultSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: true })
+    root.unmount()
+  })
+
   it('renders the agent sleep idle duration as configurable minutes', async () => {
     const updateSettings = vi.fn()
     const settings = {

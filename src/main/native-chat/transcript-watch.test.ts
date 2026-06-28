@@ -169,6 +169,33 @@ describe('subscribeNativeChatTranscript', () => {
     expect(appendedIds).toEqual(['a-1', 'a-2', 'a-3'])
   })
 
+  it('waits for an incomplete trailing JSONL line before advancing the offset', async () => {
+    const filePath = await tempFile(claudeLine('u-1', 'user', 'hi'))
+    const seen: NativeChatMessage[] = []
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5
+    })
+
+    await waitFor(() => seen.some((m) => m.id === 'u-1'))
+
+    const line = claudeLine('a-partial', 'assistant', 'split reply')
+    const splitAt = Math.floor(line.length / 2)
+    await appendFile(filePath, line.slice(0, splitAt))
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(seen.some((m) => m.id === 'a-partial')).toBe(false)
+
+    await appendFile(filePath, line.slice(splitAt))
+    await waitFor(() => seen.some((m) => m.id === 'a-partial'))
+
+    sub.unsubscribe()
+    expect(seen.filter((m) => m.id === 'a-partial')).toHaveLength(1)
+  })
+
   it('survives file replacement / rotation (offset reset on shrink)', async () => {
     const filePath = await tempFile(
       claudeLine('u-1', 'user', 'old') + claudeLine('a-1', 'assistant', 'old-reply')

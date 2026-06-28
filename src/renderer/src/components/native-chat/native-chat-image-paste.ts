@@ -1,23 +1,18 @@
 // Pure decision layer for image paste. The composer persists a pasted image to
 // a temp file (via the preload clipboard API) and then needs to know, per
-// agent, what reference to inject into the input. Agents that accept a file
-// PATH in their prompt (Claude, Codex, etc.) get the path injected; agents
-// whose image handling we haven't confirmed get a clear "unsupported" result so
-// the user is told rather than silently dropped.
+// agent, whether that file can be sent as a TUI image attachment. Confirmed
+// agents get a native attachment chip; unsupported/custom agents get a clear
+// message instead of silently injecting a path that the model reads as text.
 
 import type { AgentType } from '../../../../shared/agent-status-types'
+import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
 
-/** How a given agent consumes a pasted image. `path` = inject the absolute file
- *  path as text the agent reads; `unsupported` = we have no confirmed mechanism
- *  for this agent, so surface a message. New mechanisms (e.g. a base64 data ref)
- *  can be added here without touching the composer. */
-export type AgentImageHandling = 'path' | 'unsupported'
+/** How a given agent consumes a pasted image. `attachment` = bracket-paste the
+ *  image path into the hosted TUI so it becomes an image chip; `unsupported` =
+ *  no confirmed mechanism. */
+export type AgentImageHandling = 'attachment' | 'unsupported'
 
-// Why: these agents accept a filesystem path to an image in their prompt input
-// (Claude Code and Codex both resolve a pasted/typed path to an attachment).
-// Kept as an explicit allow-list so an unknown/custom agent defaults to the
-// honest "unsupported" branch instead of silently injecting a path it ignores.
-const PATH_IMAGE_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
+const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
   'claude',
   'openclaude',
   'codex',
@@ -28,22 +23,25 @@ const PATH_IMAGE_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
 ])
 
 export function getAgentImageHandling(agent: AgentType): AgentImageHandling {
-  return PATH_IMAGE_AGENTS.has(agent) ? 'path' : 'unsupported'
+  return IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'
 }
 
 export type ImagePasteResult =
-  | { kind: 'inject'; reference: string }
+  | { kind: 'attach'; path: string }
   | { kind: 'unsupported'; agent: AgentType }
 
 /**
  * Given the agent and the temp-file path the image was written to, decide what
- * (if anything) to inject. For path-accepting agents the reference is the bare
- * path (the composer inserts it as draft text); otherwise it's an unsupported
- * result the UI turns into a message.
+ * (if anything) to attach. Attachment-capable agents receive the path through
+ * the same bracketed image-paste channel as the terminal TUI.
  */
 export function resolveImagePaste(agent: AgentType, tempFilePath: string): ImagePasteResult {
-  if (getAgentImageHandling(agent) === 'path') {
-    return { kind: 'inject', reference: tempFilePath }
+  if (getAgentImageHandling(agent) === 'attachment') {
+    return { kind: 'attach', path: tempFilePath }
   }
   return { kind: 'unsupported', agent }
+}
+
+export function isNativeChatImageAttachmentPath(path: string): boolean {
+  return isImageDropPath(path)
 }
