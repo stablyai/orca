@@ -28,7 +28,11 @@ type HiddenTuiWindow = Window & {
       hiddenRendererSkipCount: number
       hiddenRendererSkippedChars: number
       hiddenRendererMode2031ReplyCount: number
+      atlasResetDrainCount: number
     }
+  }
+  __terminalHiddenSnapshotOverride?: {
+    setAtlasResetIdleOverrideMs: (ms: number | null) => number | null
   }
 }
 
@@ -36,6 +40,7 @@ type HiddenTuiDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
   hiddenRendererMode2031ReplyCount: number
+  atlasResetDrainCount: number
 }
 
 type TuiCursorState = {
@@ -446,4 +451,113 @@ test.describe('Hidden terminal TUI visual restore', () => {
       })
       .toContain(marker)
   })
+
+  // Why: characterization coverage for U1 (atlas reset on hidden-output drain).
+  // The atlas reset is gated on a >30s idle threshold in production; this test
+  // overrides that threshold to 0 so the reset fires on the next drain, then
+  // measures the background→foreground transition wall-clock time. If the
+  // atlas reset regresses transition latency beyond the ceiling, this fails.
+  test('background→foreground transition stays within frame-time ceiling after U1 atlas reset', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+    const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
+      (id) => id !== firstWorktreeId
+    )
+    test.skip(!secondWorktreeId, 'hidden TUI restore needs the seeded secondary worktree')
+    if (!secondWorktreeId) {
+      return
+    }
+
+    // Phase 1: baseline transition time WITHOUT the atlas reset (production
+    // threshold of 30s is never met in a fast test, so the reset does not
+    // fire here). This is the pre-U1 baseline.
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const hiddenPane = hiddenSnapshot.panes[0]
+    if (!hiddenPane?.ptyId) {
+      throw new Error('perf pane did not bind a PTY')
+    }
+    await switchToWorktree(orcaPage, firstWorktreeId)
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), {
+        timeout: 10_000,
+        message: 'first worktree did not become active before perf baseline'
+      })
+      .toBe(firstWorktreeId)
+
+    const baselineMarker = `PERF_BASELINE_${randomUUID()}`
+    await sendToTerminal(orcaPage, hiddenPane.ptyId, `printf '${baselineMarker}'\r`)
+
+    const baselineStart = Date.now()
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await expect
+      .poll(() => getTerminalContent(orcaPage, 12_000), {
+        timeout: 10_000,
+        message: 'baseline hidden marker did not restore'
+      })
+      .toContain(baselineMarker)
+    const baselineMs = Date.now() - baselineStart
+
+    // Phase 2: transition time WITH the atlas reset forced on drain. Override
+    // the idle threshold to 0 so the reset fires, then verify it actually
+    // fired via the e2e debug counter.
+    await switchToWorktree(orcaPage, firstWorktreeId)
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), {
+        timeout: 10_000,
+        message: 'first worktree did not become active before perf post-U1'
+      })
+      .toBe(firstWorktreeId)
+
+    await resetHiddenDebug(orcaPage)
+    await page_evaluate_setAtlasResetIdleOverride(orcaPage, 0)
+
+    const postMarker = `PERF_POST_${randomUUID()}`
+    await sendToTerminal(orcaPage, hiddenPane.ptyId, `printf '${postMarker}'\r`)
+
+    const postStart = Date.now()
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await expect
+      .poll(() => getTerminalContent(orcaPage, 12_000), {
+        timeout: 10_000,
+        message: 'post-U1 hidden marker did not restore'
+      })
+      .toContain(postMarker)
+    const postMs = Date.now() - postStart
+
+    await page_evaluate_setAtlasResetIdleOverride(orcaPage, null)
+
+    // Why: the atlas reset must have fired — otherwise the test isn't
+    // characterizing U1 at all.
+    const debugAfter = await readHiddenDebug(orcaPage)
+    expect(debugAfter?.atlasResetDrainCount ?? 0).toBeGreaterThan(0)
+
+    // Why: fail if the atlas reset regressed the transition by more than 100%
+    // (i.e. post-U1 must be < 2× baseline). This is intentionally loose — the
+    // real signal is "did the reset fire without blowing up transition time".
+    // Tighten once baseline numbers are established from CI.
+    const ceilingMs = Math.max(baselineMs * 2, 500)
+    expect(
+      postMs,
+      `post-U1 transition (${postMs}ms) regressed beyond ceiling (${ceilingMs}ms, baseline ${baselineMs}ms)`
+    ).toBeLessThan(ceilingMs)
+  })
 })
+
+async function page_evaluate_setAtlasResetIdleOverride(
+  page: Page,
+  ms: number | null
+): Promise<number | null> {
+  return page.evaluate((ms) => {
+    return (window as HiddenTuiWindow).__terminalHiddenSnapshotOverride
+      ?.setAtlasResetIdleOverrideMs(ms) ?? null
+  }, ms)
+}

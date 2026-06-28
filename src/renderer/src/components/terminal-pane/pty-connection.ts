@@ -108,6 +108,7 @@ import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
 } from './hidden-output-restore-scheduler'
+import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
@@ -142,6 +143,11 @@ const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
 const HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS = 750
+// Why: atlas resets are not free (rebuilds glyph textures for every
+// same-config terminal). Only reset when the terminal has been backgrounded
+// long enough that WebGL atlas staleness is plausible — rapid tab switches
+// below this threshold skip the reset to avoid perceptible lag.
+const HIDDEN_OUTPUT_RESTORE_ATLAS_RESET_IDLE_MS = 30_000
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
@@ -174,6 +180,10 @@ type E2eTerminalHiddenSnapshotOverrideApi = {
   setPending: (ptyId: string, snapshot: PtyBufferSnapshot) => void
   resolve: (ptyId: string) => void
   clear: (ptyId: string) => void
+  // Why: tests need to verify the atlas-reset-on-drain path without waiting
+  // out the production idle threshold (30s). Overrides the threshold to 0 so
+  // the next drain unconditionally resets. Returns the previous override.
+  setAtlasResetIdleOverrideMs: (ms: number | null) => number | null
 }
 
 type E2eTerminalHiddenSnapshotOverride = {
@@ -182,11 +192,18 @@ type E2eTerminalHiddenSnapshotOverride = {
 }
 
 const e2eTerminalHiddenSnapshotOverrides = new Map<string, E2eTerminalHiddenSnapshotOverride>()
+// Why: e2e-only override for the atlas-reset idle threshold. null means use
+// the production default (HIDDEN_OUTPUT_RESTORE_ATLAS_RESET_IDLE_MS).
+let e2eAtlasResetIdleOverrideMs: number | null = null
+// Why: e2e-only counter for atlas resets triggered through the hidden-output
+// drain path. Lets tests verify U1's reset actually fires without pixel probes.
+let e2eAtlasResetDrainCount = 0
 
 type E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
   hiddenRendererMode2031ReplyCount: number
+  atlasResetDrainCount: number
 }
 
 type E2eTerminalPtyOutputDebugApi = {
@@ -215,13 +232,15 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
 const e2eTerminalPtyOutputDebugState: E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: 0,
   hiddenRendererSkippedChars: 0,
-  hiddenRendererMode2031ReplyCount: 0
+  hiddenRendererMode2031ReplyCount: 0,
+  atlasResetDrainCount: 0
 }
 
 function resetE2eTerminalPtyOutputDebug(): void {
   e2eTerminalPtyOutputDebugState.hiddenRendererSkipCount = 0
   e2eTerminalPtyOutputDebugState.hiddenRendererSkippedChars = 0
   e2eTerminalPtyOutputDebugState.hiddenRendererMode2031ReplyCount = 0
+  e2eTerminalPtyOutputDebugState.atlasResetDrainCount = 0
 }
 
 function exposeE2eTerminalPtyOutputDebug(): void {
@@ -286,6 +305,11 @@ function exposeE2eTerminalPtyDataInjection(): void {
     },
     clear: (ptyId) => {
       e2eTerminalHiddenSnapshotOverrides.delete(ptyId)
+    },
+    setAtlasResetIdleOverrideMs: (ms) => {
+      const previous = e2eAtlasResetIdleOverrideMs
+      e2eAtlasResetIdleOverrideMs = ms
+      return previous
     }
   }
 }
@@ -2626,6 +2650,10 @@ export function connectPanePty(
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
+    // Why: tracks when hidden output first started accumulating so the drain
+    // path can decide whether the pane was backgrounded long enough to make
+    // WebGL atlas staleness plausible. Reset on PTY change and on restore.
+    let hiddenOutputRestoreStartedAt: number | null = null
     let hiddenOutputRestoreGeneration = 0
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
@@ -2887,6 +2915,11 @@ export function connectPanePty(
       }
       hiddenOutputRestorePtyId = ptyId
       hiddenOutputRestoreNeeded = true
+      // Why: sample-on-first-hidden avoids per-chunk Date.now() cost during the
+      // burst. The drain path compares against this to apply the idle threshold.
+      if (hiddenOutputRestoreStartedAt === null) {
+        hiddenOutputRestoreStartedAt = Date.now()
+      }
       if (shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
         requestHiddenOutputRestoreIfNeeded()
       }
@@ -3176,10 +3209,19 @@ export function connectPanePty(
         ? []
         : hiddenOutputRestorePendingChunks.slice()
       const hadPendingOverflow = hiddenOutputRestorePendingOverflow
+      // Why: a pane backgrounded long enough can accumulate stale WebGL glyph
+      // atlas state (the artifact class this fix targets). Reset ahead of the
+      // drain so the freshly-written foreground bytes render against a clean
+      // atlas. Idle threshold guards rapid tab switches — see KTD-1.
+      const idleMs =
+        hiddenOutputRestoreStartedAt === null
+          ? 0
+          : Date.now() - hiddenOutputRestoreStartedAt
       hiddenOutputRestoreGeneration += 1
       hiddenOutputRestoreInFlight = null
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
+      hiddenOutputRestoreStartedAt = null
       hiddenOutputRestorePendingChunks = []
       hiddenOutputRestorePendingChars = 0
       hiddenOutputRestorePendingOverflow = false
@@ -3196,6 +3238,20 @@ export function connectPanePty(
       writeRestoreUnavailableWarning()
       if (hadPendingOverflow) {
         return
+      }
+      const idleThresholdMs =
+        e2eAtlasResetIdleOverrideMs !== null
+          ? e2eAtlasResetIdleOverrideMs
+          : HIDDEN_OUTPUT_RESTORE_ATLAS_RESET_IDLE_MS
+      if (idleMs >= idleThresholdMs) {
+        // Why: the atlas is shared across same-config terminals; the registry
+        // reset rebuilds every live manager, not just this pane. Best-effort:
+        // a disposed sibling must not throw and skip the rest.
+        resetAllTerminalWebglAtlases()
+        if (e2eConfig.exposeStore) {
+          e2eAtlasResetDrainCount += 1
+          e2eTerminalPtyOutputDebugState.atlasResetDrainCount = e2eAtlasResetDrainCount
+        }
       }
       const pendingData = pendingChunks.map((chunk) => chunk.data).join('')
       if (pendingData) {
@@ -3240,6 +3296,7 @@ export function connectPanePty(
       hiddenRendererStateDirty = false
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
+      hiddenOutputRestoreStartedAt = null
       hiddenOutputRestoreGeneration += 1
     }
 
