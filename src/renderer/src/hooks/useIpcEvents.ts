@@ -117,6 +117,7 @@ import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -1394,6 +1395,12 @@ export function useIpcEvents(): void {
                 ? store.createTab(worktreeId, undefined, undefined, {
                     initialPtyId: ptyId,
                     activate: shouldActivate,
+                    ...(launchAgent
+                      ? {
+                          launchAgent,
+                          ...initialAgentTabViewModeProps(store.settings)
+                        }
+                      : {}),
                     // Why: tabId hint comes from CLI-spawned PTYs whose env
                     // already has the pane key baked in. Adopting the tab under
                     // the same id keeps hook-event attribution working.
@@ -1555,12 +1562,16 @@ export function useIpcEvents(): void {
               })
             )
           }
-          const tab = store.createTab(
-            worktreeId,
-            data.targetGroupId,
-            undefined,
-            shouldActivate ? undefined : { activate: false, recordInteraction: false }
-          )
+          const tabOptions = data.launchAgent
+            ? {
+                ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
+                launchAgent: data.launchAgent,
+                ...initialAgentTabViewModeProps(store.settings)
+              }
+            : shouldActivate
+              ? undefined
+              : { activate: false, recordInteraction: false }
+          const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
               .getState()

@@ -1,7 +1,9 @@
 /* eslint-disable max-lines -- Why: worktree activation is a single ordered flow spanning startup, setup, issue commands, and default tabs; splitting it would obscure sequencing guarantees. */
 import type {
   FolderWorkspace,
+  GlobalSettings,
   SetupSplitDirection,
+  Tab,
   TuiAgent,
   Worktree,
   WorktreeDefaultTabsLaunch,
@@ -53,6 +55,7 @@ import {
   getFolderWorkspacePathStatusTitle
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
+import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -91,6 +94,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       pendingActivationSpawn?: boolean
       launchAgent?: TuiAgent
       recordInteraction?: boolean
+      viewMode?: Tab['viewMode']
     }
   ) => { id: string }
   setActiveTab: (tabId: string) => void
@@ -109,6 +113,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
+      launchAgent?: TuiAgent
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
@@ -122,6 +127,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
     tabId: string,
     startup: { command: string; env?: Record<string, string> }
   ) => void
+  settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
 }
 
 /**
@@ -471,15 +477,17 @@ export function ensureWorktreeHasInitialTerminal(
   // "New Tab" actions (handleNewTab in Terminal.tsx) do not set the flag.
   //
   // Why: the initial terminal can be seeded with a coding agent (new-workspace
-  // flow, or reopening an empty worktree created with an agent). The startup
-  // payload only carries telemetry's agent_kind, so reverse it back to a
-  // TuiAgent to stamp the tab — giving it the provider icon before any hook.
-  const launchAgent = startup?.telemetry
-    ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
-    : undefined
+  // flow, or reopening an empty worktree created with an agent). Stamp that on
+  // the tab before hooks arrive so native chat and provider chrome can resolve
+  // the agent immediately.
+  const launchAgent =
+    startup?.launchAgent ??
+    (startup?.telemetry
+      ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
+      : undefined)
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
-    ...(launchAgent ? { launchAgent } : {})
+    ...(launchAgent ? { launchAgent, ...initialAgentTabViewModeProps(store.settings ?? null) } : {})
   })
   store.setActiveTab(terminalTab.id)
 
@@ -513,9 +521,19 @@ function applyDefaultTerminalTabs(
 
   let firstTabId: string | null = null
   for (const [index, template] of defaultTabs.tabs.entries()) {
+    const isStartupTab = index === 0 && startup !== undefined
+    const launchAgent =
+      isStartupTab && startup?.launchAgent
+        ? startup.launchAgent
+        : isStartupTab && startup?.telemetry
+          ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
+          : undefined
     const tab = store.createTab(worktreeId, undefined, undefined, {
       pendingActivationSpawn: true,
-      recordInteraction: false
+      recordInteraction: false,
+      ...(launchAgent
+        ? { launchAgent, ...initialAgentTabViewModeProps(store.settings ?? null) }
+        : {})
     })
     if (index === 0) {
       firstTabId = tab.id

@@ -236,6 +236,36 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
   })
 
+  it('opens new agent workspace terminals in native chat when configured', () => {
+    const store = createMockStore({
+      settings: {
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      {
+        command: 'claude',
+        launchAgent: 'claude'
+      },
+      undefined,
+      undefined
+    )
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      launchAgent: 'claude',
+      viewMode: 'chat'
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'claude',
+      launchAgent: 'claude'
+    })
+  })
+
   it('forwards telemetry on the queued startup so main can fire agent_started', () => {
     const store = createMockStore()
 
