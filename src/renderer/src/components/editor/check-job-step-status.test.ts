@@ -7,7 +7,15 @@ describe('resolveStepOutcome', () => {
   })
 
   it('maps failure-like states to failure', () => {
-    for (const conclusion of ['failure', 'failed', 'cancelled', 'timed_out']) {
+    for (const conclusion of [
+      'failure',
+      'failed',
+      'action_required',
+      'cancelled',
+      'stale',
+      'startup_failure',
+      'timed_out'
+    ]) {
       expect(resolveStepOutcome({ status: null, conclusion })).toBe('failure')
     }
   })

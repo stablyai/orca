@@ -1,30 +1,13 @@
 import { detectLanguage } from '@/lib/language-detect'
-import { joinPath } from '@/lib/path'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type { PRCheckAnnotation } from '../../../../shared/types'
+import {
+  getOpenableAnnotationLine,
+  resolveAnnotationPathInsideWorktree
+} from './check-annotation-path'
 
-/**
- * A CI annotation only links to the editor when its path names a real repo file
- * at a line — not a workflow-level reference like `.github` (no extension), which
- * has no on-disk location to reveal. Requiring a file extension keeps the
- * affordance honest: links that wouldn't open never render.
- */
-export function getOpenableAnnotationLine(
-  annotation: PRCheckAnnotation
-): { path: string; line: number } | null {
-  const path = annotation.path?.trim()
-  if (!path || !annotation.startLine) {
-    return null
-  }
-  const basename = path.split(/[\\/]/).pop() ?? ''
-  const hasExtension = basename.lastIndexOf('.') > 0
-  if (!hasExtension) {
-    return null
-  }
-  return { path, line: annotation.startLine }
-}
+export { getOpenableAnnotationLine }
 
 export function openAnnotationLocation(params: {
   worktreeId: string
@@ -39,7 +22,11 @@ export function openAnnotationLocation(params: {
   if (!worktree) {
     return
   }
-  const absolutePath = joinPath(worktree.path, path)
+  const resolvedPath = resolveAnnotationPathInsideWorktree(worktree.path, path)
+  if (!resolvedPath) {
+    return
+  }
+  const { absolutePath, relativePath } = resolvedPath
 
   // Why: reuse the shared activation path so an annotation jump lands in the
   // same history stack as sidebar, palette, and terminal-link navigation.
@@ -48,9 +35,9 @@ export function openAnnotationLocation(params: {
   store.openFile(
     {
       filePath: absolutePath,
-      relativePath: path,
+      relativePath,
       worktreeId,
-      language: detectLanguage(path),
+      language: detectLanguage(relativePath),
       mode: 'edit'
     },
     { forceContentReload: true }

@@ -3110,7 +3110,15 @@ function mapWorkflowJobs(raw: unknown, checkName?: string): PRCheckRunDetails['j
 }
 
 function isCheckJobFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
+  return (
+    state === 'failure' ||
+    state === 'failed' ||
+    state === 'action_required' ||
+    state === 'cancelled' ||
+    state === 'stale' ||
+    state === 'startup_failure' ||
+    state === 'timed_out'
+  )
 }
 
 function sliceCheckLogTail(logText: string): string {

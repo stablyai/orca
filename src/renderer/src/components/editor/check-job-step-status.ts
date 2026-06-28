@@ -8,7 +8,10 @@ export function resolveStepOutcome(step: Pick<PRCheckStep, 'status' | 'conclusio
       return 'success'
     case 'failure':
     case 'failed':
+    case 'action_required':
     case 'cancelled':
+    case 'stale':
+    case 'startup_failure':
     case 'timed_out':
       return 'failure'
     case 'skipped':

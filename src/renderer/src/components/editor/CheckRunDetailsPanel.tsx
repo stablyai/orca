@@ -26,7 +26,12 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
   })
 }
 
-function getCheckStatusLabel(check: PRCheckDetail): string {
+type CheckStatusLike = {
+  status: PRCheckDetail['status'] | string | null | undefined
+  conclusion: PRCheckDetail['conclusion'] | string | null | undefined
+}
+
+function getCheckStatusLabel(check: CheckStatusLike): string {
   const conclusion = check.conclusion ?? 'pending'
   switch (conclusion) {
     case 'success':
@@ -43,11 +48,23 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
       return translate('auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67', 'Neutral')
     case 'pending':
       return translate('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
+    default:
+      return isFailureState(conclusion)
+        ? translate('auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73', 'Failed')
+        : translate('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
   }
 }
 
 function isFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'cancelled' || state === 'timed_out'
+  return (
+    state === 'failure' ||
+    state === 'failed' ||
+    state === 'action_required' ||
+    state === 'cancelled' ||
+    state === 'stale' ||
+    state === 'startup_failure' ||
+    state === 'timed_out'
+  )
 }
 
 export function CheckRunDetailsPanel({
@@ -88,10 +105,10 @@ export function CheckRunDetailsPanel({
   })
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
-  const detailsStatusCheck: PRCheckDetail = {
+  const detailsStatusCheck: CheckStatusLike = {
     ...check,
-    status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
-    conclusion: (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
+    status: details?.status ?? check.status,
+    conclusion: details?.conclusion ?? check.conclusion
   }
   const failedJobs =
     details?.jobs.filter((job) => {
