@@ -67,6 +67,12 @@ export const XTERM_HTML = `<!DOCTYPE html>
     display: inline-block;
   }
   .xterm { -webkit-user-select: none; user-select: none; font-variant-emoji: text; }
+  .xterm .xterm-rows > div {
+    unicode-bidi: plaintext;
+  }
+  .xterm .xterm-rows > div[data-orca-rtl-row="true"] > span {
+    display: inline !important;
+  }
   .xterm .xterm-viewport {
     overflow-y: hidden !important;
     scrollbar-width: none !important;
@@ -285,6 +291,9 @@ export const XTERM_HTML = `<!DOCTYPE html>
   // once when the first live data chunk arrives so a wider line that pushes
   // scrollWidth past the previously-measured value gets re-scaled to fit.
   var firstDataPending = false;
+  var FORCE_DOM_RENDERER_FOR_RTL = true;
+  var RTL_TEXT_PATTERN = /[\u0590-\u08ff\ufb1d-\ufefc]/;
+  var rtlRowsScheduled = false;
 
   // Diagnostic logger — bridges WebView console.log to RN via postMessage.
   // Tag with [fit] so it's easy to filter in the Expo/Metro logs.
@@ -617,6 +626,27 @@ export const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
+  function markTerminalRtlRows() {
+    rtlRowsScheduled = false;
+    if (!term || !term.element || typeof term.element.querySelectorAll !== 'function') return;
+    var rows = term.element.querySelectorAll('.xterm-rows > div');
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var text = row.textContent || '';
+      if (RTL_TEXT_PATTERN.test(text)) {
+        row.setAttribute('data-orca-rtl-row', 'true');
+      } else {
+        row.removeAttribute('data-orca-rtl-row');
+      }
+    }
+  }
+
+  function scheduleTerminalRtlRows() {
+    if (rtlRowsScheduled) return;
+    rtlRowsScheduled = true;
+    requestAnimationFrame(markTerminalRtlRows);
+  }
+
   function extractMouseModeScanTail(input) {
     var start = Math.max(input.lastIndexOf(ESC), input.lastIndexOf(C1_CSI));
     if (start === -1) return '';
@@ -648,6 +678,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     // wait until replayed SGR attributes have landed in the buffer.
     term.write(next, function() {
       if (gen !== terminalGeneration) return;
+      scheduleTerminalRtlRows();
       writesDraining = false;
       pumpWrites(gen);
     });
@@ -729,7 +760,8 @@ export const XTERM_HTML = `<!DOCTYPE html>
       allowProposedApi: true
     });
     term.open(surface);
-    if (window.WebglAddon && window.WebglAddon.WebglAddon) {
+    scheduleTerminalRtlRows();
+    if (!FORCE_DOM_RENDERER_FOR_RTL && window.WebglAddon && window.WebglAddon.WebglAddon) {
       try { var webglAddon = new window.WebglAddon.WebglAddon(); term.loadAddon(webglAddon); if (webglAddon.onContextLoss) webglAddon.onContextLoss(function() { try { webglAddon && webglAddon.dispose && webglAddon.dispose(); } catch (e) {} }); } catch (e) {}
     }
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
@@ -763,6 +795,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
         captureInitialOscLinkTexts();
         initialOscLinkRowOffset = 0;
         initialOscLinkEvictionReady = true;
+        scheduleTerminalRtlRows();
         applyFitScale('init-replay');
         notify({ type: 'ready', cols: cols, rows: rows });
       });
@@ -791,6 +824,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     if (!term) return;
     initRows = rows || initRows;
     term.resize(cols || term.cols, rows || term.rows);
+    scheduleTerminalRtlRows();
     applyFitScale('resize-msg');
     notify({ type: 'ready', cols: cols, rows: rows });
   }
@@ -902,7 +936,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
       initialOscLinks = [];
       initialOscLinkRowOffset = 0;
       initialOscLinkEvictionReady = false;
-      if (term) { term.clear(); term.reset(); }
+      if (term) { term.clear(); term.reset(); scheduleTerminalRtlRows(); }
       emitModesIfChanged();
       resetEvictionCounter();
       if (selMode === 'select') {
@@ -1063,7 +1097,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     disposeTermObservers();
     try { termObserverDisposables.push(term.onLineFeed(logFeedAndEvict)); } catch (e) {}
     try {
-      termObserverDisposables.push(term.onScroll(function() { updateScrollIndicator(false); }));
+      termObserverDisposables.push(term.onScroll(function() { updateScrollIndicator(false); scheduleTerminalRtlRows(); }));
     } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
@@ -1072,6 +1106,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
         termObserverDisposables.push(term.onWriteParsed(function() {
           emitModesIfChanged();
           emitKeyboardAvoidanceMetrics();
+          scheduleTerminalRtlRows();
         }));
       }
     } catch (e) {}
