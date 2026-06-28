@@ -544,6 +544,10 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
+  // Side-by-side: when non-null, render these worktrees' terminals as columns
+  // (via the activity terminal-portal store) instead of the single active one.
+  compareWorktreeIds: string[] | null
+  setCompareWorktreeIds: (ids: string[] | null) => void
   activeView:
     | 'terminal'
     | 'settings'
@@ -1137,6 +1141,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
+  compareWorktreeIds: null,
+  setCompareWorktreeIds: (ids) => set({ compareWorktreeIds: ids }),
   taskPageData: {},
   taskResumeState: undefined,
   githubTaskDrawerWorkItem: null,
