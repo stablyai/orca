@@ -1100,6 +1100,53 @@ describe('ClaudeAccountService credential capture', () => {
     }
   })
 
+  it('rejects immediately when Claude sign-in is denied', async () => {
+    vi.resetModules()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => child)
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      const commandPromise = (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['login'],
+        { windowsPath: '/tmp/claude-auth', linuxPath: null, wslDistro: null },
+        180_000
+      )
+
+      child.stderr.write('OAuth authorization failed: access_denied\n')
+
+      await expect(commandPromise).rejects.toThrow('Claude sign-in was denied. Please try again.')
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
   it('cancels an in-flight Claude account add', async () => {
     vi.resetModules()
     const child = new EventEmitter() as EventEmitter & {
