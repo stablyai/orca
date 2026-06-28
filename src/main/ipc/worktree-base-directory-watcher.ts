@@ -28,7 +28,8 @@ let scheduledSync: ReturnType<typeof setTimeout> | null = null
 let latestSyncContext: { mainWindow: BrowserWindow; store: Store } | null = null
 
 function scheduleNotification(watch: ActiveWatch, repoIds: readonly string[]): void {
-  if (watch.disposed) {
+  if (watch.disposed || watch.mainWindow.isDestroyed()) {
+    watch.pendingRepoIds.clear()
     return
   }
   for (const repoId of repoIds) {
@@ -38,10 +39,11 @@ function scheduleNotification(watch: ActiveWatch, repoIds: readonly string[]): v
     clearTimeout(watch.notifyTimer)
   }
   watch.notifyTimer = setTimeout(() => {
-    if (watch.disposed) {
+    watch.notifyTimer = null
+    if (watch.disposed || watch.mainWindow.isDestroyed()) {
+      watch.pendingRepoIds.clear()
       return
     }
-    watch.notifyTimer = null
     const pending = [...watch.pendingRepoIds]
     watch.pendingRepoIds.clear()
     for (const repoId of pending) {
@@ -66,7 +68,7 @@ function handleLocalWatchEvents(
   error: Error | null,
   events: { type: 'create' | 'update' | 'delete'; path: string }[]
 ): void {
-  if (watch.disposed) {
+  if (watch.disposed || watch.mainWindow.isDestroyed()) {
     return
   }
   if (error) {
@@ -84,7 +86,7 @@ function handleLocalWatchEvents(
 }
 
 function handleRemoteWatchEvents(watch: ActiveWatch, events: FsChangeEvent[]): void {
-  if (watch.disposed) {
+  if (watch.disposed || watch.mainWindow.isDestroyed()) {
     return
   }
   const repoIds = new Set<string>()
@@ -258,6 +260,9 @@ export function scheduleWorktreeBaseDirectoryWatcherSync(
   }
   scheduledSync = setTimeout(() => {
     scheduledSync = null
+    if (mainWindow.isDestroyed()) {
+      return
+    }
     void syncWorktreeBaseDirectoryWatchers(store, mainWindow)
   }, 100)
 }

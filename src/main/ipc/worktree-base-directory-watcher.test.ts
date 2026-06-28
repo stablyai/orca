@@ -62,9 +62,9 @@ function makeStore(repos: Repo[]) {
   }
 }
 
-function makeWindow() {
+function makeWindow(options: { destroyed?: () => boolean } = {}) {
   return {
-    isDestroyed: () => false,
+    isDestroyed: () => options.destroyed?.() ?? false,
     webContents: { send: vi.fn() }
   }
 }
@@ -109,6 +109,22 @@ describe('worktree base directory watcher', () => {
 
     expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
+  })
+
+  it('drops pending worktree notifications after the window is destroyed', async () => {
+    let destroyed = false
+    await syncWorktreeBaseDirectoryWatchers(
+      makeStore([makeRepo()]) as never,
+      makeWindow({ destroyed: () => destroyed }) as never
+    )
+
+    emit(WORKTREE_ROOT, [
+      { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git') }
+    ] as WatcherEvent[])
+    destroyed = true
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
   })
 
   it('ignores deep checkout churn below candidate roots', async () => {
