@@ -103,11 +103,14 @@ export async function callRuntimeEnvironment(
   // Why: connection failures reject (they don't resolve as ok:false), so the
   // Tailscale hint is applied to the thrown error here — wrapping the resolved
   // value would miss the in-use connect/timeout case the toast surfaces.
-  const endpoint = getPreferredPairingOffer(environment).endpoint
+  // Track the endpoint the queued closure actually used: it re-resolves the
+  // environment, so a re-pair between enqueue and dispatch can change it.
+  let endpoint = getPreferredPairingOffer(environment).endpoint
   try {
     return await enqueueRuntimeCall(environment.id, method, async () => {
       const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
       const pairing = getPreferredPairingOffer(currentEnvironment)
+      endpoint = pairing.endpoint
       const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
       if (shouldUseCachedRequestConnection(method)) {
         const response = await sendRemoteRuntimeConnectionRequest(

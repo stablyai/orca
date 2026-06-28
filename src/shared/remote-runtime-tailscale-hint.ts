@@ -15,6 +15,10 @@ const REMOTE_RUNTIME_UNREACHABLE_RE =
   /could not connect to the remote orca runtime|remote orca runtime closed the connection|timed out (?:waiting for|while connecting to) the remote orca runtime/i
 
 const TAILSCALE_MAGIC_DNS_SUFFIX_RE = /(?:^|\.)ts\.net$/i
+// Why: gate the CGNAT check on a full IPv4 literal — the range regex alone also
+// matches DNS names like `100.64.0.1.example.com`, which aren't Tailscale IPs.
+const IPV4_LITERAL_RE =
+  /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
 // Tailscale assigns node IPs from the 100.64.0.0/10 CGNAT range (second octet 64–127).
 const TAILSCALE_CGNAT_RE = /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./
 
@@ -37,7 +41,10 @@ export function isTailscaleEndpoint(endpoint: string | null | undefined): boolea
   if (!host) {
     return false
   }
-  return TAILSCALE_MAGIC_DNS_SUFFIX_RE.test(host) || TAILSCALE_CGNAT_RE.test(host)
+  return (
+    TAILSCALE_MAGIC_DNS_SUFFIX_RE.test(host) ||
+    (IPV4_LITERAL_RE.test(host) && TAILSCALE_CGNAT_RE.test(host))
+  )
 }
 
 export function withRemoteRuntimeTailscaleHint(

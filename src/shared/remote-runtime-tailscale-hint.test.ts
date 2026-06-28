@@ -23,6 +23,8 @@ describe('isTailscaleEndpoint', () => {
     expect(isTailscaleEndpoint('ws://100.63.0.1:6768')).toBe(false)
     expect(isTailscaleEndpoint('ws://100.128.0.1:6768')).toBe(false)
     expect(isTailscaleEndpoint('ws://notts.net.evil.com')).toBe(false)
+    // A DNS name that merely starts with a CGNAT-shaped label is not a TS IP.
+    expect(isTailscaleEndpoint('ws://100.64.0.1.example.com:6768')).toBe(false)
   })
 
   it('handles bare hosts without a scheme and empty input', () => {
