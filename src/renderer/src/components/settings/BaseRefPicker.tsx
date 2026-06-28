@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: base-ref defaults and search results come from runtime repo IPC and must clear stale repo results before new requests resolve. */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useAppStore } from '@/store'
@@ -10,22 +10,33 @@ import {
 } from '@/runtime/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
+import type { GlobalSettings } from '../../../../shared/types'
 
 type BaseRefPickerProps = {
   repoId: string
+  repoPath?: string | null
+  executionHostId?: string | null
   currentBaseRef?: string
+  runtimeSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   onSelect: (ref: string) => void
   onUsePrimary?: () => void
 }
 
 export function BaseRefPicker({
   repoId,
+  repoPath,
+  executionHostId,
   currentBaseRef,
+  runtimeSettings,
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
   const activeRuntimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForRepo(state, repoId)
+  )
+  const scopedRuntimeSettings = useMemo(
+    () => runtimeSettings ?? { activeRuntimeEnvironmentId },
+    [activeRuntimeEnvironmentId, runtimeSettings]
   )
   // Why: null until the IPC resolves (or when the repo has no default base ref
   // available). We avoid seeding with 'origin/main' because that would display
@@ -64,7 +75,10 @@ export function BaseRefPicker({
 
     const loadDefaultBaseRef = async (): Promise<void> => {
       try {
-        const result = await getRuntimeRepoBaseRefDefault({ activeRuntimeEnvironmentId }, repoId)
+        const result = await getRuntimeRepoBaseRefDefault(scopedRuntimeSettings, repoId, {
+          repoPath,
+          executionHostId
+        })
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
           setRemoteCount(result.remoteCount)
@@ -90,7 +104,7 @@ export function BaseRefPicker({
     return () => {
       stale = true
     }
-  }, [activeRuntimeEnvironmentId, repoId])
+  }, [executionHostId, repoId, repoPath, scopedRuntimeSettings])
 
   useEffect(() => {
     if (!isRuntimeRepoRefSearchQueryWithinLimit(baseRefQuery)) {
@@ -109,7 +123,10 @@ export function BaseRefPicker({
     setIsSearchingBaseRefs(true)
 
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs({ activeRuntimeEnvironmentId }, repoId, trimmedQuery, 20)
+      void searchRuntimeRepoBaseRefs(scopedRuntimeSettings, repoId, trimmedQuery, 20, {
+        repoPath,
+        executionHostId
+      })
         .then((results) => {
           if (!stale) {
             setBaseRefResults(results)
@@ -132,7 +149,7 @@ export function BaseRefPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [activeRuntimeEnvironmentId, baseRefQuery, repoId])
+  }, [baseRefQuery, executionHostId, repoId, repoPath, scopedRuntimeSettings])
 
   const effectiveBaseRef = currentBaseRef ?? defaultBaseRef
 

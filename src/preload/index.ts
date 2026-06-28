@@ -517,14 +517,24 @@ const api = {
     getGitUsername: (args: { repoId: string }): Promise<string> =>
       ipcRenderer.invoke('repos:getGitUsername', args),
 
-    getBaseRefDefault: (args: { repoId: string }): Promise<BaseRefDefaultResult> =>
-      ipcRenderer.invoke('repos:getBaseRefDefault', args),
+    getBaseRefDefault: (args: {
+      repoId: string
+      repoPath?: string
+      executionHostId?: string | null
+    }): Promise<BaseRefDefaultResult> => ipcRenderer.invoke('repos:getBaseRefDefault', args),
 
-    searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>
-      ipcRenderer.invoke('repos:searchBaseRefs', args),
+    searchBaseRefs: (args: {
+      repoId: string
+      repoPath?: string
+      executionHostId?: string | null
+      query: string
+      limit?: number
+    }): Promise<string[]> => ipcRenderer.invoke('repos:searchBaseRefs', args),
 
     searchBaseRefDetails: (args: {
       repoId: string
+      repoPath?: string
+      executionHostId?: string | null
       query: string
       limit?: number
     }): Promise<BaseRefSearchResult[]> => ipcRenderer.invoke('repos:searchBaseRefDetails', args),

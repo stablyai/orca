@@ -24,6 +24,14 @@ const items: ActivityBarItem[] = [
     icon: Files,
     title: 'Source Control',
     shortcut: '',
+    gitOnly: true,
+    folderWorkspaceAllowed: true
+  },
+  {
+    id: 'checks',
+    icon: Files,
+    title: 'Checks',
+    shortcut: '',
     gitOnly: true
   },
   { id: 'ports', icon: Files, title: 'Ports', shortcut: '', sshOnly: true }
@@ -37,7 +45,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         isSshRepo: false
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control'])
+    ).toEqual(['explorer', 'source-control', 'checks'])
 
     expect(
       getVisibleRightSidebarActivityItems(items, {
@@ -45,18 +53,20 @@ describe('getVisibleRightSidebarActivityItems', () => {
         isFolderWorkspace: false,
         isSshRepo: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'source-control', 'ports'])
+    ).toEqual(['explorer', 'source-control', 'checks', 'ports'])
   })
 
-  it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
+  it('shows folder-workspace-safe Source Control for folder workspaces', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
         isFolder: true,
         isFolderWorkspace: true,
         isSshRepo: true
       }).map((item) => item.id)
-    ).toEqual(['explorer', 'workspaces', 'pr-checks', 'ports'])
+    ).toEqual(['explorer', 'workspaces', 'pr-checks', 'source-control', 'ports'])
+  })
 
+  it('hides git tabs for plain non-git folders', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
         isFolder: true,

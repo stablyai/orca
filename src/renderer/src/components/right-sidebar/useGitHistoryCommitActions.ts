@@ -38,12 +38,18 @@ export function useGitHistoryCommitActions({
   activeWorktreeId,
   worktreePath,
   activeRepoSettings,
-  resolveSplitTargetGroupId
+  resolveSplitTargetGroupId,
+  getConnectionIdForWorktree,
+  getEditorOpenOptions
 }: {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
   activeRepoSettings: RuntimeGitContext['settings']
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
+  getConnectionIdForWorktree?: (worktreeId: string | null | undefined) => string | undefined
+  getEditorOpenOptions?: <T extends Record<string, unknown>>(
+    options?: T
+  ) => T & { displayWorktreeId?: string }
 }): GitHistoryCommitActions {
   const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
@@ -69,7 +75,10 @@ export function useGitHistoryCommitActions({
       if (cached) {
         return cached.entries
       }
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const connectionId =
+        getConnectionIdForWorktree?.(activeWorktreeId) ??
+        getConnectionId(activeWorktreeId) ??
+        undefined
       const result = await getRuntimeGitCommitCompare(
         {
           // Why: route the commit compare by the repo OWNER host, not the focused runtime.
@@ -92,7 +101,7 @@ export function useGitHistoryCommitActions({
       commitCompareCacheRef.current.set(item.id, result)
       return result.entries
     },
-    [activeRepoSettings, activeWorktreeId, worktreePath]
+    [activeRepoSettings, activeWorktreeId, getConnectionIdForWorktree, worktreePath]
   )
 
   const openHistoryCommitDiff = useCallback(
@@ -114,7 +123,8 @@ export function useGitHistoryCommitActions({
           cached.summary,
           cached.entries,
           item.subject,
-          item.message
+          item.message,
+          getEditorOpenOptions?.()
         )
       } catch (error) {
         toast.error(
@@ -127,7 +137,7 @@ export function useGitHistoryCommitActions({
         )
       }
     },
-    [activeWorktreeId, loadCommitFiles, openCommitAllDiffs, worktreePath]
+    [getEditorOpenOptions, activeWorktreeId, loadCommitFiles, openCommitAllDiffs, worktreePath]
   )
 
   const openCommitFile = useCallback(
@@ -146,6 +156,7 @@ export function useGitHistoryCommitActions({
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
+      const preview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
       openCommitDiff(
         activeWorktreeId,
         worktreePath,
@@ -159,10 +170,16 @@ export function useGitHistoryCommitActions({
           message: item.message
         },
         detectLanguage(entry.path),
-        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
+        getEditorOpenOptions?.({ targetGroupId, preview }) ?? { targetGroupId, preview }
       )
     },
-    [activeWorktreeId, openCommitDiff, resolveSplitTargetGroupId, worktreePath]
+    [
+      getEditorOpenOptions,
+      activeWorktreeId,
+      openCommitDiff,
+      resolveSplitTargetGroupId,
+      worktreePath
+    ]
   )
 
   const copyCommitText = useCallback(async (text: string, label: string): Promise<void> => {
@@ -197,7 +214,10 @@ export function useGitHistoryCommitActions({
             settings: activeRepoSettings,
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId: getConnectionId(activeWorktreeId) ?? undefined
+            connectionId:
+              getConnectionIdForWorktree?.(activeWorktreeId) ??
+              getConnectionId(activeWorktreeId) ??
+              undefined
           },
           { sha: item.id }
         )
@@ -246,7 +266,8 @@ export function useGitHistoryCommitActions({
         return
       }
       const state = useAppStore.getState()
-      const connectionId = getConnectionId(activeWorktreeId)
+      const connectionId =
+        getConnectionIdForWorktree?.(activeWorktreeId) ?? getConnectionId(activeWorktreeId)
       const agent = resolveDefaultAgentForNewTab({
         defaultTuiAgent: state.settings?.defaultTuiAgent,
         detectedAgentIds:
@@ -279,7 +300,14 @@ export function useGitHistoryCommitActions({
         promptDelivery: 'submit-after-ready'
       })
     },
-    [activeRepoSettings, activeWorktreeId, copyCommitText, createBrowserTab, worktreePath]
+    [
+      activeRepoSettings,
+      activeWorktreeId,
+      copyCommitText,
+      createBrowserTab,
+      getConnectionIdForWorktree,
+      worktreePath
+    ]
   )
 
   return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }

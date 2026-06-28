@@ -823,10 +823,22 @@ export type PreloadApi = {
     getDefaultCreateProjectParent: () => Promise<string>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
-    getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
-    searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
+    getBaseRefDefault: (args: {
+      repoId: string
+      repoPath?: string
+      executionHostId?: string | null
+    }) => Promise<BaseRefDefaultResult>
+    searchBaseRefs: (args: {
+      repoId: string
+      repoPath?: string
+      executionHostId?: string | null
+      query: string
+      limit?: number
+    }) => Promise<string[]>
     searchBaseRefDetails: (args: {
       repoId: string
+      repoPath?: string
+      executionHostId?: string | null
       query: string
       limit?: number
     }) => Promise<BaseRefSearchResult[]>

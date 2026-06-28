@@ -11821,6 +11821,23 @@
             "noPr": "无 PR",
             "unavailable": "不可用"
           }
+        },
+        "FolderWorkspaceSourceControlPanel": {
+          "unavailable": "Source Control is only shown for folder workspaces with attached worktrees.",
+          "refresh": "Refresh source control",
+          "emptyTitle": "No attached worktrees yet",
+          "emptyCopy": "Source Control sections will appear here after worktrees are attached to this folder workspace.",
+          "countOne": "1 attached worktree",
+          "countMany": "{{value0}} attached worktrees",
+          "loading": "Refreshing",
+          "unavailableStatus": "Unavailable",
+          "staleAfterFailed": "{{value0}} stale",
+          "failed": "Refresh failed",
+          "cached": "{{value0}} cached",
+          "pending": "Status pending",
+          "changeOne": "1 change",
+          "changeMany": "{{value0}} changes",
+          "jumpToWorktree": "Jump to worktree"
         }
       },
       "link": {

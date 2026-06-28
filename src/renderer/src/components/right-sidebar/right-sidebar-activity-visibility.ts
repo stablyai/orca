@@ -12,7 +12,7 @@ export function getVisibleRightSidebarActivityItems(
 ): ActivityBarItem[] {
   return items.filter((item) => {
     if (item.gitOnly && isFolder) {
-      return false
+      return item.folderWorkspaceAllowed === true && isFolderWorkspace
     }
     if (item.folderOnly && !isFolderWorkspace) {
       return false

@@ -44,8 +44,12 @@ const mocks = vi.hoisted(() => {
     openDiff: vi.fn(),
     openFile: vi.fn(),
     openConflictFile: vi.fn(),
+    openConflictReview: vi.fn(),
     openBranchDiff: vi.fn(),
+    openAllDiffs: vi.fn(),
+    openBranchAllDiffs: vi.fn(),
     createEmptySplitGroup: vi.fn(),
+    activateAndRevealWorktree: vi.fn(),
     discardRuntimeGitPath: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
     requestEditorSaveQuiesce: vi.fn(),
@@ -92,6 +96,10 @@ vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
 vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorSaveQuiesce: mocks.calls.requestEditorSaveQuiesce,
   notifyEditorExternalFileChange: mocks.calls.notifyEditorExternalFileChange
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.calls.activateAndRevealWorktree
 }))
 
 vi.mock('./git-status-refresh', () => ({
@@ -144,6 +152,9 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
   mocks.calls.requestEditorSaveQuiesce.mockResolvedValue(undefined)
   mocks.state = {
     activeWorktreeId: mocks.activeWorktree.id,
+    getKnownWorktreeById: vi.fn((worktreeId: string) =>
+      worktreeId === mocks.activeWorktree.id ? mocks.activeWorktree : null
+    ),
     activeGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-1' },
     groupsByWorktree: { [mocks.activeWorktree.id]: [{ id: 'group-1', activeTabId: null }] },
     repos: [mocks.activeRepo],
@@ -193,11 +204,11 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     setMarkdownViewMode: vi.fn(),
     setPendingEditorReveal: vi.fn(),
     openConflictFile: mocks.calls.openConflictFile,
-    openConflictReview: vi.fn(),
+    openConflictReview: mocks.calls.openConflictReview,
     openBranchDiff: mocks.calls.openBranchDiff,
     createEmptySplitGroup: mocks.calls.createEmptySplitGroup,
-    openAllDiffs: vi.fn(),
-    openBranchAllDiffs: vi.fn(),
+    openAllDiffs: mocks.calls.openAllDiffs,
+    openBranchAllDiffs: mocks.calls.openBranchAllDiffs,
     openCommitAllDiffs: vi.fn(),
     deleteDiffComment: noopAsync(true),
     clearDiffComments: noopAsync(true),
@@ -233,11 +244,11 @@ afterEach(() => {
   container.remove()
 })
 
-function renderSourceControl(): void {
+function renderSourceControl(props: React.ComponentProps<typeof SourceControl> = {}): void {
   act(() => {
     root.render(
       <TooltipProvider>
-        <SourceControl />
+        <SourceControl {...props} />
       </TooltipProvider>
     )
   })
@@ -270,7 +281,63 @@ function clickBranchRow(init: MouseEventInit = {}): void {
   })
 }
 
+function clickViewAllButton(): void {
+  const button = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (candidate) => candidate.textContent?.trim() === 'View all'
+  )
+  expect(button).not.toBeNull()
+  act(() => {
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
+async function waitForCondition(assertion: () => void): Promise<void> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+    }
+  }
+  throw lastError
+}
+
 describe('SourceControl preview row opens', () => {
+  it('shows Create PR chrome in embedded scoped worktree source control', async () => {
+    resetState({
+      rightSidebarOpen: true,
+      getHostedReviewCreationEligibility: vi.fn().mockResolvedValue({
+        provider: 'github',
+        review: null,
+        canCreate: true,
+        blockedReason: null,
+        nextAction: null
+      }),
+      remoteStatusesByWorktree: {
+        [mocks.activeWorktree.id]: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature/source-control-preview',
+          ahead: 0,
+          behind: 0
+        }
+      },
+      gitBranchCompareSummaryByWorktree: {
+        [mocks.activeWorktree.id]: branchSummary()
+      }
+    })
+
+    renderSourceControl({ worktreeId: mocks.activeWorktree.id, embedded: true })
+
+    await waitForCondition(() => {
+      expect(container.textContent).toContain('Create PR')
+    })
+  })
+
   it('passes preview=true when plain uncommitted row clicks open diff tabs', () => {
     resetState({
       gitStatusByWorktree: {
@@ -420,6 +487,91 @@ describe('SourceControl preview row opens', () => {
     })
   })
 
+  it('routes embedded git mutations through the scoped worktree host owner', async () => {
+    const hostedWorktree = { ...mocks.activeWorktree, hostId: 'runtime:worktree-env' }
+    resetState({
+      activeWorktreeId: 'folder:folder-1',
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      getKnownWorktreeById: vi.fn((worktreeId: string) =>
+        worktreeId === hostedWorktree.id ? hostedWorktree : null
+      ),
+      worktreesByRepo: { [mocks.activeRepo.id]: [hostedWorktree] },
+      gitStatusByWorktree: { [hostedWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
+    })
+    renderSourceControl({ worktreeId: hostedWorktree.id, embedded: true })
+
+    const row = container.querySelector<HTMLDivElement>('[data-source-control-path="src/file.ts"]')
+    const discardButton = row?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Discard changes"]'
+    )
+    expect(discardButton).not.toBeNull()
+    act(() => {
+      discardButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Discard'
+    )
+    expect(confirmButton).not.toBeNull()
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.discardRuntimeGitPath).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({ activeRuntimeEnvironmentId: 'worktree-env' }),
+        worktreeId: hostedWorktree.id
+      }),
+      'src/file.ts'
+    )
+  })
+
+  it('does not inherit an SSH connection from a duplicate repo on another host', async () => {
+    const sshRepo = {
+      ...mocks.activeRepo,
+      connectionId: 'ssh-target',
+      executionHostId: 'ssh:ssh-target'
+    }
+    const localRepo = { ...mocks.activeRepo, connectionId: null, executionHostId: 'local' }
+    const localWorktree = { ...mocks.activeWorktree, hostId: 'local' }
+    resetState({
+      repos: [sshRepo, localRepo],
+      worktreesByRepo: { [mocks.activeRepo.id]: [localWorktree] },
+      getKnownWorktreeById: vi.fn((worktreeId: string) =>
+        worktreeId === localWorktree.id ? localWorktree : null
+      ),
+      gitStatusByWorktree: { [localWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
+    })
+    renderSourceControl({ worktreeId: localWorktree.id, embedded: true })
+
+    const row = container.querySelector<HTMLDivElement>('[data-source-control-path="src/file.ts"]')
+    const discardButton = row?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Discard changes"]'
+    )
+    expect(discardButton).not.toBeNull()
+    act(() => {
+      discardButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Discard'
+    )
+    expect(confirmButton).not.toBeNull()
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(mocks.calls.discardRuntimeGitPath).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: undefined,
+        worktreeId: localWorktree.id
+      }),
+      'src/file.ts'
+    )
+  })
+
   it('keeps nested-only submodule rows non-stageable from the parent repo', () => {
     resetState({
       gitStatusByWorktree: {
@@ -461,6 +613,73 @@ describe('SourceControl preview row opens', () => {
       expect.objectContaining({ status: 'ready' }),
       'typescript',
       { targetGroupId: undefined, preview: true }
+    )
+  })
+
+  it('opens embedded uncommitted View all in the parent folder workspace', () => {
+    resetState({
+      activeWorktreeId: 'folder:folder-1',
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })],
+        'folder:folder-1': [gitEntry({ path: 'wrong.ts' })]
+      }
+    })
+    renderSourceControl({ worktreeId: mocks.activeWorktree.id, embedded: true })
+
+    clickViewAllButton()
+
+    expect(mocks.calls.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.calls.openAllDiffs).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt',
+      undefined,
+      'unstaged',
+      [expect.objectContaining({ path: 'src/file.ts' })],
+      { displayWorktreeId: 'folder:folder-1' }
+    )
+  })
+
+  it('opens embedded branch View all in the parent folder workspace', () => {
+    resetState({
+      activeWorktreeId: 'folder:folder-1',
+      gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: [branchEntry()] },
+      gitBranchCompareSummaryByWorktree: { [mocks.activeWorktree.id]: branchSummary() }
+    })
+    renderSourceControl({ worktreeId: mocks.activeWorktree.id, embedded: true })
+
+    clickViewAllButton()
+
+    expect(mocks.calls.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.calls.openBranchAllDiffs).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt',
+      expect.objectContaining({ status: 'ready' }),
+      undefined,
+      { displayWorktreeId: 'folder:folder-1' }
+    )
+  })
+
+  it('opens embedded rows in the parent folder workspace', () => {
+    resetState({
+      activeWorktreeId: 'folder:folder-1',
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })],
+        'folder:folder-1': [gitEntry({ path: 'wrong.ts' })]
+      }
+    })
+    renderSourceControl({ worktreeId: mocks.activeWorktree.id, embedded: true })
+
+    clickUncommitted('src/file.ts', { ctrlKey: true })
+
+    expect(mocks.calls.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.calls.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt/src/file.ts',
+      'src/file.ts',
+      'typescript',
+      false,
+      { targetGroupId: undefined, preview: true, displayWorktreeId: 'folder:folder-1' }
     )
   })
 })

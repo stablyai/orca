@@ -11,7 +11,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { isGitRepo } from '../git/repo'
+import { getBaseRefDefault, isGitRepo } from '../git/repo'
 
 const {
   handleMock,
@@ -2368,6 +2368,30 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(1)
   })
 
+  it('uses repoPath to disambiguate duplicate repo ids for local defaults', async () => {
+    const selectedRepo = {
+      id: 'r1',
+      path: '/selected/repo',
+      kind: 'git'
+    }
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/wrong/repo',
+      kind: 'git'
+    })
+    mockStore.getRepos.mockReturnValue([
+      { id: 'r1', path: '/wrong/repo', kind: 'git' },
+      selectedRepo
+    ])
+
+    await handlers.get('repos:getBaseRefDefault')!(null, {
+      repoId: 'r1',
+      repoPath: selectedRepo.path
+    })
+
+    expect(getBaseRefDefault).toHaveBeenLastCalledWith(selectedRepo.path)
+  })
+
   // Why: the SSH handler resolves default-ref and remote-count in parallel
   // (Promise.all) so the order of calls into provider.exec is not stable.
   // Dispatch on argv instead of `mockResolvedValueOnce` chains so tests remain
@@ -2423,6 +2447,39 @@ describe('repos:getBaseRefDefault envelope', () => {
 
     expect(result.defaultBaseRef).toBe('origin/main')
     expect(result.remoteCount).toBe(2)
+  })
+
+  it('uses repoPath to disambiguate duplicate repo ids for SSH defaults', async () => {
+    mockGitProvider.exec = vi.fn().mockImplementation(
+      dispatchExec([
+        {
+          match: isSymbolicRef,
+          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+        },
+        {
+          match: isRemoteList,
+          respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' })
+        }
+      ])
+    )
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/wrong/repo',
+      kind: 'git'
+    })
+    mockStore.getRepos.mockReturnValue([
+      { id: 'r1', path: '/wrong/repo', kind: 'git' },
+      { id: 'r1', path: '/remote/selected', connectionId: 'wrong-conn', kind: 'git' },
+      { id: 'r1', path: '/remote/selected', connectionId: 'conn-1', kind: 'git' }
+    ])
+
+    await handlers.get('repos:getBaseRefDefault')!(null, {
+      repoId: 'r1',
+      repoPath: '/remote/selected',
+      executionHostId: 'ssh:conn-1'
+    })
+
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(expect.any(Array), '/remote/selected')
   })
 
   it('returns defaultBaseRef even when remote-count lookup fails', async () => {
@@ -2567,6 +2624,39 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(argv).toContain('refs/heads/**/**/**')
     expect(argv).toContain('refs/remotes/**/**')
     expect(argv).toContain('refs/remotes/**/**/**')
+  })
+
+  it('uses repoPath to disambiguate duplicate repo ids for SSH searches', async () => {
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+      }
+      return Promise.resolve({
+        stdout: 'refs/remotes/origin/main\0origin/main',
+        stderr: ''
+      })
+    })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/wrong/repo',
+      kind: 'git'
+    })
+    mockStore.getRepos.mockReturnValue([
+      { id: 'r1', path: '/wrong/repo', kind: 'git' },
+      { id: 'r1', path: '/remote/selected', connectionId: 'wrong-conn', kind: 'git' },
+      { id: 'r1', path: '/remote/selected', connectionId: 'conn-1', kind: 'git' }
+    ])
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      repoPath: '/remote/selected',
+      executionHostId: 'ssh:conn-1',
+      query: 'main'
+    })
+
+    expect(result).toEqual(['origin/main'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/selected')
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(expect.any(Array), '/remote/selected')
   })
 
   it('sanitizes glob metacharacter-only queries into the empty-query branch list', async () => {
