@@ -297,22 +297,28 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
-  it('disables the GPU sandbox on Linux to avoid the exit-8704 Wayland crash', async () => {
+  it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
 
-    setPlatform('linux')
-    delete process.env.ORCA_E2E_USER_DATA_DIR
-    vi.mocked(app.disableHardwareAcceleration).mockClear()
-    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.disableHardwareAcceleration).mockClear()
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
 
-    enableMainProcessGpuFeatures()
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
 
-    // Why: #5319 — the GPU-process sandbox crashes (exit 8704) on newer Linux
-    // kernels + Wayland, freezing terminal input; disabling it keeps hardware
-    // acceleration while preventing the crash.
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
-    // Hardware acceleration must stay on outside the E2E path.
     expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
       'enable-features',
@@ -320,20 +326,62 @@ describe('enableMainProcessGpuFeatures', () => {
     )
   })
 
-  it('does not disable the GPU sandbox on macOS or Windows', async () => {
+  it('uses Electron Ozone hints to recognize forced Linux Wayland launches', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
+    setPlatform('linux')
     delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+      switchName === 'ozone-platform' ? 'wayland' : ''
+    )
 
-    for (const platform of ['darwin', 'win32'] as const) {
-      setPlatform(platform)
-      vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
 
-      enableMainProcessGpuFeatures()
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+  })
 
-      // The sandbox crash is Linux-specific; don't perturb mac/Windows startup.
-      expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+  it('does not disable the GPU sandbox outside Linux Wayland', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+    const originalSessionType = process.env.XDG_SESSION_TYPE
+    const originalOzoneHint = process.env.ELECTRON_OZONE_PLATFORM_HINT
+
+    try {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      delete process.env.WAYLAND_DISPLAY
+      delete process.env.XDG_SESSION_TYPE
+      delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+
+      for (const platform of ['linux', 'darwin', 'win32'] as const) {
+        setPlatform(platform)
+        vi.mocked(app.commandLine.appendSwitch).mockClear()
+        vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+          switchName === 'enable-features' ? '' : ''
+        )
+
+        enableMainProcessGpuFeatures()
+
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+      }
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+      if (originalSessionType === undefined) {
+        delete process.env.XDG_SESSION_TYPE
+      } else {
+        process.env.XDG_SESSION_TYPE = originalSessionType
+      }
+      if (originalOzoneHint === undefined) {
+        delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+      } else {
+        process.env.ELECTRON_OZONE_PLATFORM_HINT = originalOzoneHint
+      }
     }
   })
 

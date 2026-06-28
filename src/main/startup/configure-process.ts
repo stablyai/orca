@@ -307,13 +307,15 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
-  if (process.platform === 'linux') {
-    // Why: Chromium's GPU-process sandbox crashes with exit code 8704 (0x2200)
-    // on newer Linux kernels and Wayland compositors (Fedora 43+, recent
-    // Ubuntu/Arch), wedging the eagerly-established GPU compositor channel and
-    // freezing terminal keyboard/scroll input (stablyai/orca#5319). Disabling
-    // the GPU sandbox keeps WebGL/CSS acceleration while avoiding the crash,
-    // matching VS Code/Slack on Linux. Must run before app.whenReady.
+  const isLinuxWaylandSession =
+    process.platform === 'linux' &&
+    (Boolean(process.env.WAYLAND_DISPLAY) ||
+      process.env.XDG_SESSION_TYPE === 'wayland' ||
+      process.env.ELECTRON_OZONE_PLATFORM_HINT === 'wayland' ||
+      app.commandLine.getSwitchValue('ozone-platform') === 'wayland')
+  if (isLinuxWaylandSession) {
+    // Why: #5319 reports Linux Wayland terminal input stalls when the eager GPU
+    // channel loses its sandboxed GPU process; keep acceleration but drop that sandbox.
     app.commandLine.appendSwitch('disable-gpu-sandbox')
   }
 

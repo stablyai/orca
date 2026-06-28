@@ -1,0 +1,73 @@
+name: Linux Wayland GPU Sandbox
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/linux-wayland-gpu-sandbox.yml
+      - config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+      - src/main/startup/configure-process.ts
+      - src/main/startup/configure-process.test.ts
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: wayland terminal input
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install native build tools and Wayland compositor
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh weston
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: mirrors pr.yml so native module rebuilds do not use pnpm's
+      # non-executable bundled gyp_main.py on Linux runners.
+      - name: Use external node-gyp to avoid pnpm's bundled copy
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify terminal input under Wayland GPU sandbox workaround
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          unset DISPLAY
+          weston --backend=headless-backend.so --socket=wayland-1 --idle-time=0 --log="$RUNNER_TEMP/weston.log" &
+          for _ in $(seq 1 50); do
+            if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
+              break
+            fi
+            sleep 0.2
+          done
+          test -S "$XDG_RUNTIME_DIR/wayland-1"
+          env WAYLAND_DISPLAY=wayland-1 \
+            XDG_SESSION_TYPE=wayland \
+            ELECTRON_OZONE_PLATFORM_HINT=wayland \
+            ORCA_WAYLAND_GPU_VERBOSE=1 \
+            node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+
+      - name: Upload Weston log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: weston-log
+          path: ${{ runner.temp }}/weston.log
+          retention-days: 7
+          if-no-files-found: ignore
