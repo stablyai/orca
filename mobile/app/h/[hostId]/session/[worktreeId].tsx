@@ -164,7 +164,9 @@ import {
 } from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import { getMobileTerminalFileTapTarget } from '../../../../src/session/mobile-terminal-file-tap-target'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
+import { navigateToMobileFilePreview } from '../../../../src/files/mobile-file-preview-navigation'
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,
@@ -3142,8 +3144,8 @@ export default function SessionScreen() {
   )
 
   // Tap on a file path in terminal output → resolve it on the host and open it
-  // as a file tab (mirrors desktop Cmd/Ctrl-click). Silent on a miss; the
-  // WebView only emits this when the tap landed on a detected path.
+  // in the phone previewer. Silent on a miss; the WebView only emits this when
+  // the tap landed on a detected path.
   const handleFileTap = useCallback(
     (handle: string, pathText: string) => {
       if (handle !== activeHandleRef.current || !client) {
@@ -3161,65 +3163,30 @@ export default function SessionScreen() {
             return
           }
           const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
-          if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
+          const target = getMobileTerminalFileTapTarget({
+            hostId,
+            worktreeId,
+            worktreeName: worktreeName || undefined,
+            resolved
+          })
+          if (target.kind === 'ignore') {
             return
           }
           // Confirm the tap landed on something openable before giving feedback.
           triggerSelection()
           // Why: HTML opens in a browser pane (streamed from the desktop),
           // matching desktop's terminal-click behavior, instead of a file view.
-          if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
-            void handleCreateBrowser('file://' + resolved.absolutePath)
+          if (target.kind === 'browser') {
+            void handleCreateBrowser(target.url)
             return
           }
-          const openResponse = await client.sendRequest(
-            'files.open',
-            { worktree, relativePath: resolved.relativePath },
-            { timeoutMs: 15_000 }
-          )
-          if (!openResponse.ok) {
-            return
-          }
-          // Why: the host opens the file as a markdown/file/image tab (the type
-          // depends on the file — .md opens as a 'markdown' tab), and from a terminal
-          // the active tab stays on the terminal. Once the new tab syncs in, switch to
-          // it by relativePath across ANY openable type. Poll since it arrives async.
-          const openedPath = resolved.relativePath
-          // Why: retries poll for the async-arriving tab, but once activation lands
-          // a later retry would steal focus back from the user — short-circuit the
-          // remaining ones once the opened tab is (or becomes) the active tab.
-          let activated = false
-          const activateOpenedTab = async (): Promise<void> => {
-            if (activated) {
-              return
-            }
-            await fetchSessionTabs()
-            if (activated) {
-              return
-            }
-            const opened = sessionTabsRef.current.find(
-              (tab): tab is Extract<MobileSessionTab, { relativePath?: string }> =>
-                'relativePath' in tab && tab.relativePath === openedPath
-            )
-            if (!opened) {
-              return
-            }
-            if (activeSessionTabIdRef.current === opened.id) {
-              activated = true
-              return
-            }
-            switchSessionTabRef.current?.(opened)
-            activated = true
-          }
-          scheduleDelayedAction(() => void activateOpenedTab(), 300)
-          scheduleDelayedAction(() => void activateOpenedTab(), 900)
-          scheduleDelayedAction(() => void activateOpenedTab(), 1800)
+          navigateToMobileFilePreview(router, target.params)
         } catch {
           // Resolution/open is best-effort; a failed tap silently no-ops.
         }
       })()
     },
-    [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+    [client, hostId, router, worktreeId, worktreeName]
   )
 
   const handleTerminalOpenUrl = useCallback(
