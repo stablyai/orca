@@ -315,12 +315,15 @@ function getDataFile(): string {
   return _dataFile
 }
 
-// Why: returns the userData directory captured at initDataPath() time, before
-// app.setName() can change how app.getPath('userData') resolves. Subsystems that
-// must share storage with orca-data.json (mobile pairing's DeviceRegistry,
-// E2EE keypair, runtime metadata) read this instead of resolving the path late,
-// which on case-sensitive filesystems lands in a different directory and loses
-// paired devices across restarts/updates.
+/**
+ * Return the userData directory captured at initDataPath() time, before
+ * app.setName() can change how app.getPath('userData') resolves.
+ *
+ * Subsystems that must share storage with orca-data.json (mobile pairing's
+ * DeviceRegistry, E2EE keypair, runtime metadata) read this instead of
+ * resolving the path late, which on case-sensitive filesystems can land in a
+ * different directory and lose paired devices across restarts/updates.
+ */
 export function getCanonicalUserDataPath(): string {
   if (!_userDataDir) {
     // Safety fallback — should not be hit in normal startup.
@@ -329,10 +332,14 @@ export function getCanonicalUserDataPath(): string {
   return _userDataDir
 }
 
-// Why: existing installs may already have mobile pairing credentials in the
-// late app.getPath('userData') directory. Before switching the runtime server
-// to the canonical path, copy the registry + E2EE keypair forward as a pair so
-// an update does not force one last re-pair or mix devices with the wrong key.
+/**
+ * Copy legacy mobile pairing credentials into the canonical userData directory.
+ *
+ * Existing installs may already have credentials in the late app.getPath('userData')
+ * directory. Before switching the runtime server to the canonical path, copy the
+ * registry and E2EE keypair forward as a pair so an update does not force one
+ * last re-pair or mix devices with the wrong key.
+ */
 export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
   const targetUserDataDir = getCanonicalUserDataPath()
   if (resolve(sourceUserDataDir) === resolve(targetUserDataDir)) {
