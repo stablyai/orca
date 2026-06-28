@@ -5,7 +5,7 @@ import type {
   AgentCompletionCoordinator,
   AgentCompletionStatusSnapshot
 } from '@/components/terminal-pane/agent-completion-coordinator-types'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 
@@ -146,10 +146,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
     paneKey,
     getPtyId: () => getPtyIdForPaneKey(paneKey),
     getSettings: () => useAppStore.getState().settings,
-    inspectProcess: async (): Promise<RuntimeTerminalProcessInspection> => ({
-      foregroundProcess: null,
-      hasChildProcesses: false
-    }),
+    inspectProcess: inspectRuntimeTerminalProcess,
     dispatchCompletion: (title, meta) => {
       dispatchTerminalNotification(worktreeId, {
         source: 'agent-task-complete',

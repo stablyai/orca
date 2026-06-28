@@ -41,6 +41,14 @@ function createRejectableDeferred<T>(): {
 
 const HOOK_DONE_QUIET_MS = 1_500
 
+async function elapseHookDoneQuiet(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS)
+}
+
+function inspectNoChildProcesses(): ReturnType<typeof vi.fn> {
+  return vi.fn(async () => processResult(null, false))
+}
+
 describe('agent completion coordinator', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -372,13 +380,13 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledWith('Fix flaky e2e tests')
   })
 
-  it('suppresses same-turn title completion after a hook completion already notified', () => {
+  it('suppresses same-turn title completion after a hook completion already notified', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -394,7 +402,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex'
     })
     coordinator.observeClassifiedTitleCompletion('codex done')
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith(
@@ -509,7 +517,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex',
       stateStartedAt: 1_700_000_000_000
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
@@ -567,13 +575,13 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
-  it('can require a fresh working signal after completion state reset', () => {
+  it('can require a fresh working signal after completion state reset', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -602,7 +610,7 @@ describe('agent completion coordinator', () => {
       prompt: '',
       agentType: 'codex'
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
@@ -724,13 +732,13 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
-  it('suppresses the same hook completion replay after fresh work starts', () => {
+  it('suppresses the same hook completion replay after fresh work starts', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -752,7 +760,7 @@ describe('agent completion coordinator', () => {
     })
     vi.advanceTimersByTime(5_000)
     coordinator.observeHookStatus(completedTurn)
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
@@ -762,18 +770,18 @@ describe('agent completion coordinator', () => {
       agentType: 'codex',
       stateStartedAt: 1_700_000_020_000
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
-  it('suppresses same-agent title replay after hook-backed fresh work starts', () => {
+  it('suppresses same-agent title replay after hook-backed fresh work starts', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -790,7 +798,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex',
       stateStartedAt: 1_700_000_010_000
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
     coordinator.observeHookStatus({
@@ -809,7 +817,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex',
       stateStartedAt: 1_700_000_030_000
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
@@ -847,13 +855,13 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
-  it('suppresses stale title completion replay after a hook completion remount', () => {
+  it('suppresses stale title completion replay after a hook completion remount', async () => {
     const dispatchCompletion = vi.fn()
     const firstCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -871,6 +879,7 @@ describe('agent completion coordinator', () => {
       stateStartedAt: 1_700_000_010_000
     })
     vi.advanceTimersByTime(5_000)
+    await flushAsyncTicks()
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     firstCoordinator.dispose()
 
@@ -878,7 +887,7 @@ describe('agent completion coordinator', () => {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -891,13 +900,13 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
-  it('cancels a hook completion when the same turn resumes work before the quiet window', () => {
+  it('cancels a hook completion when the same turn resumes work before the quiet window', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -913,7 +922,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex'
     })
     expect(coordinator.hasPendingHookDoneCompletion()).toBe(true)
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS - 1)
+    await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS - 1)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
     coordinator.observeHookStatus({
@@ -922,7 +931,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex'
     })
     expect(coordinator.hasPendingHookDoneCompletion()).toBe(false)
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
     coordinator.observeHookStatus({
@@ -930,7 +939,7 @@ describe('agent completion coordinator', () => {
       prompt: 'run the goal',
       agentType: 'codex'
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith(
@@ -1010,13 +1019,13 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
   })
 
-  it('notifies once after a Cursor tool-heavy turn, not on each shell hook', () => {
+  it('notifies once after a Cursor tool-heavy turn, not on each shell hook', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
-      inspectProcess: vi.fn(),
+      inspectProcess: inspectNoChildProcesses(),
       dispatchCompletion,
       isLive: () => true
     })
@@ -1049,7 +1058,7 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
     coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Fixed.' })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })

@@ -4,6 +4,14 @@ import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-type
 import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
+const inspectRuntimeTerminalProcess = vi.fn(async () => ({
+  foregroundProcess: null,
+  hasChildProcesses: false
+}))
+
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  inspectRuntimeTerminalProcess
+}))
 
 type MockStoreState = {
   settings: {
@@ -29,6 +37,10 @@ type MockStoreState = {
 
 let mockStoreState: MockStoreState
 const HOOK_DONE_QUIET_MS = 1_500
+
+async function elapseHookDoneQuiet(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS)
+}
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -56,6 +68,11 @@ describe('agent hook completion notifications', () => {
     vi.resetModules()
     vi.useFakeTimers()
     dispatchTerminalNotification.mockClear()
+    inspectRuntimeTerminalProcess.mockClear()
+    inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: null,
+      hasChildProcesses: false
+    })
     mockStoreState = {
       settings: {
         experimentalTerminalAttention: false,
@@ -107,7 +124,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
@@ -135,7 +152,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
@@ -169,7 +186,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
@@ -208,7 +225,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
@@ -250,7 +267,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
@@ -281,7 +298,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: { ...hookStatus('done'), stateStartedAt: 1_700_000_010_000 }
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
@@ -310,7 +327,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: { ...hookStatus('done'), stateStartedAt: 1_700_000_010_000 }
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
 
@@ -319,7 +336,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: { ...hookStatus('done'), stateStartedAt: 1_700_000_010_000 }
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
@@ -370,7 +387,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(0)
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
@@ -559,7 +576,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('working')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS)
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
     observeAgentHookCompletionForNotification({
@@ -567,7 +584,7 @@ describe('agent hook completion notifications', () => {
       worktreeId: 'wt-1',
       payload: hookStatus('done')
     })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    await elapseHookDoneQuiet()
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
