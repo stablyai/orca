@@ -210,8 +210,8 @@ describe('SshPortForwardManager', () => {
     })
 
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(process.kill).toHaveBeenCalledWith('SIGTERM')
-    expect(process.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(process.kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
+    expect(process.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
     expect(resolved).toBe(false)
 
     process.emit('exit', null)
