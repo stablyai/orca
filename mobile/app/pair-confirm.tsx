@@ -13,6 +13,7 @@ import { saveHost, getNextHostName } from '../src/transport/host-store'
 import type { ConnectionLogEntry, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import { T } from '../src/i18n/T'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -181,16 +182,16 @@ export default function PairConfirmScreen() {
       <View style={styles.content}>
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
-            <Text style={styles.title}>Pair with this desktop?</Text>
-            <Text style={styles.subtitle}>
+            <T style={styles.title}>Pair with this desktop?</T>
+            <T style={styles.subtitle}>
               You opened a pairing link from your desktop. Confirm to add it to your hosts.
-            </Text>
+            </T>
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-                <Text style={styles.primaryButtonText}>Pair</Text>
+                <T style={styles.primaryButtonText}>Pair</T>
               </Pressable>
               <Pressable style={styles.secondaryButton} onPress={cancel}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <T style={styles.secondaryButtonText}>Cancel</T>
               </Pressable>
             </View>
           </>
@@ -199,7 +200,7 @@ export default function PairConfirmScreen() {
         {resolvedStatus === 'connecting' && (
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
+            <T style={styles.connectingText}>Connecting…</T>
             <View style={styles.logSlot}>
               <ConnectionLog entries={logs} title="Pairing log" />
             </View>
@@ -216,7 +217,7 @@ export default function PairConfirmScreen() {
             )}
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+                <T style={styles.primaryButtonText}>Back to home</T>
               </Pressable>
             </View>
           </>

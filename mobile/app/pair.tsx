@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { T } from '../src/i18n/T'
 
 export default function PairRedirectScreen() {
   const router = useRouter()
@@ -45,9 +46,9 @@ export default function PairRedirectScreen() {
     <View style={styles.container}>
       {missingCode ? (
         <>
-          <Text style={styles.errorText}>Missing pairing code</Text>
+          <T style={styles.errorText}>Missing pairing code</T>
           <Pressable style={styles.primaryButton} onPress={goHome}>
-            <Text style={styles.primaryButtonText}>Back to home</Text>
+            <T style={styles.primaryButtonText}>Back to home</T>
           </Pressable>
         </>
       ) : (

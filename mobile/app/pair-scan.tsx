@@ -23,6 +23,8 @@ import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/trans
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import { T } from '../src/i18n/T'
+import { PairScanStepItem, pairScanSteps } from './pair-scan-steps'
 
 // Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
 // route surfaces as a real error with the log visible instead of a
@@ -30,17 +32,6 @@ import { ConnectionLog } from '../src/components/ConnectionLog'
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 const SCAN_RETICLE_SCALE = 0.62
 const SCAN_RETICLE_MAX_SIZE = 360
-
-function Step({ number, text }: { number: number; text: string }) {
-  return (
-    <View style={styles.step}>
-      <View style={styles.stepBadge}>
-        <Text style={styles.stepNumber}>{number}</Text>
-      </View>
-      <Text style={styles.stepText}>{text}</Text>
-    </View>
-  )
-}
 
 export default function PairScanScreen() {
   const router = useRouter()
@@ -280,7 +271,7 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Paste code instead</Text>
+            <T style={styles.pasteButtonText}>Paste code instead</T>
           </Pressable>
         </View>
         <TextInputModal
@@ -302,9 +293,9 @@ export default function PairScanScreen() {
       </Pressable>
 
       <View style={styles.steps}>
-        <Step number={1} text="Open Orca on your computer" />
-        <Step number={2} text="Go to Settings → Mobile" />
-        <Step number={3} text="Scan the QR code" />
+        {pairScanSteps.map((s) => (
+          <PairScanStepItem key={s.number} number={s.number} text={s.text} />
+        ))}
       </View>
 
       {status === 'scanning' && (
@@ -338,7 +329,7 @@ export default function PairScanScreen() {
             onPress={() => setPasteVisible(true)}
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
-            <Text style={styles.pasteButtonText}>Or paste pairing code</Text>
+            <T style={styles.pasteButtonText}>Or paste pairing code</T>
           </Pressable>
         </>
       )}
@@ -346,7 +337,7 @@ export default function PairScanScreen() {
       {status === 'connecting' && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.connectingText}>Connecting…</Text>
+          <T style={styles.connectingText}>Connecting…</T>
           <View style={styles.logSlot}>
             <ConnectionLog entries={logs} title="Pairing log" />
           </View>
@@ -363,7 +354,7 @@ export default function PairScanScreen() {
           )}
           <View style={styles.errorActions}>
             <Pressable style={styles.primaryButton} onPress={retry}>
-              <Text style={styles.primaryButtonText}>Try Again</Text>
+              <T style={styles.primaryButtonText}>Try Again</T>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -375,7 +366,7 @@ export default function PairScanScreen() {
                 setPasteVisible(true)
               }}
             >
-              <Text style={styles.secondaryButtonText}>Paste code instead</Text>
+              <T style={styles.secondaryButtonText}>Paste code instead</T>
             </Pressable>
           </View>
         </View>
@@ -411,28 +402,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.lg,
     marginLeft: 7
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  stepBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary
-  },
-  stepText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary
   },
   cameraWrap: {
     flex: 1,
