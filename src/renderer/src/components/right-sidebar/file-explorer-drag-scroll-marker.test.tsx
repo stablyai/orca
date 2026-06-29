@@ -112,6 +112,7 @@ let capturedHandlers: ReturnType<typeof useFileExplorerHandlers> | null = null
 function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | null> }): null {
   capturedHandlers = useFileExplorerHandlers({
     activeWorktreeId: 'wt-1',
+    runtimeEnvironmentId: null,
     openFile: vi.fn(),
     makePreviewFilePermanent: vi.fn(),
     toggleDir: vi.fn(),

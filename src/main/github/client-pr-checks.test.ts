@@ -151,6 +151,41 @@ describe('getPRChecks', () => {
     ])
   })
 
+  it('maps remaining completed GitHub conclusions to failure', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        check_runs: [
+          {
+            name: 'needs-approval',
+            status: 'completed',
+            conclusion: 'action_required',
+            html_url: 'https://github.com/acme/widgets/actions/runs/1',
+            details_url: null
+          },
+          {
+            name: 'old-run',
+            status: 'completed',
+            conclusion: 'stale',
+            html_url: 'https://github.com/acme/widgets/actions/runs/2',
+            details_url: null
+          },
+          {
+            name: 'boot',
+            status: 'completed',
+            conclusion: 'startup_failure',
+            html_url: 'https://github.com/acme/widgets/actions/runs/3',
+            details_url: null
+          }
+        ]
+      })
+    })
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(checks.map((check) => check.conclusion)).toEqual(['failure', 'failure', 'failure'])
+  })
+
   it('treats gh pr checks "no checks reported" as an empty check list', async () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })

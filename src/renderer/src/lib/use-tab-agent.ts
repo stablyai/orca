@@ -14,6 +14,8 @@ import {
 import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
+export { resolveExplicitTerminalTitleAgentType as resolveTabAgentFromTitle } from './terminal-title-agent-type'
+
 const HELPER_FOREGROUND_RETRY_DELAYS_MS = [250, 1250, 3500, 750] as const
 
 function getTitleForegroundKey(title: string, launchAgent?: TuiAgent): string {

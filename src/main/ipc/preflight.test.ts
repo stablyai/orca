@@ -708,6 +708,35 @@ describe('preflight', () => {
     expect(request).not.toHaveBeenCalled()
   })
 
+  it('sends remote Windows shell capability probes through the SSH preflight path', async () => {
+    const request = vi.fn().mockResolvedValue({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32'
+    })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteWindowsTerminalCapabilities'](undefined, {
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: true,
+      gitBashAvailable: true,
+      hostPlatform: 'win32'
+    })
+    expect(request).toHaveBeenCalledWith('preflight.detectWindowsTerminalCapabilities', {})
+  })
+
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,

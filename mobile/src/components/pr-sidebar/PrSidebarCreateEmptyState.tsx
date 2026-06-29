@@ -3,9 +3,20 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
+import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
+import {
+  getMobileCommitFailureStagedEntries,
+  type MobileCommitFailureRecovery
+} from '../../source-control/mobile-commit-failure-recovery'
+import { useMobileCommitFailureRecovery } from '../../source-control/use-mobile-commit-failure-recovery'
+import { MobileCommitFailurePanel } from '../../source-control/MobileCommitFailurePanel'
 import { mobileHostedReviewCreateIntentProgressMessage } from '../../source-control/mobile-hosted-review-create-intent'
-import { runMobileHostedReviewCreateIntent } from '../../source-control/mobile-hosted-review-create-intent-runner'
+import type { MobileHostedReviewCreateIntentProgress } from '../../source-control/mobile-hosted-review-create-intent'
+import {
+  isMobileHostedReviewCommitFailure,
+  runMobileHostedReviewCreateIntent
+} from '../../source-control/mobile-hosted-review-create-intent-runner'
 import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
@@ -16,6 +27,7 @@ type Props = {
   worktreeId: string
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
+  connState: ConnectionState
   // Refetches the sidebar after create or an explicit empty-state refresh.
   onCreated: () => void
 }
@@ -30,14 +42,29 @@ export function PrSidebarCreateEmptyState({
   worktreeId,
   gitBranch,
   gitStatus,
+  connState,
   onCreated
 }: Props) {
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
+  const [commitFailureRecovery, setCommitFailureRecovery] =
+    useState<MobileCommitFailureRecovery | null>(null)
   // A persisted linkedPR while the branch shows no PR means the linked PR could
   // not be resolved. Mention it while still allowing the user to relink.
   const [orphanLinkedPR, setOrphanLinkedPR] = useState<number | null>(null)
+  const commitFailureRecoveryAction = useMobileCommitFailureRecovery({
+    client,
+    connState,
+    worktreeId,
+    failure: commitFailureRecovery
+  })
+
+  const refreshPrState = () => {
+    setCreateWarning(null)
+    setCommitFailureRecovery(null)
+    onCreated()
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -66,6 +93,7 @@ export function PrSidebarCreateEmptyState({
       return
     }
     setCreateWarning(null)
+    setCommitFailureRecovery(null)
     setLoading(true)
     try {
       if (!gitBranch) {
@@ -74,14 +102,28 @@ export function PrSidebarCreateEmptyState({
       }
       // Why: mobile skips the local compose step here and runs the hosted create
       // flow directly so PR creation matches the automated hosted-review path.
+      let progress: MobileHostedReviewCreateIntentProgress | null = null
       const outcome = await runMobileHostedReviewCreateIntent(client, worktreeId, {
         branch: gitBranch,
         title: gitBranch,
         status: gitStatus,
-        onProgress: (progress) =>
-          setCreateWarning(mobileHostedReviewCreateIntentProgressMessage(progress))
+        onProgress: (nextProgress) => {
+          progress = nextProgress
+          setCreateWarning(mobileHostedReviewCreateIntentProgressMessage(nextProgress))
+        }
       })
       if (!outcome.ok) {
+        if (isMobileHostedReviewCommitFailure(outcome, progress)) {
+          const outcomeStagedEntries = getMobileCommitFailureStagedEntries(outcome.status?.entries)
+          setCommitFailureRecovery({
+            error: outcome.error,
+            commitMessage: outcome.commitMessage ?? gitBranch,
+            stagedEntries:
+              outcomeStagedEntries.length > 0
+                ? outcomeStagedEntries
+                : getMobileCommitFailureStagedEntries(gitStatus?.entries)
+          })
+        }
         setCreateWarning(outcome.error)
         return
       }
@@ -106,7 +148,7 @@ export function PrSidebarCreateEmptyState({
           onCancel={() => setMode('choose')}
           onLinked={() => {
             setMode('choose')
-            onCreated()
+            refreshPrState()
           }}
         />
       </View>
@@ -123,7 +165,7 @@ export function PrSidebarCreateEmptyState({
         <View style={styles.headerActions}>
           <Pressable
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={onCreated}
+            onPress={refreshPrState}
             accessibilityRole="button"
             accessibilityLabel="Refresh pull request"
             hitSlop={6}
@@ -157,7 +199,14 @@ export function PrSidebarCreateEmptyState({
               ? `${gitBranch} is not linked to an open PR.`
               : 'The current branch is not linked to an open PR.'}
         </Text>
-        {createWarning ? <Text style={styles.bodyText}>{createWarning}</Text> : null}
+        {commitFailureRecovery ? (
+          <MobileCommitFailurePanel
+            failure={commitFailureRecovery}
+            action={commitFailureRecoveryAction}
+          />
+        ) : createWarning ? (
+          <Text style={styles.bodyText}>{createWarning}</Text>
+        ) : null}
         <Pressable
           style={({ pressed }) => [
             styles.linkButton,

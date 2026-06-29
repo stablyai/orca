@@ -57,4 +57,32 @@ describe('agent session resume metadata', () => {
   it('rejects devin resume when provider session key is not session_id', () => {
     expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
   })
+
+  it('captures the hook transcript_path for native-chat agents (claude/codex)', () => {
+    expect(
+      extractAgentProviderSession('claude', {
+        session_id: 'cs',
+        transcript_path: '/home/u/.claude/projects/slug/real.jsonl'
+      })
+    ).toEqual({
+      key: 'session_id',
+      id: 'cs',
+      transcriptPath: '/home/u/.claude/projects/slug/real.jsonl'
+    })
+    expect(
+      extractAgentProviderSession('codex', { session_id: 'xs', transcriptPath: '/x/r.jsonl' })
+    ).toEqual({ key: 'session_id', id: 'xs', transcriptPath: '/x/r.jsonl' })
+  })
+
+  it('does not attach transcript_path for non-native-chat agents', () => {
+    expect(
+      extractAgentProviderSession('gemini', { session_id: 'gs', transcript_path: '/x/r.jsonl' })
+    ).toEqual({ key: 'session_id', id: 'gs' })
+  })
+
+  it('round-trips transcriptPath through normalizeAgentProviderSession', () => {
+    expect(
+      normalizeAgentProviderSession({ key: 'session_id', id: 'ok', transcriptPath: '/x/r.jsonl' })
+    ).toEqual({ key: 'session_id', id: 'ok', transcriptPath: '/x/r.jsonl' })
+  })
 })

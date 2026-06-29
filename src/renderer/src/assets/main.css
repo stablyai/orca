@@ -15,6 +15,15 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Orca Nerd Font Symbols';
+  src: url('./fonts/SymbolsNerdFontMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
@@ -1814,10 +1823,15 @@
   transition: none !important;
 }
 
-/* Specifically for the expand/collapse button icon which is often a nested 'i' or '::before' */
-.monaco-editor .find-widget .button.expand {
-  width: 16px !important;
-  height: 16px !important;
+/* Why: the expand/collapse toggle (the chevron on the far left) is positioned
+   absolutely and relies on Monaco's default height:100% to vertically center
+   its icon over the find row. The generic .button override above forces a fixed
+   20px height, which pins the chevron to the top. Restore Monaco's full-height
+   18px toggle so the chevron centers like the stock find widget. */
+.monaco-editor .find-widget .button.toggle {
+  width: 18px !important;
+  height: 100% !important;
+  top: 0 !important;
 }
 
 .monaco-editor .find-widget .button > .codicon,

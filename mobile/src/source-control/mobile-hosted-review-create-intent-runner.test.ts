@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
-import { runMobileHostedReviewCreateIntent } from './mobile-hosted-review-create-intent-runner'
+import {
+  isMobileHostedReviewCommitFailure,
+  runMobileHostedReviewCreateIntent
+} from './mobile-hosted-review-create-intent-runner'
 
 function ok(result: unknown): RpcSuccess {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
@@ -150,5 +153,46 @@ describe('runMobileHostedReviewCreateIntent', () => {
       committed: true,
       status: expect.objectContaining({ entries: [] })
     })
+  })
+})
+
+describe('isMobileHostedReviewCommitFailure', () => {
+  it('only treats failed commit attempts as commit failures', () => {
+    expect(
+      isMobileHostedReviewCommitFailure(
+        {
+          ok: false,
+          error: 'lint-staged failed',
+          committed: false,
+          status: status([entry('staged')]),
+          commitMessage: 'Generated commit'
+        },
+        'committing'
+      )
+    ).toBe(true)
+
+    expect(
+      isMobileHostedReviewCommitFailure(
+        {
+          ok: false,
+          error: 'Authenticate before creating a pull request.',
+          committed: true,
+          status: status([])
+        },
+        'committing'
+      )
+    ).toBe(false)
+
+    expect(
+      isMobileHostedReviewCommitFailure(
+        {
+          ok: false,
+          error: 'Failed to stage changes',
+          committed: false,
+          status: status([entry('unstaged')])
+        },
+        'staging'
+      )
+    ).toBe(false)
   })
 })

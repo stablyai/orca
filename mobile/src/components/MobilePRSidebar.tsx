@@ -103,6 +103,7 @@ export function MobilePRSidebar({
         onRetry={onRetry}
         refetch={refetch}
         client={client}
+        connState={connState}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
         gitStatus={gitStatus}
@@ -121,6 +122,7 @@ function PrSidebarContent({
   onRetry,
   refetch,
   client,
+  connState,
   worktreeId,
   gitBranch,
   gitStatus,
@@ -134,6 +136,7 @@ function PrSidebarContent({
   onRetry: () => void
   refetch: () => void
   client: RpcClient | null
+  connState: ConnectionState
   worktreeId: string
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
@@ -190,6 +193,7 @@ function PrSidebarContent({
         worktreeId={worktreeId}
         gitBranch={gitBranch}
         gitStatus={gitStatus}
+        connState={connState}
         onCreated={refetch}
       />
     )

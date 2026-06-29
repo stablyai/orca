@@ -82,6 +82,18 @@ export type ImportedWorktreesCardRow = {
   placement: 'repo-group' | 'pinned-fallback'
 }
 
+export type NewExternalWorktreesInboxCandidate = {
+  repo: Repo
+  inboxWorktrees: DetectedWorktree[]
+}
+
+export type NewExternalWorktreesInboxRow = {
+  type: 'new-external-worktrees-inbox'
+  key: string
+  repo: Repo
+  inboxWorktrees: DetectedWorktree[]
+}
+
 export type PendingCreationRow = {
   type: 'pending-creation'
   key: string
@@ -108,6 +120,7 @@ export type Row =
   | GroupHeaderRow
   | WorktreeRow
   | ImportedWorktreesCardRow
+  | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
 
@@ -471,6 +484,17 @@ function buildImportedWorktreesCardRow(
   }
 }
 
+function buildNewExternalWorktreesInboxRow(
+  candidate: NewExternalWorktreesInboxCandidate
+): NewExternalWorktreesInboxRow {
+  return {
+    type: 'new-external-worktrees-inbox',
+    key: `new-external-worktrees-inbox:${candidate.repo.id}`,
+    repo: candidate.repo,
+    inboxWorktrees: candidate.inboxWorktrees
+  }
+}
+
 function buildWorktreeRow(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
@@ -801,6 +825,10 @@ export function buildRows(
   projectGroups: readonly ProjectGroup[] = [],
   placeholderRepoIds: ReadonlySet<string> = new Set(),
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map(),
+  newExternalWorktreesInboxByRepo: ReadonlyMap<
+    string,
+    NewExternalWorktreesInboxCandidate
+  > = new Map(),
   pendingCreations: readonly PendingCreationRef[] = [],
   projectGrouping?: ProjectGroupingModel,
   folderWorkspaces: readonly FolderWorkspace[] = [],
@@ -913,6 +941,22 @@ export function buildRows(
   }
   if (groupBy === 'repo') {
     for (const [repoId, candidate] of importedWorktreesByRepo) {
+      const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
+      const key = grouping.key
+      if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
+        grouped.set(key, {
+          label: grouping.label,
+          items: [],
+          repo: grouping.repo ?? candidate.repo,
+          repoIds: new Set([repoId])
+        })
+      } else if (grouped.has(key)) {
+        addRepoIdToGroup(grouped.get(key)!, repoId)
+      }
+    }
+  }
+  if (groupBy === 'repo') {
+    for (const [repoId, candidate] of newExternalWorktreesInboxByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
       if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
@@ -1050,6 +1094,12 @@ export function buildRows(
               result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
             }
           }
+          for (const repoId of repoIds) {
+            const candidate = newExternalWorktreesInboxByRepo.get(repoId)
+            if (candidate) {
+              result.push(buildNewExternalWorktreesInboxRow(candidate))
+            }
+          }
           // Why: surface in-progress creates at the top of their own repo so the
           // new workspace appears where it will land, not flashed to the very top
           // of the sidebar.
@@ -1064,13 +1114,23 @@ export function buildRows(
           groupBy === 'repo'
             ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
             : undefined
-        appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
-          nestLineage,
-          collapsedGroups,
-          groupDepth: projectGroupDepth,
-          sectionKey: key,
-          hostContextLabelByRepoId
-        })
+        if (groupBy === 'repo') {
+          appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
+            nestLineage,
+            collapsedGroups,
+            groupDepth: projectGroupDepth,
+            sectionKey: key,
+            hostContextLabelByRepoId
+          })
+        } else {
+          appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
+            nestLineage,
+            collapsedGroups,
+            groupDepth: projectGroupDepth,
+            sectionKey: key,
+            hostContextLabelByRepoId
+          })
+        }
       }
     }
   }

@@ -4,10 +4,16 @@ import { triggerError } from '../platform/haptics'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
 import {
+  getMobileCommitFailureStagedEntries,
+  type MobileCommitFailureRecovery,
+  type RecordMobileCommitFailure
+} from './mobile-commit-failure-recovery'
+import {
   mobileHostedReviewCreateIntentProgressMessage,
   type MobileHostedReviewCreateIntentProgress
 } from './mobile-hosted-review-create-intent'
 import {
+  isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent,
   type MobileHostedReviewCreateIntentRunOutcome
 } from './mobile-hosted-review-create-intent-runner'
@@ -21,6 +27,7 @@ type Params = {
   status: MobileGitStatusResult | null
   branchLabel: string
   commitMessage: string
+  stagedEntries: MobileCommitFailureRecovery['stagedEntries']
   mountedRef: MutableRefObject<boolean>
   runGitWorkflow: RunGitWorkflow
   loadStatus: LoadStatus
@@ -29,6 +36,7 @@ type Params = {
   setShowActionSheet: (next: boolean) => void
   setCreatedPrUrl: (next: string | null) => void
   setCreatedPrWarning: (next: string | null) => void
+  recordCommitFailure: RecordMobileCommitFailure
 }
 
 export function useMobileCreatePrRunner({
@@ -37,6 +45,7 @@ export function useMobileCreatePrRunner({
   status,
   branchLabel,
   commitMessage,
+  stagedEntries,
   mountedRef,
   runGitWorkflow,
   loadStatus,
@@ -44,7 +53,8 @@ export function useMobileCreatePrRunner({
   setCommitMessage,
   setShowActionSheet,
   setCreatedPrUrl,
-  setCreatedPrWarning
+  setCreatedPrWarning,
+  recordCommitFailure
 }: Params) {
   return useCallback(
     async (pushFirst: boolean) => {
@@ -58,14 +68,17 @@ export function useMobileCreatePrRunner({
       const created: { current: MobileHostedReviewCreateIntentRunOutcome | null } = {
         current: null
       }
+      let progress: MobileHostedReviewCreateIntentProgress | null = null
       const ran = await runGitWorkflow(pushFirst ? 'push-create-pr' : 'create-pr', async () => {
         created.current = await runMobileHostedReviewCreateIntent(client, worktreeId, {
           branch,
           title: branchLabel,
           status,
           commitMessage,
-          onProgress: (progress: MobileHostedReviewCreateIntentProgress) =>
-            setActionError(mobileHostedReviewCreateIntentProgressMessage(progress))
+          onProgress: (nextProgress: MobileHostedReviewCreateIntentProgress) => {
+            progress = nextProgress
+            setActionError(mobileHostedReviewCreateIntentProgressMessage(nextProgress))
+          }
         })
         if (!created.current.ok) {
           throw new Error(created.current.error)
@@ -83,6 +96,14 @@ export function useMobileCreatePrRunner({
         })
       }
       if (!ran || !mountedRef.current || !outcome || !outcome.ok) {
+        if (!ran && outcome && isMobileHostedReviewCommitFailure(outcome, progress)) {
+          const outcomeStagedEntries = getMobileCommitFailureStagedEntries(outcome.status?.entries)
+          recordCommitFailure({
+            error: outcome.error,
+            commitMessage: outcome.commitMessage ?? commitMessage.trim(),
+            stagedEntries: outcomeStagedEntries.length > 0 ? outcomeStagedEntries : stagedEntries
+          })
+        }
         return
       }
       setActionError(null)
@@ -95,12 +116,14 @@ export function useMobileCreatePrRunner({
       commitMessage,
       loadStatus,
       mountedRef,
+      recordCommitFailure,
       runGitWorkflow,
       setActionError,
       setCommitMessage,
       setCreatedPrUrl,
       setCreatedPrWarning,
       setShowActionSheet,
+      stagedEntries,
       status,
       worktreeId
     ]

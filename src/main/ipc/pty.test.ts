@@ -172,6 +172,7 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
 }))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -200,6 +201,12 @@ const POWERSHELL_OSC133_ARGS = [
   '-EncodedCommand',
   encodePowerShellCommand(getPowerShellOsc133Bootstrap())
 ]
+// Why: on Windows the spawn path resolves a bare PowerShell family name to a
+// real absolute executable before handing it to ConPTY (PR #6537 / issue
+// #5161) — a bare/alias `pwsh.exe` makes CreateProcessW fail with error code 5.
+// These match the deterministic install roots pinned in the win32 beforeEach.
+const RESOLVED_WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+const RESOLVED_PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const TEST_CODEX_HOME =
   process.platform === 'win32'
     ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
@@ -790,6 +797,20 @@ describe('registerPtyHandlers', () => {
       }
     )
 
+    it('uses sequenced startup env as the MiMo launch hint when command is a wrapper', async () => {
+      const env = await spawnAndGetEnv(
+        { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'mimo --prompt hi' },
+        undefined,
+        undefined,
+        undefined,
+        'bash -lc wait-wrapper'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+    })
+
     it('does not inject MiMo overlay for non-mimo launches', async () => {
       await spawnAndGetEnv()
 
@@ -888,6 +909,29 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/user-omp-agent')
       // CRITICAL: a Pi-named shadow MUST NOT leak into an OMP PTY env.
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('uses sequenced startup env as the OMP launch hint when command is a wrapper', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/user-omp-agent',
+          [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'omp --resume'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'powershell wait-wrapper'
+      )
+
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/user-omp-agent',
+        'omp'
+      )
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+        '/tmp/user-omp-agent/extensions/orca-agent-status.ts'
+      )
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
@@ -1338,6 +1382,29 @@ describe('registerPtyHandlers', () => {
         )
         expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+      })
+
+      it('uses sequenced startup env as the daemon OMP launch hint when command is a wrapper', async () => {
+        const env = await daemonSpawnAndGetEnv(
+          {
+            PI_CODING_AGENT_DIR: '/user/.omp/agent',
+            [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'omp --resume'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'powershell wait-wrapper' }
+        )
+
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
+          expect.any(String),
+          '/user/.omp/agent',
+          'omp'
+        )
+        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
+          '/user/.omp/agent/extensions/orca-agent-status.ts'
+        )
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
 
@@ -4817,6 +4884,7 @@ describe('registerPtyHandlers', () => {
   describe('Windows UTF-8 code page', () => {
     let originalPlatform: string
     let originalComspec: string | undefined
+    const savedWindowsResolutionEnv: Record<string, string | undefined> = {}
 
     beforeEach(() => {
       originalPlatform = process.platform
@@ -4826,6 +4894,32 @@ describe('registerPtyHandlers', () => {
         value: 'win32'
       })
       process.env.USERPROFILE = 'C:\\Users\\test'
+      // Why: the production spawn path resolves a bare PowerShell family name to
+      // a real absolute executable (PR #6537 / issue #5161). Pin the install
+      // roots it probes so the resolved path is deterministic regardless of the
+      // host OS the suite runs on (CI verify runs on Linux, devs on Windows).
+      for (const key of ['SystemRoot', 'ProgramW6432', 'ProgramFiles', 'ProgramFiles(x86)']) {
+        savedWindowsResolutionEnv[key] = process.env[key]
+      }
+      process.env.SystemRoot = 'C:\\Windows'
+      process.env.ProgramW6432 = 'C:\\Program Files'
+      process.env.ProgramFiles = 'C:\\Program Files'
+      delete process.env['ProgramFiles(x86)']
+      // Why: the resolver treats any existing, non-zero-size `.exe` outside the
+      // Microsoft Store WindowsApps alias dir as a real executable. Directories
+      // (cwd validation) must still report isDirectory(); the default mock omits
+      // isFile()/size, which would make every PowerShell candidate fail to
+      // resolve and collapse the chain to cmd.exe.
+      statSyncMock.mockImplementation((target: string) => {
+        const isExe = /\.exe$/i.test(String(target))
+        return {
+          isDirectory: () => !isExe,
+          isFile: () => isExe,
+          size: isExe ? 1024 : 0,
+          mode: 0o755
+        }
+      })
+      existsSyncMock.mockReturnValue(true)
     })
 
     afterEach(() => {
@@ -4837,6 +4931,13 @@ describe('registerPtyHandlers', () => {
         delete process.env.COMSPEC
       } else {
         process.env.COMSPEC = originalComspec
+      }
+      for (const [key, value] of Object.entries(savedWindowsResolutionEnv)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
       }
       delete process.env.PYTHONUTF8
     })
@@ -4935,7 +5036,7 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        'powershell.exe',
+        RESOLVED_WINDOWS_POWERSHELL,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
@@ -5059,7 +5160,7 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        'powershell.exe',
+        RESOLVED_WINDOWS_POWERSHELL,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
@@ -5081,7 +5182,11 @@ describe('registerPtyHandlers', () => {
       )
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith('pwsh.exe', POWERSHELL_OSC133_ARGS, expect.any(Object))
+      expect(spawnMock).toHaveBeenCalledWith(
+        RESOLVED_PWSH7,
+        POWERSHELL_OSC133_ARGS,
+        expect.any(Object)
+      )
     })
 
     it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', async () => {
@@ -5101,7 +5206,7 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        'powershell.exe',
+        RESOLVED_WINDOWS_POWERSHELL,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
@@ -5124,7 +5229,7 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        'powershell.exe',
+        RESOLVED_WINDOWS_POWERSHELL,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )

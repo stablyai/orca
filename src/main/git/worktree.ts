@@ -14,6 +14,7 @@ import type {
   RemoveWorktreeResult
 } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -29,6 +30,7 @@ type SparseWorktreeCreateError = Error & {
 
 export type GitWorktreeExecOptions = {
   wslDistro?: string
+  signal?: AbortSignal
 }
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
@@ -69,8 +71,12 @@ const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
-): { cwd: string; wslDistro?: string } {
-  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+): { cwd: string; wslDistro?: string; signal?: AbortSignal } {
+  return {
+    cwd,
+    ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.signal ? { signal: options.signal } : {})
+  }
 }
 
 function getErrorCode(error: unknown): string | undefined {
@@ -99,6 +105,12 @@ function isNotGitRepositoryError(error: unknown): boolean {
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
   return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
+}
+
+function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
+  return /(?:unknown|invalid|unrecognized).*(?:--path-format|path-format)/i.test(
     getErrorText(error)
   )
 }
@@ -348,6 +360,103 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
+function resolveRevParsePath(repoPath: string, value: string): string {
+  if (posix.isAbsolute(value) || win32.isAbsolute(value)) {
+    return value
+  }
+  // Old git ignores `--path-format=absolute`, so a relative toplevel/git-dir
+  // must be resolved against the scanned repo path.
+  return looksLikeWindowsPath(repoPath)
+    ? win32.resolve(repoPath, value)
+    : posix.resolve(repoPath, value)
+}
+
+type RepoLocation = { topLevel: string; commonDir: string }
+
+function parseRepoLocation(repoPath: string, output: string): RepoLocation | undefined {
+  // Old git (pre `--path-format`) echoes the unrecognized flag to stdout and
+  // exits 0 rather than erroring, so drop any echoed `-`-prefixed lines and
+  // read the two trailing path lines (toplevel, then git-common-dir). Strip only
+  // the trailing CR, not surrounding spaces — git paths may legitimately start
+  // or end with a space.
+  const lines = output
+    .split('\n')
+    .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
+    .filter((line) => line.length > 0 && !line.startsWith('-'))
+  if (lines.length < 2) {
+    return undefined
+  }
+  const [topLevel, commonDir] = lines.slice(-2)
+  return {
+    topLevel: resolveRevParsePath(repoPath, topLevel),
+    commonDir: resolveRevParsePath(repoPath, commonDir)
+  }
+}
+
+async function readRepoLocation(
+  repoPath: string,
+  resolveBasePath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<RepoLocation | undefined> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+      gitExecOptions(repoPath, options)
+    )
+    return parseRepoLocation(resolveBasePath, stdout)
+  } catch (error) {
+    if (!isUnsupportedRevParsePathFormatError(error)) {
+      return undefined
+    }
+  }
+
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '--show-toplevel', '--git-common-dir'],
+      gitExecOptions(repoPath, options)
+    )
+    return parseRepoLocation(resolveBasePath, stdout)
+  } catch {
+    return undefined
+  }
+}
+
+async function normalizeMainWorktreePath(
+  repoPath: string,
+  worktrees: GitWorktreeInfo[],
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const mainIndex = worktrees.findIndex((worktree) => worktree.isMainWorktree)
+  const mainWorktree = worktrees[mainIndex]
+  // Compare in the Git-output space: under WSL the porcelain/rev-parse paths are
+  // Linux while repoPath is a UNC path, so without translating, a UNC repoPath
+  // never matches the early-return and fires a needless rev-parse on every poll.
+  // Use the platform-independent UNC parser so the comparison holds regardless
+  // of host OS; the runner still receives the original repoPath for WSL routing.
+  const wslRepo = parseWslUncPath(repoPath)
+  const comparablePath = wslRepo ? wslRepo.linuxPath : repoPath
+  if (!mainWorktree || areWorktreePathsEqual(mainWorktree.path, comparablePath)) {
+    return worktrees
+  }
+
+  const location = await readRepoLocation(repoPath, comparablePath, options)
+  if (!location) {
+    return worktrees
+  }
+
+  // Why: only a separate-git-dir/submodule main worktree reports the Git
+  // directory as the main entry — i.e. the main entry equals git-common-dir.
+  // A linked worktree's main entry is a real working root, so gating on this
+  // equality avoids overwriting it with the linked worktree's own toplevel.
+  if (!areWorktreePathsEqual(mainWorktree.path, location.commonDir)) {
+    return worktrees
+  }
+
+  const normalized = [...worktrees]
+  normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
+  return normalized
+}
+
 /**
  * Parse the porcelain output of `git worktree list --porcelain`.
  */
@@ -441,7 +550,11 @@ async function readWorktreeList(
       cwd: repoPath,
       ...options
     })
-    return parseWorktreeList(stdout, { nulDelimited: true })
+    return normalizeMainWorktreePath(
+      repoPath,
+      parseWorktreeList(stdout, { nulDelimited: true }),
+      options
+    )
   } catch (error) {
     if (!isUnsupportedWorktreeListZError(error)) {
       throw error
@@ -454,7 +567,7 @@ async function readWorktreeList(
     cwd: repoPath,
     ...options
   })
-  return parseWorktreeList(stdout)
+  return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
 }
 
 async function readTranslatedWorktreeGraph(

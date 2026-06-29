@@ -10,6 +10,7 @@ import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -22,7 +23,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
@@ -67,23 +69,6 @@ export type LaunchAgentInNewTabResult = {
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
 } | null
-
-function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): void {
-  const state = useAppStore.getState()
-  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
-  if (!leafId) {
-    return
-  }
-  try {
-    state.setAgentStatus(makePaneKey(tabId, leafId), {
-      state: 'working',
-      prompt,
-      agentType: 'command-code'
-    })
-  } catch {
-    // Best-effort UI seed. Real hooks still own refinement/completion.
-  }
-}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -131,6 +116,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
           repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
         )
       : CLIENT_PLATFORM)
+  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const isRemote = repo ? repoIsRemote(repo) : false
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const effectiveAgentArgs =
     agentArgs !== undefined
@@ -159,6 +147,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -172,6 +161,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       draft: trimmedPrompt,
       cmdOverrides,
       platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv
     })
@@ -193,6 +183,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: resolvedLaunchPlatform,
+        isRemote,
         agentArgs: effectiveAgentArgs,
         agentEnv,
         allowEmptyPromptLaunch: true
@@ -205,6 +196,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -216,6 +208,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: resolvedLaunchPlatform,
+      isRemote,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: !hasPrompt
@@ -275,17 +268,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // lands after mount the agent binary never starts; the user sees a bare shell.
   // Since both calls happen synchronously in the same React batch, the queue
   // is in place by the time the pane commits.
-  //
-  // The telemetry payload is threaded through the queue → pty-connection →
-  // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
-  // only after the spawn succeeds. `request_kind: 'new'` because
-  // quick-launch always opens a fresh session.
-  //
-  // Why: stamp the launched agent on the tab so the tab bar shows the provider
-  // icon immediately, before the agent's first hook event arrives.
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
-    quickCommandLabel
+    quickCommandLabel,
+    ...initialAgentTabViewModeProps(store.settings)
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,

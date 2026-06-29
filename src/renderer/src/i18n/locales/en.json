@@ -56,7 +56,8 @@
     "zoomOut": "Zoom Out",
     "openWorktreePalette": "Open Worktree Palette",
     "window": "Window",
-    "help": "Help"
+    "help": "Help",
+    "paste": "Paste"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -356,6 +357,13 @@
             }
           }
         },
+        "worktree": {
+          "background": {
+            "terminals": {
+              "setupTitle": "Setup"
+            }
+          }
+        },
         "work": {
           "item": {
             "direct": {
@@ -386,6 +394,13 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            }
+          }
+        },
+        "mobile": {
+          "emulator": {
+            "tab": {
+              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
         }
@@ -534,7 +549,9 @@
         "ba6cb77082": "Failed to connect to project.",
         "chooseOrAddProjectBeforeWorkspace": "Choose or add a project before creating a workspace.",
         "folderWorkspaceCreateFailedTitle": "Folder workspace creation failed",
-        "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again."
+        "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again.",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
+        "5f3d2c8a1b": "Failed to resolve MR base."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -1123,7 +1140,9 @@
         "reconnectingSsh": "Reconnecting SSH...",
         "sshReconnectionFailed": "SSH reconnection failed",
         "notConnected": "Not connected",
-        "notePasteTooLarge": "Paste is too large for the note field."
+        "notePasteTooLarge": "Paste is too large for the note field.",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -2234,7 +2253,25 @@
             "2ddbd6fe8a": "checked",
             "ee81adfcef": "View",
             "4d0b72481c": "Ignore",
-            "9cc26c019d": "Remove"
+            "9cc26c019d": "Remove",
+            "0e2d235c63": "Inactive workspace scan ready",
+            "4a35c08764": "Review",
+            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
+            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "3d957ff117": "No workspaces match these filters.",
+            "e94b1f8bb4": "Clear filters",
+            "efb3843e75": "Filter and sort workspaces",
+            "93b7381d50": "Filters",
+            "a615e24679": "Sort",
+            "4cc5b73efe": "Finding inactive workspaces...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
+            "searchPlaceholder": "Search workspaces",
+            "ageFilter": "Age",
+            "reviewFilter": "Review",
+            "gitFilter": "Git",
+            "contextFilter": "Context",
+            "sortBy": "Sort by",
+            "sortDirection": "Direction"
           }
         }
       },
@@ -2366,6 +2403,7 @@
             "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "Copy Pane ID",
             "39809d152f": "Set Title…",
+            "clearPaneTitle": "Clear Pane Title",
             "06c2b0f043": "Equalize Pane Sizes",
             "98bccf4fa2": "Split Terminal Down",
             "20e565d865": "Split Terminal Right",
@@ -2378,7 +2416,8 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane"
+            "df766809e0": "Collapse Pane",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -2428,7 +2467,10 @@
                   "38e41edc6e": "This workspace cannot be forked into a git worktree.",
                   "f867385bb5": "Could not find the source workspace for this fork.",
                   "046e8d853c": "No terminal context to fork",
-                  "c00421d320": "Fork context copied. Launch an agent and paste it to start the fork."
+                  "c00421d320": "Fork context copied. Launch an agent and paste it to start the fork.",
+                  "f62b40e2c7": "No terminal context to copy",
+                  "373a3103e7": "Context copied",
+                  "3fc568a49d": "Failed to copy context."
                 }
               }
             },
@@ -2496,7 +2538,9 @@
             "couldNotReadPayload": "Could not read the session drag payload.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
-            "sessionQueued": "Session queued"
+            "sessionQueued": "Session queued",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
@@ -3971,7 +4015,9 @@
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
-          "workspaceSection": "Workspace"
+          "workspaceSection": "Workspace",
+          "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
+          "deleteWorktree": "Delete Worktree"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -4332,6 +4378,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Branch"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
+          "d9f7b2a14c": "Collapse new externally-created worktrees for {{value0}}",
+          "e2c4a8d91f": "Expand new externally-created worktrees for {{value0}}",
+          "7c4e9b2a81": "New externally-created worktrees",
+          "5e1b8d3f62": "Hide external worktrees permanently",
+          "4d7a1c9e53": "These worktrees were created outside of Orca.",
+          "8b3f2e1d74": "Import",
+          "1c9e7a4b28": "Keep hidden",
+          "6f2d8c1e95": "Import all",
+          "c3e8a1f4b2": "Don't show again"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "Could not keep external worktrees hidden. Try again.",
+          "b7e4d1a062": "Could not import external worktrees. Try again.",
+          "c94f0b3a15": "Could not hide external worktrees permanently. Try again."
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "Hide external worktrees?",
+          "6e91b3c4d2": "External worktrees will not be shown in the sidebar or this list anymore for {{value0}}, including ones created later.",
+          "1f8a5d9e73": "You can turn this back on later from project settings.",
+          "8c0b2e7a41": "Open Non-Orca worktrees settings",
+          "5d1c9f0a82": "Cancel",
+          "3b7e4a1c96": "Hide external worktrees"
         }
       },
       "shared": {
@@ -4593,7 +4664,16 @@
             "tintOpacity": "Tint Strength",
             "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
           },
-          "workspaceCardLayoutGuidance": "Use the workspace sidebar options menu > Card layout > Compact."
+          "workspaceCardLayoutGuidance": "Managed from the workspace sidebar.",
+          "interfaceDefaultFont": "Default font",
+          "terminalDefaultFont": "Default font",
+          "interfaceTitle": "Interface",
+          "terminalTitle": "Terminal",
+          "windowSidebarTitle": "Window & Sidebar",
+          "windowSidebarSummary": "Sidebar, status bar, and file explorer",
+          "statusBarCount": "{{value0}} indicators visible.",
+          "gitIgnoredGlossary": "Files matched by .gitignore.",
+          "statusBarDescription": "Choose which indicators appear in the status bar."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4918,7 +4998,18 @@
           },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
-          "0e89a574ae": "Floating animated pet in the bottom-right corner."
+          "0e89a574ae": "Floating animated pet in the bottom-right corner.",
+          "nativeChat": {
+            "title": "Native chat",
+            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "toggleLabel": "Toggle native chat",
+            "defaultTitle": "Default view",
+            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultViewLabel": "Default native chat view",
+            "defaultViewTerminal": "Terminal chat",
+            "defaultViewNative": "Native chat"
+          }
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "Status Bar",
@@ -5148,7 +5239,11 @@
           "sourceControlGroupOrderDescription": "Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.",
           "changesFirst": "Changes first",
           "stagedFirst": "Staged first",
-          "untrackedFirst": "Untracked first"
+          "untrackedFirst": "Untracked first",
+          "compareAgainstUpstreamTitle": "Default Compare Base",
+          "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
+          "compareBaseRepositoryDefault": "Repository default",
+          "compareBaseBranchUpstream": "Branch upstream"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Placeholder toggle",
@@ -5345,7 +5440,12 @@
           "a4f1c82d90": "Disabled",
           "b5e2d93e01": "Checking...",
           "c6f3ea4f12": "Ready",
-          "d704fb5023": "Needs setup"
+          "d704fb5023": "Needs setup",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Regenerate the QR code and scan it from the Orca mobile app.",
@@ -5392,7 +5492,10 @@
           "b5a2ed83ff": "App Store",
           "c8491c17ef": "Control Orca from your phone by scanning a QR code. Beta / early preview - expect bugs and breaking changes. Get the iOS app from the",
           "e7a3ae8c4e": "Mobile",
-          "174f4a3c6d": "Control terminals and agents from your phone."
+          "174f4a3c6d": "Control terminals and agents from your phone.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "Send Test Notification",
@@ -5642,7 +5745,9 @@
           "2b6356e744": "Saved",
           "81057d5f71": "Saving...",
           "da37d6f10e": "Copy",
-          "3149964b66": "Copied"
+          "3149964b66": "Copied",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -6241,7 +6346,9 @@
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
           "e90afcc44f": "off",
-          "16c471ee03": "on"
+          "16c471ee03": "on",
+          "typographyAdvanced": "Typography",
+          "dimUnfocusedPanes": "Dim unfocused panes."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -6272,12 +6379,12 @@
           "3d88af864d": "Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.",
           "8a956cc91e": "Characters treated as word boundaries for double-click selection.",
           "4bebcc2b2c": "Word Separators",
-          "12e06178fa": "MB",
+          "12e06178fa": "rows",
           "907b0b9d3e": "Custom",
-          "5336c096af": "{{value0}} megabytes",
-          "81d86b2dd2": "Maximum terminal scrollback buffer size for new terminal panes.",
-          "9df53f7c14": "Scrollback Size",
-          "c3810b2b42": "Maximum terminal scrollback buffer size.",
+          "5336c096af": "{{value0}} rows",
+          "81d86b2dd2": "Retained desktop terminal rows for new and open panes.",
+          "9df53f7c14": "Scrollback Rows",
+          "c3810b2b42": "Retained desktop terminal rows.",
           "267d020745": "Scrollback, word boundaries, and platform-specific terminal behaviors.",
           "5e5f06c82c": "Advanced",
           "003df129fe": "Split Horizontally",
@@ -6771,7 +6878,7 @@
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",
-              "description": "Switch between compact and detailed workspace cards from the workspace sidebar options menu.",
+              "description": "Workspace cards can use compact or detailed layouts.",
               "compact": "compact",
               "compactDisplay": "compact display",
               "workspaceCards": "workspace cards",
@@ -7059,7 +7166,11 @@
             "b54cea709b": "sidekick",
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
-            "87d99e634b": "Pet"
+            "87d99e634b": "Pet",
+            "nativeChat": {
+              "title": "Native chat",
+              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+            }
           }
         },
         "floating": {
@@ -7272,7 +7383,19 @@
             "stagedFirst": "staged first",
             "untrackedFirst": "untracked first",
             "sourceControl": "source control",
-            "gitChanges": "git changes"
+            "gitChanges": "git changes",
+            "compareAgainstUpstreamTitle": "Default Compare Base",
+            "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
+            "compareBase": "compare base",
+            "defaultCompareBase": "default compare base",
+            "defaultBranch": "default branch",
+            "repositoryDefault": "repository default",
+            "branchUpstream": "branch upstream",
+            "currentBranch": "current branch",
+            "upstream": "upstream",
+            "localChanges": "local changes",
+            "originMaster": "origin/master",
+            "committedChanges": "committed changes"
           }
         },
         "input": {
@@ -7459,7 +7582,9 @@
               "f4ed142753": "phone",
               "f213400800": "mobile",
               "671eb4173c": "Control terminals and agents from your phone.",
-              "ffd52a96e4": "Mobile"
+              "ffd52a96e4": "Mobile",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -7916,8 +8041,9 @@
             "957a0203fc": "Word Separators",
             "56fff3d113": "memory",
             "fffdff40a7": "buffer",
-            "f7d56b6281": "Maximum terminal scrollback buffer size.",
-            "7674e758e1": "Scrollback Size",
+            "rows": "rows",
+            "f7d56b6281": "Retained desktop terminal rows.",
+            "7674e758e1": "Scrollback Rows",
             "411229c636": "light",
             "781f49d942": "divider",
             "77d9f9cd55": "Controls the split divider line between panes in light mode.",
@@ -8351,6 +8477,24 @@
           "wslUnavailable": "WSL is not available on this machine.",
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+        },
+        "MobileEmulatorSdkStatus": {
+          "536026130e": "Emulator SDKs",
+          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "027cbf668a": "Android SDK",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
+          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
+          "b94ff260e6": "Download Android Studio",
+          "18925b082d": "Locate SDK folder",
+          "8c52684db8": "Clear",
+          "76eb88b88e": "iOS Simulator (Xcode)",
+          "c6f3ea4f12": "Ready",
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
+        },
+        "AppearanceAdvancedDisclosure": {
+          "advanced": "Advanced"
         }
       },
       "right": {
@@ -8901,8 +9045,8 @@
                 "5e52f4ef7f": "failing",
                 "02ca4f9074": "passing",
                 "e15a8b77ef": "No inline details are available for this check.",
-                "679bf2093c": "Copy log tail",
-                "d713f500b2": "Log tail (last 200 lines)",
+                "679bf2093c": "Copy log excerpt",
+                "d713f500b2": "Log excerpt",
                 "a916648574": "Open details",
                 "07eccfa397": "No details are available for this check.",
                 "49731703ea": "Jobs",
@@ -9212,7 +9356,10 @@
             "sessionId": "Session ID",
             "logPath": "Log path",
             "originalPaneUnavailable": "Original pane is no longer available.",
-            "worktreeUnavailable": "Worktree is no longer available."
+            "worktreeUnavailable": "Worktree is no longer available.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9730,7 +9877,12 @@
           "a6cffbbb0b": "Generate code",
           "e59a252eca": "Regenerate code",
           "d0b52871ce": "Your phones are paired.",
-          "051978a785": "Your phone is paired."
+          "051978a785": "Your phone is paired.",
+          "channel": {
+            "group": "Release channel",
+            "preview": "Preview",
+            "stable": "Stable"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -9749,7 +9901,11 @@
           "ad2284a9e2": "Close · Esc",
           "9883b58693": "Close Orca Mobile",
           "fb5f28330e": "Show in sidebar",
-          "c669abcf8f": "Hide from sidebar"
+          "c669abcf8f": "Hide from sidebar",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Hide from sidebar",
+          "b7e3d1c84a": "Show in sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal session",
@@ -9760,7 +9916,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Scan with your Android camera to download the latest APK from GitHub Releases.",
-              "432db52b73": "Scan with your iPhone camera to open the App Store."
+              "432db52b73": "Scan with your iPhone camera to open the App Store.",
+              "preview": {
+                "tagline": "Newest features, updated daily."
+              },
+              "stable": {
+                "tagline": "The public release, updated weekly."
+              }
             }
           }
         },
@@ -9834,6 +9996,20 @@
             "cefd048225": "Back",
             "c5ad56786d": "spinner"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "Custom network address",
+          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "label": "Address",
+          "placeholder": "my-mac.ts.net or 192.168.1.50",
+          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "cancel": "Cancel",
+          "use": "Use address"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "Network address to advertise",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…"
         }
       },
       "gitlab": {
@@ -10849,7 +11025,14 @@
           "32ae8d7d57": "Previous match",
           "158c645829": "Find in rich markdown editor",
           "98b89276f3": "Find in rich editor",
-          "a86958d508": "No results"
+          "a86958d508": "No results",
+          "e8c147435f": "Hide replace",
+          "9cdc38be33": "Toggle replace",
+          "482b637099": "Match case",
+          "68d090241d": "Match whole word",
+          "fd97c7e585": "Replace",
+          "44682b4159": "Replace in rich markdown editor",
+          "c2884f5e95": "Replace all"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No blocks found",
@@ -11008,6 +11191,7 @@
           "d098e5529a": "Output",
           "f2fe8a4e8f": "Annotations",
           "cdbfda4dec": "Annotation",
+          "5e2a9c3f88": "Open file at this line",
           "066fedd446": "Failed jobs",
           "49731703ea": "Jobs",
           "ee07b33924": "unknown",
@@ -11019,6 +11203,13 @@
           "d5a8c2f1b9": "Start the default AI agent to fix this check",
           "e2b4d7c8a1": "Choose an agent for this check",
           "f1c9e3a6d4": "Choose agent to fix check"
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         },
         "check": {
           "run": {
@@ -11656,6 +11847,11 @@
           "chooseHost": "Choose automation host",
           "adding": "Adding project…",
           "addProject": "Add project"
+        },
+        "AutomationSetupDecisionField": {
+          "5a7863909c": "Run setup for each new workspace",
+          "18f000ad4e": "Advanced",
+          "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
       "agent": {
@@ -11878,6 +12074,11 @@
             "later": "Later"
           }
         }
+      },
+      "nativeChat": {
+        "contextMenu": {
+          "copy": "Copy"
+        }
       }
     },
     "i18n": {
@@ -11891,6 +12092,94 @@
           "b3d7e0f1a8": "merge request",
           "a2c6d9e0f7": "Merge Request",
           "91b5c8d7e6": "GitLab"
+        }
+      }
+    }
+  },
+  "components": {
+    "native-chat": {
+      "composer": {
+        "imageUnsupported": "Image paste is not supported for this agent.",
+        "send": "Send",
+        "noPty": "No live terminal — toggle back to reconnect.",
+        "locked": "Input is held by another device.",
+        "placeholder": "Send a message…",
+        "mentionHint": "Referencing file:",
+        "attach": "Attach file",
+        "startDictation": "Start dictation",
+        "stopDictation": "Stop dictation",
+        "noSkills": "No matching skills",
+        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
+        "removeAttachment": "Remove attachment"
+      },
+      "tool": {
+        "running": "Running…",
+        "result": "Result"
+      },
+      "status": {
+        "responding": "Agent is responding"
+      },
+      "jumpToLatest": "Jump to latest",
+      "toggle": {
+        "showTerminal": "Show terminal",
+        "showChat": "Show chat view"
+      },
+      "state": {
+        "loading": {
+          "title": "Loading conversation…",
+          "subtitle": "Reading the agent transcript."
+        },
+        "error": {
+          "title": "Could not load conversation",
+          "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
+        },
+        "notAgent": {
+          "title": "No conversation here",
+          "subtitle": "This terminal is not running a recognized coding agent."
+        },
+        "empty": {
+          "title": "Start a chat with {{value0}}",
+          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+        }
+      },
+      "stop": "Stop the agent",
+      "copyMessage": {
+        "copied": "Copied",
+        "copy": "Copy message"
+      },
+      "scrollMessageToTop": "Scroll this message to top",
+      "loadingEarlier": "Loading…",
+      "loadEarlier": "Load earlier messages",
+      "question": {
+        "step": "Step {{value0}}",
+        "other": "Other…",
+        "otherPlaceholder": "Type your answer",
+        "cancel": "Cancel",
+        "send": "Send answer",
+        "next": "Next"
+      },
+      "approval": {
+        "title": "Allow {{value0}}?",
+        "allow": "Allow",
+        "deny": "Deny"
+      }
+    },
+    "tab": {
+      "bar": {
+        "SortableTabContextMenu": {
+          "switchToTerminalView": "Switch to terminal view",
+          "switchToChatView": "Switch to chat view"
+        }
+      }
+    },
+    "workspace": {
+      "cleanup": {
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "Review alpha cleanup"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     }

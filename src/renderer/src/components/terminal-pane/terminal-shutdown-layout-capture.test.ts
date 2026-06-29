@@ -53,7 +53,7 @@ function mockRootForPane(paneId: number, leafId: string = LEAF_ID): HTMLDivEleme
   return new MockHTMLElement({ firstElementChild: pane }) as unknown as HTMLDivElement
 }
 
-function mockRootForSplit(firstPaneId: number, secondPaneId: number): HTMLDivElement {
+function mockRootForSplit(firstPaneId = 1, secondPaneId = 2): HTMLDivElement {
   const first = new MockHTMLElement({
     classList: ['pane'],
     dataset: { paneId: String(firstPaneId), leafId: LEAF_ID },
@@ -327,5 +327,86 @@ describe('captureTerminalShutdownLayout', () => {
       [LEAF_ID]: 'pty-first',
       [LEAF_ID_2]: 'pty-second'
     })
+  })
+
+  it('does not persist a no-PTY pane as active when another split pane is bound', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const paneWithoutPty = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const paneWithPty = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      stablePaneId: LEAF_ID_2,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
+      getActivePane: vi.fn(() => paneWithoutPty)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(),
+      expandedPaneId: null,
+      paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-2') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: undefined
+    })
+
+    expect(layout.activeLeafId).toBe(LEAF_ID_2)
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
+  })
+
+  it('does not preserve a stale prior PTY binding for active shutdown focus', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const paneWithoutPty = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const paneWithPty = {
+      id: 2,
+      leafId: LEAF_ID_2,
+      stablePaneId: LEAF_ID_2,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [paneWithoutPty, paneWithPty]),
+      getActivePane: vi.fn(() => paneWithoutPty)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForSplit(),
+      expandedPaneId: null,
+      paneTransports: new Map([[2, { getPtyId: vi.fn(() => 'pty-2') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: null,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: 'stale-pty', [LEAF_ID_2]: 'pty-2' }
+      }
+    })
+
+    expect(layout.activeLeafId).toBe(LEAF_ID_2)
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID_2]: 'pty-2' })
   })
 })

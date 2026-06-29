@@ -356,10 +356,16 @@ function removeTransientCursorShowSequences(data: string): string {
         if (synchronizedEndIndex === -1) {
           break
         }
-        // Why: a synchronized frame can end while parked on footer/status
-        // text. Do not expose that transient cell as the visible cursor.
+        // Why: keep the cursor hidden while xterm parses the synchronized
+        // repaint, then restore it after the frame ends so Windows never paints
+        // the cursor in the transient draw position.
         result += data.slice(offset, showIndex)
-        offset = showIndex + CURSOR_SHOW_SEQUENCE.length
+        result += data.slice(
+          showIndex + CURSOR_SHOW_SEQUENCE.length,
+          synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
+        )
+        result += CURSOR_SHOW_SEQUENCE
+        offset = synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
         showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
         continue
       }

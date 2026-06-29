@@ -104,9 +104,11 @@ import { classifyWorkspaceCreateError } from './workspace-create-error-classifie
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaLeftoverDirectory,
   canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
+  isDangerousWorktreeRemovalPath,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   stripOrcaProvenanceMetaUpdates,
@@ -251,6 +253,37 @@ async function isAlreadyRemovedWorktreePath(
     return false
   }
   return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
+}
+
+async function isLocalGitRepository(
+  runtimeWorktreePath: string,
+  localWorktreeGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  try {
+    await gitExecFileAsync(['status', '--short'], {
+      cwd: runtimeWorktreePath,
+      ...localWorktreeGitOptions
+    })
+    return true
+  } catch (error) {
+    return !gitStatusErrorMeansNotRepository(error)
+  }
+}
+
+function gitStatusErrorMeansNotRepository(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : typeof error === 'string'
+          ? error
+          : ''
+  const stderr =
+    error && typeof error === 'object' && 'stderr' in error
+      ? String((error as { stderr: unknown }).stderr)
+      : ''
+  return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
 function getWorktreeRemovalOptionsKey(args: { force?: boolean; skipArchive?: boolean }): string {
@@ -1389,19 +1422,18 @@ export function registerWorktreeHandlers(
               )
             } else {
               const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-              canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
-                toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-                toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-                access.statPath,
-                access.readPath
-              )
+              canCleanOrphanedDirectory =
+                !isDangerousWorktreeRemovalPath(worktreePath, repo.path) &&
+                (await canSafelyRemoveOrphanedWorktreeDirectory(
+                  toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
+                  toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                  access.statPath,
+                  access.readPath
+                ))
             }
           }
           if (canCleanOrphanedDirectory) {
-            assertWorktreeDoesNotContainRegisteredWorktree(
-              toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-              registeredWorktrees
-            )
+            assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
             if (!args.force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
@@ -1431,6 +1463,45 @@ export function registerWorktreeHandlers(
             preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
             notifyWorktreesChanged(mainWindow, repoId)
             return {}
+          }
+          if (!repo.connectionId) {
+            const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+            const runtimeWorktreePath = toLocalWorktreeRuntimePath(
+              worktreePath,
+              localWorktreeGitOptions
+            )
+            if (
+              await canCleanupUnregisteredOrcaLeftoverDirectory({
+                meta: removedMeta,
+                worktreePath,
+                runtimeWorktreePath,
+                repo,
+                runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                knownOrcaLayouts,
+                registeredWorktrees,
+                statPath: access.statPath,
+                isGitRepository: (path) => isLocalGitRepository(path, localWorktreeGitOptions)
+              })
+            ) {
+              if (!args.force) {
+                throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+              }
+              await closeLocalWatcherForRemoval(worktreePath)
+              await removeLocalWorktreePath(worktreePath, localWorktreeGitOptions)
+              await cleanupUnusedWorktreePushTargetRemote(
+                repo.path,
+                args.worktreeId,
+                removedPushTarget,
+                store,
+                localWorktreeGitOptions
+              )
+              runtime.clearOptimisticReconcileToken(args.worktreeId)
+              removeWorktreeMetadataAndTransientState(store, args.worktreeId)
+              preservedBranchCleanupByWorktreeId.delete(args.worktreeId)
+              invalidateAuthorizedRootsCache()
+              notifyWorktreesChanged(mainWindow, repoId)
+              return {}
+            }
           }
           if (await isAlreadyRemovedWorktreePath(repo, worktreePath, localWorktreeGitOptions)) {
             if (!args.force && !removedMeta) {
@@ -1755,11 +1826,13 @@ export function registerWorktreeHandlers(
 
       if (repo.connectionId) {
         const provider = requireSshGitProvider(repo.connectionId)
-        await forceDeleteLocalBranch(
+        // Why: SSH must use the write-capable relay RPC; the shared exec-based
+        // helper routes through the read-only git.exec allowlist, which rejects
+        // the worktree/update-ref/config writes this delete needs.
+        await provider.forceDeletePreservedBranch(
           repo.path,
           cleanupTarget.branchName,
-          cleanupTarget.head,
-          (argv, cwd) => provider.exec(argv, cwd)
+          cleanupTarget.head
         )
         await cleanupUnusedWorktreePushTargetRemoteSsh(
           provider,

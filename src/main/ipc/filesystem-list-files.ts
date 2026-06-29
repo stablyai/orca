@@ -3,18 +3,18 @@ import type { ChildProcess } from 'child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
-import { gitSpawn, wslAwareSpawn } from '../git/runner'
+import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
 import {
   buildExcludePathPrefixes,
-  buildGitLsFilesArgsForQuickOpen,
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
   type RgOutputMode,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../../shared/quick-open-filter'
+import { listFilesWithGit } from './filesystem-list-files-git-fallback'
 
 export async function listQuickOpenFiles(
   rootPath: string,
@@ -205,104 +205,4 @@ function getQuickOpenRgOutputMode(
     return { kind: 'absolute', rootPath }
   }
   return { kind: 'cwd-relative' }
-}
-
-/**
- * Fallback file lister using git ls-files. Used when rg is not available.
- *
- * Why two git ls-files calls: the first lists tracked + untracked-but-not-ignored
- * files (mirrors rg --files --hidden with gitignore respect). The second
- * surfaces ignored files (mirrors the second rg call with --no-ignore-vcs).
- */
-function listFilesWithGit(
-  rootPath: string,
-  excludePathPrefixes: readonly string[],
-  localGitOptions: { wslDistro?: string }
-): Promise<string[]> {
-  const files = new Set<string>()
-  const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
-
-  const runGitLsFiles = (args: string[]): Promise<void> => {
-    return new Promise((resolve) => {
-      let buf = ''
-      let done = false
-
-      const processPath = (path: string): void => {
-        if (!path) {
-          return
-        }
-        // Why: git exclude pathspecs prune most hits, but post-filter is
-        // still required because pathspec semantics differ subtly from the
-        // rg globs and exist as a correctness backstop.
-        if (shouldExcludeQuickOpenRelPath(path, excludePathPrefixes)) {
-          return
-        }
-        if (shouldIncludeQuickOpenPath(path)) {
-          files.add(path)
-        }
-      }
-
-      // Why: git ls-files outputs paths relative to cwd, so we set cwd to
-      // rootPath and use the output directly — no prefix stripping needed.
-      const child = gitSpawn(['ls-files', ...args], {
-        cwd: rootPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-      let timer: ReturnType<typeof setTimeout>
-      const handleStdoutData = (chunk: string): void => {
-        buf += chunk
-        let start = 0
-        let nulIdx = buf.indexOf('\0', start)
-        while (nulIdx !== -1) {
-          processPath(buf.substring(start, nulIdx))
-          start = nulIdx + 1
-          nulIdx = buf.indexOf('\0', start)
-        }
-        buf = start < buf.length ? buf.substring(start) : ''
-      }
-      const handleStderrData = (): void => {
-        /* drain */
-      }
-      const handleError = (): void => {
-        buf = ''
-        finish()
-      }
-      const handleClose = (): void => {
-        if (buf) {
-          processPath(buf)
-        }
-        finish()
-      }
-      const finish = (): void => {
-        if (done) {
-          return
-        }
-        done = true
-        clearTimeout(timer)
-        // Why: child.kill() is advisory. If git ignores it, detach our
-        // closures so repeated Quick Open attempts do not retain old scans.
-        child.stdout!.off('data', handleStdoutData)
-        child.stderr!.off('data', handleStderrData)
-        child.off('error', handleError)
-        child.off('close', handleClose)
-        resolve()
-      }
-
-      child.stdout!.setEncoding('utf-8')
-      child.stdout!.on('data', handleStdoutData)
-      child.stderr!.on('data', handleStderrData)
-      child.once('error', handleError)
-      child.once('close', handleClose)
-      timer = setTimeout(() => {
-        buf = ''
-        child.kill()
-        finish()
-      }, 10000)
-    })
-  }
-
-  return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)]).then(() =>
-    Array.from(files)
-  )
 }

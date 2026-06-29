@@ -58,7 +58,6 @@ type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
-  newCardStyle?: boolean
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onOpenChange?: (open: boolean) => void
@@ -123,10 +122,6 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
-}
-
-function shouldShowReadToggleContextMenuItem(args: { newCardStyle: boolean }): boolean {
-  return !args.newCardStyle
 }
 
 function getWorktreeParentPickerAnchor(
@@ -249,7 +244,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
-  newCardStyle = false,
   selectedWorktrees,
   onContextMenuSelect,
   onOpenChange
@@ -351,7 +345,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     (item) =>
       worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
   )
-  const showReadToggle = shouldShowReadToggleContextMenuItem({ newCardStyle })
   const eligibleParentCount = useMemo(
     () =>
       getEligibleWorktreeParents({
@@ -713,24 +706,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              {showReadToggle && (
-                <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                  {worktree.isUnread ? (
-                    <BellOff className="size-3.5" />
-                  ) : (
-                    <Bell className="size-3.5" />
-                  )}
-                  {worktree.isUnread
-                    ? translate(
-                        'auto.components.sidebar.WorktreeContextMenu.8dacff1fe0',
-                        'Mark Read'
-                      )
-                    : translate(
-                        'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                        'Mark Unread'
-                      )}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
+                {worktree.isUnread ? (
+                  <BellOff className="size-3.5" />
+                ) : (
+                  <Bell className="size-3.5" />
+                )}
+                {worktree.isUnread
+                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+                  : translate(
+                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
+                      'Mark Unread'
+                    )}
+              </DropdownMenuItem>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
@@ -842,6 +830,30 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   )}
             </TooltipContent>
           </Tooltip>
+          {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
+             disabled Delete Worktree for parity with non-primary cards and pair
+             it with the enabled Remove Project action below. */}
+          {!isMultiContext && removesProject ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <DropdownMenuItem variant="destructive" disabled>
+                    <Trash2 className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.deleteWorktree',
+                      'Delete Worktree'
+                    )}
+                  </DropdownMenuItem>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
+                  "Primary worktree — can't be deleted. Remove the project instead."
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {/* Why: primary checkout rows remove the project from Orca instead of
              invoking git worktree deletion. Radix forwards unknown props to the
              DOM element, so `title` works directly without a wrapper span —
@@ -922,7 +934,6 @@ export {
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
-  shouldShowReadToggleContextMenuItem,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

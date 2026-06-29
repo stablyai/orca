@@ -37,6 +37,7 @@ import {
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { sliceCheckLogTail } from './check-job-log-tail-slice'
 import { getPRConflictSummary } from './conflict-summary'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -98,8 +99,6 @@ type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
 const ORCA_REPO = 'stablyai/orca'
-const PR_CHECK_LOG_TAIL_LINES = 200
-const PR_CHECK_LOG_TAIL_BYTES = 16 * 1024
 const PR_CHECK_LOG_TAIL_JOB_LIMIT = 5
 // Why: each entry holds up to 16KB of log text; bound the cache so a long
 // session reviewing many failing checks can't grow it without limit.
@@ -1998,6 +1997,9 @@ const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' 
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
+  // Why: compare merged implicit PRs against the inspected worktree HEAD, not
+  // the main repo HEAD, without adding a worktree-scoped git call.
+  currentHeadOid?: string | null
 }
 
 function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
@@ -2551,8 +2553,14 @@ async function lookupPRByBranchName(args: {
   headRepo: OwnerRepo | null
   branchName: string
   ghOptions: GhExecOptions
-}): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
+}): Promise<{
+  data: PullRequestLookupData | null
+  dataRepo: OwnerRepo | null
+  pendingError?: unknown
+}> {
   if (args.candidates.length > 0) {
+    let pendingError: unknown
+    let hasPendingError = false
     for (const candidate of args.candidates) {
       try {
         const branchData = args.headRepo
@@ -2573,19 +2581,34 @@ async function lookupPRByBranchName(args: {
         if (args.headRepo) {
           throw err
         }
-        const branchData = await getRestPRForBranch(
-          candidate,
-          candidate.owner,
-          args.branchName,
-          args.ghOptions
-        )
-        const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
-        if (data) {
-          return { data, dataRepo: candidate }
+        if (!hasPendingError) {
+          pendingError = err
+          hasPendingError = true
+        }
+        try {
+          const branchData = await getRestPRForBranch(
+            candidate,
+            candidate.owner,
+            args.branchName,
+            args.ghOptions
+          )
+          const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
+          if (data) {
+            return { data, dataRepo: candidate }
+          }
+        } catch (retryErr) {
+          if (!hasPendingError) {
+            pendingError = retryErr
+            hasPendingError = true
+          }
         }
       }
     }
-    return { data: null, dataRepo: null }
+    // Why: branch-list failures are ambiguous for fork discovery, but exact
+    // fallback-number recovery should still get a chance before surfacing error.
+    return hasPendingError
+      ? { data: null, dataRepo: null, pendingError }
+      : { data: null, dataRepo: null }
   }
 
   try {
@@ -2775,17 +2798,25 @@ export async function getPRForBranchOutcome(
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
     let dataHeadRepo: OwnerRepo | null = headRepo
+    let pendingBranchLookupError: unknown
+    let hasPendingBranchLookupError = false
     let currentHeadOidForMergedImplicit: string | null | undefined
 
+    const explicitCurrentHeadOid =
+      typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
+        ? options.currentHeadOid.trim()
+        : null
     const hideMergedImplicitPR = async (candidate: PullRequestLookupData | null) => {
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
-      currentHeadOidForMergedImplicit ??= await getCurrentHeadOid(
-        repoPath,
-        connectionId,
-        localGitOptions
-      )
+      // Why: prefer the caller-supplied worktree HEAD; only shell out (against
+      // the main repo path) when no explicit oid is available, matching legacy
+      // behavior. This keeps merged-at-head PRs visible for secondary worktrees.
+      currentHeadOidForMergedImplicit ??=
+        explicitCurrentHeadOid !== null
+          ? explicitCurrentHeadOid
+          : await getCurrentHeadOid(repoPath, connectionId, localGitOptions)
       return shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)
     }
 
@@ -2808,6 +2839,10 @@ export async function getPRForBranchOutcome(
       })
       data = branchLookup.data
       dataRepo = branchLookup.dataRepo
+      if ('pendingError' in branchLookup) {
+        pendingBranchLookupError = branchLookup.pendingError
+        hasPendingBranchLookupError = true
+      }
       if (!data) {
         // Why: the tracked upstream can identify the real PR head by branch
         // name or by fork owner even when branch names match locally.
@@ -2837,6 +2872,10 @@ export async function getPRForBranchOutcome(
             })
             data = upstreamLookup.data
             dataRepo = upstreamLookup.dataRepo
+            if (!hasPendingBranchLookupError && 'pendingError' in upstreamLookup) {
+              pendingBranchLookupError = upstreamLookup.pendingError
+              hasPendingBranchLookupError = true
+            }
             if (data) {
               dataHeadRepo = upstreamHeadRepo
             }
@@ -2861,20 +2900,25 @@ export async function getPRForBranchOutcome(
       dataRepo = fallbackLookup.dataRepo
     }
     if (!data) {
+      if (hasPendingBranchLookupError) {
+        return prRefreshUpstreamError(pendingBranchLookupError)
+      }
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
     const fallbackConfirmedMergedBranch =
       typeof fallbackPRNumber === 'number' &&
       mergedBranchLookupNumber === fallbackPRNumber &&
       data.number === fallbackPRNumber
+    const explicitHeadHidesMergedImplicitPR =
+      explicitCurrentHeadOid !== null &&
+      shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid)
+    const shouldPreserveMergedFallback =
+      !explicitHeadHidesMergedImplicitPR &&
+      (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a currently visible PR can be merged outside Orca; when the caller
     // marks the fallback as visible review state, keep its lifecycle fresh even
     // if GitHub no longer reports it by branch (for example deleted heads).
-    if (
-      (await hideMergedImplicitPR(data)) &&
-      !fallbackConfirmedMergedBranch &&
-      options.acceptMergedFallbackPR !== true
-    ) {
+    if ((await hideMergedImplicitPR(data)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
@@ -3099,16 +3143,15 @@ function mapWorkflowJobs(raw: unknown, checkName?: string): PRCheckRunDetails['j
 }
 
 function isCheckJobFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
-}
-
-function sliceCheckLogTail(logText: string): string {
-  const lineTail = logText.split(/\r?\n/).slice(-PR_CHECK_LOG_TAIL_LINES).join('\n')
-  const bytes = Buffer.from(lineTail, 'utf8')
-  if (bytes.byteLength <= PR_CHECK_LOG_TAIL_BYTES) {
-    return lineTail
-  }
-  return bytes.subarray(bytes.byteLength - PR_CHECK_LOG_TAIL_BYTES).toString('utf8')
+  return (
+    state === 'failure' ||
+    state === 'failed' ||
+    state === 'action_required' ||
+    state === 'cancelled' ||
+    state === 'stale' ||
+    state === 'startup_failure' ||
+    state === 'timed_out'
+  )
 }
 
 function getCheckJobLogTailCacheKey(job: PRCheckRunDetails['jobs'][number]): string | null {

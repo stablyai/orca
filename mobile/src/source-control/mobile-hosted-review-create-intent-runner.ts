@@ -34,7 +34,17 @@ export type MobileHostedReviewCreateIntentRunOutcome =
       error: string
       committed?: boolean
       status?: MobileGitStatusResult | null
+      commitMessage?: string
     }
+
+export function isMobileHostedReviewCommitFailure(
+  outcome: MobileHostedReviewCreateIntentRunOutcome,
+  progress: MobileHostedReviewCreateIntentProgress | null
+): outcome is Extract<MobileHostedReviewCreateIntentRunOutcome, { ok: false }> & {
+  committed: false
+} {
+  return !outcome.ok && progress === 'committing' && outcome.committed === false
+}
 
 export async function runMobileHostedReviewCreateIntent(
   client: Pick<RpcClient, 'sendRequest'>,

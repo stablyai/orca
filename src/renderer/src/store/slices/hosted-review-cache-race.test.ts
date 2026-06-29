@@ -158,10 +158,58 @@ describe('hosted review cache race protection', () => {
       vi.setSystemTime(300)
       rejectFetch(new Error('older lookup failed'))
 
-      await expect(request).resolves.toBeNull()
+      // Why: a failed lookup preserves (and returns) the last known review
+      // instead of caching a definitive miss that would blank the card.
+      await expect(request).resolves.toEqual(newerReview)
       expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
         data: newerReview,
         fetchedAt: 200,
+        linkedReviewHintKey: 'github:42'
+      })
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('keeps the last known review when a refresh fails instead of caching a miss', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cachedReview = makeGitHubReview('Known PR status')
+    const cacheKey = getHostedReviewCacheKey(
+      '/repo',
+      'feature/keep-on-error',
+      null,
+      'repo-1',
+      null,
+      null,
+      true
+    )
+    let rejectFetch: (error: Error) => void = () => {}
+    const fetch = new Promise<HostedReviewInfo>((_resolve, reject) => {
+      rejectFetch = reject
+    })
+    mockApi.hostedReview.forBranch.mockReturnValueOnce(fetch)
+    const store = makeStore()
+    store.setState({
+      hostedReviewCache: {
+        [cacheKey]: { data: cachedReview, fetchedAt: 100, linkedReviewHintKey: 'github:42' }
+      }
+    })
+
+    try {
+      const request = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/keep-on-error', { force: true })
+      vi.setSystemTime(300)
+      rejectFetch(new Error('transient gh failure'))
+
+      await expect(request).resolves.toEqual(cachedReview)
+      // Why: the cached review survives untouched; no fresh `data: null` miss is
+      // written, so the card keeps showing the PR and retries on the next poll.
+      expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
+        data: cachedReview,
+        fetchedAt: 100,
         linkedReviewHintKey: 'github:42'
       })
     } finally {
@@ -274,6 +322,7 @@ describe('hosted review cache race protection', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
     expect(mockApi.hostedReview.forBranch).toHaveBeenNthCalledWith(2, {
       branch: 'feature/inflight',
+      currentHeadOid: null,
       linkedAzureDevOpsPR: null,
       linkedBitbucketPR: null,
       linkedGitHubPR: null,

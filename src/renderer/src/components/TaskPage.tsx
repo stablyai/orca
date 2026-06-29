@@ -8899,6 +8899,7 @@ export default function TaskPage(): React.JSX.Element {
                 initialTab={dialogInitialTab}
                 repoPath={dialogRepoPath}
                 repoId={dialogWorkItem.repoId}
+                sourceContext={dialogSourceContext}
                 backLabel="Pull requests"
                 onUse={(item) => {
                   setDialogWorkItem(null)

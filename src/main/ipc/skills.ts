@@ -51,7 +51,8 @@ export function registerSkillsHandlers(store: Store): void {
         return discoverSkills({ repos: [], homeDir, cwd: homeDir })
       }
 
-      return discoverSkills({ repos: store.getRepos() })
+      const cwd = target?.cwd?.trim() || undefined
+      return cwd ? discoverSkills({ repos: [], cwd }) : discoverSkills({ repos: store.getRepos() })
     }
   )
 }

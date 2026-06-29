@@ -1,10 +1,15 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
-import { readMobileGitStatusResult } from '../session/mobile-diff-review-rpc'
 import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from './mobile-pr-create'
+import {
+  commitMobileHostedReviewStagedChanges,
+  mobileHostedReviewBranchStillMatches,
+  readMobileHostedReviewGitStatus,
+  sendMobileHostedReviewGitMutation
+} from './mobile-hosted-review-git-preparation'
+import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
 
 export type MobileHostedReviewCreateIntentProgress =
   | 'staging'
@@ -15,6 +20,14 @@ export type MobileHostedReviewCreateIntentProgress =
   | 'force_pushing'
   | 'creating_review'
 
+type MobileHostedReviewCreateIntentFailure = {
+  ok: false
+  error: string
+  committed?: boolean
+  status?: MobileGitStatusResult | null
+  commitMessage?: string
+}
+
 export type MobileHostedReviewCreateIntentOutcome =
   | {
       ok: true
@@ -22,7 +35,7 @@ export type MobileHostedReviewCreateIntentOutcome =
       status: MobileGitStatusResult | null
       committed: boolean
     }
-  | { ok: false; error: string; committed?: boolean; status?: MobileGitStatusResult | null }
+  | MobileHostedReviewCreateIntentFailure
 
 type PrepareInput = {
   branch: string
@@ -53,67 +66,8 @@ export function mobileHostedReviewCreateIntentProgressMessage(
   }
 }
 
-async function readStatus(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
-): Promise<MobileGitStatusResult | null> {
-  const response = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
-  if (!response.ok) {
-    return null
-  }
-  return readMobileGitStatusResult((response as RpcSuccess).result)
-}
-
-function branchStillMatches(inputBranch: string, status: MobileGitStatusResult | null): boolean {
-  const branch = status?.branch
-  if (!branch) {
-    return false
-  }
-  return branch === inputBranch || branch === `refs/heads/${inputBranch}`
-}
-
 function hasUnresolvedConflicts(status: MobileGitStatusResult | null): boolean {
   return status?.entries.some((entry) => entry.conflictStatus === 'unresolved') === true
-}
-
-async function sendGitMutation(
-  client: Pick<RpcClient, 'sendRequest'>,
-  method: string,
-  params: Record<string, unknown>,
-  fallback: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const response = await client.sendRequest(method, params)
-    if (!response.ok) {
-      return { ok: false, error: response.error?.message || fallback }
-    }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : fallback }
-  }
-}
-
-async function commitStagedChanges(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string,
-  message: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const response = await client.sendRequest('git.commit', {
-      worktree: `id:${worktreeId}`,
-      message
-    })
-    if (!response.ok) {
-      return { ok: false, error: response.error?.message || 'Commit failed' }
-    }
-    const result = (response as RpcSuccess).result as { success?: boolean; error?: string }
-    if (result?.success !== true) {
-      return { ok: false, error: result?.error || 'Commit failed' }
-    }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Commit failed' }
-  }
 }
 
 async function resolvePrefillFromStatus(
@@ -137,7 +91,7 @@ async function ensureLocalChangesCommitted(
   currentStatus: MobileGitStatusResult | null
 ): Promise<
   | { ok: true; status: MobileGitStatusResult | null; committed: boolean }
-  | { ok: false; error: string; committed?: boolean; status?: MobileGitStatusResult | null }
+  | MobileHostedReviewCreateIntentFailure
 > {
   if ((currentStatus?.entries.length ?? 0) === 0) {
     return { ok: true, status: currentStatus, committed: false }
@@ -154,7 +108,7 @@ async function ensureLocalChangesCommitted(
   const stagePaths = getStageablePaths(currentStatus?.entries ?? [])
   if (stagePaths.length > 0) {
     input.onProgress?.('staging')
-    const staged = await sendGitMutation(
+    const staged = await sendMobileHostedReviewGitMutation(
       client,
       'git.bulkStage',
       { worktree: `id:${worktreeId}`, filePaths: stagePaths },
@@ -163,8 +117,17 @@ async function ensureLocalChangesCommitted(
     if (!staged.ok) {
       return staged
     }
-    currentStatus = await readStatus(client, worktreeId)
-    if (!branchStillMatches(input.branch, currentStatus)) {
+    const stagedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+    if (!stagedStatus.ok) {
+      return {
+        ok: false,
+        error: stagedStatus.error,
+        committed: false,
+        status: currentStatus
+      }
+    }
+    currentStatus = stagedStatus.status
+    if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
         error: 'Branch changed while preparing the pull request.',
@@ -200,12 +163,21 @@ async function ensureLocalChangesCommitted(
   }
 
   input.onProgress?.('committing')
-  const committed = await commitStagedChanges(client, worktreeId, message)
+  const committed = await commitMobileHostedReviewStagedChanges(client, worktreeId, message)
   if (!committed.ok) {
-    return { ...committed, committed: false, status: currentStatus }
+    return { ...committed, committed: false, status: currentStatus, commitMessage: message }
   }
-  currentStatus = await readStatus(client, worktreeId)
-  if (!branchStillMatches(input.branch, currentStatus)) {
+  const committedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+  if (!committedStatus.ok) {
+    return {
+      ok: false,
+      error: committedStatus.error,
+      committed: true,
+      status: currentStatus
+    }
+  }
+  currentStatus = committedStatus.status
+  if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
     return {
       ok: false,
       error: 'Branch changed while preparing the pull request.',
@@ -216,58 +188,21 @@ async function ensureLocalChangesCommitted(
   return { ok: true, status: currentStatus, committed: true }
 }
 
-async function applyRemotePrerequisite(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string,
-  prefill: MobilePrPrefill,
-  input: PrepareInput
-): Promise<{ ok: true; ran: boolean } | { ok: false; error: string }> {
-  switch (prefill.blockedReason) {
-    case 'no_upstream': {
-      input.onProgress?.('publishing')
-      const result = await sendGitMutation(
-        client,
-        'git.push',
-        { worktree: `id:${worktreeId}`, publish: true },
-        'Failed to publish branch'
-      )
-      return result.ok ? { ok: true, ran: true } : result
-    }
-    case 'needs_push': {
-      input.onProgress?.('pushing')
-      const result = await sendGitMutation(
-        client,
-        'git.push',
-        { worktree: `id:${worktreeId}` },
-        'Failed to push commits'
-      )
-      return result.ok ? { ok: true, ran: true } : result
-    }
-    case 'needs_sync':
-      if (input.status?.upstreamStatus?.behindCommitsArePatchEquivalent !== true) {
-        return { ok: true, ran: false }
-      }
-      input.onProgress?.('force_pushing')
-      const result = await sendGitMutation(
-        client,
-        'git.push',
-        { worktree: `id:${worktreeId}`, forceWithLease: true },
-        'Failed to force push with lease'
-      )
-      return result.ok ? { ok: true, ran: true } : result
-    default:
-      return { ok: true, ran: false }
-  }
-}
-
 export async function prepareMobileHostedReviewCreateIntent(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
   input: PrepareInput
 ): Promise<MobileHostedReviewCreateIntentOutcome> {
-  let currentStatus = (await readStatus(client, worktreeId)) ?? input.status
-  if (!branchStillMatches(input.branch, currentStatus)) {
-    return { ok: false, error: 'Branch changed while preparing the pull request.' }
+  const initialStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+  let currentStatus = initialStatus.ok ? initialStatus.status : input.status
+  if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
+    return {
+      ok: false,
+      error: initialStatus.ok
+        ? 'Branch changed while preparing the pull request.'
+        : initialStatus.error,
+      status: currentStatus
+    }
   }
 
   const committed = await ensureLocalChangesCommitted(client, worktreeId, input, currentStatus)
@@ -284,7 +219,7 @@ export async function prepareMobileHostedReviewCreateIntent(
     currentStatus
   )
   for (let attempts = 0; attempts < 2; attempts++) {
-    const remote = await applyRemotePrerequisite(client, worktreeId, prefill, {
+    const remote = await applyMobileHostedReviewRemotePrerequisite(client, worktreeId, prefill, {
       ...input,
       status: currentStatus
     })
@@ -294,8 +229,17 @@ export async function prepareMobileHostedReviewCreateIntent(
     if (!remote.ran) {
       break
     }
-    currentStatus = await readStatus(client, worktreeId)
-    if (!branchStillMatches(input.branch, currentStatus)) {
+    const refreshedStatus = await readMobileHostedReviewGitStatus(client, worktreeId)
+    if (!refreshedStatus.ok) {
+      return {
+        ok: false,
+        error: refreshedStatus.error,
+        committed: committed.committed,
+        status: currentStatus
+      }
+    }
+    currentStatus = refreshedStatus.status
+    if (!mobileHostedReviewBranchStillMatches(input.branch, currentStatus)) {
       return {
         ok: false,
         error: 'Branch changed while preparing the pull request.',

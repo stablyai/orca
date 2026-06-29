@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from
 import { GitBranch, Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileSourceControlReviewEntry } from './mobile-source-control-review-entry'
+import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
@@ -27,6 +28,8 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
     setShowActionSheet,
     setDiscardTarget,
     actionError,
+    commitFailureRecovery,
+    commitFailureRecoveryAction,
     keyboardLift,
     openingPath,
     openingBranchPath,
@@ -91,7 +94,12 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
             </View>
           ) : null}
         </View>
-        {actionError ? (
+        {commitFailureRecovery ? (
+          <MobileCommitFailurePanel
+            failure={commitFailureRecovery}
+            action={commitFailureRecoveryAction}
+          />
+        ) : actionError ? (
           <View style={styles.actionError}>
             <Text style={styles.actionErrorText} numberOfLines={2}>
               {actionError}

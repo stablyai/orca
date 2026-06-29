@@ -150,6 +150,8 @@ function renderCard(
         requiresExplicitSetupChoice={false}
         setupDecision={null}
         onSetupDecisionChange={() => {}}
+        setupAgentStartupPolicy="start-immediately"
+        onSetupAgentStartupPolicyChange={() => {}}
         shouldWaitForSetupCheck={false}
         resolvedSetupDecision={null}
         createError={null}
@@ -264,6 +266,58 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     })
     clickReuseCheckbox()
     expect(onChanges).toEqual([true])
+  })
+
+  it('shows the setup startup policy toggle only when setup is available', () => {
+    current = renderCard({
+      advancedOpen: true,
+      setupControlsEnabled: true,
+      setupConfig: {
+        source: 'yaml',
+        command: '# defaultTabs[1]\npnpm dev',
+        kind: 'default-tabs'
+      }
+    })
+    expect(current.container.textContent).not.toContain(
+      'Wait for setup to complete before starting agent'
+    )
+
+    act(() => current?.root.unmount())
+    current?.container.remove()
+
+    current = renderCard({
+      advancedOpen: true,
+      setupControlsEnabled: true,
+      setupConfig: {
+        source: 'yaml',
+        command: 'pnpm install',
+        kind: 'setup'
+      }
+    })
+    expect(current.container.textContent).toContain(
+      'Wait for setup to complete before starting agent'
+    )
+  })
+
+  it('emits the setup startup policy toggle value', () => {
+    const changes: string[] = []
+    current = renderCard({
+      advancedOpen: true,
+      setupControlsEnabled: true,
+      setupConfig: {
+        source: 'yaml',
+        command: 'pnpm install',
+        kind: 'setup'
+      },
+      onSetupAgentStartupPolicyChange: (next) => changes.push(next)
+    })
+
+    const waitSwitch = current.container.querySelector<HTMLElement>(
+      '[role="switch"][aria-label="Wait for setup to complete before starting agent"]'
+    )
+    expect(waitSwitch).toBeTruthy()
+    act(() => waitSwitch?.click())
+    expect(changes).toEqual(['wait-for-setup'])
   })
 
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {

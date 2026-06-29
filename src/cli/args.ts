@@ -40,6 +40,7 @@ export const BOOLEAN_FLAGS = new Set([
   'parent-current',
   'ready',
   'relations',
+  'reinstall',
   'restore-window',
   'return-preamble',
   'run-hooks',
@@ -192,7 +193,8 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
     if (positionalArgs.length === 0) {
       continue
     }
-    if (parsed.commandPath.length !== spec.path.length + positionalArgs.length) {
+    const positionalCount = parsed.commandPath.length - spec.path.length
+    if (positionalCount <= 0 || positionalCount > positionalArgs.length) {
       continue
     }
     if (!matches(parsed.commandPath.slice(0, spec.path.length), spec.path)) {
@@ -202,10 +204,12 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
     const values = parsed.commandPath.slice(spec.path.length)
     // Why: validation runs inside main's error-reporting path, so normalization
     // records ambiguity instead of throwing before CLI errors can be formatted.
-    const positionalFlagConflicts = positionalArgs.filter((name) => flags.has(name))
-    positionalArgs.forEach((name, index) => {
+    const providedPositionals = values.map((_, index) => positionalArgs[index])
+    const positionalFlagConflicts = providedPositionals.filter((name) => flags.has(name))
+    values.forEach((value, index) => {
+      const name = positionalArgs[index]
       if (!flags.has(name)) {
-        flags.set(name, values[index])
+        flags.set(name, value)
       }
     })
     return { commandPath: spec.path, flags, positionalFlagConflicts }

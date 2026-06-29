@@ -8,6 +8,7 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
     expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
     expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')
+    expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
   })
 
   it('treats Claude generic status prefixes as activity-only, not identity', () => {
