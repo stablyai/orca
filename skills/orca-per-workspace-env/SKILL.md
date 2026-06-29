@@ -35,9 +35,10 @@ them in order:
 
 Then the **per-workspace contract** (create/suspend/resume/destroy) runs fast (§8).
 
-**Quick-start (happy path):** ask the provider + read its CLI docs → scaffold `scripts/orca-vm/` from §7
-→ run the base-snapshot script, then the auth script (you invoke these by hand; not via `orca.yaml`) →
-wire `vmRecipes` in `orca.yaml` → `orca vm recipe doctor <id> --json` (free) → then the `--provision`
+**Quick-start (happy path):** interview the user (connection mode Orca-server vs SSH, provider, agent CLI,
+git auth — §1.2) + read the provider's CLI docs → scaffold `scripts/orca-vm/` from §7 → run the
+base-snapshot script, then the auth script (you invoke these by hand; not via `orca.yaml`) → wire
+`vmRecipes` in `orca.yaml` → `orca vm recipe doctor <id> --json` (free) → then the `--provision`
 self-test loop (§9) until it passes.
 
 ---
@@ -49,12 +50,20 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
 
 1. **Inspect the repo** for an existing `vmRecipes` entry, `scripts/orca-vm/`, a state file, or setup
    notes. If a working recipe exists, jump to Doctor (§9) instead of rebuilding.
-2. **Ask the user which provider** to use (Vercel Sandbox, Fly, Modal, an existing SSH host…) and which
-   coding-agent CLI runs in it (`codex`, `claude`…). Don't pick for them (§11). Then **read that
-   provider's CLI/SDK docs** (or `<cli> --help`) before scaffolding — you'll need its exact verbs for
-   create/exec/snapshot/remove; don't guess them.
-3. **Check prerequisites (§2)** — detect the provider CLI + auth; ask for scope/project, plan limits, and
-   the git token source. Don't guess.
+2. **Interview the user up front** — gather these choices and confirm them back before scaffolding
+   anything. Don't pick for them (§11); don't guess.
+   - **Connection mode:** how Orca attaches to the environment — an **Orca server** (the VM runs
+     `orca serve` and Orca pairs over its pairing URL; worked example §7f) or **SSH** (Orca connects to
+     the host over SSH; §7g). This decides the recipe's connection shape, so settle it first.
+   - **Provider:** Vercel Sandbox, Fly, Modal, an existing SSH host, … For non-obvious providers, also
+     ask scope/project/region and plan limits (§2). Then **read that provider's CLI/SDK docs** (or
+     `<cli> --help`) before scaffolding — you need its exact create/exec/snapshot/remove verbs.
+   - **Coding-agent CLI + account:** which agent runs in the VM (`codex`, `claude`, …) and that the user
+     has an account for it — it gets logged in during the Phase-3 auth snapshot (§4).
+   - **Git auth:** the token source for cloning a private repo (`GH_TOKEN`/`GITHUB_TOKEN` or `gh auth
+     token`; §5).
+3. **Check prerequisites (§2)** — detect the provider CLI + auth and confirm the items above are in
+   place before any paid step.
 4. **Scaffold scripts + state file** from §7 (worked Vercel example: §7f; SSH host: §7g; Windows: §7h),
    filling in the provider's real commands. Make them executable.
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
@@ -76,6 +85,7 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
 The user's responsibility; verify what's verifiable, ask for the rest, invent nothing. State which
 items you verified vs. which the user asserted.
 
+- **Connection mode** (Orca server vs SSH) confirmed with the user — see §1 step 2; it shapes the recipe.
 - **Cloud account + plan** that allows sandboxes/VMs. Ask.
 - **Provider CLI installed + authenticated** — detect (`command -v <cli>`), check auth (e.g.
   `vercel whoami`). If missing, point at the provider's docs; don't log them in.
@@ -359,8 +369,8 @@ trap - EXIT
 ```
 
 `suspend`/`resume`/`destroy` use `vercel sandbox stop|...|remove "$resource_id"` reading
-`userData.resourceId` from stdin (§7d). Note: a `connection.type` of `orca-server` is implied here (the
-pairing URL is an Orca-server pairing). To connect over **SSH** instead, see §7g.
+`userData.resourceId` from stdin (§7d). This is the **Orca-server** connection mode (the recipe emits a
+pairing URL). If the user chose **SSH** in the §1 interview, use §7g instead.
 
 ### 7g. Worked example — existing SSH host (no provider CLI)
 
