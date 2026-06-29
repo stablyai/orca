@@ -4123,9 +4123,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
+                    data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
+                    data-group-header-drag-handle={isDraggableGroupHeader ? '' : undefined}
                     className={cn(
                       'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
                       'cursor-pointer',
+                      // Why: the whole header row is the drag handle (like the
+                      // worktree cards), so show the grab affordance across the
+                      // row; action buttons opt out via data-repo-header-action.
+                      (isDraggableRepoHeader || isDraggableGroupHeader) &&
+                        'select-none hover:cursor-grab active:cursor-grabbing',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       isDraggingThis &&
@@ -4160,6 +4167,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? (event) => handleWorkspaceStatusDrop(event, headerWorkspaceStatus)
                         : undefined
                     }
+                    onPointerDown={
+                      isDraggableRepoHeader && projectIdForHeader
+                        ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
+                        : isDraggableGroupHeader && groupIdForHeader
+                          ? (event) => groupDrag.onHandlePointerDown(event, groupIdForHeader)
+                          : undefined
+                    }
                     onClick={(event) => {
                       if (shouldIgnoreRepoHeaderToggle(event)) {
                         return
@@ -4178,21 +4192,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   >
                     {row.icon ? (
                       <div
-                        data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
-                        data-group-header-drag-handle={isDraggableGroupHeader ? '' : undefined}
                         className={cn(
                           'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                          repoHeaderColor ? 'text-muted-foreground' : row.tone,
-                          (isDraggableRepoHeader || isDraggableGroupHeader) &&
-                            'hover:cursor-grab active:cursor-grabbing'
+                          repoHeaderColor ? 'text-muted-foreground' : row.tone
                         )}
-                        onPointerDown={
-                          isDraggableRepoHeader && projectIdForHeader
-                            ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
-                            : isDraggableGroupHeader && groupIdForHeader
-                              ? (event) => groupDrag.onHandlePointerDown(event, groupIdForHeader)
-                              : undefined
-                        }
                       >
                         {row.repo ? (
                           <RepoIconGlyph
