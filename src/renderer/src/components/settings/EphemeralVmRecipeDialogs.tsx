@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { EphemeralVmRecipeDoctorResult } from '../../../../shared/ephemeral-vm-recipes'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -23,6 +23,12 @@ export function RecipeDoctorDialog({
               'Recipe doctor'
             )}
           </DialogTitle>
+          <DialogDescription>
+            {translate(
+              'auto.components.settings.EphemeralVmRecipeDialogs.description',
+              'Validation checks for this VM recipe.'
+            )}
+          </DialogDescription>
         </DialogHeader>
         {result ? (
           <div className="space-y-2">
