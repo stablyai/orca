@@ -7643,15 +7643,18 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, createDeps({ isVisibleRef }) as never)
     await flushAsyncTicks(6)
+    if (!capturedDataCallback.current) {
+      throw new Error('Expected PTY onData callback to be captured')
+    }
+    const onData = capturedDataCallback.current
 
     // Background: in-place rewrite (CR without LF — the stale-cell pattern)
-    capturedDataCallback.current?.('progress: 50%\r')
-    capturedDataCallback.current?.('progress: 100%\r')
+    onData('progress: 50%\r')
     expect(refresh).not.toHaveBeenCalled()
 
     // Foreground return: first chunk after background rewrite triggers refresh
     isVisibleRef.current = true
-    capturedDataCallback.current?.('done\r\n')
+    onData('done\r\n')
 
     expect(refresh).toHaveBeenCalled()
   })
@@ -7680,14 +7683,18 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, createDeps({ isVisibleRef }) as never)
     await flushAsyncTicks(6)
+    if (!capturedDataCallback.current) {
+      throw new Error('Expected PTY onData callback to be captured')
+    }
+    const onData = capturedDataCallback.current
 
     // Background: normal output (no rewrite)
-    capturedDataCallback.current?.('normal output\r\n')
+    onData('normal output\r\n')
     expect(refresh).not.toHaveBeenCalled()
 
     // Foreground return: no rewrite was queued, so no forced refresh
     isVisibleRef.current = true
-    capturedDataCallback.current?.('more output\r\n')
+    onData('more output\r\n')
 
     expect(refresh).not.toHaveBeenCalled()
   })

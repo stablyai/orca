@@ -2926,6 +2926,7 @@ export function connectPanePty(
       // cursor-only restores need row invalidation even outside DEC 2026.
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      let backgroundRewriteRefreshOnForeground = false
       if (!foreground) {
         const backgroundRewriteDecision = terminalRewriteOutputRenderRefreshDecision(data, {
           previousChunkEndsWithCarriageReturn: backgroundRewriteChunkEndedWithCarriageReturn,
@@ -2937,12 +2938,23 @@ export function connectPanePty(
         backgroundRewriteChunkEndedWithCarriageReturn =
           backgroundRewriteDecision.nextChunkEndsWithCarriageReturn
         backgroundRewriteCsiScanTail = backgroundRewriteDecision.nextRewriteCsiScanTail
+      } else if (backgroundRewriteChunkEndedWithCarriageReturn || backgroundRewriteCsiScanTail) {
+        const backgroundRewriteDecision = terminalRewriteOutputRenderRefreshDecision(data, {
+          previousChunkEndsWithCarriageReturn: backgroundRewriteChunkEndedWithCarriageReturn,
+          previousRewriteCsiScanTail: backgroundRewriteCsiScanTail
+        })
+        backgroundRewriteRefreshOnForeground = backgroundRewriteDecision.prefersRenderRefresh
+        backgroundRewriteChunkEndedWithCarriageReturn = false
+        backgroundRewriteCsiScanTail = ''
       }
       const foregroundOutput = foreground || parseHiddenStartupOutput
       let renderRefreshDecision: { refresh: boolean; inPlaceRewrite: boolean }
       if (foregroundOutput) {
         renderRefreshDecision = shouldForceForegroundRenderRefresh(data)
-        if (pendingBackgroundRewriteRefresh) {
+        if (
+          foreground &&
+          (pendingBackgroundRewriteRefresh || backgroundRewriteRefreshOnForeground)
+        ) {
           renderRefreshDecision = { refresh: true, inPlaceRewrite: true }
           pendingBackgroundRewriteRefresh = false
         }
