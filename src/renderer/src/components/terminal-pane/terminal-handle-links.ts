@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,
@@ -96,13 +96,14 @@ function findPrefixedTokenEnd(lineText: string, startIndex: number): number {
 
 export function findTerminalHandleTarget(
   handle: string,
-  state: TerminalHandleFocusState
+  state: TerminalHandleFocusState,
+  runtimeEnvironmentId?: string | null
 ): TerminalHandleTarget | null {
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       const layout = state.terminalLayoutsByTabId[tab.id]
       for (const [leafId, ptyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
-        if (ptyIdMatchesTerminalHandle(ptyId, handle)) {
+        if (ptyIdMatchesTerminalHandle(ptyId, handle, runtimeEnvironmentId)) {
           return { worktreeId, tabId: tab.id, leafId }
         }
       }
@@ -110,7 +111,9 @@ export function findTerminalHandleTarget(
       const tabPtyIds = [tab.ptyId, ...(state.ptyIdsByTabId[tab.id] ?? [])].filter(
         (ptyId): ptyId is string => Boolean(ptyId)
       )
-      if (tabPtyIds.some((ptyId) => ptyIdMatchesTerminalHandle(ptyId, handle))) {
+      if (
+        tabPtyIds.some((ptyId) => ptyIdMatchesTerminalHandle(ptyId, handle, runtimeEnvironmentId))
+      ) {
         return { worktreeId, tabId: tab.id, leafId: layout?.activeLeafId ?? null }
       }
     }
@@ -118,9 +121,12 @@ export function findTerminalHandleTarget(
   return null
 }
 
-export function focusRendererTerminalHandle(handle: string): boolean {
+export function focusRendererTerminalHandle(
+  handle: string,
+  runtimeEnvironmentId?: string | null
+): boolean {
   const store = useAppStore.getState()
-  const target = findTerminalHandleTarget(handle, store)
+  const target = findTerminalHandleTarget(handle, store, runtimeEnvironmentId)
   if (!target) {
     return false
   }
@@ -211,21 +217,39 @@ async function activateParsedLink(
 ): Promise<void> {
   try {
     if (parsed.kind === 'terminal') {
-      if (!focusRendererTerminalHandle(parsed.text)) {
+      if (!focusRendererTerminalHandle(parsed.text, runtimeEnvironmentId)) {
         await focusRuntimeTerminalHandle(parsed.text, runtimeEnvironmentId)
       }
       return
     }
     // Why: a task can be retried onto a new dispatch; runtime DB is the
     // authority for the latest terminal assigned to a stable task ID.
-    await focusRuntimeOrchestrationTask(parsed.text, runtimeEnvironmentId)
+    await focusRuntimeOrchestrationTask(parsed.text, runtimeEnvironmentId, (handle) =>
+      focusRendererTerminalHandle(handle, runtimeEnvironmentId)
+    )
   } catch (error: unknown) {
     console.warn('[terminal-handle-link] focus failed:', error)
   }
 }
 
-function ptyIdMatchesTerminalHandle(ptyId: string, handle: string): boolean {
-  return ptyId === handle || getRemoteRuntimeTerminalHandle(ptyId) === handle
+function ptyIdMatchesTerminalHandle(
+  ptyId: string,
+  handle: string,
+  runtimeEnvironmentId?: string | null
+): boolean {
+  const targetEnvironmentId = runtimeEnvironmentId?.trim() || null
+  if (ptyId === handle) {
+    return targetEnvironmentId === null
+  }
+  const remotePty = parseRemoteRuntimePtyId(ptyId)
+  if (!remotePty || remotePty.handle !== handle) {
+    return false
+  }
+  const ptyEnvironmentId = remotePty.environmentId?.trim() || null
+  if (runtimeEnvironmentId === undefined) {
+    return true
+  }
+  return ptyEnvironmentId === targetEnvironmentId
 }
 
 function getTerminalHandleFocusHint(): string {

@@ -648,6 +648,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       if (!workItem) {
         return
       }
+      // Why: issue #4756 changes the TaskPage "Create workspace" path only.
+      // Project view still means "start work now", so it stays on direct launch.
       void launchWorkItemDirect({
         item: workItem,
         repoId: resolution.repo.id,
@@ -929,6 +931,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
           onUse={(item) => {
             const current = resolvedDialogRepoItem
             setDialogRepoItem(null)
+            // Why: issue #4756 keeps project-view actions on the direct
+            // "start work now" path instead of the TaskPage background-create flow.
             void launchWorkItemDirect({
               item,
               repoId: current.workItem.repoId,

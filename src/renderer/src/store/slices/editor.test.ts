@@ -579,6 +579,46 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().activeGroupIdByWorktree['wt-1']).toBe(targetGroupId)
   })
 
+  it('keeps a diff tab selectable after opening its target file tab', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    const diffFileId = 'wt-1::diff::unstaged::file.ts'
+    const diffTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'diff')
+    if (!diffTab) {
+      throw new Error('expected diff tab')
+    }
+
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    const stateAfterOpen = store.getState()
+    const editFile = stateAfterOpen.openFiles.find((file) => file.mode === 'edit')
+    expect(stateAfterOpen.openFiles.find((file) => file.id === diffFileId)).toEqual(
+      expect.objectContaining({ mode: 'diff' })
+    )
+    expect(editFile).toEqual(expect.objectContaining({ id: '/repo/file.ts', mode: 'edit' }))
+    expect(
+      stateAfterOpen.unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'editor')
+        ?.entityId
+    ).toBe('/repo/file.ts')
+
+    store.getState().activateTab(diffTab.id)
+    store.getState().setActiveFile(diffFileId)
+
+    const stateAfterReselect = store.getState()
+    expect(stateAfterReselect.groupsByWorktree['wt-1']?.[0]?.activeTabId).toBe(diffTab.id)
+    expect(stateAfterReselect.activeFileId).toBe(diffFileId)
+    expect(stateAfterReselect.openFiles.find((file) => file.id === diffFileId)?.mode).toBe('diff')
+  })
+
   it('reuses a preview editor tab when opening a preview diff', () => {
     const store = createEditorTabsStore()
 

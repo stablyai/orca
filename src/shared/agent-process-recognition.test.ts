@@ -135,6 +135,19 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes Qwen Code by its installed qwen executable', () => {
+    expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\qwen.cmd`)).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/qwen', 'qwen')).toBe(true)
+    expect(isRecognizedAgentType('qwen')).toBe(true)
+  })
+
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')

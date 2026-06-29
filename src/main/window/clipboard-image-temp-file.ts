@@ -9,6 +9,7 @@ import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboar
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
 }
 
 const REMOTE_CLIPBOARD_IMAGE_TEMP_DIR = '/tmp'

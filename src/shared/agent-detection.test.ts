@@ -1,6 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { extractAllOscTitles, extractLastOscTitle, MAX_OSC_TITLE_CHARS } from './agent-detection'
+import {
+  detectAgentStatusFromTitle,
+  extractAllOscTitles,
+  extractLastOscTitle,
+  getAgentLabel,
+  MAX_OSC_TITLE_CHARS
+} from './agent-detection'
+import {
+  normalizeCompatibleAgentStatusEntryForOwner,
+  normalizeCompatibleAgentTitleForOwner,
+  resolveCompatibleAgentTypeForOwner
+} from './agent-title-owner'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -50,4 +61,84 @@ describe('OSC title extraction', () => {
     expect(extracted?.endsWith('b'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extractAllOscTitles(data)).toEqual([extracted])
   })
+})
+
+describe('MiMo title detection', () => {
+  it.each([
+    ['MiMo Code', 'idle'],
+    ['mimo ready', 'idle'],
+    ['mimo working', 'working'],
+    ['\u280b MiMo Code', 'working']
+  ] as const)('classifies %s', (title, expectedStatus) => {
+    expect(getAgentLabel(title)).toBe('MiMo Code')
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each(['~/mimo/working', 'mimo-code-fixtures ready'])(
+    'does not classify path or hyphen false positive %s',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
+describe('Pi-compatible title detection', () => {
+  it.each([
+    ['\u280b OMP', 'OMP', 'working'],
+    ['OMP ready', 'OMP', 'idle'],
+    ['OMP - action required', 'OMP', 'permission'],
+    ['\u280b Pi', 'Pi', 'working'],
+    ['Pi ready', 'Pi', 'idle'],
+    ['Pi - action required', 'Pi', 'permission']
+  ] as const)('classifies synthesized %s', (title, expectedLabel, expectedStatus) => {
+    expect(getAgentLabel(title)).toBe(expectedLabel)
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each([
+    ['\u280b Pi', 'omp', '\u280b OMP'],
+    ['Pi ready', 'omp', 'OMP ready'],
+    ['Pi - action required', 'omp', 'OMP - action required'],
+    ['π - tmp', 'omp', 'OMP ready'],
+    ['π: tmp', 'omp', 'OMP ready'],
+    ['\u280b π: tmp', 'omp', '\u280b OMP'],
+    ['\u280b π - tmp', 'omp', '\u280b OMP'],
+    ['\u280b OMP', 'pi', '\u280b Pi']
+  ] as const)('normalizes %s to the authoritative %s owner', (title, owner, expectedTitle) => {
+    expect(normalizeCompatibleAgentTitleForOwner(title, owner)).toBe(expectedTitle)
+  })
+
+  it('preserves Pi-compatible custom titles and unrelated owners', () => {
+    expect(normalizeCompatibleAgentTitleForOwner('Fix pi bugs', 'omp')).toBe('Fix pi bugs')
+    expect(normalizeCompatibleAgentTitleForOwner('\u280b Pi', 'codex')).toBe('\u280b Pi')
+  })
+
+  it('normalizes Pi-compatible status identity and terminal title to the owner', () => {
+    const status = normalizeCompatibleAgentStatusEntryForOwner(
+      {
+        state: 'working',
+        prompt: '',
+        updatedAt: 1,
+        stateStartedAt: 1,
+        agentType: 'pi',
+        paneKey: 'tab-1:leaf-1',
+        terminalTitle: '\u280b Pi',
+        stateHistory: []
+      },
+      'omp'
+    )
+
+    expect(status.agentType).toBe('omp')
+    expect(status.terminalTitle).toBe('\u280b OMP')
+    expect(resolveCompatibleAgentTypeForOwner('codex', 'omp')).toBe('codex')
+  })
+
+  it.each(['~/omp/working', 'omp-harness ready', '~/pi/working', 'pi-scratch ready'])(
+    'does not classify path or hyphen false positive %s',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
 })

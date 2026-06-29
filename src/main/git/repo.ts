@@ -5,6 +5,7 @@ import { basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
+import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
 import {
   buildHostedRemoteCommitUrl,
   buildHostedRemoteFileUrl,
@@ -87,6 +88,27 @@ export function isGitRepo(path: string): boolean {
   } catch {
     return false
   }
+}
+
+export function getGitRepoRoot(path: string): string {
+  try {
+    if (!existsSync(path) || !statSync(path).isDirectory()) {
+      return path
+    }
+    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+      cwd: path
+    }).trim()
+    if (insideWorkTree === 'true') {
+      return normalizeRuntimePathSeparators(
+        gitExecFileSync(['rev-parse', '--show-toplevel'], {
+          cwd: path
+        }).trim()
+      )
+    }
+  } catch {
+    // Fall through to preserving the original path.
+  }
+  return path
 }
 
 /**

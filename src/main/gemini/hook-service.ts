@@ -3,9 +3,11 @@ import { join } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
+  MANAGED_HOOK_TIMEOUT_MILLISECONDS,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -204,7 +206,8 @@ export class GeminiHookService {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {
-        hooks: [{ type: 'command', command }]
+        // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
+        hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
       }
       nextHooks[eventName] = [...cleaned, definition]
     }
@@ -261,7 +264,8 @@ export class GeminiHookService {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         const cleaned = removeManagedCommands(current, isManagedCommand)
         const definition: HookDefinition = {
-          hooks: [{ type: 'command', command }]
+          // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
+          hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
         }
         nextHooks[eventName] = [...cleaned, definition]
       }

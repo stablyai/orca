@@ -26,10 +26,10 @@ export default defineConfig({
   // substantially. The few visible-window tests that still rely on real
   // pointer interaction are marked serial in their spec file instead.
   fullyParallel: true,
-  // Why: each CI worker launches real Electron/Chromium process trees. Ubuntu
-  // runners have 4 vCPUs, but 4 parallel apps can exhaust Chromium GPU/zygote
-  // subprocess startup under Xvfb, so keep headless E2E below that ceiling.
-  workers: process.env.CI ? 2 : undefined,
+  // Why: each CI worker launches a real Electron/Chromium process tree against
+  // a mutable seeded repo. Release runners showed two apps per VM can contend
+  // on Xvfb/git enough to create false E2E failures, so CI scales by shards.
+  workers: process.env.CI ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: 'list',

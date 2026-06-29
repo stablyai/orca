@@ -1,7 +1,4 @@
 import { ipcMain } from 'electron'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import path from 'path'
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
@@ -11,13 +8,20 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
-import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
-import { buildLocalPreflightEnv } from './preflight-local-env'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
 import { hydrateShellPathForAgentDetection } from './agent-detection-shell-path'
-const execFileAsync = promisify(execFile)
-const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
+import {
+  execCommandInWsl,
+  execLocalPreflightCommand,
+  isCommandAvailable,
+  isCommandOnPath,
+  shellQuote
+} from './preflight-command-exec'
+import {
+  detectRemoteWindowsTerminalCapabilities,
+  type RemoteWindowsTerminalCapabilities
+} from './preflight-remote-windows-terminal-capabilities'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -44,6 +48,9 @@ export type PreflightStatus = {
   }
 }
 
+export { detectRemoteWindowsTerminalCapabilities }
+export type { RemoteWindowsTerminalCapabilities }
+
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
@@ -51,92 +58,6 @@ let cached: PreflightStatus | null = null
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
-
-type PreflightCommandResult = { stdout: string; stderr: string }
-
-// Why: a broken PATH shim or auth helper should not keep startup/settings
-// preflight IPC pending forever; WSL probes already use the same deadline.
-async function withPreflightTimeout<T>(command: string, commandPromise: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  try {
-    return await Promise.race([
-      commandPromise,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          const error = Object.assign(new Error(`Timed out running ${command}`), {
-            code: 'ETIMEDOUT'
-          })
-          reject(error)
-        }, PREFLIGHT_COMMAND_TIMEOUT_MS)
-        if (typeof timeout.unref === 'function') {
-          timeout.unref()
-        }
-      })
-    ])
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout)
-    }
-  }
-}
-
-async function execLocalPreflightCommand(
-  command: string,
-  args: string[]
-): Promise<PreflightCommandResult> {
-  const env = buildLocalPreflightEnv()
-  const commandPromise = execFileAsync(command, args, {
-    encoding: 'utf-8',
-    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
-    ...(env ? { env } : {})
-  }) as Promise<PreflightCommandResult>
-
-  return withPreflightTimeout(command, commandPromise)
-}
-
-async function execCommandInWsl(
-  target: WslPreflightTarget,
-  command: string
-): Promise<{ stdout: string; stderr: string }> {
-  const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
-  return withPreflightTimeout('wsl.exe', commandPromise)
-}
-
-async function isCommandAvailable(
-  command: string,
-  wslTarget?: WslPreflightTarget
-): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote(command)} --version`)
-      : execLocalPreflightCommand(command, ['--version']))
-    return true
-  } catch {
-    return false
-  }
-}
-
-// Why: `which`/`where` is faster than spawning the agent binary itself and avoids
-// triggering any agent-specific startup side-effects. This gives a reliable
-// PATH-based check without requiring `--version` support from each agent.
-async function isCommandOnPath(command: string, wslTarget?: WslPreflightTarget): Promise<boolean> {
-  const finder = process.platform === 'win32' ? 'where' : 'which'
-  try {
-    const { stdout } = wslTarget
-      ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
-      : await execLocalPreflightCommand(finder, [command])
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .some((line) => path.isAbsolute(line))
-  } catch {
-    return false
-  }
 }
 
 const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>
@@ -376,6 +297,13 @@ export function registerPreflightHandlers(): void {
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {
       return detectRemoteAgents(args)
+    }
+  )
+
+  ipcMain.handle(
+    'preflight:detectRemoteWindowsTerminalCapabilities',
+    async (_event, args: { connectionId: string }): Promise<RemoteWindowsTerminalCapabilities> => {
+      return detectRemoteWindowsTerminalCapabilities(args)
     }
   )
 }

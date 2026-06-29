@@ -1,6 +1,5 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { getProcessTableSnapshot } from '../../shared/process-table-snapshot'
 import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground,
@@ -8,8 +7,6 @@ import {
 } from './windows-agent-foreground-process'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
-
-const execFileAsync = promisify(execFile)
 
 type ProcessRow = {
   pid: number
@@ -85,10 +82,7 @@ export async function resolveAgentForegroundProcess(
   }
 
   try {
-    const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,stat=,command='], {
-      encoding: 'utf8',
-      timeout: 3000
-    })
+    const stdout = await getProcessTableSnapshot()
     return resolveAgentForegroundProcessFromPs(stdout, shellPid) ?? fallbackProcess
   } catch {
     // Fall through to node-pty's process name. Foreground process inspection is

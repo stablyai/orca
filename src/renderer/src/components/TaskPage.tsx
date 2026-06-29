@@ -138,6 +138,7 @@ import {
   findGithubWorkItemWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
+import { createGitHubWorkItemWorkspaceInBackground } from '@/lib/github-work-item-background-create'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
@@ -1984,13 +1985,13 @@ function getChecksLabel(item: GitHubWorkItem): string {
 function getChecksPillTone(item: GitHubWorkItem): string {
   const state = item.checksSummary?.state
   if (state === 'success') {
-    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
   }
   if (state === 'failure') {
-    return 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+    return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
   }
   if (state === 'pending') {
-    return 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
   }
   return 'border-border/60 bg-background/70 text-muted-foreground'
 }
@@ -6495,17 +6496,16 @@ export default function TaskPage(): React.JSX.Element {
 
   const handleUseWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      // Why: open the unified New Workspace dialog pre-filled with the work
-      // item as the selected source so the user can confirm name / agent /
-      // setup before the worktree is created. Earlier the "Use" CTA created
-      // and activated the worktree synchronously, which was disorienting —
-      // the worktree appeared in the sidebar before the user had a chance
-      // to review it. The composer already owns the prefill flow. Telemetry
-      // attribution flows via `openComposerForItem` (sets telemetrySource).
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      openComposerForItem(item)
+      void createGitHubWorkItemWorkspaceInBackground({
+        item,
+        repoId: item.repoId,
+        taskSourceContext: getTaskPageRepoSourceContext(repoMap.get(item.repoId), 'github'),
+        telemetrySource: 'sidebar',
+        openModalFallback: () => openComposerForItem(item)
+      })
     },
-    [openComposerForItem]
+    [openComposerForItem, repoMap]
   )
 
   const handleOpenOrUseGitHubWorkItem = useCallback(

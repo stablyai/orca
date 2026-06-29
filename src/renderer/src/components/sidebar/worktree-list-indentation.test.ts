@@ -12,6 +12,7 @@ import {
   getFolderBackedRepoWorktreeCardSurfaceInset,
   getFolderWorkspaceCardContentIndent,
   getFolderWorkspaceCardSurfaceInset,
+  getFolderWorkspaceRowGeometry,
   getFlushWorktreeCardPaddingLeft,
   getLineageChildrenInlineStyle,
   getLineageEffectiveChildStart,
@@ -20,6 +21,17 @@ import {
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset
 } from './worktree-list-indentation'
+
+function getFlushCardContentStart(args: {
+  surfaceInset: number
+  cardContentIndent: number
+}): number {
+  return (
+    args.surfaceInset +
+    WORKTREE_CARD_SURFACE_MARGIN +
+    Math.max(FLUSH_CARD_MIN_CONTENT_INSET, args.cardContentIndent - FLUSH_CARD_CONTENT_PULLBACK)
+  )
+}
 
 describe('worktree list indentation', () => {
   it('keeps ungrouped workspaces flush with the list', () => {
@@ -76,6 +88,118 @@ describe('worktree list indentation', () => {
     expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: true, groupDepth: 1 })).toBe(14)
     expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: true, groupDepth: 2 })).toBe(24)
     expect(getFolderWorkspaceCardSurfaceInset({ isGrouped: false, groupDepth: 2 })).toBe(0)
+  })
+
+  it('preserves legacy folder-scanned folder workspace row geometry', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: false,
+      isFolderBackedWorkspaceChild: true,
+      isGrouped: true,
+      groupDepth: 1,
+      lineageDepth: 0
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 14,
+      cardContentIndent: 6
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(20)
+  })
+
+  it('preserves legacy nested folder-scanned folder workspace row geometry', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: false,
+      isFolderBackedWorkspaceChild: true,
+      isGrouped: true,
+      groupDepth: 2,
+      lineageDepth: 0
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 24,
+      cardContentIndent: 6
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(30)
+  })
+
+  it('preserves legacy manual grouped folder workspace row geometry', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: false,
+      isFolderBackedWorkspaceChild: false,
+      isGrouped: true,
+      groupDepth: 1,
+      lineageDepth: 0
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 14,
+      cardContentIndent: 24
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(38)
+  })
+
+  it('uses comparable repo worktree geometry for experimental folder-scanned folder workspaces', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: true,
+      isFolderBackedWorkspaceChild: true,
+      isGrouped: true,
+      groupDepth: 1,
+      lineageDepth: 0
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 14,
+      cardContentIndent: 16
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(30)
+  })
+
+  it('uses comparable repo worktree geometry for experimental nested folder workspaces', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: true,
+      isFolderBackedWorkspaceChild: true,
+      isGrouped: true,
+      groupDepth: 4,
+      lineageDepth: 3
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 54,
+      cardContentIndent: 6
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(60)
+  })
+
+  it('keeps experimental manual grouped folder workspaces on normal worktree geometry', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: true,
+      isFolderBackedWorkspaceChild: false,
+      isGrouped: true,
+      groupDepth: 1,
+      lineageDepth: 0
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 14,
+      cardContentIndent: 24
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(38)
+  })
+
+  it('keeps experimental flat folder workspaces on normal worktree geometry', () => {
+    const geometry = getFolderWorkspaceRowGeometry({
+      experimentalNewWorktreeCardStyle: true,
+      isFolderBackedWorkspaceChild: false,
+      isGrouped: false,
+      groupDepth: 3,
+      lineageDepth: 0
+    })
+
+    expect(geometry).toEqual({
+      surfaceInset: 0,
+      cardContentIndent: 0
+    })
+    expect(getFlushCardContentStart(geometry)).toBe(6)
   })
 
   it('caps header indentation separately from workspace content indentation', () => {

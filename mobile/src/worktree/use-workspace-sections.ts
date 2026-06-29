@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import {
   buildSections,
@@ -123,6 +124,7 @@ export function useWorkspaceSections(args: {
   collapsedGroups: Set<string>
   workspaceHostScope?: string
   visibleWorkspaceHostIds?: string[] | null
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -141,7 +143,8 @@ export function useWorkspaceSections(args: {
     repoColorsByName,
     collapsedGroups,
     workspaceHostScope,
-    visibleWorkspaceHostIds
+    visibleWorkspaceHostIds,
+    workspaceStatuses
   } = args
 
   const visibleRepoIdsByName = useMemo(() => {
@@ -189,16 +192,28 @@ export function useWorkspaceSections(args: {
         search,
         groupMode,
         pinnedIds,
-        visibleRepoIdsByName
+        visibleRepoIdsByName,
+        workspaceStatuses,
+        collapsedGroups
       ),
-    [hostScopedWorktrees, sortMode, filters, search, groupMode, pinnedIds, visibleRepoIdsByName]
+    [
+      hostScopedWorktrees,
+      sortMode,
+      filters,
+      search,
+      groupMode,
+      pinnedIds,
+      visibleRepoIdsByName,
+      workspaceStatuses,
+      collapsedGroups
+    ]
   )
 
   const sections = useMemo(
     () =>
       rawSections.map((s) => ({
         ...s,
-        data: collapsedGroups.has(s.title) ? [] : s.data
+        data: collapsedGroups.has(s.key) ? [] : s.data
       })),
     [rawSections, collapsedGroups]
   )

@@ -29,6 +29,7 @@ import type { AppState } from '@/store/types'
 import {
   getAllWorktreesFromState,
   useAllWorktrees,
+  useProjectHostSetupProjection,
   useRepoMap,
   useWorktreeMap
 } from '@/store/selectors'
@@ -57,6 +58,7 @@ import type {
   ProjectOrderBy,
   WorktreeLineage,
   WorktreeMeta,
+  WorkspaceLineage,
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
@@ -213,20 +215,35 @@ import {
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
+import NewExternalWorktreesInboxLine from './NewExternalWorktreesInboxLine'
+import SuppressExternalWorktreeInboxDialog from './SuppressExternalWorktreeInboxDialog'
 import {
   keepImportedWorktreesHiddenCard,
+  IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
 } from './imported-worktrees-card-actions'
+import {
+  importNewExternalWorktreeInboxPaths,
+  keepNewExternalWorktreeInboxHidden,
+  suppressNewExternalWorktreeInbox,
+  type NewExternalWorktreesInboxActionState
+} from './new-external-worktrees-inbox-actions'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
-import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
+import {
+  buildImportedWorktreesCardCandidates,
+  getHiddenImportedWorktrees
+} from './imported-worktrees-card-candidates'
+import {
+  buildNewExternalWorktreesInboxCandidates,
+  toNewExternalWorktreeInboxPreview
+} from './new-external-worktrees-inbox-candidates'
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
   LINEAGE_CHILDREN_INLINE_OFFSET,
   getFolderBackedRepoWorktreeCardContentIndent,
   getFolderBackedRepoWorktreeCardSurfaceInset,
-  getFolderWorkspaceCardContentIndent,
-  getFolderWorkspaceCardSurfaceInset,
+  getFolderWorkspaceRowGeometry,
   getLineageChildrenInlineStyle,
   getLineageNestedRowGeometry,
   getProjectGroupHeaderPaddingLeft,
@@ -256,6 +273,7 @@ import {
   getFolderWorkspaceExecutionHostIdForRows,
   getProjectGroupExecutionHostIdForRows
 } from './worktree-list-host-filtering'
+import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 
 export {
   getScrollTopToRevealBounds,
@@ -468,6 +486,9 @@ function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'imported-worktrees-card') {
     return row.key
   }
+  if (row.type === 'new-external-worktrees-inbox') {
+    return row.key
+  }
   return null
 }
 
@@ -587,6 +608,11 @@ type VirtualizedWorktreeViewportProps = {
   handleShowImportedWorktrees: (projectId: string) => void
   handleKeepImportedWorktreesHidden: (projectId: string) => void
   importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
+  handleImportNewExternalWorktree: (projectId: string, worktreeId: string) => void
+  handleImportAllNewExternalWorktrees: (projectId: string) => void
+  handleKeepNewExternalWorktreeInboxHidden: (projectId: string) => void
+  handleOpenSuppressExternalWorktreeInbox: (projectId: string) => void
+  newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
   handleRemoveProject: (repo: Repo) => void
   handleCreateGroupFromRepo: (repo: Repo) => void
   handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
@@ -613,6 +639,7 @@ type VirtualizedWorktreeViewportProps = {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
   repoOrder: Map<string, number>
   // The full canonical state.repos id ordering — the drag controller commits
   // permutations of this list, even when some repos aren't currently visible
@@ -622,6 +649,7 @@ type VirtualizedWorktreeViewportProps = {
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void
   onHostDragActiveChange: (active: boolean) => void
   prCache: Record<string, unknown> | null
+  hostedReviewCache: Record<string, unknown> | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectGrouping?: ProjectGroupingModel
   projectGroups?: readonly ProjectGroup[]
@@ -1122,6 +1150,9 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'imported-worktrees-card') {
     return `imported:${row.key}`
   }
+  if (row.type === 'new-external-worktrees-inbox') {
+    return `inbox:${row.key}`
+  }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
   }
@@ -1144,6 +1175,7 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
+      row.type === 'new-external-worktrees-inbox' ||
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
@@ -1215,6 +1247,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleShowImportedWorktrees,
   handleKeepImportedWorktreesHidden,
   importedWorktreeCardActionState,
+  handleImportNewExternalWorktree,
+  handleImportAllNewExternalWorktrees,
+  handleKeepNewExternalWorktreeInboxHidden,
+  handleOpenSuppressExternalWorktreeInbox,
+  newExternalWorktreeInboxActionState,
   handleRemoveProject,
   handleCreateGroupFromRepo,
   handleMoveProjectToGroup,
@@ -1238,11 +1275,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   repoMap,
   worktreeMap,
   worktreeLineageById,
+  workspaceLineageByChildKey,
   repoOrder,
   allRepoIds,
   onReorderHostSections,
   onHostDragActiveChange,
   prCache,
+  hostedReviewCache,
   workspaceStatuses,
   projectGrouping,
   projectGroups = EMPTY_PROJECT_GROUPS,
@@ -2300,6 +2339,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         settings,
         projectGroups,
         new Set(),
+        new Map(),
         new Map(),
         [],
         projectGrouping
@@ -4732,6 +4772,36 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               )
             }
 
+            if (row.type === 'new-external-worktrees-inbox') {
+              const actionState = newExternalWorktreeInboxActionState.get(row.repo.id)
+              return (
+                <div
+                  key={vItem.key}
+                  role="presentation"
+                  data-worktree-virtual-row
+                  data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-virtual-row-start={vItem.start}
+                  data-index={vItem.index}
+                  ref={measureVirtualRowElement}
+                  className="absolute left-0 right-0 top-0"
+                  style={{ transform: getVirtualRowTransform(vItem.start) }}
+                >
+                  <NewExternalWorktreesInboxLine
+                    repoDisplayName={row.repo.displayName}
+                    inboxWorktrees={row.inboxWorktrees.map(toNewExternalWorktreeInboxPreview)}
+                    pending={actionState?.pending ?? false}
+                    error={actionState?.error ?? null}
+                    onImportWorktree={(worktreeId) =>
+                      handleImportNewExternalWorktree(row.repo.id, worktreeId)
+                    }
+                    onKeepHidden={() => handleKeepNewExternalWorktreeInboxHidden(row.repo.id)}
+                    onImportAll={() => handleImportAllNewExternalWorktrees(row.repo.id)}
+                    onSuppress={() => handleOpenSuppressExternalWorktreeInbox(row.repo.id)}
+                  />
+                </div>
+              )
+            }
+
             if (row.type === 'pending-creation') {
               return (
                 <div
@@ -4761,30 +4831,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 folderWorkspacePathStatus?.exists === false &&
                 (isConfirmedStaleFolderPathStatus(folderWorkspacePathStatus) ||
                   folderWorkspacePathStatus.reason === 'ambiguous-connection')
+              const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
+                folderWorkspaceId: folderWorkspaceRow.folderWorkspace.id,
+                workspaceLineageByChildKey,
+                worktreeLineageById,
+                worktreeMap,
+                repoMap,
+                hostedReviewCache,
+                prCache,
+                settings
+              })
               const isFolderBackedWorkspaceChild =
                 groupBy === 'repo' && folderWorkspaceRow.projectGroup.createdFrom === 'folder-scan'
-              const contentIndent = isFolderBackedWorkspaceChild
-                ? getFolderWorkspaceCardContentIndent({
-                    groupDepth: folderWorkspaceRow.groupDepth
-                  })
-                : getWorktreeCardContentIndent({
-                    isGrouped: groupBy !== 'none',
-                    groupDepth: folderWorkspaceRow.groupDepth,
-                    lineageDepth: folderWorkspaceRow.depth
-                  })
-              // Why: folder workspace surfaces should step inward with their
-              // project-group nesting, matching lineage child card surfaces
-              // instead of spanning from the sidebar edge at every depth.
-              const surfaceInset = isFolderBackedWorkspaceChild
-                ? getFolderWorkspaceCardSurfaceInset({
-                    isGrouped: true,
-                    groupDepth: folderWorkspaceRow.groupDepth
-                  })
-                : getWorktreeCardSurfaceInset({
-                    isGrouped: groupBy !== 'none',
-                    groupDepth: folderWorkspaceRow.groupDepth
-                  })
-              const insetContentIndent = Math.max(0, contentIndent - surfaceInset)
+              const { surfaceInset, cardContentIndent } = getFolderWorkspaceRowGeometry({
+                experimentalNewWorktreeCardStyle: newCardStyle,
+                isFolderBackedWorkspaceChild,
+                isGrouped: groupBy !== 'none',
+                groupDepth: folderWorkspaceRow.groupDepth,
+                lineageDepth: folderWorkspaceRow.depth
+              })
               return (
                 <div
                   key={vItem.key}
@@ -4815,7 +4880,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       repo={undefined}
                       isActive={activeWorktreeId === folderWorktree.id}
                       isCurrentWorktree={currentWorktreeId === folderWorktree.id}
-                      contentIndent={insetContentIndent}
+                      contentIndent={cardContentIndent}
                       flushSurface
                       nativeDragEnabled={false}
                       onImmediateActivate={
@@ -4826,6 +4891,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       activationRowKey={folderWorktree.id}
                       onSelectionGesture={onSelectionGesture}
                       onContextMenuSelect={onContextMenuSelect}
+                      statusPrDisplay={folderPrDisplay}
                     />
                     <div className="pointer-events-auto absolute right-3 top-1.5">
                       <FolderPathStatusIndicator status={folderWorkspacePathStatus} />
@@ -4910,6 +4976,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -5015,6 +5082,11 @@ const WorktreeList = React.memo(function WorktreeList({
       ? cardProps.includes('status')
       : cardProps.includes('pr'))
       ? s.prCache
+      : null
+  )
+  const hostedReviewCache = useAppStore((s) =>
+    s.settings?.experimentalNewWorktreeCardStyle === true && cardProps.includes('status')
+      ? s.hostedReviewCache
       : null
   )
   const settings = useAppStore((s) => s.settings)
@@ -5325,11 +5397,13 @@ const WorktreeList = React.memo(function WorktreeList({
   // Why: manual repo header order is bound to state.repos. Recent/Smart derive
   // header order from the sorted visible worktree stream instead.
   const repos = useAppStore((s) => s.repos)
-  const projects = useAppStore((s) => s.projects)
-  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const projectGrouping = useMemo(
-    () => ({ projects, projectHostSetups }),
-    [projectHostSetups, projects]
+    () => ({
+      projects: projectHostSetupProjection.projects,
+      projectHostSetups: projectHostSetupProjection.setups
+    }),
+    [projectHostSetupProjection]
   )
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
@@ -5438,6 +5512,12 @@ const WorktreeList = React.memo(function WorktreeList({
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
   >(new Map())
+  const [newExternalWorktreeInboxActionState, setNewExternalWorktreeInboxActionState] = useState<
+    Map<string, NewExternalWorktreesInboxActionState>
+  >(new Map())
+  const [suppressExternalWorktreeInboxRepoId, setSuppressExternalWorktreeInboxRepoId] = useState<
+    string | null
+  >(null)
   const importedWorktreesByRepo = useMemo(() => {
     const forceVisibleRepoIds = new Set(
       [...importedWorktreeCardActionState.entries()]
@@ -5451,6 +5531,15 @@ const WorktreeList = React.memo(function WorktreeList({
       forceVisibleRepoIds
     })
   }, [detectedWorktreesByRepo, filterRepoIds, importedWorktreeCardActionState, visibleReposForRows])
+  const newExternalWorktreesInboxByRepo = useMemo(
+    () =>
+      buildNewExternalWorktreesInboxCandidates({
+        repos: visibleReposForRows,
+        detectedWorktreesByRepo,
+        filterRepoIds
+      }),
+    [detectedWorktreesByRepo, filterRepoIds, visibleReposForRows]
+  )
   const placeholderRepoIds = useMemo(() => {
     return getEmptyProjectPlaceholderRepoIds({
       groupBy,
@@ -5527,6 +5616,7 @@ const WorktreeList = React.memo(function WorktreeList({
         visibleProjectGroupsForRows,
         placeholderRepoIds,
         importedWorktreesByRepo,
+        newExternalWorktreesInboxByRepo,
         pendingCreations,
         projectGrouping,
         visibleFolderWorkspacesForRows,
@@ -5549,6 +5639,7 @@ const WorktreeList = React.memo(function WorktreeList({
       visibleFolderWorkspacesForRows,
       placeholderRepoIds,
       importedWorktreesByRepo,
+      newExternalWorktreesInboxByRepo,
       pendingCreations,
       hostLabelById
     ]
@@ -5615,6 +5706,8 @@ const WorktreeList = React.memo(function WorktreeList({
       } else if (row.type === 'pending-creation') {
         keys.add(`pending:${row.creationId}`)
       } else if (row.type === 'imported-worktrees-card') {
+        keys.add(row.key)
+      } else if (row.type === 'new-external-worktrees-inbox') {
         keys.add(row.key)
       }
     }
@@ -5804,14 +5897,146 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const handleKeepImportedWorktreesHidden = useCallback(
     async (projectId: string) => {
+      const repo = repos.find((candidate) => candidate.id === projectId)
+      let detected = detectedWorktreesByRepo[projectId]
+      // Why: baseline seeding depends on authoritative hidden paths; do not
+      // dismiss the initial prompt on a stale/non-authoritative snapshot.
+      if (detected?.authoritative !== true) {
+        const refreshed = await fetchWorktrees(projectId, { requireAuthoritative: true })
+        if (!refreshed) {
+          setImportedWorktreeCardState(projectId, {
+            pending: false,
+            error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+          })
+          return
+        }
+        detected = useAppStore.getState().detectedWorktreesByRepo[projectId]
+      }
+      if (detected?.authoritative !== true) {
+        setImportedWorktreeCardState(projectId, {
+          pending: false,
+          error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+        })
+        return
+      }
+      const hiddenWorktrees = getHiddenImportedWorktrees(detected)
       await keepImportedWorktreesHiddenCard({
         projectId,
         updateRepo,
-        setCardState: setImportedWorktreeCardState
+        setCardState: setImportedWorktreeCardState,
+        hiddenWorktreePaths: hiddenWorktrees.map((worktree) => worktree.path),
+        existingBaselinePaths: repo?.externalWorktreeInboxBaselinePaths
       })
     },
-    [setImportedWorktreeCardState, updateRepo]
+    [detectedWorktreesByRepo, fetchWorktrees, repos, setImportedWorktreeCardState, updateRepo]
   )
+
+  const setNewExternalWorktreeInboxState = useCallback(
+    (projectId: string, state: NewExternalWorktreesInboxActionState | null) => {
+      setNewExternalWorktreeInboxActionState((previous) => {
+        const next = new Map(previous)
+        if (state) {
+          next.set(projectId, state)
+        } else {
+          next.delete(projectId)
+        }
+        return next
+      })
+    },
+    []
+  )
+
+  const getNewExternalWorktreeInboxActionArgs = useCallback(
+    (projectId: string, worktreePaths: readonly string[]) => {
+      const repo = repos.find((candidate) => candidate.id === projectId)
+      if (!repo) {
+        return null
+      }
+      return {
+        projectId,
+        repo,
+        worktreePaths,
+        updateRepo,
+        fetchWorktrees,
+        setInboxState: setNewExternalWorktreeInboxState
+      }
+    },
+    [fetchWorktrees, repos, setNewExternalWorktreeInboxState, updateRepo]
+  )
+
+  const handleImportNewExternalWorktree = useCallback(
+    async (projectId: string, worktreeId: string) => {
+      const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
+      const worktree = inboxWorktrees.find((candidate) => candidate.id === worktreeId)
+      if (!worktree) {
+        return
+      }
+      const args = getNewExternalWorktreeInboxActionArgs(projectId, [worktree.path])
+      if (!args) {
+        return
+      }
+      await importNewExternalWorktreeInboxPaths(args)
+    },
+    [getNewExternalWorktreeInboxActionArgs, newExternalWorktreesInboxByRepo]
+  )
+
+  const handleImportAllNewExternalWorktrees = useCallback(
+    async (projectId: string) => {
+      const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
+      const args = getNewExternalWorktreeInboxActionArgs(
+        projectId,
+        inboxWorktrees.map((worktree) => worktree.path)
+      )
+      if (!args) {
+        return
+      }
+      await importNewExternalWorktreeInboxPaths(args)
+    },
+    [getNewExternalWorktreeInboxActionArgs, newExternalWorktreesInboxByRepo]
+  )
+
+  const handleKeepNewExternalWorktreeInboxHidden = useCallback(
+    async (projectId: string) => {
+      const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
+      const args = getNewExternalWorktreeInboxActionArgs(
+        projectId,
+        inboxWorktrees.map((worktree) => worktree.path)
+      )
+      if (!args) {
+        return
+      }
+      await keepNewExternalWorktreeInboxHidden(args)
+    },
+    [getNewExternalWorktreeInboxActionArgs, newExternalWorktreesInboxByRepo]
+  )
+
+  const handleOpenSuppressExternalWorktreeInbox = useCallback((projectId: string) => {
+    setSuppressExternalWorktreeInboxRepoId(projectId)
+  }, [])
+
+  const handleConfirmSuppressExternalWorktreeInbox = useCallback(async () => {
+    if (!suppressExternalWorktreeInboxRepoId) {
+      return
+    }
+    const projectId = suppressExternalWorktreeInboxRepoId
+    const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
+    const args = getNewExternalWorktreeInboxActionArgs(
+      projectId,
+      inboxWorktrees.map((worktree) => worktree.path)
+    )
+    if (!args) {
+      setSuppressExternalWorktreeInboxRepoId(null)
+      return
+    }
+    const suppressed = await suppressNewExternalWorktreeInbox(args)
+    if (suppressed) {
+      setSuppressExternalWorktreeInboxRepoId(null)
+    }
+  }, [
+    getNewExternalWorktreeInboxActionArgs,
+    newExternalWorktreesInboxByRepo,
+    suppressExternalWorktreeInboxRepoId
+  ])
 
   const handleRemoveProject = useCallback(
     (repo: Repo) => {
@@ -6361,6 +6586,37 @@ const WorktreeList = React.memo(function WorktreeList({
         }}
         onSubmit={handleSubmitProjectGroupName}
       />
+      <SuppressExternalWorktreeInboxDialog
+        open={suppressExternalWorktreeInboxRepoId !== null}
+        repoDisplayName={
+          suppressExternalWorktreeInboxRepoId
+            ? (repos.find((repo) => repo.id === suppressExternalWorktreeInboxRepoId)?.displayName ??
+              '')
+            : ''
+        }
+        pending={
+          suppressExternalWorktreeInboxRepoId
+            ? (newExternalWorktreeInboxActionState.get(suppressExternalWorktreeInboxRepoId)
+                ?.pending ?? false)
+            : false
+        }
+        onOpenChange={(open) => {
+          if (!open) {
+            setSuppressExternalWorktreeInboxRepoId(null)
+          }
+        }}
+        onConfirm={() => {
+          void handleConfirmSuppressExternalWorktreeInbox()
+        }}
+        onOpenRecovery={() => {
+          if (!suppressExternalWorktreeInboxRepoId) {
+            return
+          }
+          const projectId = suppressExternalWorktreeInboxRepoId
+          setSuppressExternalWorktreeInboxRepoId(null)
+          handleOpenWorktreeVisibility(projectId)
+        }}
+      />
       <ProjectGroupDeleteDialog
         open={projectGroupDeleteDialog !== null}
         groupName={projectGroupDeleteDialog?.groupName ?? ''}
@@ -6394,6 +6650,11 @@ const WorktreeList = React.memo(function WorktreeList({
         handleShowImportedWorktrees={handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={handleKeepImportedWorktreesHidden}
         importedWorktreeCardActionState={importedWorktreeCardActionState}
+        handleImportNewExternalWorktree={handleImportNewExternalWorktree}
+        handleImportAllNewExternalWorktrees={handleImportAllNewExternalWorktrees}
+        handleKeepNewExternalWorktreeInboxHidden={handleKeepNewExternalWorktreeInboxHidden}
+        handleOpenSuppressExternalWorktreeInbox={handleOpenSuppressExternalWorktreeInbox}
+        newExternalWorktreeInboxActionState={newExternalWorktreeInboxActionState}
         handleRemoveProject={handleRemoveProject}
         handleCreateGroupFromRepo={handleCreateGroupFromRepo}
         handleMoveProjectToGroup={handleMoveProjectToGroup}
@@ -6417,11 +6678,13 @@ const WorktreeList = React.memo(function WorktreeList({
         repoMap={repoMap}
         worktreeMap={worktreeMap}
         worktreeLineageById={worktreeLineageById}
+        workspaceLineageByChildKey={workspaceLineageByChildKey}
         repoOrder={repoOrder}
         allRepoIds={allRepoIds}
         onReorderHostSections={handleReorderHostSections}
         onHostDragActiveChange={setHostDragActive}
         prCache={prCache}
+        hostedReviewCache={hostedReviewCache}
         workspaceStatuses={workspaceStatuses}
         projectGrouping={projectGrouping}
         projectGroups={projectGroups}

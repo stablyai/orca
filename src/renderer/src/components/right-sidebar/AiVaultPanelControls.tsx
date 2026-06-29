@@ -36,8 +36,11 @@ import { translate } from '@/i18n/i18n'
 
 const VAULT_HEADER_CONTROL_CLASS = 'size-6 shrink-0'
 
-const VAULT_SCOPE_TOGGLE_ITEM_CLASS =
-  'h-7 min-h-7 min-w-0 flex-1 basis-0 shrink border border-transparent bg-transparent px-2.5 text-[11px] font-medium leading-none text-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground @max-[300px]/ai-vault:px-1.5'
+// Why: match ToggleGroup's spacing+outline qualifiers so selected edges out-specify its border-l-0 collapse.
+const VAULT_SCOPE_SELECTED_EDGE_CLASS =
+  'data-[spacing=0]:data-[variant=outline]:aria-[checked=true]:border-l data-[spacing=0]:data-[variant=outline]:data-[state=on]:border-l'
+
+const VAULT_SCOPE_TOGGLE_ITEM_CLASS = `h-7 min-h-7 min-w-0 flex-1 basis-0 shrink border border-transparent bg-transparent px-2.5 text-[11px] font-medium leading-none text-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground ${VAULT_SCOPE_SELECTED_EDGE_CLASS} @max-[300px]/ai-vault:px-1.5`
 
 export function VaultGroupHeader({
   group,
@@ -73,7 +76,7 @@ export function SessionLoadingState(): React.JSX.Element {
   return (
     <div className="px-3 py-3" aria-busy="true">
       <div className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <LoaderCircle className="size-3.5 animate-spin" />
+        <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
         <span>
           {translate(
             'auto.components.right.sidebar.AiVaultPanelControls.scanningSessions',

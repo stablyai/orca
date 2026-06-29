@@ -1,179 +1,28 @@
-import { Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
 // Upstream packaging bug: @xterm/addon-ligatures declares `"main":
 // "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
 // resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
 // Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
 // https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
-import { SearchAddon } from '@xterm/addon-search'
-import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { SerializeAddon } from '@xterm/addon-serialize'
 
-import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-types'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { DragReorderState } from './pane-drag-reorder'
-import type { DragReorderCallbacks } from './pane-drag-reorder'
-import { attachPaneDrag } from './pane-drag-pointer'
+import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
+import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
-import {
-  ENABLE_WEBGL_RENDERER,
-  attachWebgl,
-  cancelPendingWebglRefresh,
-  disposeWebgl
-} from './pane-webgl-renderer'
-import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
+import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
 
-function getTerminalUrlOpenHint(): string {
-  return navigator.userAgent.includes('Mac')
-    ? 'click to open or ⇧+click for system browser'
-    : 'click to open or Shift+click for system browser'
-}
-
-export function createPaneDOM(
-  id: number,
-  leafId: TerminalLeafId,
-  options: PaneManagerOptions,
-  dragState: DragReorderState,
-  dragCallbacks: DragReorderCallbacks,
-  onPointerDown: (id: number, options?: { focusTerminal?: boolean }) => void,
-  onMouseEnter: (id: number, event: MouseEvent) => void
-): ManagedPaneInternal {
-  // Create .pane container
-  const container = document.createElement('div')
-  container.className = 'pane'
-  container.dataset.paneId = String(id)
-  container.dataset.leafId = leafId
-
-  // Create .xterm-container — baseline layout (position, width, height, margin)
-  // is CSS-driven (see main.css .xterm-container) so that the data-has-title
-  // attribute override can shift the terminal down without racing safeFit().
-  const xtermContainer = document.createElement('div')
-  xtermContainer.className = 'xterm-container'
-  container.appendChild(xtermContainer)
-
-  // Build terminal options
-  const userOpts = options.terminalOptions?.(id) ?? {}
-  const terminalOpts: ITerminalOptions = {
-    ...buildDefaultTerminalOptions(),
-    ...userOpts
-  }
-
-  const terminal = new Terminal(terminalOpts)
-  const fitAddon = new FitAddon()
-  const searchAddon = new SearchAddon()
-  const unicode11Addon = new Unicode11Addon()
-  const openLinkHint = getTerminalUrlOpenHint()
-
-  // URL tooltip element — Ghostty-style bottom-left hint on hover
-  const linkTooltip = document.createElement('div')
-  linkTooltip.className = 'pane-link-tooltip'
-  linkTooltip.classList.add('xterm-hover')
-  linkTooltip.style.cssText =
-    'display:none;position:absolute;bottom:4px;left:8px;z-index:40;' +
-    'padding:5px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
-    'color:#a1a1aa;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.6);' +
-    'pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-
-  // Ghostty-style drag handle — appears at top of pane on hover when 2+ panes
-  const dragHandle = document.createElement('div')
-  dragHandle.className = 'pane-drag-handle'
-  container.appendChild(dragHandle)
-  const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
-
-  const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
-    {
-      hover: (_event, uri) => {
-        if (uri) {
-          linkTooltip.textContent = `${uri} (${openLinkHint})`
-          linkTooltip.style.display = ''
-        }
-      },
-      leave: () => {
-        linkTooltip.style.display = 'none'
-      }
-    }
-  )
-
-  const serializeAddon = new SerializeAddon()
-
-  const panePointerDownHandler = (event: PointerEvent): void => {
-    onPointerDown(id, {
-      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
-    })
-  }
-
-  const paneMouseEnterHandler = (event: MouseEvent): void => {
-    onMouseEnter(id, event)
-  }
-
-  const pane: ManagedPaneInternal = {
-    id,
-    leafId,
-    stablePaneId: leafId,
-    terminal,
-    container,
-    xtermContainer,
-    linkTooltip,
-    terminalTuiScrollSensitivity: options.terminalTuiScrollSensitivity,
-    terminalGpuAcceleration: options.terminalGpuAcceleration ?? 'auto',
-    gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
-    webglAttachmentDeferred: false,
-    webglDisabledAfterContextLoss: false,
-    hasComplexScriptOutput: false,
-    fitAddon,
-    fitResizeObserver: null,
-    pendingInitialFitRafId: null,
-    pendingWebglRefreshRafId: null,
-    pendingObservedFitRafId: null,
-    searchAddon,
-    serializeAddon,
-    unicode11Addon,
-    webLinksAddon,
-    webglAddon: null,
-    ligaturesAddon: null,
-    panePointerDownHandler,
-    paneMouseEnterHandler,
-    paneDragCleanup,
-    compositionHandler: null,
-    focusClassSyncCleanup: null,
-    pendingSplitScrollState: null,
-    pendingSplitScrollRafIds: [],
-    pendingSplitScrollTimerId: null,
-    pendingSplitScrollBufferDisposable: null,
-    debugLabel: options.debugLabel ?? null
-  }
-
-  // Focus handler: clicking a pane makes it active and explicitly focuses
-  // the terminal. We must call focus: true here because after DOM reparenting
-  // (e.g. splitPane moves the original pane into a flex container), xterm.js's
-  // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', panePointerDownHandler)
-
-  // Focus-follows-mouse handler: when the setting is enabled, hovering a
-  // pane makes it active. All gating (feature flag, drag-in-progress,
-  // window focus, etc.) lives in the PaneManager callback — this layer
-  // just forwards the event.
-  container.addEventListener('mouseenter', paneMouseEnterHandler)
-
-  return pane
-}
+export { createPaneDOM } from './pane-dom-creation'
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
 export function openTerminal(pane: ManagedPaneInternal): void {
@@ -203,6 +52,11 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
   })
+  pane.terminalScrollIntentDisposable = attachTerminalScrollIntentTracking(
+    terminal,
+    xtermContainer,
+    pane.leafId
+  )
 
   // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
@@ -343,6 +197,8 @@ export function disposePane(
   pane.paneDragCleanup = null
   pane.focusClassSyncCleanup?.()
   pane.focusClassSyncCleanup = null
+  pane.terminalScrollIntentDisposable?.dispose()
+  pane.terminalScrollIntentDisposable = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null

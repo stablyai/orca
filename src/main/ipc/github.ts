@@ -331,7 +331,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle(
     'gh:enqueuePRRefresh',
     (
-      _event,
+      event,
       args: {
         candidate: GitHubPRRefreshCandidate
         reason: GitHubPRRefreshReason
@@ -342,7 +342,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (validation.kind === 'skipped') {
         return validation.result
       }
-      enqueuePRRefresh(validation.candidate, args.reason, args.priority ?? 0)
+      const senderWindowId = event?.sender?.id
+      enqueuePRRefresh(validation.candidate, args.reason, args.priority ?? 0, senderWindowId)
       return { kind: 'queued' }
     }
   )

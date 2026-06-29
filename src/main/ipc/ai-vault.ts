@@ -22,7 +22,11 @@ let inflightKey: string | null = null
 let handlerOptions: AiVaultHandlerOptions = {}
 
 async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
-  const key = String(args?.limit ?? 'default')
+  // Scope paths change the result set, so they must be part of the cache key.
+  const key = JSON.stringify({
+    limit: args?.limit ?? 'default',
+    scopePaths: args?.scopePaths ?? []
+  })
   const now = Date.now()
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
   // transcripts; explicit refreshes bypass the cache but not an active scan.
@@ -40,6 +44,7 @@ async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListR
   inflightList = (async () =>
     scanAiVaultSessions({
       limit: args?.limit,
+      scopePaths: args?.scopePaths,
       additionalCodexSessionsDirs,
       wslHomeDirs: await getAiVaultWslHomeDirs()
     }))()

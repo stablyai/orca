@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   canResolveFolderSmartGitHubSubmit,
+  getInitialAutoManagedWorkspaceName,
+  isExplicitWorkspaceNameInput,
   resolveInitialWorkspaceRunSeed
 } from './useComposerState'
 
@@ -17,6 +19,47 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('useComposerState host-context boundaries', () => {
+  it('treats typed workspace names as user-authored, not auto-managed', () => {
+    expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
+    expect(
+      isExplicitWorkspaceNameInput({
+        name: 'keep-my-name',
+        lastAutoName: 'keep-my-name'
+      })
+    ).toBe(false)
+    expect(isExplicitWorkspaceNameInput({ name: '#1234', lastAutoName: '' })).toBe(false)
+    expect(
+      isExplicitWorkspaceNameInput({
+        name: 'https://github.com/stablyai/orca/pull/1234',
+        lastAutoName: ''
+      })
+    ).toBe(false)
+  })
+
+  it('does not auto-own arbitrary prefilled names', () => {
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'keep-my-name',
+        initialLinkedWorkItem: null
+      })
+    ).toBe('')
+  })
+
+  it('auto-owns linked-item generated prefilled names', () => {
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: 'fix-workspace-name',
+        initialLinkedWorkItem: {
+          type: 'issue',
+          provider: 'github',
+          number: 1234,
+          title: 'Fix workspace name',
+          url: 'https://github.com/stablyai/orca/issues/1234'
+        }
+      })
+    ).toBe('fix-workspace-name')
+  })
+
   it('resolves GitHub PR bases against the selected run repo, not the source item repo', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
@@ -45,6 +88,11 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('worktree.resolveMrBase')
     expect(section).toContain('repo: runRepo.id')
     expect(section).not.toContain('repoId: repoForItem.id')
+    // Why (#6263): an unresolved MR base must surface a toast and clear stale
+    // state instead of silently dropping the worktree onto origin/master.
+    expect(section).toContain('toast.error(result.error)')
+    expect(section).toContain("'Failed to resolve MR base.'")
+    expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
   })
 
   it('does not use local SSH gates for runtime-owned folder targets', () => {
@@ -187,6 +235,36 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('saves setup startup policy before creating a workspace', () => {
+    const persistSection = sourceBetween(
+      HOOK_SOURCE,
+      'const persistSetupAgentStartupPolicy = useCallback',
+      'const handleSetupAgentStartupPolicyChange'
+    )
+    expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
+    expect(persistSection).toContain('pendingSave?.repoId === currentRepo.id')
+    expect(persistSection).toContain('pendingSave.policy === policy')
+    expect(persistSection).toContain('await pendingSave.promise')
+    expect(persistSection).toContain('continue')
+    expect(HOOK_SOURCE).toContain('setupAgentStartupPolicyDraftRef.current')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
+    expect(fullPolicySave).toBeGreaterThanOrEqual(0)
+    expect(fullCreate).toBeGreaterThan(fullPolicySave)
+
+    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
+    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
+    const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
+    expect(quickPolicySave).toBeGreaterThanOrEqual(0)
+    expect(quickCreate).toBeGreaterThan(quickPolicySave)
+  })
+
   it('resolves submit-time GitHub smart input when folder child repos exist', () => {
     expect(
       canResolveFolderSmartGitHubSubmit({
@@ -238,6 +316,19 @@ describe('useComposerState host-context boundaries', () => {
     expect(handleProjectChange).toContain(
       'handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })'
     )
+  })
+
+  it('selects a project by its own host instead of pinning the current host', () => {
+    // Regression: passing the current host as a hard `hostId` made picking a
+    // project set up only on a different host a silent no-op. The current host
+    // must be a preference (focusedHostScope), with a fallback to any ready host.
+    const handleProjectChange = sourceBetween(
+      HOOK_SOURCE,
+      'const handleProjectChange = useCallback',
+      'const handleSmartGitHubItemSelect'
+    )
+    expect(handleProjectChange).toContain('focusedHostScope: preferredHostId ?? workspaceHostScope')
+    expect(handleProjectChange).not.toContain('hostId: preferredHostId')
   })
 
   it('clears GitLab-specific linked state when clearing smart-name selection', () => {
@@ -398,5 +489,42 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('explicitAgentChoice')
     expect(quickSubmit).not.toContain('shouldPrepareQuickLinkedWorkItemAgentPrompt')
     expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
+  })
+
+  it('keeps Linear starts out of issue-command templates without special draft routing', () => {
+    expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
+    expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
+    expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
+    expect(HOOK_SOURCE).toMatch(
+      /willApplyIssueCommandAsPrompt[\s\S]*linkedWorkItemProvider !== 'linear'/
+    )
+
+    const previewSection = sourceBetween(
+      HOOK_SOURCE,
+      'const shouldApplyLinkedOnlyTemplate =',
+      'const linkedOnlyTemplatePrompt'
+    )
+    expect(previewSection).toContain("linkedWorkItemProvider !== 'linear'")
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    expect(fullSubmit).toContain("submitLinkedWorkItemProvider !== 'linear'")
+    expect(fullSubmit).toMatch(
+      /submitShouldRunIssueAutomation[\s\S]*submitLinkedWorkItemProvider !== 'linear'/
+    )
+    expect(fullSubmit).toContain('prompt: submitStartupPrompt')
+    expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')
+    expect(fullSubmit).toContain('...(shouldSeedInitialAgentStatus')
+
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+    expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
+    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
   })
 })

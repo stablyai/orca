@@ -138,6 +138,24 @@ describe('getRelayShellLaunchConfig', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
+    'wraps zsh when MiMo home must survive shell startup',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(zshrc).toContain(
+        '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'wraps bash even without overlay env for OSC 133 lifecycle markers',
     () => {
       const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })

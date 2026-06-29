@@ -29,6 +29,8 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -259,12 +261,14 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalAllowOsc52Clipboard: false,
     claudeAgentTeamsMode: 'off',
     setupScriptLaunchMode: 'new-tab',
-    terminalScrollbackBytes: 10_000_000,
+    terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
     electronHttp1CompatibilityMode: false,
     openLinksInApp: false,
     openLinksInAppPreferencePrompted: false,
+    openAgentTabsInChatByDefault: false,
+    experimentalNativeChat: false,
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
@@ -286,6 +290,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     floatingTerminalTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
+    diffWordWrap: false,
     combinedDiffFileTreeVisibleByDefault: false,
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
@@ -331,6 +336,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalMobile: false,
     mobileEmulatorEnabled: true,
     mobileEmulatorDefaultDeviceUdid: null,
+    androidSdkPath: null,
     // Why: indefinite hold by default — the desktop "Restore" banner is the
     // explicit return-to-desktop-size action, no wall-clock guess.
     // See docs/mobile-fit-hold.md.
@@ -396,6 +402,7 @@ export function getDefaultRepoHookSettings(): RepoHookSettings {
   return {
     mode: 'auto',
     setupRunPolicy: 'run-by-default',
+    setupAgentStartupPolicy: DEFAULT_SETUP_AGENT_STARTUP_POLICY,
     scripts: {
       setup: '',
       archive: ''

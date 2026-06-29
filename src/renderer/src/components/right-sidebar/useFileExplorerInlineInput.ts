@@ -158,13 +158,19 @@ export function useFileExplorerInlineInput({
             }
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
-              openFile({
-                filePath: fullPath,
-                relativePath: worktreePath ? fullPath.slice(worktreePath.length + 1) : name,
-                worktreeId: activeWorktreeId,
-                language: detectLanguage(name),
-                mode: 'edit'
-              })
+              const runtimeEnvironmentId =
+                fileContext.settings.activeRuntimeEnvironmentId?.trim() || null
+              openFile(
+                {
+                  filePath: fullPath,
+                  relativePath: worktreePath ? fullPath.slice(worktreePath.length + 1) : name,
+                  worktreeId: activeWorktreeId,
+                  runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+                  language: detectLanguage(name),
+                  mode: 'edit'
+                },
+                { suppressActiveRuntimeFallback: runtimeEnvironmentId === null }
+              )
             }
           } catch (err) {
             // Refresh the directory even on failure so the tree stays consistent

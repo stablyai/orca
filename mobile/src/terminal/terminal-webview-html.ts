@@ -224,6 +224,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var userScale = 1;
   var BASE_FONT_PX = 13;
   var MIN_FONT_PX = 6;
+  var MIN_FIT_COLS = 20;
   var currentTextScale = 1;
   var TEXT_SCALE_PRESETS = ${JSON.stringify([...TERMINAL_TEXT_SCALES])};
   var MIN_TEXT_SCALE = TEXT_SCALE_PRESETS[0];
@@ -255,7 +256,8 @@ export const XTERM_HTML = `<!DOCTYPE html>
       var cellW = getCellWidth();
       var cellH = getCellHeight();
       if (cellW > 0 && cellH > 0) {
-        var cols = Math.max(1, Math.floor(window.innerWidth / cellW));
+        var cols = Math.floor(window.innerWidth / cellW);
+        if (cols < MIN_FIT_COLS) return;
         var rows = Math.max(8, Math.floor(window.innerHeight / cellH));
         term.resize(cols, rows);
       }
@@ -844,6 +846,15 @@ export const XTERM_HTML = `<!DOCTYPE html>
       ? containerHeightPx
       : window.innerHeight;
     var cols = Math.floor(vpWidth / cellWidth);
+    if (cols < MIN_FIT_COLS) {
+      flog('measure-skip-small-width', {
+        vpWidth: vpWidth,
+        cellWidth: cellWidth,
+        cols: cols
+      });
+      notify({ type: 'measure-result', cols: null, rows: null });
+      return;
+    }
     // Why: the rows we report become the PTY's actual row count after the
     // server fits to viewport, and xterm renders exactly that many lines
     // anchored top-left of the WebView. Subtracting rows here would leave

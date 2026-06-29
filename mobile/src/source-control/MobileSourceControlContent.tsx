@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from
 import { GitBranch, Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileSourceControlReviewEntry } from './mobile-source-control-review-entry'
+import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
@@ -27,6 +28,8 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
     setShowActionSheet,
     setDiscardTarget,
     actionError,
+    commitFailureRecovery,
+    commitFailureRecoveryAction,
     keyboardLift,
     openingPath,
     openingBranchPath,
@@ -41,9 +44,9 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
     unstagedCount,
     branchLabel,
     syncLabel,
+    primaryAction,
     stageAll,
     unstageAll,
-    commit,
     generateCommitMessage,
     cancelGenerateCommitMessage,
     abortConflictOperation,
@@ -52,6 +55,7 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
 
   return (
     <>
@@ -90,7 +94,12 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
             </View>
           ) : null}
         </View>
-        {actionError ? (
+        {commitFailureRecovery ? (
+          <MobileCommitFailurePanel
+            failure={commitFailureRecovery}
+            action={commitFailureRecoveryAction}
+          />
+        ) : actionError ? (
           <View style={styles.actionError}>
             <Text style={styles.actionErrorText} numberOfLines={2}>
               {actionError}
@@ -224,46 +233,50 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
               placeholderTextColor={colors.textMuted}
               editable={busyAction === null && openingPath === null && openingBranchPath === null}
               returnKeyType="done"
-              onSubmitEditing={() => void commit()}
+              onSubmitEditing={primaryAction.onPress}
             />
           )}
-          <Pressable
-            style={({ pressed }) => [
-              styles.generateButton,
-              (stagedCount === 0 || busyAction !== null) && styles.commitButtonDisabled,
-              pressed && styles.commitButtonPressed
-            ]}
-            // Why: stay tappable while generating so the press can cancel
-            // (disabling it here made the cancel branch below unreachable).
-            disabled={stagedCount === 0 || busyAction !== null}
-            onPress={() =>
-              generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
-            }
-            accessibilityLabel={
-              generatingMessage
-                ? 'Cancel commit message generation'
-                : 'Generate commit message with AI'
-            }
-          >
-            {generatingMessage ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.1} />
-            )}
-          </Pressable>
+          {shouldShowGenerateButton ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.generateButton,
+                busyAction !== null && styles.commitButtonDisabled,
+                pressed && styles.commitButtonPressed
+              ]}
+              // Why: commit-message AI belongs to the commit path; hiding it
+              // during Stage All keeps the quick action visually unambiguous.
+              disabled={busyAction !== null}
+              onPress={() =>
+                generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
+              }
+              accessibilityLabel={
+                generatingMessage
+                  ? 'Cancel commit message generation'
+                  : 'Generate commit message with AI'
+              }
+            >
+              {generatingMessage ? (
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              ) : (
+                <Sparkles size={16} color={colors.textSecondary} strokeWidth={2.1} />
+              )}
+            </Pressable>
+          ) : null}
           <Pressable
             style={({ pressed }) => [
               styles.commitButton,
-              (!commitMessage.trim() || stagedCount === 0 || ioBusy) && styles.commitButtonDisabled,
+              primaryAction.disabled && styles.commitButtonDisabled,
               pressed && styles.commitButtonPressed
             ]}
-            onPress={() => void commit()}
-            disabled={!commitMessage.trim() || stagedCount === 0 || ioBusy}
+            onPress={primaryAction.onPress}
+            disabled={primaryAction.disabled}
+            accessibilityLabel={primaryAction.accessibilityLabel}
+            accessibilityHint={primaryAction.accessibilityHint}
           >
-            {busyAction === 'commit' ? (
+            {primaryAction.loading ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={styles.commitButtonText}>Commit</Text>
+              <Text style={styles.commitButtonText}>{primaryAction.label}</Text>
             )}
           </Pressable>
         </View>

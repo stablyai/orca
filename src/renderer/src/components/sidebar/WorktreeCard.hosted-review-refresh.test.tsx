@@ -33,6 +33,7 @@ vi.mock('@/store', () => ({
       issueCache: {},
       linearIssueCache: {},
       openModal,
+      projectGroups: [],
       remoteBranchConflictByWorktreeId: {},
       settings: { experimentalNewWorktreeCardStyle: true },
       sshConnectionStates: new Map(),
@@ -147,6 +148,7 @@ describe('WorktreeCard hosted review refresh', () => {
     expect(fetchHostedReviewForBranch).toHaveBeenLastCalledWith('/repo', 'feature/branch', {
       repoId: 'repo-1',
       linkedGitHubPR: null,
+      currentHeadOid: 'abc123',
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,

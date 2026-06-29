@@ -50,6 +50,8 @@ export function createRemoteRuntimePtyTextBatcher(
 
   const clear = (): void => {
     clearTimer()
+    pending = ''
+    pendingBytes = 0
     validationVersion += 1
     validationTail = null
   }

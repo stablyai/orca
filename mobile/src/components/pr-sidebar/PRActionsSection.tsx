@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitMerge, Link2Off } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
@@ -8,7 +8,8 @@ import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { ConfirmModal } from '../ConfirmModal'
 import { PRSection } from './PRSection'
-import { resolvePrActionAvailability } from './pr-actions-state'
+import { canShowMobilePRAutoMergeControl } from './pr-auto-merge-availability'
+import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
 import { prActionsStyles as styles } from './pr-actions-styles'
 
 type Props = {
@@ -20,48 +21,32 @@ type Props = {
   onUnlinked: () => void
 }
 
-const MERGE_METHODS: { method: GitHubPRMergeMethod; label: string }[] = [
-  { method: 'merge', label: 'Merge' },
-  { method: 'squash', label: 'Squash' },
-  { method: 'rebase', label: 'Rebase' }
-]
-
 type Confirm =
   | { kind: 'merge'; method: GitHubPRMergeMethod }
   | { kind: 'state'; state: 'open' | 'closed' }
 
-// Merge (with method picker), auto-merge toggle, and close/reopen. Destructive
-// actions route through ConfirmModal first (R5). The firing row shows a spinner
-// in place of its icon and disables; other rows stay interactive (uniform visual).
+// Merge, auto-merge toggle, and close/reopen. Destructive actions route through
+// ConfirmModal first (R5). The firing row shows a spinner in place of its icon
+// and disables; other rows stay interactive (uniform visual).
 export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
-  // Default merge method from the PR's repo settings, else 'squash' (host default).
-  const [method, setMethod] = useState<GitHubPRMergeMethod>(
-    pr.mergeMethodSettings?.defaultMethod ?? 'squash'
-  )
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
 
-  // Only offer methods the repo allows; selecting a disabled method would make the
-  // merge fail. Fall back to all methods when the repo settings are unknown.
-  const availableMethods = useMemo(() => {
-    const allowed = pr.mergeMethodSettings?.allowedMethods
-    if (!allowed) {
-      return MERGE_METHODS
-    }
-    const filtered = MERGE_METHODS.filter((m) => allowed[m.method])
-    return filtered.length > 0 ? filtered : MERGE_METHODS
-  }, [pr.mergeMethodSettings])
-  // Keep the active method valid even if the default isn't an allowed option.
-  const effectiveMethod = availableMethods.some((m) => m.method === method)
-    ? method
-    : availableMethods[0].method
-
+  // Mobile keeps merge one-tap: use the repo default instead of surfacing a
+  // desktop-style method picker in the narrow PR action stack.
+  const effectiveMethod = resolveMobilePrMergeMethod(pr.mergeMethodSettings)
   const state = actions.resolveState(pr.state)
   const autoMerge = actions.resolveAutoMerge(pr.autoMergeEnabled ?? false)
   const avail = resolvePrActionAvailability(state)
   const mergeBusy = actions.isBusy({ kind: 'merge' })
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
+  const showAutoMerge =
+    avail.canAutoMerge &&
+    canShowMobilePRAutoMergeControl({
+      ...pr,
+      autoMergeEnabled: autoMerge || pr.autoMergeEnabled === true
+    })
 
   const unlink = useCallback(async (): Promise<void> => {
     if (!client || unlinking) {
@@ -81,9 +66,9 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
   const confirmCopy = (): { title: string; message: string; confirmLabel: string } => {
     if (confirm?.kind === 'merge') {
       return {
-        title: `${methodLabel(confirm.method)} pull request?`,
-        message: `This will ${confirm.method} #${pr.number} into its base branch.`,
-        confirmLabel: methodLabel(confirm.method)
+        title: 'Merge pull request?',
+        message: `This will merge #${pr.number} into its base branch.`,
+        confirmLabel: 'Merge'
       }
     }
     if (confirm?.kind === 'state' && confirm.state === 'closed') {
@@ -117,56 +102,30 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
     <PRSection title="Actions">
       {/* Merge controls only while the PR can still be merged (open/draft). */}
       {avail.canMerge ? (
-        <>
-          {/* Merge-method picker: one-step selection, then a single Merge CTA. */}
-          <View style={styles.methodRow}>
-            {availableMethods.map((m) => {
-              const selected = m.method === effectiveMethod
-              return (
-                <Pressable
-                  key={m.method}
-                  style={[styles.methodButton, selected && styles.methodButtonSelected]}
-                  onPress={() => setMethod(m.method)}
-                  disabled={mergeBusy}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`${m.label} merge method`}
-                >
-                  <Text
-                    style={[styles.methodButtonText, selected && styles.methodButtonTextSelected]}
-                  >
-                    {m.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-
-          <Pressable
-            style={[
-              styles.actionButton,
-              styles.actionButtonMerge,
-              mergeBusy && styles.actionButtonDisabled
-            ]}
-            onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
-            disabled={mergeBusy}
-            accessibilityRole="button"
-            accessibilityLabel={`${methodLabel(effectiveMethod)} pull request`}
-          >
-            {mergeBusy ? (
-              <ActivityIndicator color={colors.onMergeGreen} />
-            ) : (
-              <GitMerge size={16} color={colors.onMergeGreen} strokeWidth={2.2} />
-            )}
-            <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>
-              {methodLabel(effectiveMethod)} and merge
-            </Text>
-          </Pressable>
-        </>
+        <Pressable
+          style={[
+            styles.actionButton,
+            styles.actionButtonMerge,
+            mergeBusy && styles.actionButtonDisabled
+          ]}
+          onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
+          disabled={mergeBusy}
+          accessibilityRole="button"
+          accessibilityLabel="Merge pull request"
+        >
+          {mergeBusy ? (
+            <ActivityIndicator color={colors.onMergeGreen} />
+          ) : (
+            <GitMerge size={16} color={colors.onMergeGreen} strokeWidth={2.2} />
+          )}
+          <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>
+            Merge pull request
+          </Text>
+        </Pressable>
       ) : null}
 
       {/* Auto-merge toggle — optimistic, reverts on transient failure. */}
-      {avail.canAutoMerge ? (
+      {showAutoMerge ? (
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Auto-merge when ready</Text>
           <Pressable
@@ -242,15 +201,4 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
       />
     </PRSection>
   )
-}
-
-function methodLabel(method: GitHubPRMergeMethod): string {
-  switch (method) {
-    case 'merge':
-      return 'Merge'
-    case 'squash':
-      return 'Squash'
-    case 'rebase':
-      return 'Rebase'
-  }
 }

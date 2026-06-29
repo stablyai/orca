@@ -273,6 +273,9 @@ describe('PRCommentsList', () => {
     expect(markup.indexOf('aria-label="Add comment"')).toBeLessThan(
       markup.indexOf('Existing review context')
     )
+    expect(markup.indexOf('aria-label="Comment display options"')).toBeLessThan(
+      markup.indexOf('aria-label="Add comment"')
+    )
     expect(markup).toContain('lucide-plus')
     expect(markup).not.toContain('Add a comment...')
     expect(markup).not.toContain('Add a PR comment')
@@ -374,8 +377,20 @@ describe('CheckJobLogTail', () => {
       })
     )
 
-    expect(markup).toContain('Log tail (last 200 lines)')
+    expect(markup).toContain('Log excerpt')
     expect(markup).toContain('Error: expected true to be false')
-    expect(markup).toContain('Copy log tail')
+    expect(markup).toContain('Copy log excerpt')
+  })
+
+  it('uses a taller viewport when expanded for failed-job details', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(CheckJobLogTail, {
+        logTail: 'Error: expected true to be false',
+        expanded: true
+      })
+    )
+
+    expect(markup).toContain('min-h-48')
+    expect(markup).toContain('max-h-[min(50vh,32rem)]')
   })
 })

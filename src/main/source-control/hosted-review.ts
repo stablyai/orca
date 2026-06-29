@@ -38,6 +38,7 @@ export async function getHostedReviewForBranch(
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
+    currentHeadOid?: string | null
   } & HostedReviewExecutionOptions
 ): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
@@ -68,6 +69,7 @@ export async function getHostedReviewForBranch(
     connectionId: input.connectionId,
     branch: branchName,
     ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {}),
+    githubCurrentHeadOid: input.currentHeadOid ?? null,
     ...reviewLinkForProvider(input, provider.id)
   })
 }

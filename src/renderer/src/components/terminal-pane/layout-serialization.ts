@@ -6,7 +6,11 @@ import type {
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
-import { getLeftmostLeafId, normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
+import {
+  getLeftmostLeafId,
+  normalizeTerminalLayoutSnapshot,
+  resolveRootlessTerminalLayoutLeafId
+} from './terminal-layout-leaf-ids'
 
 export {
   collectLeafIdsInOrder,
@@ -257,9 +261,12 @@ export function replayTerminalLayout(
 ): Map<string, number> {
   const paneByLeafId = new Map<string, number>()
 
+  const inputSnapshot = snapshot
   const normalized = normalizeTerminalLayoutSnapshot(snapshot)
   snapshot = normalized.snapshot
-  const initialLeafId = snapshot.root ? getLeftmostLeafId(snapshot.root) : undefined
+  const initialLeafId = snapshot.root
+    ? getLeftmostLeafId(snapshot.root)
+    : (resolveRootlessTerminalLayoutLeafId(inputSnapshot ?? snapshot) ?? undefined)
   const initialPane = manager.createInitialPane({ focus: focusInitialPane, leafId: initialLeafId })
   if (!snapshot?.root) {
     paneByLeafId.set(initialPane.leafId, initialPane.id)

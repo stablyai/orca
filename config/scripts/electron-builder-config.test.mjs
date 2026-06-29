@@ -63,6 +63,12 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+    )
+  })
+
   it('uses the multi-size icon source for Linux packages', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })

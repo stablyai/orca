@@ -26,10 +26,15 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     left.repo === right.repo &&
     left.branch === right.branch &&
     left.displayName === right.displayName &&
+    (left.workspaceStatus ?? null) === (right.workspaceStatus ?? null) &&
+    (left.sortOrder ?? null) === (right.sortOrder ?? null) &&
+    (left.manualOrder ?? null) === (right.manualOrder ?? null) &&
     left.path === right.path &&
     (left.isArchived ?? false) === (right.isArchived ?? false) &&
     (left.isMainWorktree ?? false) === (right.isMainWorktree ?? false) &&
     (left.hasHostSidebarActivity ?? false) === (right.hasHostSidebarActivity ?? false) &&
+    (left.parentWorktreeId ?? null) === (right.parentWorktreeId ?? null) &&
+    areStringArraysEqual(left.childWorktreeIds ?? [], right.childWorktreeIds ?? []) &&
     left.liveTerminalCount === right.liveTerminalCount &&
     left.hasAttachedPty === right.hasAttachedPty &&
     left.preview === right.preview &&
@@ -46,6 +51,21 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     arePullRequestsEqual(left.linkedPR, right.linkedPR) &&
     areAgentRowsEqual(left.agents ?? [], right.agents ?? [])
   )
+}
+
+function areStringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  if (left === right) {
+    return true
+  }
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
 }
 
 function arePullRequestsEqual(left: Worktree['linkedPR'], right: Worktree['linkedPR']): boolean {

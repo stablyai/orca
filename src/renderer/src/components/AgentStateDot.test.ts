@@ -39,14 +39,17 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('text-emerald-500')
   })
 
-  it('renders permission as an amber attention dot', () => {
-    const classNames = renderDotClassNames('permission')
+  it.each(['permission', 'waiting'] satisfies AgentDotState[])(
+    'renders %s as an amber attention dot',
+    (state) => {
+      const classNames = renderDotClassNames(state)
 
-    expect(classNames).toContain('bg-amber-500')
-    expect(classNames).not.toContain('bg-red-500')
-  })
+      expect(classNames).toContain('bg-amber-500')
+      expect(classNames).not.toContain('bg-red-500')
+    }
+  )
 
-  it.each(['blocked', 'waiting', 'interrupted'] satisfies AgentDotState[])(
+  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
       const classNames = renderDotClassNames(state)

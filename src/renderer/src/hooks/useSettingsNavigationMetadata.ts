@@ -72,9 +72,10 @@ import { getExperimentalPaneSearchEntries } from '@/components/settings/experime
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
-  getCachedWindowsTerminalCapabilities,
-  getWindowsTerminalCapabilityOwnerKey
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
@@ -114,7 +115,7 @@ export function buildSettingsNavigationMetadata({
         'Manage AI agents, set a default, and customize commands.'
       ),
       icon: Bot,
-      searchEntries: getAgentsPaneSearchEntries(),
+      searchEntries: getAgentsPaneSearchEntries({ includeAgentRuntime: isWindowsTerminalHost }),
       group: 'capabilities'
     },
     {
@@ -224,6 +225,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getIntegrationsPaneSearchEntries(),
       group: 'setup'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'mobile',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
+              'Control terminals and agents from your phone.'
+            ),
+            icon: Smartphone,
+            searchEntries: getMobileSettingsPaneSearchEntries(),
+            group: 'setup'
+          }
+        ]
+      : []),
     {
       id: 'git',
       title: translate(
@@ -292,7 +308,7 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
-    ...(showDesktopOnlySettings && isMac
+    ...(showDesktopOnlySettings
       ? [
           {
             id: 'mobile-emulator',
@@ -412,17 +428,6 @@ export function buildSettingsNavigationMetadata({
             icon: Cable,
             searchEntries: getSshPaneSearchEntries(),
             group: 'remote'
-          },
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'mobile'
           }
         ]
       : []),
@@ -502,18 +507,21 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   // contents refresh on rerender without depending on i18n.language directly.
   useTranslation()
   const repos = useAppStore((state) => state.repos)
-  const activeRuntimeEnvironmentId = useAppStore(
-    (state) => state.settings?.activeRuntimeEnvironmentId
-  )
+  const settings = useAppStore((state) => state.settings)
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId
+    settings?.activeRuntimeEnvironmentId
   )
-  const isWindowsTerminalHost =
-    isWindows ||
-    getCachedWindowsTerminalCapabilities(windowsTerminalCapabilityOwnerKey).hostPlatform === 'win32'
+  const runtimeTarget = getActiveRuntimeTarget(settings)
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    isWindows || isWebClient || runtimeTarget.kind === 'environment',
+    false,
+    windowsTerminalCapabilityOwnerKey,
+    runtimeTarget
+  )
+  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
   // and search entries cannot drift. Keep this hook free of Settings pane UI

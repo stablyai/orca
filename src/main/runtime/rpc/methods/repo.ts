@@ -1,11 +1,9 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
-import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
-import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
-import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
+import { createRepoUpdateSchema } from './repo-update-schema'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -32,55 +30,7 @@ const RepoSetBaseRef = z.object({
   ref: requiredString('Missing base ref')
 })
 
-const RepoSourceControlAiOverrides = z
-  .unknown()
-  .optional()
-  .transform((value) =>
-    value === undefined
-      ? undefined
-      : value === null
-        ? null
-        : normalizeRepoSourceControlAiOverrides(value)
-  )
-
-const RepoBadgeColor = z
-  .unknown()
-  .optional()
-  .transform((value) =>
-    value === undefined ? undefined : (normalizeRepoBadgeColor(value) ?? undefined)
-  )
-
-const RepoUpstream = z
-  .object({
-    owner: z.string().min(1),
-    repo: z.string().min(1)
-  })
-  .nullable()
-  .optional()
-
-const RepoUpdate = RepoSelector.extend({
-  updates: z.object({
-    displayName: OptionalString,
-    badgeColor: RepoBadgeColor,
-    repoIcon: z
-      .unknown()
-      .transform((value) => sanitizeRepoIcon(value))
-      .optional(),
-    upstream: RepoUpstream,
-    hookSettings: z.unknown().optional(),
-    worktreeBaseRef: OptionalString,
-    worktreeBasePath: OptionalString,
-    kind: z.enum(['git', 'folder']).optional(),
-    symlinkPaths: z.array(z.string()).optional(),
-    issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
-    forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
-    externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
-    externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
-    projectGroupId: OptionalString.nullable().optional(),
-    projectGroupOrder: OptionalFiniteNumber,
-    sourceControlAi: RepoSourceControlAiOverrides
-  })
-})
+const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
 
 const RepoSearchRefs = z.object({
   repo: requiredString('Missing repo selector'),
@@ -158,7 +108,10 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.list',
     params: null,
-    handler: (_params, { runtime }) => ({ repos: runtime.listRepos() })
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return { repos: runtime.listRepos() }
+    }
   }),
   ...PROJECT_RUNTIME_METHODS,
   defineMethod({

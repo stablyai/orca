@@ -72,6 +72,7 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
@@ -131,6 +132,10 @@ import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
+import {
+  legacyTerminalScrollbackBytesToRows,
+  normalizeDesktopTerminalScrollbackRows
+} from '../shared/terminal-scrollback-policy'
 import {
   compareFeatureInteractionUsageBuckets,
   getFeatureInteractionCategory,
@@ -389,6 +394,46 @@ function buildWorkspaceDirHistoryForUpdate(
     next.push(previousLayout)
   }
   return next
+}
+
+type LegacyTerminalScrollbackSettings = {
+  terminalScrollbackRows?: unknown
+  terminalScrollbackBytes?: unknown
+}
+
+function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminalScrollbackSettings {
+  return settings && typeof settings === 'object'
+    ? (settings as LegacyTerminalScrollbackSettings)
+    : {}
+}
+
+function stripLegacyTerminalScrollbackBytes(
+  settings: Partial<GlobalSettings> | undefined
+): Partial<GlobalSettings> {
+  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...rest } = (settings ??
+    {}) as Partial<GlobalSettings> & { terminalScrollbackBytes?: unknown }
+  void _legacyScrollbackBytes
+  return rest
+}
+
+function migrateTerminalScrollbackRows(settings: unknown): {
+  rows: number
+  needsSave: boolean
+} {
+  const legacySettings = readLegacyTerminalScrollbackSettings(settings)
+  const hasRows = Object.prototype.hasOwnProperty.call(legacySettings, 'terminalScrollbackRows')
+  const hasLegacyBytes = Object.prototype.hasOwnProperty.call(
+    legacySettings,
+    'terminalScrollbackBytes'
+  )
+  const rows = hasRows
+    ? normalizeDesktopTerminalScrollbackRows(legacySettings.terminalScrollbackRows)
+    : legacyTerminalScrollbackBytesToRows(legacySettings.terminalScrollbackBytes)
+
+  return {
+    rows,
+    needsSave: !hasRows || hasLegacyBytes || legacySettings.terminalScrollbackRows !== rows
+  }
 }
 
 function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
@@ -665,6 +710,16 @@ function normalizeAutomationRunWorkspaceDisplayName(value: string | null): strin
   return trimmed ? trimmed : null
 }
 
+function normalizeAutomationRunTerminalPaneKey(value: string | null | undefined): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed && parsePaneKey(trimmed) ? trimmed : null
+}
+
+function normalizeAutomationRunTerminalPtyId(value: string | null | undefined): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed || null
+}
+
 function normalizeAutomationRunOutputSnapshot(
   value: AutomationRunOutputSnapshot | null | undefined
 ): AutomationRunOutputSnapshot | null {
@@ -720,11 +775,25 @@ function normalizeAutomationPrecheckResult(
 }
 
 function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  const setupDecision = normalizeAutomationSetupDecisionForWorkspaceMode(
+    automation.workspaceMode,
+    automation.setupDecision
+  )
   return {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
+    setupDecision,
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
+}
+
+function normalizeAutomationSetupDecisionForWorkspaceMode(
+  workspaceMode: Automation['workspaceMode'],
+  setupDecision: unknown
+): Automation['setupDecision'] {
+  return workspaceMode === 'new_per_run' && (setupDecision === 'run' || setupDecision === 'skip')
+    ? setupDecision
+    : undefined
 }
 
 function getAutomationContextsForRepo(
@@ -820,6 +889,14 @@ function backfillLegacyAutomationContexts(
     }
     if (!Object.hasOwn(next, 'sourceContext')) {
       next.sourceContext = automationContexts?.sourceContext ?? null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPaneKey')) {
+      next.terminalPaneKey = null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPtyId')) {
+      next.terminalPtyId = null
       changed = true
     }
     return next
@@ -1081,6 +1158,24 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
+function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as {
+    canonicalKey?: unknown
+    remoteName?: unknown
+    remoteUrl?: unknown
+  }
+  const canonicalKey =
+    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
+  const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
+  const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+  return canonicalKey && remoteName && remoteUrl
+    ? { canonicalKey, remoteName, remoteUrl }
+    : undefined
+}
+
 function sanitizeRepoProjectHostSetupMethod(
   value: unknown
 ): RepoProjectHostSetupMethod | undefined {
@@ -1098,6 +1193,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'badgeColor'
       | 'repoIcon'
       | 'upstream'
+      | 'gitRemoteIdentity'
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
@@ -1128,6 +1224,14 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.upstream
     } else {
       sanitized.upstream = upstream
+    }
+  }
+  if ('gitRemoteIdentity' in sanitized) {
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(sanitized.gitRemoteIdentity)
+    if (gitRemoteIdentity === undefined) {
+      delete sanitized.gitRemoteIdentity
+    } else {
+      sanitized.gitRemoteIdentity = gitRemoteIdentity
     }
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
@@ -2476,6 +2580,10 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
+        const migratedTerminalScrollback = migrateTerminalScrollbackRows(parsed.settings)
+        if (migratedTerminalScrollback.needsSave) {
+          this.loadNeedsSave = true
+        }
         const rawSourceControlAi = parsed.settings?.sourceControlAi
         const rawSourceControlAiMissing = rawSourceControlAi === undefined
         const rawSourceControlAiActionsMissing =
@@ -2698,7 +2806,7 @@ export class Store {
           ),
           settings: {
             ...defaults.settings,
-            ...parsed.settings,
+            ...stripLegacyTerminalScrollbackBytes(parsed.settings),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
@@ -2734,6 +2842,7 @@ export class Store {
             floatingTerminalCwd: migratedFloatingTerminalCwd,
             floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
             floatingTerminalCwdMigratedToAppWorkspace: true,
+            terminalScrollbackRows: migratedTerminalScrollback.rows,
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
@@ -3720,6 +3829,7 @@ export class Store {
         | 'badgeColor'
         | 'repoIcon'
         | 'upstream'
+        | 'gitRemoteIdentity'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -3729,11 +3839,16 @@ export class Store {
         | 'forkSyncMode'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
+        | 'externalWorktreeInboxBaselinePaths'
+        | 'importedExternalWorktreePaths'
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
-    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+    > & {
+      sourceControlAi?: Repo['sourceControlAi'] | null
+      externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+    }
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -3782,6 +3897,14 @@ export class Store {
       // Why: old persisted repos have no explicit marker. Stamp it the first
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
+    }
+    if (
+      'externalWorktreeDiscoverySuppressedAt' in sanitizedUpdates &&
+      (sanitizedUpdates.externalWorktreeDiscoverySuppressedAt === undefined ||
+        sanitizedUpdates.externalWorktreeDiscoverySuppressedAt === null)
+    ) {
+      delete repo.externalWorktreeDiscoverySuppressedAt
+      delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
     }
     if (
       'sourceControlAi' in sanitizedUpdates &&
@@ -3895,6 +4018,7 @@ export class Store {
     const {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
+      gitRemoteIdentity: rawGitRemoteIdentity,
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
@@ -3902,6 +4026,7 @@ export class Store {
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
@@ -3918,6 +4043,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
@@ -3998,6 +4124,10 @@ export class Store {
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
+        input.workspaceMode,
+        input.setupDecision
+      ),
       reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
       timezone: input.timezone,
       rrule: input.rrule,
@@ -4065,6 +4195,12 @@ export class Store {
             ? (updates.baseBranch ?? null)
             : (current.baseBranch ?? null)
           : null,
+      setupDecision:
+        workspaceMode === 'new_per_run'
+          ? Object.hasOwn(updates, 'setupDecision')
+            ? normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, updates.setupDecision)
+            : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
+          : undefined,
       reuseSession:
         workspaceMode === 'existing'
           ? (updates.reuseSession ?? current.reuseSession ?? false)
@@ -4118,6 +4254,8 @@ export class Store {
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null,
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
@@ -4153,7 +4291,15 @@ export class Store {
         workspaceDisplayName ??
         normalizeAutomationRunWorkspaceDisplayName(current.workspaceDisplayName ?? null) ??
         this.getAutomationRunWorkspaceDisplayName(workspaceId),
-      terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      terminalSessionId: Object.hasOwn(result, 'terminalSessionId')
+        ? (result.terminalSessionId ?? null)
+        : current.terminalSessionId,
+      terminalPaneKey: Object.hasOwn(result, 'terminalPaneKey')
+        ? normalizeAutomationRunTerminalPaneKey(result.terminalPaneKey)
+        : normalizeAutomationRunTerminalPaneKey(current.terminalPaneKey),
+      terminalPtyId: Object.hasOwn(result, 'terminalPtyId')
+        ? normalizeAutomationRunTerminalPtyId(result.terminalPtyId)
+        : normalizeAutomationRunTerminalPtyId(current.terminalPtyId),
       outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
         ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
         : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),
@@ -4539,7 +4685,7 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
-    const sanitizedUpdates = { ...updates }
+    const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
     // Why: coerce strictly to boolean here (not at the IPC edge) so every write
     // path is covered and a non-bool renderer payload can never persist a
     // truthy non-bool that later reads as "tray-minimize on".
@@ -4565,6 +4711,11 @@ export class Store {
     if ('terminalCustomThemes' in updates) {
       sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
         updates.terminalCustomThemes
+      )
+    }
+    if ('terminalScrollbackRows' in updates) {
+      sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+        updates.terminalScrollbackRows
       )
     }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {

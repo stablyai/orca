@@ -172,7 +172,7 @@ describe('resolveTabInsertion', () => {
 // ---------------------------------------------------------------------------
 
 describe('resolveTabIndicatorEdges', () => {
-  it('marks both tabs around a left-edge insertion slot', () => {
+  it('marks one edge for a left-edge insertion slot', () => {
     const hovered: HoveredTabInsertion = {
       groupId: 'group-1',
       visibleTabId: 'tab-2',
@@ -180,12 +180,11 @@ describe('resolveTabIndicatorEdges', () => {
     }
 
     expect(resolveTabIndicatorEdges(['tab-1', 'tab-2', 'tab-3'], hovered)).toEqual([
-      { visibleTabId: 'tab-1', side: 'right' },
       { visibleTabId: 'tab-2', side: 'left' }
     ])
   })
 
-  it('marks both tabs around a right-edge insertion slot', () => {
+  it('marks one edge for a right-edge insertion slot', () => {
     const hovered: HoveredTabInsertion = {
       groupId: 'group-1',
       visibleTabId: 'tab-2',
@@ -193,7 +192,6 @@ describe('resolveTabIndicatorEdges', () => {
     }
 
     expect(resolveTabIndicatorEdges(['tab-1', 'tab-2', 'tab-3'], hovered)).toEqual([
-      { visibleTabId: 'tab-2', side: 'right' },
       { visibleTabId: 'tab-3', side: 'left' }
     ])
   })

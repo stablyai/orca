@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
-import { getConnectionId, getConnectionIdForFile } from './connection-context'
+import {
+  getConnectionId,
+  getConnectionIdForFile,
+  isWorktreeConnectionResolved
+} from './connection-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 const initialState = useAppStore.getInitialState()
@@ -315,6 +319,25 @@ describe('getConnectionId', () => {
     })
 
     expect(getConnectionId(folderWorkspaceKey('folder-workspace-1'))).toBe('ssh-1')
+  })
+
+  it('reports a worktree owner as unresolved until its backing repo hydrates (#6648)', () => {
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    // SSH repo not yet in the store -> owner unknown, must not read locally.
+    expect(isWorktreeConnectionResolved('repo-ssh::/home/neil/repo')).toBe(false)
+
+    useAppStore.setState({
+      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-1' })],
+      worktreesByRepo: {}
+    })
+    expect(isWorktreeConnectionResolved('repo-ssh::/home/neil/repo')).toBe(true)
+  })
+
+  it('treats null worktrees and folder workspaces as resolved owners', () => {
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+    expect(isWorktreeConnectionResolved(null)).toBe(true)
+    // Folder workspaces resolve per-file via getConnectionIdForFile.
+    expect(isWorktreeConnectionResolved(folderWorkspaceKey('folder-workspace-1'))).toBe(true)
   })
 
   it('keeps normalized same-path folder repo ambiguity when resolving files', () => {

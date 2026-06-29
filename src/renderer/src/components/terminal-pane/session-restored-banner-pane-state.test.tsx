@@ -76,7 +76,7 @@ describe('session restored banner pane state', () => {
     expect(paneText(createdPane)).toBe(SESSION_RESTORED_BANNER_TEXT)
   })
 
-  it('reserves title space for always-on pane headers on the active tab', () => {
+  it('does not reserve title space for chromeless always-on pane headers', () => {
     const activePane = createPane(1)
     const secondPane = createPane(2)
 
@@ -84,13 +84,28 @@ describe('session restored banner pane state', () => {
       panes: [activePane, secondPane],
       paneTitles: {},
       renamingPaneId: null,
-      sessionRestoredBannerPaneIds: new Set(),
-      reservePaneHeaderSpace: true
+      sessionRestoredBannerPaneIds: new Set()
+    })
+
+    expect(needsFit).toBe(false)
+    expect(activePane.container.hasAttribute('data-has-title')).toBe(false)
+    expect(secondPane.container.hasAttribute('data-has-title')).toBe(false)
+  })
+
+  it('reserves title space for explicit titles and inline rename', () => {
+    const titledPane = createPane(1)
+    const renamingPane = createPane(2)
+
+    const needsFit = syncSessionRestoredBannerTitleSpace({
+      panes: [titledPane, renamingPane],
+      paneTitles: { [titledPane.id]: 'server' },
+      renamingPaneId: renamingPane.id,
+      sessionRestoredBannerPaneIds: new Set()
     })
 
     expect(needsFit).toBe(true)
-    expect(activePane.container.hasAttribute('data-has-title')).toBe(true)
-    expect(secondPane.container.hasAttribute('data-has-title')).toBe(true)
+    expect(titledPane.container.hasAttribute('data-has-title')).toBe(true)
+    expect(renamingPane.container.hasAttribute('data-has-title')).toBe(true)
   })
 
   it('renders and reserves title space only on the restored inactive split pane', async () => {

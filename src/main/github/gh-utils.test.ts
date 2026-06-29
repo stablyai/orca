@@ -1,3 +1,6 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
@@ -27,12 +30,17 @@ import {
   resolvePRRepositoryCandidates,
   resolveIssueSource
 } from './gh-utils'
+import {
+  __resetLocalGitConfigSignatureCacheForTests,
+  readLocalGitConfigSignature
+} from './local-git-config-signature'
 
 describe('github owner/repo resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     getSshGitProviderMock.mockReset()
     _resetOwnerRepoCache()
+    __resetLocalGitConfigSignatureCacheForTests()
   })
 
   it('parses GitHub HTTPS and SSH remotes', () => {
@@ -287,6 +295,364 @@ describe('github owner/repo resolution', () => {
       expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('keeps local missing-remote probes cached beyond the short positive TTL', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock.mockRejectedValue(new Error("error: No such remote 'origin'"))
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      vi.setSystemTime(32_000)
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('treats stderr-only missing-remote errors as stable negatives', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock.mockRejectedValue(
+        Object.assign(new Error('Command failed'), {
+          stderr: "fatal: No such remote 'origin'"
+        })
+      )
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      vi.setSystemTime(32_000)
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('does not apply the long negative TTL when git remote get-url fails transiently', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    try {
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error('fatal: cannot lock ref'))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('invalidates a cached local missing remote when git config changes', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    const configPath = join(repoPath, '.git', 'config')
+    await writeFile(configPath, '[core]\n\trepositoryformatversion = 0\n')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await writeFile(
+        configPath,
+        '[core]\n\trepositoryformatversion = 0\n[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      vi.setSystemTime(32_000)
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('invalidates a cached local missing remote when an included git config changes', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    const includedConfigPath = join(repoPath, 'remote.inc')
+    await writeFile(
+      join(repoPath, '.git', 'config'),
+      `[core]\n\trepositoryformatversion = 0\n[include]\n\tpath = ${includedConfigPath}\n`
+    )
+    await writeFile(includedConfigPath, '')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      vi.setSystemTime(32_000)
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks included git config paths with inline comments', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    const includedConfigPath = join(repoPath, 'remote-with-comment.inc')
+    await writeFile(
+      join(repoPath, '.git', 'config'),
+      `[core]\n\trepositoryformatversion = 0\n[include]\n\tpath = ${includedConfigPath} # origin remote lives here\n`
+    )
+    await writeFile(includedConfigPath, '')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      vi.setSystemTime(32_000)
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks included git config paths when section headers have inline comments', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    const includedConfigPath = join(repoPath, 'section-comment.inc')
+    await writeFile(
+      join(repoPath, '.git', 'config'),
+      `[core]\n\trepositoryformatversion = 0\n[include] # comment\n\tpath = ${includedConfigPath}\n`
+    )
+    await writeFile(includedConfigPath, '')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      vi.setSystemTime(32_000)
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks quoted included git config paths with inline comments', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    const includedConfigPath = join(repoPath, 'quoted-comment.inc')
+    await writeFile(
+      join(repoPath, '.git', 'config'),
+      `[core]\n\trepositoryformatversion = 0\n[include]\n\tpath = "${includedConfigPath}" # comment\n`
+    )
+    await writeFile(includedConfigPath, '')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      vi.setSystemTime(32_000)
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks quoted included git config paths with comment characters in the path', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    await mkdir(join(repoPath, '.git'))
+    const includeDir = join(repoPath, 'include # hash')
+    await mkdir(includeDir)
+    const includedConfigPath = join(includeDir, 'remote.inc')
+    await writeFile(
+      join(repoPath, '.git', 'config'),
+      `[core]\n\trepositoryformatversion = 0\n[include]\n\tpath = "${includedConfigPath}"\n`
+    )
+    await writeFile(includedConfigPath, '')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      gitExecFileAsyncMock
+        .mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+        .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toBeNull()
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      vi.setSystemTime(32_000)
+
+      await expect(getOwnerRepoForRemote(repoPath, 'origin')).resolves.toEqual({
+        owner: 'acme',
+        repo: 'widgets'
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('includes per-worktree git config in local config signatures', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    const gitDir = join(repoPath, '.git')
+    await mkdir(gitDir)
+    await writeFile(join(gitDir, 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    try {
+      const firstSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId: null
+      })
+
+      await writeFile(
+        join(gitDir, 'config.worktree'),
+        '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+      )
+      const secondSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId: null
+      })
+
+      expect(secondSignature).not.toEqual(firstSignature)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('includes linked worktree config in local config signatures', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    const commonGitDir = join(repoPath, 'common-git')
+    const worktreeGitDir = join(commonGitDir, 'worktrees', 'feature')
+    const worktreePath = join(repoPath, 'feature-worktree')
+    await mkdir(worktreeGitDir, { recursive: true })
+    await mkdir(worktreePath)
+    await writeFile(join(worktreePath, '.git'), `gitdir: ${worktreeGitDir}\n`)
+    await writeFile(join(worktreeGitDir, 'commondir'), '../..\n')
+    await writeFile(join(commonGitDir, 'config'), '[core]\n\trepositoryformatversion = 0\n')
+    try {
+      const firstSignature = await readLocalGitConfigSignature({
+        repoPath: worktreePath,
+        connectionId: null
+      })
+
+      await writeFile(
+        join(worktreeGitDir, 'config.worktree'),
+        '[branch "feature"]\n\tremote = origin\n\tmerge = refs/heads/contributor/original\n'
+      )
+      const secondSignature = await readLocalGitConfigSignature({
+        repoPath: worktreePath,
+        connectionId: null
+      })
+
+      expect(secondSignature).not.toEqual(firstSignature)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks includeIf paths with comment markers inside quoted section headers', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
+    const gitDir = join(repoPath, '.git')
+    const includedDir = join(repoPath, 'Work #1')
+    const includedConfigPath = join(includedDir, 'included.gitconfig')
+    await mkdir(gitDir)
+    await mkdir(includedDir)
+    await writeFile(
+      includedConfigPath,
+      '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
+    )
+    await writeFile(
+      join(gitDir, 'config'),
+      `[includeIf "gitdir:${includedDir}/"]\n\tpath = "${includedConfigPath}"\n`
+    )
+    try {
+      const firstSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId: null
+      })
+
+      await writeFile(
+        includedConfigPath,
+        '[remote "origin"]\n\turl = git@github.com:acme/renamed-widgets.git\n'
+      )
+      const secondSignature = await readLocalGitConfigSignature({
+        repoPath,
+        connectionId: null
+      })
+
+      expect(secondSignature).not.toEqual(firstSignature)
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
     }
   })
 })

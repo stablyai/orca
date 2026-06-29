@@ -25,7 +25,8 @@ type MarkdownTableOfContentsPanelProps = {
   onNavigate: (id: string) => void
 }
 
-const TOC_LEVELS: MarkdownTocLevel[] = [1, 2, 3]
+const TOC_LEVELS: MarkdownTocLevel[] = [1, 2, 3, 4, 5]
+const TOC_EXPAND_ALL_LEVEL: MarkdownTocLevel = 5
 const TOC_INDENT_BASE_PX = 12
 const TOC_INDENT_STEP_PX = 12
 
@@ -194,7 +195,7 @@ export function MarkdownTableOfContentsPanel({
                 size="icon-xs"
                 className="markdown-toc-level-button"
                 aria-label={
-                  level === 3
+                  level === TOC_EXPAND_ALL_LEVEL
                     ? translate(
                         'auto.components.editor.MarkdownTableOfContentsPanel.f3de856175',
                         'Expand all heading levels'
@@ -206,7 +207,7 @@ export function MarkdownTableOfContentsPanel({
                       )
                 }
                 title={
-                  level === 3
+                  level === TOC_EXPAND_ALL_LEVEL
                     ? translate(
                         'auto.components.editor.MarkdownTableOfContentsPanel.a5daadd68b',
                         'Expand all'

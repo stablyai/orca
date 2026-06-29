@@ -4,7 +4,6 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
-import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   buildAgentDraftLaunchPlan,
@@ -66,18 +65,15 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
   linkedWorkItem: LinkedWorkItemSummary
   note: string
-  cliAvailable: boolean
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
   platform: NodeJS.Platform
+  isRemote: boolean
 }): AgentStartupPlan | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
     args.linkedWorkItem,
-    args.note,
-    {
-      cliAvailable: args.cliAvailable
-    }
+    args.note
   )
   const linkedDraftPrompt = (draftPrompt ?? prompt.trim()) || null
   const draftLaunchPlan = linkedDraftPrompt
@@ -87,7 +83,8 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
         cmdOverrides: args.agentCmdOverrides ?? {},
         agentArgs: args.agentArgs,
         agentEnv: args.agentEnv,
-        platform: args.platform
+        platform: args.platform,
+        isRemote: args.isRemote
       })
     : null
   if (draftLaunchPlan) {
@@ -113,6 +110,7 @@ function buildFolderWorkspaceLinkedStartupPlan(args: {
     agentArgs: args.agentArgs,
     agentEnv: args.agentEnv,
     platform: args.platform,
+    isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && linkedDraftPrompt) {
@@ -155,7 +153,6 @@ export async function submitFolderWorkspaceCreate({
   agentCmdOverrides,
   agentArgs,
   agentEnv,
-  isRemote,
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   createFolderWorkspace,
@@ -168,23 +165,20 @@ export async function submitFolderWorkspaceCreate({
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
   const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
-  // Why: only suggest `orca linear` when the launched terminal can actually
-  // resolve the CLI; SSH launches get the relay shim, local launches may not.
-  const linearCliAvailable =
-    quickAgent && linkedWorkItem?.linearIdentifier
-      ? await isOrcaCliAvailableForLaunch({ remote: isRemote ?? projectGroup.connectionId != null })
-      : false
+  // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const launchIsRemote = Boolean(projectGroup.connectionId)
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
           linkedWorkItem,
           note,
-          cliAvailable: linearCliAvailable,
           agentCmdOverrides,
           agentArgs,
           agentEnv,
-          platform: launchPlatform
+          platform: launchPlatform,
+          isRemote: launchIsRemote
         })
       : quickAgent
         ? buildAgentStartupPlan({
@@ -194,6 +188,7 @@ export async function submitFolderWorkspaceCreate({
             agentArgs,
             agentEnv,
             platform: launchPlatform,
+            isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true
           })
         : null

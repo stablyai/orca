@@ -157,6 +157,7 @@ describe('AddProjectFromFolderDialog', () => {
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: repo.id,
       source: 'local_folder_picker',
+      selectedPath: '/projects/child',
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })
@@ -206,6 +207,7 @@ describe('AddProjectFromFolderDialog', () => {
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: repo.id,
       source: 'ssh_remote_path',
+      selectedPath: '/srv/projects/child',
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })
@@ -229,6 +231,7 @@ describe('AddProjectFromFolderDialog', () => {
     expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
       repoId: repo.id,
       source: 'local_folder_picker',
+      selectedPath: '/projects/child',
       closeModal: mocks.state.closeModal,
       setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
     })

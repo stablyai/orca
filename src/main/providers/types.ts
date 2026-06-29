@@ -30,6 +30,7 @@ export type PtySpawnOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
@@ -168,6 +169,7 @@ export type IFilesystemProvider = {
 export type GitProviderStatusOptions = {
   includeIgnored?: boolean
   bypassEffectiveUpstreamNegativeCache?: boolean
+  signal?: AbortSignal
 }
 
 export type IGitProvider = {

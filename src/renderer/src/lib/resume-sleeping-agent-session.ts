@@ -11,7 +11,11 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../shared/types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
@@ -141,13 +145,43 @@ function hasRestorableLegacyTabPty(
   return Boolean(tab.ptyId) || (ptyIdsByTabId[tab.id]?.length ?? 0) > 0
 }
 
+function layoutContainsLeaf(
+  node: TerminalPaneLayoutNode | null | undefined,
+  leafId: string
+): boolean {
+  if (!node) {
+    return false
+  }
+  if (node.type === 'leaf') {
+    return node.leafId === leafId
+  }
+  return layoutContainsLeaf(node.first, leafId) || layoutContainsLeaf(node.second, leafId)
+}
+
 function hasMatchingStablePaneLayout(
   tabId: string,
   leafId: string,
-  terminalLayoutsByTabId: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
 ): boolean {
-  const ptyIdsByLeafId = terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId
-  return Boolean(ptyIdsByLeafId && Object.hasOwn(ptyIdsByLeafId, leafId))
+  // Why: hibernation intentionally clears the live PTY binding after the pane
+  // exits, but the preserved leaf still owns cold-restore for its session.
+  return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
+}
+
+function hasRestorableStablePanePty(
+  tab: TerminalTab,
+  tabId: string,
+  leafId: string,
+  ptyIdsByTabId: Record<string, string[] | undefined>,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+): boolean {
+  const layout = terminalLayoutsByTabId[tabId]
+  const hasLeafPty = Boolean(layout?.ptyIdsByLeafId?.[leafId])
+  const isSingleLeafLayout = layout?.root?.type === 'leaf' && layout.root.leafId === leafId
+
+  return Boolean(
+    hasLeafPty || (isSingleLeafLayout && (tab.ptyId || (ptyIdsByTabId[tabId]?.length ?? 0) > 0))
+  )
 }
 
 function findSameWorktreeTab(
@@ -169,8 +203,20 @@ function recordPaneIsOwnedByPreservedPane(
     }
     const tabId = record.tabId ?? stable.tabId
     const tab = findSameWorktreeTab(worktreeTabs, tabId)
-    return Boolean(
-      tab && hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)
+    if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+      return false
+    }
+    if (record.origin !== 'quit' && record.origin !== 'live') {
+      return true
+    }
+    // Why: live/quit captures rely on pane-level cold restore. A preserved
+    // leaf without a PTY/session id can repaint scrollback but cannot resume.
+    return hasRestorableStablePanePty(
+      tab,
+      tabId,
+      stable.leafId,
+      state.ptyIdsByTabId,
+      state.terminalLayoutsByTabId
     )
   }
 
@@ -205,20 +251,16 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
-  const records = worktreeRecords
-    // Why: pane-owned captures (#5232/#5626) cover panes that still exist in
-    // the restored session. Those panes own their own recovery — warm reattach
-    // when the daemon kept the agent alive, or pane-level cold-restore resume.
-    .filter((record) => record.origin !== 'quit' && record.origin !== 'live')
 
   const paneOwnedClaimKeys = new Set(
     worktreeRecords
+      .filter((record) => !isInvalidWorktreeActivationRecord(record))
       .filter((record) => recordPaneIsOwnedByPreservedPane(record, state))
       .map(getProviderSessionClaimKey)
   )
 
   let launched = 0
-  for (const record of records) {
+  for (const record of worktreeRecords) {
     const claimKey = getProviderSessionClaimKey(record)
     if (isInvalidWorktreeActivationRecord(record)) {
       state.clearSleepingAgentSession(record.paneKey)

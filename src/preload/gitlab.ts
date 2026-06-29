@@ -35,6 +35,7 @@ export const glApi = {
       state?: 'opened' | 'merged' | 'closed' | 'all'
       page?: number
       perPage?: number
+      query?: string
     }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:listMRs', args),
 
@@ -43,6 +44,7 @@ export const glApi = {
       state?: 'opened' | 'merged' | 'closed' | 'all'
       page?: number
       perPage?: number
+      query?: string
     }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:listWorkItems', args),
 

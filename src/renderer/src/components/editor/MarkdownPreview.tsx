@@ -76,7 +76,7 @@ import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-imag
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { buildMarkdownTableOfContents } from './markdown-table-of-contents'
+import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
 import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
@@ -554,9 +554,14 @@ export default function MarkdownPreview({
   }, [renderedContent, filePath, imageRuntimeContext])
 
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
+  // Why: building the table of contents runs a full-document remark parse on
+  // every content change, and the preview's content churns on streamed/external
+  // file writes. The result is only used while the panel is open (closed by
+  // default), so gate the parse on visibility; showTableOfContents in the deps
+  // rebuilds the outline the moment it opens.
   const tableOfContentsItems = useMemo(
-    () => buildMarkdownTableOfContents(renderedContent),
-    [renderedContent]
+    () => selectMarkdownTableOfContents(showTableOfContents, renderedContent),
+    [renderedContent, showTableOfContents]
   )
   const markdownDocumentIndex = useMemo(
     () => createMarkdownDocumentIndex(markdownDocuments),
