@@ -1,4 +1,4 @@
-const { chmodSync, existsSync, readdirSync } = require('node:fs')
+const { chmodSync, existsSync, readdirSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
@@ -126,6 +126,7 @@ module.exports = {
     }
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    writePackagedCliCommonjsPackage(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
@@ -326,6 +327,20 @@ module.exports = {
     repo: 'orca',
     releaseType: 'release'
   }
+}
+
+function writePackagedCliCommonjsPackage(resourcesDir) {
+  const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+  if (!existsSync(cliDir)) {
+    return
+  }
+  // Why: Node resolves the CLI's module type from ancestor package.json files;
+  // a local boundary keeps user directories from making the CJS CLI run as ESM.
+  writeFileSync(
+    join(cliDir, 'package.json'),
+    `${JSON.stringify({ name: 'orca-cli', type: 'commonjs', private: true }, null, 2)}\n`,
+    'utf8'
+  )
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {

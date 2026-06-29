@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -104,6 +104,35 @@ describe('electron-builder config', () => {
   it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {
     expect(electronBuilderConfig.beforeBuild).toBe(electronBuilderNativeRebuild)
     expect(electronBuilderConfig.npmRebuild).toBe(true)
+  })
+
+  it('writes a CommonJS package boundary beside the unpacked CLI entry', async () => {
+    const appOutDir = await mkdtemp(join(tmpdir(), 'orca-cli-commonjs-boundary-'))
+    try {
+      const cliDir = join(appOutDir, 'resources', 'app.asar.unpacked', 'out', 'cli')
+      await mkdir(cliDir, { recursive: true })
+      await writeFile(
+        join(cliDir, 'index.js'),
+        'Object.defineProperty(exports, "__esModule", { value: true })\n',
+        'utf8'
+      )
+
+      await electronBuilderConfig.afterPack({
+        appOutDir,
+        electronPlatformName: 'win32',
+        packager: { appInfo: { productFilename: 'Orca' } }
+      })
+
+      await expect(
+        readFile(join(cliDir, 'package.json'), 'utf8').then(JSON.parse)
+      ).resolves.toEqual({
+        name: 'orca-cli',
+        type: 'commonjs',
+        private: true
+      })
+    } finally {
+      await rm(appOutDir, { recursive: true, force: true })
+    }
   })
 
   it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
