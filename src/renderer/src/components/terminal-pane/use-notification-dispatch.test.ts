@@ -476,6 +476,37 @@ describe('dispatchTerminalNotification', () => {
     expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
   })
 
+  it('does not reuse an event snapshot when the terminal title names another agent', () => {
+    mockState.agentStatusByPaneKey = {}
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: '✳ Claude Code',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'codex prompt',
+        agentType: 'codex',
+        lastAssistantMessage: 'Codex done.',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    const dispatchArgs = getLastNotificationDispatchArg()
+    expect(dispatchArgs).toEqual(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        terminalTitle: '✳ Claude Code'
+      })
+    )
+    expect(dispatchArgs?.notificationId).toBeUndefined()
+    expect(dispatchArgs?.agentType).toBeUndefined()
+    expect(dispatchArgs?.agentPrompt).toBeUndefined()
+    expect(dispatchArgs?.agentLastAssistantMessage).toBeUndefined()
+  })
+
   it('does not reuse an untyped fresh agent snapshot when the terminal title names an agent', () => {
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
       agentType: undefined,
