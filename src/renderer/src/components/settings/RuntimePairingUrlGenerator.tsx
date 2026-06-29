@@ -13,13 +13,11 @@ const LOOPBACK_ADDRESS = '127.0.0.1'
 // last displayed URL across settings collapse/navigation without less-protected storage.
 const runtimePairingUrlCache: {
   selectedAddress: string
-  customAddress: string
   runtimePairingUrl: string | null
   webClientUrl: string | null
   runtimePairingDeviceId: string | null
 } = {
   selectedAddress: LOOPBACK_ADDRESS,
-  customAddress: '',
   runtimePairingUrl: null,
   webClientUrl: null,
   runtimePairingDeviceId: null
@@ -40,7 +38,6 @@ export function RuntimePairingUrlGenerator({
     []
   )
   const [selectedAddress, setSelectedAddress] = useState(runtimePairingUrlCache.selectedAddress)
-  const [customAddress, setCustomAddress] = useState(runtimePairingUrlCache.customAddress)
   const [runtimePairingUrl, setRuntimePairingUrl] = useState<string | null>(
     runtimePairingUrlCache.runtimePairingUrl
   )
@@ -178,9 +175,8 @@ export function RuntimePairingUrlGenerator({
   const generateRuntimePairingUrl = async (): Promise<void> => {
     setIsGeneratingPairing(true)
     try {
-      const advertiseAddress = customAddress.trim() || selectedAddress
       const result = await window.api.mobile.getRuntimePairingUrl({
-        address: advertiseAddress,
+        address: selectedAddress,
         rotate: true
       })
       if (!result.available) {
@@ -333,11 +329,6 @@ export function RuntimePairingUrlGenerator({
     setSelectedAddress(address)
   }
 
-  const updateCustomAddress = (address: string): void => {
-    runtimePairingUrlCache.customAddress = address
-    setCustomAddress(address)
-  }
-
   return (
     <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
@@ -361,14 +352,12 @@ export function RuntimePairingUrlGenerator({
           loopbackAddress={LOOPBACK_ADDRESS}
           networkInterfaces={networkInterfaces}
           selectedAddress={selectedAddress}
-          customAddress={customAddress}
           refreshingNetworkInterfaces={refreshingNetworkInterfaces}
           isGeneratingPairing={isGeneratingPairing}
           webClientUrl={webClientUrl}
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}
           onSelectedAddressChange={updateSelectedAddress}
-          onCustomAddressChange={updateCustomAddress}
           onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}
           onGenerate={() => void generateRuntimePairingUrl()}
           onCopy={(target, value) => void copyGeneratedUrl(target, value)}

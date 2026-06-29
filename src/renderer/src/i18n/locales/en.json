@@ -5998,7 +5998,14 @@
           "2752126f3e": "Runtime pairing is unavailable.",
           "95b8be4cea": "Failed to refresh network interfaces.",
           "1b4e0bbcc5": "Failed to load shared access grants.",
-          "b91e36a986": "web"
+          "b91e36a986": "web",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…",
+          "custom-title": "Custom connection address",
+          "custom-description": "Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.",
+          "custom-hint": "Enter a host, host:port, or a ws(s):// URL.",
+          "custom-cancel": "Cancel",
+          "custom-use": "Use address"
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",

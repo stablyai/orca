@@ -5961,7 +5961,14 @@
           "2752126f3e": "El emparejamiento en tiempo de ejecución no está disponible.",
           "95b8be4cea": "No se pudieron actualizar las interfaces de red.",
           "1b4e0bbcc5": "No se pudieron cargar las concesiones de acceso compartido.",
-          "b91e36a986": "web"
+          "b91e36a986": "web",
+          "custom-option": "{{address}} (personalizada)",
+          "add-custom": "Añadir dirección personalizada…",
+          "custom-title": "Dirección de conexión personalizada",
+          "custom-description": "Anuncia una dirección que otro dispositivo pueda alcanzar: un host de LAN o Tailscale, o una URL ws(s):// completa.",
+          "custom-hint": "Introduce un host, host:puerto o una URL ws(s)://.",
+          "custom-cancel": "Cancelar",
+          "custom-use": "Usar dirección"
         },
         "Settings": {
           "3bf149e873": "Configuración del proyecto > {{value0}}",

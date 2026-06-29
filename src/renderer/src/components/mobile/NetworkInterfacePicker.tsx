@@ -1,27 +1,15 @@
-import React, { useState } from 'react'
-import { Plus } from 'lucide-react'
+import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue
-} from '../ui/select'
-import { CustomNetworkAddressDialog } from './CustomNetworkAddressDialog'
+import { AddressPicker, type AddressOption } from '../network/AddressPicker'
+import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
 // Why: MobileHero (mobile pairing screen) and MobileNetworkInterfaceSection
-// (Settings → Mobile → Network Interface section) both need the same network
-// selector. Discovered interfaces come from the OS; the "Add custom address…"
-// footer opens a dialog for a Tailscale hostname or static IP the OS didn't
-// surface — the only way to pair across networks. Shared here so both surfaces
-// pick up the behavior automatically.
-
-// Why: a sentinel Select value for the footer action. It is never committed as
-// a real address; selecting it opens the custom-address dialog instead.
-const ADD_CUSTOM_VALUE = '__add_custom_address__'
+// (Settings → Mobile) both need the same network selector. This wraps the
+// generic AddressPicker with the mobile grammar (IPv4 / Tailscale *.ts.net)
+// and copy. Discovered interfaces come from the OS; "Add custom address…"
+// opens a dialog for an address the OS didn't surface — the only way to pair
+// across networks.
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -32,10 +20,6 @@ export type NetworkInterfacePickerProps = {
   id?: string
 }
 
-function formatInterfaceLabel(iface: MobileNetworkInterface): string {
-  return `${iface.address} (${iface.name})`
-}
-
 export function NetworkInterfacePicker({
   networkInterfaces,
   selectedAddress,
@@ -44,76 +28,68 @@ export function NetworkInterfacePicker({
   className,
   id
 }: NetworkInterfacePickerProps): React.JSX.Element {
-  const [dialogOpen, setDialogOpen] = useState(false)
-
-  // Why: a selected address that isn't an OS-enumerated interface is a custom
-  // entry. Render it as a "(custom)" option so the trigger can display it —
-  // Radix Select only shows values that have a matching item.
-  const isCustomSelection =
-    selectedAddress !== undefined &&
-    !networkInterfaces.some((iface) => iface.address === selectedAddress)
-
-  const handleValueChange = (value: string): void => {
-    if (value === ADD_CUSTOM_VALUE) {
-      setDialogOpen(true)
-      return
-    }
-    onSelectedAddressChange(value)
-  }
+  const options = useMemo<AddressOption[]>(
+    () =>
+      networkInterfaces.map((iface) => ({
+        value: iface.address,
+        label: `${iface.address} (${iface.name})`
+      })),
+    [networkInterfaces]
+  )
 
   return (
-    <>
-      <Select value={selectedAddress ?? ''} onValueChange={handleValueChange} disabled={disabled}>
-        <SelectTrigger
-          id={id}
-          size="sm"
-          className={className}
-          aria-label={translate(
-            'auto.components.mobile.NetworkInterfacePicker.trigger-label',
-            'Network address to advertise'
-          )}
-        >
-          <SelectValue
-            placeholder={translate(
-              'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
-              'No interfaces found'
-            )}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {networkInterfaces.map((iface) => (
-            <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-              {formatInterfaceLabel(iface)}
-            </SelectItem>
-          ))}
-          {isCustomSelection ? (
-            <SelectItem value={selectedAddress}>
-              {translate(
-                'auto.components.mobile.NetworkInterfacePicker.custom-option',
-                '{{address}} (custom)',
-                { address: selectedAddress }
-              )}
-            </SelectItem>
-          ) : null}
-          {networkInterfaces.length > 0 || isCustomSelection ? <SelectSeparator /> : null}
-          <SelectItem
-            value={ADD_CUSTOM_VALUE}
-            className="text-muted-foreground focus:text-foreground"
-          >
-            <Plus className="size-3.5" />
-            {translate(
-              'auto.components.mobile.NetworkInterfacePicker.add-custom',
-              'Add custom address…'
-            )}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <CustomNetworkAddressDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        initialValue={isCustomSelection ? selectedAddress : undefined}
-        onConfirm={onSelectedAddressChange}
-      />
-    </>
+    <AddressPicker
+      options={options}
+      value={selectedAddress}
+      onValueChange={onSelectedAddressChange}
+      disabled={disabled}
+      className={className}
+      id={id}
+      formatCustomLabel={(address) =>
+        translate(
+          'auto.components.mobile.NetworkInterfacePicker.custom-option',
+          '{{address}} (custom)',
+          { address }
+        )
+      }
+      addCustomLabel={translate(
+        'auto.components.mobile.NetworkInterfacePicker.add-custom',
+        'Add custom address…'
+      )}
+      placeholder={translate(
+        'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
+        'No interfaces found'
+      )}
+      triggerAriaLabel={translate(
+        'auto.components.mobile.NetworkInterfacePicker.trigger-label',
+        'Network address to advertise'
+      )}
+      customInputId="custom-network-address-input"
+      validateCustom={(input) => {
+        const parsed = parseManualNetworkAddress(input)
+        return parsed.ok ? { ok: true, value: parsed.address } : { ok: false }
+      }}
+      customDialogCopy={{
+        title: translate(
+          'auto.components.mobile.CustomNetworkAddressDialog.title',
+          'Custom network address'
+        ),
+        description: translate(
+          'auto.components.mobile.CustomNetworkAddressDialog.description',
+          'Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.'
+        ),
+        inputLabel: translate('auto.components.mobile.CustomNetworkAddressDialog.label', 'Address'),
+        placeholder: translate(
+          'auto.components.mobile.CustomNetworkAddressDialog.placeholder',
+          'my-mac.ts.net or 192.168.1.50'
+        ),
+        hint: translate(
+          'auto.components.mobile.CustomNetworkAddressDialog.hint',
+          'Enter an IP address or a Tailscale hostname (ends in .ts.net).'
+        ),
+        cancel: translate('auto.components.mobile.CustomNetworkAddressDialog.cancel', 'Cancel'),
+        confirm: translate('auto.components.mobile.CustomNetworkAddressDialog.use', 'Use address')
+      }}
+    />
   )
 }

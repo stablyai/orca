@@ -5983,7 +5983,14 @@
           "2752126f3e": "ランタイムペアリングは利用できません。",
           "95b8be4cea": "ネットワークインターフェースの更新に失敗しました。",
           "1b4e0bbcc5": "共有アクセス許可のロードに失敗しました。",
-          "b91e36a986": "ウェブ"
+          "b91e36a986": "ウェブ",
+          "custom-option": "{{address}}（カスタム）",
+          "add-custom": "カスタムアドレスを追加…",
+          "custom-title": "カスタム接続アドレス",
+          "custom-description": "他のデバイスから到達できるアドレスを指定します。LAN や Tailscale のホスト、または完全な ws(s):// URL です。",
+          "custom-hint": "ホスト、host:port、または ws(s):// URL を入力してください。",
+          "custom-cancel": "キャンセル",
+          "custom-use": "アドレスを使用"
         },
         "Settings": {
           "3bf149e873": "プロジェクト設定 > {{value0}}",

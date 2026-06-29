@@ -5946,7 +5946,14 @@
           "2752126f3e": "运行时配对不可用。",
           "95b8be4cea": "刷新网络接口失败。",
           "1b4e0bbcc5": "无法加载共享访问授权。",
-          "b91e36a986": "网络"
+          "b91e36a986": "网络",
+          "custom-option": "{{address}}（自定义）",
+          "add-custom": "添加自定义地址…",
+          "custom-title": "自定义连接地址",
+          "custom-description": "公布其他设备可以访问的地址：LAN 或 Tailscale 主机，或完整的 ws(s):// URL。",
+          "custom-hint": "请输入主机、host:port 或 ws(s):// URL。",
+          "custom-cancel": "取消",
+          "custom-use": "使用地址"
         },
         "Settings": {
           "3bf149e873": "项目设置 > {{value0}}",

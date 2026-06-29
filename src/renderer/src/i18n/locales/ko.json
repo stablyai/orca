@@ -5946,7 +5946,14 @@
           "2752126f3e": "런타임 페어링을 사용할 수 없습니다.",
           "95b8be4cea": "네트워크 인터페이스를 새로고침하지 못했습니다.",
           "1b4e0bbcc5": "공유 액세스 권한을 로드하지 못했습니다.",
-          "b91e36a986": "웹"
+          "b91e36a986": "웹",
+          "custom-option": "{{address}} (사용자 지정)",
+          "add-custom": "사용자 지정 주소 추가…",
+          "custom-title": "사용자 지정 연결 주소",
+          "custom-description": "다른 기기가 연결할 수 있는 주소를 알립니다. LAN 또는 Tailscale 호스트, 또는 전체 ws(s):// URL입니다.",
+          "custom-hint": "호스트, host:port 또는 ws(s):// URL을 입력하세요.",
+          "custom-cancel": "취소",
+          "custom-use": "주소 사용"
         },
         "Settings": {
           "3bf149e873": "프로젝트 설정 > {{value0}}",
