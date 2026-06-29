@@ -7,9 +7,16 @@ import {
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../shared/types'
 
+// Converts a bucket key back to a project group id: 'ungrouped' → null, 'group:<id>' → '<id>'.
+function bucketKeyToGroupId(bucketKey: string): string | null {
+  return bucketKey === 'ungrouped' ? null : bucketKey.slice('group:'.length)
+}
+
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
   sidebarDropIndex: number
+  targetBucketKey?: string
+  sidebarRepoHeaderIdsByBucketAll?: ReadonlyMap<string, readonly string[]>
   orderedRepoIds: readonly string[]
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
@@ -18,6 +25,35 @@ export function commitProjectHeaderDragDrop(args: {
 }): void {
   const draggedRepo = args.repoById.get(args.session.repoId)
   if (!draggedRepo) {
+    return
+  }
+
+  // Cross-bucket move: when the target bucket differs from the source, place the
+  // dragged repo into the new group without touching same-bucket ordering logic.
+  const sourceBucketKey = draggedRepo.projectGroupId
+    ? `group:${draggedRepo.projectGroupId}`
+    : 'ungrouped'
+
+  if (
+    args.usesProjectGroupOrdering &&
+    args.targetBucketKey &&
+    args.targetBucketKey !== sourceBucketKey
+  ) {
+    const targetGroupId = bucketKeyToGroupId(args.targetBucketKey)
+    const targetSiblings = (args.sidebarRepoHeaderIdsByBucketAll?.get(args.targetBucketKey) ?? [])
+      .filter((repoId) => repoId !== args.session.repoId)
+      .map((repoId) => args.repoById.get(repoId))
+      .filter((repo): repo is Repo => repo !== undefined)
+    const repoOrderRankById = new Map(
+      args.orderedRepoIds.map((repoId, index) => [repoId, index] as const)
+    )
+    const insertIndex = Math.max(0, Math.min(targetSiblings.length, args.sidebarDropIndex))
+    const order = getProjectGroupOrderForSidebarDrop({
+      siblings: targetSiblings,
+      dropIndex: insertIndex,
+      repoOrderRankById
+    })
+    args.onCommitProjectGroupOrder(args.session.repoId, targetGroupId, order)
     return
   }
 
