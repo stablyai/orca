@@ -338,6 +338,61 @@ describe('registerEphemeralVmHandlers', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
+  it('removes the runtime-owned SSH target on cleanup even when destroy fails', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
+    const startPath = join(repoPath, 'scripts', 'start-ssh.js')
+    const destroyPath = join(repoPath, 'scripts', 'destroy.js')
+    writeFileSync(
+      startPath,
+      [
+        'console.log(JSON.stringify({',
+        '  schemaVersion: 1,',
+        '  connection: {',
+        "    type: 'ssh',",
+        "    projectRoot: '/workspace/repo',",
+        '    target: {',
+        "      label: 'Sandbox',",
+        "      host: 'sandbox.example.com',",
+        '      port: 22,',
+        "      username: 'root'",
+        '    }',
+        '  }',
+        '}))'
+      ].join('\n')
+    )
+    // Why: a failing destroy drives the cleanup_failed branch; the runtime-owned
+    // SSH target must still be torn down so it never orphans (see Fix D).
+    writeFileSync(destroyPath, 'process.exit(1)')
+    writeFileSync(
+      join(repoPath, 'orca.yaml'),
+      [
+        'vmRecipes:',
+        '  - id: cloud-sandbox',
+        '    name: Cloud Sandbox',
+        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
+        `    destroy: ${JSON.stringify(nodeCommand(destroyPath))}`
+      ].join('\n')
+    )
+
+    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
+      repoId: 'repo-1',
+      recipeId: 'cloud-sandbox'
+    } as never)) as { ok: true; runtime: { id: string } }
+
+    const cleaned = (await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: provisioned.runtime.id
+    } as never)) as { status?: string; connectionMode?: string; sshTargetId?: string }
+
+    expect(cleaned).toEqual(expect.objectContaining({ status: 'cleanup_failed' }))
+    expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledWith('runtime-ssh-orca-instance-1')
+    expect(cleaned.connectionMode).toBeUndefined()
+    expect(cleaned.sshTargetId).toBeUndefined()
+  })
+
   it('runs suspend and resume for an attached ephemeral VM workspace', async () => {
     const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')

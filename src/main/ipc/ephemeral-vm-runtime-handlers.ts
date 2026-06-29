@@ -93,18 +93,6 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           cleanupLastError: `Recipe not found: ${runtime.recipeId}`
         })
       }
-      const disconnectError = await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).then(
-        () => null,
-        (error: unknown) => (error instanceof Error ? error.message : String(error))
-      )
-      if (disconnectError) {
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          status: 'cleanup_failed',
-          cleanupStatus: 'failed',
-          cleanupLastAttemptAt: Date.now(),
-          cleanupLastError: disconnectError
-        })
-      }
       const result = await cleanupEphemeralVmRuntime({
         userDataPath,
         repoPath: repo.repo.path,
