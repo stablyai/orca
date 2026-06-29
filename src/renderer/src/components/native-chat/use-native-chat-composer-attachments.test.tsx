@@ -10,10 +10,6 @@ import {
 } from './use-native-chat-composer-attachments'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 
-const sendNativeChatImageAttachments = vi.fn()
-vi.mock('./native-chat-runtime-send', () => ({
-  sendNativeChatImageAttachments: (...args: unknown[]) => sendNativeChatImageAttachments(...args)
-}))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -69,19 +65,20 @@ async function renderProbe(scopeKey: string): Promise<{ root: Root; api: ProbeAp
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
     clearNativeChatAttachmentCacheForTests()
-    sendNativeChatImageAttachments.mockReset()
     document.body.replaceChildren()
   })
 
-  it('pastes image attachments into the TUI immediately and restores native chips on remount', async () => {
+  it('holds attached images as chips (deferred to submit) and restores them on remount', async () => {
     const first = await renderProbe('pty-1')
 
     await act(async () => {
       first.api.attachLocalPaths(['/tmp/orca-native-chat-attach-test.png'])
     })
 
-    expect(sendNativeChatImageAttachments).toHaveBeenCalledWith(target.settings, 'pty-1', [
-      '/tmp/orca-native-chat-attach-test.png'
+    // Images are NOT sent to the TUI on attach — they ride along on submit, so
+    // the chip and the TUI input never diverge and removing a chip is clean.
+    expect(first.api.imageAttachments).toMatchObject([
+      { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
     expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([
       { path: '/tmp/orca-native-chat-attach-test.png' }
@@ -94,5 +91,19 @@ describe('useNativeChatComposerAttachments', () => {
       { path: '/tmp/orca-native-chat-attach-test.png' }
     ])
     act(() => second.root.unmount())
+  })
+
+  it('removes an attached image chip cleanly', async () => {
+    const { root, api } = await renderProbe('pty-1')
+    await act(async () => {
+      api.attachLocalPaths(['/tmp/orca-native-chat-remove-test.png'])
+    })
+    const id = api.imageAttachments[0]?.id
+    expect(id).toBeDefined()
+    await act(async () => {
+      api.removeImageAttachment(id as string)
+    })
+    expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([])
+    act(() => root.unmount())
   })
 })

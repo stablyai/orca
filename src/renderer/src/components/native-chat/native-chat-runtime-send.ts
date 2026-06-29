@@ -111,19 +111,8 @@ export function sendNativeChatMessageWithImageAttachments(
   }
 }
 
-/** Paste image attachments into the hosted TUI immediately so switching back to
- *  the terminal shows the same image chips a direct terminal paste would show. */
-export function sendNativeChatImageAttachments(
-  settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
-  ptyId: string,
-  imagePaths: readonly string[]
-): void {
-  for (const imagePath of imagePaths) {
-    sendRuntimePtyInput(settings, ptyId, buildNativeChatImagePasteBytes(imagePath))
-  }
-}
-
-/** Submit a TUI prompt whose image attachments were already pasted earlier. */
+/** Submit a TUI prompt with no body (Enter only) — e.g. a plain submit when the
+ *  composer is empty. */
 export function submitNativeChatPrompt(
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
   ptyId: string

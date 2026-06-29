@@ -10,7 +10,6 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 import {
   sendNativeChatMessage,
   sendNativeChatMessageWithImageAttachments,
-  sendNativeChatImageAttachments,
   submitNativeChatPrompt,
   sendNativeChatAnswer,
   nativeChatQuestionOffsets,
@@ -114,23 +113,12 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 })
 
-describe('pre-pasted image attachment sends', () => {
+describe('empty prompt submit', () => {
   beforeEach(() => {
     sendRuntimePtyInput.mockClear()
   })
 
-  it('pastes image attachments immediately without submitting the prompt', () => {
-    sendNativeChatImageAttachments(SETTINGS, PTY, ['/tmp/orca-paste-image.png'])
-
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      buildNativeChatImagePasteBytes('/tmp/orca-paste-image.png')
-    )
-  })
-
-  it('submits a prompt whose image attachments were already pasted', () => {
+  it('submits an empty prompt with a bare Enter', () => {
     submitNativeChatPrompt(SETTINGS, PTY)
 
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)

@@ -12,7 +12,11 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { sendNativeChatMessage, submitNativeChatPrompt } from './native-chat-runtime-send'
+import {
+  sendNativeChatMessage,
+  sendNativeChatMessageWithImageAttachments,
+  submitNativeChatPrompt
+} from './native-chat-runtime-send'
 import { getAgentSlashCommands } from './native-chat-agent-commands'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
@@ -274,9 +278,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       if (!target) {
         return
       }
-      // Images are pasted into the hosted TUI as soon as they are attached, so the
-      // Send action only submits the text body (if any) plus Enter.
-      if (text.trim().length > 0) {
+      // Images are deferred to submit (like text) so the GUI chips and the TUI
+      // input stay in sync and removing a chip needs no TUI un-paste. Send the
+      // attached images, then the text body, then Enter — atomically.
+      if (imagePaths.length > 0) {
+        sendNativeChatMessageWithImageAttachments(target.settings, target.ptyId, text, imagePaths)
+      } else if (text.trim().length > 0) {
         sendNativeChatMessage(target.settings, target.ptyId, text)
       } else {
         submitNativeChatPrompt(target.settings, target.ptyId)
