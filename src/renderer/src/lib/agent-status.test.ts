@@ -239,6 +239,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Devin working')).toBe('working')
   })
 
+  it('classifies synthesized AdaL titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ AdaL')).toBe('working')
+    expect(detectAgentStatusFromTitle('AdaL ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('AdaL - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('AdaL working')).toBe('working')
+  })
+
   it('does not treat Factory Droid native needs-input titles as completion', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
@@ -281,6 +288,11 @@ describe('detectAgentStatusFromTitle', () => {
   it('does not treat path fragments containing Hermes as agent activity', () => {
     expect(detectAgentStatusFromTitle('~/hermes/working')).not.toBe('working')
     expect(detectAgentStatusFromTitle('C:\\hermes\\ready')).toBeNull()
+  })
+
+  it('does not treat path fragments containing AdaL as agent activity', () => {
+    expect(detectAgentStatusFromTitle('~/adal/working')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('C:\\adal\\ready')).toBeNull()
   })
 })
 
@@ -439,6 +451,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
     expect(getAgentLabel('⠋ Devin')).toBe('Devin')
     expect(getAgentLabel('Devin ready')).toBe('Devin')
+    expect(getAgentLabel('⠋ AdaL')).toBe('AdaL')
+    expect(getAgentLabel('AdaL ready')).toBe('AdaL')
   })
 
   it('does not label the Claude agents management title', () => {
@@ -466,6 +480,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('~/cursor-rules')).toBeNull()
     expect(getAgentLabel('grok-fixtures')).toBeNull()
     expect(getAgentLabel('devin-fixtures')).toBeNull()
+    expect(getAgentLabel('C:\\adal\\ready')).toBeNull()
     expect(getAgentLabel('aider-config')).toBeNull()
   })
 
@@ -476,6 +491,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('⠋ Codex')).toBe('Codex')
     expect(getAgentLabel('Aider idle')).toBe('Aider')
     expect(getAgentLabel('Devin working')).toBe('Devin')
+    expect(getAgentLabel('AdaL ready')).toBe('AdaL')
   })
 })
 
@@ -827,6 +843,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('ante')).toBe('Ante')
   })
 
+  it("maps 'adal' to 'AdaL'", () => {
+    expect(formatAgentTypeLabel('adal')).toBe('AdaL')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -851,6 +871,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
     expect(agentTypeToIconAgent('ante')).toBe('ante')
+    expect(agentTypeToIconAgent('adal')).toBe('adal')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

@@ -13,6 +13,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',
+  AdaL: 'adal',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   'MiMo Code': 'mimo-code',

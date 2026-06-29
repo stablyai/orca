@@ -9,6 +9,7 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
     expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')
     expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
+    expect(resolveExplicitTerminalTitleAgentType('⠋ AdaL')).toBe('adal')
   })
 
   it('treats Claude generic status prefixes as activity-only, not identity', () => {

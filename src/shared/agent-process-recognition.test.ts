@@ -135,6 +135,14 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes AdaL from a Windows npm global bin path', () => {
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\adal.cmd`)).toEqual({
+      agent: 'adal',
+      processName: 'adal'
+    })
+    expect(isRecognizedAgentType('adal')).toBe(true)
+  })
+
   it('recognizes Qwen Code by its installed qwen executable', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
       agent: 'qwen-code',

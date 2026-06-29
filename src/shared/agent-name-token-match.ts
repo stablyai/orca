@@ -26,7 +26,8 @@ export const AGENT_NAMES = [
   'openclaw',
   'aider',
   'grok',
-  'devin'
+  'devin',
+  'adal'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as

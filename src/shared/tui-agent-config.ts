@@ -335,6 +335,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `followupPrompt` to the PTY as plain input + Enter after startup (not
     // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
     promptInjectionMode: 'stdin-after-start'
+  },
+  adal: {
+    detectCmd: 'adal',
+    launchCmd: 'adal',
+    expectedProcess: 'adal',
+    // Why: AdaL has no documented prompt-prefill flag, so Orca starts the
+    // interactive TUI and injects the initial prompt after startup.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

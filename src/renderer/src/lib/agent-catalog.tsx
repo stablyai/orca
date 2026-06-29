@@ -288,6 +288,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'adal',
+    label: translate('auto.lib.agent.catalog.adal', 'AdaL'),
+    cmd: 'adal',
+    faviconDomain: 'sylph.ai',
+    homepageUrl: 'https://docs.sylph.ai'
   }
 ])
 

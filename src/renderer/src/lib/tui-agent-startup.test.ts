@@ -205,6 +205,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches AdaL first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'adal',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'adal',
+      launchCommand: 'adal',
+      expectedProcess: 'adal',
+      followupPrompt: 'Trace the failing test',
+      launchConfig: emptyLaunchConfig('adal')
+    })
+  })
+
   it('launches Command Code by its unambiguous binary with a positional prompt', () => {
     expect(
       buildAgentStartupPlan({

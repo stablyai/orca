@@ -34,6 +34,7 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
   Devin: 'devin',
+  AdaL: 'adal',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   Aider: 'aider',
