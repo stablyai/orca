@@ -118,6 +118,15 @@ export class ServeSimStateWatcher {
         this.ptyBuffers.delete(ptyId)
       }
     }
+    // Why: dedupe keys are worktree-scoped (`${worktreeId}::...`); prune them on
+    // forget so the Set does not grow for the session across worktree switches.
+    // A later re-bind of the same worktree is a fresh context and should re-emit.
+    const prefix = `${worktreeId}::`
+    for (const key of this.seenExternalKeys) {
+      if (key.startsWith(prefix)) {
+        this.seenExternalKeys.delete(key)
+      }
+    }
   }
 
   ingestPtyOutput(ptyId: string, data: string): void {
