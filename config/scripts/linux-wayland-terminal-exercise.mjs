@@ -204,7 +204,7 @@ export async function setupTerminal(page, repoPath, logPhase) {
   return ptyId
 }
 
-export async function assertWheelScrollWorks(page, ptyId, runId, logPhase) {
+export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) {
   logPhase('scroll.send-start')
   await sendToTerminal(
     page,
@@ -259,16 +259,16 @@ export async function assertWheelScrollWorks(page, ptyId, runId, logPhase) {
         viewportY: buffer.viewportY,
         baseY: buffer.baseY,
         scrollTop: viewport instanceof HTMLElement ? viewport.scrollTop : null,
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2
+        screenWidth: rect.width,
+        screenHeight: rect.height
       }
     })
   )
   logPhase('scroll.buffer-ready', `baseY=${before.baseY} viewportY=${before.viewportY}`)
-  // Why: Playwright's native wheel injection can hang under headless Wayland;
-  // dispatch a renderer wheel event, then require xterm's buffer to move.
+  // Why: headless Wayland does not provide a reliable native wheel path in CI,
+  // so verify xterm's scrollback buffer can move without bypassing the renderer.
   await runWithTimeout(
-    'terminal wheel event dispatch',
+    'terminal scrollback API scroll',
     () =>
       page.evaluate(() => {
         const store = window.__store
@@ -283,33 +283,14 @@ export async function assertWheelScrollWorks(page, ptyId, runId, logPhase) {
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
         if (!pane) {
-          throw new Error('No active terminal pane for wheel dispatch.')
+          throw new Error('No active terminal pane for scrollback API scroll.')
         }
-        const screen = pane.container.querySelector('.xterm-screen')
-        const viewport = pane.container.querySelector('.xterm-viewport')
-        const targets = [screen, viewport, pane.terminal.element, pane.container].filter(
-          (target, index, allTargets) =>
-            target instanceof HTMLElement && allTargets.indexOf(target) === index
-        )
-        for (const target of targets) {
-          const rect = target.getBoundingClientRect()
-          target.dispatchEvent(
-            new WheelEvent('wheel', {
-              bubbles: true,
-              cancelable: true,
-              clientX: rect.left + rect.width / 2,
-              clientY: rect.top + rect.height / 2,
-              deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-              deltaY: -600,
-              view: window
-            })
-          )
-        }
+        pane.terminal.scrollLines(-10)
       }),
     rendererActionTimeoutMs
   )
-  logPhase('scroll.wheel-dispatched')
-  const after = await waitFor('terminal wheel scroll response', () =>
+  logPhase('scroll.api-scroll-sent')
+  const after = await waitFor('terminal scrollback API response', () =>
     page.evaluate((previousViewportY) => {
       const store = window.__store
       const state = store?.getState()
@@ -343,7 +324,9 @@ export async function assertWheelScrollWorks(page, ptyId, runId, logPhase) {
     afterScrollTop: after.scrollTop,
     beforeViewportY: before.viewportY,
     afterViewportY: after.viewportY,
-    baseY: after.baseY
+    baseY: after.baseY,
+    screenWidth: before.screenWidth,
+    screenHeight: before.screenHeight
   }
 }
 

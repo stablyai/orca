@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { collectRendererDiagnostics } from './linux-wayland-renderer-diagnostics.mjs'
 import {
   assertKeyboardInputWorks,
-  assertWheelScrollWorks,
+  assertScrollbackBufferWorks,
   setupTerminal
 } from './linux-wayland-terminal-exercise.mjs'
 import {
@@ -263,7 +263,7 @@ async function runValidation(mode) {
     const ptyId = await setupTerminal(page, repoPath, logPhase)
     terminalExerciseStarted = true
     logPhase('exercise.start')
-    const scroll = await assertWheelScrollWorks(page, ptyId, runId, logPhase)
+    const scroll = await assertScrollbackBufferWorks(page, ptyId, runId, logPhase)
     const typedMarkers = await assertKeyboardInputWorks(page, ptyId, repoPath, runId, logPhase)
     const gpuCrashLines = stderrLines.filter((line) => gpuCrashPattern.test(line))
 
