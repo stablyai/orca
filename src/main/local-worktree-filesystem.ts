@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { lstat, readFile, rm, type RmOptions } from 'node:fs/promises'
+import type { RmOptions } from 'node:fs'
+import { lstat, readFile, rm } from 'node:fs/promises'
 import { win32 } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
