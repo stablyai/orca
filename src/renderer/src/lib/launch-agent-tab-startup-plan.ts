@@ -1,7 +1,7 @@
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
-  type AgentStartupPlan,
+  type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
@@ -27,6 +27,7 @@ export function buildLaunchAgentTabStartupPlan(args: {
   agentEnv: Record<string, string>
   agentProfiles: readonly TuiAgentProfile[]
   variables: { repoPath?: string | null; worktreePath?: string | null }
+  isRemote?: boolean
 }): LaunchAgentTabStartupPlan {
   const trimmedPrompt = args.prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
@@ -42,6 +43,7 @@ export function buildLaunchAgentTabStartupPlan(args: {
     agentEnv: args.agentEnv,
     agentProfiles: args.agentProfiles,
     variables: args.variables,
+    isRemote: args.isRemote
   }
 
   if (hasPrompt && args.promptDelivery === 'submit-after-ready') {
@@ -49,36 +51,36 @@ export function buildLaunchAgentTabStartupPlan(args: {
       startupPlan: buildAgentStartupPlan({
         ...common,
         prompt: '',
-        allowEmptyPromptLaunch: true,
+        allowEmptyPromptLaunch: true
       }),
       pasteDraftAfterLaunch: trimmedPrompt,
       submitPastedPrompt: true,
-      forcePasteAfterLaunch: true,
+      forcePasteAfterLaunch: true
     }
   }
 
   if (hasPrompt && args.promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       ...common,
-      draft: trimmedPrompt,
+      draft: trimmedPrompt
     })
     if (draftLaunchPlan) {
       return {
         startupPlan: draftPlanToStartupPlan(draftLaunchPlan),
         pasteDraftAfterLaunch: null,
         submitPastedPrompt: false,
-        forcePasteAfterLaunch: false,
+        forcePasteAfterLaunch: false
       }
     }
     return {
       startupPlan: buildAgentStartupPlan({
         ...common,
         prompt: '',
-        allowEmptyPromptLaunch: true,
+        allowEmptyPromptLaunch: true
       }),
       pasteDraftAfterLaunch: trimmedPrompt,
       submitPastedPrompt: false,
-      forcePasteAfterLaunch: false,
+      forcePasteAfterLaunch: false
     }
   }
 
@@ -87,11 +89,11 @@ export function buildLaunchAgentTabStartupPlan(args: {
       startupPlan: buildAgentStartupPlan({
         ...common,
         prompt: '',
-        allowEmptyPromptLaunch: true,
+        allowEmptyPromptLaunch: true
       }),
       pasteDraftAfterLaunch: trimmedPrompt,
       submitPastedPrompt: false,
-      forcePasteAfterLaunch: false,
+      forcePasteAfterLaunch: false
     }
   }
 
@@ -99,11 +101,11 @@ export function buildLaunchAgentTabStartupPlan(args: {
     startupPlan: buildAgentStartupPlan({
       ...common,
       prompt: hasPrompt ? trimmedPrompt : '',
-      allowEmptyPromptLaunch: !hasPrompt,
+      allowEmptyPromptLaunch: !hasPrompt
     }),
     pasteDraftAfterLaunch: null,
     submitPastedPrompt: false,
-    forcePasteAfterLaunch: false,
+    forcePasteAfterLaunch: false
   }
 }
 
@@ -121,9 +123,7 @@ export function draftPlanToStartupPlan(plan: {
     expectedProcess: plan.expectedProcess,
     followupPrompt: null,
     launchConfig: plan.launchConfig,
-    ...(plan.startupCommandDelivery
-      ? { startupCommandDelivery: plan.startupCommandDelivery }
-      : {}),
-    ...(plan.env ? { env: plan.env } : {}),
+    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
+    ...(plan.env ? { env: plan.env } : {})
   }
 }

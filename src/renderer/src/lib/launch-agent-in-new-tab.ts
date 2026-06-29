@@ -8,14 +8,16 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { buildLaunchAgentTabStartupPlan } from '@/lib/launch-agent-tab-startup-plan'
 import { launchWebRuntimeAgentTab } from '@/lib/launch-agent-web-runtime-tab'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import {
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv,
+  resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
@@ -52,26 +54,6 @@ export type LaunchAgentInNewTabResult = {
   pasteDraftAfterLaunch: boolean
 } | null
 
-function seedCommandCodeSubmittedPromptStatus(
-  tabId: string,
-  prompt: string,
-): void {
-  const state = useAppStore.getState()
-  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
-  if (!leafId) {
-    return
-  }
-  try {
-    state.setAgentStatus(makePaneKey(tabId, leafId), {
-      state: 'working',
-      prompt,
-      agentType: 'command-code',
-    })
-  } catch {
-    // Best-effort UI seed. Real hooks still own refinement/completion.
-  }
-}
-
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
  * with an initial prompt.
@@ -94,9 +76,7 @@ function seedCommandCodeSubmittedPromptStatus(
  * only prompt on the trim-empty branch of `buildAgentStartupPlan`. Callers
  * surface that as a launch failure (see `QuickLaunchButton.runLaunch`).
  */
-export function launchAgentInNewTab(
-  args: LaunchAgentInNewTabArgs,
-): LaunchAgentInNewTabResult {
+export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
     agent,
     worktreeId,
@@ -107,74 +87,57 @@ export function launchAgentInNewTab(
     launchSource,
     quickCommandLabel,
     launchPlatform,
-    onPromptDelivered,
+    onPromptDelivered
   } = args
   const store = useAppStore.getState()
-  const worktree = store
-    .allWorktrees?.()
-    .find((entry: { id: string }) => entry.id === worktreeId)
-  const repo = worktree
-    ? store.repos?.find((entry) => entry.id === worktree.repoId)
-    : null
+  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
   const resolvedLaunchPlatform =
     launchPlatform ??
     (repo
       ? getAgentLaunchPlatformForRepo(
           repo,
-          repo.connectionId
-            ? undefined
-            : getLocalProjectExecutionRuntimeContext(store, worktreeId),
+          repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
         )
       : CLIENT_PLATFORM)
+  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const isRemote = repo ? repoIsRemote(repo) : false
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const agentProfiles = store.settings?.agentProfiles ?? []
   const variables = { repoPath: repo?.path, worktreePath: worktree?.path }
   const effectiveAgentArgs =
     agentArgs != null
       ? agentArgs
-      : resolveTuiAgentLaunchArgs(
-          agent,
-          store.settings?.agentDefaultArgs,
-          agentProfiles,
-          variables,
-        )
+      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs, agentProfiles, variables)
   const agentEnv = resolveTuiAgentLaunchEnv(
     agent,
     store.settings?.agentDefaultEnv,
     agentProfiles,
-    variables,
+    variables
   )
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const {
-    startupPlan,
-    pasteDraftAfterLaunch,
-    submitPastedPrompt,
-    forcePasteAfterLaunch,
-  } = buildLaunchAgentTabStartupPlan({
-    agent,
-    prompt,
-    promptDelivery,
-    cmdOverrides,
-    platform: resolvedLaunchPlatform,
-    agentArgs: effectiveAgentArgs,
-    agentEnv,
-    agentProfiles,
-    variables,
-  })
+  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt, forcePasteAfterLaunch } =
+    buildLaunchAgentTabStartupPlan({
+      agent,
+      prompt,
+      promptDelivery,
+      cmdOverrides,
+      platform: resolvedLaunchPlatform,
+      agentArgs: effectiveAgentArgs,
+      agentEnv,
+      agentProfiles,
+      variables,
+      isRemote
+    })
 
   if (!startupPlan) {
     return null
   }
 
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
-    store,
-    worktreeId,
-  )
-  if (
-    isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-    pasteDraftAfterLaunch === null
-  ) {
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
     const webLaunch = launchWebRuntimeAgentTab({
       worktreeId,
       environmentId: runtimeEnvironmentId,
@@ -182,7 +145,7 @@ export function launchAgentInNewTab(
       agent,
       startupPlan,
       hasPrompt,
-      onPromptDelivered,
+      onPromptDelivered
     })
     if (webLaunch.handled) {
       return webLaunch.result
@@ -194,17 +157,10 @@ export function launchAgentInNewTab(
   // lands after mount the agent binary never starts; the user sees a bare shell.
   // Since both calls happen synchronously in the same React batch, the queue
   // is in place by the time the pane commits.
-  //
-  // The telemetry payload is threaded through the queue → pty-connection →
-  // pty-transport → pty:spawn IPC → main, where main fires `agent_started`
-  // only after the spawn succeeds. `request_kind: 'new'` because
-  // quick-launch always opens a fresh session.
-  //
-  // Why: stamp the launched agent on the tab so the tab bar shows the provider
-  // icon immediately, before the agent's first hook event arrives.
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...initialAgentTabViewModeProps(store.settings)
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
@@ -214,16 +170,14 @@ export function launchAgentInNewTab(
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
-    ...(agent === 'command-code' &&
-    hasPrompt &&
-    promptDelivery === 'auto-submit'
+    ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
       ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
       : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: launchSource ?? 'tab_bar_quick_launch',
-      request_kind: 'new',
-    },
+      request_kind: 'new'
+    }
   })
   // Why: schedule the bracketed-paste-after-ready follow-up immediately after
   // the startup command is queued. Fire-and-forget so callers keep their
@@ -265,14 +219,14 @@ export function launchAgentInNewTab(
           translate(
             'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
             "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-            { value0: label },
-          ),
+            { value0: label }
+          )
         )
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
-          agent_kind: tuiAgentToAgentKind(agent),
+          agent_kind: tuiAgentToAgentKind(agent)
         })
-      },
+      }
     }).then((delivered) => {
       if (delivered) {
         if (agent === 'command-code' && submitPastedPrompt) {
@@ -297,17 +251,13 @@ export function launchAgentInNewTab(
   // order is unset, which can jump the new tab to index 0 instead of the end.
   const fresh = useAppStore.getState()
   const termIds = (fresh.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
-  const editorIds = fresh.openFiles
-    .filter((f) => f.worktreeId === worktreeId)
-    .map((f) => f.id)
-  const browserIds = (fresh.browserTabsByWorktree?.[worktreeId] ?? []).map(
-    (t) => t.id,
-  )
+  const editorIds = fresh.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
+  const browserIds = (fresh.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
   const base = reconcileTabOrder(
     fresh.tabBarOrderByWorktree[worktreeId],
     termIds,
     editorIds,
-    browserIds,
+    browserIds
   )
   const order = base.filter((id) => id !== tab.id)
   order.push(tab.id)
@@ -316,6 +266,6 @@ export function launchAgentInNewTab(
   return {
     tabId: tab.id,
     startupPlan,
-    pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+    pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null
   }
 }

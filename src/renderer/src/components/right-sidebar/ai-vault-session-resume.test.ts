@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo, Worktree } from '../../../../shared/types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-actions'
 import {
   aiVaultSessionResumeLabel,
+  type AiVaultSessionResumeTargetState,
   resolveAiVaultSessionResumeActions,
   resolveAiVaultSessionResumeState
 } from './ai-vault-session-resume'
@@ -39,6 +42,57 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     addedAt: 1,
     ...overrides
   }
+}
+
+function makeTargetState(
+  overrides: Partial<AiVaultSessionResumeTargetState> = {}
+): AiVaultSessionResumeTargetState {
+  return {
+    folderWorkspaces: [],
+    projectGroups: [],
+    repos: [],
+    worktreesByRepo: {},
+    ...overrides
+  } as AiVaultSessionResumeTargetState
+}
+
+function makeFolderTargetState(
+  projectGroup: Partial<AiVaultSessionResumeTargetState['projectGroups'][number]>
+): AiVaultSessionResumeTargetState {
+  return makeTargetState({
+    folderWorkspaces: [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'Platform',
+        folderPath: '/repo/platform',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ],
+    projectGroups: [
+      {
+        id: 'group-1',
+        name: 'Platform',
+        parentPath: null,
+        parentGroupId: null,
+        createdFrom: 'manual',
+        tabOrder: 0,
+        isCollapsed: false,
+        color: null,
+        createdAt: 1,
+        updatedAt: 1,
+        ...projectGroup
+      }
+    ]
+  })
 }
 
 function makeWorktreeInfo(
@@ -86,7 +140,7 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('blocks remote targets and missing worktrees', () => {
+  it('blocks missing worktrees even when the repo is SSH-owned', () => {
     expect(
       resolveAiVaultSessionResumeState({
         worktreeInfo: makeWorktreeInfo('active'),
@@ -98,6 +152,36 @@ describe('resolveAiVaultSessionResumeState', () => {
       blocked: true,
       worktreeId: null,
       usesSessionWorktree: false
+    })
+  })
+
+  it('allows SSH-owned session worktrees', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: null,
+        worktrees: [makeWorktree()],
+        repos: [makeRepo({ connectionId: 'ssh-1' })]
+      })
+    ).toEqual({
+      blocked: false,
+      worktreeId: 'repo-1::/repo/orca',
+      usesSessionWorktree: true
+    })
+  })
+
+  it('allows SSH-stamped worktrees even when the repo owner is runtime', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: null,
+        worktrees: [makeWorktree({ hostId: 'ssh:ssh-1' })],
+        repos: [makeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })]
+      })
+    ).toEqual({
+      blocked: false,
+      worktreeId: 'repo-1::/repo/orca',
+      usesSessionWorktree: true
     })
   })
 
@@ -121,7 +205,22 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('uses a local session worktree when the active workspace is remote', () => {
+  it('blocks runtime-stamped worktrees even when the repo owner is local', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('active'),
+        activeWorktreeId: null,
+        worktrees: [makeWorktree({ hostId: 'runtime:env-1' })],
+        repos: [makeRepo({ connectionId: null, executionHostId: 'local' })]
+      })
+    ).toEqual({
+      blocked: true,
+      worktreeId: null,
+      usesSessionWorktree: false
+    })
+  })
+
+  it('prefers the session worktree when the active workspace is SSH-owned', () => {
     expect(
       resolveAiVaultSessionResumeState({
         worktreeInfo: makeWorktreeInfo('active'),
@@ -172,6 +271,38 @@ describe('resolveAiVaultSessionResumeState', () => {
       usesSessionWorktree: false
     })
   })
+
+  it('falls back to an active SSH folder workspace', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('archived'),
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        worktrees: [],
+        repos: [],
+        targetState: makeFolderTargetState({ id: 'group-1', connectionId: 'ssh-1' })
+      })
+    ).toEqual({
+      blocked: false,
+      worktreeId: folderWorkspaceKey('folder-1'),
+      usesSessionWorktree: false
+    })
+  })
+
+  it('blocks an active runtime folder workspace', () => {
+    expect(
+      resolveAiVaultSessionResumeState({
+        worktreeInfo: makeWorktreeInfo('archived'),
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        worktrees: [],
+        repos: [],
+        targetState: makeFolderTargetState({ id: 'group-1', executionHostId: 'runtime:env-1' })
+      })
+    ).toEqual({
+      blocked: true,
+      worktreeId: null,
+      usesSessionWorktree: false
+    })
+  })
 })
 
 describe('resolveAiVaultSessionResumeActions', () => {
@@ -192,7 +323,7 @@ describe('resolveAiVaultSessionResumeActions', () => {
     })
   })
 
-  it('disables only the remote active-workspace action when the session worktree is local', () => {
+  it('enables an SSH active-workspace action when the session worktree is local', () => {
     expect(
       resolveAiVaultSessionResumeActions({
         worktreeInfo: makeWorktreeInfo('active'),
@@ -209,7 +340,7 @@ describe('resolveAiVaultSessionResumeActions', () => {
       })
     ).toEqual({
       worktree: { worktreeId: 'repo-1::/repo/orca', disabled: false },
-      newTab: { worktreeId: 'repo-2::/remote/orca', disabled: true }
+      newTab: { worktreeId: 'repo-2::/remote/orca', disabled: false }
     })
   })
 
@@ -253,6 +384,62 @@ describe('resolveAiVaultSessionResumeActions', () => {
     ).toEqual({
       worktree: { worktreeId: 'repo-1::/repo/orca', disabled: false },
       newTab: { worktreeId: null, disabled: true }
+    })
+  })
+
+  it('enables the active folder workspace action when it is local or SSH-owned', () => {
+    expect(
+      resolveAiVaultSessionResumeActions({
+        worktreeInfo: makeWorktreeInfo('archived'),
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        worktrees: [],
+        repos: [],
+        targetState: makeFolderTargetState({ id: 'group-1', connectionId: 'ssh-1' })
+      })
+    ).toEqual({
+      worktree: { worktreeId: null, disabled: true },
+      newTab: { worktreeId: folderWorkspaceKey('folder-1'), disabled: false }
+    })
+  })
+
+  it('disables the active folder workspace action when it is runtime-owned', () => {
+    expect(
+      resolveAiVaultSessionResumeActions({
+        worktreeInfo: makeWorktreeInfo('archived'),
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        worktrees: [],
+        repos: [],
+        targetState: makeFolderTargetState({ id: 'group-1', executionHostId: 'runtime:env-1' })
+      })
+    ).toEqual({
+      worktree: { worktreeId: null, disabled: true },
+      newTab: { worktreeId: folderWorkspaceKey('folder-1'), disabled: true }
+    })
+  })
+})
+
+describe('resolveAiVaultSessionLaunchTarget', () => {
+  it('allows direct resume into an active SSH folder workspace', () => {
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        targetState: makeFolderTargetState({ id: 'group-1', connectionId: 'ssh-1' })
+      })
+    ).toEqual({
+      status: 'ready',
+      worktreeId: folderWorkspaceKey('folder-1')
+    })
+  })
+
+  it('blocks direct resume into a runtime folder workspace', () => {
+    expect(
+      resolveAiVaultSessionLaunchTarget({
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        targetState: makeFolderTargetState({ id: 'group-1', executionHostId: 'runtime:env-1' })
+      })
+    ).toEqual({
+      status: 'unsupported',
+      targetStatus: 'runtime'
     })
   })
 })

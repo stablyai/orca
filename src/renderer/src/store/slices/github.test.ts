@@ -17,7 +17,7 @@ import {
 } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
-import type { GitHubWorkItem, PRInfo } from '../../../../shared/types'
+import type { GitHubWorkItem, PRInfo, Worktree } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import {
@@ -100,6 +100,29 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
     updatedAt: '2026-03-28T00:00:00Z',
     mergeable: 'UNKNOWN',
     headSha: 'head-oid',
+    ...overrides
+  }
+}
+
+function makePRRefreshWorktree(overrides: Partial<Worktree> = {}): Worktree {
+  return {
+    id: 'wt-pr-refresh',
+    repoId: 'repo-1',
+    path: '/repo/worktrees/pr-refresh',
+    displayName: 'PR refresh',
+    branch: 'feature/pr-refresh',
+    head: 'head-oid',
+    isBare: false,
+    isMainWorktree: false,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
     ...overrides
   }
 }
@@ -607,7 +630,15 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       prCache: {
         [runtimePrCacheKey]: {
           data: makePR({ checksStatus: 'pending' }),
@@ -631,6 +662,51 @@ describe('createGitHubSlice.fetchPRChecks', () => {
     ])
     expect(store.getState().checksCache[localChecksCacheKey]).toBeUndefined()
     expect(store.getState().prCache[runtimePrCacheKey]?.data?.checksStatus).toBe('success')
+  })
+
+  it('keeps known local repo checks on local cache keys when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/local-checks'
+    const localPrCacheKey = `${repoId}::${branch}`
+    const localChecksCacheKey = `${repoId}::pr-checks::12`
+    const runtimeChecksCacheKey = `runtime:env-1::${repoId}::pr-checks::12`
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      prCache: {
+        [localPrCacheKey]: {
+          data: makePR({ checksStatus: 'pending' }),
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    mockApi.gh.prChecks.mockResolvedValueOnce([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      prNumber: 12,
+      headSha: undefined,
+      prRepo: null,
+      noCache: true,
+      sourceContext: undefined
+    })
+    expect(store.getState().checksCache[localChecksCacheKey]?.data).toEqual([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+    expect(store.getState().checksCache[runtimeChecksCacheKey]).toBeUndefined()
+    expect(store.getState().prCache[localPrCacheKey]?.data?.checksStatus).toBe('success')
   })
 
   it('marks the PR cache entry as failure when any check fails', async () => {
@@ -1041,7 +1117,15 @@ describe('createGitHubSlice.fetchPRComments', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().fetchPRComments(repoPath, 12, {
@@ -1067,6 +1151,42 @@ describe('createGitHubSlice.fetchPRComments', () => {
     ).toBe('remote')
     expect(
       store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]
+    ).toBeUndefined()
+  })
+
+  it('keeps known local repo comments on local cache keys when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.prComments.mockResolvedValueOnce([
+      { id: 1, author: 'local', authorAvatarUrl: '', body: '', createdAt: '', url: '' }
+    ])
+
+    await store.getState().fetchPRComments(repoPath, 12, {
+      force: true,
+      repoId,
+      prRepo: { owner: 'Acme', repo: 'Widgets' }
+    })
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prComments).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      prNumber: 12,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      noCache: true,
+      sourceContext: undefined
+    })
+    expect(
+      store.getState().commentsCache[`${repoId}::pr-comments::acme/widgets::12`]?.data?.[0].author
+    ).toBe('local')
+    expect(
+      store.getState().commentsCache[`runtime:env-1::${repoId}::pr-comments::acme/widgets::12`]
     ).toBeUndefined()
   })
 
@@ -1226,7 +1346,15 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().fetchPRCheckDetails(
@@ -1253,6 +1381,39 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       timeoutMs: 30_000
     })
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+  })
+
+  it('loads known local repo check details through local IPC when a runtime is focused', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchPRCheckDetails(
+      repoPath,
+      {
+        checkRunId: 123,
+        checkName: 'build',
+        prRepo: { owner: 'Acme', repo: 'Widgets' }
+      },
+      { repoId }
+    )
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.prCheckDetails).toHaveBeenCalledWith({
+      repoPath,
+      repoId,
+      checkRunId: 123,
+      workflowRunId: undefined,
+      checkName: 'build',
+      url: undefined,
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
+      sourceContext: undefined
+    })
   })
 })
 
@@ -1405,7 +1566,15 @@ describe('createGitHubSlice PR comment mutations', () => {
     const repoId = 'repo-id'
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }]
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
     } as unknown as Partial<AppState>)
 
     await store.getState().addPRReviewCommentReply(repoPath, 12, 99, 'reply', {
@@ -1471,6 +1640,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
   afterEach(() => {
     _clearGitHubPRRefreshStartedEntriesForTest()
+    vi.useRealTimers()
   })
 
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
@@ -2044,6 +2214,150 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
   })
 
+  it('preserves cached merged PR data when a forced no-PR refresh matches the worktree head', async () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-head-match'
+    const worktreeId = 'wt-merged-direct-match'
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Merged PR still checked out',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'merged-head'
+          })
+        ]
+      },
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId
+      })
+    ).resolves.toEqual(cachedPR)
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+      data: cachedPR,
+      fetchedAt: 1
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mockApi.cache.setGitHub).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'worktree id is missing',
+      worktreeId: undefined,
+      linkedPRNumber: undefined,
+      worktreesByRepo: {}
+    },
+    {
+      name: 'worktree cannot be found',
+      worktreeId: 'wt-missing',
+      linkedPRNumber: undefined,
+      worktreesByRepo: { 'repo-1': [] }
+    },
+    {
+      name: 'worktree head is empty',
+      worktreeId: 'wt-empty-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-empty-head',
+            branch: 'feature/merged-pr-stale-direct',
+            head: ''
+          })
+        ]
+      }
+    },
+    {
+      name: 'cached PR head differs from worktree head',
+      worktreeId: 'wt-moved-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-moved-head',
+            branch: 'feature/merged-pr-stale-direct',
+            head: 'new-head'
+          })
+        ]
+      }
+    },
+    {
+      name: 'an explicit linked PR lookup misses',
+      worktreeId: 'wt-linked-pr-miss',
+      linkedPRNumber: 12,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-linked-pr-miss',
+            branch: 'feature/merged-pr-stale-direct',
+            head: 'merged-head',
+            linkedPR: 12
+          })
+        ]
+      }
+    }
+  ])('clears cached merged PR data on forced no-PR refresh when $name', async (testCase) => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/merged-pr-stale-direct'
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Stale merged PR',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
+
+    store.setState({
+      repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
+      worktreesByRepo: testCase.worktreesByRepo,
+      prCache: {
+        [`${repoId}::${branch}`]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
+
+    await expect(
+      store.getState().fetchPRForBranch(repoPath, branch, {
+        force: true,
+        repoId,
+        worktreeId: testCase.worktreeId,
+        linkedPRNumber: testCase.linkedPRNumber
+      })
+    ).resolves.toBeNull()
+    expect(store.getState().prCache[`${repoId}::${branch}`]).toEqual({
+      data: null,
+      fetchedAt: 2
+    })
+  })
+
   it('uses a GitHub hosted-review cache entry as the fallback PR for direct refreshes', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -2231,6 +2545,150 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       fetchedAt: 1,
       linkedReviewHintKey: 'github:12'
     })
+  })
+
+  it('preserves cached merged PR data when a no-PR refresh event matches the worktree head', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/event-merged-pr-head-match'
+    const cacheKey = `${repoId}::${branch}`
+    const worktreeId = 'wt-merged-event-match'
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Merged event PR still checked out',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
+
+    store.setState({
+      worktreesByRepo: {
+        [repoId]: [
+          makePRRefreshWorktree({
+            id: worktreeId,
+            repoId,
+            branch,
+            head: 'merged-head'
+          })
+        ]
+      },
+      prCache: {
+        [cacheKey]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [{ cacheKey, repoId, repoPath, branch, worktreeId }],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: cachedPR, fetchedAt: 1 })
+    vi.advanceTimersByTime(1000)
+    expect(mockApi.cache.setGitHub).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'worktree id is missing',
+      worktreeId: undefined,
+      linkedPRNumber: undefined,
+      worktreesByRepo: {}
+    },
+    {
+      name: 'worktree cannot be found',
+      worktreeId: 'wt-missing-event',
+      linkedPRNumber: undefined,
+      worktreesByRepo: { 'repo-1': [] }
+    },
+    {
+      name: 'worktree head is empty',
+      worktreeId: 'wt-empty-event-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-empty-event-head',
+            branch: 'feature/event-merged-pr-stale',
+            head: ''
+          })
+        ]
+      }
+    },
+    {
+      name: 'cached PR head differs from worktree head',
+      worktreeId: 'wt-moved-event-head',
+      linkedPRNumber: undefined,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-moved-event-head',
+            branch: 'feature/event-merged-pr-stale',
+            head: 'new-head'
+          })
+        ]
+      }
+    },
+    {
+      name: 'an explicit linked PR lookup misses',
+      worktreeId: 'wt-linked-event-miss',
+      linkedPRNumber: 12,
+      worktreesByRepo: {
+        'repo-1': [
+          makePRRefreshWorktree({
+            id: 'wt-linked-event-miss',
+            branch: 'feature/event-merged-pr-stale',
+            head: 'merged-head',
+            linkedPR: 12
+          })
+        ]
+      }
+    }
+  ])('clears cached merged PR data on no-PR refresh event when $name', (testCase) => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-1'
+    const branch = 'feature/event-merged-pr-stale'
+    const cacheKey = `${repoId}::${branch}`
+    const cachedPR = makePR({
+      number: 12,
+      title: 'Stale merged event PR',
+      state: 'merged',
+      headSha: 'merged-head'
+    })
+
+    store.setState({
+      worktreesByRepo: testCase.worktreesByRepo,
+      prCache: {
+        [cacheKey]: {
+          data: cachedPR,
+          fetchedAt: 1
+        }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().applyGitHubPRRefreshEvent({
+      sequence: 1,
+      aliases: [
+        {
+          cacheKey,
+          repoId,
+          repoPath,
+          branch,
+          worktreeId: testCase.worktreeId,
+          linkedPRNumber: testCase.linkedPRNumber
+        }
+      ],
+      reason: 'visible',
+      outcome: { kind: 'no-pr', fetchedAt: 2 }
+    })
+
+    expect(store.getState().prCache[cacheKey]).toEqual({ data: null, fetchedAt: 2 })
   })
 
   it('updates hosted review cache from GitHub PR refresh events', () => {
@@ -2625,8 +3083,28 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const settings = { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
     const runtimeHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, settings, repoId)
     const localHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+    const localChecksCacheKey = `${repoId}::${prChecksCacheSuffix(12, null, 'head-oid')}`
+    const runtimeChecksCacheKey = `runtime:env-1::${repoId}::${prChecksCacheSuffix(
+      12,
+      null,
+      'head-oid'
+    )}`
 
-    store.setState({ settings } as Partial<AppState>)
+    store.setState({
+      settings,
+      checksCache: {
+        [localChecksCacheKey]: {
+          data: [{ name: 'test', status: 'completed', conclusion: 'failure', url: null }],
+          fetchedAt: 1,
+          headSha: 'head-oid'
+        },
+        [runtimeChecksCacheKey]: {
+          data: [{ name: 'test', status: 'completed', conclusion: 'success', url: null }],
+          fetchedAt: 1,
+          headSha: 'head-oid'
+        }
+      }
+    } as Partial<AppState>)
 
     store.getState().applyGitHubPRRefreshEvent({
       sequence: 1,
@@ -2634,14 +3112,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       reason: 'visible',
       outcome: {
         kind: 'found',
-        pr: makePR({ number: 12, title: 'Local PR status' }),
+        pr: makePR({ number: 12, title: 'Local PR status', checksStatus: 'pending' }),
         fetchedAt: 2
       }
     })
 
     expect(store.getState().prCache[cacheKey]?.data).toMatchObject({
       number: 12,
-      title: 'Local PR status'
+      title: 'Local PR status',
+      checksStatus: 'failure'
     })
     expect(store.getState().prRefreshSequences[cacheKey]).toBe(1)
     expect(store.getState().hostedReviewCache[localHostedReviewCacheKey]?.data).toMatchObject({
@@ -2776,6 +3255,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
       branch,
+      currentHeadOid: null,
       linkedAzureDevOpsPR: null,
       linkedBitbucketPR: null,
       linkedGitHubPR: null,
@@ -3341,12 +3821,23 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       {
         activeRuntimeEnvironmentId: 'env-1'
       } as AppState['settings'],
-      'repo-1'
+      'repo-1',
+      null,
+      'runtime:env-1',
+      true
     )
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       groupBy: 'pr-status',
       worktreeCardProperties: ['status'],
       worktreesByRepo: {
@@ -3622,7 +4113,15 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       groupBy: 'repo',
       worktreeCardProperties: ['comment'],
       activeWorktreeId: 'wt-1',
@@ -3750,7 +4249,15 @@ describe('createGitHubSlice.refreshGitHubForWorktree', () => {
 
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
-      repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
+      repos: [
+        {
+          id: 'repo-1',
+          path: repoPath,
+          name: 'repo',
+          kind: 'git',
+          executionHostId: 'runtime:env-1'
+        }
+      ],
       worktreesByRepo: {
         'repo-1': [
           {

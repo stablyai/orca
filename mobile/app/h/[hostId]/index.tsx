@@ -710,9 +710,12 @@ export function HostScreen({
       // Highlight the row immediately; the next worktree.ps poll confirms it.
       setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
+        // Why: opening a mobile session should hydrate host-owned tabs without
+        // pulling other paired clients, especially desktop, into this worktree.
         void client
           .sendRequest('worktree.activate', {
-            worktree: `id:${item.worktreeId}`
+            worktree: `id:${item.worktreeId}`,
+            notifyClients: false
           })
           .catch(() => null)
       }

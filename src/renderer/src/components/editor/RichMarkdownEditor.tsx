@@ -9,7 +9,8 @@ import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import { buildMarkdownTableOfContents, type MarkdownTocItem } from './markdown-table-of-contents'
+import { type MarkdownTocItem } from './markdown-table-of-contents'
+import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
@@ -138,7 +139,14 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
-  const tableOfContentsItems = useMemo(() => buildMarkdownTableOfContents(content), [content])
+  // Why: building the table of contents runs a full-document remark parse on
+  // every content change. The result is only used while the panel is open
+  // (closed by default), so gate the parse on visibility; including
+  // showTableOfContents in deps rebuilds the outline the moment it opens.
+  const tableOfContentsItems = useMemo(
+    () => selectMarkdownTableOfContents(showTableOfContents, content),
+    [content, showTableOfContents]
+  )
   const flatTableOfContentsItems = useMemo(
     () => flattenMarkdownTocItems(tableOfContentsItems),
     [tableOfContentsItems]
@@ -310,17 +318,7 @@ export default function RichMarkdownEditor({
     })
   }, [handleLocalImagePick, toggleLinkFromToolbar])
 
-  const {
-    activeMatchIndex,
-    closeSearch,
-    isSearchOpen,
-    matchCount,
-    moveToMatch,
-    openSearch,
-    searchInputRef,
-    searchQuery,
-    setSearchQuery
-  } = useRichMarkdownSearch({
+  const { openSearch, searchState, searchActions } = useRichMarkdownSearch({
     editor,
     rootRef,
     scrollContainerRef
@@ -381,18 +379,8 @@ export default function RichMarkdownEditor({
       markdownSourceLineOffset={markdownSourceLineOffset}
       tableOfContentsItems={tableOfContentsItems}
       showTableOfContents={showTableOfContents}
-      searchState={{
-        activeMatchIndex,
-        isSearchOpen,
-        matchCount,
-        searchQuery,
-        searchInputRef
-      }}
-      searchActions={{
-        closeSearch,
-        moveToMatch,
-        setSearchQuery
-      }}
+      searchState={searchState}
+      searchActions={searchActions}
       linkBubbleActions={{
         handleLinkSave,
         handleLinkRemove,

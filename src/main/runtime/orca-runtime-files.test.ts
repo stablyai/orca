@@ -126,20 +126,28 @@ function createRuntimeFileCommands(options?: {
   path?: string
   openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
+  resolveRuntimeFileTarget?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const path = options?.path ?? '/repo'
+  const worktree = {
+    id: 'wt-1',
+    repoId: 'repo-1',
+    path
+  }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
-    resolveWorktreeSelector: vi.fn(async () => ({
-      id: 'wt-1',
-      repoId: 'repo-1',
-      path
-    })),
+    resolveWorktreeSelector: vi.fn(async () => worktree),
+    resolveRuntimeFileTarget:
+      options?.resolveRuntimeFileTarget ??
+      vi.fn(async () => ({
+        worktree,
+        connectionId: store.getRepo(worktree.repoId)?.connectionId
+      })),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
@@ -427,7 +435,7 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {
-    const resolveRuntimeGitTarget = vi.fn(async () => ({
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: {
         id: 'wt-1',
         repoId: 'repo-1',
@@ -435,7 +443,7 @@ describe('RuntimeFileCommands', () => {
       },
       connectionId: null
     }))
-    const { commands } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     checkRgAvailableMock.mockResolvedValue(true)
@@ -460,7 +468,7 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('routes runtime rg searches through the registered WSL project runtime', async () => {
-    const resolveRuntimeGitTarget = vi.fn(async () => ({
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: {
         id: 'wt-1',
         repoId: 'repo-1',
@@ -468,7 +476,7 @@ describe('RuntimeFileCommands', () => {
       },
       connectionId: null
     }))
-    const { commands, store } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const { commands, store } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     checkRgAvailableMock.mockResolvedValue(true)

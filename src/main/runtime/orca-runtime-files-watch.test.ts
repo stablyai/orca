@@ -52,6 +52,13 @@ function createRuntimeFileCommands(rootPath: string) {
       repoId: 'repo-1',
       path: rootPath
     })),
+    resolveRuntimeFileTarget: vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: rootPath
+      }
+    })),
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()
   } as never)

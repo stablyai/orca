@@ -25,7 +25,10 @@ function shellBasename(shellPath: string): string {
   return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
 }
 
-function windowsShellArgs(shellName: string): string[] | null {
+function windowsShellArgs(
+  shellName: string,
+  options: { terminalWindowsWslDistro?: string | null } = {}
+): string[] | null {
   if (shellName === 'powershell.exe' || shellName === 'powershell') {
     return ['-NoLogo']
   }
@@ -34,6 +37,10 @@ function windowsShellArgs(shellName: string): string[] | null {
   }
   if (shellName === 'cmd.exe' || shellName === 'cmd') {
     return []
+  }
+  if (shellName === 'wsl.exe' || shellName === 'wsl') {
+    const distro = options.terminalWindowsWslDistro?.trim()
+    return distro ? ['-d', distro] : []
   }
   return null
 }
@@ -247,14 +254,20 @@ export function getRelayShellLaunchConfig(
   shellPath: string,
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
-  options: { emitReadyMarker?: boolean } = {}
+  options: { emitReadyMarker?: boolean; terminalWindowsWslDistro?: string | null } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
   const emitReadyMarker = options.emitReadyMarker === true
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
-    return { args: windowsShellArgs(shellName) ?? [], env: {} }
+    return {
+      args:
+        windowsShellArgs(shellName, {
+          terminalWindowsWslDistro: options.terminalWindowsWslDistro
+        }) ?? [],
+      env: {}
+    }
   }
 
   if (shellName !== 'zsh' && shellName !== 'bash') {

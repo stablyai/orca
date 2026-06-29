@@ -385,18 +385,34 @@ export async function getHostedReviewCreationEligibility(
   const defaultBaseRef =
     args.base?.trim() || (await getDefaultBaseRef(args.repoPath, args.connectionId, args))
   const baseBranch = defaultBaseRef ? normalizeHostedReviewBaseRef(defaultBaseRef) : null
-  const review = await getHostedReviewForBranch({
-    repoPath: args.repoPath,
-    branch,
-    linkedGitHubPR: args.linkedGitHubPR ?? null,
-    fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-    linkedGitLabMR: args.linkedGitLabMR ?? null,
-    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: args.linkedGiteaPR ?? null,
-    connectionId: args.connectionId ?? null,
-    ...hostedReviewExecutionContext(args)
-  })
+  let review: Awaited<ReturnType<typeof getHostedReviewForBranch>> = null
+  try {
+    review = await getHostedReviewForBranch({
+      repoPath: args.repoPath,
+      branch,
+      linkedGitHubPR: args.linkedGitHubPR ?? null,
+      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
+      linkedGitLabMR: args.linkedGitLabMR ?? null,
+      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+      linkedGiteaPR: args.linkedGiteaPR ?? null,
+      connectionId: args.connectionId ?? null,
+      ...hostedReviewExecutionContext(args)
+    })
+  } catch (error) {
+    const canReturnLocalBlocker =
+      branch &&
+      branch !== 'HEAD' &&
+      supportsHostedReviewCreation(provider) &&
+      (!baseBranch || branch.toLowerCase() !== baseBranch.toLowerCase()) &&
+      (args.hasUncommittedChanges || args.hasUpstream !== true || (args.behind ?? 0) > 0)
+    if (!canReturnLocalBlocker) {
+      throw error
+    }
+    // Why: local blockers still let the UI offer Create PR preparation; a
+    // flaky existing-review lookup should not hide the affordance entirely.
+    console.warn('Hosted review lookup failed while resolving local review blocker:', error)
+  }
 
   const baseResult = {
     provider,

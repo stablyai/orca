@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
+  activateWebRuntimeSessionWorktree,
   activateWebRuntimeSessionTab,
   closeWebRuntimeTerminal,
   closeWebRuntimeSessionTab,
@@ -61,6 +62,55 @@ function makeSnapshot(): RuntimeMobileSessionTabsResult {
     tabs: []
   }
 }
+
+describe('activateWebRuntimeSessionWorktree', () => {
+  beforeEach(() => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('can ask the host to activate session surfaces without notifying desktop clients', async () => {
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'activate',
+      ok: true,
+      result: { repoId: 'repo', worktreeId: WORKTREE_ID, activated: true }
+    })
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      activateWebRuntimeSessionWorktree({
+        worktreeId: WORKTREE_ID,
+        notifyDesktop: false
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: ENVIRONMENT_ID,
+      method: 'worktree.activate',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        notifyClients: false
+      },
+      timeoutMs: 15_000
+    })
+  })
+})
 
 describe('createWebRuntimeSessionBrowserTab', () => {
   beforeEach(() => {

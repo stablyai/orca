@@ -4,6 +4,9 @@ import { promisify } from 'util'
 import path, { win32 } from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import { buildRelayCommandEnv } from './relay-command-env'
+import { isPwshAvailable } from '../main/pwsh'
+import { isWslAvailable, listWslDistros } from '../main/wsl'
+import { isGitBashAvailable } from '../main/git-bash'
 
 const execFileAsync = promisify(execFile)
 
@@ -33,6 +36,9 @@ export class PreflightHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('preflight.detectAgents', (p) => this.detectAgents(p))
+    this.dispatcher.onRequest('preflight.detectWindowsTerminalCapabilities', () =>
+      this.detectWindowsTerminalCapabilities()
+    )
   }
 
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
@@ -52,6 +58,28 @@ export class PreflightHandler {
     )
 
     return { agents: [...new Set(results.filter((r) => r.installed).map((r) => r.id))] }
+  }
+
+  private async detectWindowsTerminalCapabilities(): Promise<{
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }> {
+    const [wslAvailable, pwshAvailable, gitBashAvailable] = await Promise.all([
+      Promise.resolve(isWslAvailable()).catch(() => false),
+      Promise.resolve(isPwshAvailable()).catch(() => false),
+      Promise.resolve(isGitBashAvailable()).catch(() => false)
+    ])
+    const wslDistros = wslAvailable ? await Promise.resolve(listWslDistros()).catch(() => []) : []
+    return {
+      wslAvailable,
+      wslDistros,
+      pwshAvailable,
+      gitBashAvailable,
+      hostPlatform: process.platform
+    }
   }
 
   // Why: SSH exec channels give the relay a minimal environment without shell

@@ -140,6 +140,66 @@ describe('automation target availability', () => {
     ).toBe('host-mismatch')
   })
 
+  it('allows remote-listed SSH automations whose repo is projected through a runtime server', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          executionTargetType: 'ssh',
+          executionTargetId: 'devbox',
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'project-1',
+            hostId: 'ssh:devbox',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo({
+          connectionId: 'devbox',
+          executionHostId: 'runtime:gpu'
+        }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            hostId: 'ssh:devbox',
+            connectionId: 'devbox',
+            executionHostId: 'ssh:devbox'
+          })
+        ],
+        sshConnectionStates: new Map([['devbox', { status: 'connected' }]]),
+        automationHostTarget: { kind: 'environment', environmentId: 'gpu' }
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
+  it('allows remote-listed server-local automations whose setup is projected through a runtime server', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'project-1',
+            hostId: 'local',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-1',
+            path: '/repo'
+          }
+        }),
+        repo: makeRepo({ executionHostId: 'runtime:gpu' }),
+        workspace: makeWorkspace(),
+        projectHostSetups: [
+          makeProjectHostSetup({
+            hostId: 'runtime:gpu',
+            executionHostId: 'runtime:gpu'
+          })
+        ],
+        sshConnectionStates: new Map(),
+        automationHostTarget: { kind: 'environment', environmentId: 'gpu' }
+      })
+    ).toEqual({ canRunNow: true, reason: 'available', message: null })
+  })
+
   it('blocks saved run contexts whose project host setup is missing or not ready', () => {
     const automation = makeAutomation({
       runContext: {

@@ -27,6 +27,9 @@ type UseSourceControlAgentActionStartArgs = {
   groupId?: string | null
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
+  /** Why: SSH hosts launch the plain `orca` shim, so the previewed command must
+   * drop the Linux-only `orca-ide` rename to match the real launch. */
+  isRemote?: boolean
   launchSource: LaunchSource
   connectionUnavailable: boolean
   agentProfiles?: readonly TuiAgentProfile[] | null
@@ -76,6 +79,7 @@ export function useSourceControlAgentActionStart({
   groupId,
   promptDelivery,
   launchPlatform,
+  isRemote,
   launchSource,
   connectionUnavailable,
   agentProfiles,
@@ -103,7 +107,8 @@ export function useSourceControlAgentActionStart({
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
         launchPlatform,
-        agentProfiles
+        agentProfiles,
+        isRemote
       })
     },
     [
@@ -114,7 +119,8 @@ export function useSourceControlAgentActionStart({
       refreshDetectedAgents,
       selectedAgent,
       launchPlatform,
-      agentProfiles
+      agentProfiles,
+      isRemote
     ]
   )
 

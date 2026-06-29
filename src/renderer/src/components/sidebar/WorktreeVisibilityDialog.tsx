@@ -49,7 +49,14 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     if (!repoId) {
       return
     }
-    await updateRepo(repoId, { externalWorktreeVisibility: showOther ? 'hide' : 'show' })
+    await updateRepo(repoId, {
+      externalWorktreeVisibility: showOther ? 'hide' : 'show',
+      // Why: showing hidden externals again should re-enable the inbox if the
+      // user previously opted out of discovery prompts for this repo.
+      // Why: null is the transport sentinel for clearing on remote runtime paths
+      // where `undefined` is stripped before persistence.
+      ...(!showOther ? { externalWorktreeDiscoverySuppressedAt: null } : {})
+    })
     await fetchWorktrees(repoId)
     closeModal()
   }, [closeModal, fetchWorktrees, repoId, showOther, updateRepo])

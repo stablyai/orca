@@ -169,6 +169,38 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
   })
 
+  it('passes a contained selected path through as the initial terminal cwd', async () => {
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree()]
+    }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'local_folder_picker',
+      selectedPath: '/repo/packages/web',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      initialCwd: '/repo/packages/web'
+    })
+  })
+
+  it('skips the initial cwd override when the selected path is the repo root', async () => {
+    mocks.state.worktreesByRepo = {
+      'repo-1': [makeWorktree()]
+    }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'local_folder_picker',
+      selectedPath: '/repo',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+  })
+
   it('shows a hidden detected default checkout before activating it', async () => {
     const defaultCheckout = makeWorktree()
     mocks.state.detectedWorktreesByRepo = {

@@ -70,8 +70,14 @@ echo "  -> resources/build/icon.png (1024x1024)"
 sips -s format png --resampleWidth 256 "$TMP_DIR/icon.icns" --out "$RESOURCES_DIR/icon.png" >/dev/null 2>&1
 echo "  -> resources/icon.png (256x256)"
 
-# Generate .ico for Windows (proper ICO format with multiple sizes)
-"$MAGICK_BIN" "$BUILD_DIR/icon.png" -define icon:auto-resize=256,128,64,48,32,16 "$BUILD_DIR/icon.ico"
-echo "  -> resources/build/icon.ico (multi-size ICO via ImageMagick)"
+# Generate .ico for Windows. Icon Composer keeps the macOS safe-area inset in
+# the 1024px render, but Windows scales the largest ICO frame down for the
+# taskbar/"Open with" list without compensating, so the glyph looks small next
+# to native apps (issue #5357). Delegate to the pngjs trim script so the
+# committed ICO always matches it: it trims the transparent inset, re-squares
+# with a small 2% margin, and emits the filled multi-size ICO. Node + pngjs are
+# already repo dependencies, so this also works where ImageMagick is unavailable.
+node "$PROJECT_DIR/config/scripts/trim-windows-icon-source.mjs"
+echo "  -> resources/build/icon.ico (trimmed, filled multi-size ICO)"
 
 echo "Done! Icons generated in resources/build/ and resources/"

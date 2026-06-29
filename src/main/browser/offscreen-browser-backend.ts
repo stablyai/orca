@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import { browserSessionRegistry } from './browser-session-registry'
@@ -35,6 +36,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       width: DEFAULT_VIEWPORT_WIDTH,
       height: DEFAULT_VIEWPORT_HEIGHT,
       webPreferences: {
+        // Why: offscreen pages are the SSH/headless browser backend; keep their
+        // HTML fullscreen behavior aligned with desktop <webview> guests.
+        ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
         sandbox: true,
         contextIsolation: true,

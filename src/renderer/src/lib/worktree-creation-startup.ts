@@ -1,12 +1,12 @@
 import {
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv,
+  resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { WorktreeStartupPayload } from '@/lib/worktree-activation'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
-  type AgentStartupPlan,
+  type AgentStartupPlan
 } from './tui-agent-startup'
 import { draftPlanToStartupPlan } from './launch-agent-tab-startup-plan'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -16,7 +16,7 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 export function buildWorktreeCreationStartupPayload(
   request: WorktreeCreationRequest,
   backendSpawned: boolean,
-  startupPlan: AgentStartupPlan | null,
+  startupPlan: AgentStartupPlan | null
 ): WorktreeStartupPayload | undefined {
   const plan = startupPlan
   if (!plan || backendSpawned) {
@@ -28,25 +28,23 @@ export function buildWorktreeCreationStartupPayload(
     launchConfig: plan.launchConfig,
     ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
     ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.startupCommandDelivery
-      ? { startupCommandDelivery: plan.startupCommandDelivery }
-      : {}),
+    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
       ? {
           initialAgentStatus: {
             agent: request.agent,
-            prompt: request.quickPrompt.trim(),
-          },
+            prompt: request.quickPrompt.trim()
+          }
         }
       : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {}),
+    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
   }
 }
 
 export function buildPostCreateStartupPlan(
   request: WorktreeCreationRequest,
   repoPath: string | null | undefined,
-  worktreePath: string | null | undefined,
+  worktreePath: string | null | undefined
 ): AgentStartupPlan | null {
   const template = request.startupPlanTemplate
   if (!template) {
@@ -57,13 +55,13 @@ export function buildPostCreateStartupPlan(
     template.agent,
     template.agentDefaultArgs,
     template.agentProfiles,
-    variables,
+    variables
   )
   const agentEnv = resolveTuiAgentLaunchEnv(
     template.agent,
     template.agentDefaultEnv,
     template.agentProfiles,
-    variables,
+    variables
   )
   const common = {
     agent: template.agent,
@@ -73,12 +71,13 @@ export function buildPostCreateStartupPlan(
     agentProfiles: template.agentProfiles,
     variables,
     platform: template.platform,
+    isRemote: template.isRemote
   }
 
   if (template.draftPrompt) {
     const draftPlan = buildAgentDraftLaunchPlan({
       ...common,
-      draft: template.draftPrompt,
+      draft: template.draftPrompt
     })
     if (draftPlan) {
       return draftPlanToStartupPlan(draftPlan)
@@ -88,7 +87,7 @@ export function buildPostCreateStartupPlan(
   const startupPlan = buildAgentStartupPlan({
     ...common,
     prompt: template.prompt,
-    allowEmptyPromptLaunch: template.allowEmptyPromptLaunch,
+    allowEmptyPromptLaunch: template.allowEmptyPromptLaunch
   })
   if (startupPlan && template.draftPrompt) {
     startupPlan.draftPrompt = template.draftPrompt

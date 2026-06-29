@@ -27,8 +27,10 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
@@ -44,7 +46,10 @@ import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
-import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import {
+  normalizeTerminalLayoutSnapshot,
+  resolvePtyBoundActiveLeafId
+} from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -169,14 +174,28 @@ function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 }
 
+function isAllowedRemoteWindowsTerminalShell(shell: string | undefined): boolean {
+  return (
+    shell === 'powershell.exe' ||
+    shell === 'pwsh.exe' ||
+    shell === 'cmd.exe' ||
+    shell === 'wsl.exe' ||
+    shell === WINDOWS_GIT_BASH_SHELL
+  )
+}
+
 function resolveCreatedTabShellOverride(
   explicitShellOverride: string | undefined,
   defaultWindowsShell: string | undefined,
   isRemoteWorktree: boolean,
+  remotePlatform: NodeJS.Platform | null,
   isWslWorktree: boolean,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
 ): string | undefined {
   if (isRemoteWorktree) {
+    if (remotePlatform === 'win32' && isAllowedRemoteWindowsTerminalShell(explicitShellOverride)) {
+      return explicitShellOverride
+    }
     return undefined
   }
   if (isWindowsRendererRuntime()) {
@@ -229,6 +248,27 @@ export function worktreeUsesRemoteConnection(
     .find((entry) => entry.id === worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   return Boolean(repo?.connectionId)
+}
+
+function getRemoteConnectionIdForWorktree(
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
+  worktreeId: string
+): string | null {
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null
+  }
+  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
+  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
+  if (directRepo) {
+    return directRepo.connectionId?.trim() || null
+  }
+
+  const worktree = Object.values(state.worktreesByRepo)
+    .flat()
+    .find((entry) => entry.id === worktreeId)
+  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  return repo?.connectionId?.trim() || null
 }
 
 function resolveTerminalStopRuntimeEnvironmentId(
@@ -309,6 +349,7 @@ export type TerminalSlice = {
       telemetry?: AgentStartedTelemetry
     }
   >
+  pendingInitialCwdByTabId: Record<string, string>
   /** Queued setup-split requests — when present, TerminalPane creates the
    *  initial pane clean, then splits (vertical or horizontal per user setting)
    *  and runs the command in the new pane so the main terminal stays
@@ -379,6 +420,11 @@ export type TerminalSlice = {
        *  bar can show the provider icon before the agent's first hook event. */
       launchAgent?: TuiAgent
       quickCommandLabel?: string | null
+      /** Initial native-chat view mode for the unified tab. When the
+       *  `openAgentTabsInChatByDefault` setting is on, agent launches pass
+       *  `'chat'` so the tab opens in the native chat view; omitted otherwise
+       *  so the tab keeps the implicit `'terminal'` default. */
+      viewMode?: Tab['viewMode']
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -459,6 +505,8 @@ export type TerminalSlice = {
       telemetry?: AgentStartedTelemetry
     }
   ) => void
+  queueTabInitialCwd: (tabId: string, cwd: string) => void
+  consumeTabInitialCwd: (tabId: string) => string | null
   consumeTabStartupCommand: (tabId: string) => {
     command: string
     delivery?: 'terminal-paste'
@@ -528,6 +576,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
   pendingStartupByTabId: {},
+  pendingInitialCwdByTabId: {},
   pendingSetupSplitByTabId: {},
   pendingIssueCommandSplitByTabId: {},
   tabBarOrderByWorktree: {},
@@ -686,7 +735,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       const quickCommandLabel = options?.quickCommandLabel?.trim()
-      const isRemoteWorktree = worktreeUsesRemoteConnection(s, worktreeId)
+      const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
+      const isRemoteWorktree = Boolean(remoteConnectionId)
       const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
@@ -694,6 +744,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // Why: SSH PTYs ignore local Windows shell selection; persisting a
         // local shell icon would mislabel a remote terminal.
         isRemoteWorktree,
+        remoteConnectionId
+          ? ((s.sshConnectionStates.get(remoteConnectionId)
+              ?.remotePlatform as NodeJS.Platform | null) ?? null)
+          : null,
         // Why: WSL UNC worktrees are repo-scoped WSL environments. New default
         // terminals should enter that distro even when the global Windows shell
         // preference is PowerShell or cmd.exe.
@@ -792,7 +846,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         customLabel: tab.customTitle,
         color: tab.color,
         sortOrder: cleanedGroupOrder.length,
-        createdAt: tab.createdAt
+        createdAt: tab.createdAt,
+        // Why: agent launches open in chat when the opt-in default is on;
+        // omitted for all other tabs so they keep the implicit 'terminal' mode.
+        ...(options?.viewMode ? { viewMode: options.viewMode } : {})
       }
       const nextGroupOrder = dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
       const nextRecent = shouldActivate
@@ -964,6 +1021,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
+      const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
+      delete nextPendingInitialCwdByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
       delete nextPendingSetupSplitByTabId[tabId]
       const nextPendingIssueCommandSplitByTabId = { ...s.pendingIssueCommandSplitByTabId }
@@ -1038,6 +1097,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
         pendingStartupByTabId: nextPendingStartupByTabId,
+        pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
         cacheTimerByKey: nextCacheTimer,
@@ -1053,6 +1113,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
     get().dropAgentStatusByTabPrefix(tabId)
+    // Why: closing a tab permanently retires every pane under it (a reopen mints
+    // a fresh leafId at epoch 0), so drop the panes' hibernation output epochs to
+    // keep that module-level map from growing for the renderer's whole lifetime.
+    forgetAgentHibernationTabOutput(tabId)
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
       const workspaceItem = tabs.find(
         (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
@@ -2373,6 +2437,28 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }))
   },
 
+  queueTabInitialCwd: (tabId, cwd) => {
+    set((s) => ({
+      pendingInitialCwdByTabId: {
+        ...s.pendingInitialCwdByTabId,
+        [tabId]: cwd
+      }
+    }))
+  },
+
+  consumeTabInitialCwd: (tabId) => {
+    const pending = get().pendingInitialCwdByTabId[tabId]
+    if (!pending) {
+      return null
+    }
+    set((s) => {
+      const next = { ...s.pendingInitialCwdByTabId }
+      delete next[tabId]
+      return { pendingInitialCwdByTabId: next }
+    })
+    return pending
+  },
+
   consumeTabStartupCommand: (tabId) => {
     const pending = get().pendingStartupByTabId[tabId]
     if (!pending) {
@@ -2780,7 +2866,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               const tab = Object.values(tabsByWorktree)
                 .flat()
                 .find((entry) => entry.id === tabId)
-              return [tabId, tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized]
+              const sanitized = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
+              const activeLeafId = sanitized.root
+                ? resolvePtyBoundActiveLeafId({
+                    root: sanitized.root,
+                    activeLeafId: sanitized.activeLeafId,
+                    ptyIdsByLeafId: sanitized.ptyIdsByLeafId
+                  })
+                : sanitized.activeLeafId
+              return [tabId, { ...sanitized, activeLeafId }]
             })
         )
       }

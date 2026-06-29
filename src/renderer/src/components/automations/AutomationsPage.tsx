@@ -68,7 +68,7 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/proto
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { Repo, TuiAgent, TuiAgentProfile, Worktree } from '../../../../shared/types'
+import type { OrcaHooks, Repo, TuiAgent, TuiAgentProfile, Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationCronSchedule,
@@ -111,9 +111,17 @@ import {
 } from './AutomationEditorDialog'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { AutomationRunHistory } from './AutomationRunHistory'
+import {
+  getAutomationSetupDecisionDraftValue,
+  getVisibleAutomationSetupDecision,
+  resolveAutomationSetupDecisionForSave
+} from './automation-setup-decision'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
   getRepoBackedProviderAvailability,
   type RuntimeProviderPreflightStatus
@@ -170,6 +178,16 @@ type SelectedExternalRunPage = {
 
 function getAutomationHostTargetKey(target: AutomationHostTarget): string {
   return target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
+}
+
+function getAutomationHostTargetFromKey(key: string | null): AutomationHostTarget | null {
+  if (!key) {
+    return null
+  }
+  if (key.startsWith('environment:')) {
+    return { kind: 'environment', environmentId: key.slice('environment:'.length) }
+  }
+  return { kind: 'local' }
 }
 
 function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
@@ -459,6 +477,15 @@ export default function AutomationsPage(): React.JSX.Element {
   const completionInFlightRef = useRef<Set<string>>(new Set())
   const rerunRunIdsInFlightRef = useRef<Set<string>>(new Set())
   const workspaceNameCacheRef = useRef<Map<string, string>>(new Map())
+  const setupDecisionPolicyDefaultRef = useRef<AutomationDraft['setupDecision']>(undefined)
+  const setupDecisionDefaultSignatureRef = useRef<string | null>(null)
+  const setupDecisionTouchedRef = useRef(false)
+  const automationHookCheckPromisesRef = useRef<
+    Map<string, Promise<{ hooks: OrcaHooks | null; ok: boolean }>>
+  >(new Map())
+  const [automationYamlHooksByRepoKey, setAutomationYamlHooksByRepoKey] = useState<
+    Record<string, OrcaHooks | null>
+  >({})
   const [draft, setDraft] = useState<AutomationDraft>({
     name: '',
     prompt: '',
@@ -467,6 +494,7 @@ export default function AutomationsPage(): React.JSX.Element {
     workspaceMode: 'existing',
     workspaceId: '',
     baseBranch: '',
+    setupDecision: undefined,
     reuseSession: false,
     precheckCommand: '',
     precheckTimeoutSeconds: '60',
@@ -544,6 +572,76 @@ export default function AutomationsPage(): React.JSX.Element {
       }),
     [selectedAutomationRuns.runs, worktreeMap]
   )
+  const getDraftSetupDecisionDefault = useCallback(
+    (
+      candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>
+    ): AutomationDraft['setupDecision'] => {
+      const settingsForRepo = getSettingsForRepoRuntimeOwner(
+        { repos, settings },
+        candidate.projectId
+      )
+      const hookKey = `${settingsForRepo.activeRuntimeEnvironmentId ?? 'local'}:${candidate.projectId}`
+      return getVisibleAutomationSetupDecision({
+        createTarget,
+        workspaceMode: candidate.workspaceMode,
+        repoId: candidate.projectId,
+        repos,
+        projectHostSetups,
+        yamlHooks: automationYamlHooksByRepoKey[hookKey]
+      })
+    },
+    [automationYamlHooksByRepoKey, createTarget, projectHostSetups, repos, settings]
+  )
+  const getAutomationHooksCacheKey = useCallback(
+    (repoId: string): string => {
+      const settingsForRepo = getSettingsForRepoRuntimeOwner({ repos, settings }, repoId)
+      return `${settingsForRepo.activeRuntimeEnvironmentId ?? 'local'}:${repoId}`
+    },
+    [repos, settings]
+  )
+  const loadAutomationYamlHooksForRepo = useCallback(
+    async (repoId: string): Promise<OrcaHooks | null> => {
+      const key = getAutomationHooksCacheKey(repoId)
+      if (Object.prototype.hasOwnProperty.call(automationYamlHooksByRepoKey, key)) {
+        return automationYamlHooksByRepoKey[key] ?? null
+      }
+      const existingPromise = automationHookCheckPromisesRef.current.get(key)
+      if (existingPromise) {
+        return (await existingPromise).hooks
+      }
+      const settingsForRepo = getSettingsForRepoRuntimeOwner({ repos, settings }, repoId)
+      const promise = checkRuntimeHooks(settingsForRepo, repoId)
+        .then((result) => ({
+          hooks: result.status === 'error' ? null : ((result.hooks as OrcaHooks | null) ?? null),
+          ok: result.status !== 'error'
+        }))
+        .catch(() => ({ hooks: null, ok: false }))
+      automationHookCheckPromisesRef.current.set(key, promise)
+      const { hooks, ok } = await promise
+      automationHookCheckPromisesRef.current.delete(key)
+      if (!ok) {
+        return hooks
+      }
+      setAutomationYamlHooksByRepoKey((current) =>
+        Object.prototype.hasOwnProperty.call(current, key) ? current : { ...current, [key]: hooks }
+      )
+      return hooks
+    },
+    [automationYamlHooksByRepoKey, getAutomationHooksCacheKey, repos, settings]
+  )
+  const getDraftSetupDecisionDefaultSignature = useCallback(
+    (candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>): string =>
+      [
+        createTarget,
+        candidate.workspaceMode,
+        candidate.projectId,
+        getDraftSetupDecisionDefault(candidate) ?? 'none'
+      ].join(':'),
+    [createTarget, getDraftSetupDecisionDefault]
+  )
+  const markSetupDecisionTouched = useCallback((): void => {
+    setupDecisionTouchedRef.current = true
+  }, [])
   // Why: keep the detail tab scoped even while the selected-run fetch catches up.
   const selectedRunsSource =
     selected && selectedAutomationRuns.automationId === selected.id
@@ -559,6 +657,10 @@ export default function AutomationsPage(): React.JSX.Element {
   const worktrees = useMemo(
     () => worktreesByRepo[draft.projectId] ?? [],
     [draft.projectId, worktreesByRepo]
+  )
+  const automationHostTarget = useMemo(
+    () => getAutomationHostTargetFromKey(automationHostTargetKey),
+    [automationHostTargetKey]
   )
 
   useEffect(() => {
@@ -814,6 +916,7 @@ export default function AutomationsPage(): React.JSX.Element {
         projectHostSetups,
         sshConnectionStates,
         runtimeStatusByEnvironmentId,
+        automationHostTarget,
         sourceHostAvailability: automationSourceHostAvailabilityById.get(selected.id)
       })
     : null
@@ -982,7 +1085,7 @@ export default function AutomationsPage(): React.JSX.Element {
       pendingAutomationRunNavigation.hostId
         ? getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
         : selected
-          ? getAutomationOwnerTarget(selected)
+          ? getAutomationOwnerTarget(selected, automationHostTarget)
           : getAutomationListTarget(settings)
     void listAutomationRunsForTarget(target, automationId).then((nextRuns) => {
       if (!cancelled) {
@@ -992,7 +1095,7 @@ export default function AutomationsPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [pendingAutomationRunNavigation, selected, selected?.id, runs, settings])
+  }, [automationHostTarget, pendingAutomationRunNavigation, selected, selected?.id, runs, settings])
 
   useEffect(() => {
     const onAutomationsChanged = (): void => {
@@ -1100,6 +1203,50 @@ export default function AutomationsPage(): React.JSX.Element {
     }
   }, [draft.projectId, draft.workspaceId, worktreesByRepo])
 
+  useEffect(() => {
+    if (
+      !createOpen ||
+      createTarget !== 'orca' ||
+      draft.workspaceMode !== 'new_per_run' ||
+      !draft.projectId
+    ) {
+      return
+    }
+    void loadAutomationYamlHooksForRepo(draft.projectId)
+  }, [
+    createOpen,
+    createTarget,
+    draft.projectId,
+    draft.workspaceMode,
+    loadAutomationYamlHooksForRepo
+  ])
+
+  useEffect(() => {
+    if (!createOpen) {
+      setupDecisionPolicyDefaultRef.current = undefined
+      setupDecisionDefaultSignatureRef.current = null
+      setupDecisionTouchedRef.current = false
+      return
+    }
+    const nextDefault = getDraftSetupDecisionDefault(draft)
+    const nextSignature = getDraftSetupDecisionDefaultSignature(draft)
+    if (setupDecisionDefaultSignatureRef.current !== nextSignature) {
+      setupDecisionDefaultSignatureRef.current = nextSignature
+      setupDecisionTouchedRef.current = false
+    }
+    const previousDefault = setupDecisionPolicyDefaultRef.current
+    setupDecisionPolicyDefaultRef.current = nextDefault
+    const shouldApplyPolicyDefault =
+      !setupDecisionTouchedRef.current &&
+      (nextDefault === undefined ||
+        draft.setupDecision === undefined ||
+        draft.setupDecision === previousDefault)
+    if (!shouldApplyPolicyDefault || draft.setupDecision === nextDefault) {
+      return
+    }
+    setDraft((current) => ({ ...current, setupDecision: nextDefault }))
+  }, [createOpen, draft, getDraftSetupDecisionDefault, getDraftSetupDecisionDefaultSignature])
+
   const applyTemplateToDraft = useCallback((template: AutomationTemplate): void => {
     setDraft((current) => ({
       ...current,
@@ -1122,6 +1269,7 @@ export default function AutomationsPage(): React.JSX.Element {
         ...current,
         agentId: 'hermes',
         workspaceMode: 'existing',
+        setupDecision: undefined,
         reuseSession: false
       }))
     }
@@ -1141,6 +1289,7 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,
       baseBranch: '',
+      setupDecision: undefined,
       reuseSession: false,
       precheckCommand: '',
       precheckTimeoutSeconds: '60',
@@ -1195,6 +1344,10 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: latest.workspaceMode,
       workspaceId: latest.workspaceId ?? '',
       baseBranch: latest.baseBranch ?? '',
+      setupDecision: getAutomationSetupDecisionDraftValue({
+        workspaceMode: latest.workspaceMode,
+        persistedSetupDecision: latest.setupDecision
+      }),
       reuseSession: latest.workspaceMode === 'existing' && latest.reuseSession,
       precheckCommand: latest.precheck?.command ?? '',
       precheckTimeoutSeconds: String(latest.precheck?.timeoutSeconds ?? 60),
@@ -1242,6 +1395,7 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: 'existing',
       workspaceId,
       baseBranch: '',
+      setupDecision: undefined,
       reuseSession: false,
       precheckCommand: '',
       precheckTimeoutSeconds: '60',
@@ -1448,6 +1602,28 @@ export default function AutomationsPage(): React.JSX.Element {
         repos,
         projectHostSetups
       })
+      let setupDecision = resolveAutomationSetupDecisionForSave({
+        createTarget,
+        workspaceMode: draft.workspaceMode,
+        repoId: draft.projectId,
+        repos,
+        projectHostSetups,
+        yamlHooks:
+          createTarget === 'orca' && draft.workspaceMode === 'new_per_run'
+            ? await loadAutomationYamlHooksForRepo(draft.projectId)
+            : null,
+        draftSetupDecision: draft.setupDecision
+      })
+      if (setupDecision === 'run') {
+        const trustDecision = await ensureHooksConfirmed(
+          useAppStore.getState(),
+          draft.projectId,
+          'setup'
+        )
+        if (trustDecision === 'skip') {
+          setupDecision = 'skip'
+        }
+      }
       if (!runContext) {
         toast.error(
           translate(
@@ -1480,6 +1656,7 @@ export default function AutomationsPage(): React.JSX.Element {
         workspaceMode: draft.workspaceMode,
         workspaceId: draft.workspaceId,
         baseBranch: draft.baseBranch.trim() || null,
+        setupDecision,
         reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
         timezone,
         missedRunGraceMinutes
@@ -1491,7 +1668,7 @@ export default function AutomationsPage(): React.JSX.Element {
       }
       const automation = editingAutomationId
         ? currentAutomation
-          ? await updateAutomationForTarget(currentAutomation, updates)
+          ? await updateAutomationForTarget(currentAutomation, updates, automationHostTarget)
           : await window.api.automations.update({
               id: editingAutomationId,
               updates
@@ -1506,6 +1683,7 @@ export default function AutomationsPage(): React.JSX.Element {
             workspaceMode: draft.workspaceMode,
             workspaceId: draft.workspaceId,
             baseBranch: draft.baseBranch.trim() || null,
+            setupDecision,
             reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
             timezone,
             rrule,
@@ -1552,12 +1730,16 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const toggleAutomation = async (automation: Automation): Promise<void> => {
-    await updateAutomationForTarget(automation, { enabled: !automation.enabled })
+    await updateAutomationForTarget(
+      automation,
+      { enabled: !automation.enabled },
+      automationHostTarget
+    )
     await refresh()
   }
 
   const deleteAutomation = async (automation: Automation): Promise<void> => {
-    await deleteAutomationForTarget(automation)
+    await deleteAutomationForTarget(automation, automationHostTarget)
     if (useAppStore.getState().selectedAutomationId === automation.id) {
       selectAutomationId(null)
     }
@@ -1629,13 +1811,14 @@ export default function AutomationsPage(): React.JSX.Element {
       projectHostSetups,
       sshConnectionStates,
       runtimeStatusByEnvironmentId,
+      automationHostTarget,
       sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
     })
     if (!availability.canRunNow) {
       toast.error(availability.message)
       return
     }
-    await runAutomationNowForTarget(automation)
+    await runAutomationNowForTarget(automation, automationHostTarget)
     useAppStore.getState().recordFeatureInteraction('automation-run')
     await hydratePersistedUIState()
     await refresh()
@@ -1653,7 +1836,7 @@ export default function AutomationsPage(): React.JSX.Element {
     rerunRunIdsInFlightRef.current.add(runId)
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
     try {
-      await runAutomationNowForTarget(automation)
+      await runAutomationNowForTarget(automation, automationHostTarget)
       await hydratePersistedUIState()
       await refresh()
       toast.message(
@@ -2028,6 +2211,9 @@ export default function AutomationsPage(): React.JSX.Element {
         isEditingExternal={editingExternalTarget !== null}
         createTarget={createTarget}
         repos={repos}
+        projectHostSetups={projectHostSetups}
+        automationYamlHooksByRepoKey={automationYamlHooksByRepoKey}
+        getAutomationHooksCacheKey={getAutomationHooksCacheKey}
         repoMap={repoMap}
         worktrees={worktrees}
         settings={settings}
@@ -2037,6 +2223,7 @@ export default function AutomationsPage(): React.JSX.Element {
         onCreateTargetChange={handleCreateTargetChange}
         onOpenChange={setCreateOpen}
         onDraftChange={setDraft}
+        onSetupDecisionTouched={markSetupDecisionTouched}
         onApplyTemplate={applyTemplateToDraft}
         onSave={() => void saveAutomation()}
       />
@@ -2230,6 +2417,7 @@ export default function AutomationsPage(): React.JSX.Element {
                 projectHostSetups,
                 sshConnectionStates,
                 runtimeStatusByEnvironmentId,
+                automationHostTarget,
                 sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
               })
               const workspaceLabel =

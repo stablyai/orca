@@ -197,7 +197,8 @@ async function executeWorktreeCreation(
       startupOpt,
       result.setup,
       undefined,
-      result.defaultTabs
+      result.defaultTabs,
+      { activateCreatedTabs: false }
     )
   }
 

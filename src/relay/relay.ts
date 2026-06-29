@@ -57,6 +57,7 @@ import {
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
@@ -536,8 +537,10 @@ async function main(): Promise<void> {
       // Why: source-dir defaulting is keyed on which Pi-compatible agent is
       // being launched (Pi vs OMP). Install Orca's guarded extension into that
       // real remote agent dir without redirecting PI_CODING_AGENT_DIR.
-      const kind = detectPiAgentKindFromCommand(ctx.command)
-      const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
+      const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command)
+      const kind = detectPiAgentKindFromCommand(launchCommandHint)
+      const hasLaunchCommand =
+        typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
       if (kind === 'pi') {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')

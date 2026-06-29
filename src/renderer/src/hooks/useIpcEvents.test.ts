@@ -13,6 +13,7 @@ import {
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 
 const { closeTerminalTabMock } = vi.hoisted(() => ({
   closeTerminalTabMock: vi.fn()
@@ -1341,7 +1342,11 @@ describe('useIpcEvents updater integration', () => {
         ]
       },
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
-      settings: { terminalFontSize: 13 }
+      settings: {
+        terminalFontSize: 13,
+        experimentalNativeChat: false,
+        openAgentTabsInChatByDefault: false
+      }
     }
 
     vi.doMock('react', async () => {
@@ -1621,7 +1626,7 @@ describe('useIpcEvents updater integration', () => {
     expect(setSshConnectionState).toHaveBeenCalledWith('conn-refresh-failure', refreshFailureState)
   })
 
-  it('activates the target worktree when CLI creates a terminal there', async () => {
+  it('surfaces terminal creates without stealing focus unless requested', async () => {
     const createTab = vi.fn(() => ({ id: 'tab-new' }))
     const setActiveView = vi.fn()
     const setActiveWorktree = vi.fn()
@@ -1690,7 +1695,11 @@ describe('useIpcEvents updater integration', () => {
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
       clearTabPtyId: vi.fn(),
-      settings: { terminalFontSize: 13 }
+      settings: {
+        terminalFontSize: 13,
+        experimentalNativeChat: false,
+        openAgentTabsInChatByDefault: false
+      }
     }
     const createTerminalListenerRef: {
       current:
@@ -1703,6 +1712,7 @@ describe('useIpcEvents updater integration', () => {
             title?: string
             ptyId?: string
             activate?: boolean
+            presentation?: 'background' | 'focused'
             tabId?: string
             leafId?: string
             splitFromLeafId?: string
@@ -1728,6 +1738,7 @@ describe('useIpcEvents updater integration', () => {
             launchAgent?: TuiAgent
             title?: string
             activate?: boolean
+            presentation?: 'background' | 'focused'
           }) => void)
         | null
     } = { current: null }
@@ -1843,6 +1854,7 @@ describe('useIpcEvents updater integration', () => {
               title?: string
               ptyId?: string
               activate?: boolean
+              presentation?: 'background' | 'focused'
               tabId?: string
               leafId?: string
               splitFromLeafId?: string
@@ -1869,6 +1881,7 @@ describe('useIpcEvents updater integration', () => {
               launchAgent?: TuiAgent
               title?: string
               activate?: boolean
+              presentation?: 'background' | 'focused'
             }) => void
           ) => {
             requestTerminalCreateListenerRef.current = listener
@@ -1997,7 +2010,11 @@ describe('useIpcEvents updater integration', () => {
 
     createWebRuntimeSessionTerminal.mockClear()
     createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
     setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
 
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2005,13 +2022,16 @@ describe('useIpcEvents updater integration', () => {
       command: 'opencode'
     })
 
-    expect(setActiveView).toHaveBeenCalledWith('terminal')
-    expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
-    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
-    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
-    expect(createTab).toHaveBeenCalledWith('wt-2')
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
@@ -2019,6 +2039,30 @@ describe('useIpcEvents updater integration', () => {
       recordInteraction: false
     })
     expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      title: 'Runner',
+      command: 'opencode',
+      presentation: 'focused'
+    })
+
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
+    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, undefined)
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
 
     if (typeof requestTerminalCreateListenerRef.current !== 'function') {
       throw new Error('Expected request-terminal-create listener to be registered')
@@ -2043,16 +2087,25 @@ describe('useIpcEvents updater integration', () => {
       title: 'Shell'
     })
 
-    expect(setActiveView).toHaveBeenCalledWith('terminal')
-    expect(setActiveWorktree).toHaveBeenCalledWith('wt-3')
-    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-3')
-    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-3')
-    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, undefined, undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-3')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-3' }
+      })
+    )
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Shell', {
       recordInteraction: false
     })
@@ -2074,6 +2127,11 @@ describe('useIpcEvents updater integration', () => {
     queueTabStartupCommand.mockClear()
     focusRuntimeTerminalSurface.mockClear()
     focusTerminalTabSurface.mockClear()
+    storeState.settings = {
+      ...storeState.settings,
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
       worktreeId: 'wt-2',
@@ -2090,7 +2148,9 @@ describe('useIpcEvents updater integration', () => {
 
     expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, {
       activate: false,
-      recordInteraction: false
+      recordInteraction: false,
+      launchAgent: 'codex',
+      viewMode: 'chat'
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -2098,9 +2158,9 @@ describe('useIpcEvents updater integration', () => {
     expect(recordWorktreeVisit).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
-    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
-    expect(focusRuntimeTerminalSurface).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', undefined)
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'orca-background-mount-terminal-worktree',
@@ -2172,6 +2232,36 @@ describe('useIpcEvents updater integration', () => {
     storeState.isNavigatingHistory = false
 
     createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    replyTerminalCreate.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-renderer-backed-background',
+      worktreeId: 'wt-2',
+      title: 'Codex',
+      command: 'codex',
+      presentation: 'background'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-renderer-backed-background',
+      tabId: 'tab-new',
+      title: 'Codex'
+    })
+
+    createTab.mockClear()
     registerAgentLaunchConfig.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2186,8 +2276,15 @@ describe('useIpcEvents updater integration', () => {
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
-      activate: true
+      activate: false,
+      launchAgent: 'codex',
+      viewMode: 'chat'
     })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(registerAgentLaunchConfig).toHaveBeenCalledWith(
       makePaneKey('tab-new', '55555555-5555-4555-8555-555555555555'),
       {
@@ -2223,6 +2320,30 @@ describe('useIpcEvents updater integration', () => {
     expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
     expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-bg-3',
+      presentation: 'background',
+      tabId: 'tab-cli-bg-reveal'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      initialPtyId: 'pty-bg-3',
+      activate: false,
+      id: 'tab-cli-bg-reveal'
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
 
     storeState.tabsByWorktree = {
@@ -2231,6 +2352,7 @@ describe('useIpcEvents updater integration', () => {
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
     createTab.mockClear()
     setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
     setTabCustomTitle.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2239,7 +2361,8 @@ describe('useIpcEvents updater integration', () => {
     })
 
     expect(createTab).not.toHaveBeenCalled()
-    expect(setActiveTab).toHaveBeenCalledWith('tab-existing')
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(setTabCustomTitle).not.toHaveBeenCalled()
 
     createTerminalListenerRef.current({
@@ -2272,6 +2395,9 @@ describe('useIpcEvents updater integration', () => {
     updateTabPtyId.mockClear()
     setTabLayout.mockClear()
     setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
     replyTerminalCreate.mockClear()
     createTerminalListenerRef.current({
       requestId: 'req-adopt-pending',
@@ -2294,7 +2420,10 @@ describe('useIpcEvents updater integration', () => {
         [pendingLeafId]: 'serve-cf39bedb-a33a-417c-9ab6-f304dc27a6c0'
       }
     })
-    expect(setActiveTab).toHaveBeenCalledWith(pendingTabId)
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith(pendingTabId, pendingLeafId)
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-adopt-pending',
       tabId: pendingTabId,
@@ -2325,7 +2454,8 @@ describe('useIpcEvents updater integration', () => {
       leafId: 'leaf-split',
       splitFromLeafId: 'leaf-source',
       splitDirection: 'vertical',
-      splitTelemetrySource: 'contextual_tour'
+      splitTelemetrySource: 'contextual_tour',
+      presentation: 'focused'
     })
 
     expect(createTab).not.toHaveBeenCalled()
@@ -4082,6 +4212,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     lastAssistantMessage?: string
     interrupted?: boolean
     terminalHandle?: string
+    launchToken?: string
+    providerSession?: { key: 'session_id'; id: string }
     orchestration?: {
       taskId?: string
       dispatchId?: string
@@ -4149,6 +4281,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {},
+      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       recentlyClosedAgentStatusTabIds: {},
       repos: [],
       worktreesByRepo: {},
@@ -4686,6 +4819,253 @@ describe('useIpcEvents agent status snapshot integration', () => {
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
       expectWorktreeRouting('wt-1'),
       undefined
+    )
+  })
+
+  it('suppresses auto-approved Codex permission attention before status and title mutation', async () => {
+    const setAgentStatus = vi.fn()
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
+      metadata.launchToken === 'launch-yolo'
+        ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
+        : undefined
+    )
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      updateTabTitle,
+      getAgentLaunchConfigForStatusMetadata,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'waiting',
+      prompt: 'auto-approved permission',
+      agentType: 'codex',
+      launchToken: 'launch-yolo',
+      receivedAt: 1_700_000_000_300,
+      stateStartedAt: 1_699_999_999_300
+    })
+
+    expect(getAgentLaunchConfigForStatusMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: FUTURE_PANE_KEY, launchToken: 'launch-yolo' })
+    )
+    expect(setAgentStatus).not.toHaveBeenCalled()
+    expect(updateTabTitle).not.toHaveBeenCalled()
+    expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
+  })
+
+  it('keeps manual or missing-attribution Codex permission attention actionable', async () => {
+    const setAgentStatus = vi.fn()
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      updateTabTitle,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'waiting',
+      prompt: 'manual permission',
+      agentType: 'codex',
+      receivedAt: 1_700_000_000_400,
+      stateStartedAt: 1_699_999_999_400
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'waiting',
+        prompt: 'manual permission',
+        agentType: 'codex'
+      }),
+      'Codex - action required',
+      { updatedAt: 1_700_000_000_400, stateStartedAt: 1_699_999_999_400 },
+      expectWorktreeRouting('wt-1'),
+      undefined
+    )
+    expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required')
+    expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps auto-approved Codex done statuses on the completion path', async () => {
+    const setAgentStatus = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
+      metadata.launchToken === 'launch-yolo'
+        ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
+        : undefined
+    )
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      getAgentLaunchConfigForStatusMetadata,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationSettings: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'done',
+      prompt: 'auto-approved task',
+      agentType: 'codex',
+      launchToken: 'launch-yolo',
+      lastAssistantMessage: 'Done.',
+      receivedAt: 1_700_000_000_500,
+      stateStartedAt: 1_699_999_999_500
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
+    expect(observeAgentHookCompletionForNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: FUTURE_PANE_KEY,
+        worktreeId: 'wt-1',
+        payload: expect.objectContaining({ state: 'done', agentType: 'codex' })
+      })
     )
   })
 

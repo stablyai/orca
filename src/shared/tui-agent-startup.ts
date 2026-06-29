@@ -3,7 +3,7 @@ import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent,
-  type SleepingAgentLaunchConfig,
+  type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { resolveTuiAgentBaseAgent, type TuiAgentProfileVariables } from './tui-agent-profiles'
@@ -12,7 +12,7 @@ import {
   commandSeparator,
   quoteStartupArg,
   resolveStartupShell,
-  type AgentStartupShell,
+  type AgentStartupShell
 } from './tui-agent-startup-shell'
 import { resolveAgentStartupBaseCommand } from './tui-agent-startup-command'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
@@ -24,7 +24,7 @@ export {
   quoteStartupArg,
   resolveStartupShell,
   type AgentCliArgsPlan,
-  type AgentStartupShell,
+  type AgentStartupShell
 } from './tui-agent-startup-shell'
 
 const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
@@ -51,7 +51,7 @@ function buildSleepingAgentLaunchConfig(args: {
     agentArgs: args.agentArgs ?? '',
     // Why: startupPlan.env may include prompt transport or pane identity env; the
     // durable resume snapshot is limited to Orca-managed agent env inputs.
-    agentEnv: args.agentEnv ? { ...args.agentEnv } : {},
+    agentEnv: args.agentEnv ? { ...args.agentEnv } : {}
   }
 }
 
@@ -66,14 +66,11 @@ export function buildAgentStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   agentProfiles?: readonly TuiAgentProfile[] | null
   variables?: TuiAgentProfileVariables | null
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must be skipped for remote launches. */
+  isRemote?: boolean
 }): AgentStartupPlan | null {
-  const {
-    agent,
-    prompt,
-    cmdOverrides,
-    platform,
-    allowEmptyPromptLaunch = false,
-  } = args
+  const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const baseAgent = resolveTuiAgentBaseAgent(agent, args.agentProfiles)
@@ -89,13 +86,14 @@ export function buildAgentStartupPlan(args: {
     agentArgs: args.agentArgs,
     agentProfiles: args.agentProfiles,
     variables: args.variables,
+    isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
     return null
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    agentCommand: baseCommand.command,
+    agentCommand: baseCommand.command
   })
 
   if (!trimmedPrompt) {
@@ -108,7 +106,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
 
@@ -121,10 +119,8 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(baseAgent === 'codex'
-        ? { startupCommandDelivery: 'shell-ready' as const }
-        : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+      ...(baseAgent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
 
@@ -135,7 +131,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
 
@@ -146,7 +142,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
 
@@ -157,7 +153,7 @@ export function buildAgentStartupPlan(args: {
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
 
@@ -167,7 +163,7 @@ export function buildAgentStartupPlan(args: {
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt,
     launchConfig,
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
 
@@ -182,6 +178,8 @@ export function buildAgentResumeStartupPlan(args: {
   agentProfiles?: readonly TuiAgentProfile[] | null
   variables?: TuiAgentProfileVariables | null
   agentCommand?: string | null
+  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  isRemote?: boolean
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession)
   if (!argv) {
@@ -200,28 +198,27 @@ export function buildAgentResumeStartupPlan(args: {
         agentArgs: args.agentArgs,
         agentProfiles: args.agentProfiles,
         variables: args.variables,
+        isRemote: args.isRemote
       })
   if (!baseCommand.ok) {
     return null
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    agentCommand: baseCommand.command,
+    agentCommand: baseCommand.command
   })
   const resumeArgs = argv
     .slice(1)
     .map((arg) => quoteStartupArg(arg, shell))
     .join(' ')
-  const launchCommand = resumeArgs
-    ? `${baseCommand.command} ${resumeArgs}`
-    : baseCommand.command
+  const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
   return {
     agent: args.agent,
     launchCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
 
@@ -236,14 +233,14 @@ export type AgentDraftLaunchPlan = {
 
 function inlineDraftPlanFitsPlatform(
   plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform,
+  platform: NodeJS.Platform
 ): boolean {
   if (platform !== 'win32') {
     return true
   }
   const envChars = Object.entries(plan.env ?? {}).reduce(
     (total, [key, value]) => total + key.length + value.length,
-    0,
+    0
   )
   // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
   // generated drafts should use the existing post-ready paste fallback.
@@ -260,6 +257,8 @@ export function buildAgentDraftLaunchPlan(args: {
   agentEnv?: Record<string, string> | null
   agentProfiles?: readonly TuiAgentProfile[] | null
   variables?: TuiAgentProfileVariables | null
+  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -280,13 +279,14 @@ export function buildAgentDraftLaunchPlan(args: {
     agentArgs: args.agentArgs,
     agentProfiles: args.agentProfiles,
     variables: args.variables,
+    isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
     return null
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    agentCommand: baseCommand.command,
+    agentCommand: baseCommand.command
   })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
@@ -297,10 +297,8 @@ export function buildAgentDraftLaunchPlan(args: {
       expectedProcess: config.expectedProcess,
       launchConfig,
       // Why: native draft flags carry user text on argv and must survive rc-file startup.
-      ...(baseAgent === 'codex'
-        ? { startupCommandDelivery: 'shell-ready' as const }
-        : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {}),
+      ...(baseAgent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
+      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   } else if (config.draftPromptEnvVar) {
     const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
@@ -309,7 +307,7 @@ export function buildAgentDraftLaunchPlan(args: {
       launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
       launchConfig,
-      env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed },
+      env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
   if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {

@@ -67,6 +67,26 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('forwards explicit shellOverride and terminalWindowsWslDistro to the relay mux', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-2' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        shellOverride: 'powershell.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        shellOverride: 'powershell.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+    })
+
     it('preserves an explicit remote Powerlevel10k wizard env value', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
@@ -99,6 +119,28 @@ describe('SshPtyProvider', () => {
         rows: 40,
         cwd: undefined,
         env: {}
+      })
+    })
+
+    it('forwards provider command delivery to the relay', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-provider-command' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        command: 'echo from-runtime',
+        commandDelivery: 'provider',
+        startupCommandDelivery: 'shell-ready'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.spawn', {
+        cols: 120,
+        rows: 40,
+        cwd: undefined,
+        env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' },
+        command: 'echo from-runtime',
+        commandDelivery: 'provider',
+        startupCommandDelivery: 'shell-ready'
       })
     })
 

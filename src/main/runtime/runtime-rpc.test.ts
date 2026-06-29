@@ -2498,7 +2498,8 @@ describe('OrcaRuntimeRpcServer', () => {
         worktree: 'id:repo-1::/tmp/worktree-a',
         command: "claude 'work on the issue'",
         tabId: 'laptop-tab',
-        leafId
+        leafId,
+        presentation: 'background'
       }
     })
 
@@ -2512,6 +2513,9 @@ describe('OrcaRuntimeRpcServer', () => {
         }
       }
     })
+    expect(
+      (createResponse.result as { terminal?: { warning?: string } } | undefined)?.terminal?.warning
+    ).toBeUndefined()
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 456)
     runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', 456)
 

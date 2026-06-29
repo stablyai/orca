@@ -31,6 +31,7 @@ export type WorktreeAgentStartupPlanTemplate = {
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   agentProfiles: readonly TuiAgentProfile[]
   platform: NodeJS.Platform
+  isRemote?: boolean
 }
 
 /**
