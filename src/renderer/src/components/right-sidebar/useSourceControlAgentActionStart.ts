@@ -6,6 +6,8 @@ import type {
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { useAppStore } from '@/store'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
@@ -22,7 +24,7 @@ type UseSourceControlAgentActionStartArgs = {
   actionId: SourceControlLaunchActionId
   repoId?: string | null
   settings: GlobalSettings | null
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
+  repo: Pick<Repo, 'id' | 'sourceControlAi' | 'connectionId' | 'executionHostId'> | null
   worktreeId?: string | null
   groupId?: string | null
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -97,6 +99,9 @@ export function useSourceControlAgentActionStart({
   const buildPlan = useCallback(
     async (agentsOverride?: TuiAgent[]): Promise<SourceControlAgentActionDeliveryPlanState> => {
       const currentDetectedAgents = agentsOverride ?? (await refreshDetectedAgents())
+      const projectRuntime = repo?.connectionId
+        ? undefined
+        : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), worktreeId)
       return buildSourceControlAgentDeliveryPlan({
         selectedAgent,
         commandInput,
@@ -105,6 +110,8 @@ export function useSourceControlAgentActionStart({
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
         launchPlatform,
+        launchHost: repo,
+        projectRuntime,
         isRemote
       })
     },
@@ -116,6 +123,8 @@ export function useSourceControlAgentActionStart({
       refreshDetectedAgents,
       selectedAgent,
       launchPlatform,
+      repo,
+      worktreeId,
       isRemote
     ]
   )

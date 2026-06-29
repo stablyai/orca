@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-types'
+import { getCodexStartupRetryInnerCommand } from '../../../shared/codex-startup-retry'
 import {
   buildAiVaultResumeCommandForWorktree,
   buildAiVaultResumeStartupForWorktree,
@@ -281,17 +282,20 @@ describe('ai vault resume command runtime', () => {
       worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
     })
 
-    expect(
-      buildAiVaultResumeCommandForWorktree({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'codex',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
-        }
-      })
-    ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
+    const command = buildAiVaultResumeCommandForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: {
+        agent: 'codex',
+        sessionId: 'session one',
+        cwd: '/home/alice/repo',
+        codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+      }
+    })
+    const prefix = "cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' "
+    expect(command.startsWith(prefix)).toBe(true)
+    expect(getCodexStartupRetryInnerCommand(command.slice(prefix.length))).toBe(
+      "codex 'resume' 'session one'"
+    )
   })
 })

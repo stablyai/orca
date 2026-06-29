@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getCodexStartupRetryInnerCommand } from '../../../../shared/codex-startup-retry'
 import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type * as NewWorkspaceModule from '@/lib/new-workspace'
@@ -78,6 +79,23 @@ describe('submitFolderWorkspaceCreate', () => {
     mocks.ensureAgentStartupInTerminal.mockReset()
     Reflect.deleteProperty(window, 'api')
     vi.restoreAllMocks()
+  })
+
+  it('uses host path planning for runtime-owned project groups', () => {
+    expect(
+      getFolderWorkspaceAgentLaunchPlatform({
+        ...makeProjectGroup(),
+        executionHostId: 'runtime:env-1',
+        parentPath: '/workspace/root'
+      })
+    ).toBe('linux')
+    expect(
+      getFolderWorkspaceAgentLaunchPlatform({
+        ...makeProjectGroup(),
+        executionHostId: 'runtime:env-1',
+        parentPath: String.raw`C:\Users\alice`
+      })
+    ).toBe('win32')
   })
 
   it('closes the composer after creation even when reveal fails', async () => {
@@ -160,8 +178,9 @@ describe('submitFolderWorkspaceCreate', () => {
       })
     )
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toContain('--model')
-    expect(startup?.command).toContain('gpt-5.4')
+    const innerCommand = getCodexStartupRetryInnerCommand(startup?.command)
+    expect(innerCommand).toContain('--model')
+    expect(innerCommand).toContain('gpt-5.4')
     expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
   })
 
@@ -256,9 +275,10 @@ describe('submitFolderWorkspaceCreate', () => {
       createdWithAgent: 'codex'
     })
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
-    expect(startup?.command).toBe('codex')
-    expect(startup?.command).not.toContain(linkedWorkItem.url)
-    expect(startup?.command).not.toContain('Review this before starting')
+    const innerCommand = getCodexStartupRetryInnerCommand(startup?.command)
+    expect(innerCommand).toBe('codex')
+    expect(innerCommand).not.toContain(linkedWorkItem.url)
+    expect(innerCommand).not.toContain('Review this before starting')
     expect(window.api.agentTrust?.markTrusted).toHaveBeenCalledWith({
       preset: 'codex',
       workspacePath: '/repo/platform/hi'
@@ -268,11 +288,12 @@ describe('submitFolderWorkspaceCreate', () => {
       primaryTabId: 'tab-1',
       startup: expect.objectContaining({
         agent: 'codex',
-        launchCommand: 'codex',
         followupPrompt: null,
         draftPrompt: `Review this before starting\n\n${linkedWorkItem.url}`
       })
     })
+    const terminalStartup = mocks.ensureAgentStartupInTerminal.mock.calls[0]?.[0]?.startup
+    expect(getCodexStartupRetryInnerCommand(terminalStartup?.launchCommand)).toBe('codex')
   })
 
   it('pre-marks remote linked Codex folder workspaces trusted before draft paste', async () => {

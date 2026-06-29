@@ -507,6 +507,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
+    executionHostId: activeWorktree?.hostId,
     worktreePath: activeWorktreePath,
     projectRuntime: activeConnectionId
       ? undefined

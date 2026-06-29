@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { getCodexStartupRetryInnerCommand } from '../../../shared/codex-startup-retry'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { useAppStore } from '@/store'
@@ -307,7 +308,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     const startup = state.pendingStartupByTabId[resumedTab!.id]
-    expect(startup?.command).toBe(
+    expect(getCodexStartupRetryInnerCommand(startup?.command)).toBe(
       "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
     )
     expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })

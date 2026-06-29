@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
+import { getCodexStartupRetryInnerCommand } from '../../../../shared/codex-startup-retry'
 import {
   buildDismissedOnboardingFolderAgentStartup,
   buildOnboardingFolderAgentStartup,
@@ -13,8 +14,10 @@ describe('buildOnboardingFolderAgentStartup', () => {
       defaultTuiAgent: 'codex'
     })
 
-    expect(startup).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+    expect(getCodexStartupRetryInnerCommand(startup?.command)).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox'"
+    )
+    expect(startup).toMatchObject({
       env: {},
       launchAgent: 'codex',
       launchConfig: {
@@ -86,18 +89,20 @@ describe('buildOnboardingFolderAgentStartup', () => {
   })
 
   it('builds the skipped-onboarding folder startup from the persisted default agent', () => {
-    expect(
-      buildDismissedOnboardingFolderAgentStartup(
-        {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
-          defaultTuiAgent: 'codex',
-          agentCmdOverrides: { codex: 'echo onboarding-folder-agent' }
-        },
-        { ...getDefaultOnboardingState(), outcome: 'dismissed' },
-        false
-      )
-    ).toEqual({
-      command: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
+    const startup = buildDismissedOnboardingFolderAgentStartup(
+      {
+        ...getDefaultSettings('/tmp/orca-workspaces'),
+        defaultTuiAgent: 'codex',
+        agentCmdOverrides: { codex: 'echo onboarding-folder-agent' }
+      },
+      { ...getDefaultOnboardingState(), outcome: 'dismissed' },
+      false
+    )
+
+    expect(getCodexStartupRetryInnerCommand(startup?.command)).toBe(
+      "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'"
+    )
+    expect(startup).toMatchObject({
       env: {},
       launchAgent: 'codex',
       launchConfig: {

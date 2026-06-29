@@ -4,6 +4,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getConnectionId } from '@/lib/connection-context'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupTarget } from '@/lib/agent-startup-target'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
@@ -53,10 +54,12 @@ export async function launchCommitFailureAgentWithDefault({
 
   const store = getStoreState()
   const savedRecipe = getLaunchActionRecipe('fixCommitFailure')
-  const agentArgsPlan = planAgentCliArgsSuffix(
-    savedRecipe.agentArgs,
-    activeSourceControlLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  )
+  const startupTarget = resolveAgentStartupTarget({
+    platform: activeSourceControlLaunchPlatform,
+    host: { connectionId },
+    terminalWindowsShell: store.settings?.terminalWindowsShell
+  })
+  const agentArgsPlan = planAgentCliArgsSuffix(savedRecipe.agentArgs, startupTarget.shell)
   if (!agentArgsPlan.ok) {
     // Why: saved launch recipes are shared with direct launches; reject bad
     // argv before remote agent detection or terminal creation has side effects.

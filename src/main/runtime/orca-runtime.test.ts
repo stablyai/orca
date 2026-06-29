@@ -18,6 +18,7 @@ import type {
 } from '../../shared/types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import { MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
+import { getCodexStartupRetryInnerCommand } from '../../shared/codex-startup-retry'
 import {
   addWorktree,
   assertWorktreeCleanForRemoval,
@@ -3236,9 +3237,11 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/agent-feature',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
           worktreeId: result.worktree.id
         })
+      )
+      expect(getCodexStartupRetryInnerCommand(spawn.mock.calls[0]?.[0]?.command)).toBe(
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'"
       )
       expect(activateWorktree).toHaveBeenCalledWith(
         TEST_REPO_ID,
@@ -3343,9 +3346,11 @@ describe('OrcaRuntimeService', () => {
 
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: 'C:/remote/agent-feature',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'"
+          cwd: 'C:/remote/agent-feature'
         })
+      )
+      expect(getCodexStartupRetryInnerCommand(spawn.mock.calls[0]?.[0]?.command)).toBe(
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'"
       )
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
@@ -20144,9 +20149,11 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-draft',
-        command: "codex --profile work '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id
       })
+    )
+    expect(getCodexStartupRetryInnerCommand(spawn.mock.calls[0]?.[0]?.command)).toBe(
+      "codex --profile work '--dangerously-bypass-approvals-and-sandbox'"
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
 
@@ -20247,9 +20254,11 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-agent-startup',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
         worktreeId: result.worktree.id
       })
+    )
+    expect(getCodexStartupRetryInnerCommand(spawn.mock.calls[0]?.[0]?.command)).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'"
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
   })
@@ -20742,9 +20751,11 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-explicit-draft',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id
       })
+    )
+    expect(getCodexStartupRetryInnerCommand(spawn.mock.calls[0]?.[0]?.command)).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox'"
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
 
@@ -21020,10 +21031,12 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-draft',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
         })
+      )
+      expect(getCodexStartupRetryInnerCommand(spawn.mock.calls[0]?.[0]?.command)).toBe(
+        "codex '--dangerously-bypass-approvals-and-sandbox'"
       )
       expect(fsProvider.writeFile.mock.invocationCallOrder[0]).toBeLessThan(
         spawn.mock.invocationCallOrder[0]!

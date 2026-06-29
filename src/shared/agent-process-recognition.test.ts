@@ -6,6 +6,7 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from './agent-process-recognition'
+import { maybeWrapCodexStartupRetry } from './codex-startup-retry'
 
 describe('agent process recognition', () => {
   it('recognizes packaged Codex foreground process names', () => {
@@ -189,6 +190,27 @@ describe('agent process recognition', () => {
         String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\@google\gemini-cli\bundle\gemini.mjs`
       )
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
+  })
+
+  it('recognizes Orca Codex startup retry wrappers as Codex', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        maybeWrapCodexStartupRetry('codex', "codex 'fix it'", 'posix')
+      )
+    ).toEqual({ agent: 'codex', processName: 'codex' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        maybeWrapCodexStartupRetry('codex', "codex 'resume' 's1'", 'powershell')
+      )
+    ).toEqual({ agent: 'codex', processName: 'codex' })
+    expect(
+      recognizeAgentProcessFromCommandLine('function __orca_codex_start { echo not-codex }')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'function __orca_codex_start { echo not-codex }; Write-Host "Codex exited during startup; retrying..."'
+      )
+    ).toBeNull()
   })
 
   it('does not classify prompt text as a wrapped agent command', () => {

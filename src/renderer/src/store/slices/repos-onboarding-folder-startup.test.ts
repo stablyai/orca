@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
+import { getCodexStartupRetryInnerCommand } from '../../../../shared/codex-startup-retry'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const worktreeActivation = vi.hoisted(() => ({
@@ -52,13 +53,13 @@ describe('repo slice skipped-onboarding folder startup', () => {
     await store.getState().addNonGitFolder('/first')
     await store.getState().addNonGitFolder('/second')
 
+    const firstStartup = worktreeActivation.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       1,
       'folder-1::/folder',
       {
         sidebarRevealBehavior: 'auto',
-        startup: {
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+        startup: expect.objectContaining({
           env: {},
           launchAgent: 'codex',
           launchConfig: {
@@ -71,8 +72,11 @@ describe('repo slice skipped-onboarding folder startup', () => {
             launch_source: 'onboarding',
             request_kind: 'new'
           }
-        }
+        })
       }
+    )
+    expect(getCodexStartupRetryInnerCommand(firstStartup?.command)).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox'"
     )
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       2,

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
+import { getCodexStartupRetryInnerCommand } from '../../../shared/codex-startup-retry'
 import { useAppStore } from '@/store'
 import {
   activateAndRevealWorktree,
@@ -92,11 +93,14 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     const result = activateAndRevealWorktree(worktree.id)
     const state = useAppStore.getState()
     const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
+    const pendingStartup = state.pendingStartupByTabId[reopenedTab!.id]
 
     expect(result).toEqual({ primaryTabId: reopenedTab?.id })
     expect(reopenedTab).toBeDefined()
-    expect(state.pendingStartupByTabId[reopenedTab!.id]).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+    expect(getCodexStartupRetryInnerCommand(pendingStartup?.command)).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox'"
+    )
+    expect(pendingStartup).toMatchObject({
       env: {},
       launchAgent: 'codex',
       launchConfig: {
@@ -111,6 +115,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
         request_kind: 'resume'
       }
     })
+    expect(pendingStartup?.launchToken).toEqual(expect.any(String))
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
@@ -171,10 +176,13 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     const result = activateAndRevealWorktree(worktree.id)
     const state = useAppStore.getState()
     const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
+    const innerCommand = getCodexStartupRetryInnerCommand(
+      state.pendingStartupByTabId[reopenedTab!.id]?.command
+    )
 
     expect(result).toEqual({ primaryTabId: reopenedTab?.id })
-    expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).toContain("'don'\\''t'")
-    expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).not.toContain("'don''t'")
+    expect(innerCommand).toContain("'don'\\''t'")
+    expect(innerCommand).not.toContain("'don''t'")
   })
 
   it('does not duplicate a sleeping agent session owned by a preserved slept pane', () => {

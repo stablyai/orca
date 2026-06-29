@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { GitHubWorkItem, Repo } from '../../../shared/types'
 import {
@@ -7,16 +8,20 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 
-vi.mock('@/lib/tui-agent-startup', () => ({
-  buildAgentDraftLaunchPlan: vi.fn(() => null),
-  buildAgentStartupPlan: vi.fn(() => ({
-    agent: 'codex',
-    launchCommand: 'codex',
-    expectedProcess: 'codex',
-    followupPrompt: null,
-    launchConfig: { kind: 'shell', command: 'codex' }
-  }))
-}))
+vi.mock('@/lib/tui-agent-startup', async () => {
+  const actual = await vi.importActual<typeof TuiAgentStartupModule>('@/lib/tui-agent-startup')
+  return {
+    ...actual,
+    buildAgentDraftLaunchPlan: vi.fn(() => null),
+    buildAgentStartupPlan: vi.fn(() => ({
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      launchConfig: { kind: 'shell', command: 'codex' }
+    }))
+  }
+})
 
 vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent

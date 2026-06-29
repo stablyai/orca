@@ -7,6 +7,7 @@ import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupTarget } from '@/lib/agent-startup-target'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
@@ -164,12 +165,18 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     if (!agent) {
       return false
     }
+    const targetProjectRuntime = targetConnectionId
+      ? undefined
+      : getLocalProjectExecutionRuntimeContext(store, targetWorktreeId, CLIENT_PLATFORM)
+    const targetLaunchHost = {
+      connectionId: targetConnectionId,
+      executionHostId: targetWorktree.hostId ?? repo?.executionHostId
+    }
     const launchPlatform = resolveSourceControlLaunchPlatform({
       connectionId: targetConnectionId,
+      executionHostId: targetWorktree.hostId ?? repo?.executionHostId,
       worktreePath: targetWorktree.path,
-      projectRuntime: targetConnectionId
-        ? undefined
-        : getLocalProjectExecutionRuntimeContext(store, targetWorktreeId, CLIENT_PLATFORM)
+      projectRuntime: targetProjectRuntime
     })
     if (!launchPlatform) {
       toast.error(
@@ -180,10 +187,13 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       )
       return false
     }
-    const agentArgsPlan = planAgentCliArgsSuffix(
-      recipe.agentArgs,
-      launchPlatform === 'win32' ? 'powershell' : 'posix'
-    )
+    const startupTarget = resolveAgentStartupTarget({
+      platform: launchPlatform,
+      host: targetLaunchHost,
+      terminalWindowsShell: store.settings?.terminalWindowsShell,
+      projectRuntime: targetProjectRuntime
+    })
+    const agentArgsPlan = planAgentCliArgsSuffix(recipe.agentArgs, startupTarget.shell)
     if (!agentArgsPlan.ok) {
       toast.error(agentArgsPlan.error)
       return false

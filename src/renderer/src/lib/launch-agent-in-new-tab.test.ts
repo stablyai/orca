@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getCodexStartupRetryInnerCommand } from '../../../shared/codex-startup-retry'
 
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
@@ -232,21 +233,26 @@ describe('launchAgentInNewTab', () => {
         pasteDraftAfterLaunch: false
       })
     )
-    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      targetGroupId: 'group-1',
-      activate: true,
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
-      env: { CODEX_PROFILE: 'captured' },
-      startupCommandDelivery: 'shell-ready',
-      launchConfig: {
-        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
-        agentArgs: '--model gpt-5 --reasoning-effort high',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      launchAgent: 'codex'
-    })
+    const webStartup = mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]
+    expect(webStartup).toEqual(
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        targetGroupId: 'group-1',
+        activate: true,
+        env: { CODEX_PROFILE: 'captured' },
+        startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
+          agentArgs: '--model gpt-5 --reasoning-effort high',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex'
+      })
+    )
+    expect(getCodexStartupRetryInnerCommand(webStartup?.command)).toBe(
+      "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'"
+    )
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
   })
@@ -464,11 +470,9 @@ describe('launchAgentInNewTab', () => {
       promptDelivery: 'submit-after-ready'
     })
 
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
-      })
-    )
+    expect(mockQueueTabStartupCommand.mock.calls[0]?.[0]).toBe('tab-1')
+    expect(
+      getCodexStartupRetryInnerCommand(mockQueueTabStartupCommand.mock.calls[0]?.[1].command)
+    ).toBe("codex '--model' 'gpt-5.5'")
   })
 })

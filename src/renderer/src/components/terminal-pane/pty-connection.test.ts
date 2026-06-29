@@ -9,6 +9,7 @@ import {
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
+import { getCodexStartupRetryInnerCommand } from '../../../../shared/codex-startup-retry'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
@@ -153,6 +154,34 @@ type MockTransport = {
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
+}
+
+type ConnectCallOptions = {
+  command?: string
+  env?: Record<string, string>
+  launchAgent?: string
+  launchConfig?: unknown
+  launchToken?: string
+  sessionId?: string
+} & Record<string, unknown>
+
+function getConnectCallOptions(transport: MockTransport, callIndex: number): ConnectCallOptions {
+  return (transport.connect.mock.calls[callIndex]?.[0] ?? {}) as ConnectCallOptions
+}
+
+function findConnectCallOptions(
+  transport: MockTransport,
+  predicate: (options: ConnectCallOptions) => boolean
+): ConnectCallOptions {
+  const match = transport.connect.mock.calls
+    .map(([options]) => options as ConnectCallOptions)
+    .find(predicate)
+  expect(match).toBeDefined()
+  return match ?? {}
+}
+
+function expectCodexRetryInnerCommand(command: string | null | undefined, expected: string): void {
+  expect(getCodexStartupRetryInnerCommand(command)).toBe(expected)
 }
 
 const scheduleRuntimeGraphSync = vi.fn()
@@ -3598,10 +3627,9 @@ describe('connectPanePty', () => {
       }
 
       expect(transport.connect).toHaveBeenCalledTimes(2)
-      expect(transport.connect).toHaveBeenNthCalledWith(
-        2,
+      const fallbackConnect = getConnectCallOptions(transport, 1)
+      expect(fallbackConnect).toEqual(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
@@ -3611,8 +3639,15 @@ describe('connectPanePty', () => {
           })
         })
       )
-      expect(transport.sendInput).toHaveBeenCalledWith(
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+      expectCodexRetryInnerCommand(
+        fallbackConnect.command,
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
+      )
+      const sentInput = transport.sendInput.mock.calls[0]?.[0] as string | undefined
+      expect(sentInput?.endsWith('\r')).toBe(true)
+      expectCodexRetryInnerCommand(
+        sentInput?.slice(0, -1),
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
       )
     } finally {
       globalThis.setTimeout = originalSetTimeout
@@ -3884,10 +3919,12 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -3896,6 +3933,10 @@ describe('connectPanePty', () => {
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
     )
   })
 
@@ -3966,11 +4007,12 @@ describe('connectPanePty', () => {
 
     expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        sessionId: 'lost-pty',
-        command:
-          "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\\''s'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -3979,6 +4021,10 @@ describe('connectPanePty', () => {
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\\''s'"
     )
   })
 
@@ -4044,10 +4090,12 @@ describe('connectPanePty', () => {
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1)
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -4056,6 +4104,10 @@ describe('connectPanePty', () => {
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
     )
     // Why: consuming the record prevents a later worktree activation from
     // launching a duplicate resume tab for the same session.
@@ -4127,11 +4179,13 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1)
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
-      })
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
     )
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(duplicateLegacyPaneKey)
@@ -4274,10 +4328,12 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           CODEX_PROFILE: 'captured',
           ORCA_PANE_KEY: paneKey,
@@ -4287,6 +4343,10 @@ describe('connectPanePty', () => {
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'codex-session-1'"
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
       agentType: 'codex',
@@ -4444,14 +4504,20 @@ describe('connectPanePty', () => {
     await new Promise((resolve) => setTimeout(resolve, 70))
 
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--model' 'gpt-5-mini' 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--model' 'gpt-5-mini' 'resume' 'codex-session-1'"
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
       agentType: 'codex',
@@ -4540,11 +4606,13 @@ describe('connectPanePty', () => {
     expect(mockStoreState.getAgentLaunchConfigForStatusEntry).toHaveBeenCalledWith(
       expect.objectContaining({ paneKey, agentType: 'codex' })
     )
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--model' 'current' 'resume' 'codex-session-1'"
-      })
+    const resumeConnect = findConnectCallOptions(
+      transport,
+      (options) => options.sessionId === 'lost-pty'
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--model' 'current' 'resume' 'codex-session-1'"
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
       paneKey,
@@ -4693,9 +4761,9 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(4)
 
     expect(transport.connect).toHaveBeenCalledTimes(1)
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = getConnectCallOptions(transport, 0)
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
         launchAgent: 'codex',
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
@@ -4705,6 +4773,10 @@ describe('connectPanePty', () => {
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
     )
     expect(transport.connect).toHaveBeenCalledWith(
       expect.not.objectContaining({ sessionId: expect.any(String) })
@@ -8182,9 +8254,9 @@ describe('connectPanePty', () => {
 
     expect(transport.attach).not.toHaveBeenCalled()
     expect(transport.connect).toHaveBeenCalledTimes(1)
-    expect(transport.connect).toHaveBeenCalledWith(
+    const resumeConnect = getConnectCallOptions(transport, 0)
+    expect(resumeConnect).toEqual(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
         launchAgent: 'codex',
         launchConfig: {
           agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
@@ -8200,6 +8272,10 @@ describe('connectPanePty', () => {
           ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
+    )
+    expectCodexRetryInnerCommand(
+      resumeConnect.command,
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
     )
     expect(transport.connect).toHaveBeenCalledWith(
       expect.not.objectContaining({ sessionId: expect.any(String) })

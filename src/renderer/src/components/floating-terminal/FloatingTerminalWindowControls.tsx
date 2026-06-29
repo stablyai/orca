@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlan, resolveStartupShellForTerminal } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -73,6 +73,7 @@ export function FloatingTerminalWindowControls({
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
       platform: CLIENT_PLATFORM,
+      shell: resolveStartupShellForTerminal(CLIENT_PLATFORM, state.settings?.terminalWindowsShell),
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {

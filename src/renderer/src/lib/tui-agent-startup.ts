@@ -5,10 +5,12 @@ export {
   planAgentCliArgsSuffix,
   isShellProcess,
   quoteStartupArg,
-  resolveStartupShell
+  resolveStartupShell,
+  resolveStartupShellForTerminal
 } from '../../../shared/tui-agent-startup'
 export type {
   AgentCliArgsPlan,
   AgentDraftLaunchPlan,
-  AgentStartupPlan
+  AgentStartupPlan,
+  AgentStartupShell
 } from '../../../shared/tui-agent-startup'

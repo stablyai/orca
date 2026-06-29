@@ -9,6 +9,29 @@ export function resolveStartupShell(
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
 }
 
+export function resolveStartupShellForTerminal(
+  platform: NodeJS.Platform,
+  terminalWindowsShell?: string | null
+): AgentStartupShell {
+  if (platform !== 'win32') {
+    return 'posix'
+  }
+  const shellName = terminalWindowsShell?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
+  if (shellName === 'cmd' || shellName === 'cmd.exe') {
+    return 'cmd'
+  }
+  if (
+    shellName === 'wsl' ||
+    shellName === 'wsl.exe' ||
+    shellName === 'bash' ||
+    shellName === 'bash.exe' ||
+    terminalWindowsShell === 'git-bash'
+  ) {
+    return 'posix'
+  }
+  return 'powershell'
+}
+
 export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
   if (shell === 'powershell') {
     return `'${value.replace(/'/g, "''")}'`

@@ -5,23 +5,24 @@ import {
   type ResumableTuiAgent,
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
+import { maybeWrapCodexStartupRetry } from './codex-startup-retry'
 import {
-  clearEnvCommand,
-  commandSeparator,
-  planAgentCliArgsSuffix,
   quoteStartupArg,
   resolveStartupShell,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import {
+  buildSleepingAgentLaunchConfig,
+  resolveTuiAgentBaseCommand
+} from './tui-agent-launch-command'
+import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { TuiAgent } from './types'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type AgentStartupPlan = {
   agent: TuiAgent
   launchCommand: string
+  unwrappedLaunchCommand?: string
   expectedProcess: string
   followupPrompt: string | null
   launchConfig: SleepingAgentLaunchConfig
@@ -29,43 +30,6 @@ export type AgentStartupPlan = {
   draftPrompt?: string | null
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
-}
-
-function resolveBaseCommand(args: {
-  agent: TuiAgent
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell: AgentStartupShell
-  agentArgs?: string | null
-  isRemote?: boolean
-}): { ok: true; command: string } | { ok: false; error: string } {
-  const override = args.cmdOverrides[args.agent]
-  const command =
-    override ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
-      isRemote: args.isRemote
-    })
-  const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
-  if (!suffix.ok) {
-    return suffix
-  }
-  // Why: Codex status hooks live in Orca's runtime CODEX_HOME; adding
-  // --profile-v2 makes Codex load a second hook representation and warn.
-  return { ok: true, command: suffix.suffix ? `${command} ${suffix.suffix}` : command }
-}
-
-function buildSleepingAgentLaunchConfig(args: {
-  agentCommand?: string | null
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-}): SleepingAgentLaunchConfig {
-  return {
-    ...(args.agentCommand?.trim() ? { agentCommand: args.agentCommand } : {}),
-    agentArgs: args.agentArgs ?? '',
-    // Why: startupPlan.env may include prompt transport or pane identity env; the
-    // durable resume snapshot is limited to Orca-managed agent env inputs.
-    agentEnv: args.agentEnv ? { ...args.agentEnv } : {}
-  }
 }
 
 export function buildAgentStartupPlan(args: {
@@ -85,7 +49,7 @@ export function buildAgentStartupPlan(args: {
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
-  const baseCommand = resolveBaseCommand({
+  const baseCommand = resolveTuiAgentBaseCommand({
     agent,
     cmdOverrides,
     platform,
@@ -105,9 +69,13 @@ export function buildAgentStartupPlan(args: {
     if (!allowEmptyPromptLaunch) {
       return null
     }
+    const launchCommand = maybeWrapCodexStartupRetry(agent, baseCommand.command, shell)
     return {
       agent,
-      launchCommand: baseCommand.command,
+      launchCommand,
+      ...(launchCommand !== baseCommand.command
+        ? { unwrappedLaunchCommand: baseCommand.command }
+        : {}),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -118,9 +86,12 @@ export function buildAgentStartupPlan(args: {
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
+    const unwrappedLaunchCommand = `${baseCommand.command} ${quotedPrompt}`
+    const launchCommand = maybeWrapCodexStartupRetry(agent, unwrappedLaunchCommand, shell)
     return {
       agent,
-      launchCommand: `${baseCommand.command} ${quotedPrompt}`,
+      launchCommand,
+      ...(launchCommand !== unwrappedLaunchCommand ? { unwrappedLaunchCommand } : {}),
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -193,7 +164,7 @@ export function buildAgentResumeStartupPlan(args: {
   const resolvedAgentCommand = args.agentCommand?.trim()
   const baseCommand = resolvedAgentCommand
     ? ({ ok: true, command: resolvedAgentCommand } as const)
-    : resolveBaseCommand({
+    : resolveTuiAgentBaseCommand({
         agent: args.agent,
         cmdOverrides: args.cmdOverrides,
         platform: args.platform,
@@ -213,9 +184,11 @@ export function buildAgentResumeStartupPlan(args: {
     .map((arg) => quoteStartupArg(arg, shell))
     .join(' ')
   const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
+  const wrappedLaunchCommand = maybeWrapCodexStartupRetry(args.agent, launchCommand, shell)
   return {
     agent: args.agent,
-    launchCommand,
+    launchCommand: wrappedLaunchCommand,
+    ...(wrappedLaunchCommand !== launchCommand ? { unwrappedLaunchCommand: launchCommand } : {}),
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,
@@ -223,97 +196,14 @@ export function buildAgentResumeStartupPlan(args: {
   }
 }
 
-export type AgentDraftLaunchPlan = {
-  agent: TuiAgent
-  launchCommand: string
-  expectedProcess: string
-  launchConfig: SleepingAgentLaunchConfig
-  env?: Record<string, string>
-  startupCommandDelivery?: StartupCommandDelivery
-}
-
-function inlineDraftPlanFitsPlatform(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste fallback.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
-}
-
-export function buildAgentDraftLaunchPlan(args: {
-  agent: TuiAgent
-  draft: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
-  isRemote?: boolean
-}): AgentDraftLaunchPlan | null {
-  const { agent, draft, cmdOverrides, platform } = args
-  const shell = resolveStartupShell(platform, args.shell)
-  const config = TUI_AGENT_CONFIG[agent]
-  const trimmed = draft.trim()
-  if (!trimmed) {
-    return null
-  }
-  const baseCommand = resolveBaseCommand({
-    agent,
-    cmdOverrides,
-    platform,
-    shell,
-    agentArgs: args.agentArgs,
-    isRemote: args.isRemote
-  })
-  if (!baseCommand.ok) {
-    return null
-  }
-  const launchConfig = buildSleepingAgentLaunchConfig({
-    ...args,
-    agentCommand: baseCommand.command
-  })
-  let plan: AgentDraftLaunchPlan | null = null
-  if (config.draftPromptFlag) {
-    const quoted = quoteStartupArg(trimmed, shell)
-    plan = {
-      agent,
-      launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
-      expectedProcess: config.expectedProcess,
-      launchConfig,
-      // Why: native draft flags carry user text on argv and must survive rc-file startup.
-      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  } else if (config.draftPromptEnvVar) {
-    const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
-    plan = {
-      agent,
-      launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
-      expectedProcess: config.expectedProcess,
-      launchConfig,
-      env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
-    }
-  }
-  if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {
-    return null
-  }
-  return plan
-}
-
 export { isShellProcess }
+export { buildAgentDraftLaunchPlan } from './tui-agent-draft-launch-plan'
 export {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix,
   quoteStartupArg,
-  resolveStartupShell
+  resolveStartupShell,
+  resolveStartupShellForTerminal
 } from './tui-agent-startup-shell'
 export type { AgentCliArgsPlan, AgentStartupShell } from './tui-agent-startup-shell'
+export type { AgentDraftLaunchPlan } from './tui-agent-draft-launch-plan'

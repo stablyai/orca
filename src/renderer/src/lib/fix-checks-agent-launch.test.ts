@@ -227,6 +227,7 @@ describe('startFixChecksAgent', () => {
     expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
     expect(mocks.resolveSourceControlLaunchPlatform).toHaveBeenCalledWith({
       connectionId: 'ssh-1',
+      executionHostId: undefined,
       worktreePath: '/repo/wt-1',
       projectRuntime: undefined
     })
@@ -276,6 +277,7 @@ describe('startFixChecksAgent', () => {
 
     expect(mocks.resolveSourceControlLaunchPlatform).toHaveBeenCalledWith({
       connectionId: null,
+      executionHostId: undefined,
       worktreePath: 'C:\\Users\\alice\\repo-worktree',
       projectRuntime: expect.objectContaining({
         status: 'resolved',

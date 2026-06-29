@@ -1,11 +1,10 @@
 import { useAppStore } from '@/store'
 import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupTarget } from '@/lib/agent-startup-target'
 import type {
   LaunchAgentBackgroundSessionArgs,
   LaunchAgentBackgroundSessionResult
 } from '@/lib/agent-background-session-contract'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
@@ -62,12 +61,15 @@ export async function launchAgentBackgroundSession(
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
-  const launchPlatform = repo
-    ? getAgentLaunchPlatformForRepo(
-        repo,
-        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
-      )
-    : CLIENT_PLATFORM
+  const projectRuntime =
+    repo && !repo.connectionId
+      ? getLocalProjectExecutionRuntimeContext(store, worktreeId)
+      : undefined
+  const startupTarget = resolveAgentStartupTarget({
+    host: repo,
+    projectRuntime,
+    terminalWindowsShell: store.settings?.terminalWindowsShell
+  })
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
@@ -84,7 +86,8 @@ export async function launchAgentBackgroundSession(
       cmdOverrides,
       agentArgs,
       agentEnv,
-      platform: launchPlatform,
+      platform: startupTarget.platform,
+      shell: startupTarget.shell,
       isRemote,
       allowEmptyPromptLaunch: true
     })
@@ -96,7 +99,8 @@ export async function launchAgentBackgroundSession(
       cmdOverrides,
       agentArgs,
       agentEnv,
-      platform: launchPlatform,
+      platform: startupTarget.platform,
+      shell: startupTarget.shell,
       isRemote,
       allowEmptyPromptLaunch: !hasPrompt
     })

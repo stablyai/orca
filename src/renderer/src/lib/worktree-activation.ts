@@ -17,8 +17,7 @@ import { buildSetupRunnerCommand } from './setup-runner'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { buildAgentStartupPlan } from './tui-agent-startup'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
-import { CLIENT_PLATFORM } from './new-workspace'
+import { resolveAgentStartupTarget } from '@/lib/agent-startup-target'
 import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
@@ -236,12 +235,15 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
 
   const state = useAppStore.getState()
   const repo = state.repos.find((entry) => entry.id === worktree.repoId)
-  const launchPlatform = repo
-    ? getAgentLaunchPlatformForRepo(
-        repo,
-        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
-      )
-    : CLIENT_PLATFORM
+  const projectRuntime =
+    repo && !repo.connectionId
+      ? getLocalProjectExecutionRuntimeContext(state, worktree.id)
+      : undefined
+  const startupTarget = resolveAgentStartupTarget({
+    host: repo,
+    projectRuntime,
+    terminalWindowsShell: state.settings?.terminalWindowsShell
+  })
 
   const startupPlan = buildAgentStartupPlan({
     agent,
@@ -249,7 +251,8 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-    platform: launchPlatform,
+    platform: startupTarget.platform,
+    shell: startupTarget.shell,
     isRemote: repo ? repoIsRemote(repo) : false,
     allowEmptyPromptLaunch: true
   })

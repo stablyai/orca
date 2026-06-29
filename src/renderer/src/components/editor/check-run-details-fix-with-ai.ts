@@ -10,6 +10,8 @@ import {
 } from './check-run-details-fix-context'
 import { openSourceControlAiSettingsTarget } from '@/components/right-sidebar/source-control-ai-settings-navigation'
 import { getConnectionId } from '@/lib/connection-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
@@ -149,7 +151,15 @@ export function useCheckRunDetailsFixWithAI(args: {
     : null
   const launchPlatform = resolveSourceControlLaunchPlatform({
     connectionId,
-    worktreePath: worktree?.path ?? null
+    executionHostId: worktree?.hostId ?? repo?.executionHostId,
+    worktreePath: worktree?.path ?? null,
+    projectRuntime: connectionId
+      ? undefined
+      : getLocalProjectExecutionRuntimeContext(
+          useAppStore.getState(),
+          args.worktreeId,
+          CLIENT_PLATFORM
+        )
   })
   const fixChecksRecipe = useMemo(
     () =>

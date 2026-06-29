@@ -1,10 +1,9 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupTarget, type AgentStartupTarget } from '@/lib/agent-startup-target'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { isWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveTuiAgentLaunchArgs,
@@ -20,21 +19,28 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 
-function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
+function getResumeLaunchContext(worktreeId: string): {
+  startupTarget: AgentStartupTarget
+} {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
-  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
-  if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+  const repo = worktree ? (state.repos.find((entry) => entry.id === worktree.repoId) ?? null) : null
+  const projectRuntime = repo?.connectionId
+    ? undefined
+    : getLocalProjectExecutionRuntimeContext(state, worktreeId)
+  const startupTarget = resolveAgentStartupTarget({
+    host: {
+      connectionId: repo?.connectionId ?? null,
+      executionHostId: worktree?.hostId ?? repo?.executionHostId,
+      path: worktree?.path ?? null
+    },
+    worktreePath: worktree?.path ?? null,
+    projectRuntime,
+    terminalWindowsShell: state.settings?.terminalWindowsShell
+  })
+  return {
+    startupTarget
   }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-  if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-    return 'linux'
-  }
-  return CLIENT_PLATFORM
 }
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
@@ -58,6 +64,7 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
 function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  const { startupTarget } = getResumeLaunchContext(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -71,7 +78,8 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
         ? launchConfig.agentEnv
         : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    platform: startupTarget.platform,
+    shell: startupTarget.shell
   })
   if (!startupPlan) {
     toast.error(

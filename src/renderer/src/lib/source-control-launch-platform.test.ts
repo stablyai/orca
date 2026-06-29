@@ -31,6 +31,23 @@ describe('resolveSourceControlLaunchPlatform', () => {
     ).toBe('win32')
   })
 
+  it('uses host path planning for runtime-owned worktrees', async () => {
+    const { resolveSourceControlLaunchPlatform } = await import('./source-control-launch-platform')
+
+    expect(
+      resolveSourceControlLaunchPlatform({
+        executionHostId: 'runtime:env-1',
+        worktreePath: '/workspace/repo'
+      })
+    ).toBe('linux')
+    expect(
+      resolveSourceControlLaunchPlatform({
+        executionHostId: 'runtime:env-1',
+        worktreePath: String.raw`C:\Users\alice\repo`
+      })
+    ).toBe('win32')
+  })
+
   it('uses linux shell planning for Windows paths forced to local WSL runtime', async () => {
     const { resolveSourceControlLaunchPlatform } = await import('./source-control-launch-platform')
 

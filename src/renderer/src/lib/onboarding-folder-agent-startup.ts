@@ -1,4 +1,4 @@
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlan, resolveStartupShellForTerminal } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import {
@@ -46,6 +46,7 @@ export function buildOnboardingFolderAgentStartup(
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
     platform: getClientPlatform(),
+    shell: resolveStartupShellForTerminal(getClientPlatform(), settings.terminalWindowsShell),
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {

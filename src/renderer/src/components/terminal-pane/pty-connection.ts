@@ -122,6 +122,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupTarget } from '@/lib/agent-startup-target'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
@@ -138,7 +139,6 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
 import type { TuiAgent } from '../../../../shared/types'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -2485,18 +2485,17 @@ export function connectPanePty(
       sessionRestoredBannerShown = true
       deps.onShowSessionRestoredBanner(pane.id)
     }
-    const getColdRestoreAgentResumePlatform = (): NodeJS.Platform => {
-      if (projectRuntime?.status === 'repair-required') {
-        return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
-      }
-      if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-        return 'linux'
-      }
-      if (connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-        return 'linux'
-      }
-      return CLIENT_PLATFORM
-    }
+    const getColdRestoreAgentStartupTarget = (): ReturnType<typeof resolveAgentStartupTarget> =>
+      resolveAgentStartupTarget({
+        host: {
+          connectionId,
+          executionHostId,
+          path: worktree?.path ?? null
+        },
+        worktreePath: worktree?.path ?? null,
+        projectRuntime,
+        terminalWindowsShell: useAppStore.getState().settings?.terminalWindowsShell
+      })
     const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {
         return null
@@ -2527,7 +2526,7 @@ export function connectPanePty(
       const launchConfig =
         (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
         matchingSleepingLaunchConfig
-      const resumePlatform = getColdRestoreAgentResumePlatform()
+      const startupTarget = getColdRestoreAgentStartupTarget()
       const startupPlan = buildAgentResumeStartupPlan({
         agent,
         providerSession,
@@ -2541,7 +2540,8 @@ export function connectPanePty(
             ? launchConfig.agentEnv
             : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
         ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-        platform: resumePlatform
+        platform: startupTarget.platform,
+        shell: startupTarget.shell
       })
       if (!startupPlan) {
         return null

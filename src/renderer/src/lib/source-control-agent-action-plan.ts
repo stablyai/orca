@@ -4,9 +4,11 @@ import {
   planAgentCliArgsSuffix,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { resolveAgentStartupTarget, type AgentStartupTarget } from '@/lib/agent-startup-target'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import type { TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -35,7 +37,11 @@ export function planSourceControlAgentActionLaunch(args: {
   disabledAgents?: TuiAgent[]
   cmdOverrides?: Partial<Record<TuiAgent, string>>
   agentArgs?: string | null
+  startupTarget?: AgentStartupTarget
   platform?: NodeJS.Platform
+  terminalWindowsShell?: string | null
+  launchHost?: { connectionId?: string | null; executionHostId?: string | null } | null
+  projectRuntime?: ProjectExecutionRuntimeResolution
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
@@ -81,9 +87,16 @@ export function planSourceControlAgentActionLaunch(args: {
   }
 
   const cmdOverrides = args.cmdOverrides ?? {}
-  const platform = args.platform ?? CLIENT_PLATFORM
-  const isRemote = args.isRemote ?? false
-  const shell = platform === 'win32' ? 'powershell' : 'posix'
+  const startupTarget =
+    args.startupTarget ??
+    resolveAgentStartupTarget({
+      platform: args.platform,
+      host: args.launchHost,
+      terminalWindowsShell: args.terminalWindowsShell,
+      projectRuntime: args.projectRuntime
+    })
+  const { platform, shell } = startupTarget
+  const isRemote = args.isRemote ?? repoIsRemote(args.launchHost ?? {})
   const plannedArgs = planAgentCliArgsSuffix(args.agentArgs, shell)
   if (!plannedArgs.ok) {
     return { ok: false, error: plannedArgs.error }
@@ -97,6 +110,7 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: '',
       cmdOverrides,
       platform,
+      shell,
       isRemote,
       agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: true
@@ -108,6 +122,7 @@ export function planSourceControlAgentActionLaunch(args: {
       draft: trimmedInput,
       cmdOverrides,
       platform,
+      shell,
       isRemote,
       agentArgs: args.agentArgs
     })
@@ -115,6 +130,9 @@ export function planSourceControlAgentActionLaunch(args: {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
+        ...(draftLaunchPlan.unwrappedLaunchCommand
+          ? { unwrappedLaunchCommand: draftLaunchPlan.unwrappedLaunchCommand }
+          : {}),
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
@@ -130,6 +148,7 @@ export function planSourceControlAgentActionLaunch(args: {
         prompt: '',
         cmdOverrides,
         platform,
+        shell,
         isRemote,
         agentArgs: args.agentArgs,
         allowEmptyPromptLaunch: true
@@ -142,6 +161,7 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: '',
       cmdOverrides,
       platform,
+      shell,
       isRemote,
       agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: true
@@ -153,6 +173,7 @@ export function planSourceControlAgentActionLaunch(args: {
       prompt: trimmedInput,
       cmdOverrides,
       platform,
+      shell,
       isRemote,
       agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: false
@@ -183,7 +204,7 @@ export function planSourceControlAgentActionLaunch(args: {
     ok: true,
     plan: startupPlan,
     delivery,
-    commandLabel: startupPlan.launchCommand,
+    commandLabel: startupPlan.unwrappedLaunchCommand ?? startupPlan.launchCommand,
     summary,
     caveat:
       'This check builds Orca’s launch plan only. PATH, binary availability, account setup, and terminal startup failures are still caught by the real launch watchdog.'

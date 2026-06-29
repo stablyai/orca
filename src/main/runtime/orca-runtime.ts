@@ -39,6 +39,7 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import { parseExecutionHostId } from '../../shared/execution-host'
 import { createHash, randomUUID } from 'crypto'
 import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
@@ -1050,19 +1051,21 @@ type WorktreeStartupFollowup = {
 }
 
 function getAgentLaunchPlatformForRepo(
-  repo: Pick<Repo, 'connectionId' | 'path'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId' | 'path'>,
   projectRuntime?: ProjectExecutionRuntimeResolution
 ): NodeJS.Platform {
-  if (!repo.connectionId) {
-    if (projectRuntime?.status === 'repair-required') {
-      return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
-    }
-    if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-      return 'linux'
-    }
-    return process.platform
+  const path = repo.path?.trim() ?? ''
+  const parsedHost = parseExecutionHostId(repo.executionHostId)
+  if (repo.connectionId || parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime') {
+    return path && isWindowsAbsolutePathLike(path) && !isWslUncPath(path) ? 'win32' : 'linux'
   }
-  return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
+  }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
+  return process.platform
 }
 
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150

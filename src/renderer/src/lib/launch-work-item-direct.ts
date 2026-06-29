@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import { resolveAgentStartupTarget } from '@/lib/agent-startup-target'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -27,12 +28,12 @@ import {
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-types'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -73,15 +74,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const repoProjectRuntime = repoConnectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
-  const preflightLaunchPlatform =
-    args.launchPlatform ??
-    resolveSourceControlLaunchPlatform({
-      connectionId: repoConnectionId,
-      worktreePath: repo.path,
-      projectRuntime: repoProjectRuntime
-    })
-  const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
+  const preflightStartupTarget = resolveAgentStartupTarget({
+    platform: args.launchPlatform,
+    host: repo,
+    worktreePath: repo.path,
+    projectRuntime: repoProjectRuntime,
+    terminalWindowsShell: settings?.terminalWindowsShell
+  })
+  const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, preflightStartupTarget.shell)
   if (!agentArgsPlan.ok) {
     // Why: direct launches may create a worktree before the agent startup plan
     // is built; reject malformed saved args before touching user workspaces.
@@ -184,17 +184,25 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     // rehydrates their repo link; preserve the source repo connection.
     const launchConnectionId = createdConnectionId ?? repoConnectionId
     const latestStore = useAppStore.getState()
-    const launchPlatform =
-      args.launchPlatform ??
-      resolveSourceControlLaunchPlatform({
+    const launchProjectRuntime =
+      launchConnectionId === null
+        ? (getLocalProjectExecutionRuntimeContext(latestStore, worktreeId, CLIENT_PLATFORM) ??
+          repoProjectRuntime)
+        : undefined
+    const launchTarget = resolveAgentStartupTarget({
+      platform: args.launchPlatform,
+      host: {
         connectionId: launchConnectionId,
-        worktreePath,
-        projectRuntime:
-          launchConnectionId === null
-            ? (getLocalProjectExecutionRuntimeContext(latestStore, worktreeId, CLIENT_PLATFORM) ??
-              repoProjectRuntime)
-            : undefined
-      })
+        executionHostId: repo.executionHostId
+      },
+      worktreePath,
+      projectRuntime: launchProjectRuntime,
+      terminalWindowsShell: settings?.terminalWindowsShell
+    })
+    const launchIsRemote = repoIsRemote({
+      connectionId: launchConnectionId,
+      executionHostId: repo.executionHostId
+    })
     if (agentOverride) {
       const detectedAgents =
         typeof launchConnectionId === 'string'
@@ -264,10 +272,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         draftContent,
         promptDelivery,
         settings,
-        launchPlatform,
+        startupTarget: launchTarget,
         // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.
-        isRemote: typeof launchConnectionId === 'string'
+        isRemote: launchIsRemote
       }))
 
     const activation = activateAndRevealWorktree(worktreeId, {

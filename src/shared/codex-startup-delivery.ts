@@ -1,4 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { getCodexStartupRetryInnerCommand } from './codex-startup-retry'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
 
@@ -65,7 +66,9 @@ export function hasCodexNativeDraftFlag(command: string | null | undefined): boo
   if (recognizeAgentProcessFromCommandLine(command)?.agent !== 'codex' || !command) {
     return false
   }
-  const tokens = tokenizeCommandWithQuoteMetadata(command)
+  const tokens = tokenizeCommandWithQuoteMetadata(
+    getCodexStartupRetryInnerCommand(command) ?? command
+  )
   return tokens.some(
     (token, index) =>
       index > 0 &&

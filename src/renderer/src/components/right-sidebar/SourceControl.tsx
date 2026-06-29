@@ -1182,6 +1182,7 @@ function SourceControlInner(): React.JSX.Element {
     : null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
+    executionHostId: activeWorktree?.hostId ?? activeRepo?.executionHostId,
     worktreePath,
     projectRuntime: activeConnectionId
       ? undefined
