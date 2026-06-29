@@ -57,6 +57,25 @@ describe('resolveChecksPanelTerminalPtyId', () => {
     ).toBe('pty-live')
   })
 
+  it('falls back to the last live tab PTY when the layout has no live PTY', () => {
+    expect(
+      resolveChecksPanelTerminalPtyId({
+        activeTabId: 'tab-1',
+        ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: null,
+            activeLeafId: 'leaf-stale',
+            expandedLeafId: null,
+            ptyIdsByLeafId: {
+              'leaf-stale': 'pty-stale'
+            }
+          }
+        }
+      })
+    ).toBe('pty-right')
+  })
+
   it('returns null when the active tab has no live PTY', () => {
     expect(
       resolveChecksPanelTerminalPtyId({

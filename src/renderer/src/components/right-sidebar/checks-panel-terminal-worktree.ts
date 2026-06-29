@@ -38,6 +38,7 @@ export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): st
   const firstLiveLayoutPtyId = Object.values(layout?.ptyIdsByLeafId ?? {}).find((ptyId) =>
     livePtyIds.includes(ptyId)
   )
+  // Last tab PTY is the newest terminal when the split-pane layout is stale or unavailable.
   return firstLiveLayoutPtyId ?? livePtyIds.at(-1) ?? null
 }
 
@@ -85,6 +86,7 @@ function isTerminalCwdInsideWorktree(worktreePath: string, terminalCwd: string):
     return true
   }
 
+  // Windows hosts store WSL worktrees as UNC paths, while the terminal reports Linux paths.
   const wslPath = parseWslUncPath(worktreePath)
   return wslPath ? isPathInsideOrEqual(wslPath.linuxPath, terminalCwd) : false
 }
@@ -99,5 +101,6 @@ function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandi
   if (left.source === right.source) {
     return 0
   }
+  // Prefer the current path when a renamed worktree still has a matching prior path.
   return left.source === 'current-path' ? -1 : 1
 }
