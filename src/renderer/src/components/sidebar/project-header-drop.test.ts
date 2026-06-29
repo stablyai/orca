@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAllRepoInsertAt,
   computeProjectHeaderDropPreview,
+  computeProjectHeaderDropPreviewAcrossBuckets,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
   getSidebarOrderedRepoHeaderIdsByBucket,
@@ -143,6 +144,47 @@ describe('applyAllRepoInsertAt', () => {
 
   it('returns null for no-op reorders', () => {
     expect(applyAllRepoInsertAt(['a', 'b', 'c'], 'b', 2)).toBeNull()
+  })
+})
+
+describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
+  it('targets the bucket whose project block contains the pointer', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 60,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 28 },
+        { repoId: 'b', bucketKey: 'group:2', headerIndex: 0, top: 50, bottom: 78 }
+      ],
+      groupZones: [
+        { bucketKey: 'group:1', top: 0, bottom: 40, projectCount: 1 },
+        { bucketKey: 'group:2', top: 45, bottom: 85, projectCount: 1 }
+      ]
+    })
+    expect(result?.targetBucketKey).toBe('group:2')
+  })
+
+  it('targets the ungrouped bucket when the pointer is below all groups', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 200,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [{ repoId: 'u', bucketKey: 'ungrouped', headerIndex: 0, top: 150, bottom: 178 }],
+      groupZones: [{ bucketKey: 'group:1', top: 0, bottom: 40, projectCount: 1 }]
+    })
+    expect(result?.targetBucketKey).toBe('ungrouped')
+  })
+
+  it('appends into a collapsed group whose header contains the pointer', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 12,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [],
+      groupZones: [{ bucketKey: 'group:1', top: 0, bottom: 24, projectCount: 3 }]
+    })
+    expect(result).toEqual({ targetBucketKey: 'group:1', dropIndex: 3, dropIndicatorY: 0 })
   })
 })
 

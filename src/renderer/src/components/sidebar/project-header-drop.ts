@@ -202,6 +202,105 @@ export function computeProjectHeaderDropPreview(args: {
   }
 }
 
+export type ProjectGroupDropZone = {
+  bucketKey: ProjectHeaderDragBucketKey
+  top: number
+  bottom: number
+  projectCount: number
+}
+
+export type ProjectHeaderCrossBucketDropPreview = {
+  targetBucketKey: ProjectHeaderDragBucketKey
+  dropIndex: number
+  dropIndicatorY: number
+}
+
+export function measureProjectGroupHeaderDropZones(container: HTMLElement): ProjectGroupDropZone[] {
+  const containerRect = container.getBoundingClientRect()
+  const zones: ProjectGroupDropZone[] = []
+  container.querySelectorAll<HTMLElement>('[data-project-group-header-id]').forEach((element) => {
+    const groupId = element.getAttribute('data-project-group-header-id')
+    if (!groupId) {
+      return
+    }
+    const rect = element.getBoundingClientRect()
+    const top = rect.top - containerRect.top + container.scrollTop
+    const rawCount = element.getAttribute('data-project-group-project-count')
+    const projectCount = rawCount === null ? 0 : Number(rawCount)
+    zones.push({
+      bucketKey: `group:${groupId}`,
+      top,
+      bottom: top + rect.height,
+      projectCount: Number.isFinite(projectCount) ? projectCount : 0
+    })
+  })
+  return zones
+}
+
+export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
+  pointerY: number
+  containerTop: number
+  scrollTop: number
+  repoRects: readonly ProjectHeaderDragRect[]
+  groupZones: readonly ProjectGroupDropZone[]
+}): ProjectHeaderCrossBucketDropPreview | null {
+  const localY = args.pointerY - args.containerTop + args.scrollTop
+  // 1) A group header directly under the pointer = append into that group.
+  for (const zone of args.groupZones) {
+    const bucketRepoRects = args.repoRects.filter((rect) => rect.bucketKey === zone.bucketKey)
+    if (bucketRepoRects.length === 0 && localY >= zone.top && localY <= zone.bottom) {
+      return {
+        targetBucketKey: zone.bucketKey,
+        dropIndex: zone.projectCount,
+        dropIndicatorY: Math.max(args.scrollTop, zone.top)
+      }
+    }
+  }
+  // 2) Otherwise resolve the bucket whose block (header..last project) holds the
+  //    pointer; fall back to the bucket of the nearest project header above.
+  const buckets = new Map<ProjectHeaderDragBucketKey, ProjectHeaderDragRect[]>()
+  for (const rect of args.repoRects) {
+    const list = buckets.get(rect.bucketKey) ?? []
+    list.push(rect)
+    buckets.set(rect.bucketKey, list)
+  }
+  let targetBucketKey: ProjectHeaderDragBucketKey | null = null
+  for (const [bucketKey, rects] of buckets) {
+    const top = Math.min(...rects.map((r) => r.top))
+    const bottom = Math.max(...rects.map((r) => r.bottom))
+    if (localY >= top && localY <= bottom) {
+      targetBucketKey = bucketKey
+      break
+    }
+  }
+  if (targetBucketKey === null) {
+    // nearest project header at/above the pointer
+    const above = [...args.repoRects]
+      .filter((r) => r.top <= localY)
+      .sort((a, b) => b.top - a.top)[0]
+    targetBucketKey = above ? above.bucketKey : (args.repoRects[0]?.bucketKey ?? null)
+  }
+  if (targetBucketKey === null) {
+    return null
+  }
+  const targetRects = (buckets.get(targetBucketKey) ?? []).slice().sort((a, b) => a.top - b.top)
+  let dropIndex = targetRects.length
+  let indicatorY = (targetRects.at(-1)?.bottom ?? localY) + INDICATOR_GAP_PX
+  for (const rect of targetRects) {
+    const mid = (rect.top + rect.bottom) / 2
+    if (localY < mid) {
+      dropIndex = rect.headerIndex
+      indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
+      break
+    }
+  }
+  return {
+    targetBucketKey,
+    dropIndex: targetRects.length === 0 ? 0 : dropIndex,
+    dropIndicatorY: Math.max(args.scrollTop, indicatorY)
+  }
+}
+
 export function applyAllRepoInsertAt(
   allRepoIds: readonly string[],
   draggedRepoId: string,
