@@ -30,6 +30,19 @@ const gpuCrashPattern =
 
 class MissingReproductionError extends Error {}
 
+function hasBaseReproductionEvidence({ error, gpuCrashLines, phase, terminalExerciseStarted }) {
+  if (error instanceof MissingReproductionError) {
+    return false
+  }
+  return (
+    terminalExerciseStarted ||
+    gpuCrashLines.length > 0 ||
+    // Why: the unfixed Wayland GPU path can wedge before the terminal receives
+    // a PTY; reaching this boundary means the terminal pane itself is present.
+    phase === 'setup.wait-pty'
+  )
+}
+
 function parseArgs() {
   const modeArg = process.argv.find((arg) => arg.startsWith('--mode='))
   const mode = modeArg?.slice('--mode='.length) ?? 'verify-fix'
@@ -297,8 +310,12 @@ async function runValidation(mode) {
     const rendererDiagnostics = await collectRendererDiagnostics(page)
     if (
       mode === 'expect-repro' &&
-      !(error instanceof MissingReproductionError) &&
-      (terminalExerciseStarted || gpuCrashLines.length > 0)
+      hasBaseReproductionEvidence({
+        error,
+        gpuCrashLines,
+        phase: validationState.phase,
+        terminalExerciseStarted
+      })
     ) {
       console.log(
         JSON.stringify(
