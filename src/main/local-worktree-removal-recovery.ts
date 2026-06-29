@@ -62,7 +62,7 @@ async function pruneRequiredGitWorktreeRegistration(
 export async function recoverLocalWindowsLongPathWorktreeRemoval(
   args: LocalWindowsLongPathRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
-  if (!args.force || !isWindowsLongPathWorktreeRemovalError(args.error)) {
+  if (!args.force || !isRecoverableWindowsFilesystemRemovalError(args.error)) {
     return undefined
   }
 
@@ -80,6 +80,22 @@ export async function recoverLocalWindowsLongPathWorktreeRemoval(
     args.canonicalWorktreePath
   )
   return preservedBranchResult(args.registeredWorktree, args.deleteBranch)
+}
+
+function isRecoverableWindowsFilesystemRemovalError(error: unknown): boolean {
+  if (isWindowsLongPathWorktreeRemovalError(error)) {
+    return true
+  }
+  if (process.platform !== 'win32' || typeof error !== 'object' || error === null) {
+    return false
+  }
+  const errorWithDetails = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const details = [errorWithDetails.stderr, errorWithDetails.stdout, errorWithDetails.message]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join('\n')
+  return /failed to delete .*(?:directory not empty|permission denied|access is denied|being used by another process)|(?:directory not empty|permission denied|access is denied|being used by another process).*failed to delete/i.test(
+    details
+  )
 }
 
 export async function pruneStaleLocalWorktreeRegistrationAfterFilesystemRemoval(
