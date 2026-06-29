@@ -372,30 +372,94 @@ trap - EXIT
 `userData.resourceId` from stdin (§7d). This is the **Orca-server** connection mode (the recipe emits a
 pairing URL). If the user chose **SSH** in the §1 interview, use §7g instead.
 
-### 7g. Worked example — existing SSH host (no provider CLI)
+### 7g. Worked example — existing SSH host (SSH connection mode)
 
-For a machine you already reach over SSH, there is **no provider CLI and usually no native "snapshot"**
-— so Phases 2–3 don't apply the same way. Treat the host (or a per-workspace clone of it) as the base;
-the agent's auth and toolchain must already be present or be installed by `create`. This variant is less
-battle-tested than Vercel — **flag these assumptions to the user and confirm before relying on them.**
+SSH mode is **fundamentally different from §7c/§7f**, not a relabeling of them:
+
+- **`create` does NOT run `orca serve` and does NOT emit a `pairingCode`.** Orca itself connects to the
+  host over its SSH relay, brings up the git + filesystem providers, and imports the repo. The script's
+  only job is to make the host ready and **print SSH connection details** Orca will dial.
+- The result uses a `connection` block with `type: "ssh"` and a `target`, **not** the flat
+  `pairingCode`/`projectRoot` shape. Exact shape (Orca rejects anything else):
+
+```json
+{
+  "schemaVersion": 1,
+  "connection": {
+    "type": "ssh",
+    "projectRoot": "/abs/path/to/repo/on/host",
+    "target": {
+      "label": "my-box",
+      "host": "192.0.2.10",
+      "port": 22,
+      "username": "ubuntu",
+      "identityFile": "~/.ssh/id_ed25519",
+      "jumpHost": "bastion.example.com",
+      "proxyCommand": "cloudflared access ssh --hostname %h",
+      "relayGracePeriodSeconds": 0,
+      "portForwards": []
+    }
+  }
+}
+```
+
+`label`, `host`, `port`, `username` are required; the rest are optional — omit any you don't need.
+
+**Networking → which `target` fields to set** (how *your desktop* reaches the box — there is no
+`orca serve` URL in SSH mode):
+
+- Public IP / DNS, or a Tailscale/VPN address → `host`; SSH port → `port` (usually 22).
+- Key auth → `identityFile` (add `identitiesOnly: true` if the agent has many keys).
+- Through a bastion → `jumpHost` (a `user@host` ProxyJump) **or** a full `proxyCommand` (e.g. an access
+  proxy). Use one, not both.
+- A service port the workspace needs → add entries to `portForwards`.
+- `relayGracePeriodSeconds` (optional): how long Orca keeps the SSH relay alive after the workspace
+  detaches before tearing it down; `0` = tear down immediately. Leave it off unless the user wants a
+  reconnect grace window.
+
+**Toolchain & agent auth on a persistent (no-snapshot) host — do this ONCE, by hand, before wiring the
+recipe** (there's no base image to bake; the host *is* the base). Run the §7f Phase-2 install steps and
+the §7f Phase-3 `<agent> login --device-auth` **directly over SSH on the host** (interactive, e.g.
+`ssh -t user@host '<agent> login --device-auth'`). After that the host stays ready across workspaces.
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-# resolve from env→state→fallback: ssh_host (user@host), port, project_root, repo_url, repo_ref
-# 1. ensure the remote repo is at the right commit (ssh "$ssh_host" 'git -C ... fetch/checkout; build if changed')
-# 2. start orca serve on the remote, reachable from your desktop. Two common ways to expose it:
-#    a) SSH local port-forward: ssh -fN -L "$port:127.0.0.1:$port" "$ssh_host"  → pairing-address ws://127.0.0.1:$port
-#    b) a tunnel/public address the host already has → pairing-address wss://<that-address>
-#    Then (remote) run orca serve with --recipe-json exactly as in §7c, capture its JSON (poll a file).
-# 3. print serve's JSON with userData:{ provider:"ssh", resourceId:"$ssh_host" }
-# suspend/resume/destroy: there may be nothing to suspend/destroy on a persistent host —
-#   set `destroy: none` and omit suspend/resume unless the host genuinely supports them.
+# resolve from env→state→fallback (default unset optionals to ""): ssh_username, host,
+#   ssh_port (default 22), identity_file, jump_host, proxy_command, project_root, repo_url, repo_ref
+: "${identity_file:=}"; : "${jump_host:=}"; : "${proxy_command:=}"   # avoid set -u aborts on optionals
+gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(command -v gh >/dev/null 2>&1 && gh auth token 2>/dev/null || true)}}"
+ssh_target="${ssh_username}@${host}"
+ssh_opts=(-p "$ssh_port"); [ -n "$identity_file" ] && ssh_opts+=(-i "$identity_file")
+# Why: a fresh host's key isn't in known_hosts; a StrictHostKeyChecking prompt would HANG a
+# non-interactive create. Pre-add the key (or set the option) so it can't block.
+ssh-keyscan -p "$ssh_port" "$host" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+
+# 1. ensure the repo is present and at the right commit on the host (NO orca serve here)
+ssh "${ssh_opts[@]}" "$ssh_target" \
+  "GH_TOKEN='$gh_token' GIT_TERMINAL_PROMPT=0 bash -lc '
+     set -euo pipefail
+     [ -d \"$project_root/.git\" ] || git clone \"$repo_url\" \"$project_root\"
+     cd \"$project_root\" && git fetch origin \"$repo_ref\" && git checkout -B \"$repo_ref\" FETCH_HEAD
+   '" >&2
+
+# 2. print the SSH connection block (NO pairingCode, NO orca serve). host/port/username tell Orca's
+#    relay how to dial in; identityFile/jumpHost/proxyCommand/portForwards are emitted when set.
+node -e 'const [host,port,user,idf,jh,pc,root]=process.argv.slice(1);
+  const target={ label:"per-workspace-host", host, port:Number(port), username:user };
+  if(idf) target.identityFile=idf; if(jh) target.jumpHost=jh; if(pc) target.proxyCommand=pc;
+  // add target.portForwards=[...] here if the workspace needs forwarded service ports
+  console.log(JSON.stringify({ schemaVersion:1, connection:{ type:"ssh", projectRoot:root, target } }))' \
+  "$host" "$ssh_port" "$ssh_username" "$identity_file" "$jump_host" "$proxy_command" "$project_root"
 ```
 
-If the SSH host *is* an ephemeral/snapshot-capable VM (e.g. your own hypervisor or a cloud VM with
-image support), use the Phase-2/3 + §7f model with that provider's CLI instead — the SSH-only shape
-above is for persistent hosts.
+`suspend`/`resume`/`destroy`: on a persistent host there's usually nothing to tear down — set
+`destroy: none` and omit suspend/resume. (Orca still disconnects/reconnects its own SSH relay on
+sleep/wake/delete — that's separate from these scripts.)
+
+If the SSH host is instead an **ephemeral/snapshot-capable VM** (your hypervisor, or a cloud VM with
+image support), keep the §7f Phase-2/3 base-image model for provisioning, but still emit the
+`connection.type:"ssh"` block above instead of starting `orca serve`.
 
 ### 7h. Windows local-side scripts
 
@@ -407,9 +471,11 @@ launcher), or scaffold PowerShell equivalents. Minimal PowerShell shape:
 #requires -Version 5
 $ErrorActionPreference = 'Stop'
 # resolve env→state→fallback; run the provider CLI / ssh the same way;
-# capture provider output; build the final result object and write ONE line of JSON to stdout:
-@{ schemaVersion = 1; pairingCode = $pairingCode; projectRoot = $projectRoot;
-   userData = @{ provider = $provider; resourceId = $name } } | ConvertTo-Json -Compress
+# capture provider output; build the result object for the chosen mode and write ONE line of JSON to stdout.
+# Orca-server mode: @{ schemaVersion=1; pairingCode=$pairingCode; projectRoot=$projectRoot; userData=@{...} }
+# SSH mode:        @{ schemaVersion=1; connection=@{ type="ssh"; projectRoot=$projectRoot;
+#                     target=@{ label=$label; host=$host; port=$port; username=$user } } }  (see §7g)
+($result | ConvertTo-Json -Compress -Depth 6)
 # progress/errors → Write-Error / the error stream, never stdout.
 ```
 
@@ -432,8 +498,10 @@ vmRecipes:
     destroy: ./scripts/orca-vm/cloud-sandbox-destroy.sh
 ```
 
-`create` runs **locally from the repo root**: boot the snapshot, ensure the repo is at the right commit,
-start `orca serve` in the VM, then print **one** JSON object to stdout:
+`create` runs **locally from the repo root** and prints **one** JSON object to stdout. Its shape depends
+on the connection mode chosen in §1:
+
+**Orca-server mode** — boot the env, start `orca serve` in it, and print serve's result:
 
 ```json
 {
@@ -444,8 +512,11 @@ start `orca serve` in the VM, then print **one** JSON object to stdout:
 }
 ```
 
-Required: `pairingCode` (from `orca serve --recipe-json`) and `projectRoot` (absolute remote path).
-Optional: `schemaVersion` (`1`) and `userData` (non-secret provider metadata).
+Here `pairingCode` (from `orca serve --recipe-json`) and `projectRoot` are required; `schemaVersion` (`1`)
+and `userData` are optional.
+
+**SSH mode** — do **not** run `orca serve`; print the `connection.type:"ssh"` block instead (full shape +
+worked script in §7g). `pairingCode` is **not** used in SSH mode.
 
 Lifecycle hooks (all run locally):
 
