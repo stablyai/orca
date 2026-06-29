@@ -19,6 +19,7 @@ type WorktreeCandidate = {
   source: 'current-path' | 'prior-path'
 }
 
+/** Resolve the active terminal PTY that should provide Checks panel cwd context. */
 export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): string | null {
   if (!context.activeTabId) {
     return null
@@ -42,6 +43,7 @@ export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): st
   return firstLiveLayoutPtyId ?? livePtyIds.at(-1) ?? null
 }
 
+/** Resolve the worktree whose current or prior path contains the terminal cwd. */
 export function resolveChecksPanelWorktreeFromTerminalCwd(
   cwd: string | null,
   worktrees: readonly Worktree[]
