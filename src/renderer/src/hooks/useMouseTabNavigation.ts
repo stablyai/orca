@@ -34,6 +34,8 @@ export function useMouseTabNavigation(): void {
       }
     }
 
+    // Why: browsers treat side buttons as history navigation; capture and
+    // consume each mouse phase before webviews or terminal handlers see it.
     window.addEventListener('mousedown', onMouseDown, { capture: true })
     window.addEventListener('mouseup', consumeSideButtonDefault, { capture: true })
     window.addEventListener('auxclick', consumeSideButtonDefault, { capture: true })
