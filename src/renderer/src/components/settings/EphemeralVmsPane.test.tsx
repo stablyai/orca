@@ -17,6 +17,7 @@ const mockStoreState = {
   activeRepoId: null,
   activeWorktreeId: null,
   openModal: storeMocks.openModal,
+  recordFeatureInteraction: vi.fn(),
   projects: [],
   repos: [],
   settings: null,
@@ -83,8 +84,10 @@ describe('EphemeralVmsPane', () => {
           discover: vi.fn().mockResolvedValue({ skills: [] })
         },
         cli: {
-          getInstallStatus: vi.fn().mockResolvedValue({ installed: true }),
-          getWslInstallStatus: vi.fn().mockResolvedValue({ installed: true })
+          getInstallStatus: vi.fn().mockResolvedValue({ state: 'installed', pathConfigured: true }),
+          getWslInstallStatus: vi
+            .fn()
+            .mockResolvedValue({ state: 'installed', pathConfigured: true })
         },
         platform: {
           get: vi.fn().mockReturnValue({ platform: 'darwin' })
@@ -103,12 +106,13 @@ describe('EphemeralVmsPane', () => {
     document.body.replaceChildren()
   })
 
-  it('renders guidance and opens the composer with the recipe selected', async () => {
+  it('renders the staged setup plan and opens the composer with the recipe selected', async () => {
     const container = await renderPane()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
     await vi.waitFor(() => expect(container.textContent).toContain('Ephemeral VMs skill'))
-    expect(container.textContent).toContain('How ephemeral VMs work')
+    expect(container.textContent).toContain('Setup plan')
+    expect(container.textContent).toContain('Set up & build with your agent')
     const useButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Use in workspace'
     )

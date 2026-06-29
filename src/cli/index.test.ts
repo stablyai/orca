@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: CLI parser tests share one mocked runtime client and fixture queue; splitting this file would duplicate setup and make command coverage harder to audit. */
 import path from 'path'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -1866,8 +1866,12 @@ describe('orca cli worktree awareness', () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-'))
     try {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
-      writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'start.sh'), '#!/bin/sh\n')
-      writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'cleanup.sh'), '#!/bin/sh\n')
+      const startScript = path.join(repoPath, 'scripts', 'orca-vm', 'start.sh')
+      const cleanupScript = path.join(repoPath, 'scripts', 'orca-vm', 'cleanup.sh')
+      writeFileSync(startScript, '#!/bin/sh\n')
+      writeFileSync(cleanupScript, '#!/bin/sh\n')
+      chmodSync(startScript, 0o755)
+      chmodSync(cleanupScript, 0o755)
       writeFileSync(
         path.join(repoPath, 'orca.yaml'),
         [

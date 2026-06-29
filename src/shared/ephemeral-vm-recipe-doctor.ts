@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'fs'
+import { accessSync, constants as fsConstants, existsSync, statSync } from 'fs'
 import { isAbsolute, join, normalize } from 'path'
 import type {
   EphemeralVmRecipeDoctorCheck,
@@ -64,6 +64,23 @@ export function doctorEphemeralVmRecipe(args: {
     })
   }
 
+  if (recipe.suspend) {
+    checks.push(checkCommandPath(args.repoPath, recipe.suspend, 'recipe.suspend'))
+  }
+  if (recipe.resume) {
+    checks.push(checkCommandPath(args.repoPath, recipe.resume, 'recipe.resume'))
+  }
+  // Why: a workspace suspended by `suspend` can only be woken if `resume` exists;
+  // defining one without the other strands the workspace asleep.
+  if (Boolean(recipe.suspend) !== Boolean(recipe.resume)) {
+    checks.push({
+      id: 'recipe.suspend_resume_pairing',
+      status: 'warn',
+      message: 'Recipe defines only one of suspend/resume.',
+      remediation: 'Define both so a suspended workspace can be resumed, or neither.'
+    })
+  }
+
   return buildDoctorResult(args.recipeId, args.repoPath, checks)
 }
 
@@ -116,6 +133,20 @@ function checkCommandPath(
       status: 'fail',
       message: `Command path does not exist: ${executable}`,
       remediation: 'Create the script or update the recipe command path.'
+    }
+  }
+  // Why: a non-executable script fails create with a confusing EACCES. The exec
+  // bit is a POSIX concept — skip on Windows, where it does not apply.
+  if (process.platform !== 'win32') {
+    try {
+      accessSync(scriptPath, fsConstants.X_OK)
+    } catch {
+      return {
+        id,
+        status: 'warn',
+        message: `Command exists but is not executable: ${executable}`,
+        remediation: 'Make it executable: chmod +x (git: git update-index --chmod=+x).'
+      }
     }
   }
   return {
