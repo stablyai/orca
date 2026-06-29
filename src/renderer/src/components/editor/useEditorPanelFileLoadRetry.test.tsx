@@ -15,6 +15,18 @@ import {
   useEditorPanelFileLoadRetry
 } from './useEditorPanelFileLoadRetry'
 
+// Why: the real setFileContents replaces the map; a key the hook deletes must
+// disappear. A merge (Object.assign) would silently keep a stale loadError.
+function replaceFileContents(
+  target: Record<string, FileContent>,
+  next: Record<string, FileContent>
+): void {
+  for (const key of Object.keys(target)) {
+    delete target[key]
+  }
+  Object.assign(target, next)
+}
+
 function makeFile(overrides: Partial<OpenFile> = {}): OpenFile {
   return {
     id: 'tab-1',
@@ -98,8 +110,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     const setFileContents = (
       updater: (prev: Record<string, FileContent>) => Record<string, FileContent>
     ): void => {
-      const next = updater(fileContents)
-      Object.assign(fileContents, next)
+      replaceFileContents(fileContents, updater(fileContents))
     }
     // loadFileContent (the retry callback) clears then re-fails as owner-not-ready.
     const loadFileContent = vi.fn(async (_filePath: string, id: string) => {
@@ -162,7 +173,7 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     const setFileContents = (
       updater: (prev: Record<string, FileContent>) => Record<string, FileContent>
     ): void => {
-      Object.assign(fileContents, updater(fileContents))
+      replaceFileContents(fileContents, updater(fileContents))
     }
     // The repo hydrates on the first retry: the read now succeeds.
     const loadFileContent = vi.fn(async (_filePath: string, id: string) => {

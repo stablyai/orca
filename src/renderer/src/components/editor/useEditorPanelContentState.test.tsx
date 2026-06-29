@@ -205,17 +205,17 @@ describe('useEditorPanelContentState', () => {
     expect(latestFileContents[activeFile.id]?.loadError).not.toMatch(/access denied/i)
     expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
 
-    // The SSH repo finishes hydrating: the worktree owner resolves to its target.
+    // The SSH repo finishes hydrating: the worktree owner resolves to its
+    // target. We do NOT bump the reload nonce here — the retry hook must
+    // re-attempt the read on its own once the owner-not-ready error clears.
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
     mocks.getConnectionIdForFile.mockReturnValue('ssh-target-1')
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'remote', isBinary: false })
 
-    const reloadedFile = { ...activeFile, fileContentReloadNonce: 1 }
-    await act(async () => {
-      root?.render(<HookProbe activeFile={reloadedFile} openFiles={[reloadedFile]} />)
+    // Driven purely by the automatic retry (no re-render, no forced reload).
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('remote'), {
+      timeout: 3000
     })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('remote'))
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/user/project/src/index.ts',
