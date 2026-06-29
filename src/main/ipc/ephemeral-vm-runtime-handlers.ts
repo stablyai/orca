@@ -146,15 +146,11 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
       // 'running', so disconnecting would break the still-active session with no resume.
       if (runtime.connectionMode === 'ssh' && !result.skipped) {
-        const disconnectError = await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).then(
-          () => null,
-          (error: unknown) => (error instanceof Error ? error.message : String(error))
-        )
-        if (disconnectError) {
-          return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-            status: 'suspend_failed'
-          })
-        }
+        // Why: the suspend recipe already succeeded (VM is suspended), so a failed
+        // LOCAL relay teardown must NOT flip to 'suspend_failed' — that status is not
+        // resume-eligible (see resume gate below), which would strand the runtime
+        // unrecoverable. Keep 'suspended'; resume re-establishes the relay anyway.
+        await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
       }
       return result.runtime
     }

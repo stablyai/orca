@@ -93,7 +93,22 @@ export async function runRecipeCommand(args: {
 }
 
 function killRecipeProcess(child: ChildProcessWithoutNullStreams): void {
-  if (process.platform !== 'win32' && child.pid) {
+  if (process.platform === 'win32') {
+    // Recipes run through `cmd.exe /c` (shell: true), so child.kill() would only
+    // terminate the wrapper and orphan the actual recipe subprocess (e.g. a cloud
+    // CLI mid-provision). taskkill /T walks and kills the whole tree.
+    if (child.pid) {
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+      killer.on('error', () => child.kill())
+      return
+    }
+    child.kill()
+    return
+  }
+  if (child.pid) {
     try {
       // Recipes run through a shell; kill the process group so shell children do not linger.
       process.kill(-child.pid, 'SIGTERM')

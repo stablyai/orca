@@ -1,5 +1,6 @@
 import type { Store } from '../persistence'
 import type { SshTarget } from '../../shared/ssh-types'
+import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
 
 export class SshConnectionStore {
@@ -148,7 +149,7 @@ export class SshConnectionStore {
 }
 
 export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
-  return `runtime-ssh-${runtimeId}`
+  return `${RUNTIME_OWNED_SSH_TARGET_ID_PREFIX}${runtimeId}`
 }
 
 export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {

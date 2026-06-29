@@ -126,53 +126,77 @@ export function registerEphemeralVmHandlers(store: Store): void {
           chunk: redactEphemeralVmRecipeDiagnosticText(chunk)
         })
       }
-      const result = await provisionEphemeralVmRuntime({
-        userDataPath: app.getPath('userData'),
-        repoPath: repo.repo.path,
-        repoId: repo.repo.id,
-        recipe,
-        projectId: args.projectId,
-        workspaceId: args.workspaceId,
-        workspaceName: args.workspaceName,
-        ...(controller ? { signal: controller.signal } : {}),
-        onStdout: (chunk) => sendProvisionEvent('stdout', chunk),
-        onStderr: (chunk) => sendProvisionEvent('stderr', chunk)
-      }).finally(() => {
-        if (args.provisionId) {
-          activeProvisionControllers.delete(args.provisionId)
-        }
-      })
-      if (!result.ok) {
-        return {
-          ok: false,
-          error: result.start.error,
-          stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
-          stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
-        }
-      }
-      const connection = getEphemeralVmRecipeResultConnection(result.start.result)
-      if (connection.type === 'ssh') {
-        try {
-          const ssh = await connectRuntimeOwnedSshTarget({
-            runtimeId: result.runtime.id,
-            connection,
-            ...(controller ? { signal: controller.signal } : {})
-          })
-          const runtime = updateEphemeralVmRuntimeStatus(
-            app.getPath('userData'),
-            result.runtime.id,
-            {
-              sshTargetId: ssh.targetId
-            }
-          )
+      // Why: keep the controller registered across BOTH the recipe-create phase AND
+      // the post-create SSH-connect/provider-wait phase, so cancelProvision can still
+      // abort during the up-to-10s SSH connect window. Removing it in the provision
+      // promise's own .finally() would deregister it before SSH connect even starts.
+      try {
+        const result = await provisionEphemeralVmRuntime({
+          userDataPath: app.getPath('userData'),
+          repoPath: repo.repo.path,
+          repoId: repo.repo.id,
+          recipe,
+          projectId: args.projectId,
+          workspaceId: args.workspaceId,
+          workspaceName: args.workspaceName,
+          ...(controller ? { signal: controller.signal } : {}),
+          onStdout: (chunk) => sendProvisionEvent('stdout', chunk),
+          onStderr: (chunk) => sendProvisionEvent('stderr', chunk)
+        })
+        if (!result.ok) {
           return {
-            ok: true,
-            connectionType: 'ssh',
-            runtime,
-            sshTargetId: ssh.targetId,
-            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
-            warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
+            ok: false,
+            error: result.start.error,
+            stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
+            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
           }
+        }
+        const connection = getEphemeralVmRecipeResultConnection(result.start.result)
+        if (connection.type === 'ssh') {
+          try {
+            const ssh = await connectRuntimeOwnedSshTarget({
+              runtimeId: result.runtime.id,
+              connection,
+              ...(controller ? { signal: controller.signal } : {})
+            })
+            const runtime = updateEphemeralVmRuntimeStatus(
+              app.getPath('userData'),
+              result.runtime.id,
+              {
+                sshTargetId: ssh.targetId
+              }
+            )
+            return {
+              ok: true,
+              connectionType: 'ssh',
+              runtime,
+              sshTargetId: ssh.targetId,
+              stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
+              warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
+            }
+          } catch (error) {
+            await cleanupEphemeralVmRuntime({
+              userDataPath: app.getPath('userData'),
+              repoPath: repo.repo.path,
+              recipe,
+              runtimeId: result.runtime.id
+            }).catch(() => undefined)
+            return {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+              stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
+              stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
+            }
+          }
+        }
+
+        let environment: ReturnType<typeof addEnvironmentFromPairingCode>
+        try {
+          environment = addEnvironmentFromPairingCode(app.getPath('userData'), {
+            name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
+            pairingCode: connection.pairingCode,
+            source: 'ephemeral-vm'
+          })
         } catch (error) {
           await cleanupEphemeralVmRuntime({
             userDataPath: app.getPath('userData'),
@@ -187,39 +211,21 @@ export function registerEphemeralVmHandlers(store: Store): void {
             stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
           }
         }
-      }
-
-      let environment: ReturnType<typeof addEnvironmentFromPairingCode>
-      try {
-        environment = addEnvironmentFromPairingCode(app.getPath('userData'), {
-          name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
-          pairingCode: connection.pairingCode,
-          source: 'ephemeral-vm'
+        const runtime = updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
+          runtimeEnvironmentId: environment.id
         })
-      } catch (error) {
-        await cleanupEphemeralVmRuntime({
-          userDataPath: app.getPath('userData'),
-          repoPath: repo.repo.path,
-          recipe,
-          runtimeId: result.runtime.id
-        }).catch(() => undefined)
         return {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-          stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
-          stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
+          ok: true,
+          connectionType: 'orca-server',
+          runtime,
+          environment: redactRuntimeEnvironment(environment),
+          stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
+          warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
         }
-      }
-      const runtime = updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
-        runtimeEnvironmentId: environment.id
-      })
-      return {
-        ok: true,
-        connectionType: 'orca-server',
-        runtime,
-        environment: redactRuntimeEnvironment(environment),
-        stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
-        warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
+      } finally {
+        if (args.provisionId) {
+          activeProvisionControllers.delete(args.provisionId)
+        }
       }
     }
   )

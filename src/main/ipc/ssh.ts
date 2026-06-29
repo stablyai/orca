@@ -16,6 +16,7 @@ import {
   type SshConnectionState
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
+import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
@@ -207,6 +208,12 @@ function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
+  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, which
+  // has no surface for them. Broadcasting their state would make the renderer fire
+  // a listTargets() lookup per event (incl. each relay-lost reconnect) for nothing.
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return
+  }
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', {
