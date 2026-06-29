@@ -8,6 +8,7 @@ vi.mock('child_process', () => ({
   execFile: execFileMock
 }))
 
+import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 
 // Why: the module wraps execFile with promisify, so the mock must honor the
@@ -71,6 +72,7 @@ describe('resolveAgentForegroundProcess', () => {
 
   beforeEach(() => {
     execFileMock.mockReset()
+    resetProcessTableSnapshotForTests()
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'darwin' })
   })

@@ -235,7 +235,8 @@ describe('staged background worktree creation', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      { activateCreatedTabs: false }
     )
     expect(queueNewWorkspaceTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')

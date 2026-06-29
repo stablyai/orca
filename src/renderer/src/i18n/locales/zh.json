@@ -56,7 +56,8 @@
     "zoomOut": "缩小",
     "openWorktreePalette": "打开工作树面板",
     "window": "窗口",
-    "help": "帮助"
+    "help": "帮助",
+    "paste": "Paste"
   },
   "tray": {
     "openOrca": "打开 Orca",
@@ -356,6 +357,13 @@
             }
           }
         },
+        "worktree": {
+          "background": {
+            "terminals": {
+              "setupTitle": "Setup"
+            }
+          }
+        },
         "work": {
           "item": {
             "direct": {
@@ -534,7 +542,9 @@
         "ba6cb77082": "无法连接到项目。",
         "chooseOrAddProjectBeforeWorkspace": "创建工作区前，请选择或添加项目。",
         "folderWorkspaceCreateFailedTitle": "文件夹工作区创建失败",
-        "folderWorkspaceCreateFailedMessage": "无法创建文件夹工作区。请查看上方错误详情，然后重试。"
+        "folderWorkspaceCreateFailedMessage": "无法创建文件夹工作区。请查看上方错误详情，然后重试。",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
+        "5f3d2c8a1b": "Failed to resolve MR base."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "无法上传删除的文件。",
@@ -1123,7 +1133,9 @@
         "notePasteTooLarge": "笔记字段的粘贴内容过大。",
         "reuseExistingBranch": "复用分支",
         "reuseExistingBranchHint": "检出已有分支，而不是从它创建新分支。",
-        "createMultiple": "创建更多"
+        "createMultiple": "创建更多",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "创建工作树",
@@ -2234,7 +2246,25 @@
             "2ddbd6fe8a": "检查过",
             "ee81adfcef": "查看",
             "4d0b72481c": "忽略",
-            "9cc26c019d": "移除"
+            "9cc26c019d": "移除",
+            "0e2d235c63": "Inactive workspace scan ready",
+            "4a35c08764": "Review",
+            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
+            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "3d957ff117": "No workspaces match these filters.",
+            "e94b1f8bb4": "Clear filters",
+            "efb3843e75": "Filter and sort workspaces",
+            "93b7381d50": "Filters",
+            "a615e24679": "Sort",
+            "4cc5b73efe": "Finding inactive workspaces...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
+            "searchPlaceholder": "Search workspaces",
+            "ageFilter": "Age",
+            "reviewFilter": "Review",
+            "gitFilter": "Git",
+            "contextFilter": "Context",
+            "sortBy": "Sort by",
+            "sortDirection": "Direction"
           }
         }
       },
@@ -2378,7 +2408,8 @@
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
-            "df766809e0": "折叠窗格"
+            "df766809e0": "折叠窗格",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "重新启动守护进程",
@@ -2428,7 +2459,10 @@
                   "38e41edc6e": "该工作区无法分叉为 git 工作树。",
                   "f867385bb5": "找不到此分支的源工作区。",
                   "046e8d853c": "没有要 fork 的终端上下文",
-                  "c00421d320": "已复制分叉上下文。启动智能体并粘贴它以启动分叉。"
+                  "c00421d320": "已复制分叉上下文。启动智能体并粘贴它以启动分叉。",
+                  "f62b40e2c7": "没有可复制的终端上下文",
+                  "373a3103e7": "已复制上下文",
+                  "3fc568a49d": "无法复制上下文。"
                 }
               }
             },
@@ -4332,6 +4366,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "分支"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "永久隐藏 {{value0}} 的外部工作树",
+          "d9f7b2a14c": "折叠 {{value0}} 的外部创建的新工作树",
+          "e2c4a8d91f": "展开 {{value0}} 的外部创建的新工作树",
+          "7c4e9b2a81": "外部创建的新工作树",
+          "5e1b8d3f62": "永久隐藏外部工作树",
+          "4d7a1c9e53": "这些工作树是在 Orca 外部创建的。",
+          "8b3f2e1d74": "导入",
+          "1c9e7a4b28": "保持隐藏",
+          "6f2d8c1e95": "全部导入",
+          "c3e8a1f4b2": "不再显示"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "无法保持外部工作树隐藏。请重试。",
+          "b7e4d1a062": "无法导入外部工作树。请重试。",
+          "c94f0b3a15": "无法永久隐藏外部工作树。请重试。"
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "隐藏外部工作树？",
+          "6e91b3c4d2": "对于 {{value0}}，外部工作树将不再显示在侧边栏或此列表中，包括之后创建的工作树。",
+          "1f8a5d9e73": "之后可以在项目设置中重新开启。",
+          "8c0b2e7a41": "打开 Non-Orca 工作树设置",
+          "5d1c9f0a82": "取消",
+          "3b7e4a1c96": "隐藏外部工作树"
         }
       },
       "shared": {
@@ -4575,10 +4634,19 @@
             "tintOpacity": "色调强度",
             "tintOpacityDescription": "控制色调混入边栏的强度。"
           },
-          "workspaceCardLayoutGuidance": "使用工作区侧边栏选项菜单 > 卡片布局 > 紧凑。",
+          "workspaceCardLayoutGuidance": "从工作区侧边栏管理。",
           "872af9556e": "系统托盘",
           "2edf606c46": "关闭时最小化到托盘",
-          "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。"
+          "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+          "interfaceDefaultFont": "默认字体",
+          "terminalDefaultFont": "默认字体",
+          "interfaceTitle": "界面",
+          "terminalTitle": "终端",
+          "windowSidebarTitle": "窗口和侧边栏",
+          "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",
+          "statusBarCount": "显示 {{value0}} 个指示器。",
+          "gitIgnoredGlossary": "与 .gitignore 匹配的文件。",
+          "statusBarDescription": "Choose which indicators appear in the status bar."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4903,6 +4971,17 @@
             "description": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
             "title": "新卡片样式",
             "toggleLabel": "切换新卡片样式"
+          },
+          "nativeChat": {
+            "title": "Native chat",
+            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "toggleLabel": "Toggle native chat",
+            "defaultTitle": "Default view",
+            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultViewLabel": "Default native chat view",
+            "defaultViewTerminal": "Terminal chat",
+            "defaultViewNative": "Native chat"
           }
         },
         "FloatingWorkspacePane": {
@@ -5340,7 +5419,10 @@
           "b5a2ed83ff": "应用商店",
           "c8491c17ef": "通过扫描二维码从手机控制 Orca。 Beta/早期预览 - 预计会出现错误和重大更改。从以下位置获取 iOS 应用程序",
           "e7a3ae8c4e": "移动端",
-          "174f4a3c6d": "通过手机控制终端和智能体。"
+          "174f4a3c6d": "通过手机控制终端和智能体。",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "发送测试通知",
@@ -5590,7 +5672,9 @@
           "2b6356e744": "已保存",
           "81057d5f71": "保存中...",
           "da37d6f10e": "复制",
-          "3149964b66": "已复制"
+          "3149964b66": "已复制",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 仓库颜色",
@@ -6189,7 +6273,9 @@
           "4415beb958": "已禁用",
           "4e7d41a9f0": "已启用",
           "e90afcc44f": "关",
-          "16c471ee03": "开"
+          "16c471ee03": "开",
+          "typographyAdvanced": "排版",
+          "dimUnfocusedPanes": "调暗未聚焦的窗格。"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "像素",
@@ -6220,12 +6306,12 @@
           "3d88af864d": "选择 PowerShell shell 选项是为新终端窗格启动 Windows PowerShell 还是 PowerShell 7+。",
           "8a956cc91e": "双击选择时将字符视为单词边界。",
           "4bebcc2b2c": "单词分隔符",
-          "12e06178fa": "MB",
+          "12e06178fa": "行",
           "907b0b9d3e": "自定义",
-          "5336c096af": "{{value0}} 兆字节",
-          "81d86b2dd2": "新终端窗格的最大终端回滚缓冲区大小。",
-          "9df53f7c14": "回滚大小",
-          "c3810b2b42": "最大终端回滚缓冲区大小。",
+          "5336c096af": "{{value0}} 行",
+          "81d86b2dd2": "为新窗格和已打开窗格保留的桌面终端行数。",
+          "9df53f7c14": "回滚行数",
+          "c3810b2b42": "保留的桌面终端行数。",
           "267d020745": "回滚、字边界和特定于平台的终端行为。",
           "5e5f06c82c": "高级",
           "003df129fe": "水平分割",
@@ -6717,7 +6803,7 @@
             },
             "workspaceCardLayout": {
               "title": "工作区卡片布局",
-              "description": "从工作区侧边栏选项菜单在紧凑和详细工作区卡片之间切换。",
+              "description": "工作区卡片可以使用紧凑或详细布局。",
               "compact": "紧凑",
               "compactDisplay": "紧凑显示",
               "workspaceCards": "工作区卡片",
@@ -7007,6 +7093,10 @@
               "title": "新卡片样式",
               "worktree": "工作树",
               "worktrees": "工作树"
+            },
+            "nativeChat": {
+              "title": "Native chat",
+              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
             }
           }
         },
@@ -7407,7 +7497,9 @@
               "f4ed142753": "手机",
               "f213400800": "移动端",
               "671eb4173c": "通过手机控制终端和智能体。",
-              "ffd52a96e4": "移动端"
+              "ffd52a96e4": "移动端",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -7850,8 +7942,9 @@
             "957a0203fc": "单词分隔符",
             "56fff3d113": "记忆",
             "fffdff40a7": "缓冲",
-            "f7d56b6281": "最大终端回滚缓冲区大小。",
-            "7674e758e1": "回滚大小",
+            "rows": "行",
+            "f7d56b6281": "保留的桌面终端行数。",
+            "7674e758e1": "回滚行数",
             "411229c636": "浅色",
             "781f49d942": "分隔线",
             "77d9f9cd55": "控制浅色模式下窗格之间的分割分隔线。",
@@ -8351,6 +8444,9 @@
           "wslUnavailable": "WSL is not available on this machine.",
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+        },
+        "AppearanceAdvancedDisclosure": {
+          "advanced": "高级"
         }
       },
       "right": {
@@ -9730,7 +9826,12 @@
           "a6cffbbb0b": "生成代码",
           "e59a252eca": "重新生成代码",
           "d0b52871ce": "您的手机已配对。",
-          "051978a785": "您的手机已配对。"
+          "051978a785": "您的手机已配对。",
+          "channel": {
+            "group": "发布渠道",
+            "preview": "预览版",
+            "stable": "稳定版"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -9749,7 +9850,11 @@
           "ad2284a9e2": "关闭 · Esc",
           "9883b58693": "关闭 Orca 手机",
           "fb5f28330e": "在侧边栏中显示",
-          "c669abcf8f": "从侧边栏隐藏"
+          "c669abcf8f": "从侧边栏隐藏",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "终端会话",
@@ -9760,7 +9865,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "使用 Android 相机扫描以从 GitHub Releases 下载最新的 APK。",
-              "432db52b73": "使用 iPhone 相机扫描以打开 App Store。"
+              "432db52b73": "使用 iPhone 相机扫描以打开 App Store。",
+              "preview": {
+                "tagline": "最新功能，每日更新。"
+              },
+              "stable": {
+                "tagline": "公开发布版，每周更新。"
+              }
             }
           }
         },
@@ -11018,7 +11129,8 @@
           "b3e7f9a1c2": "检查修复上下文不可用",
           "d5a8c2f1b9": "启动默认 AI 智能体来修复此检查",
           "e2b4d7c8a1": "为此检查选择智能体",
-          "f1c9e3a6d4": "选择智能体修复检查"
+          "f1c9e3a6d4": "选择智能体修复检查",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11039,6 +11151,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "粘贴内容过大。"
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {
@@ -11656,6 +11775,11 @@
           "chooseHost": "选择自动化主机",
           "adding": "正在添加项目…",
           "addProject": "添加项目"
+        },
+        "AutomationSetupDecisionField": {
+          "5a7863909c": "为每个新工作区运行设置",
+          "18f000ad4e": "Advanced",
+          "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
       "agent": {
@@ -11878,6 +12002,11 @@
             "later": "稍后"
           }
         }
+      },
+      "nativeChat": {
+        "contextMenu": {
+          "copy": "Copy"
+        }
       }
     },
     "i18n": {
@@ -11891,6 +12020,94 @@
           "b3d7e0f1a8": "合并请求",
           "a2c6d9e0f7": "合并请求",
           "91b5c8d7e6": "GitLab"
+        }
+      }
+    }
+  },
+  "components": {
+    "native-chat": {
+      "composer": {
+        "imageUnsupported": "Image paste is not supported for this agent.",
+        "send": "Send",
+        "noPty": "No live terminal — toggle back to reconnect.",
+        "locked": "Input is held by another device.",
+        "placeholder": "Send a message…",
+        "mentionHint": "Referencing file:",
+        "attach": "Attach file",
+        "startDictation": "Start dictation",
+        "stopDictation": "Stop dictation",
+        "noSkills": "No matching skills",
+        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
+        "removeAttachment": "Remove attachment"
+      },
+      "tool": {
+        "running": "Running…",
+        "result": "Result"
+      },
+      "status": {
+        "responding": "Agent is responding"
+      },
+      "jumpToLatest": "Jump to latest",
+      "toggle": {
+        "showTerminal": "Show terminal",
+        "showChat": "Show chat view"
+      },
+      "state": {
+        "loading": {
+          "title": "Loading conversation…",
+          "subtitle": "Reading the agent transcript."
+        },
+        "error": {
+          "title": "Could not load conversation",
+          "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
+        },
+        "notAgent": {
+          "title": "No conversation here",
+          "subtitle": "This terminal is not running a recognized coding agent."
+        },
+        "empty": {
+          "title": "Start a chat with {{value0}}",
+          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+        }
+      },
+      "stop": "Stop the agent",
+      "copyMessage": {
+        "copied": "Copied",
+        "copy": "Copy message"
+      },
+      "scrollMessageToTop": "Scroll this message to top",
+      "loadingEarlier": "Loading…",
+      "loadEarlier": "Load earlier messages",
+      "question": {
+        "step": "Step {{value0}}",
+        "other": "Other…",
+        "otherPlaceholder": "Type your answer",
+        "cancel": "Cancel",
+        "send": "Send answer",
+        "next": "Next"
+      },
+      "approval": {
+        "title": "Allow {{value0}}?",
+        "allow": "Allow",
+        "deny": "Deny"
+      }
+    },
+    "tab": {
+      "bar": {
+        "SortableTabContextMenu": {
+          "switchToTerminalView": "Switch to terminal view",
+          "switchToChatView": "Switch to chat view"
+        }
+      }
+    },
+    "workspace": {
+      "cleanup": {
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "Review alpha cleanup"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     }

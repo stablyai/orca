@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { HeroFlow, HeroIntro, HeroPaired, type PairedDevice, type Platform } from './MobileHero'
 import type { StepIndex } from './MobileHero'
-import { PLATFORM_COPY } from './mobile-platform-copy'
+import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
@@ -18,6 +18,8 @@ type MobilePageContentProps = {
   handleBack: () => void
   handleContinue: () => void
   installQrUrl: string | null
+  iosChannel: IosChannel
+  setIosChannel: (channel: IosChannel) => void
   loadNetworkInterfaces: () => void
   networkInterfaces: MobileNetworkInterface[]
   openInstallUrl: () => void
@@ -49,6 +51,8 @@ export function MobilePageContent({
   handleBack,
   handleContinue,
   installQrUrl,
+  iosChannel,
+  setIosChannel,
   loadNetworkInterfaces,
   networkInterfaces,
   openInstallUrl,
@@ -92,7 +96,9 @@ export function MobilePageContent({
               platform={platform}
               onPlatformChange={setPlatform}
               installQrUrl={installQrUrl}
-              installCopy={PLATFORM_COPY[platform]}
+              installCopy={getInstallCopy(platform, iosChannel)}
+              iosChannel={iosChannel}
+              onIosChannelChange={setIosChannel}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}

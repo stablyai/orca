@@ -159,6 +159,65 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
     ])
   })
 
+  it('preserves the status refresh error after staging instead of reporting a branch change', async () => {
+    const client = clientWith([
+      ok(status([entry('unstaged')])),
+      ok({ success: true }),
+      fail('Desktop disconnected while refreshing status')
+    ])
+
+    await expect(
+      prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {
+        branch: 'feature/x',
+        title: 'feature/x',
+        status: null
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Desktop disconnected while refreshing status',
+      committed: false,
+      status: expect.objectContaining({
+        entries: [expect.objectContaining({ area: 'unstaged' })]
+      })
+    })
+
+    expect(client.calls.map((call) => call.method)).toEqual([
+      'git.status',
+      'git.bulkStage',
+      'git.status'
+    ])
+  })
+
+  it('reports refresh failures after a successful commit without hiding that commit happened', async () => {
+    const client = clientWith([
+      ok(status([entry('staged')])),
+      ok({ success: true }),
+      fail('Unable to refresh after commit')
+    ])
+
+    await expect(
+      prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {
+        branch: 'feature/x',
+        title: 'feature/x',
+        status: null,
+        commitMessage: 'Use my message'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Unable to refresh after commit',
+      committed: true,
+      status: expect.objectContaining({
+        entries: [expect.objectContaining({ area: 'staged' })]
+      })
+    })
+
+    expect(client.calls.map((call) => call.method)).toEqual([
+      'git.status',
+      'git.commit',
+      'git.status'
+    ])
+  })
+
   it('returns an actionable error when commit message generation fails', async () => {
     const client = clientWith([
       ok(status([entry('staged')])),
@@ -183,6 +242,40 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
     expect(client.calls.map((call) => call.method)).toEqual([
       'git.status',
       'git.generateCommitMessage'
+    ])
+  })
+
+  it('returns the attempted commit message and staged snapshot when commit fails', async () => {
+    const client = clientWith([
+      ok(status([entry('unstaged')])),
+      ok({ success: true }),
+      ok(status([entry('staged')])),
+      ok({ success: true, message: 'Generated mobile commit' }),
+      ok({ success: false, error: 'lint-staged failed' })
+    ])
+
+    await expect(
+      prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {
+        branch: 'feature/x',
+        title: 'feature/x',
+        status: null
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'lint-staged failed',
+      committed: false,
+      commitMessage: 'Generated mobile commit',
+      status: expect.objectContaining({
+        entries: [expect.objectContaining({ area: 'staged' })]
+      })
+    })
+
+    expect(client.calls.map((call) => call.method)).toEqual([
+      'git.status',
+      'git.bulkStage',
+      'git.status',
+      'git.generateCommitMessage',
+      'git.commit'
     ])
   })
 

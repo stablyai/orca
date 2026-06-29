@@ -9,7 +9,7 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
-import type { PtyConnectResult, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
+import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-transport'
 import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
 import {
@@ -507,7 +507,13 @@ export function createRemoteRuntimePtyTransport(
       storedCallbacks = options.callbacks
       currentRuntimeEnvironmentId =
         getRemoteRuntimePtyEnvironmentId(options.existingPtyId) ?? runtimeEnvironmentId
-      handle = getRemoteRuntimeTerminalHandle(options.existingPtyId)
+      const previousHandle = handle
+      const nextHandle = getRemoteRuntimeTerminalHandle(options.existingPtyId)
+      if (previousHandle && previousHandle !== nextHandle) {
+        // Why: debounced input is scoped by the current terminal handle at flush time.
+        inputBatcher.clear()
+      }
+      handle = nextHandle
       if (!handle) {
         connected = false
         remotePtyId = null

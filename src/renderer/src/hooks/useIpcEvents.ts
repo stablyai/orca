@@ -111,12 +111,14 @@ import {
   resetAgentHookCompletionNotificationCoordinators,
   syncAgentHookCompletionNotificationSettings
 } from './agent-hook-completion-notifications'
+import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -252,6 +254,12 @@ function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<stri
   return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
 }
 
+function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
+  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
+    focusTerminalTabSurface(tabId, leafId)
+  }
+}
+
 function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
   store.setActiveView('terminal')
   store.setActiveWorktree(worktreeId)
@@ -260,12 +268,6 @@ function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string):
   store.markWorktreeVisited(worktreeId)
   if (!store.isNavigatingHistory) {
     store.recordWorktreeVisit(worktreeId)
-  }
-}
-
-function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
-  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
-    focusTerminalTabSurface(tabId, leafId)
   }
 }
 
@@ -1394,6 +1396,12 @@ export function useIpcEvents(): void {
                 ? store.createTab(worktreeId, undefined, undefined, {
                     initialPtyId: ptyId,
                     activate: shouldActivate,
+                    ...(launchAgent
+                      ? {
+                          launchAgent,
+                          ...initialAgentTabViewModeProps(store.settings)
+                        }
+                      : {}),
                     // Why: tabId hint comes from CLI-spawned PTYs whose env
                     // already has the pane key baked in. Adopting the tab under
                     // the same id keeps hook-event attribution working.
@@ -1555,12 +1563,16 @@ export function useIpcEvents(): void {
               })
             )
           }
-          const tab = store.createTab(
-            worktreeId,
-            data.targetGroupId,
-            undefined,
-            shouldActivate ? undefined : { activate: false, recordInteraction: false }
-          )
+          const tabOptions = data.launchAgent
+            ? {
+                ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
+                launchAgent: data.launchAgent,
+                ...initialAgentTabViewModeProps(store.settings)
+              }
+            : shouldActivate
+              ? undefined
+              : { activate: false, recordInteraction: false }
+          const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
               .getState()
@@ -2772,6 +2784,9 @@ export function useIpcEvents(): void {
         agentType: data.agentType,
         toolName: data.toolName,
         toolInput: data.toolInput,
+        // Why: the live AskUserQuestion prompt rides this IPC field; omitting it
+        // here silently dropped the native question card on web/mobile clients.
+        interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted
       })
@@ -2877,6 +2892,20 @@ export function useIpcEvents(): void {
       ) {
         // Why: renderer may receive an old/stale main-process child completion.
         // Keep the defensive store guard and completion notification path in sync.
+        return 'dropped'
+      }
+      if (
+        shouldSuppressCodexAutoApprovalStatus(statusPayload, {
+          paneKey: data.paneKey,
+          tabId: data.tabId,
+          terminalHandle: data.terminalHandle,
+          launchToken: data.launchToken,
+          providerSession: data.providerSession,
+          existingProviderSession: existingStatus?.providerSession
+        })
+      ) {
+        // Why: Codex yolo permission hooks are not user-actionable, and must
+        // not drive status, synthetic titles, unread badges, or notifications.
         return 'dropped'
       }
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)

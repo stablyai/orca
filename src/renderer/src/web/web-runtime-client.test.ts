@@ -528,4 +528,49 @@ describe('WebRuntimeClient', () => {
       })
     }
   })
+
+  it('emits the buildUnsubscribe RPC frame on subscription teardown', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const internals = client as unknown as {
+      waitForConnected: (timeoutMs?: number) => Promise<void>
+      sendEncrypted: (message: unknown) => boolean
+      subscribeOnCurrentConnection: (
+        method: string,
+        params: unknown,
+        callbacks: unknown,
+        options?: { buildUnsubscribe?: (params: unknown) => unknown }
+      ) => Promise<{ unsubscribe: () => void }>
+    }
+    vi.spyOn(internals, 'waitForConnected').mockResolvedValue(undefined)
+    const sent: unknown[] = []
+    vi.spyOn(internals, 'sendEncrypted').mockImplementation((message) => {
+      sent.push(message)
+      return true
+    })
+
+    const handle = await internals.subscribeOnCurrentConnection(
+      'nativeChat.subscribe',
+      { agent: 'claude', sessionId: 'sess-1' },
+      { onResponse: vi.fn() },
+      {
+        buildUnsubscribe: () => ({
+          method: 'nativeChat.unsubscribe',
+          params: { subscriptionId: 'claude:sess-1' }
+        })
+      }
+    )
+
+    handle.unsubscribe()
+
+    const unsubscribeFrame = sent.find(
+      (m) => (m as { method?: string }).method === 'nativeChat.unsubscribe'
+    ) as { params: { subscriptionId: string } } | undefined
+    expect(unsubscribeFrame?.params.subscriptionId).toBe('claude:sess-1')
+    client.close()
+  })
 })

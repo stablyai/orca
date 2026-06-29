@@ -47,6 +47,16 @@ export type WebRuntimeSubscriptionHandle = {
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
 }
 
+export type SubscribeOptions = {
+  timeoutMs?: number
+  // Why: streaming subscriptions whose server-side cleanup is keyed by a
+  // client-supplied token (native chat keys its fs-watcher by agent:sessionId)
+  // must send an explicit unsubscribe RPC on teardown so the watcher is reaped
+  // on view-toggle, not just on socket close. Returns the RPC frame to emit, or
+  // null when the method needs no explicit teardown.
+  buildUnsubscribe?: (params: unknown) => { method: string; params: unknown } | null
+}
+
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 10_000
@@ -101,7 +111,7 @@ export class WebRuntimeClient {
     method: string,
     params: unknown,
     callbacks: SubscriptionCallbacks,
-    options?: { timeoutMs?: number }
+    options?: SubscribeOptions
   ): Promise<WebRuntimeSubscriptionHandle> {
     if (SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)) {
       // Why: file watches are text-only and already have an explicit
@@ -135,6 +145,9 @@ export class WebRuntimeClient {
       )
       return {
         unsubscribe: () => {
+          // Why: emit the explicit teardown RPC (e.g. nativeChat.unsubscribe)
+          // on the child socket BEFORE closing it, so the server reaps the
+          // fs-watcher on view-toggle instead of leaking it until socket close.
           handle.unsubscribe()
           closeChild()
         },
@@ -256,7 +269,7 @@ export class WebRuntimeClient {
     method: string,
     params: unknown,
     callbacks: SubscriptionCallbacks,
-    options?: { timeoutMs?: number }
+    options?: SubscribeOptions
   ): Promise<WebRuntimeSubscriptionHandle> {
     await this.waitForConnected(options?.timeoutMs)
     const id = this.nextId()
@@ -268,6 +281,17 @@ export class WebRuntimeClient {
     return {
       unsubscribe: () => {
         this.subscriptions.delete(id)
+        // Tell the server to reap its keyed cleanup (e.g. native-chat fs-watcher)
+        // before the socket goes away. Best-effort: a closed socket already reaps.
+        const teardown = options?.buildUnsubscribe?.(params)
+        if (teardown) {
+          this.sendEncrypted({
+            id: this.nextId(),
+            deviceToken: this.pairing.deviceToken,
+            method: teardown.method,
+            params: teardown.params
+          })
+        }
       },
       sendBinary: (bytes) => {
         this.sendEncryptedBinary(bytes)

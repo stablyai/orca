@@ -139,7 +139,8 @@ export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   droid: 'droid',
   kimi: 'kimi',
   'mistral-vibe': 'mistral-vibe',
-  'qwen-code': 'qwen-code',
+  // Why: QwenLM/qwen-code installs its CLI executable as `qwen`, not `qwen-code`.
+  'qwen-code': 'qwen',
   rovo: 'rovo',
   hermes: 'hermes',
   devin: 'devin',

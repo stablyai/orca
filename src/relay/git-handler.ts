@@ -20,6 +20,7 @@ import {
 } from './git-handler-ops'
 import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler-commit-diff-ops'
 import {
+  areRelayWorktreePathsEqual,
   commitChangesRelay,
   addWorktreeOp,
   removeWorktreeOp,
@@ -51,6 +52,64 @@ import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-pr
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const parts: string[] = []
+    if ('message' in error && typeof error.message === 'string') {
+      parts.push(error.message)
+    }
+    if ('stderr' in error && typeof error.stderr === 'string') {
+      parts.push(error.stderr)
+    }
+    return parts.join('\n')
+  }
+  return String(error)
+}
+
+function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
+  return /(?:unknown|invalid|unrecognized).*(?:--path-format|path-format)/i.test(
+    getErrorText(error)
+  )
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')
+}
+
+function resolveRelayPath(repoPath: string, value: string): string {
+  if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
+    return value
+  }
+  // Old git ignores `--path-format=absolute`, so a relative toplevel/git-dir
+  // must be resolved against the scanned repo path. Mirror worktree.ts's
+  // resolveRevParsePath: pick the win32/posix resolver from the repoPath shape.
+  return isWindowsAbsolutePath(repoPath)
+    ? path.win32.resolve(repoPath, value)
+    : path.posix.resolve(repoPath, value)
+}
+
+type RelayRepoLocation = { topLevel: string; commonDir: string }
+
+function parseRelayRepoLocation(repoPath: string, output: string): RelayRepoLocation | undefined {
+  // Old git (pre `--path-format`) echoes the unrecognized flag to stdout and
+  // exits 0 rather than erroring, so drop any echoed `-`-prefixed lines and
+  // read the two trailing path lines (toplevel, then git-common-dir). Strip only
+  // the trailing CR, not surrounding spaces — git paths may legitimately start
+  // or end with a space.
+  const lines = output
+    .split('\n')
+    .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
+    .filter((line) => line.length > 0 && !line.startsWith('-'))
+  if (lines.length < 2) {
+    return undefined
+  }
+  const [topLevel, commonDir] = lines.slice(-2)
+  return {
+    topLevel: resolveRelayPath(repoPath, topLevel),
+    commonDir: resolveRelayPath(repoPath, commonDir)
+  }
+}
 
 function execFileWithStdin(
   command: string,
@@ -998,11 +1057,70 @@ export class GitHandler {
     }
   }
 
+  private async readRepoLocation(repoPath: string): Promise<RelayRepoLocation | undefined> {
+    try {
+      const { stdout } = await this.git(
+        ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+        repoPath
+      )
+      return parseRelayRepoLocation(repoPath, stdout)
+    } catch (error) {
+      if (!isUnsupportedRevParsePathFormatError(error)) {
+        return undefined
+      }
+    }
+
+    try {
+      const { stdout } = await this.git(
+        ['rev-parse', '--show-toplevel', '--git-common-dir'],
+        repoPath
+      )
+      return parseRelayRepoLocation(repoPath, stdout)
+    } catch {
+      return undefined
+    }
+  }
+
+  private async normalizeMainWorktreePath(
+    repoPath: string,
+    worktrees: Record<string, unknown>[]
+  ): Promise<Record<string, unknown>[]> {
+    const mainIndex = worktrees.findIndex((worktree) => worktree.isMainWorktree === true)
+    const mainWorktree = worktrees[mainIndex]
+    const mainPath = typeof mainWorktree?.path === 'string' ? mainWorktree.path : ''
+    // Expand `~` so the early-return matches git's absolute porcelain path for
+    // legacy SSH repos stored with a tilde, sparing them a rev-parse per poll.
+    const resolvedRepoPath = expandTilde(repoPath)
+    if (!mainPath || areRelayWorktreePathsEqual(mainPath, resolvedRepoPath)) {
+      return worktrees
+    }
+
+    const location = await this.readRepoLocation(resolvedRepoPath)
+    if (!location) {
+      return worktrees
+    }
+
+    // Why: only a separate-git-dir/submodule main worktree reports the Git
+    // directory as the main entry — i.e. the main entry equals git-common-dir.
+    // A linked worktree's main entry is a real working root, so gating on this
+    // equality avoids overwriting it with the linked worktree's own toplevel.
+    if (!areRelayWorktreePathsEqual(mainPath, location.commonDir)) {
+      return worktrees
+    }
+
+    const normalized = [...worktrees]
+    normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
+    return normalized
+  }
+
   private async listWorktrees(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
     try {
       const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath)
-      return parseWorktreeList(stdout, { nulDelimited: true })
+      return this.normalizeMainWorktreePath(
+        repoPath,
+        parseWorktreeList(stdout, { nulDelimited: true })
+      )
     } catch (error) {
       if (!isUnsupportedWorktreeListZError(error)) {
         return []
@@ -1013,7 +1131,7 @@ export class GitHandler {
     // Git rejects it. Fall back to the original line-block parser there.
     try {
       const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath)
-      return parseWorktreeList(stdout)
+      return this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
     } catch {
       return []
     }

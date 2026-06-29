@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import QRCodeBrowser from 'qrcode/lib/browser'
 import type { Platform } from './MobileHero'
-import { PLATFORM_COPY } from './mobile-platform-copy'
+import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 
 async function renderQrDataUrl(text: string): Promise<string> {
@@ -14,7 +14,8 @@ async function renderQrDataUrl(text: string): Promise<string> {
 
 export function useMobileInstallQr(
   stage: MobilePageStage | null,
-  platform: Platform
+  platform: Platform,
+  iosChannel: IosChannel
 ): string | null {
   const [installQrUrl, setInstallQrUrl] = useState<string | null>(null)
 
@@ -28,7 +29,7 @@ export function useMobileInstallQr(
     let cancelled = false
     void (async () => {
       try {
-        const dataUrl = await renderQrDataUrl(PLATFORM_COPY[platform].url)
+        const dataUrl = await renderQrDataUrl(getInstallCopy(platform, iosChannel).url)
         if (!cancelled) {
           setInstallQrUrl(dataUrl)
         }
@@ -41,7 +42,7 @@ export function useMobileInstallQr(
     return () => {
       cancelled = true
     }
-  }, [platform, stage])
+  }, [platform, iosChannel, stage])
 
   return installQrUrl
 }

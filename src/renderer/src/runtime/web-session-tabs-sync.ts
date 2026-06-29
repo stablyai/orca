@@ -51,6 +51,10 @@ import {
   reconcileWebSessionCloseIntents
 } from './web-session-close-intent'
 import {
+  clearWebSessionReorderIntentsForWorktree,
+  resolveWebSessionReorderedOrder
+} from './web-session-reorder-intent'
+import {
   beginWebRuntimeWakeTerminalRespawn,
   clearAllWebRuntimeWakeTerminalRespawn,
   clearWebRuntimeWakeTerminalRespawnForWorktree,
@@ -284,6 +288,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   latestSessionTabsSnapshotByWorktree.delete(key)
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
+  clearWebSessionReorderIntentsForWorktree(worktreeId)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -529,6 +534,11 @@ function buildMirroredTerminalTabs(
     const isPinned = existing
       ? existing.isPinned === true
       : surfaces.some((surface) => surface.isPinned)
+    // Why: viewMode echoes back through host snapshots like color/pin, so prefer
+    // the client's own record during the optimistic echo window and adopt the host
+    // value only when this client has no prior tab (first reconcile / other client).
+    const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
+    const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
     return {
       tab: {
         id: localTabId,
@@ -540,6 +550,7 @@ function buildMirroredTerminalTabs(
         customTitle: existing?.customTitle ?? null,
         color,
         isPinned,
+        ...(viewMode ? { viewMode } : {}),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
         // Why: launchAgent is host-owned lifecycle metadata. If the host stops
@@ -662,7 +673,15 @@ function buildMirroredAgentStatusPatch(
   }
 }
 
-function buildTerminalUnifiedTab(tab: TerminalTab, groupId: string): Tab {
+function buildTerminalUnifiedTab(
+  tab: TerminalTab,
+  groupId: string,
+  // Why: viewMode (terminal vs native chat) is host-tracked, but the client's
+  // optimistic toggle must win during the echo window. Callers pass the reconciled
+  // value (host value falling back to the captured client value) so toggling to
+  // chat doesn't revert when the next session-graph sync rebuilds tabs.
+  viewMode?: Tab['viewMode']
+): Tab {
   return {
     id: tab.id,
     entityId: tab.id,
@@ -677,7 +696,8 @@ function buildTerminalUnifiedTab(tab: TerminalTab, groupId: string): Tab {
     sortOrder: tab.sortOrder,
     createdAt: tab.createdAt,
     isPreview: false,
-    isPinned: tab.isPinned === true
+    isPinned: tab.isPinned === true,
+    ...(viewMode ? { viewMode } : {})
   }
 }
 
@@ -1104,6 +1124,7 @@ function buildMirroredHostGroups({
   hostToLocalTabId,
   mirroredUnifiedIds,
   nextActiveUnifiedTabId,
+  now,
   validUnifiedTabIds,
   worktreeId
 }: {
@@ -1112,6 +1133,7 @@ function buildMirroredHostGroups({
   hostToLocalTabId: ReadonlyMap<string, string>
   mirroredUnifiedIds: ReadonlySet<string>
   nextActiveUnifiedTabId: string | null
+  now: number
   validUnifiedTabIds: ReadonlySet<string>
   worktreeId: string
 }): TabGroup[] | null {
@@ -1134,10 +1156,13 @@ function buildMirroredHostGroups({
     const localHostOrder = hostGroup.tabOrder
       .map((tabId) => hostToLocalTabId.get(tabId))
       .filter((tabId): tabId is string => tabId !== undefined && validUnifiedTabIds.has(tabId))
-    const tabOrder = [
+    const hostTabOrder = [
       ...(existing?.tabOrder.filter((tabId) => !localHostOrder.includes(tabId)) ?? []),
       ...localHostOrder
     ]
+    // Why: a pending client reorder for this group wins over a stale pre-move
+    // host order until the host echoes the move (or membership changes).
+    const tabOrder = resolveWebSessionReorderedOrder(worktreeId, hostGroup.id, hostTabOrder, now)
     if (tabOrder.length === 0) {
       continue
     }
@@ -1212,6 +1237,7 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.terminalTitle === b.terminalTitle &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
+    a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
@@ -1542,12 +1568,13 @@ export function applyWebSessionTabsSnapshot(
   // pre-close snapshot can still list the tab and flash it back. Drop any tab
   // the client is closing until the host confirms removal; reconcile the intents
   // against the full snapshot first so confirmed (absent) closes clear.
+  // Why: must match the id the close path records as the intent. The close RPC
+  // resolves to the host session tab id (terminal parentTabId; otherwise tab.id)
+  // — keying browser on browserPageId instead never matched, so browser closes
+  // were never suppressed and reconcile cleared the intent on the still-present
+  // snapshot. The host also addresses tabs by session id, not page id.
   const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
-    tab.type === 'terminal'
-      ? tab.parentTabId
-      : tab.type === 'browser'
-        ? (tab.browserPageId ?? tab.id)
-        : tab.id
+    tab.type === 'terminal' ? tab.parentTabId : tab.id
   reconcileWebSessionCloseIntents(
     worktreeId,
     new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab)))
@@ -1730,8 +1757,19 @@ export function applyWebSessionTabsSnapshot(
     }
     return !mirroredTerminalIds.has(tab.entityId) && !mirroredTerminalIds.has(tab.id)
   })
+  const existingViewModeByTabId = new Map(
+    currentUnifiedTabs
+      .filter((tab) => tab.contentType === 'terminal' && tab.viewMode)
+      .map((tab) => [tab.id, tab.viewMode] as const)
+  )
   const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
-    buildTerminalUnifiedTab(entry.tab, hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId)
+    buildTerminalUnifiedTab(
+      entry.tab,
+      hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
+      // Prefer the reconciled mirrored value (already client-wins during the echo
+      // window); fall back to the captured client value when the entry omits it.
+      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
+    )
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
   const mirroredEditorUnifiedTabs = mirroredEditorTabs.map((entry) => entry.unifiedTab)
@@ -1882,6 +1920,7 @@ export function applyWebSessionTabsSnapshot(
         hostToLocalTabId,
         mirroredUnifiedIds,
         nextActiveUnifiedTabId,
+        now,
         validUnifiedTabIds,
         worktreeId
       })

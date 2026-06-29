@@ -486,6 +486,9 @@ function buildRuntimeMobileAgentStatusProjection(
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
+        // Why: include so a newly-captured AskUserQuestion prompt re-fires the
+        // mobile session republish even when no other field changed.
+        interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         interrupted: entry.interrupted ?? null
       }))

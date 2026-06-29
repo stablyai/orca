@@ -209,6 +209,27 @@ export function terminalRewriteOutputRenderRefreshDecision(
   }
 }
 
+/**
+ * Whether a native-Windows ConPTY foreground chunk that forces a render refresh
+ * should ALSO schedule a follow-up next-frame repaint.
+ *
+ * Why: Claude Code echoes prompt keystrokes by redrawing the input line in place
+ * (CR + CHA/erase + reprint) without DEC 2026 synchronized output. xterm's buffer
+ * ends up correct, but its DOM renderer can paint these rapid rewrites one frame
+ * late — surfacing a phantom first char or an overwritten cell ("zzzx" rendered as
+ * "zzx") that only a window resize clears. A single synchronous refresh races that
+ * late paint; a follow-up next-frame repaint corrects the column desync the way the
+ * existing cursor-restore and scroll cases already do. Scoped to in-place rewrites
+ * on native Windows so plain shells and non-Windows renderers are unaffected.
+ */
+export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
+  isNativeWindowsConpty: boolean
+  isForeground: boolean
+  isInPlaceRewrite: boolean
+}): boolean {
+  return args.isNativeWindowsConpty && args.isForeground && args.isInPlaceRewrite
+}
+
 export function terminalOutputPrefersRenderRefresh(data: string): boolean {
   if (containsBackgroundSgr(data)) {
     return true

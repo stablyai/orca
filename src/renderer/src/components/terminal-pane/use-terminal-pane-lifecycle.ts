@@ -9,6 +9,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
@@ -73,6 +74,7 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
+import { reconcileDeadSessions, type ReconcilableBinding } from './terminal-dead-session-reconcile'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
@@ -110,6 +112,21 @@ export function recordRuntimeCreatedTerminalPaneSplit(
   }
 ): boolean {
   return recordCreatedTerminalPaneSplit(createdPane, args)
+}
+
+type TerminalScrollbackPaneManager = {
+  getPanes(): { terminal: Pick<Terminal, 'options'> }[]
+}
+
+export function applyTerminalScrollbackRowsToMountedPanes(
+  manager: TerminalScrollbackPaneManager,
+  rows: number
+): void {
+  for (const pane of manager.getPanes()) {
+    if (pane.terminal.options.scrollback !== rows) {
+      pane.terminal.options.scrollback = rows
+    }
+  }
 }
 
 function extractUncHost(value: string | undefined): string | null {
@@ -305,6 +322,42 @@ function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
     : { layout, hydrated }
 }
 
+export function resolveQueuedInitialCwd(
+  queuedInitialCwd: string | null | undefined,
+  consumeTabInitialCwd: () => string | null,
+  defaultTabCwd: string
+): { queuedInitialCwd: string | null; startupCwd: string } {
+  const nextQueuedInitialCwd =
+    queuedInitialCwd === undefined ? consumeTabInitialCwd() : queuedInitialCwd
+  return {
+    queuedInitialCwd: nextQueuedInitialCwd,
+    startupCwd: nextQueuedInitialCwd ?? defaultTabCwd
+  }
+}
+
+export function clearQueuedInitialCwdAfterFirstPane(
+  queuedInitialCwd: string | null | undefined,
+  defaultTabCwd: string,
+  currentPtyCwd: string
+): { queuedInitialCwd: string | null | undefined; ptyCwd: string } {
+  if (!queuedInitialCwd) {
+    return { queuedInitialCwd, ptyCwd: currentPtyCwd }
+  }
+  return { queuedInitialCwd: null, ptyCwd: defaultTabCwd }
+}
+
+export function resolvePaneLinkCwd(
+  paneCwdMap: PaneCwdMap,
+  paneId: number,
+  fallbackCwd: string
+): string {
+  return paneCwdMap.get(paneId)?.cwd ?? fallbackCwd
+}
+
+export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd: string): string {
+  return splitPaneCwd ?? fallbackCwd
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -362,6 +415,26 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   return Boolean(
     args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
   )
+}
+
+/**
+ * Self-gating dead-session reconcile pass scheduled from the isVisible effect.
+ * Why self-gate: the effect fires on BOTH isVisible true and false, but we only
+ * reconcile on resume (becoming visible), never on hide. Returns true when the
+ * pass was scheduled so the resume-unit test can assert the gate.
+ */
+export function scheduleVisibilityReconcilePass(args: {
+  isVisible: boolean
+  bindings: Iterable<ReconcilableBinding>
+  listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+}): boolean {
+  if (!args.isVisible) {
+    return false
+  }
+  // Why: fire-and-forget so the async listSessions IPC never blocks the
+  // synchronous WebGL/fit resume work the user sees first.
+  void reconcileDeadSessions({ bindings: args.bindings, listSessions: args.listSessions })
+  return true
 }
 
 export function useTerminalPaneLifecycle({
@@ -422,6 +495,9 @@ export function useTerminalPaneLifecycle({
   setPaneCount,
   setPaneLayoutRevision
 }: UseTerminalPaneLifecycleDeps): void {
+  const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+    settings?.terminalScrollbackRows
+  )
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -438,6 +514,7 @@ export function useTerminalPaneLifecycle({
   const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
   const imeCompositionDisposablesRef = useRef(new Map<number, IDisposable>())
   const imeNativeTextForwarderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const queuedInitialCwdRef = useRef<string | null | undefined>(undefined)
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -512,8 +589,17 @@ export function useTerminalPaneLifecycle({
         .find((candidate) => candidate.id === worktreeId)?.path ??
       cwd ??
       ''
-    const startupCwd = cwd ?? worktreePath
+    const defaultTabCwd = cwd ?? worktreePath
+    const initialCwdResolution = resolveQueuedInitialCwd(
+      queuedInitialCwdRef.current,
+      () => useAppStore.getState().consumeTabInitialCwd(tabId),
+      defaultTabCwd
+    )
+    queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
+    const startupCwd = initialCwdResolution.startupCwd
     const terminalHomePath = resolveTerminalHomePathFromEnv(startup?.env)
+    const getPaneLinkCwd = (paneId: number): string =>
+      resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     // Why: existence probes can cross SSH/runtime boundaries. This cache is
     // lifecycle-scoped, so external mutations and the initial 'active' runtime
     // fallback can temporarily leave stale entries.
@@ -522,6 +608,7 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       worktreePath,
       startupCwd,
+      getPaneLinkCwd,
       terminalHomePath,
       managerRef,
       linkProviderDisposablesRef,
@@ -581,7 +668,7 @@ export function useTerminalPaneLifecycle({
     const ptyDeps = {
       tabId,
       worktreeId,
-      cwd,
+      cwd: startupCwd,
       startup,
       paneTransportsRef,
       paneMode2031Ref,
@@ -621,7 +708,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
-    const osc7UncHost = extractUncHost(cwd)
+    const osc7UncHost = extractUncHost(startupCwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -674,6 +761,12 @@ export function useTerminalPaneLifecycle({
         // Return true so xterm marks the sequence handled. If a future
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
+        if (!paneCwdRef.current.has(pane.id)) {
+          paneCwdRef.current.set(pane.id, {
+            cwd: resolvePaneSeedCwd(spawnHints?.cwd, ptyDeps.cwd),
+            confirmed: false
+          })
+        }
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
           const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
           if (parsedCwd) {
@@ -879,6 +972,7 @@ export function useTerminalPaneLifecycle({
           activate: (event, text) => {
             handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
+              startupCwd: getPaneLinkCwd(pane.id),
               runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
               requestOpenLinksInAppPreference
             })
@@ -930,6 +1024,13 @@ export function useTerminalPaneLifecycle({
         // sets deps.startup immediately before splitPane() and is therefore
         // unaffected by this clear.
         ptyDeps.startup = null
+        const nextInitialCwdState = clearQueuedInitialCwdAfterFirstPane(
+          queuedInitialCwdRef.current,
+          defaultTabCwd,
+          ptyDeps.cwd
+        )
+        queuedInitialCwdRef.current = nextInitialCwdState.queuedInitialCwd
+        ptyDeps.cwd = nextInitialCwdState.ptyCwd
         panePtyBindings.set(pane.id, panePtyBinding)
         syncPaneCount()
         scheduleRuntimeGraphSync()
@@ -1097,6 +1198,9 @@ export function useTerminalPaneLifecycle({
           }
         }
         scheduleRuntimeGraphSync()
+        // Why: active pane lives in PaneManager; React consumers such as the
+        // header chat toggle need a render tick when focus moves between splits.
+        syncPaneLayoutRevision()
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
         }
@@ -1154,12 +1258,8 @@ export function useTerminalPaneLifecycle({
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,
           fontWeightBold: terminalFontWeights.fontWeightBold,
-          scrollback: Math.min(
-            50_000,
-            Math.max(
-              1000,
-              Math.round((currentSettings?.terminalScrollbackBytes ?? 10_000_000) / 200)
-            )
+          scrollback: normalizeDesktopTerminalScrollbackRows(
+            currentSettings?.terminalScrollbackRows
           ),
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
@@ -1184,6 +1284,7 @@ export function useTerminalPaneLifecycle({
         const activePane = managerRef.current?.getActivePane()
         void handleOscLink(url, event, {
           ...linkDeps,
+          startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
@@ -1508,9 +1609,25 @@ export function useTerminalPaneLifecycle({
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
         syncProcessTracking?: () => void
+        noteVisibilityResume?: () => void
       }
       bindingWithVisibility.syncProcessTracking?.()
+      // Why: re-arm the once-per-resume input liveness re-check so the typing
+      // hot path stays off the listSessions IPC between resumes (the re-check
+      // is only useful right after a hidden→visible flip).
+      if (isVisible) {
+        bindingWithVisibility.noteVisibilityResume?.()
+      }
     }
+    // Why: the reconcile pass self-gates on becoming visible (resume) — the
+    // effect also fires on hide — and runs fire-and-forget alongside
+    // syncProcessTracking. reconcileDeadSessions re-validates identity at apply
+    // time so a racing reattach is not clobbered.
+    scheduleVisibilityReconcilePass({
+      isVisible,
+      bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
+      listSessions: () => window.api.pty.listSessions()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [isVisible, isVisibleRef, panePtyBindingsRef])
 
@@ -1531,6 +1648,16 @@ export function useTerminalPaneLifecycle({
   useEffect(() => {
     managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')
   }, [settings?.terminalGpuAcceleration, managerRef])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    // Why: live row retention changes are xterm option updates only; they must
+    // not recreate panes, replay snapshots, refit, resize, or signal the PTY.
+    applyTerminalScrollbackRowsToMountedPanes(manager, terminalScrollbackRows)
+  }, [managerRef, terminalScrollbackRows])
 
   useEffect(() => {
     const manager = managerRef.current

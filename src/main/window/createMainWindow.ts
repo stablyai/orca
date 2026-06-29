@@ -92,6 +92,18 @@ function nativeZoomCommandMatchesKeybindings(
   )
 }
 
+function isMacAppPasteInput(input: Electron.Input): boolean {
+  return (
+    process.platform === 'darwin' &&
+    input.type === 'keyDown' &&
+    input.meta &&
+    !input.control &&
+    !input.alt &&
+    !input.shift &&
+    (input.code === 'KeyV' || input.key.toLowerCase() === 'v')
+  )
+}
+
 // Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
 // center of the CSS-centered content sits at ~18 CSS px from the top.
 // At zoom factor z that becomes 18·z window px.  Traffic lights are
@@ -330,11 +342,34 @@ export function createMainWindow(
   // handler re-runs maximize() from the persisted savedMaximized flag, snapping
   // the window back to full-screen after the user already resized it (#591).
   let handledInitialReadyToShow = false
-  mainWindow.on('ready-to-show', () => {
+  let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
+    process.platform === 'win32'
+      ? setTimeout(() => {
+          // Why: GPU/driver failures on Windows can prevent ready-to-show forever,
+          // leaving the only app window hidden while the main process stays alive.
+          initialRevealFallbackTimer = null
+          revealInitialWindow()
+        }, 10_000)
+      : null
+  initialRevealFallbackTimer?.unref?.()
+
+  const clearInitialRevealFallbackTimer = (): void => {
+    if (initialRevealFallbackTimer) {
+      clearTimeout(initialRevealFallbackTimer)
+      initialRevealFallbackTimer = null
+    }
+  }
+
+  const revealInitialWindow = (): void => {
+    if (mainWindow.isDestroyed()) {
+      clearInitialRevealFallbackTimer()
+      return
+    }
     if (handledInitialReadyToShow) {
       return
     }
     handledInitialReadyToShow = true
+    clearInitialRevealFallbackTimer()
 
     // Why: in E2E headless mode, the window stays hidden to avoid stealing
     // focus and screen real estate during test runs. Playwright interacts
@@ -347,7 +382,8 @@ export function createMainWindow(
       mainWindow.maximize()
     }
     mainWindow.show()
-  })
+  }
+  mainWindow.on('ready-to-show', revealInitialWindow)
 
   // Why: persist window bounds so the app restores to the user's last
   // position/size instead of maximizing on every launch. Debounce to avoid
@@ -820,6 +856,14 @@ export function createMainWindow(
       return
     }
 
+    if (isMacAppPasteInput(input)) {
+      // Why: native chat/terminal panes can own focus without being native
+      // editable controls, so route Cmd+V through Orca's paste ownership first.
+      event.preventDefault()
+      mainWindow.webContents.send('ui:appMenuPaste')
+      return
+    }
+
     const keybindings = opts?.getKeybindings?.()
     const terminalShortcutContext: KeybindingMatchOptions = {
       context: terminalInputFocused || floatingTerminalInputFocused ? 'terminal' : 'app',
@@ -1117,6 +1161,7 @@ export function createMainWindow(
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
+    clearInitialRevealFallbackTimer()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a
     // stale-true flag can't leak past subsequent state transitions. Paired
     // with the webContents lifecycle resets above.

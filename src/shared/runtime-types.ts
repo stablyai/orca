@@ -130,6 +130,9 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
   color?: string | null
   isPinned?: boolean
+  /** Per-tab view preference (terminal xterm vs native chat). Host-persisted so
+   *  paired clients converge; clients still win during the optimistic echo window. */
+  viewMode?: 'terminal' | 'chat'
   isActive: boolean
 }
 

@@ -69,7 +69,7 @@ function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null):
   )
 }
 
-function agentFromTabTitle(title: string): TuiAgent | null {
+export function resolveTabAgentFromTitle(title: string): TuiAgent | null {
   const titleAgent = agentFromTitle(title)
   if (isGenericClaudeStatusClaim(title, titleAgent)) {
     // Why: bare Claude status prefixes are activity evidence, not identity.
@@ -81,7 +81,7 @@ function agentFromTabTitle(title: string): TuiAgent | null {
 }
 
 function getTitleForegroundKey(title: string, launchAgent?: TuiAgent): string {
-  const titleAgent = launchAgent ? null : agentFromTabTitle(title)
+  const titleAgent = launchAgent ? null : resolveTabAgentFromTitle(title)
   if (titleAgent) {
     return `agent:${titleAgent}`
   }
@@ -112,7 +112,7 @@ export function resolveTabAgentFromSignals(args: {
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
-  const titleAgent = launchAgent ? null : agentFromTabTitle(args.title)
+  const titleAgent = launchAgent ? null : resolveTabAgentFromTitle(args.title)
   const titleLooksShell = isShellProcess(args.title)
   // Why: remote panes cannot cheaply prove shell foreground after hook exit,
   // so keep the last completed hook identity instead of flashing unknown.
@@ -223,7 +223,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
 
   useEffect(() => {
     const fallbackAgentSignal =
-      !tab.launchAgent && (agentFromTabTitle(tab.title) || siblingHookAgent)
+      !tab.launchAgent && (resolveTabAgentFromTitle(tab.title) || siblingHookAgent)
     // Why: a completed structured hook proves a launched agent existed, but
     // local launch cleanup still waits for current foreground-shell evidence.
     if (focusedHookAgent || hasCompletedHook || fallbackAgentSignal) {

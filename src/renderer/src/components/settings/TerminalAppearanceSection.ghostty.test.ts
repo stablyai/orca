@@ -97,8 +97,8 @@ vi.mock('./SettingsFormControls', () => ({
   }) {
     return options?.map((option) => option.label) ?? null
   },
-  SettingsSubsectionHeader: function SettingsSubsectionHeader() {
-    return null
+  SettingsSubsectionHeader: function SettingsSubsectionHeader({ action }: { action?: unknown }) {
+    return action ?? null
   },
   SettingsSwitchRow: function SettingsSwitchRow() {
     return null
@@ -322,6 +322,30 @@ function findWarpThemeImportModal(node: unknown): ReactElementLike | null {
   return null
 }
 
+function findComponentByTypeName(node: unknown, targetTypeName: string): ReactElementLike | null {
+  if (node == null) {
+    return null
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findComponentByTypeName(child, targetTypeName)
+      if (found) {
+        return found
+      }
+    }
+    return null
+  }
+  const el = node as ReactElementLike
+  const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+  if (typeName === targetTypeName) {
+    return el
+  }
+  if (el.props?.children) {
+    return findComponentByTypeName(el.props.children, targetTypeName)
+  }
+  return null
+}
+
 describe('TerminalAppearanceSection ghostty import wiring', () => {
   beforeEach(() => {
     mockStateValues.length = 0
@@ -419,6 +443,68 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
     })
 
     expect(findTerminalThemeCatalogSection(darkPhraseElement)?.props.preferredTarget).toBe('dark')
+  })
+
+  it('does not open advanced typography for primary terminal font searches', () => {
+    mockSettingsSearchQuery = 'font size'
+
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    expect(findComponentByTypeName(element, 'TerminalAdvancedTypographyControls')).toBeNull()
+  })
+
+  it('does not show primary typography chrome for unrelated terminal searches', () => {
+    mockSettingsSearchQuery = 'cursor opacity'
+
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    expect(findComponentByTypeName(element, 'TerminalFontSizeSetting')).toBeNull()
+    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
+  })
+
+  it('shows the Ghostty import button for Ghostty-only searches', () => {
+    mockSettingsSearchQuery = 'ghostty'
+
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(true)
+  })
+
+  it('opens typography advanced inside the typography section for advanced searches', () => {
+    mockSettingsSearchQuery = 'line height'
+
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    expect(findComponentByTypeName(element, 'TerminalAdvancedTypographyControls')).not.toBeNull()
+    expect(findComponentByTypeName(element, 'TerminalFontSizeSetting')).not.toBeNull()
   })
 
   it('hides the theme import affordance on paired web clients', () => {

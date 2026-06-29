@@ -1,4 +1,5 @@
 import type { ITerminalOptions } from '@xterm/xterm'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -40,7 +41,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
       '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace',
     fontWeight: '300',
     fontWeightBold: '500',
-    scrollback: 10000,
+    scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     // Why: Orca's default terminal cells are taller than many users' baseline
     // terminal, so a small multiplier keeps row-per-wheel movement familiar.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
@@ -24,6 +24,8 @@ import {
   isMobileGitStageableEntry,
   type MobileGitStatusEntry
 } from './mobile-git-status'
+import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
+import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
 import {
   formatBranchLabel,
   type MobileBranchEntryView,
@@ -60,6 +62,11 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const busyActionRef = useRef<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
+  const { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure } =
+    useMobileSourceControlCommitFailure({ client, connState, worktreeId })
+  const clearCommitFailureRecovery = useCallback(() => {
+    recordCommitFailure(null)
+  }, [recordCommitFailure])
 
   const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus } =
     useMobileSourceControlLoaders({
@@ -67,7 +74,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       connState,
       statusIdentityKey,
       worktreeId,
-      setActionError
+      setActionError,
+      onStatusLoadSuccess: clearCommitFailureRecovery
     })
 
   const {
@@ -155,6 +163,10 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const stageablePaths = useMemo(() => getStageablePaths(entries), [entries])
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
+  const stagedEntriesForRecovery = useMemo(
+    () => getMobileCommitFailureStagedEntries(entries),
+    [entries]
+  )
   const unstagedCount = useMemo(() => countUnstagedEntries(entries), [entries])
   const hasUnresolvedConflicts = useMemo(
     () => entries.some((entry) => entry.conflictStatus === 'unresolved'),
@@ -183,6 +195,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     status,
     branchLabel,
     commitMessage,
+    stagedEntries: stagedEntriesForRecovery,
     generatingMessage,
     stageablePaths,
     unstageablePaths,
@@ -201,7 +214,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setLocalBranches,
     setShowBranchPicker,
     setCreatedPrUrl,
-    setCreatedPrWarning
+    setCreatedPrWarning,
+    recordCommitFailure
   })
   const primaryAction = useMemo(
     () =>
@@ -270,6 +284,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     showActionSheet,
     setShowActionSheet,
     actionError,
+    commitFailureRecovery,
+    commitFailureRecoveryAction,
     keyboardLift,
     openingPath,
     openingBranchPath,

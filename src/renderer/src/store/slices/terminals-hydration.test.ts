@@ -139,6 +139,58 @@ describe('hydrateWorkspaceSession', () => {
     })
   })
 
+  it('moves restored active focus from a dead split leaf to a pty-backed sibling', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    const liveLeftLeafId = '9ee09218-72a5-4e1c-b075-729e937d4e29'
+    const liveRightLeafId = 'f5fc66b1-ec43-404b-b7b0-a06f0db34940'
+    const deadActiveLeafId = 'fbf63fd9-34d6-4387-9109-562f7c02bc4c'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: liveLeftLeafId },
+            second: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: liveRightLeafId },
+              second: { type: 'leaf', leafId: deadActiveLeafId }
+            }
+          },
+          activeLeafId: deadActiveLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [liveLeftLeafId]: 'daemon-session-left',
+            [liveRightLeafId]: 'daemon-session-right'
+          },
+          buffersByLeafId: {
+            [deadActiveLeafId]: 'retained scrollback'
+          }
+        }
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    // Why: restart can preserve scrollback for an exited pane while live siblings
+    // reattach. Keyboard focus must land on a PTY-backed pane, not the dead leaf.
+    expect(store.getState().terminalLayoutsByTabId['tab-1']?.activeLeafId).toBe(liveLeftLeafId)
+  })
+
   it('hydrates floating terminal tabs even though they are not repo worktrees', () => {
     const store = createTestStore()
     const session: WorkspaceSessionState = {

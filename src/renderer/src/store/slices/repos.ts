@@ -80,7 +80,7 @@ const ERROR_TOAST_DURATION = 60_000
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
 
-type RepoUpdate = Partial<
+export type RepoUpdate = Partial<
   Pick<
     Repo,
     | 'displayName'
@@ -96,10 +96,15 @@ type RepoUpdate = Partial<
     | 'forkSyncMode'
     | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'
+    | 'externalWorktreeInboxBaselinePaths'
+    | 'importedExternalWorktreePaths'
     | 'projectGroupId'
     | 'projectGroupOrder'
   >
-> & { sourceControlAi?: Repo['sourceControlAi'] | null }
+> & {
+  sourceControlAi?: Repo['sourceControlAi'] | null
+  externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+}
 
 type ProjectUpdate = ProjectUpdateArgs['updates']
 
@@ -2574,18 +2579,30 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             if (updatedRepo) {
               return repoWithFetchedOwner(updatedRepo, target)
             }
-            if (sanitizedUpdates.sourceControlAi === null) {
-              const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } = r
-              const { sourceControlAi: _clearedSourceControlAi, ...updatesWithoutSourceControlAi } =
-                sanitizedUpdates
-              return { ...repoWithoutSourceControlAi, ...updatesWithoutSourceControlAi }
+            let mergedRepo: Repo = r
+            const {
+              sourceControlAi,
+              externalWorktreeDiscoverySuppressedAt,
+              ...updatesWithoutClearSentinels
+            } = sanitizedUpdates
+            mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
+            if (sourceControlAi === null) {
+              const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } =
+                mergedRepo
+              mergedRepo = repoWithoutSourceControlAi
+            } else if (sourceControlAi !== undefined) {
+              mergedRepo = { ...mergedRepo, sourceControlAi }
             }
-            const { sourceControlAi, ...updatesWithoutSourceControlAi } = sanitizedUpdates
-            return {
-              ...r,
-              ...updatesWithoutSourceControlAi,
-              ...(sourceControlAi !== undefined ? { sourceControlAi } : {})
+            if (externalWorktreeDiscoverySuppressedAt === null) {
+              const {
+                externalWorktreeDiscoverySuppressedAt: _suppressedAt,
+                ...repoWithoutSuppression
+              } = mergedRepo
+              mergedRepo = repoWithoutSuppression
+            } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
+              mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
             }
+            return mergedRepo
           })
           return {
             repos: nextRepos,

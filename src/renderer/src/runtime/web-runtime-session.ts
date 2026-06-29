@@ -21,6 +21,7 @@ import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
+import { recordWebSessionReorderIntent } from './web-session-reorder-intent'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 
 export {
@@ -343,6 +344,14 @@ export async function moveWebRuntimeSessionTab(
     return false
   }
 
+  if (args.kind === 'reorder') {
+    // Why: record the intended LOCAL order synchronously, before the async host
+    // resolution below, so an in-flight pre-move snapshot carrying the old order
+    // can't snap the tab back. The reconcile applies this until the host echoes
+    // the new order. (tabOrder here is already local unified tab ids.)
+    recordWebSessionReorderIntent(args.worktreeId, args.targetGroupId, args.tabOrder, Date.now())
+  }
+
   try {
     const { resolveHostSessionTabIdForWebSessionTab } = await import('./web-session-tabs-sync')
     const state = useAppStore.getState()
@@ -436,6 +445,16 @@ async function callWebRuntimeSessionTabMethod(
     null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+
+  if (method === 'session.tabs.close') {
+    // Why: the caller prunes the local mirror synchronously, but the precise
+    // host id resolution below sits behind an async import. A host snapshot
+    // published in that gap would re-materialize the just-closed tab before any
+    // intent exists to suppress it (the immediate "flash back"). Record a
+    // best-effort intent synchronously now — the resolved-id record below then
+    // covers any id the static decode couldn't recover.
+    recordWebSessionCloseIntent(args.worktreeId, toHostSessionTabId(args.tabId), Date.now())
   }
 
   try {
@@ -683,6 +702,7 @@ export function setWebRuntimeTabProps(args: {
   tabId: string
   color?: string | null
   isPinned?: boolean
+  viewMode?: 'terminal' | 'chat'
 }): boolean {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
@@ -705,7 +725,8 @@ export function setWebRuntimeTabProps(args: {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
-          ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {})
+          ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
         },
         timeoutMs: 15_000
       })

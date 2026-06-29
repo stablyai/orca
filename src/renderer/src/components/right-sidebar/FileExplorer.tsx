@@ -479,6 +479,7 @@ function FileExplorerFiles(): React.JSX.Element {
   }, [])
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
+    runtimeEnvironmentId: activeRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
