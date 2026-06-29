@@ -40,6 +40,10 @@ describe('WebRuntimeClient', () => {
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
+      // Why: the connected-state liveness heartbeat arms a window.setInterval, so
+      // the stub must provide interval timers once a client reaches 'connected'.
+      setInterval,
+      clearInterval,
       atob: (value: string) => Buffer.from(value, 'base64').toString('binary'),
       btoa: (value: string) => Buffer.from(value, 'binary').toString('base64')
     })

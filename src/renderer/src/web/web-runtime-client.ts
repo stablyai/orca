@@ -63,6 +63,18 @@ const HANDSHAKE_TIMEOUT_MS = 10_000
 const FILE_WATCH_READY_CLEANUP_TIMEOUT_MS = 5_000
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
+// Why: the browser WebSocket API hides protocol pings/pongs, so a half-open
+// connection (mobile NAT idle timeout, server crash, wifi→cellular handoff)
+// leaves readyState===OPEN with no onclose/onerror — the UI silently freezes on
+// stale data and never reconnects. Poll connection liveness while the tab is
+// visible: after HEARTBEAT_IDLE_MS of silence send a cheap status.get probe
+// (any inbound frame proves liveness), and only if that probe stays unanswered
+// for HEARTBEAT_PROBE_GRACE_MS close the socket to drive the reconnect path.
+// Closing is gated on an unanswered PROBE, never on raw accumulated silence, so
+// a backgrounded/frozen tab can never be mistaken for a dead socket on resume.
+const HEARTBEAT_INTERVAL_MS = 10_000
+const HEARTBEAT_IDLE_MS = 25_000
+const HEARTBEAT_PROBE_GRACE_MS = 20_000
 
 export class WebRuntimeClient {
   private ws: WebSocket | null = null
@@ -74,6 +86,16 @@ export class WebRuntimeClient {
   private connectTimer: number | null = null
   private handshakeTimer: number | null = null
   private reconnectTimer: number | null = null
+  private heartbeatTimer: number | null = null
+  private lastInboundFrameAt = 0
+  // Why: timestamp of an outstanding liveness probe (null = none in flight).
+  // The dead-close fires only when a SENT probe goes unanswered, never on raw
+  // silence, so a hidden/frozen tab resuming after a long gap re-probes first.
+  private heartbeatProbeSentAt: number | null = null
+  // Why: detect a suspended tick loop (backgrounded/frozen tab). If a tick lands
+  // far later than scheduled, treat the gap as "no evidence", reset the clocks,
+  // and re-probe instead of closing.
+  private lastHeartbeatTickAt = 0
   private readonly pending = new Map<string, PendingRequest>()
   private readonly subscriptions = new Map<string, RuntimeSubscription>()
   private readonly childClients = new Set<WebRuntimeClient>()
@@ -374,6 +396,11 @@ export class WebRuntimeClient {
       if (this.ws !== ws) {
         return
       }
+      // Why: any inbound frame (RPC reply, subscription push, keepalive, probe
+      // echo) proves the socket is alive — reset the liveness watchdog and clear
+      // any outstanding probe.
+      this.lastInboundFrameAt = this.now()
+      this.heartbeatProbeSentAt = null
       void this.handleSocketMessage(event.data, ws)
     }
 
@@ -551,6 +578,7 @@ export class WebRuntimeClient {
     this.sharedKey = null
     this.clearConnectTimer()
     this.clearHandshakeTimer()
+    this.clearHeartbeatTimer()
     this.rejectAllPending('Remote Orca runtime connection interrupted.')
     this.notifySubscriptionsClosed()
     if (this.intentionallyClosed || this.state === 'auth-failed') {
@@ -577,6 +605,7 @@ export class WebRuntimeClient {
   private setState(next: WebRuntimeConnectionState): void {
     this.state = next
     if (next === 'connected') {
+      this.startHeartbeat()
       for (const waiter of this.waiters.splice(0)) {
         waiter.resolve()
       }
@@ -624,6 +653,7 @@ export class WebRuntimeClient {
   private clearTimers(): void {
     this.clearConnectTimer()
     this.clearHandshakeTimer()
+    this.clearHeartbeatTimer()
     if (this.reconnectTimer) {
       window.clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -641,6 +671,81 @@ export class WebRuntimeClient {
     if (this.handshakeTimer) {
       window.clearTimeout(this.handshakeTimer)
       this.handshakeTimer = null
+    }
+  }
+
+  // Why: overridable seams so a test can drive deterministic time + visibility
+  // without faking globals across the whole crypto/transport fixture.
+  protected now(): number {
+    return Date.now()
+  }
+
+  protected isDocumentVisible(): boolean {
+    return typeof document === 'undefined' || document.visibilityState !== 'hidden'
+  }
+
+  private startHeartbeat(): void {
+    this.clearHeartbeatTimer()
+    const now = this.now()
+    this.lastInboundFrameAt = now
+    this.lastHeartbeatTickAt = now
+    this.heartbeatProbeSentAt = null
+    this.heartbeatTimer = window.setInterval(() => this.runHeartbeatTick(), HEARTBEAT_INTERVAL_MS)
+  }
+
+  private clearHeartbeatTimer(): void {
+    if (this.heartbeatTimer) {
+      window.clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
+    this.heartbeatProbeSentAt = null
+  }
+
+  private runHeartbeatTick(): void {
+    const now = this.now()
+    // Why: if this tick lands far later than scheduled, the loop was suspended
+    // (backgrounded/frozen tab) — that gap is NOT evidence the socket died, so
+    // re-baseline the liveness clocks and drop any stale probe before judging.
+    const sinceLastTick = now - this.lastHeartbeatTickAt
+    this.lastHeartbeatTickAt = now
+    if (sinceLastTick >= HEARTBEAT_INTERVAL_MS * 2) {
+      this.lastInboundFrameAt = now
+      this.heartbeatProbeSentAt = null
+    }
+    // Why: a backgrounded tab shows no live data and the user can't see
+    // staleness, so don't spend battery probing; the next visible tick re-checks.
+    if (!this.isDocumentVisible()) {
+      return
+    }
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN || this.state !== 'connected') {
+      return
+    }
+    // Why: close ONLY when a probe we actually sent has gone unanswered past the
+    // grace window — never on raw accumulated silence. This guarantees at least
+    // one real round-trip attempt before declaring the socket half-open.
+    if (
+      this.heartbeatProbeSentAt !== null &&
+      now - this.heartbeatProbeSentAt >= HEARTBEAT_PROBE_GRACE_MS
+    ) {
+      ws.close()
+      this.handleSocketClosed(ws)
+      return
+    }
+    if (this.heartbeatProbeSentAt === null && now - this.lastInboundFrameAt >= HEARTBEAT_IDLE_MS) {
+      // Why: a fire-and-forget liveness probe. The reply (or any other frame)
+      // resets lastInboundFrameAt and clears heartbeatProbeSentAt; the id is
+      // intentionally unmatched in handleSocketMessage so it adds no pending
+      // request or timeout. If sending fails the socket isn't OPEN — skip.
+      if (
+        this.sendEncrypted({
+          id: `web-heartbeat-${this.nextId()}`,
+          deviceToken: this.pairing.deviceToken,
+          method: 'status.get'
+        })
+      ) {
+        this.heartbeatProbeSentAt = now
+      }
     }
   }
 }
