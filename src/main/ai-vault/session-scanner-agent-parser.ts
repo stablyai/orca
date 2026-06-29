@@ -67,6 +67,8 @@ export async function parseAgentSessionFile(
       return parseMessageGraphSessionFile('openclaw', candidate.file, platform)
     case 'pi':
       return parseMessageGraphSessionFile('pi', candidate.file, platform)
+    case 'omp':
+      return parseMessageGraphSessionFile('omp', candidate.file, platform)
     case 'droid':
       return parseDroidSessionFile(candidate.file, platform)
     case 'devin':

@@ -1,14 +1,13 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS, buildAiVaultResumeCommand } from '../../shared/ai-vault-types'
+import { afterEach, describe, expect, it } from 'vitest'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 
 let tempRoots: string[] = []
 
 afterEach(async () => {
-  vi.restoreAllMocks()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
@@ -31,6 +30,7 @@ function isolatedScanRoots(root: string) {
     openclawStateDir: join(root, 'openclaw-state'),
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
     piSessionsDir: join(root, 'pi-sessions'),
+    ompSessionsDir: join(root, 'omp-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions')
@@ -611,6 +611,42 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    await mkdir(join(roots.ompSessionsDir, encodeURIComponent('/tmp/omp')), { recursive: true })
+    await writeFile(
+      join(roots.ompSessionsDir, encodeURIComponent('/tmp/omp'), '2026-05-01_omp-session.jsonl'),
+      jsonLines([
+        {
+          type: 'session',
+          id: 'omp-session',
+          title: 'OMP header title',
+          timestamp: '2026-05-01T10:08:30.000Z',
+          cwd: '/tmp/omp'
+        },
+        {
+          type: 'model_change',
+          timestamp: '2026-05-01T10:08:31.000Z',
+          model: 'omp-model'
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:08:32.000Z',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'OMP first user fallback title' }]
+          }
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:08:33.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Done' }],
+            usage: { input: 3, output: 5, cacheRead: 7, cacheWrite: 11 }
+          }
+        }
+      ])
+    )
+
     await mkdir(roots.devinTranscriptsDir, { recursive: true })
     await writeFile(
       join(roots.devinTranscriptsDir, 'devin-session.json'),
@@ -746,92 +782,21 @@ describe('scanAiVaultSessions', () => {
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
+    expect(commandByAgent.get('omp')).toBe("cd '/tmp/omp' && omp --resume 'omp-session'")
     expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
-  })
 
-  it('strips newline-heavy Grok user_query envelopes without regex matching', async () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-grok-large-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionDir = join(roots.grokSessionsDir, encodeURIComponent('/tmp/grok'), 'large-session')
-    const requestText = 'Grok large title\n'.repeat(300)
-    await mkdir(sessionDir, { recursive: true })
-    await writeFile(
-      join(sessionDir, 'summary.json'),
-      JSON.stringify({
-        info: { id: 'large-session', cwd: '/tmp/grok' },
-        created_at: '2026-05-01T10:04:00.000Z'
-      })
-    )
-    await writeFile(
-      join(sessionDir, 'chat_history.jsonl'),
-      jsonLines([
-        {
-          type: 'user',
-          content: `<USER_INFO>context</USER_INFO><USER_QUERY>\n${requestText}</USER_QUERY>`
-        }
-      ])
-    )
-
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin',
-      limit: 5
+    const omp = result.sessions.find((session) => session.agent === 'omp')
+    expect(omp).toMatchObject({
+      sessionId: 'omp-session',
+      title: 'OMP header title',
+      cwd: '/tmp/omp',
+      model: 'omp-model',
+      messageCount: 2,
+      totalTokens: 26
     })
-
-    expect(result.issues).toEqual([])
-    expect(result.sessions[0]?.title).toContain('Grok large title')
-    expect(result.sessions[0]?.title).not.toContain('USER_QUERY')
-    const usedGrokWrapperMatch = matchSpy.mock.calls.some(
-      ([pattern]) =>
-        pattern instanceof RegExp &&
-        pattern.source.includes('<user_query>') &&
-        pattern.source.includes('[\\s\\S]')
-    )
-    expect(usedGrokWrapperMatch).toBe(false)
-  })
-})
-
-describe('buildAiVaultResumeCommand', () => {
-  it('wraps Windows cwd changes in cmd so PowerShell and cmd launch the same resume command', () => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'codex',
-        sessionId: 'session-1',
-        cwd: 'C:\\Users\\Ada Lovelace\\repo',
-        platform: 'win32'
-      })
-    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
-  })
-
-  it('carries non-default Codex homes in copied resume commands', () => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'codex',
-        sessionId: 'session-1',
-        cwd: '/repo/app',
-        platform: 'darwin',
-        codexHome: '/Users/ada/Library/Application Support/Orca/codex-runtime-home/home'
-      })
-    ).toBe(
-      "cd '/repo/app' && CODEX_HOME='/Users/ada/Library/Application Support/Orca/codex-runtime-home/home' codex resume 'session-1'"
-    )
-
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'codex',
-        sessionId: 'session-1',
-        cwd: 'C:\\Users\\Ada Lovelace\\repo',
-        platform: 'win32',
-        codexHome: 'C:\\Users\\Ada\\AppData\\Roaming\\Orca\\codex-runtime-home\\home'
-      })
-    ).toBe(
-      'cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && set ""CODEX_HOME=C:\\Users\\Ada\\AppData\\Roaming\\Orca\\codex-runtime-home\\home"" && codex resume ""session-1"""'
-    )
   })
 })

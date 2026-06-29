@@ -11,6 +11,7 @@ export const AI_VAULT_AGENTS = [
   'codex',
   'hermes',
   'pi',
+  'omp',
   'cursor',
   'gemini',
   'rovo',
@@ -33,6 +34,7 @@ export const AI_VAULT_AGENT_LABELS = {
   codex: 'Codex',
   hermes: 'Hermes',
   pi: 'Pi',
+  omp: 'OMP',
   cursor: 'Cursor',
   gemini: 'Gemini',
   rovo: 'Rovo Dev',
@@ -209,6 +211,9 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Why: OMP stores Pi-shaped transcripts, but its CLI resumes with
+    // `omp --resume <id>` rather than Pi's `--session` flag.
+    case 'omp':
     case 'claude':
     case 'cursor':
     case 'gemini':

@@ -28,6 +28,7 @@ const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedi
 const PI_SESSIONS_DIR = normalizePiSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions')
 )
+const OMP_SESSIONS_DIR = normalizePiSessionsDir(join(homedir(), '.omp', 'agent', 'sessions'))
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
   process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
@@ -114,7 +115,8 @@ function standardDiscoveries(
     ...devinDiscoveries(options, wslHomeDirs, limit, issues),
     ...hermesDiscoveries(options, wslHomeDirs, limit, issues),
     ...rovoDiscoveries(options, wslHomeDirs, limit, issues),
-    ...piDiscoveries(options, wslHomeDirs, limit, issues)
+    ...piDiscoveries(options, wslHomeDirs, limit, issues),
+    ...ompDiscoveries(options, wslHomeDirs, limit, issues)
   ]
 }
 
@@ -231,6 +233,21 @@ function piDiscoveries(
     'sessions'
   ]).map((rootDir) =>
     discoverFiles({ rootDir, limit, agent: 'pi', issues, extensions: ['.jsonl'] })
+  )
+}
+
+function ompDiscoveries(
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[],
+  limit: number,
+  issues: AiVaultScanIssue[]
+): Promise<SessionFileDiscovery>[] {
+  return sessionRootDirs(options.ompSessionsDir ?? OMP_SESSIONS_DIR, wslHomeDirs, [
+    '.omp',
+    'agent',
+    'sessions'
+  ]).map((rootDir) =>
+    discoverFiles({ rootDir, limit, agent: 'omp', issues, extensions: ['.jsonl'] })
   )
 }
 

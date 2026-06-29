@@ -34,6 +34,7 @@ function isolatedScanRoots(root: string) {
     openclawStateDir: join(root, 'openclaw-state'),
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
     piSessionsDir: join(root, 'pi-sessions'),
+    ompSessionsDir: join(root, 'omp-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions')

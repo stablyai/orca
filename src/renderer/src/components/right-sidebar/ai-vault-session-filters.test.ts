@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS, type AiVaultSession } from '../../../../shared/ai-vault-types'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import {
   AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
   filterAiVaultSessions,
@@ -33,6 +34,11 @@ const baseSession: AiVaultSession = {
 }
 
 describe('filterAiVaultSessions', () => {
+  it('offers OMP in the agent filter because OMP is a supported TUI agent', () => {
+    expect(TUI_AGENT_CONFIG.omp).toBeDefined()
+    expect(AI_VAULT_AGENTS).toContain('omp')
+  })
+
   it('filters by workspace, agent, plain terms, repo: and path: operators', () => {
     const sessions: AiVaultSession[] = [
       baseSession,

@@ -11,6 +11,23 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
+vi.mock('@/lib/local-preflight-context', () => ({
+  getLocalProjectExecutionRuntimeContext: (
+    state: Pick<AppState, 'projects'>,
+    _worktreeId: string | null | undefined,
+    platform: NodeJS.Platform
+  ) => {
+    if (platform !== 'win32') {
+      return undefined
+    }
+    const preference = state.projects[0]?.localWindowsRuntimePreference
+    if (preference?.kind !== 'wsl') {
+      return undefined
+    }
+    return { status: 'resolved', runtime: preference }
+  }
+}))
+
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
 type AiVaultResumeCommandState = Pick<
@@ -135,6 +152,19 @@ describe('ai vault resume command runtime', () => {
         codexHome: null
       })
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude --resume ""session one"""')
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: 'omp session',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && omp --resume ""omp session"""')
   })
 
   it('uses configured agent defaults for resumable session history entries', () => {

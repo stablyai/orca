@@ -155,7 +155,7 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
 }
 
 export async function parseMessageGraphSessionFile(
-  agent: 'openclaw' | 'pi',
+  agent: 'openclaw' | 'pi' | 'omp',
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
@@ -181,10 +181,12 @@ export async function parseMessageGraphSessionFile(
         accumulator.sessionId = sessionId
       }
       accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+      accumulator.title ??= normalizeTitleText(extractString(record.title) ?? '')
       continue
     }
     if (record.type === 'model_change') {
-      accumulator.model = extractString(record.modelId) ?? accumulator.model
+      accumulator.model =
+        extractString(record.model) ?? extractString(record.modelId) ?? accumulator.model
       continue
     }
     if (record.type !== 'message') {
