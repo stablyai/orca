@@ -1,18 +1,20 @@
 ---
-name: ephemeral-vms
+name: orca-per-workspace-env
 description: >-
-  Set up, review, debug, or validate Orca ephemeral VM recipes for cloud
-  sandboxes and one-workspace remote runtimes — including first-time setup
-  (provider prerequisites, the reusable base snapshot, the coding-agent auth
-  snapshot, credentials, and state), not just the per-workspace lifecycle
-  scripts. Use to stand up ephemeral coding VMs, fix a `vmRecipes` entry in
-  `orca.yaml`, scaffold provider lifecycle scripts, or resolve an
-  `orca vm recipe doctor` failure.
+  Set up, review, debug, or validate Orca per-workspace environment recipes —
+  on-demand, disposable runtimes (cloud sandboxes, VMs, or local) created fresh
+  for each workspace. Covers first-time setup (provider prerequisites, the
+  reusable base snapshot, the coding-agent auth snapshot, credentials, and
+  state), not just the per-workspace lifecycle scripts. Use to stand up
+  per-workspace environments, fix a `vmRecipes` entry in `orca.yaml`, scaffold
+  provider lifecycle scripts, or resolve an `orca vm recipe doctor` failure.
 ---
 
-# Ephemeral VMs
+# Per-Workspace Environments
 
-Help a user stand up and maintain a repo-owned ephemeral VM recipe end to end.
+Help a user stand up and maintain a repo-owned per-workspace environment recipe end to end. Each
+workspace gets its own on-demand, disposable runtime (a cloud sandbox, a VM, or a local one),
+created fresh and torn down after.
 
 Orca is a **thin wrapper**: you guide, detect, and scaffold; you never own the user's cloud account,
 billing, images, or credentials.

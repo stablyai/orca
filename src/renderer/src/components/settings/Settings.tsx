@@ -76,7 +76,6 @@ import type {
 } from '@/lib/settings-navigation-types'
 import {
   COMPUTER_USE_SKILL_NAME,
-  EPHEMERAL_VMS_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
@@ -287,11 +286,6 @@ function Settings(): React.JSX.Element {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
-    enabled: showDesktopOnlySettings,
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const ephemeralVmsSkill = useInstalledAgentSkill(EPHEMERAL_VMS_SKILL_NAME, {
     enabled: showDesktopOnlySettings,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
@@ -610,8 +604,6 @@ function Settings(): React.JSX.Element {
     orchestrationSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
-  const { installed: ephemeralVmsSkillInstalled, loading: ephemeralVmsSkillLoading } =
-    ephemeralVmsSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
     const next = new Map<string, SettingsNavInstallStatus>([
       [
@@ -623,13 +615,8 @@ function Settings(): React.JSX.Element {
       ]
     ])
     if (showDesktopOnlySettings) {
-      next.set(
-        'ephemeral-vms',
-        getSkillNavInstallStatus({
-          installed: ephemeralVmsSkillInstalled,
-          loading: ephemeralVmsSkillLoading
-        })
-      )
+      // Why: Per-Workspace Environments shows a 'Beta' badge in the sidebar (from nav
+      // metadata) rather than skill install status — skill status lives inside the pane.
       next.set(
         'computer-use',
         getSkillNavInstallStatus({
@@ -652,8 +639,6 @@ function Settings(): React.JSX.Element {
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
-    ephemeralVmsSkillInstalled,
-    ephemeralVmsSkillLoading,
     modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
@@ -1522,12 +1507,12 @@ function Settings(): React.JSX.Element {
                   id="ephemeral-vms"
                   title={translate(
                     'auto.components.settings.Settings.ephemeralVms',
-                    'Ephemeral VMs'
+                    'Per-Workspace Environments'
                   )}
                   badge="Beta"
                   description={translate(
                     'auto.components.settings.Settings.ephemeralVmsDescription',
-                    'Run each workspace on a temporary cloud VM you own. The skill sets it up for this repo.'
+                    'Give each workspace its own on-demand, disposable environment. The skill sets it up for this repo.'
                   )}
                   searchEntries={getSectionSearchEntries('ephemeral-vms')}
                 >

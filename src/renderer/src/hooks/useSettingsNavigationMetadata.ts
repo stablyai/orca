@@ -419,10 +419,13 @@ export function buildSettingsNavigationMetadata({
     },
     {
       id: 'ephemeral-vms',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.ephemeralVms', 'Ephemeral VMs'),
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.ephemeralVms',
+        'Per-Workspace Environments'
+      ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.ephemeralVmsDescription',
-        'Use repo-owned recipes to create one temporary cloud runtime per workspace.'
+        'Use repo-owned recipes to give each workspace its own on-demand, disposable environment.'
       ),
       icon: Server,
       searchEntries: [getEphemeralVmsSearchEntry()],

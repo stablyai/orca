@@ -38,7 +38,8 @@ type Recipe = NonNullable<OrcaHooks['vmRecipes']>[number]
 
 // Why: the pane leans on the skill, so the nudge is one line — the skill carries
 // provider choice, prerequisites, the snapshot build, agent auth, and validation.
-const AGENT_PROMPT = 'Use the ephemeral-vms skill to set up VMs for this repo.'
+const AGENT_PROMPT =
+  'Use the orca-per-workspace-env skill to set up a per-workspace environment for this repo.'
 
 export function EphemeralVmsPane(): React.JSX.Element {
   const openModal = useAppStore((state) => state.openModal)
@@ -92,7 +93,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
             ? error.message
             : translate(
                 'auto.components.settings.EphemeralVmsPane.loadError',
-                'Could not load VM recipes.'
+                'Could not load recipes.'
               )
         )
       }
@@ -168,11 +169,11 @@ export function EphemeralVmsPane(): React.JSX.Element {
       <AgentSkillSetupPanel
         title={translate(
           'auto.components.settings.EphemeralVmsPane.skillTitle',
-          'Ephemeral VMs skill'
+          'Per-Workspace Environments skill'
         )}
         description={translate(
           'auto.components.settings.EphemeralVmsPane.skillDescription',
-          'Sets up, builds, authenticates, and validates repo-owned VM recipes.'
+          'Sets up, builds, authenticates, and validates repo-owned environment recipes.'
         )}
         command={installCommand}
         installedCommand={updateCommand}
@@ -218,7 +219,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
           <WhatItem
             text={translate(
               'auto.components.settings.EphemeralVmsPane.whatBuild',
-              'Builds a reusable VM image and signs your agent in (uses your cloud account).'
+              'Builds a reusable base image and signs your agent in.'
             )}
           />
           <WhatItem
@@ -232,7 +233,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
           <div className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.EphemeralVmsPane.promptHint',
-              'Then, in a normal workspace for this repo, ask your agent:'
+              'In any workspace, ask your agent:'
             )}
           </div>
           <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2">
@@ -289,11 +290,11 @@ export function EphemeralVmsPane(): React.JSX.Element {
               {isLoading
                 ? translate(
                     'auto.components.settings.EphemeralVmsPane.checking',
-                    'Checking VM recipes...'
+                    'Checking recipes...'
                   )
                 : translate(
                     'auto.components.settings.EphemeralVmsPane.none',
-                    'No ephemeral VM recipes found yet.'
+                    'No recipes found yet.'
                   )}
             </div>
           ) : (

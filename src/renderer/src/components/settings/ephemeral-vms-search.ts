@@ -5,10 +5,13 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getEphemeralVmsSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
-    title: translate('auto.components.settings.ephemeralVms.search.title', 'Ephemeral VMs'),
+    title: translate(
+      'auto.components.settings.ephemeralVms.search.title',
+      'Per-Workspace Environments'
+    ),
     description: translate(
       'auto.components.settings.ephemeralVms.search.description',
-      'Learn how repo-owned recipes create one temporary cloud runtime per workspace.'
+      'Learn how repo-owned recipes give each workspace its own on-demand, disposable environment.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.ephemeralVms.search.keywordVm', 'vm'),
