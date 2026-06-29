@@ -350,6 +350,43 @@ describe('enableMainProcessGpuFeatures', () => {
     )
   })
 
+  it('honors explicit Linux X11 Ozone overrides even when Wayland env vars are present', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+    const originalSessionType = process.env.XDG_SESSION_TYPE
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      process.env.XDG_SESSION_TYPE = 'wayland'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+      vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+        switchName === 'ozone-platform' ? 'x11' : ''
+      )
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+      if (originalSessionType === undefined) {
+        delete process.env.XDG_SESSION_TYPE
+      } else {
+        process.env.XDG_SESSION_TYPE = originalSessionType
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+    )
+  })
+
   it('does not disable the GPU sandbox outside Linux Wayland', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')

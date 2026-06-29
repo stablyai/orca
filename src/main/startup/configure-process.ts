@@ -307,12 +307,17 @@ export function enableMainProcessGpuFeatures(): void {
     return
   }
 
+  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
+  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+  const isLinuxX11Override =
+    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
   const isLinuxWaylandSession =
     process.platform === 'linux' &&
+    !isLinuxX11Override &&
     (Boolean(process.env.WAYLAND_DISPLAY) ||
       process.env.XDG_SESSION_TYPE === 'wayland' ||
-      process.env.ELECTRON_OZONE_PLATFORM_HINT === 'wayland' ||
-      app.commandLine.getSwitchValue('ozone-platform') === 'wayland')
+      ozonePlatformHint === 'wayland' ||
+      ozonePlatform === 'wayland')
   if (isLinuxWaylandSession) {
     // Why: #5319 reproduces when Wayland loses the eager GPU channel. Keep
     // acceleration available, but drop the GPU sandbox and let Chromium open

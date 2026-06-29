@@ -264,9 +264,26 @@ async function collectRendererDiagnostics(page) {
         })
         return {
           hasStore: Boolean(store),
+          workspaceSessionReady: state?.workspaceSessionReady ?? null,
+          hydrationSucceeded: state?.hydrationSucceeded ?? null,
+          activeRepoId: state?.activeRepoId ?? null,
           activeWorktreeId: worktreeId,
+          activeWorkspaceKey: state?.activeWorkspaceKey ?? null,
           activeTabType: state?.activeTabType ?? null,
           activeTabId: tabId,
+          repoIds: (state?.repos ?? []).map((repo) => repo.id),
+          worktreeIdsByRepo: Object.fromEntries(
+            Object.entries(state?.worktreesByRepo ?? {}).map(([id, worktrees]) => [
+              id,
+              worktrees.map((worktree) => worktree.id)
+            ])
+          ),
+          tabIdsByWorktree: Object.fromEntries(
+            Object.entries(state?.tabsByWorktree ?? {}).map(([id, worktreeTabs]) => [
+              id,
+              worktreeTabs.map((tab) => tab.id)
+            ])
+          ),
           tabCount,
           activeTab: activeTab
             ? {
@@ -336,6 +353,12 @@ async function focusActiveTerminal(page) {
 
 async function setupTerminal(page, repoPath) {
   await waitFor('renderer store exposure', () => page.evaluate(() => Boolean(window.__store)))
+  await waitFor('workspace session hydration', () =>
+    page.evaluate(() => {
+      const state = window.__store?.getState?.()
+      return Boolean(state?.workspaceSessionReady && state?.hydrationSucceeded)
+    })
+  )
   const repoId = await page.evaluate(async (pathToAdd) => {
     const result = await window.api.repos.add({ path: pathToAdd, kind: 'git' })
     if ('error' in result) {
@@ -350,40 +373,41 @@ async function setupTerminal(page, repoPath) {
     return result.repo.id
   }, repoPath)
 
-  await waitFor('active worktree', () =>
+  // Why: startup hydration can reset activeWorktreeId; after it completes, set
+  // worktree, tab, and visible type in one renderer transaction for CI setup.
+  await waitFor('active terminal workspace setup', () =>
     page.evaluate((id) => {
       const store = window.__store
       if (!store) {
         return false
       }
-      const state = store.getState()
+      let state = store.getState()
       const worktree = state.worktreesByRepo[id]?.[0]
       if (!worktree) {
         return false
       }
       state.setActiveWorktree(worktree.id)
-      return true
-    }, repoId)
-  )
-
-  await waitFor('active terminal tab', () =>
-    page.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        return false
-      }
-      let state = store.getState()
-      const worktreeId = state.activeWorktreeId
-      if (!worktreeId) {
-        return false
-      }
-      const tabs = state.tabsByWorktree[worktreeId] ?? []
-      const tab = tabs[0] ?? state.createTab(worktreeId)
+      state = store.getState()
+      const tabs = state.tabsByWorktree[worktree.id] ?? []
+      const tab =
+        tabs[0] ??
+        state.createTab(worktree.id, undefined, undefined, {
+          activate: true,
+          pendingActivationSpawn: true
+        })
+      state = store.getState()
       state.setActiveTab(tab.id)
       state.setActiveTabType('terminal')
       state = store.getState()
-      return state.activeTabType === 'terminal' && state.activeTabId === tab.id
-    })
+      if (
+        state.activeWorktreeId !== worktree.id ||
+        state.activeTabType !== 'terminal' ||
+        state.activeTabId !== tab.id
+      ) {
+        return false
+      }
+      return true
+    }, repoId)
   )
 
   return waitFor('active terminal PTY binding', () =>
