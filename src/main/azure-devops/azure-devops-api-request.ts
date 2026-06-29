@@ -1,18 +1,24 @@
 import { Buffer } from 'buffer'
+import { getAzureDevOpsAzCliAccessToken } from './az-cli-token'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 
 const REQUEST_TIMEOUT_MS = 5000
 
-type AzureDevOpsAuthConfig = {
+export type AzureDevOpsAuthConfig = {
   apiBaseUrl: string | null
   pat: string | null
   accessToken: string | null
   username: string | null
 }
 
+export type AzureDevOpsResolvedAuth = AzureDevOpsAuthConfig & {
+  source: 'env-token' | 'env-pat' | 'az-cli' | null
+}
+
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  allowAzCli?: boolean
 }
 
 function envValue(name: string): string | null {
@@ -40,7 +46,7 @@ export function azureDevOpsTokenConfigured(config: AzureDevOpsAuthConfig): boole
   return Boolean(config.pat || config.accessToken)
 }
 
-function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
+export function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
@@ -49,6 +55,25 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
     return { Authorization: `Basic ${encoded}` }
   }
   return {}
+}
+
+export async function resolveAzureDevOpsAuth(options?: {
+  allowAzCli?: boolean
+}): Promise<AzureDevOpsResolvedAuth> {
+  const config = getAzureDevOpsAuthConfig()
+  if (config.accessToken) {
+    return { ...config, source: 'env-token' }
+  }
+  if (config.pat) {
+    return { ...config, source: 'env-pat' }
+  }
+  if (options?.allowAzCli !== false) {
+    const azToken = await getAzureDevOpsAzCliAccessToken()
+    if (azToken) {
+      return { ...config, accessToken: azToken.token, source: 'az-cli' }
+    }
+  }
+  return { ...config, source: null }
 }
 
 function configuredApiBaseUrl(repo: AzureDevOpsRepoRef): string {
@@ -74,14 +99,14 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   path: string,
   options: AzureDevOpsRequestOptions = {}
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
+  const auth = await resolveAzureDevOpsAuth({ allowAzCli: options.allowAzCli })
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
       headers: {
         Accept: 'application/json',
-        ...authHeaders(config)
+        ...authHeaders(auth)
       },
       signal: controller.signal
     })

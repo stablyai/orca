@@ -3,11 +3,19 @@ import {
   createAzureDevOpsPullRequest,
   isAzureDevOpsReviewCreationAuthenticated
 } from './pull-request-creation'
+import { _resetAzCliTokenCache } from './az-cli-token'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
+const {
+  gitExecFileAsyncMock,
+  getSshGitProviderMock,
+  execLocalPreflightCommandMock,
+  isCommandAvailableMock
+} = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getSshGitProviderMock: vi.fn(),
+  execLocalPreflightCommandMock: vi.fn(),
+  isCommandAvailableMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
@@ -16,6 +24,11 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
+}))
+
+vi.mock('../ipc/preflight-command-exec', () => ({
+  execLocalPreflightCommand: execLocalPreflightCommandMock,
+  isCommandAvailable: isCommandAvailableMock
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -30,22 +43,52 @@ describe('Azure DevOps pull request creation', () => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
     getSshGitProviderMock.mockReset()
+    execLocalPreflightCommandMock.mockReset()
+    isCommandAvailableMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://dev.azure.com/acme/Project/_git/repo\n',
       stderr: ''
     })
     _resetAzureDevOpsRepoRefCache()
+    _resetAzCliTokenCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetAzureDevOpsRepoRefCache()
+    _resetAzCliTokenCache()
   })
 
-  it('treats token-only auth as sufficient for repo-scoped creation', () => {
+  it('treats token-only auth as sufficient for repo-scoped creation', async () => {
     delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
-    expect(isAzureDevOpsReviewCreationAuthenticated()).toBe(true)
+    await expect(isAzureDevOpsReviewCreationAuthenticated()).resolves.toBe(true)
+  })
+
+  it('authenticates creation via an az CLI token when no env auth is set', async () => {
+    process.env = { ...OLD_ENV }
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_PAT
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
+    execLocalPreflightCommandMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        accessToken: 'az-token',
+        expires_on: Math.floor(Date.now() / 1000) + 3600
+      }),
+      stderr: ''
+    })
+    await expect(isAzureDevOpsReviewCreationAuthenticated()).resolves.toBe(true)
+  })
+
+  it('reports creation unauthenticated when neither env auth nor an az token exists', async () => {
+    process.env = { ...OLD_ENV }
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_PAT
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
+    execLocalPreflightCommandMock.mockRejectedValue(
+      Object.assign(new Error('spawn az ENOENT'), { code: 'ENOENT' })
+    )
+    await expect(isAzureDevOpsReviewCreationAuthenticated()).resolves.toBe(false)
   })
 
   it('posts a pull request create body to the repository REST endpoint', async () => {
@@ -94,6 +137,49 @@ describe('Azure DevOps pull request creation', () => {
       url: 'https://dev.azure.com/acme/Project/_git/repo/pullrequest/37'
     })
     expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('uses an az CLI token as Bearer auth when creating without env auth', async () => {
+    process.env = { ...OLD_ENV }
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_PAT
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
+    execLocalPreflightCommandMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        accessToken: 'az-token',
+        expires_on: Math.floor(Date.now() / 1000) + 3600
+      }),
+      stderr: ''
+    })
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>
+      expect(headers.Authorization).toMatch(/^Bearer /)
+      return Response.json({
+        pullRequestId: 39,
+        title: 'Create with az',
+        status: 'active',
+        creationDate: '2026-06-01T00:00:00Z',
+        _links: {
+          web: {
+            href: 'https://dev.azure.com/acme/Project/_git/repo/pullrequest/39'
+          }
+        }
+      })
+    })
+    globalThis.fetch = fetchMock as never
+
+    await expect(
+      createAzureDevOpsPullRequest('/repo', {
+        provider: 'azure-devops',
+        base: 'main',
+        head: 'feature/azure',
+        title: 'Create with az'
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      number: 39
+    })
+    expect(execLocalPreflightCommandMock).toHaveBeenCalledOnce()
   })
 
   it('resolves Azure DevOps remotes through the SSH git provider', async () => {

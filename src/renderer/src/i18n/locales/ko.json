@@ -8331,7 +8331,9 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "이 런타임에서는 아직 Bitbucket 상태를 사용할 수 없습니다.",
                   "a924e8dcd1": "Bitbucket Cloud API 토큰을 통한 PR 및 빌드 상태입니다.",
-                  "0fa5629dad": "PR 및 빌드 상태"
+                  "0fa5629dad": "PR 및 빌드 상태",
+                  "9c4a0c82e7": " Or sign in with the Azure CLI",
+                  "a58e8fa2b9": "az login"
                 }
               }
             }

@@ -8339,7 +8339,9 @@
                   "63a7f47392": "ORCA_BITBUCKET_EMAIL",
                   "24ac1c69dc": "Bitbucket status is not available in this runtime yet.",
                   "a924e8dcd1": "Pull requests and build statuses via Bitbucket Cloud API tokens.",
-                  "0fa5629dad": "Pull requests and build statuses"
+                  "0fa5629dad": "Pull requests and build statuses",
+                  "9c4a0c82e7": " Or sign in with the Azure CLI",
+                  "a58e8fa2b9": "az login"
                 }
               }
             }

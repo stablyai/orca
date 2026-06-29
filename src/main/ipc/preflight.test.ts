@@ -145,13 +145,15 @@ describe('preflight', () => {
   })
 
   // Why: every preflight run probes (in order) `git --version`, `gh --version`,
-  // `glab --version`, then in parallel `gh auth status` + `glab auth status` —
-  // five execFile calls per cycle. Tests below provide values for all five.
+  // `glab --version`, local `az --version`, then in parallel `gh auth status`
+  // + `glab auth status` — six execFile calls per cycle. Tests below provide
+  // values for all six.
   it('marks gh as authenticated when gh auth status exits successfully', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
@@ -165,11 +167,12 @@ describe('preflight', () => {
       azureDevOps: defaultAzureDevOpsStatus,
       gitea: defaultGiteaStatus
     })
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, 'gh', ['auth', 'status'], {
+    expect(getAzureDevOpsAuthStatusMock).toHaveBeenCalledWith({ localAzAvailable: true })
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, 'gh', ['auth', 'status'], {
       encoding: 'utf-8',
       timeout: 5000
     })
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, 'glab', ['auth', 'status'], {
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(6, 'glab', ['auth', 'status'], {
       encoding: 'utf-8',
       timeout: 5000
     })
@@ -180,6 +183,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitHub hosts.\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
@@ -193,6 +197,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockRejectedValueOnce(Object.assign(new Error('spawn az ENOENT'), { code: 'ENOENT' }))
       .mockRejectedValueOnce({ stderr: 'Logged in to github.com account octocat\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
@@ -206,6 +211,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockRejectedValueOnce(new Error('command not found: glab'))
+      .mockRejectedValueOnce(Object.assign(new Error('spawn az ENOENT'), { code: 'ENOENT' }))
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
 
     const status = await runPreflightCheck()
@@ -213,7 +219,8 @@ describe('preflight', () => {
     expect(status.glab).toEqual({ installed: false, authenticated: false })
     // Why: with glab uninstalled, glab auth status must not run — that
     // would surface a misleading "command not found" error in logs.
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(getAzureDevOpsAuthStatusMock).toHaveBeenCalledWith({ localAzAvailable: false })
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(5)
   })
 
   it('marks glab as installed but unauthenticated when auth status fails', async () => {
@@ -221,6 +228,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitLab hosts.\n' })
 
@@ -325,6 +333,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
@@ -396,11 +405,13 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockRejectedValueOnce(Object.assign(new Error('spawn az ENOENT'), { code: 'ENOENT' }))
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitHub hosts.\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
@@ -409,7 +420,7 @@ describe('preflight', () => {
 
     expect(firstStatus.gh).toEqual({ installed: true, authenticated: false })
     expect(refreshedStatus.gh).toEqual({ installed: true, authenticated: true })
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(12)
   })
 
   it('registers the preflight handler', async () => {
@@ -417,6 +428,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
@@ -439,11 +451,13 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockRejectedValueOnce(Object.assign(new Error('spawn az ENOENT'), { code: 'ENOENT' }))
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitHub hosts.\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'azure-cli 2.60.0\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 

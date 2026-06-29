@@ -1,4 +1,3 @@
-import { Buffer } from 'buffer'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -9,59 +8,32 @@ import {
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
+import {
+  authHeaders,
+  azureDevOpsTokenConfigured,
+  getAzureDevOpsAuthConfig,
+  normalizeAzureDevOpsApiBaseUrl,
+  resolveAzureDevOpsAuth
+} from './azure-devops-api-request'
 import { getAzureDevOpsPullRequestForBranch } from './client'
 import { mapAzureDevOpsPullRequest, type RawAzureDevOpsPullRequest } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
-type AzureDevOpsCreateAuthConfig = {
-  apiBaseUrl: string | null
-  pat: string | null
-  accessToken: string | null
-  username: string | null
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-function normalizeApiBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/_apis$/i, '')
-}
-
-function getAuthConfig(): AzureDevOpsCreateAuthConfig {
-  return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
+export async function isAzureDevOpsReviewCreationAuthenticated(): Promise<boolean> {
+  const config = getAzureDevOpsAuthConfig()
+  if (azureDevOpsTokenConfigured(config)) {
+    return true
   }
-}
-
-export function isAzureDevOpsReviewCreationAuthenticated(): boolean {
-  const config = getAuthConfig()
-  return Boolean(config.pat || config.accessToken)
-}
-
-function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
-  }
-  if (config.pat) {
-    const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
+  return (await resolveAzureDevOpsAuth()).source !== null
 }
 
 function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
-  const config = getAuthConfig()
-  const baseUrl = config.apiBaseUrl ? normalizeApiBaseUrl(config.apiBaseUrl) : repo.apiBaseUrl
+  const config = getAzureDevOpsAuthConfig()
+  const baseUrl = config.apiBaseUrl
+    ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl)
+    : repo.apiBaseUrl
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
   url.searchParams.set('api-version', '7.1')
   return url
@@ -97,7 +69,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
+        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN or sign in with the Azure CLI (az login).'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('active pull request')) {
@@ -192,6 +164,7 @@ export async function createAzureDevOpsPullRequest(
   }
 
   try {
+    const auth = await resolveAzureDevOpsAuth()
     const raw = await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
       apiUrl(repo, `/_apis/git/repositories/${encodePathSegment(repo.repository)}/pullRequests`),
       {
@@ -199,7 +172,7 @@ export async function createAzureDevOpsPullRequest(
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          ...authHeaders(getAuthConfig())
+          ...authHeaders(auth)
         },
         body: JSON.stringify(requestBody)
       },

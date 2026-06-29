@@ -4,12 +4,22 @@ import {
   getAzureDevOpsPullRequestForBranch,
   normalizeAzureDevOpsApiBaseUrl
 } from './client'
+import { _resetAzCliTokenCache } from './az-cli-token'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+const { execLocalPreflightCommandMock, isCommandAvailableMock } = vi.hoisted(() => ({
+  execLocalPreflightCommandMock: vi.fn(),
+  isCommandAvailableMock: vi.fn()
+}))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../ipc/preflight-command-exec', () => ({
+  execLocalPreflightCommand: execLocalPreflightCommandMock,
+  isCommandAvailable: isCommandAvailableMock
 }))
 
 const OLD_ENV = process.env
@@ -19,13 +29,17 @@ describe('Azure DevOps client', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
+    execLocalPreflightCommandMock.mockReset()
+    isCommandAvailableMock.mockReset()
     _resetAzureDevOpsRepoRefCache()
+    _resetAzCliTokenCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetAzureDevOpsRepoRefCache()
+    _resetAzCliTokenCache()
   })
 
   it('normalizes configured API base URLs', () => {
@@ -43,6 +57,58 @@ describe('Azure DevOps client', () => {
       baseUrl: null,
       tokenConfigured: true
     })
+  })
+
+  it('reports az-only auth as configured and authenticated when local az can mint a token', async () => {
+    process.env = {
+      ...OLD_ENV,
+      ORCA_AZURE_DEVOPS_API_BASE_URL: 'https://dev.azure.com/acme'
+    }
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_PAT
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
+    execLocalPreflightCommandMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        accessToken: 'az-token',
+        expires_on: Math.floor(Date.now() / 1000) + 3600
+      }),
+      stderr: ''
+    })
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>
+      expect(headers.Authorization).toBe('Bearer az-token')
+      return Response.json({
+        authenticatedUser: {
+          providerDisplayName: 'Ada Azure'
+        }
+      })
+    }) as never
+
+    await expect(getAzureDevOpsAuthStatus({ localAzAvailable: true })).resolves.toEqual({
+      configured: true,
+      authenticated: true,
+      account: 'Ada Azure',
+      baseUrl: 'https://dev.azure.com/acme',
+      tokenConfigured: true
+    })
+    expect(execLocalPreflightCommandMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not spawn az when local az is unavailable and no env token is set', async () => {
+    process.env = { ...OLD_ENV }
+    delete process.env.ORCA_AZURE_DEVOPS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_PAT
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
+    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+
+    await expect(getAzureDevOpsAuthStatus({ localAzAvailable: false })).resolves.toEqual({
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    })
+    expect(execLocalPreflightCommandMock).not.toHaveBeenCalled()
   })
 
   it('resolves a PR for a branch through repository, PR, and status REST calls', async () => {

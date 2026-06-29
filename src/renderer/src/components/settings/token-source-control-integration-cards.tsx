@@ -210,6 +210,18 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                   'auto.components.settings.token.source.control.integration.cards.7bd345e3f6',
                   'only when Orca cannot derive the API base URL from the git remote.'
                 )}
+                {translate(
+                  'auto.components.settings.token.source.control.integration.cards.9c4a0c82e7',
+                  ' Or sign in with the Azure CLI'
+                )}{' '}
+                (
+                <span className="font-mono text-[11px]">
+                  {translate(
+                    'auto.components.settings.token.source.control.integration.cards.a58e8fa2b9',
+                    'az login'
+                  )}
+                </span>
+                ).
               </>
             ) : (
               translate(

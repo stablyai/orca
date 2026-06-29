@@ -3,6 +3,7 @@ import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-ag
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
+import { _resetAzCliTokenCache } from '../azure-devops/az-cli-token'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
@@ -238,19 +239,24 @@ export async function runPreflightCheck(
     // path in IntegrationsPane forces preflight, so piggyback on that signal
     // to refresh the host list too.
     _resetKnownHostsCache()
+    // Why: same rationale for the Azure DevOps az-CLI token cache — a user who
+    // runs `az login` after Orca starts should see the Re-check pick it up
+    // immediately rather than waiting out the cached negative/expiry window.
+    _resetAzCliTokenCache()
   }
 
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const [gitProbe, ghProbe, glabProbe, azAvailable] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('glab', context),
+    isCommandAvailable('az')
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
     ghProbe.installed ? isGhAuthenticated(ghProbe.wslTarget) : Promise.resolve(false),
     glabProbe.installed ? isGlabAuthenticated(glabProbe.wslTarget) : Promise.resolve(false),
     getBitbucketAuthStatus(),
-    getAzureDevOpsAuthStatus(),
+    getAzureDevOpsAuthStatus({ localAzAvailable: azAvailable }),
     getGiteaAuthStatus()
   ])
 

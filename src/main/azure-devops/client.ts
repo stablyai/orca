@@ -14,6 +14,7 @@ import {
   azureDevOpsTokenConfigured,
   getAzureDevOpsAuthConfig,
   normalizeAzureDevOpsApiBaseUrl,
+  resolveAzureDevOpsAuth,
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
@@ -128,10 +129,16 @@ function sortPullRequestsForBranch(
   return Number(rightStatus === 'active') - Number(leftStatus === 'active')
 }
 
-export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
+export async function getAzureDevOpsAuthStatus(options?: {
+  localAzAvailable?: boolean
+}): Promise<AzureDevOpsAuthStatus> {
   const config = getAzureDevOpsAuthConfig()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
-  const hasToken = azureDevOpsTokenConfigured(config)
+  const envTokenConfigured = azureDevOpsTokenConfigured(config)
+  const allowAzCli = options?.localAzAvailable === true
+  const hasToken =
+    envTokenConfigured ||
+    (allowAzCli && (await resolveAzureDevOpsAuth({ allowAzCli: true })).source === 'az-cli')
   if (!baseUrl && !hasToken) {
     return {
       configured: false,
@@ -157,7 +164,7 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
       customDisplayName?: string | null
       uniqueName?: string | null
     } | null
-  }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000 })
+  }>(baseUrl, '/_apis/connectionData', { allowAzCli, timeoutMs: 4000 })
   const user = connection?.authenticatedUser
   return {
     configured: hasToken || connection !== null,
