@@ -18,10 +18,9 @@ function event(overrides: Partial<TerminalShortcutEvent>): TerminalShortcutEvent
 }
 
 describe('non-mac Ctrl+Left/Right word-nav', () => {
-  // Windows Terminal, GNOME Terminal, and Konsole all bind Ctrl+←/→ to
-  // word-nav. xterm.js emits \e[1;5D / \e[1;5C which default readline doesn't
-  // map, so translate to \eb / \ef (same bytes as our Alt+Arrow rule).
-  it('translates Ctrl+←/→ on Windows/Linux to readline \\eb / \\ef', () => {
+  // Linux and remote/WSL readline shells don't bind the \e[1;5D / \e[1;5C that
+  // xterm.js emits, so translate to \eb / \ef (same bytes as our Alt+Arrow rule).
+  it('translates Ctrl+←/→ on Linux to readline \\eb / \\ef', () => {
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true }),
@@ -32,6 +31,64 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
       resolveTerminalShortcutAction(
         event({ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true }),
         false
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bf' })
+  })
+
+  // Local Windows ConPTY shells (PowerShell/cmd via PSReadLine) already bind
+  // Ctrl+←/→ to word-nav and self-insert a stray "b"/"f" when fed \eb/\ef
+  // (Escape→RevertLine + self-insert), so the policy must defer to xterm's
+  // native \e[1;5D / \e[1;5C there. Signalled via the isLocalWindowsConptyPane
+  // getter (7th arg).
+  it('does NOT translate Ctrl+←/→ for a local Windows ConPTY pane', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true }),
+        false,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        () => true
+      )
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true }),
+        false,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        () => true
+      )
+    ).toBeNull()
+  })
+
+  // A Windows client SSH'd into Linux (or running WSL) is NOT a local native
+  // Windows ConPTY, so the getter returns false and the readline translation
+  // must still apply — otherwise word-nav silently breaks on the remote shell.
+  it('still translates Ctrl+←/→ on Windows when the pane is not local ConPTY (SSH/WSL)', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true }),
+        false,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        () => false
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true }),
+        false,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        () => false
       )
     ).toEqual({ type: 'sendInput', data: '\x1bf' })
   })

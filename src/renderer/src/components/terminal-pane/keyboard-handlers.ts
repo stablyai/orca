@@ -20,6 +20,9 @@ import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-w
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
+import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
+import { getConnectionId } from '@/lib/connection-context'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import {
   markTerminalFollowOutput,
@@ -115,6 +118,7 @@ export function matchFileSearchShortcut(
 
 type KeyboardHandlersDeps = {
   tabId: string
+  worktreeId: string
   isActive: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
@@ -148,6 +152,7 @@ type KeyboardHandlersDeps = {
  */
 export function useTerminalKeyboardShortcuts({
   tabId,
+  worktreeId,
   isActive,
   keyboardScopeRef,
   managerRef,
@@ -251,13 +256,39 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      // Why: the active pane's live cwd/shell decides whether Ctrl+Arrow should
+      // pass through as native \e[1;5C/\e[1;5D (local Windows ConPTY/PSReadLine)
+      // or be translated to \eb/\ef (Linux + remote/WSL readline). Resolved
+      // lazily so the execution-host lookup only runs for the Ctrl+Arrow chord.
+      const isLocalWindowsConptyPane = (): boolean => {
+        if (!isWindows) {
+          return false
+        }
+        const activePane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!activePane) {
+          return false
+        }
+        const storeState = useAppStore.getState()
+        const shellOverride = storeState.tabsByWorktree[worktreeId]?.find(
+          (candidate) => candidate.id === tabId
+        )?.shellOverride
+        return isLocalNativeWindowsConpty({
+          userAgent: navigator.userAgent,
+          connectionId: getConnectionId(worktreeId) ?? null,
+          cwd: paneCwdRef.current.get(activePane.id)?.cwd ?? fallbackCwd,
+          shellOverride,
+          executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId)
+        })
+      }
+
       const action = resolveTerminalShortcutAction(
         e,
         isMac,
         macOptionAsAltRef.current,
         optionKeyLocation,
         isWindows,
-        keybindings
+        keybindings,
+        isLocalWindowsConptyPane
       )
       if (!action) {
         return
@@ -496,7 +527,8 @@ export function useTerminalKeyboardShortcuts({
     macOptionAsAltRef,
     keybindings,
     terminalShortcutPolicy,
-    tabId
+    tabId,
+    worktreeId
   ])
 }
 
