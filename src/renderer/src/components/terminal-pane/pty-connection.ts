@@ -816,6 +816,8 @@ export function connectPanePty(
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
   let connectFrame: number | null = null
+  let connectFallbackTimer: ReturnType<typeof setTimeout> | null = null
+  let connectStarted = false
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
@@ -2206,8 +2208,24 @@ export function connectPanePty(
 
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
-  connectFrame = requestAnimationFrame(() => {
-    connectFrame = null
+  const cancelScheduledConnectFrame = (): void => {
+    if (connectFrame !== null) {
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(connectFrame)
+      }
+      connectFrame = null
+    }
+  }
+  const runDeferredConnect = (): void => {
+    if (connectStarted) {
+      return
+    }
+    connectStarted = true
+    cancelScheduledConnectFrame()
+    if (connectFallbackTimer !== null) {
+      clearTimeout(connectFallbackTimer)
+      connectFallbackTimer = null
+    }
     if (disposed) {
       return
     }
@@ -4359,7 +4377,12 @@ export function connectPanePty(
       }
     }
     scheduleRuntimeGraphSync()
-  })
+  }
+
+  // Why: Wayland/CI compositors can keep timers and CDP responsive while the
+  // next rAF never arrives; the terminal must still start its PTY once.
+  connectFallbackTimer = setTimeout(runDeferredConnect, 250)
+  connectFrame = requestAnimationFrame(runDeferredConnect)
 
   // Why: on visibility resume a pane may still be bound to a daemon session
   // reaped while hidden (the missed-exit defect). Route it through the SAME
@@ -4496,8 +4519,11 @@ export function connectPanePty(
         // before its deferred PTY attach/spawn work runs. Cancel that queued
         // frame so stale bindings cannot reattach the PTY and steal the live
         // handler wiring from the current pane.
-        cancelAnimationFrame(connectFrame)
-        connectFrame = null
+        cancelScheduledConnectFrame()
+      }
+      if (connectFallbackTimer !== null) {
+        clearTimeout(connectFallbackTimer)
+        connectFallbackTimer = null
       }
       onDataDisposable.dispose()
       terminalCapabilityRepliesDisposable.dispose()
