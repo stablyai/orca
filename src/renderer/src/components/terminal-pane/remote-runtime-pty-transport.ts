@@ -470,6 +470,9 @@ export function createRemoteRuntimePtyTransport(
           tabId,
           leafId,
           focus: false,
+          // Why: this transport is backing an already-mounted renderer pane;
+          // activation here is local state, not permission for remote UI reveal.
+          presentation: 'background',
           ...(activate === true ? { activate: true } : {})
         })
         handle = created.terminal.handle

@@ -3184,6 +3184,7 @@ export class OrcaRuntimeService {
       leafId: string
       title: string | null
       activate: boolean
+      selectIfNoActiveTab?: boolean
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
     }
   ): void {
@@ -3219,7 +3220,8 @@ export class OrcaRuntimeService {
       ptyId: pty.ptyId,
       title,
       parentLayout,
-      isActive: args.activate || existing?.activeTabId == null
+      isActive:
+        args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
     }
     const existingTabs = (existing?.tabs ?? []).filter(
       (candidate) =>
@@ -3246,7 +3248,7 @@ export class OrcaRuntimeService {
     const activeTab =
       (tab.isActive ? tab : tabs.find((candidate) => candidate.id === existing?.activeTabId)) ??
       tabs.find((candidate) => candidate.isActive) ??
-      tabs[0] ??
+      (args.selectIfNoActiveTab !== false ? tabs[0] : null) ??
       null
     const terminalTabs = tabs.filter(
       (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
@@ -15115,7 +15117,10 @@ export class OrcaRuntimeService {
           tabId,
           leafId,
           title: opts.title ?? null,
-          activate: opts.activate === true
+          activate: presentation === 'focused',
+          // Why: explicit background presentation may carry legacy activate
+          // metadata from an already-owned renderer pane; don't select it on mobile.
+          selectIfNoActiveTab: presentation !== 'background'
         })
       }
       let surface: RuntimeTerminalCreate['surface'] = 'background'

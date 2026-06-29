@@ -543,6 +543,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           tabId: 'tab-1',
           leafId: 'pane:1',
           focus: false,
+          presentation: 'background',
           activate: true
         })
       })

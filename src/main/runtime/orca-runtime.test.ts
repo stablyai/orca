@@ -12689,6 +12689,33 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('keeps background-presentation PTY-backed mobile session tabs inactive', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      activate: true,
+      presentation: 'background',
+      tabId: 'laptop-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    const phoneTabs = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(phoneTabs.activeTabId).toBeNull()
+    expect(phoneTabs.tabs[0]).toMatchObject({
+      type: 'terminal',
+      id: `laptop-tab::${HEADLESS_LEAF_ID}`,
+      isActive: false
+    })
+  })
+
   it('replaces pending phone session tabs when a laptop-created remote PTY becomes live', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)

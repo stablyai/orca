@@ -147,8 +147,7 @@ export async function launchAgentBackgroundSession(
       }),
     write: (ptyId, data) => window.api.pty.write(ptyId, data)
   })
-  // Route by the worktree's owner host: the agent terminal must spawn on the host
-  // that owns this worktree, not on the focused runtime.
+  // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
   )
@@ -173,7 +172,8 @@ export async function launchAgentBackgroundSession(
           title,
           tabId: tab.id,
           leafId,
-          focus: false
+          // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
+          presentation: 'background'
         },
         { timeoutMs: 15_000 }
       )

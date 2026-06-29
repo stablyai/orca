@@ -599,7 +599,7 @@ describe('launchAgentBackgroundSession', () => {
         }),
         tabId: 'tab-1',
         leafId,
-        focus: false
+        presentation: 'background'
       }),
       timeoutMs: 15_000
     })
