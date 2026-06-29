@@ -219,6 +219,7 @@ export class ScrcpyStreamSession {
       buffer = Buffer.from(buffer.subarray(headerLen))
       this.headerStripped = true
     }
+    let shouldResolveReady = false
     if (!this.metaSeen) {
       const meta = parseScrcpyVideoMeta(buffer)
       if (!meta) {
@@ -228,9 +229,7 @@ export class ScrcpyStreamSession {
       this.metaSeen = true
       emulatorProbe('scrcpy.meta', meta)
       this.callbacks.onMeta(meta)
-      this.resolveReady?.()
-      this.resolveReady = null
-      this.rejectReady = null
+      shouldResolveReady = true
       buffer = Buffer.from(buffer.subarray(12))
     }
     // The parser throws on a desynced stream (e.g. an absurd frame size); catch
@@ -244,6 +243,11 @@ export class ScrcpyStreamSession {
       return
     }
     this.pendingVideo = result.pending
+    if (shouldResolveReady) {
+      this.resolveReady?.()
+      this.resolveReady = null
+      this.rejectReady = null
+    }
     for (const frame of result.frames) {
       this.callbacks.onFrame(frame)
     }

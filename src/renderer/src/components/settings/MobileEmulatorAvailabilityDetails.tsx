@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleAlert, FolderOpen, X } from 'lucide-react'
 import type React from 'react'
+import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -68,11 +69,37 @@ export function MobileEmulatorAvailabilityDetails({
   const showIos = availability.platform === 'darwin'
 
   const handleLocate = async (): Promise<void> => {
-    const picked = await window.api.shell.pickDirectory({
-      defaultPath: android.sdkPath ?? configuredPath ?? undefined
-    })
-    if (picked) {
-      await onSetAndroidSdkPath(picked)
+    try {
+      const picked = await window.api.shell.pickDirectory({
+        defaultPath: android.sdkPath ?? configuredPath ?? undefined
+      })
+      if (picked) {
+        await onSetAndroidSdkPath(picked)
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.MobileEmulatorSdkStatus.63fe73a1ea',
+              'Could not update Android SDK folder.'
+            )
+      )
+    }
+  }
+
+  const handleClear = async (): Promise<void> => {
+    try {
+      await onSetAndroidSdkPath(null)
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.MobileEmulatorSdkStatus.63fe73a1ea',
+              'Could not update Android SDK folder.'
+            )
+      )
     }
   }
 
@@ -91,12 +118,12 @@ export function MobileEmulatorAvailabilityDetails({
                 {configuredPath
                   ? translate(
                       'auto.components.settings.MobileEmulatorSdkStatus.f6d080d128',
-                      'Using configured path '
+                      'Using configured path'
                     )
                   : translate(
                       'auto.components.settings.MobileEmulatorSdkStatus.7fe4bd5907',
-                      'Detected at '
-                    )}
+                      'Detected at'
+                    )}{' '}
                 <code className="rounded bg-muted px-1 py-0.5">{android.sdkPath}</code>
               </>
             ) : (
@@ -140,7 +167,7 @@ export function MobileEmulatorAvailabilityDetails({
                   type="button"
                   size="xs"
                   variant="ghost"
-                  onClick={() => void onSetAndroidSdkPath(null)}
+                  onClick={() => void handleClear()}
                   className={sdkPathActionClassName}
                 >
                   <X className="size-3" />

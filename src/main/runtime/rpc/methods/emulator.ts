@@ -91,6 +91,20 @@ const PermissionsParams = z
   })
   .superRefine((value, ctx) => {
     if (value.op === 'reset') {
+      if (value.package) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['package'],
+          message: 'package is not allowed for reset'
+        })
+      }
+      if (value.permission) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['permission'],
+          message: 'permission is not allowed for reset'
+        })
+      }
       return
     }
     if (!value.package) {

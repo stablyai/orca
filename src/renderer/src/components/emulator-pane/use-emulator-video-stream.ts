@@ -48,7 +48,11 @@ export function useEmulatorVideoStream(
 
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
-    if (!enabled || !deviceId || !api?.startVideoStream) {
+    if (!enabled || !deviceId) {
+      setError(null)
+      return
+    }
+    if (!api?.startVideoStream) {
       return
     }
     setError(null)
@@ -178,10 +182,11 @@ export function useEmulatorVideoStream(
       // decode() can throw synchronously (DataError/InvalidStateError on malformed
       // wire bytes); the async error callback won't catch it, so surface via fatal().
       try {
+        timestamp += 1
         decoder.decode(
           new ChunkCtor({
             type: msg.keyFrame ? 'key' : 'delta',
-            timestamp: (timestamp += 1),
+            timestamp,
             data: chunkData
           })
         )

@@ -5433,7 +5433,12 @@
           "a4f1c82d90": "Disabled",
           "b5e2d93e01": "Checking...",
           "c6f3ea4f12": "Ready",
-          "d704fb5023": "Needs setup"
+          "d704fb5023": "Needs setup",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Regenerate the QR code and scan it from the Orca mobile app.",
@@ -8458,15 +8463,16 @@
           "536026130e": "Emulator SDKs",
           "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
           "027cbf668a": "Android SDK",
-          "f6d080d128": "Using configured path ",
-          "7fe4bd5907": "Detected at ",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
           "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
           "b94ff260e6": "Download Android Studio",
           "18925b082d": "Locate SDK folder",
           "8c52684db8": "Clear",
           "76eb88b88e": "iOS Simulator (Xcode)",
           "c6f3ea4f12": "Ready",
-          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime."
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Advanced"

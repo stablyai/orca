@@ -98,12 +98,22 @@ function DeviceSelectItemLabel({ device }: { device: SimulatorDeviceRow }): Reac
 
 function availabilityDetail(availability: EmulatorAvailability | null): string {
   if (!availability) {
-    return 'Checking Android SDK and iOS Simulator support.'
+    return translate(
+      'auto.components.settings.MobileEmulatorSettingsPane.06b06429c6',
+      'Checking Android SDK and iOS Simulator support.'
+    )
   }
   if (availability.available) {
-    return `${availability.devices.length} emulator device${
-      availability.devices.length === 1 ? '' : 's'
-    } detected.`
+    return availability.devices.length === 1
+      ? translate(
+          'auto.components.settings.MobileEmulatorSettingsPane.6d1483d4a0',
+          '1 emulator device detected.'
+        )
+      : translate(
+          'auto.components.settings.MobileEmulatorSettingsPane.0a452d4d3b',
+          '{{value0}} emulator devices detected.',
+          { value0: availability.devices.length }
+        )
   }
   return availability.simctl.message || availability.serveSim.message || availability.message
 }
@@ -155,9 +165,15 @@ export function MobileEmulatorSettingsPane({
 
   const defaultDeviceDescription = useMemo(() => {
     if (devices.length === 0) {
-      return 'Orca will auto-select an emulator device after devices are detected.'
+      return translate(
+        'auto.components.settings.MobileEmulatorSettingsPane.f62a1bb759',
+        'Orca will auto-select an emulator device after devices are detected.'
+      )
     }
-    return 'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
+    return translate(
+      'auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75',
+      'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
+    )
   }, [devices.length])
 
   return (
