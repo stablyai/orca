@@ -547,8 +547,18 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
   })
 
   it('launches once and clears skipped duplicates for the same provider session', () => {
-    const first = makeRecord({ paneKey: 'tab-1:leaf-1', capturedAt: 1, updatedAt: 1 })
-    const duplicate = makeRecord({ paneKey: 'tab-2:leaf-1', capturedAt: 2, updatedAt: 2 })
+    const first = makeRecord({
+      paneKey: 'tab-1:leaf-1',
+      capturedAt: 1,
+      updatedAt: 1,
+      launchConfig: { agentArgs: '--older', agentEnv: {} }
+    })
+    const duplicate = makeRecord({
+      paneKey: 'tab-2:leaf-1',
+      capturedAt: 2,
+      updatedAt: 2,
+      launchConfig: { agentArgs: '--newer', agentEnv: {} }
+    })
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: {
@@ -562,6 +572,10 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     expect(launched).toBe(1)
     expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
+    const resumedTab = state.tabsByWorktree['wt-1']?.[0]
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.launchConfig).toMatchObject({
+      agentArgs: '--newer'
+    })
     expect(state.sleepingAgentSessionsByPaneKey[first.paneKey]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[duplicate.paneKey]).toBeUndefined()
   })

@@ -140,6 +140,24 @@ function getCurrentPaneOwnedClaimKeys(records: readonly SleepingAgentSessionReco
   return keys
 }
 
+function getNewestActiveRecordsByClaimKey(
+  records: readonly SleepingAgentSessionRecord[]
+): Map<string, SleepingAgentSessionRecord> {
+  const newestRecords = new Map<string, SleepingAgentSessionRecord>()
+  for (const record of records) {
+    const claimKey = getProviderSessionClaimKey(record)
+    const current = newestRecords.get(claimKey)
+    if (
+      !current ||
+      record.capturedAt > current.capturedAt ||
+      (record.capturedAt === current.capturedAt && record.updatedAt > current.updatedAt)
+    ) {
+      newestRecords.set(claimKey, record)
+    }
+  }
+  return newestRecords
+}
+
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
   if (record.interrupted === true) {
     return true
@@ -164,6 +182,7 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
     (record) => !isPassiveCompletedHibernationEvidence(record)
   )
   const activeClaimKeys = new Set(activeWorktreeRecords.map(getProviderSessionClaimKey))
+  const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(activeWorktreeRecords)
   const freshlyLaunchedClaimKeys = new Set<string>()
 
   let launched = 0
@@ -186,15 +205,19 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
       }
       continue
     }
-    if (freshlyLaunchedClaimKeys.has(claimKey)) {
-      state.clearSleepingAgentSession(record.paneKey)
-      continue
-    }
     const paneOwnedClaimKeys = getCurrentPaneOwnedClaimKeys(activeWorktreeRecords)
     if (paneOwnedClaimKeys.has(claimKey)) {
       if (!isPaneOwned) {
         state.clearSleepingAgentSession(record.paneKey)
       }
+      continue
+    }
+    if (freshlyLaunchedClaimKeys.has(claimKey)) {
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
+    if (newestActiveRecordByClaimKey.get(claimKey) !== record) {
+      state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     if (isPaneOwned) {
