@@ -1,4 +1,5 @@
 import { getEffectiveProjectGroupManualRank } from '../../../../shared/project-groups'
+import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
 import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
 import type { Row } from './worktree-list-groups'
 import type { Repo } from '../../../../shared/types'
@@ -72,21 +73,7 @@ export function getProjectGroupOrderForSidebarDrop(args: {
   }
   const before = getEffectiveOrder(ordered[args.dropIndex - 1], args.dropIndex - 1)
   const after = getEffectiveOrder(ordered[args.dropIndex], args.dropIndex)
-  if (before === undefined && after === undefined) {
-    return 0
-  }
-  if (before === undefined) {
-    return after !== undefined ? after - 1 : 0
-  }
-  if (after === undefined) {
-    return before + 1
-  }
-  if (after > before) {
-    return before + (after - before) / 2
-  }
-  // Why: duplicate legacy ranks leave no numeric slot between neighbors; choose
-  // a deterministic finite value so the next drag has a persisted anchor.
-  return before + 1
+  return interpolateSparseOrder(before, after)
 }
 
 export function mapSidebarProjectHeaderDropIndexToSiblingInsertIndex(args: {
