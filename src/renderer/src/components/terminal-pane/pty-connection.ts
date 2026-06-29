@@ -2720,6 +2720,12 @@ export function connectPanePty(
     let foregroundImmediateBudgetWindowStart = 0
     let foregroundRewriteChunkEndedWithCarriageReturn = false
     let foregroundRewriteCsiScanTail = ''
+    let backgroundRewriteChunkEndedWithCarriageReturn = false
+    let backgroundRewriteCsiScanTail = ''
+    // Why: background-queued output during idle over SSH can carry in-place
+    // rewrites that leave stale renderer cells. Flag so the first foreground
+    // chunk after the violation triggers a refresh (U3, issue #5969).
+    let pendingBackgroundRewriteRefresh = false
     let hiddenMode2031ScanTail = ''
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
@@ -2920,10 +2926,29 @@ export function connectPanePty(
       // cursor-only restores need row invalidation even outside DEC 2026.
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      if (!foreground) {
+        const backgroundRewriteDecision = terminalRewriteOutputRenderRefreshDecision(data, {
+          previousChunkEndsWithCarriageReturn: backgroundRewriteChunkEndedWithCarriageReturn,
+          previousRewriteCsiScanTail: backgroundRewriteCsiScanTail
+        })
+        if (backgroundRewriteDecision.prefersRenderRefresh) {
+          pendingBackgroundRewriteRefresh = true
+        }
+        backgroundRewriteChunkEndedWithCarriageReturn =
+          backgroundRewriteDecision.nextChunkEndsWithCarriageReturn
+        backgroundRewriteCsiScanTail = backgroundRewriteDecision.nextRewriteCsiScanTail
+      }
       const foregroundOutput = foreground || parseHiddenStartupOutput
-      const renderRefreshDecision = foregroundOutput
-        ? shouldForceForegroundRenderRefresh(data)
-        : { refresh: false, inPlaceRewrite: false }
+      let renderRefreshDecision: { refresh: boolean; inPlaceRewrite: boolean }
+      if (foregroundOutput) {
+        renderRefreshDecision = shouldForceForegroundRenderRefresh(data)
+        if (pendingBackgroundRewriteRefresh) {
+          renderRefreshDecision = { refresh: true, inPlaceRewrite: true }
+          pendingBackgroundRewriteRefresh = false
+        }
+      } else {
+        renderRefreshDecision = { refresh: false, inPlaceRewrite: false }
+      }
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
       // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
@@ -3330,6 +3355,9 @@ export function connectPanePty(
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
       hiddenOutputRestoreGeneration += 1
+      backgroundRewriteChunkEndedWithCarriageReturn = false
+      backgroundRewriteCsiScanTail = ''
+      pendingBackgroundRewriteRefresh = false
     }
 
     function clearPaneMode2031State(): void {

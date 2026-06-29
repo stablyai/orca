@@ -7619,6 +7619,79 @@ describe('connectPanePty', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
+  it('forces a viewport refresh on first foreground chunk after background in-place rewrite', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+
+    connectPanePty(pane as never, manager as never, createDeps({ isVisibleRef }) as never)
+    await flushAsyncTicks(6)
+
+    // Background: in-place rewrite (CR without LF — the stale-cell pattern)
+    capturedDataCallback.current?.('progress: 50%\r')
+    capturedDataCallback.current?.('progress: 100%\r')
+    expect(refresh).not.toHaveBeenCalled()
+
+    // Foreground return: first chunk after background rewrite triggers refresh
+    isVisibleRef.current = true
+    capturedDataCallback.current?.('done\r\n')
+
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('does not force refresh on foreground chunk after background output with no rewrite', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const isVisibleRef = { current: false }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+
+    connectPanePty(pane as never, manager as never, createDeps({ isVisibleRef }) as never)
+    await flushAsyncTicks(6)
+
+    // Background: normal output (no rewrite)
+    capturedDataCallback.current?.('normal output\r\n')
+    expect(refresh).not.toHaveBeenCalled()
+
+    // Foreground return: no rewrite was queued, so no forced refresh
+    isVisibleRef.current = true
+    capturedDataCallback.current?.('more output\r\n')
+
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
   it('forces a viewport refresh for native Windows CJK foreground output after terminal input', async () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
