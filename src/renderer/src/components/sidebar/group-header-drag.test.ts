@@ -135,7 +135,7 @@ describe('useGroupHeaderDrag lifecycle', () => {
   })
 
   it('calls onCommitGroupOrder after a drag past the threshold over a sibling', async () => {
-    const onCommitGroupOrder = vi.fn<[string, number], void>()
+    const onCommitGroupOrder = vi.fn<(groupId: string, tabOrder: number) => void>()
 
     // Build two groups: group-a (tabOrder=0, siblingIndex=0), group-b (tabOrder=1, siblingIndex=1)
     const groupA = makeGroup('group-a', 0)
