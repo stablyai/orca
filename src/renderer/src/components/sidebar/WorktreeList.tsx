@@ -1579,15 +1579,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
     return map
   }, [sidebarRepoHeaderIdsByBucket])
-  // Why: matches the drag-session guard in createProjectHeaderDragSession, which
-  // arms whenever the total across all buckets is >1, not just the source bucket.
-  const totalRepoHeaderCount = useMemo(() => {
-    let total = 0
-    for (const ids of sidebarRepoHeaderIdsByBucket.values()) {
-      total += ids.length
-    }
-    return total
-  }, [sidebarRepoHeaderIdsByBucket])
+  // Why: count ALL projects (including those hidden inside collapsed groups),
+  // not just visible headers, so a project stays draggable when other groups
+  // are collapsed. Matches the createProjectHeaderDragSession arm guard.
+  const totalRepoHeaderCount = allRepoIds.length
   const projectGroupsById = useMemo(
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
@@ -1632,6 +1627,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onCommitGroupOrder: commitGroupOrder,
     getScrollContainer: () => scrollRef.current
   })
+  // Project and group drag are mutually exclusive, so one shared drop indicator
+  // (the worktree pill) renders for whichever header drag is active.
+  const headerDropIndicatorY = !canReorderRepoHeaders
+    ? null
+    : repoDrag.state.draggingRepoId !== null
+      ? // Dropping into a collapsed/empty group highlights the group instead of
+        // drawing a line, so suppress the pill in that case.
+        repoDrag.state.dropIntoGroupId !== null
+        ? null
+        : repoDrag.state.dropIndicatorY
+      : groupDrag.state.draggingGroupId !== null
+        ? groupDrag.state.dropIndicatorY
+        : null
   const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] = useState<{
     worktreeId: string
     rowKey: string
@@ -3877,26 +3885,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           className="relative w-full"
           style={{ height: `${virtualizer.getTotalSize()}px` }}
         >
-          {canReorderRepoHeaders &&
-          repoDrag.state.draggingRepoId !== null &&
-          repoDrag.state.dropIndicatorY !== null ? (
+          {headerDropIndicatorY !== null ? (
+            // Why z-30: the sticky pinned header is z-20, so a lower indicator
+            // renders behind it when the drop slot is at the top while scrolled.
+            // Same dot–bar–dot pill the worktree drag uses, for a unified look.
             <div
               role="presentation"
-              // Why z-30 (not z-10): the sticky pinned header is z-20, so a
-              // lower indicator renders behind it whenever the drop slot is at
-              // the top while scrolled. Match the worktree indicator's tier.
-              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
-              style={{ top: `${repoDrag.state.dropIndicatorY}px` }}
-            />
-          ) : null}
-          {canReorderRepoHeaders &&
-          groupDrag.state.draggingGroupId !== null &&
-          groupDrag.state.dropIndicatorY !== null ? (
-            <div
-              role="presentation"
-              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
-              style={{ top: `${groupDrag.state.dropIndicatorY}px` }}
-            />
+              className="pointer-events-none absolute left-3 right-2 z-30 flex h-3 -translate-y-1/2 items-center"
+              style={{ top: `${headerDropIndicatorY}px` }}
+            >
+              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
+              <span className="h-0.5 flex-1 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
+              <span className="size-1.5 shrink-0 rounded-full bg-worktree-sidebar-ring shadow-[0_0_0_2px_var(--worktree-sidebar)]" />
+            </div>
           ) : null}
           {hostDrag.state.draggingHostId !== null && hostDrag.state.dropIndicatorY !== null ? (
             <div
@@ -4027,6 +4028,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 canReorderRepoHeaders &&
                 groupDrag.state.draggingGroupId !== null &&
                 groupDrag.state.draggingGroupId === groupIdForHeader
+              const isDropIntoGroupTarget =
+                canReorderRepoHeaders &&
+                groupIdForHeader !== undefined &&
+                repoDrag.state.dropIntoGroupId === groupIdForHeader
               const headerWorkspaceStatus =
                 groupBy === 'workspace-status'
                   ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses)
@@ -4135,10 +4140,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         'select-none hover:cursor-grab active:cursor-grabbing',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
-                      isDraggingThis &&
-                        'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
-                      isDraggingThisGroup &&
-                        'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
+                      // Why: while dragging, the floating clone is the visible
+                      // affordance, so hide the source row (matches worktree drag).
+                      (isDraggingThis || isDraggingThisGroup) && 'opacity-0 pointer-events-none',
+                      // Highlight a collapsed/empty group as the drop target when
+                      // a project is dropped into it (instead of a drop line).
+                      isDropIntoGroupTarget &&
+                        'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
                       headerWorkspaceStatus &&
                         dragOverStatus === headerWorkspaceStatus &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',

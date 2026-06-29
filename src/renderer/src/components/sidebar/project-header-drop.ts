@@ -150,6 +150,10 @@ export type ProjectHeaderCrossBucketDropPreview = {
   targetBucketKey: ProjectHeaderDragBucketKey
   dropIndex: number
   dropIndicatorY: number
+  /** Set when dropping onto a collapsed/empty group header: the project lands
+   *  inside this group, so the UI highlights the group instead of drawing a
+   *  drop line above it. */
+  intoGroupId?: string | null
 }
 
 export function measureProjectGroupHeaderDropZones(container: HTMLElement): ProjectGroupDropZone[] {
@@ -196,7 +200,11 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
       return {
         targetBucketKey: zone.bucketKey,
         dropIndex: zone.projectCount,
-        dropIndicatorY: Math.max(args.scrollTop, zone.top)
+        dropIndicatorY: Math.max(args.scrollTop, zone.top),
+        // group zones are keyed `group:<id>`; highlight that group as the target.
+        intoGroupId: zone.bucketKey.startsWith('group:')
+          ? zone.bucketKey.slice('group:'.length)
+          : null
       }
     }
   }

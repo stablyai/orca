@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
+import {
+  createSidebarDragPreview,
+  updateSidebarDragPreviewPosition
+} from './worktree-sidebar-pointer-drag-dom'
 
 /** Common fields the lifecycle reads/writes on any header drag session. */
 export type SidebarHeaderDragSessionBase = {
@@ -62,6 +66,14 @@ export function useSidebarHeaderPointerDrag<
   const clickSwallowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
   const autoscrollFrameIdRef = useRef<number | null>(null)
+  // Floating clone that follows the cursor, shared with the worktree drag so
+  // header drags look identical (source row hides; this is the visible thing).
+  const previewRef = useRef<{ preview: HTMLElement; offsetX: number; offsetY: number } | null>(null)
+
+  const removeDragPreview = useCallback(() => {
+    previewRef.current?.preview.remove()
+    previewRef.current = null
+  }, [])
 
   const refreshHeaderRects = useCallback(() => {
     const container = configRef.current.getScrollContainer()
@@ -91,6 +103,7 @@ export function useSidebarHeaderPointerDrag<
   const endDrag = useCallback(
     (commit: boolean) => {
       cancelAutoscroll()
+      removeDragPreview()
       const session = dragSessionRef.current
       if (!session) {
         setState(configRef.current.initialState)
@@ -128,7 +141,7 @@ export function useSidebarHeaderPointerDrag<
       }
       configRef.current.commit(session, drop)
     },
-    [cancelAutoscroll]
+    [cancelAutoscroll, removeDragPreview]
   )
 
   const runAutoscrollFrame = useCallback(
@@ -204,10 +217,31 @@ export function useSidebarHeaderPointerDrag<
           }
         }
         refreshHeaderRects()
+        // Clone the header row into a floating preview that follows the cursor
+        // (same primitive the worktree drag uses); the source row then hides.
+        try {
+          previewRef.current = createSidebarDragPreview({
+            sourceRow: session.handleEl,
+            pointerX: e.clientX,
+            pointerY: e.clientY,
+            draggedCount: 1
+          })
+        } catch {
+          previewRef.current = null
+        }
         // Why: null here is intentional — sets the initial dragging state
         // (indicator hidden) on promotion. Unlike mid-drag moves, we always
         // write this null so the dragging identity appears in state immediately.
         setState(configRef.current.buildState(configRef.current.getSessionId(session), null))
+      }
+      if (previewRef.current) {
+        updateSidebarDragPreviewPosition({
+          preview: previewRef.current.preview,
+          pointerX: e.clientX,
+          pointerY: e.clientY,
+          offsetX: previewRef.current.offsetX,
+          offsetY: previewRef.current.offsetY
+        })
       }
       refreshHeaderRects()
       const drop = configRef.current.computeDrop(session, container)
@@ -251,12 +285,21 @@ export function useSidebarHeaderPointerDrag<
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('blur', onBlur)
       cancelAutoscroll()
+      removeDragPreview()
       if (clickSwallowTimeoutRef.current !== null) {
         clearTimeout(clickSwallowTimeoutRef.current)
         clickSwallowTimeoutRef.current = null
       }
     }
-  }, [applyDrop, cancelAutoscroll, endDrag, ensureAutoscroll, refreshHeaderRects, sessionArmed])
+  }, [
+    applyDrop,
+    cancelAutoscroll,
+    endDrag,
+    ensureAutoscroll,
+    refreshHeaderRects,
+    removeDragPreview,
+    sessionArmed
+  ])
 
   // Why: depend only on the dragging identity, not the full state object,
   // so the cursor/userSelect effect does not re-run every frame when only

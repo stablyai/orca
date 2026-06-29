@@ -8,13 +8,17 @@ export type RepoDragState = {
   dropIndex: number | null
   dropIndicatorY: number | null
   targetBucketKey: string | null
+  /** Group to highlight as the drop target when dropping into a collapsed/empty
+   *  group (in that case no drop line is drawn). */
+  dropIntoGroupId: string | null
 }
 
 export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
   draggingRepoId: null,
   dropIndex: null,
   dropIndicatorY: null,
-  targetBucketKey: null
+  targetBucketKey: null,
+  dropIntoGroupId: null
 }
 
 export type UseRepoHeaderDragArgs = {

@@ -153,7 +153,12 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
       repoRects: [],
       groupZones: [{ bucketKey: 'group:1', top: 0, bottom: 24, projectCount: 3 }]
     })
-    expect(result).toEqual({ targetBucketKey: 'group:1', dropIndex: 3, dropIndicatorY: 0 })
+    expect(result).toEqual({
+      targetBucketKey: 'group:1',
+      dropIndex: 3,
+      dropIndicatorY: 0,
+      intoGroupId: '1'
+    })
   })
 })
 

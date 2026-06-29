@@ -37,6 +37,9 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
         repoId,
         repoById: argsRef.current.repoById,
         sidebarRepoHeaderIdsByBucket: argsRef.current.sidebarRepoHeaderIdsByBucket,
+        // Complete count (incl. collapsed groups) so a project stays draggable
+        // when other groups are collapsed and hide their projects from the rows.
+        totalProjectCount: argsRef.current.orderedRepoIds.length,
         getScrollContainer: argsRef.current.getScrollContainer
       }),
     // Why: cross-group drops need every bucket's headers, not just the source's.
@@ -59,14 +62,22 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
             draggingRepoId: repoId,
             dropIndex: drop.dropIndex,
             dropIndicatorY: drop.dropIndicatorY,
-            targetBucketKey: drop.targetBucketKey
+            targetBucketKey: drop.targetBucketKey,
+            dropIntoGroupId: drop.intoGroupId ?? null
           }
-        : { draggingRepoId: repoId, dropIndex: null, dropIndicatorY: null, targetBucketKey: null },
+        : {
+            draggingRepoId: repoId,
+            dropIndex: null,
+            dropIndicatorY: null,
+            targetBucketKey: null,
+            dropIntoGroupId: null
+          },
     areStatesEqual: (a, b) =>
       a.draggingRepoId === b.draggingRepoId &&
       a.dropIndex === b.dropIndex &&
       a.dropIndicatorY === b.dropIndicatorY &&
-      a.targetBucketKey === b.targetBucketKey,
+      a.targetBucketKey === b.targetBucketKey &&
+      a.dropIntoGroupId === b.dropIntoGroupId,
     commit: (session, drop) => {
       commitProjectHeaderDragDrop({
         session,

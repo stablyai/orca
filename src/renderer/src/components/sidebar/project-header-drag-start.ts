@@ -17,6 +17,10 @@ export function createProjectHeaderDragSession(args: {
   repoId: string
   repoById: ReadonlyMap<string, Repo>
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  /** Total project count across ALL groups (collapsed included). Falls back to
+   *  the visible-bucket sum; callers pass the complete count so a project stays
+   *  draggable when other groups are collapsed and hide their projects. */
+  totalProjectCount?: number
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -34,10 +38,9 @@ export function createProjectHeaderDragSession(args: {
   }
   const bucketKey = getProjectHeaderDragBucketKey(repo)
   const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
-  const totalHeaders = Array.from(args.sidebarRepoHeaderIdsByBucket.values()).reduce(
-    (sum, ids) => sum + ids.length,
-    0
-  )
+  const totalHeaders =
+    args.totalProjectCount ??
+    Array.from(args.sidebarRepoHeaderIdsByBucket.values()).reduce((sum, ids) => sum + ids.length, 0)
   // Why: a project can now move across buckets, so arming requires only that some
   // other project exists somewhere, not that the source bucket has a sibling.
   if (totalHeaders <= 1) {
