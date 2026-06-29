@@ -60,10 +60,13 @@ export function RuntimePairingGeneratorForm({
               'Connection address'
             )}
           </Label>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <AddressPicker
               id="runtime-pairing-address"
-              className="min-w-0 flex-1"
+              // Why: bounded width so a short value like "This computer
+              // (127.0.0.1)" doesn't stretch the trigger across the whole card;
+              // the value can grow up to the card edge before truncating.
+              className="min-w-[240px] max-w-full"
               triggerAriaLabel={translate(
                 'auto.components.settings.RuntimePairingUrlGenerator.de77eb1b65',
                 'Connection address'
