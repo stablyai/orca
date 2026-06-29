@@ -24,7 +24,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
-import { WORKTREE_OWNER_NOT_READY_ERROR } from '@/components/editor/editor-panel-content-types'
+import {
+  WORKTREE_OWNER_NOT_READY_ERROR,
+  WORKTREE_OWNER_UNREACHABLE_ERROR
+} from '@/components/editor/editor-panel-content-types'
+import { shouldRetryFileLoadError } from '@/components/editor/useEditorPanelFileLoadRetry'
 import { readRuntimeFileContent } from './runtime-file-client'
 
 // Mirrors src/main/ipc/filesystem-auth.ts PATH_ACCESS_DENIED_MESSAGE.
@@ -159,19 +163,12 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
     })
   })
 
-  it('retry gate retries the owner-not-ready error but not a genuine access-denied', () => {
-    // Mirrors src/renderer/.../useEditorPanelFileLoadRetry.shouldRetryFileLoadError.
-    const shouldRetry = (message: string): boolean => {
-      const lower = message.toLowerCase()
-      return (
-        !lower.includes('access denied') &&
-        !lower.includes('enoent') &&
-        !lower.includes('no such file') &&
-        !lower.includes('file too large')
-      )
-    }
-
-    expect(shouldRetry(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
-    expect(shouldRetry(PATH_ACCESS_DENIED_MESSAGE)).toBe(false)
+  it('retry gate retries owner-not-ready but not access-denied or the terminal message', () => {
+    // owner-not-ready auto-retries (while connecting)...
+    expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
+    // ...but a genuine access-denied and the budget-exhausted terminal message
+    // are NOT auto-retried (the terminal one only restarts via the Retry button).
+    expect(shouldRetryFileLoadError(PATH_ACCESS_DENIED_MESSAGE)).toBe(false)
+    expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
   })
 })
