@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyAllRepoInsertAt,
-  computeProjectHeaderDropPreview,
   computeProjectHeaderDropPreviewAcrossBuckets,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
@@ -99,36 +98,6 @@ describe('mapSidebarProjectHeaderDropIndexToSiblingInsertIndex', () => {
         siblingCount: 2
       })
     ).toBe(1)
-  })
-})
-
-describe('computeProjectHeaderDropPreview', () => {
-  it('uses row-model header indices instead of mounted subset order', () => {
-    const preview = computeProjectHeaderDropPreview({
-      pointerY: 105,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarRepoHeaderIds: ['a', 'b', 'c', 'd', 'e'],
-      rects: [
-        { repoId: 'b', bucketKey: 'ungrouped', headerIndex: 1, top: 100, bottom: 128 },
-        { repoId: 'c', bucketKey: 'ungrouped', headerIndex: 2, top: 200, bottom: 228 },
-        { repoId: 'd', bucketKey: 'ungrouped', headerIndex: 3, top: 300, bottom: 328 }
-      ]
-    })
-
-    expect(preview).toEqual({ dropIndex: 1, dropIndicatorY: 96 })
-  })
-
-  it('supports boundary drops at the end of the full sidebar list', () => {
-    const preview = computeProjectHeaderDropPreview({
-      pointerY: 360,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarRepoHeaderIds: ['a', 'b', 'c'],
-      rects: [{ repoId: 'c', bucketKey: 'ungrouped', headerIndex: 2, top: 300, bottom: 328 }]
-    })
-
-    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: 331 })
   })
 })
 

@@ -23,7 +23,7 @@ export type UseRepoHeaderDragArgs = {
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order?: number) => void
   getScrollContainer: () => HTMLElement | null
 }
 

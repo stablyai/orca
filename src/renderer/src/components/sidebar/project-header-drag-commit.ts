@@ -21,7 +21,7 @@ export function commitProjectHeaderDragDrop(args: {
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order?: number) => void
 }): void {
   const draggedRepo = args.repoById.get(args.session.repoId)
   if (!draggedRepo) {
@@ -44,6 +44,13 @@ export function commitProjectHeaderDragDrop(args: {
       .filter((repoId) => repoId !== args.session.repoId)
       .map((repoId) => args.repoById.get(repoId))
       .filter((repo): repo is Repo => repo !== undefined)
+    // Why: a collapsed group has no visible sibling rects, so sidebarDropIndex
+    // is 0 (front). Pass undefined instead so the store appends, matching the
+    // context-menu "move to group" behaviour.
+    if (targetSiblings.length === 0) {
+      args.onCommitProjectGroupOrder(args.session.repoId, targetGroupId, undefined)
+      return
+    }
     const repoOrderRankById = new Map(
       args.orderedRepoIds.map((repoId, index) => [repoId, index] as const)
     )

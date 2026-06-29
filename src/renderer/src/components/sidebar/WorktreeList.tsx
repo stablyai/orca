@@ -1579,6 +1579,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
     return map
   }, [sidebarRepoHeaderIdsByBucket])
+  // Why: matches the drag-session guard in createProjectHeaderDragSession, which
+  // arms whenever the total across all buckets is >1, not just the source bucket.
+  const totalRepoHeaderCount = useMemo(() => {
+    let total = 0
+    for (const ids of sidebarRepoHeaderIdsByBucket.values()) {
+      total += ids.length
+    }
+    return total
+  }, [sidebarRepoHeaderIdsByBucket])
   const projectGroupsById = useMemo(
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
@@ -1595,7 +1604,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     return map
   }, [siblingGroupIdsByParent])
   const commitProjectGroupOrder = useCallback(
-    (repoId: string, projectGroupId: string | null, order: number) => {
+    (repoId: string, projectGroupId: string | null, order?: number) => {
       void moveProjectToGroup(repoId, projectGroupId, order)
     },
     [moveProjectToGroup]
@@ -3991,7 +4000,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 isRepoHeader &&
                 projectIdForHeader &&
                 repoHeaderBucketKey &&
-                (sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
+                totalRepoHeaderCount > 1
               )
               const isDraggingThis =
                 canReorderRepoHeaders &&

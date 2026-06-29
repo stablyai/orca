@@ -1,6 +1,5 @@
 import { getEffectiveProjectGroupManualRank } from '../../../../shared/project-groups'
 import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
-import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
 import { getVirtualRowStart } from './sidebar-virtual-row-offset'
 import type { Row } from './worktree-list-groups'
 import type { Repo } from '../../../../shared/types'
@@ -16,11 +15,6 @@ export type ProjectHeaderDragRect = {
   headerIndex: number
   top: number
   bottom: number
-}
-
-export type ProjectHeaderDropPreview = {
-  dropIndex: number
-  dropIndicatorY: number
 }
 
 const INDICATOR_GAP_PX = 4
@@ -145,63 +139,6 @@ export function mapSidebarRepoDropIndexToAllRepoInsertAt(
   return allRepoIds.indexOf(sidebarRepoHeaderIds[sidebarDropIndex]!)
 }
 
-export function computeProjectHeaderDropPreview(args: {
-  pointerY: number
-  containerTop: number
-  scrollTop: number
-  rects: readonly ProjectHeaderDragRect[]
-  sidebarRepoHeaderIds: readonly string[]
-}): ProjectHeaderDropPreview | null {
-  const { rects, sidebarRepoHeaderIds } = args
-  if (rects.length === 0 || sidebarRepoHeaderIds.length === 0) {
-    return null
-  }
-
-  const localY = args.pointerY - args.containerTop + args.scrollTop
-  const first = rects[0]!
-  const last = rects.at(-1)!
-  const boundaryDrop = getWorktreeSidebarBoundaryDrop({
-    localY,
-    firstRect: {
-      worktreeId: first.repoId,
-      groupIndex: first.headerIndex,
-      top: first.top,
-      bottom: first.bottom
-    },
-    lastRect: {
-      worktreeId: last.repoId,
-      groupIndex: last.headerIndex,
-      top: last.top,
-      bottom: last.bottom
-    },
-    sourceGroupSize: sidebarRepoHeaderIds.length
-  })
-  if (boundaryDrop.kind === 'outside') {
-    return null
-  }
-
-  let dropIndex = last.headerIndex + 1
-  let indicatorY = last.bottom + INDICATOR_GAP_PX
-  if (boundaryDrop.kind === 'drop') {
-    dropIndex = boundaryDrop.dropIndex
-    indicatorY = boundaryDrop.indicatorY
-  } else {
-    for (const rect of rects) {
-      const mid = (rect.top + rect.bottom) / 2
-      if (localY < mid) {
-        dropIndex = rect.headerIndex
-        indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
-        break
-      }
-    }
-  }
-
-  return {
-    dropIndex,
-    dropIndicatorY: Math.max(args.scrollTop, indicatorY)
-  }
-}
-
 export type ProjectGroupDropZone = {
   bucketKey: ProjectHeaderDragBucketKey
   top: number
@@ -224,7 +161,14 @@ export function measureProjectGroupHeaderDropZones(container: HTMLElement): Proj
       return
     }
     const rect = element.getBoundingClientRect()
-    const top = rect.top - containerRect.top + container.scrollTop
+    // Why: mirrors measureProjectHeaderDragRects / measureGroupHeaderDragRects so
+    // sticky-pinned virtual rows don't skew the coordinate space.
+    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
+    const virtualRowStart = getVirtualRowStart(virtualRow)
+    const top =
+      virtualRow && virtualRowStart !== null
+        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
+        : rect.top - containerRect.top + container.scrollTop
     const rawCount = element.getAttribute('data-project-group-project-count')
     const projectCount = rawCount === null ? 0 : Number(rawCount)
     zones.push({
