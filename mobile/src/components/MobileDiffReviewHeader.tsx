@@ -117,7 +117,7 @@ export function MobileDiffReviewHeader({
               'mobile.diffHeader.showFilterA11y',
               'Show {filter} review files',
               {
-                filter
+                filter: item
               }
             )}
           >
