@@ -387,7 +387,7 @@ export default function ChecksPanel(): React.JSX.Element {
   )
   const [terminalCwdSnapshot, setTerminalCwdSnapshot] = useState<{
     ptyId: string
-    cwd: string
+    cwd: string | null
   } | null>(null)
 
   // Why: the sidebar stays mounted when closed (for performance). Gate
@@ -396,9 +396,11 @@ export default function ChecksPanel(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
+  const shouldPollTerminalCwd =
+    isPanelVisible && activeTerminalPtyId !== null && !isRemoteRuntimePtyId(activeTerminalPtyId)
 
   useEffect(() => {
-    if (!isPanelVisible || !activeTerminalPtyId || isRemoteRuntimePtyId(activeTerminalPtyId)) {
+    if (!shouldPollTerminalCwd || activeTerminalPtyId === null) {
       setTerminalCwdSnapshot(null)
       return
     }
@@ -408,11 +410,11 @@ export default function ChecksPanel(): React.JSX.Element {
       try {
         const cwd = (await window.api.pty.getCwd(activeTerminalPtyId)).trim()
         if (!disposed) {
-          setTerminalCwdSnapshot(cwd ? { ptyId: activeTerminalPtyId, cwd } : null)
+          setTerminalCwdSnapshot({ ptyId: activeTerminalPtyId, cwd: cwd || null })
         }
       } catch {
         if (!disposed) {
-          setTerminalCwdSnapshot(null)
+          setTerminalCwdSnapshot({ ptyId: activeTerminalPtyId, cwd: null })
         }
       }
     }
@@ -423,16 +425,20 @@ export default function ChecksPanel(): React.JSX.Element {
       disposed = true
       window.clearInterval(interval)
     }
-  }, [activeTerminalPtyId, isPanelVisible])
+  }, [activeTerminalPtyId, shouldPollTerminalCwd])
 
+  const terminalCwdPending =
+    shouldPollTerminalCwd && terminalCwdSnapshot?.ptyId !== activeTerminalPtyId
   const terminalCwd =
     terminalCwdSnapshot?.ptyId === activeTerminalPtyId ? terminalCwdSnapshot.cwd : null
   const terminalCwdWorktree = useMemo(
     () => resolveChecksPanelWorktreeFromTerminalCwd(terminalCwd, allWorktrees),
     [allWorktrees, terminalCwd]
   )
-  const activeWorktree = terminalCwdWorktree ?? defaultActiveWorktree
-  const activeWorktreeId = activeWorktree?.id ?? defaultActiveWorktreeId
+  const activeWorktree = terminalCwdPending ? null : (terminalCwdWorktree ?? defaultActiveWorktree)
+  const activeWorktreeId = terminalCwdPending
+    ? null
+    : (activeWorktree?.id ?? defaultActiveWorktreeId)
   const repo = useRepoById(activeWorktree?.repoId ?? null)
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
