@@ -6,10 +6,8 @@ import {
   removeEnvironment,
   resolveEnvironment
 } from '../../shared/runtime-environment-store'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import {
   redactRuntimeEnvironment,
-  type KnownRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
@@ -60,18 +58,9 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
 }
 
 function listPublicRuntimeEnvironments(): PublicKnownRuntimeEnvironment[] {
-  const userDataPath = getUserDataPath()
-  const ephemeralEnvironmentIds = new Set(
-    listEphemeralVmRuntimes(userDataPath)
-      .map((runtime) => runtime.runtimeEnvironmentId)
-      .filter((id): id is string => Boolean(id))
-  )
-  return listEnvironments(userDataPath).map((environment) => {
-    const enriched: KnownRuntimeEnvironment = ephemeralEnvironmentIds.has(environment.id)
-      ? { ...environment, source: 'ephemeral-vm' }
-      : environment
-    return redactRuntimeEnvironment(enriched)
-  })
+  // Why: `source` is persisted on the env record, so read it directly instead of
+  // joining the VM store — a corrupt VM store must not break listing all envs.
+  return listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
 }
 
 export function registerRuntimeEnvironmentHandlers(): void {

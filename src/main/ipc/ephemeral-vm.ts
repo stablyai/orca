@@ -153,13 +153,13 @@ export function registerEphemeralVmHandlers(store: Store): void {
         try {
           const ssh = await connectRuntimeOwnedSshTarget({
             runtimeId: result.runtime.id,
-            connection
+            connection,
+            ...(controller ? { signal: controller.signal } : {})
           })
           const runtime = updateEphemeralVmRuntimeStatus(
             app.getPath('userData'),
             result.runtime.id,
             {
-              connectionMode: 'ssh',
               sshTargetId: ssh.targetId
             }
           )
@@ -209,7 +209,6 @@ export function registerEphemeralVmHandlers(store: Store): void {
         }
       }
       const runtime = updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
-        connectionMode: 'orca-server',
         runtimeEnvironmentId: environment.id
       })
       return {

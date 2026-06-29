@@ -98,7 +98,7 @@ describe('SshConnectionStore', () => {
       port: 22,
       username: 'deploy'
     })
-    const runtimeTarget = sshStore.upsertRuntimeOwnedTarget('runtime-1', {
+    sshStore.upsertRuntimeOwnedTarget('runtime-1', {
       label: 'Sandbox',
       host: 'sandbox.example.com',
       port: 22,
@@ -106,7 +106,6 @@ describe('SshConnectionStore', () => {
     })
 
     expect(sshStore.listTargets()).toEqual([userTarget])
-    expect(sshStore.listAllTargets()).toEqual([userTarget, runtimeTarget])
   })
 
   it('updateTarget delegates to store', () => {

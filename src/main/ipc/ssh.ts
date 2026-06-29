@@ -100,7 +100,19 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   if (!sshStore) {
     return
   }
-  await disconnectRegisteredSshTarget(targetId)
+  // Why: removing a target is destructive — dispose() (not detach()) so the
+  // relay shuts down and remote PTY leases are terminated rather than preserved
+  // for a reattach to a target that will no longer exist.
+  await disposeActiveSshSession(targetId)
+  try {
+    await connectionManager?.disconnect(targetId)
+  } catch (err) {
+    // Why: a failed disconnect must not block metadata removal; otherwise the
+    // target lingers in the store and its leases are never cleaned up.
+    console.warn(
+      `[ssh] Failed to disconnect removed target ${targetId}: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
   persistedStore?.removeSshRemotePtyLeases(targetId)
   sshStore.removeTarget(targetId)
 }
@@ -111,6 +123,17 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
 const activeSessions = new Map<string, SshRelaySession>()
 
 async function detachActiveSshSession(targetId: string): Promise<void> {
+  await teardownActiveSshSession(targetId, (session) => session.detach())
+}
+
+async function disposeActiveSshSession(targetId: string): Promise<void> {
+  await teardownActiveSshSession(targetId, (session) => session.dispose())
+}
+
+async function teardownActiveSshSession(
+  targetId: string,
+  teardown: (session: SshRelaySession) => void
+): Promise<void> {
   const session = activeSessions.get(targetId)
   if (!session) {
     return
@@ -118,7 +141,7 @@ async function detachActiveSshSession(targetId: string): Promise<void> {
   // Why: await port teardown so local listeners are fully released before
   // disconnect/remove completes; otherwise immediate reconnect can hit EADDRINUSE.
   await portForwardManager?.removeAllForwards(targetId)
-  session.detach()
+  teardown(session)
   activeSessions.delete(targetId)
   clearRelayLostBackoff(targetId)
   clearRelayStateOverride(targetId)

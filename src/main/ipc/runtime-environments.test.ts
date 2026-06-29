@@ -5,7 +5,6 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
-import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
 
@@ -203,25 +202,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
     registerRuntimeEnvironmentHandlers()
 
-    const add = handler<
-      { name: string; pairingCode: string },
-      { environment: { id: string; name: string; source?: string } }
-    >('runtimeEnvironments:addFromPairingCode')
-    const added = await add(null, { name: 'orca VM abc12345', pairingCode: pairingCode() })
-    upsertEphemeralVmRuntime(userDataPath, {
-      id: 'runtime-1',
-      recipeId: 'vercel-sandbox',
-      repoId: 'repo-1',
-      runtimeEnvironmentId: added.environment.id,
-      status: 'running',
-      cleanupStatus: 'not_started',
-      createdAt: 1,
-      updatedAt: 1,
-      recipeResult: {
-        schemaVersion: 1,
-        pairingCode: pairingCode(),
-        projectRoot: '/workspace'
-      }
+    // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
+    // on the environment record (ephemeral-vm.ts), so the public list reads it
+    // straight from the record rather than cross-referencing the VM runtime store.
+    const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'orca VM abc12345',
+      pairingCode: pairingCode(),
+      source: 'ephemeral-vm'
     })
 
     const list = handler<undefined, { id: string; name: string; source?: string }[]>(
@@ -229,7 +216,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     )
 
     expect(await list(null, undefined)).toMatchObject([
-      { id: added.environment.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
+      { id: added.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
     ])
   })
 

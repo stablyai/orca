@@ -9,10 +9,6 @@ export class SshConnectionStore {
     return this.store.getSshTargets().filter((target) => !isRuntimeOwnedSshTarget(target))
   }
 
-  listAllTargets(): SshTarget[] {
-    return this.store.getSshTargets()
-  }
-
   getTarget(id: string): SshTarget | undefined {
     return this.store.getSshTarget(id)
   }

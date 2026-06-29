@@ -6,6 +6,7 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compati
 function makeProvisionedRuntime(projectRoot: string) {
   return {
     ok: true as const,
+    connectionType: 'orca-server' as const,
     stderr: 'creating sandbox',
     warnings: [],
     environment: {

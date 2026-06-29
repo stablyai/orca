@@ -20,17 +20,25 @@ export type RuntimeOwnedSshConnectionResult = {
 export async function connectRuntimeOwnedSshTarget(args: {
   runtimeId: string
   connection: Extract<EphemeralVmRecipeConnection, { type: 'ssh' }>
+  signal?: AbortSignal
 }): Promise<RuntimeOwnedSshConnectionResult> {
   const store = getSshConnectionStore()
   if (!store) {
     throw new Error('SSH handlers are not registered.')
   }
   const target = store.upsertRuntimeOwnedTarget(args.runtimeId, args.connection.target)
-  const state = await connectRegisteredSshTarget(target.id)
-  if (state.status !== 'connected') {
-    throw new Error(state.error || `SSH target did not connect: ${state.status}`)
+  try {
+    const state = await connectRegisteredSshTarget(target.id)
+    if (state.status !== 'connected') {
+      throw new Error(state.error || `SSH target did not connect: ${state.status}`)
+    }
+    await waitForRuntimeSshProviders(target.id, args.signal)
+  } catch (error) {
+    // The target is persisted at upsert, so a failed connect/provider-wait would
+    // orphan it; remove it (idempotent) before rethrowing so cleanup is complete.
+    await removeRuntimeOwnedSshTarget(target.id).catch(() => undefined)
+    throw error
   }
-  await waitForRuntimeSshProviders(target.id)
   return { targetId: target.id, target }
 }
 
@@ -48,9 +56,12 @@ export async function removeRuntimeOwnedSshTarget(targetId: string | undefined):
   await removeRegisteredSshTarget(targetId)
 }
 
-async function waitForRuntimeSshProviders(targetId: string): Promise<void> {
+async function waitForRuntimeSshProviders(targetId: string, signal?: AbortSignal): Promise<void> {
   const startedAt = Date.now()
   while (Date.now() - startedAt < SSH_PROVIDER_READY_TIMEOUT_MS) {
+    if (signal?.aborted) {
+      throw new Error(`SSH provider wait aborted for target "${targetId}".`)
+    }
     if (getSshGitProvider(targetId) && getSshFilesystemProvider(targetId)) {
       return
     }

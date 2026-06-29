@@ -12,7 +12,10 @@ export type ProcessRunResult = {
 
 export function quoteShellToken(value: string): string {
   if (process.platform === 'win32') {
-    return `"${value.replace(/(["^&|<>])/g, '^$1')}"`
+    // Inside cmd.exe double quotes, `^` is literal; an embedded `"` is escaped
+    // by doubling it. This token is only displayed for manual cleanup, so it
+    // must be valid when pasted into cmd.exe.
+    return `"${value.replace(/"/g, '""')}"`
   }
   return `'${value.replace(/'/g, `'\\''`)}'`
 }

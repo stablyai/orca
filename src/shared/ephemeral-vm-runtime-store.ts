@@ -57,9 +57,9 @@ export function updateEphemeralVmRuntimeStatus(
     cleanupLastError?: string | null
     workspaceId?: string
     workspaceName?: string
-    connectionMode?: EphemeralVmRuntimeRecord['connectionMode']
+    connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
     runtimeEnvironmentId?: string
-    sshTargetId?: string
+    sshTargetId?: string | null
     recipeResult?: EphemeralVmRuntimeRecord['recipeResult']
     updatedAt?: number
   }
@@ -86,9 +86,18 @@ export function updateEphemeralVmRuntimeStatus(
         : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
-    ...(args.connectionMode ? { connectionMode: args.connectionMode } : {}),
+    // null explicitly clears the field (e.g. terminal cleanup); undefined leaves it unchanged.
+    ...(args.connectionMode === null
+      ? { connectionMode: undefined }
+      : args.connectionMode
+        ? { connectionMode: args.connectionMode }
+        : {}),
     ...(args.runtimeEnvironmentId ? { runtimeEnvironmentId: args.runtimeEnvironmentId } : {}),
-    ...(args.sshTargetId ? { sshTargetId: args.sshTargetId } : {}),
+    ...(args.sshTargetId === null
+      ? { sshTargetId: undefined }
+      : args.sshTargetId
+        ? { sshTargetId: args.sshTargetId }
+        : {}),
     ...(args.recipeResult ? { recipeResult: args.recipeResult } : {}),
     updatedAt: args.updatedAt ?? Date.now()
   })

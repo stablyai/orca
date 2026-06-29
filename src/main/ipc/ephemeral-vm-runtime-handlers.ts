@@ -119,8 +119,14 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           // environment row; users can still remove that manually.
         }
       }
-      if (result.ok && runtime.sshTargetId) {
+      // Remove even on cleanup_failed (removal is idempotent via the deterministic
+      // id) so a terminal cleanup never orphans the hidden SSH target.
+      if (runtime.sshTargetId) {
         await removeRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
+        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+          connectionMode: null,
+          sshTargetId: null
+        })
       }
       return result.runtime
     }
@@ -140,15 +146,6 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         return null
       }
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-      const disconnectError = await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).then(
-        () => null,
-        (error: unknown) => (error instanceof Error ? error.message : String(error))
-      )
-      if (disconnectError) {
-        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-          status: 'suspend_failed'
-        })
-      }
       const result = await suspendEphemeralVmRuntime({
         userDataPath,
         repoPath: recipeContext.repo.repo.path,
@@ -157,6 +154,19 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       })
       if (!result.ok) {
         throw new Error(result.error)
+      }
+      // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
+      // 'running', so disconnecting would break the still-active session with no resume.
+      if (runtime.connectionMode === 'ssh' && !result.skipped) {
+        const disconnectError = await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).then(
+          () => null,
+          (error: unknown) => (error instanceof Error ? error.message : String(error))
+        )
+        if (disconnectError) {
+          return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+            status: 'suspend_failed'
+          })
+        }
       }
       return result.runtime
     }

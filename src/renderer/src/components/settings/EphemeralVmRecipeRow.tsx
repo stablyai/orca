@@ -23,10 +23,13 @@ export function EphemeralVmRecipeRow({
   onUse: () => void
 }): React.JSX.Element {
   const destroyLabel = recipe.destroyDisabled
-    ? 'destroy disabled'
+    ? translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
     : recipe.destroy
-      ? 'destroy configured'
-      : 'no destroy'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.destroyConfigured',
+          'destroy configured'
+        )
+      : translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
