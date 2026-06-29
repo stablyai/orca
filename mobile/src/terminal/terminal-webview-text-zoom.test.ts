@@ -167,6 +167,16 @@ describe('TerminalWebView text zoom', () => {
     expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
   })
 
+  it('treats touch iPadOS WebViews that report MacIntel as iOS for font fallback', () => {
+    const fontFamily = resolveTerminalFontFamily({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15',
+      platform: 'MacIntel',
+      maxTouchPoints: 5
+    })
+    expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
+    expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
+  })
+
   it('keeps the SF Mono desktop fallback chain outside iOS WebViews', () => {
     const fontFamily = resolveTerminalFontFamily({
       userAgent: 'Mozilla/5.0 (Linux; Android 16)',
