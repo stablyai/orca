@@ -4105,6 +4105,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       groupIdForHeader ? (groupHeaderParent ?? '') : undefined
                     }
                     data-project-group-sibling-index={groupSiblingIndex}
+                    data-project-group-project-count={
+                      groupIdForHeader !== undefined
+                        ? (sidebarRepoHeaderIdsByBucket.get(`group:${groupIdForHeader}`)?.length ??
+                          0)
+                        : undefined
+                    }
                     data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}

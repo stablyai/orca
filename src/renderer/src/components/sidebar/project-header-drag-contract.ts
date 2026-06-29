@@ -7,12 +7,14 @@ export type RepoDragState = {
   draggingRepoId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  targetBucketKey: string | null
 }
 
 export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
   draggingRepoId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  targetBucketKey: null
 }
 
 export type UseRepoHeaderDragArgs = {

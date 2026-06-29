@@ -1,9 +1,10 @@
 import { useRef } from 'react'
 
 import {
-  computeProjectHeaderDropPreview,
+  computeProjectHeaderDropPreviewAcrossBuckets,
+  measureProjectGroupHeaderDropZones,
   measureProjectHeaderDragRects,
-  type ProjectHeaderDropPreview
+  type ProjectHeaderCrossBucketDropPreview
 } from './project-header-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
@@ -23,7 +24,7 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
   return useSidebarHeaderPointerDrag<
     ProjectHeaderDragSession,
     RepoDragState,
-    ProjectHeaderDropPreview
+    ProjectHeaderCrossBucketDropPreview
   >({
     threshold: PROJECT_HEADER_DRAG_THRESHOLD_PX,
     initialState: INITIAL_REPO_DRAG_STATE,
@@ -38,31 +39,40 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
         sidebarRepoHeaderIdsByBucket: argsRef.current.sidebarRepoHeaderIdsByBucket,
         getScrollContainer: argsRef.current.getScrollContainer
       }),
+    // Why: cross-group drops need every bucket's headers, not just the source's.
     measureRects: (container, session) => {
-      session.headerRects = measureProjectHeaderDragRects(container, session.bucketKey)
+      session.headerRects = measureProjectHeaderDragRects(container)
     },
     computeDrop: (session, container) => {
       const containerRect = container.getBoundingClientRect()
-      return computeProjectHeaderDropPreview({
+      return computeProjectHeaderDropPreviewAcrossBuckets({
         pointerY: session.latestPointerY,
         containerTop: containerRect.top,
         scrollTop: container.scrollTop,
-        rects: session.headerRects,
-        sidebarRepoHeaderIds: session.sidebarRepoHeaderIds
+        repoRects: session.headerRects,
+        groupZones: measureProjectGroupHeaderDropZones(container)
       })
     },
     buildState: (repoId, drop) =>
       drop
-        ? { draggingRepoId: repoId, dropIndex: drop.dropIndex, dropIndicatorY: drop.dropIndicatorY }
-        : { draggingRepoId: repoId, dropIndex: null, dropIndicatorY: null },
+        ? {
+            draggingRepoId: repoId,
+            dropIndex: drop.dropIndex,
+            dropIndicatorY: drop.dropIndicatorY,
+            targetBucketKey: drop.targetBucketKey
+          }
+        : { draggingRepoId: repoId, dropIndex: null, dropIndicatorY: null, targetBucketKey: null },
     areStatesEqual: (a, b) =>
       a.draggingRepoId === b.draggingRepoId &&
       a.dropIndex === b.dropIndex &&
-      a.dropIndicatorY === b.dropIndicatorY,
+      a.dropIndicatorY === b.dropIndicatorY &&
+      a.targetBucketKey === b.targetBucketKey,
     commit: (session, drop) => {
       commitProjectHeaderDragDrop({
         session,
         sidebarDropIndex: drop.dropIndex,
+        targetBucketKey: drop.targetBucketKey,
+        sidebarRepoHeaderIdsByBucketAll: session.sidebarRepoHeaderIdsByBucketAll,
         orderedRepoIds: argsRef.current.orderedRepoIds,
         repoById: argsRef.current.repoById,
         usesProjectGroupOrdering: argsRef.current.usesProjectGroupOrdering,
