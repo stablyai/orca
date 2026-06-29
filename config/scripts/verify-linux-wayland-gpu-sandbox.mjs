@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url'
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const outMain = path.join(rootDir, 'out', 'main', 'index.js')
 const timeoutMs = 45_000
+const pollTimeoutMs = 2_500
+const appCloseTimeoutMs = 5_000
 const typingSamples = 'abcdefghijklmnop'
 const gpuCrashPattern =
   /GPU process (?:exited unexpectedly|isn't usable)|gpu_data_manager|exit[_ -]?code=8704/i
@@ -93,17 +95,75 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
+async function pollWithTimeout(label, read) {
+  const readPromise = Promise.resolve().then(read)
+  readPromise.catch(() => undefined)
+  // Why: the unfixed Wayland GPU stall can freeze renderer protocol calls, so
+  // each poll needs its own deadline instead of relying only on waitFor's loop.
+  const result = await Promise.race([
+    readPromise.then((value) => ({ timedOut: false, value })),
+    delay(pollTimeoutMs).then(() => ({ timedOut: true, value: null }))
+  ])
+  if (result.timedOut) {
+    throw new Error(`Timed out polling ${label} after ${pollTimeoutMs}ms.`)
+  }
+  return result.value
+}
+
 async function waitFor(label, read, timeout = timeoutMs) {
   const startedAt = Date.now()
   let lastValue
   while (Date.now() - startedAt < timeout) {
-    lastValue = await read()
+    lastValue = await pollWithTimeout(label, read)
     if (lastValue) {
       return lastValue
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error(`Timed out waiting for ${label}; last value: ${JSON.stringify(lastValue)}`)
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function closeElectronApp(app) {
+  if (!app) {
+    return
+  }
+
+  const electronProcess = app.process()
+  let closeError
+  const didClose = await Promise.race([
+    app.close().then(
+      () => true,
+      (error) => {
+        closeError = error
+        return false
+      }
+    ),
+    delay(appCloseTimeoutMs).then(() => false)
+  ])
+
+  if (didClose) {
+    return
+  }
+
+  if (closeError) {
+    console.warn(
+      `[wayland-gpu] Electron close failed: ${closeError instanceof Error ? closeError.message : closeError}`
+    )
+  }
+  // Why: reproducing the Wayland GPU stall can wedge Chromium teardown after
+  // the evidence is collected, so CI needs a bounded close path.
+  if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
+    console.warn('[wayland-gpu] Electron did not close cleanly; killing the app process.')
+    electronProcess.kill('SIGKILL')
+    await Promise.race([
+      new Promise((resolve) => electronProcess.once('exit', resolve)),
+      delay(appCloseTimeoutMs)
+    ])
+  }
 }
 
 async function getTerminalContent(page, charLimit = 12_000) {
@@ -293,6 +353,7 @@ async function runValidation(mode) {
   const runId = `${Date.now()}`
   let app
   let terminalExerciseStarted = false
+  let commandLineSwitches = null
   const stderrLines = []
 
   try {
@@ -322,16 +383,26 @@ async function runValidation(mode) {
     await app.evaluate(async ({ app: electronApp }) => {
       await electronApp.whenReady()
     })
-    const switches = await app.evaluate(({ app: electronApp }) => ({
+    commandLineSwitches = await app.evaluate(({ app: electronApp }) => ({
       disableGpuSandbox: electronApp.commandLine.hasSwitch('disable-gpu-sandbox'),
       disableGpu: electronApp.commandLine.hasSwitch('disable-gpu'),
       ozonePlatform: electronApp.commandLine.getSwitchValue('ozone-platform')
     }))
 
-    if (mode === 'verify-fix' && !switches.disableGpuSandbox) {
+    if (mode === 'expect-repro' && commandLineSwitches.disableGpuSandbox) {
+      throw new MissingReproductionError(
+        'Base run already has --disable-gpu-sandbox; cannot validate the unfixed Wayland path.'
+      )
+    }
+    if (mode === 'expect-repro' && commandLineSwitches.disableGpu) {
+      throw new MissingReproductionError(
+        'Base run has --disable-gpu; hardware acceleration is disabled and would mask the GPU sandbox path.'
+      )
+    }
+    if (mode === 'verify-fix' && !commandLineSwitches.disableGpuSandbox) {
       throw new Error('Expected --disable-gpu-sandbox on Linux Wayland, but it was absent.')
     }
-    if (mode === 'verify-fix' && switches.disableGpu) {
+    if (mode === 'verify-fix' && commandLineSwitches.disableGpu) {
       throw new Error('Expected hardware acceleration to remain enabled, but --disable-gpu is set.')
     }
 
@@ -358,7 +429,7 @@ async function runValidation(mode) {
           mode,
           waylandDisplay: process.env.WAYLAND_DISPLAY ?? null,
           xdgSessionType: process.env.XDG_SESSION_TYPE ?? null,
-          switches,
+          switches: commandLineSwitches,
           scroll,
           typedMarkers,
           gpuCrashLines
@@ -380,6 +451,7 @@ async function runValidation(mode) {
             mode,
             reproduced: true,
             reason: error instanceof Error ? error.message : String(error),
+            switches: commandLineSwitches,
             gpuCrashLines
           },
           null,
@@ -390,7 +462,7 @@ async function runValidation(mode) {
     }
     throw error
   } finally {
-    await app?.close().catch(() => undefined)
+    await closeElectronApp(app)
     rmSync(repoPath, { recursive: true, force: true })
     rmSync(userDataPath, { recursive: true, force: true })
   }
