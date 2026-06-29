@@ -64,7 +64,8 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeTerminalPresentation
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -79,6 +80,7 @@ import type {
   RateLimitState
 } from '../shared/rate-limit-types'
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
+import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -152,6 +154,12 @@ import type {
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type { AiVaultListArgs } from '../shared/ai-vault-types'
+import type { AgentType } from '../shared/native-chat-types'
+import type {
+  NativeChatAppendedMessages,
+  NativeChatAppendedPayload,
+  NativeChatReadSessionResult
+} from './api-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
@@ -190,6 +198,20 @@ type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
+
+function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
+  if (process.platform !== 'linux') {
+    return null
+  }
+  if (
+    process.env.WAYLAND_DISPLAY ||
+    process.env.XDG_SESSION_TYPE?.toLowerCase() === 'wayland' ||
+    process.env.ELECTRON_OZONE_PLATFORM_HINT?.toLowerCase() === 'wayland'
+  ) {
+    return 'wayland'
+  }
+  return process.env.DISPLAY ? 'x11' : null
+}
 
 type AppRestartPrepOptions = {
   startedEventName: string
@@ -452,7 +474,9 @@ const api = {
     get: () => ({
       platform: process.platform,
       osRelease:
-        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ?? ''
+        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ??
+        '',
+      displayServer: getLinuxDisplayServer()
     })
   } satisfies PreloadApi['platform'],
 
@@ -662,7 +686,24 @@ const api = {
   } satisfies PreloadApi['worktrees'],
 
   workspaceCleanup: {
-    scan: (args) => ipcRenderer.invoke('workspaceCleanup:scan', args),
+    scan: (args, onProgress) => {
+      if (!onProgress) {
+        return ipcRenderer.invoke('workspaceCleanup:scan', args)
+      }
+      const scanId = args?.scanId ?? crypto.randomUUID()
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: WorkspaceCleanupScanProgress
+      ): void => {
+        if (progress.scanId === scanId) {
+          onProgress(progress)
+        }
+      }
+      ipcRenderer.on('workspaceCleanup:scanProgress', listener)
+      return ipcRenderer
+        .invoke('workspaceCleanup:scan', { ...args, scanId })
+        .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
+    },
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
@@ -785,6 +826,7 @@ const api = {
       cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -1752,7 +1794,16 @@ const api = {
     refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
       ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args),
+    detectRemoteWindowsTerminalCapabilities: (args: {
+      connectionId: string
+    }): Promise<{
+      wslAvailable: boolean
+      wslDistros: string[]
+      pwshAvailable: boolean
+      gitBashAvailable: boolean
+      hostPlatform: NodeJS.Platform | null
+    }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
   },
 
   notifications: {
@@ -2450,6 +2501,27 @@ const api = {
       connectionId: string
     }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
       ipcRenderer.invoke('fs:downloadFile', args),
+    saveDownloadedFile: (args: {
+      suggestedName: string
+      content: string
+      encoding: 'utf8' | 'base64'
+    }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:saveDownloadedFile', args),
+    startDownloadedFile: (args: {
+      suggestedName: string
+    }): Promise<
+      { canceled: true } | { canceled: false; transferId: string; destinationPath: string }
+    > => ipcRenderer.invoke('fs:startDownloadedFile', args),
+    appendDownloadedFileChunk: (args: {
+      transferId: string
+      contentBase64: string
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('fs:appendDownloadedFileChunk', args),
+    finishDownloadedFile: (args: {
+      transferId: string
+    }): Promise<{ canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:finishDownloadedFile', args),
+    cancelDownloadedFile: (args: { transferId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('fs:cancelDownloadedFile', args),
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -3064,6 +3136,7 @@ const api = {
         title?: string
         ptyId?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3084,6 +3157,7 @@ const api = {
           title?: string
           ptyId?: string
           activate?: boolean
+          presentation?: RuntimeTerminalPresentation
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
@@ -3108,6 +3182,7 @@ const api = {
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
       }) => void
     ): (() => void) => {
       const listener = (
@@ -3125,6 +3200,7 @@ const api = {
           startupCommandDelivery?: StartupCommandDelivery
           title?: string
           activate?: boolean
+          presentation?: RuntimeTerminalPresentation
         }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)
@@ -3484,6 +3560,40 @@ const api = {
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSessions', args)
+  },
+
+  nativeChat: {
+    readSession: (
+      agent: AgentType,
+      sessionId: string,
+      limit?: number,
+      transcriptPath?: string
+    ): Promise<NativeChatReadSessionResult> =>
+      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
+    /** Start live tailing for a transcript. `onAppended` fires with only the
+     *  newly-appended messages. Returns an unsubscribe fn that closes the
+     *  main-process watcher (subscriptionId routes appends to this caller). */
+    subscribe: (
+      args: {
+        subscriptionId: string
+        agent: AgentType
+        sessionId: string
+        transcriptPath?: string
+      },
+      onAppended: (messages: NativeChatAppendedMessages) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: NativeChatAppendedPayload) => {
+        if (payload.subscriptionId === args.subscriptionId) {
+          onAppended(payload.messages)
+        }
+      }
+      ipcRenderer.on('nativeChat:appended', listener)
+      ipcRenderer.send('nativeChat:subscribe', args)
+      return () => {
+        ipcRenderer.removeListener('nativeChat:appended', listener)
+        ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
+      }
+    }
   },
 
   runtime: {

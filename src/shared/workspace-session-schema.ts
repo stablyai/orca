@@ -116,7 +116,13 @@ const tabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
+  // session restore. `.catch('terminal')` tolerates unknown future values (a
+  // newer build that wrote an unrecognized mode) by degrading to the safe
+  // default instead of failing the whole-session parse. Legacy/missing stays
+  // undefined → 'terminal' in the renderer.
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
 })
 
 const tabGroupSchema = z.object({

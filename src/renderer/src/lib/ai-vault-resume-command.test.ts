@@ -12,16 +12,27 @@ vi.mock('@/lib/new-workspace', () => ({
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
+type AiVaultResumeCommandState = Pick<
+  AppState,
+  | 'activeRepoId'
+  | 'activeWorktreeId'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'projects'
+  | 'repos'
+  | 'settings'
+  | 'worktreesByRepo'
+>
+
 function makeState(args: {
   worktreePath: string
   localWindowsRuntimePreference?: RuntimePreference
-}): Pick<
-  AppState,
-  'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
-> {
+}): AiVaultResumeCommandState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    folderWorkspaces: [],
+    projectGroups: [],
     repos: [{ id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
     projects: [
       {
@@ -46,10 +57,7 @@ function makeState(args: {
         }
       ]
     }
-  } as unknown as Pick<
-    AppState,
-    'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
-  >
+  } as unknown as AiVaultResumeCommandState
 }
 
 describe('ai vault resume command runtime', () => {
@@ -123,6 +131,82 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
+  })
+
+  it('uses POSIX command wrapping for SSH-owned worktrees on Windows clients', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
+  })
+
+  it('uses POSIX command wrapping for folder workspaces with their own SSH target', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    state.activeWorktreeId = 'folder:folder-1'
+    state.folderWorkspaces = [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'Platform',
+        folderPath: '/home/alice/platform',
+        connectionId: 'folder-ssh'
+      }
+    ] as never
+    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: null }] as never
+
+    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'folder:folder-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/platform',
+          codexHome: null
+        }
+      })
+    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
+  })
+
+  it('uses POSIX command wrapping for WSL UNC folder workspaces on Windows clients', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    state.activeWorktreeId = 'folder:folder-1'
+    state.folderWorkspaces = [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'Platform',
+        folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
+      }
+    ] as never
+    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: 'local' }] as never
+
+    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'folder:folder-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/platform',
+          codexHome: null
+        }
+      })
+    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
   })
 
   it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {

@@ -57,8 +57,10 @@ import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
+import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import {
   isGitRepo,
+  getGitRepoRoot,
   getGitUsername,
   getRepoName,
   getBaseRefDefault,
@@ -78,6 +80,7 @@ import { getSshGitUsername } from '../git/git-username'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
@@ -182,6 +185,7 @@ async function addLocalRepoFromPath(
     return { error: `Not a valid git repository: ${path}` }
   }
 
+  const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
   const existing = store
     .getRepos()
@@ -190,11 +194,24 @@ async function addLocalRepoFromPath(
     return { repo: existing, alreadyExisted: true }
   }
 
-  const detected = await detectRepoIconAndUpstream({ repoPath: path, kind: repoKind })
+  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
+  if (resolvedPathKey !== pathKey) {
+    const existingAfterRootResolve = store
+      .getRepos()
+      .find(
+        (repo) =>
+          !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+      )
+    if (existingAfterRootResolve) {
+      return { repo: existingAfterRootResolve, alreadyExisted: true }
+    }
+  }
+
+  const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: repoKind })
   const repo: Repo = {
     id: randomUUID(),
-    path,
-    displayName: getRepoName(path),
+    path: resolvedPath,
+    displayName: getRepoName(resolvedPath),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
     addedAt: Date.now(),
@@ -1498,12 +1515,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           error: 'Repository was not found in the nested repo scan result'
         })
       )
+      const importedProjectIdsByRepoPath = new Map<string, string>()
+      const importTargetResolver = createNestedRepoImportTargetResolver()
 
       for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
+          let importRepoPath = repoPath
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
-            if (!gitProvider || !(await gitProvider.isGitRepoAsync(repoPath)).isRepo) {
+            const check = gitProvider ? await gitProvider.isGitRepoAsync(repoPath) : null
+            if (!gitProvider || !check?.isRepo) {
               results.push({
                 path: repoPath,
                 status: 'failed',
@@ -1511,8 +1532,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               })
               continue
             }
+            importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
           } else if (!isGitRepo(repoPath)) {
             results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            continue
+          } else {
+            importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+          }
+          const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
+          const alreadyImportedProjectId =
+            importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
+          if (alreadyImportedProjectId) {
+            results.push({
+              path: repoPath,
+              projectId: alreadyImportedProjectId,
+              status: 'already-known'
+            })
             continue
           }
           const existing = store
@@ -1520,26 +1555,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             .find(
               (repo) =>
                 (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                normalizeRuntimePathForComparison(repo.path) ===
-                  normalizeRuntimePathForComparison(repoPath)
+                normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
             )
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
               store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
             }
+            importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
           }
           const detected = await detectRepoIconAndUpstream({
-            repoPath,
+            repoPath: importRepoPath,
             kind: 'git',
             connectionId: args.connectionId
           })
           const repo: Repo = {
             id: randomUUID(),
-            path: repoPath,
-            displayName: getRepoName(repoPath),
+            path: importRepoPath,
+            displayName: getRepoName(importRepoPath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
             ...detected,
             addedAt: Date.now(),
@@ -1559,9 +1594,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           await prepareLocalWorktreeRootForRepo(store, repo)
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
-              rootPath: repoPath
+              rootPath: importRepoPath
             })
           }
+          importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
           // Why: nested-repo import only reaches here after the isGitRepo /
           // isGitRepoAsync guard above confirmed a git repo, so always `true`.
@@ -1906,10 +1942,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'forkSyncMode'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
+            | 'externalWorktreeInboxBaselinePaths'
+            | 'importedExternalWorktreePaths'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
-        > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+        > & {
+          sourceControlAi?: Repo['sourceControlAi'] | null
+          externalWorktreeDiscoverySuppressedAt?:
+            | Repo['externalWorktreeDiscoverySuppressedAt']
+            | null
+        }
       }
     ) => {
       // Why: validate the persisted preference string at the IPC boundary
@@ -1988,6 +2031,38 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           !Number.isFinite(updates.externalWorktreeVisibilityPromptDismissedAt))
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
+      }
+      // Why: null is the transport sentinel for clearing discovery suppression.
+      if (
+        'externalWorktreeDiscoverySuppressedAt' in updates &&
+        updates.externalWorktreeDiscoverySuppressedAt === null
+      ) {
+        updates.externalWorktreeDiscoverySuppressedAt = undefined
+      } else if (
+        'externalWorktreeDiscoverySuppressedAt' in updates &&
+        updates.externalWorktreeDiscoverySuppressedAt !== undefined &&
+        (typeof updates.externalWorktreeDiscoverySuppressedAt !== 'number' ||
+          !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
+      ) {
+        delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if (
+        'externalWorktreeInboxBaselinePaths' in updates &&
+        updates.externalWorktreeInboxBaselinePaths !== undefined
+      ) {
+        const value = updates.externalWorktreeInboxBaselinePaths as unknown
+        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+          delete updates.externalWorktreeInboxBaselinePaths
+        }
+      }
+      if (
+        'importedExternalWorktreePaths' in updates &&
+        updates.importedExternalWorktreePaths !== undefined
+      ) {
+        const value = updates.importedExternalWorktreePaths as unknown
+        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+          delete updates.importedExternalWorktreePaths
+        }
       }
       // Why: null is the transport sentinel for clearing Source Control AI.
       // Other invalid fields are deleted; this one must flow as undefined.
@@ -2505,6 +2580,7 @@ function notifyReposChanged(mainWindow: BrowserWindow): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
+  scheduleCurrentWorktreeBaseDirectoryWatcherSync()
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {

@@ -7,7 +7,6 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
@@ -21,6 +20,7 @@ import {
   resumeTerminalVisibility,
   type TerminalHiddenReason
 } from './terminal-visibility-resume'
+import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -80,6 +80,7 @@ export function useTerminalPaneGlobalEffects({
     paneCount
   })
   useTerminalContainerFitSync({ isVisible, isSyncFitEnabled, managerRef, containerRef })
+  useTerminalWindowWakeRecovery({ isVisible, managerRef, isActiveRef, isVisibleRef })
 
   useEffect(() => {
     const manager = managerRef.current
@@ -127,34 +128,6 @@ export function useTerminalPaneGlobalEffects({
     wasWorktreeActiveRef.current = isWorktreeActive
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, isVisible, isWorktreeActive])
-
-  useEffect(() => {
-    if (!isVisible) {
-      return
-    }
-    const recoverWebglAtlases = (): void => {
-      // Why: WebGL atlas corruption does not always raise context loss; window
-      // foregrounding is a low-cost recovery point. Visible terminals can be
-      // inactive in split groups, and same-config terminals share the atlas.
-      resetAllTerminalWebglAtlases()
-    }
-    const onFocus = (): void => recoverWebglAtlases()
-    const onVisibilityChange = (): void => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        recoverWebglAtlases()
-      }
-    }
-    window.addEventListener('focus', onFocus)
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-      document.addEventListener('visibilitychange', onVisibilityChange)
-    }
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
-        document.removeEventListener('visibilitychange', onVisibilityChange)
-      }
-    }
-  }, [isVisible])
 
   useEffect(() => {
     const manager = managerRef.current

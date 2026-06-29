@@ -43,6 +43,21 @@ export type MonacoLargeTextPasteOptions = {
   ) => void
 }
 
+// Why: getFocusedCodeEditor() (context-menu/command paste) yields the base
+// ICodeEditor, while @monaco-editor/react mounts an IStandaloneCodeEditor (DOM
+// paste path). Both share every method used here, so accept the base type and
+// let the stricter standalone callers pass through unchanged.
+export type MonacoPasteEditor = Pick<
+  editor.ICodeEditor,
+  | 'getModel'
+  | 'getContainerDomNode'
+  | 'hasTextFocus'
+  | 'getSelection'
+  | 'setSelection'
+  | 'executeEdits'
+  | 'pushUndoStop'
+>
+
 type MonacoPasteSnapshot = {
   container: HTMLElement
   model: editor.ITextModel
@@ -113,9 +128,7 @@ function getEndPositionAfterInsert(start: Position, text: string): Position {
   return { lineNumber, column }
 }
 
-function snapshotMonacoPasteTarget(
-  monacoEditor: editor.IStandaloneCodeEditor
-): MonacoPasteSnapshot | null {
+function snapshotMonacoPasteTarget(monacoEditor: MonacoPasteEditor): MonacoPasteSnapshot | null {
   const model = monacoEditor.getModel()
   const container = monacoEditor.getContainerDomNode()
   if (!model || !container.isConnected || !monacoEditor.hasTextFocus()) {
@@ -125,7 +138,7 @@ function snapshotMonacoPasteTarget(
 }
 
 function isMonacoPasteTargetCurrent(
-  monacoEditor: editor.IStandaloneCodeEditor,
+  monacoEditor: MonacoPasteEditor,
   snapshot: MonacoPasteSnapshot
 ): boolean {
   return (
@@ -136,10 +149,7 @@ function isMonacoPasteTargetCurrent(
   )
 }
 
-function setCollapsedSelection(
-  monacoEditor: editor.IStandaloneCodeEditor,
-  position: Position
-): void {
+function setCollapsedSelection(monacoEditor: MonacoPasteEditor, position: Position): void {
   monacoEditor.setSelection({
     startLineNumber: position.lineNumber,
     startColumn: position.column,
@@ -153,7 +163,7 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 async function insertMonacoTextInChunks(
-  monacoEditor: editor.IStandaloneCodeEditor,
+  monacoEditor: MonacoPasteEditor,
   text: string,
   byteLength: number,
   options: MonacoLargeTextPasteOptions
@@ -206,8 +216,12 @@ async function insertMonacoTextInChunks(
   return { status: 'pasted', mode: 'chunked', byteLength, chunksWritten }
 }
 
-async function executeMonacoLargeTextPaste(
-  monacoEditor: editor.IStandaloneCodeEditor,
+// Why: shared by the DOM-event paste path (handleMonacoLargeTextPaste) and the
+// context-menu paste path (monaco-context-menu-paste) so both enforce the same
+// too-large rejection and chunked-insert behavior regardless of how the paste
+// was triggered.
+export async function executeMonacoLargeTextPaste(
+  monacoEditor: MonacoPasteEditor,
   text: string,
   options: MonacoLargeTextPasteOptions
 ): Promise<Exclude<MonacoLargeTextPasteResult, { status: 'ignored' | 'handled' }>> {

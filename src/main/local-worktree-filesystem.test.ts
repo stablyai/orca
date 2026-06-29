@@ -17,7 +17,11 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess, removeLocalWorktreePath } from './local-worktree-filesystem'
+import {
+  getLocalWorktreePathAccess,
+  removeLocalWorktreePath,
+  toHostRemovalPath
+} from './local-worktree-filesystem'
 
 function completeExecFile(stdout = ''): void {
   execFileMock.mockImplementation((_file, _args, _options, callback) => {
@@ -59,8 +63,25 @@ describe('local worktree filesystem runtime access', () => {
 
     expect(lstatMock).toHaveBeenCalledWith('C:\\repo\\.git')
     expect(readFileMock).toHaveBeenCalledWith('C:\\repo\\.git', 'utf8')
-    expect(rmMock).toHaveBeenCalledWith('C:\\repo\\feature', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(toHostRemovalPath('C:\\repo\\feature'), {
+      recursive: true,
+      force: true
+    })
     expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('uses a Win32 long-path namespace for host removal on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const longPath = `C:\\repo\\${'nested\\'.repeat(40)}feature`
+
+      await removeLocalWorktreePath(longPath)
+
+      expect(toHostRemovalPath(longPath)).toBe(`\\\\?\\${longPath}`)
+      expect(rmMock).toHaveBeenCalledWith(`\\\\?\\${longPath}`, {
+        recursive: true,
+        force: true
+      })
+    })
   })
 
   it('uses the selected WSL distro for stat, read, and removal on Windows', async () => {

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: filesystem-watcher centralizes native
-(@parcel/watcher), WSL (inotifywait), and SSH remote watcher lifecycles in
+(@parcel/watcher), WSL-native snapshot, and SSH remote watcher lifecycles in
 one module so subscription/cleanup invariants stay auditable from a single
 file. Splitting by transport would scatter the shared debounce/coalesce
 helpers and the common batch-flush path across three files. */
@@ -506,8 +506,8 @@ async function doInstallLocalWatcher(
   }
 
   try {
-    // Why: WSL paths use inotifywait inside the Linux distro where
-    // inotify works natively; native Windows paths use @parcel/watcher.
+    // Why: WSL paths use one snapshot subprocess inside the Linux distro so
+    // `wsl --shutdown` can kill it; native Windows paths use @parcel/watcher.
     root = isWslPath(worktreePath)
       ? await createWslWatcher(rootKey, worktreePath, {
           ignoreDirs: WATCHER_IGNORE_DIRS,

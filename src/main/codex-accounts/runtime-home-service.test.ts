@@ -81,7 +81,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalClipboardOnSelect: false,
     terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'split-vertical',
-    terminalScrollbackBytes: 10_000_000,
+    terminalScrollbackRows: 5_000,
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
     openLinksInApp: false,

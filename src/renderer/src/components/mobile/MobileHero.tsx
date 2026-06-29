@@ -3,6 +3,7 @@ import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
+import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
@@ -27,7 +28,9 @@ type HeroFlowProps = {
   platform: Platform
   onPlatformChange: (next: Platform) => void
   installQrUrl: string | null
-  installCopy: { description: string; ctaLabel: string; url: string }
+  installCopy: InstallCopy
+  iosChannel: IosChannel
+  onIosChannelChange: (next: IosChannel) => void
   onOpenInstallUrl: () => void
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
@@ -51,6 +54,8 @@ export function HeroFlow({
   onPlatformChange,
   installQrUrl,
   installCopy,
+  iosChannel,
+  onIosChannelChange,
   onOpenInstallUrl,
   onCopyInstallUrl,
   pairQrDataUrl,
@@ -110,6 +115,36 @@ export function HeroFlow({
                   {translate('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
                 </button>
               </div>
+              {platform === 'ios' ? (
+                <div
+                  className="mp-channel-toggle"
+                  role="radiogroup"
+                  aria-label={translate(
+                    'auto.components.mobile.MobileHero.channel.group',
+                    'Release channel'
+                  )}
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={iosChannel === 'preview'}
+                    className={cn(iosChannel === 'preview' && 'is-active')}
+                    onClick={() => onIosChannelChange('preview')}
+                  >
+                    {translate('auto.components.mobile.MobileHero.channel.preview', 'Preview')}
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={iosChannel === 'stable'}
+                    className={cn(iosChannel === 'stable' && 'is-active')}
+                    onClick={() => onIosChannelChange('stable')}
+                  >
+                    {translate('auto.components.mobile.MobileHero.channel.stable', 'Stable')}
+                  </button>
+                  <span className="mp-channel-tagline">{getChannelTagline(iosChannel)}</span>
+                </div>
+              ) : null}
               <div className="mp-inline-actions">
                 <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
                   {installCopy.ctaLabel}

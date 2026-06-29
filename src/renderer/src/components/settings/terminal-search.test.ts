@@ -72,6 +72,15 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entriesLinux.some((entry) => entry.title === 'Manage Sessions')).toBe(true)
   })
 
+  it('indexes terminal scrollback as rows rather than MB size', () => {
+    const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    const scrollbackEntry = entries.find((entry) => entry.title === 'Scrollback Rows')
+
+    expect(scrollbackEntry).toBeDefined()
+    expect(matchesSettingsSearch('rows', [scrollbackEntry!])).toBe(true)
+    expect(entries.some((entry) => entry.title === 'Scrollback Size')).toBe(false)
+  })
+
   it('includes the OSC 52 clipboard setting on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
@@ -180,6 +189,8 @@ describe('getTerminalPaneSearchEntries', () => {
 
     expect(getSidebarEntries()).toContainEqual(entry)
     expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
+    expect(entry.description).toBe('Workspace cards can use compact or detailed layouts.')
+    expect(entry.description).not.toContain('options menu')
   })
 
   it.each(['compact', 'compact display', 'workspace cards', 'sidebar', 'card layout'])(

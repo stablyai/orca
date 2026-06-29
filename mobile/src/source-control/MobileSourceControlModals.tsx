@@ -1,28 +1,23 @@
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PickerModal } from '../components/PickerModal'
-import { MobilePrComposeSheet, openMobilePrUrl } from '../components/MobilePrComposeSheet'
+import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
 import { MobileBranchDiffPreviewDrawer } from './MobileBranchDiffPreviewDrawer'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
 type Props = {
   state: MobileSourceControlState
-  worktreeId: string
   actionSheetActions: ActionSheetAction[]
 }
 
-export function MobileSourceControlModals({ state, worktreeId, actionSheetActions }: Props) {
+export function MobileSourceControlModals({ state, actionSheetActions }: Props) {
   const {
-    client,
     branchDiffPreview,
     setBranchDiffPreview,
     showActionSheet,
     setShowActionSheet,
     discardTarget,
     setDiscardTarget,
-    showPrSheet,
-    setShowPrSheet,
-    prPrefill,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,
@@ -30,9 +25,7 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
     setCreatedPrUrl,
     createdPrWarning,
     setCreatedPrWarning,
-    status,
     branchLabel,
-    loadStatus,
     checkoutBranch,
     runGitAction
   } = state
@@ -72,21 +65,6 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
           setDiscardTarget(null)
         }}
         onCancel={() => setDiscardTarget(null)}
-      />
-
-      <MobilePrComposeSheet
-        visible={showPrSheet}
-        client={client}
-        worktreeId={worktreeId ?? ''}
-        prefill={prPrefill ?? { provider: 'github', base: 'main', title: branchLabel, body: '' }}
-        head={status?.branch ?? null}
-        onClose={() => setShowPrSheet(false)}
-        onCreated={(url, warning) => {
-          setShowPrSheet(false)
-          setCreatedPrUrl(url)
-          setCreatedPrWarning(warning ?? null)
-          void loadStatus({ preserveReadyOnFailure: true, force: true })
-        }}
       />
 
       <PickerModal

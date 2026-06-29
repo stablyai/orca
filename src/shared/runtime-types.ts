@@ -130,6 +130,9 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
   color?: string | null
   isPinned?: boolean
+  /** Per-tab view preference (terminal xterm vs native chat). Host-persisted so
+   *  paired clients converge; clients still win during the optimistic echo window. */
+  viewMode?: 'terminal' | 'chat'
   isActive: boolean
 }
 
@@ -327,6 +330,12 @@ export type RuntimeFilePreviewResult = {
   mimeType?: string
 }
 
+export type RuntimeFileReadChunkResult = {
+  contentBase64: string
+  bytesRead: number
+  eof: boolean
+}
+
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
@@ -438,6 +447,8 @@ export type RuntimeTerminalAgentStatus = {
   status: RuntimeTerminalAgentStatusState
 }
 
+export type RuntimeTerminalPresentation = 'background' | 'focused'
+
 export type RuntimeTerminalCreate = {
   handle: string
   tabId?: string
@@ -446,6 +457,7 @@ export type RuntimeTerminalCreate = {
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'
+  warning?: string
 }
 
 export type RuntimeTerminalSplit = {

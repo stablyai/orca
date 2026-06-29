@@ -162,7 +162,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       { role: 'cut' },
       { role: 'copy' },
-      { role: 'paste' },
+      {
+        label: translateMain('menu.paste', 'Paste'),
+        accelerator: 'CmdOrCtrl+V',
+        click: () => {
+          // Why: a focused terminal/native-chat pane is not a native editable
+          // control, so raw Electron paste cannot know which Orca surface owns it.
+          BrowserWindow.getFocusedWindow()?.webContents.send('ui:appMenuPaste')
+        }
+      },
       { role: 'selectAll' }
     ]
   }

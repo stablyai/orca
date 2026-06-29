@@ -17,12 +17,25 @@ import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
+import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
 // check stay O(1) without re-coercing the readonly tuple on every call.
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
+
+type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
+  terminalScrollbackBytes?: unknown
+}
+
+function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
+  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
+    args as LegacyTerminalScrollbackSettingsUpdate
+  void _legacyScrollbackBytes
+  return sanitizedArgs
+}
 
 // Why: fields that appear in the View > Appearance submenu need the menu
 // rebuilt after any update so the checkbox `checked` state stays in sync
@@ -54,7 +67,7 @@ export function registerSettingsHandlers(
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
-    const sanitizedArgs = { ...args }
+    const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
     // Why: Floating Workspace grants are trusted only when written by the
     // main-process directory picker, never by renderer-provided settings IPC.
     delete sanitizedArgs.floatingTerminalTrustedCwds
@@ -76,6 +89,11 @@ export function registerSettingsHandlers(
     }
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
+    }
+    if ('terminalScrollbackRows' in args) {
+      sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+        args.terminalScrollbackRows
+      )
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
@@ -114,6 +132,7 @@ export function registerSettingsHandlers(
       ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
     ) {
       void prepareLocalWorktreeRootsForRepos(store)
+      scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()

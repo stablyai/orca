@@ -1,4 +1,11 @@
-import { PanelBottomClose, PanelRightClose, Pin, PinOff } from 'lucide-react'
+import {
+  MessageSquare,
+  PanelBottomClose,
+  PanelRightClose,
+  Pin,
+  PinOff,
+  SquareTerminal
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,6 +102,14 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
+  /** True when this tab is an agent terminal that can switch to the native chat
+   *  view; gates the "Switch view" menu item. */
+  canToggleViewMode?: boolean
+  /** True when the tab is currently showing the native chat view (drives the
+   *  item's label/icon between "chat" and "terminal"). */
+  isChatView?: boolean
+  /** Toggle the tab between terminal and native chat view. */
+  onToggleViewMode?: () => void
 }
 
 export function SortableTabContextMenu({
@@ -114,7 +129,10 @@ export function SortableTabContextMenu({
   onCloseToRight,
   onRenameOpen,
   onSetTabColor,
-  onTogglePin
+  onTogglePin,
+  canToggleViewMode = false,
+  isChatView = false,
+  onToggleViewMode
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -140,6 +158,27 @@ export function SortableTabContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+        {canToggleViewMode && onToggleViewMode && (
+          <>
+            <DropdownMenuItem onSelect={onToggleViewMode}>
+              {isChatView ? (
+                <SquareTerminal className="mr-1.5 size-3.5" />
+              ) : (
+                <MessageSquare className="mr-1.5 size-3.5" />
+              )}
+              {isChatView
+                ? translate(
+                    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                    'Switch to terminal view'
+                  )
+                : translate(
+                    'components.tab.bar.SortableTabContextMenu.switchToChatView',
+                    'Switch to chat view'
+                  )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
           <PanelRightClose />
           {translate(

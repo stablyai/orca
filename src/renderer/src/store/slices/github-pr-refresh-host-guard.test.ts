@@ -76,6 +76,17 @@ describe('enqueueGitHubPRRefresh host guard', () => {
     expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
   })
 
+  it('enqueues the local handler for a known local repo while a runtime is focused', () => {
+    const store = createTestStore()
+    seed(store, { id: 'local-1', path: '/Users/me/code/local-1', name: 'local-1', kind: 'git' })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-win' } as never })
+
+    store.getState().enqueueGitHubPRRefresh('wt-1', 'active', 80)
+
+    expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
+    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalled()
+  })
+
   it('enqueues the local handler for a repo with an explicit local executionHostId', () => {
     const store = createTestStore()
     seed(store, {

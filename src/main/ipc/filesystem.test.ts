@@ -299,6 +299,8 @@ describe('registerFilesystemHandlers', () => {
         buffer.fill(0x61)
         return { bytesRead: buffer.length, buffer }
       }),
+      write: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined),
       close: vi.fn()
     })
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -483,6 +485,71 @@ describe('registerFilesystemHandlers', () => {
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
     expect(renameMock).toHaveBeenCalledWith(tempPath, '/downloads/report.pdf')
     expect(rmMock).not.toHaveBeenCalledWith(tempPath, expect.anything())
+  })
+
+  it('streams runtime download chunks to a temp sibling then promotes on finish', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const close = vi.fn().mockResolvedValue(undefined)
+    openMock.mockResolvedValue({ writeFile, close })
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    const started = await handlers.get('fs:startDownloadedFile')!(
+      { sender: {} },
+      { suggestedName: 'report.pdf' }
+    )
+    expect(started).toMatchObject({
+      canceled: false,
+      destinationPath: '/downloads/report.pdf'
+    })
+    if (!started || typeof started !== 'object' || !('transferId' in started)) {
+      throw new Error('download did not start')
+    }
+    const transferId = started.transferId
+
+    await expect(
+      handlers.get('fs:appendDownloadedFileChunk')!(null, {
+        transferId,
+        contentBase64: Buffer.from('hello').toString('base64')
+      })
+    ).resolves.toEqual({ ok: true })
+    await expect(handlers.get('fs:finishDownloadedFile')!(null, { transferId })).resolves.toEqual({
+      canceled: false,
+      destinationPath: '/downloads/report.pdf'
+    })
+
+    const tempPath = openMock.mock.calls[0][0]
+    expect(path.dirname(tempPath)).toBe(path.normalize('/downloads'))
+    expect(openMock).toHaveBeenCalledWith(tempPath, 'wx')
+    expect(writeFile).toHaveBeenCalledWith(Buffer.from('hello'))
+    expect(close).toHaveBeenCalled()
+    expect(renameMock).toHaveBeenCalledWith(tempPath, '/downloads/report.pdf')
+  })
+
+  it('cleans up a runtime download temp file on cancel', async () => {
+    const close = vi.fn().mockResolvedValue(undefined)
+    openMock.mockResolvedValue({ writeFile: vi.fn(), close })
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    const started = await handlers.get('fs:startDownloadedFile')!(
+      { sender: {} },
+      { suggestedName: 'report.pdf' }
+    )
+    if (!started || typeof started !== 'object' || !('transferId' in started)) {
+      throw new Error('download did not start')
+    }
+    const tempPath = openMock.mock.calls[0][0]
+
+    await expect(
+      handlers.get('fs:cancelDownloadedFile')!(null, { transferId: started.transferId })
+    ).resolves.toEqual({ ok: true })
+
+    expect(close).toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { force: true })
+    expect(renameMock).not.toHaveBeenCalled()
   })
 
   it('cleans up the temp sibling when remote download transfer fails', async () => {

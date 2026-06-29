@@ -405,6 +405,11 @@ function resolvePrompt(
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string
+  /** Full JSON of an AskUserQuestion tool input, set only on the event that
+   *  carries it. Deliberately NOT inherited across events in resolveToolState
+   *  so it clears the moment the agent moves to a different tool / state and a
+   *  stale prompt can't linger on the emitted payload. */
+  interactivePrompt?: string
   hasToolUpdate?: boolean
   hasToolInputField?: boolean
   lastAssistantMessage?: string
@@ -440,6 +445,10 @@ function resolveToolState(
   const merged: ToolSnapshot = {
     toolName,
     toolInput,
+    // Why: do NOT inherit `previous.interactivePrompt`. The prompt is only
+    // valid for the single AskUserQuestion event that produced it; carrying it
+    // forward would leave a stale live card on the next tool/state change.
+    interactivePrompt: update.interactivePrompt,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
       : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
@@ -599,7 +608,7 @@ function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]
 }
 
 function toolUpdate(
-  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput'>,
+  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput' | 'interactivePrompt'>,
   options?: { hasToolInputField?: boolean }
 ): ToolSnapshot {
   return {
@@ -607,6 +616,85 @@ function toolUpdate(
     hasToolUpdate: true,
     hasToolInputField: options?.hasToolInputField === true
   }
+}
+
+/** True for the AskUserQuestion tool across the casing variants different
+ *  agents emit (`AskUserQuestion` / `ask_user_question` / `askUserQuestion`).
+ *  Why: this is the structured "pick an option" prompt whose full input the
+ *  clients render as a live card. */
+function isAskUserQuestionTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
+}
+
+/** Capture the full AskUserQuestion tool input as a JSON string when the tool
+ *  is an AskUserQuestion variant; otherwise undefined so resolveToolState
+ *  clears any prior prompt. Kept agent-generic: callers pass whatever raw
+ *  tool-input object their hook payload exposed. */
+/** Drop the hook envelope keys a plugin merges into its event properties so
+ *  the serialized interactive prompt holds only the question structure. */
+function stripHookEnvelopeKeys(record: Record<string, unknown>): Record<string, unknown> {
+  const { hook_event_name: _h, hookEventName: _he, ...rest } = record
+  return rest
+}
+
+/** Short, single-line description of a tool call for an approval card (the
+ *  command for Bash, the path for file tools, else a clipped JSON preview). */
+function summarizeApprovalInput(toolInput: unknown): string {
+  if (toolInput && typeof toolInput === 'object') {
+    const obj = toolInput as Record<string, unknown>
+    const direct = obj.command ?? obj.file_path ?? obj.path ?? obj.url ?? obj.pattern
+    if (typeof direct === 'string' && direct.length > 0) {
+      return direct.length > 200 ? `${direct.slice(0, 200)}…` : direct
+    }
+  }
+  try {
+    const json = JSON.stringify(toolInput) ?? ''
+    return json.length > 200 ? `${json.slice(0, 200)}…` : json
+  } catch {
+    return ''
+  }
+}
+
+/** Capture a pending interactive prompt as a normalized JSON envelope:
+ *  - AskUserQuestion → the raw `{ questions: [...] }` structure (kind inferred
+ *    by the client from the `questions` key, kept stable for back-compat).
+ *  - any other tool on a PermissionRequest → `{ approval: { tool, summary } }`
+ *    so the client can render an Allow/Deny card.
+ *  Returns undefined otherwise so resolveToolState clears any prior prompt. */
+function deriveInteractivePrompt(
+  toolName: string | undefined,
+  toolInput: unknown,
+  eventName?: unknown
+): string | undefined {
+  // Why: an AskUserQuestion is pending only on the Pre/Permission event. On
+  // PostToolUse it has already been answered, so re-asserting the `{questions}`
+  // prompt would re-show an answered card instead of letting it clear. The live
+  // working indicator keys off agentStatus.state (not this prompt), so dropping
+  // it here doesn't suppress it.
+  if (
+    isAskUserQuestionTool(toolName) &&
+    eventName !== 'PostToolUse' &&
+    toolInput !== undefined &&
+    toolInput !== null
+  ) {
+    try {
+      return JSON.stringify(toolInput)
+    } catch {
+      // Why: defend against circular/unserializable input from a buggy agent —
+      // a missing live card is better than throwing in the hook hot path.
+      return undefined
+    }
+  }
+  if (eventName === 'PermissionRequest' && typeof toolName === 'string' && toolName.length > 0) {
+    try {
+      return JSON.stringify({
+        approval: { tool: toolName, summary: summarizeApprovalInput(toolInput) }
+      })
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
 }
 
 function readFirstString(
@@ -1120,7 +1208,11 @@ function extractClaudeToolFields(
     Object.assign(
       update,
       toolUpdate(
-        { toolName, toolInput: deriveToolInputPreview(toolName, hookPayload.tool_input) },
+        {
+          toolName,
+          toolInput: deriveToolInputPreview(toolName, hookPayload.tool_input),
+          interactivePrompt: deriveInteractivePrompt(toolName, hookPayload.tool_input, eventName)
+        },
         { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
       )
     )
@@ -1164,12 +1256,17 @@ function extractCodexToolFields(
     eventName === 'PostToolUse'
   ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+    const rawInput = hookPayload.tool_input ?? hookPayload.input ?? hookPayload.arguments
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
     return toolUpdate(
-      { toolName, toolInput },
+      {
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
+      },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
     )
   }
@@ -1299,6 +1396,19 @@ function extractOpenCodeToolFields(
     const text = readString(hookPayload, 'text')
     if (text) {
       return { lastAssistantMessage: capOpenCodeHookText(text) }
+    }
+  }
+  if (eventName === 'AskUserQuestion') {
+    // Why: OpenCode posts the question.asked event's `event.properties` as the
+    // hook payload (the plugin merges `hook_event_name` into it). The structured
+    // input is that object — minus the hook envelope key — or its `tool_input`
+    // when wrapped. Capture the full JSON so clients render the live card.
+    const toolInputSource = hasOwnField(hookPayload, 'tool_input')
+      ? hookPayload.tool_input
+      : stripHookEnvelopeKeys(hookPayload)
+    return {
+      hasToolUpdate: true,
+      interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
   }
   return {}
@@ -2075,6 +2185,7 @@ function normalizeClaudeEvent(
       agentType: 'claude',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2135,6 +2246,7 @@ function normalizeDevinEvent(
       agentType: 'devin',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2245,6 +2357,7 @@ function normalizeGeminiEvent(
       agentType: 'gemini',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2320,6 +2433,7 @@ function normalizeAntigravityEvent(
       agentType: 'antigravity',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2402,6 +2516,7 @@ function normalizeAmpEvent(
       agentType: 'amp',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2539,6 +2654,7 @@ function normalizeCodexEvent(
       agentType: 'codex',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2581,6 +2697,7 @@ function normalizeOpenCodeFamilyEvent(
       agentType: source,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2643,6 +2760,7 @@ function normalizeCursorEvent(
       agentType: 'cursor',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2707,6 +2825,7 @@ function normalizeCopilotEvent(
       agentType: 'copilot',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2752,6 +2871,7 @@ function normalizePiCompatibleEvent(
       agentType,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2823,6 +2943,7 @@ function normalizeDroidEvent(
       agentType: 'droid',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2861,6 +2982,7 @@ function normalizeCommandCodeEvent(
       agentType: 'command-code',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2943,6 +3065,7 @@ function normalizeGrokEvent(
       agentType: 'grok',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2991,6 +3114,7 @@ function normalizeHermesEvent(
       agentType: 'hermes',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )

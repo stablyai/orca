@@ -77,6 +77,7 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { rememberLiveBrowserUrl } from './browser-runtime'
 import {
   destroyPersistentWebview,
@@ -3612,6 +3613,16 @@ function BrowserPagePane({
       webview = document.createElement('webview') as Electron.WebviewTag
       webview.setAttribute('partition', webviewPartition)
       webview.setAttribute('allowpopups', '')
+      // Why: keep HTML fullscreen contained to the <webview> element instead of
+      // letting guest content resize the host BrowserWindow into native macOS
+      // fullscreen. Without this, requestFullscreen() resizes the OS window but
+      // exitFullscreen() has nothing to restore, leaving the pane stuck
+      // fullscreen (issue #6442). Containing fullscreen to the element makes
+      // exit reliable and fires fullscreenchange as guests expect.
+      // Why: the key must be camelCase — Electron's <webview> webpreferences
+      // parser spreads keys verbatim into WebPreferences, so a lowercase key is
+      // silently ignored.
+      webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
       webview.style.display = 'flex'
       webview.style.flex = '1'
       webview.style.width = '100%'

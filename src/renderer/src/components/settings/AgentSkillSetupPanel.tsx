@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Copy, RefreshCw, Terminal } from 'lucide-react'
+import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
@@ -44,6 +44,7 @@ type AgentSkillSetupPanelProps = {
   installLabel?: string
   installedInstallLabel?: string
   actionHint?: ReactNode
+  openingHint?: ReactNode
   footer?: ReactNode
   onRecheck: () => void | Promise<unknown>
 }
@@ -76,11 +77,13 @@ export function AgentSkillSetupPanel({
   installLabel = 'Install',
   installedInstallLabel = 'Update',
   actionHint,
+  openingHint,
   footer,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
+  const [terminalOpening, setTerminalOpening] = useState(false)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
     Boolean(preInstallNotice && !installed)
   )
@@ -164,23 +167,42 @@ export function AgentSkillSetupPanel({
           variant="outline"
           size="sm"
           onClick={() => {
+            if (terminalOpening) {
+              return
+            }
             const nextCommand = activeCommand
+            setTerminalOpening(true)
             void (async () => {
+              let shouldOpenTerminal = false
               try {
                 await onBeforeOpenTerminal?.()
                 await refreshPreInstallNotice()
+                shouldOpenTerminal = true
+              } catch {
+                shouldOpenTerminal = false
               } finally {
                 if (mountedRef.current) {
-                  setTerminalCommand(nextCommand)
-                  setTerminalOpen(true)
+                  setTerminalOpening(false)
+                  if (shouldOpenTerminal) {
+                    setTerminalCommand(nextCommand)
+                    setTerminalOpen(true)
+                  }
                 }
               }
             })()
           }}
-          disabled={terminalOpen || installDisabled}
+          disabled={terminalOpen || installDisabled || terminalOpening}
         >
-          <Terminal className="size-3.5" />
-          {installed ? installedInstallLabel : installLabel}
+          {terminalOpening ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Terminal className="size-3.5" />
+          )}
+          {terminalOpening
+            ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
+            : installed
+              ? installedInstallLabel
+              : installLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
@@ -195,6 +217,15 @@ export function AgentSkillSetupPanel({
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
           {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
+      ) : null}
+      {terminalOpening ? (
+        <p className="basis-full text-[12px] leading-snug text-muted-foreground">
+          {openingHint ??
+            translate(
+              'auto.components.settings.AgentSkillSetupPanel.4c05b9d7cb',
+              'Preparing setup terminal.'
+            )}
+        </p>
       ) : null}
     </div>
   )

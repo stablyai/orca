@@ -152,6 +152,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readChunk',
   'files.readPreview',
   'files.resolveTerminalPath',
   'git.abortMerge',
@@ -296,6 +297,9 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'session.tabs.subscribeAll',
   'session.tabs.unsubscribe',
   'session.tabs.unsubscribeAll',
+  'nativeChat.readSession',
+  'nativeChat.subscribe',
+  'nativeChat.unsubscribe',
   'settings.get',
   'settings.update',
   'ssh.connect',
@@ -970,6 +974,9 @@ export class OrcaRuntimeRpcServer {
       await this.dispatcher.dispatchStreaming(request, reply, {
         connectionId,
         clientId: token,
+        // Why: gates the mobile-only payload diet (native-chat char clipping) so
+        // full-screen web/desktop runtime clients aren't truncated.
+        clientKind: device.scope,
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>

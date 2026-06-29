@@ -172,7 +172,8 @@ function getAttachedWorktreePrDisplay({
     settings,
     repo.id,
     repo.connectionId,
-    repo.executionHostId
+    repo.executionHostId,
+    true
   )
   const hostedReviewEntry = hostedReviewCache?.[hostedReviewCacheKey] as
     | HostedReviewCacheEntry
@@ -241,10 +242,10 @@ function getCachedGitHubPr({
     branch,
     settings,
     repo.connectionId,
-    repo.executionHostId
+    repo.executionHostId,
+    true
   )
-  const canUseLegacyPRCache =
-    !settings?.activeRuntimeEnvironmentId?.trim() && !repo.connectionId && !repo.executionHostId
+  const canUseLegacyPRCache = !repo.connectionId && !repo.executionHostId
   const legacyRepoScopedCacheKey = canUseLegacyPRCache
     ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch)
     : ''

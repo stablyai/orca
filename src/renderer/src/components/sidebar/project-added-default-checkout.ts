@@ -6,6 +6,7 @@ import type {
   EventProps
 } from '../../../../shared/telemetry-events'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 
@@ -94,13 +95,26 @@ async function findDetectedDefaultCheckout(repoId: string): Promise<{
   }
 }
 
+function resolveInitialCwdForDefaultCheckout(
+  defaultCheckout: Worktree,
+  selectedPath: string | undefined
+): string | undefined {
+  if (!selectedPath) {
+    return undefined
+  }
+  const relativePath = relativePathInsideRoot(defaultCheckout.path, selectedPath)
+  return relativePath && relativePath.length > 0 ? selectedPath : undefined
+}
+
 export async function openProjectDefaultCheckout({
   repoId,
   source,
+  selectedPath,
   setHideDefaultBranchWorkspace
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
+  selectedPath?: string
   setHideDefaultBranchWorkspace: (value: boolean) => void
 }): Promise<void> {
   let defaultCheckout = getProjectDefaultCheckout(
@@ -135,7 +149,12 @@ export async function openProjectDefaultCheckout({
       result: 'opened_default_checkout',
       reason
     })
-    activateAndRevealWorktree(defaultCheckout.id)
+    const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
+    if (initialCwd) {
+      activateAndRevealWorktree(defaultCheckout.id, { initialCwd })
+    } else {
+      activateAndRevealWorktree(defaultCheckout.id)
+    }
     return
   }
 
@@ -150,15 +169,22 @@ export async function openProjectDefaultCheckout({
 export async function finishProjectAddWithDefaultCheckout({
   repoId,
   source,
+  selectedPath,
   closeModal,
   setHideDefaultBranchWorkspace
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
+  selectedPath?: string
   closeModal: () => void
   setHideDefaultBranchWorkspace: (value: boolean) => void
 }): Promise<void> {
   await markOnboardingProjectAdded('addedRepo')
   closeModal()
-  await openProjectDefaultCheckout({ repoId, source, setHideDefaultBranchWorkspace })
+  await openProjectDefaultCheckout({
+    repoId,
+    source,
+    selectedPath,
+    setHideDefaultBranchWorkspace
+  })
 }

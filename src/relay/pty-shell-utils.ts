@@ -10,6 +10,7 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
+import { getProcessTableSnapshot } from '../shared/process-table-snapshot'
 import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
@@ -210,10 +211,7 @@ async function getRecognizedForegroundDescendant(
   fallbackProcess?: string | null
 ): Promise<string | null> {
   try {
-    const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=,stat=,command='], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
+    const stdout = await getProcessTableSnapshot()
     const rows = parsePsRows(stdout)
     const root = rows.find((row) => row.pid === pid)
     const candidates = collectDescendants(rows, pid).sort(

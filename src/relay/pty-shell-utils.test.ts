@@ -8,6 +8,7 @@ vi.mock('child_process', () => ({
   execFile: execFileMock
 }))
 
+import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
 import {
   getForegroundProcessName,
   resolveDefaultCwd,
@@ -47,6 +48,7 @@ async function withProcessPlatform<T>(
 
 beforeEach(() => {
   execFileMock.mockReset()
+  resetProcessTableSnapshotForTests()
 })
 
 describe('resolveWindowsDefaultShell', () => {

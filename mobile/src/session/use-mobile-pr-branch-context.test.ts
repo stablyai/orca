@@ -78,7 +78,7 @@ describe('deriveMobilePrBranchContext', () => {
   it('does not throw on null status and null branchCompare', () => {
     expect(() => deriveMobilePrBranchContext(null, null)).not.toThrow()
     const result = deriveMobilePrBranchContext(null, null)
-    expect(result).toEqual({ branch: null, headSha: null })
+    expect(result).toEqual({ branch: null, headSha: null, status: null })
   })
 })
 
@@ -109,6 +109,7 @@ describe('loadMobilePrBranchContext', () => {
     expect(out).toEqual({
       branch: 'feat',
       headSha: 'sha-status',
+      status: expect.objectContaining({ branch: 'feat', head: 'sha-status' }),
       isGithubRepo: true,
       repoLoaded: true,
       loaded: true

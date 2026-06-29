@@ -5,14 +5,15 @@ import { useAppStore } from '@/store'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import {
   resetAgentHibernationCoordinatorForTests,
+  runAgentHibernationTick,
   startAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
 import { hydrateDrivers, setDriverForPty } from './pane-manager/mobile-driver-state'
 import {
-  registerVisibleTerminalWorktree,
-  resetForegroundTerminalWorktreeIdsForTests,
-  setForegroundTerminalWorktreeIds
-} from './foreground-terminal-worktrees'
+  registerVisibleTerminalTab,
+  resetForegroundTerminalTabIdsForTests,
+  setForegroundTerminalTabIds
+} from './foreground-terminal-tabs'
 import {
   recordAgentHibernationPaneOutput,
   resetAgentHibernationOutputActivityForTests
@@ -163,7 +164,7 @@ function deferred<T>(): {
 afterEach(() => {
   resetAgentHibernationCoordinatorForTests()
   clearRuntimeCompatibilityCacheForTests()
-  resetForegroundTerminalWorktreeIdsForTests()
+  resetForegroundTerminalTabIdsForTests()
   resetAgentHibernationOutputActivityForTests()
   hydrateDrivers([])
   mockRuntimeEnvironmentCall.mockReset()
@@ -229,10 +230,10 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
   })
 
-  it('does not hibernate a foreground worktree that is not the active worktree', async () => {
+  it('does not hibernate a foreground terminal tab that is not in the active worktree', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    setForegroundTerminalWorktreeIds(['wt-bg'])
+    setForegroundTerminalTabIds(['tab-1'])
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(3000)
@@ -240,21 +241,27 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
   })
 
-  it('does not hibernate a worktree with a visible mounted terminal pane', async () => {
+  it('does not hibernate a visible mounted terminal tab', async () => {
     vi.useFakeTimers()
+    vi.setSystemTime(NOW)
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
-    const unregister = registerVisibleTerminalWorktree('wt-bg')
-    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+    const unregister = registerVisibleTerminalTab('tab-1')
 
-    await vi.advanceTimersByTimeAsync(3000)
+    await runAgentHibernationTick()
     expect(shutdown).not.toHaveBeenCalled()
 
+    vi.setSystemTime(NOW + 1_000)
     unregister()
-    // Why: the coordinator requires one tick to confirm a stable candidate
-    // and a second tick to revalidate before shutdown.
-    await vi.advanceTimersByTimeAsync(1000)
-    await vi.advanceTimersByTimeAsync(1000)
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
 
+    vi.setSystemTime(NOW + 1_000 + DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    await runAgentHibernationTick()
+    await Promise.resolve()
+    await Promise.resolve()
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',
@@ -290,6 +297,37 @@ describe('agent sleep coordinator', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('restarts confirmation when a foreground terminal visit refreshes idle state', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    vi.setSystemTime(NOW + 1_999)
+    setForegroundTerminalTabIds(['tab-1'])
+    vi.setSystemTime(NOW + 2_000)
+    setForegroundTerminalTabIds([])
+
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    vi.setSystemTime(NOW + 2_000 + DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)
+    await runAgentHibernationTick()
+    expect(shutdown).not.toHaveBeenCalled()
+
+    await runAgentHibernationTick()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
+      paneKey: `tab-1:${LEAF}`,
+      tabId: 'tab-1',
+      leafId: LEAF,
+      ptyId: 'pty-1'
+    })
   })
 
   it('blocks shutdown when terminal input arrives between confirmation ticks', async () => {

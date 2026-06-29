@@ -166,10 +166,10 @@ describe('getPRCheckDetails', () => {
               id: 8801,
               name: 'verify',
               status: 'completed',
-              conclusion: 'failure',
+              conclusion: 'startup_failure',
               completed_at: '2026-05-18T19:02:00Z',
               html_url: actionUrl,
-              steps: [{ name: 'Run tests', status: 'completed', conclusion: 'failure' }]
+              steps: [{ name: 'Run tests', status: 'completed', conclusion: 'startup_failure' }]
             },
             {
               id: 8802,
@@ -190,7 +190,7 @@ describe('getPRCheckDetails', () => {
     expect(details?.jobs[0]).toMatchObject({
       id: 8801,
       name: 'verify',
-      conclusion: 'failure'
+      conclusion: 'startup_failure'
     })
     expect(details?.jobs[0].logTail).toContain('line 209')
     expect(details?.jobs[0].logTail).not.toContain('line 0')

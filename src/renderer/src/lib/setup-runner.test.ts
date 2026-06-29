@@ -38,4 +38,14 @@ describe('buildSetupRunnerCommand', () => {
       'bash /home/dev/repo/.git/orca/setup-runner.sh'
     )
   })
+
+  it('uses cmd.exe for native Windows runner scripts on non-Windows clients', () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    })
+
+    expect(buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd')).toBe(
+      'cmd.exe /c "C:\\repo\\.git\\orca\\setup-runner.cmd"'
+    )
+  })
 })
