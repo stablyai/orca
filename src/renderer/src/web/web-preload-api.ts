@@ -2373,6 +2373,7 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)

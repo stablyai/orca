@@ -83,6 +83,7 @@ function shellQuote(value: string): string {
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private cancelPendingClaudeLogin: (() => boolean) | null = null
 
   constructor(
     private readonly store: Store,
@@ -116,6 +117,10 @@ export class ClaudeAccountService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
     return this.serializeMutation(() => this.doSelectAccount(accountId, target))
+  }
+
+  cancelPendingLogin(): boolean {
+    return this.cancelPendingClaudeLogin?.() ?? false
   }
 
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
@@ -428,8 +433,16 @@ export class ClaudeAccountService {
     let captured: CapturedClaudeAuth | null = null
     let captureError: unknown = null
     let cleanupError: unknown = null
+    const loginAbortController = new AbortController()
+    this.cancelPendingClaudeLogin = () => {
+      loginAbortController.abort()
+      return true
+    }
     try {
-      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS)
+      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
+        signal: loginAbortController.signal
+      })
+      this.cancelPendingClaudeLogin = null
       const status = await this.runClaudeCommand(
         ['auth', 'status', '--json'],
         tempConfig,
@@ -463,6 +476,7 @@ export class ClaudeAccountService {
         }
       }
       this.removeTemporaryClaudeConfigDir(tempConfig)
+      this.cancelPendingClaudeLogin = null
     }
     if (captureError) {
       throw captureError
@@ -862,7 +876,7 @@ export class ClaudeAccountService {
     args: string[],
     configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
     timeoutMs: number,
-    options?: { allowFailure?: boolean }
+    options?: { allowFailure?: boolean; signal?: AbortSignal }
   ): Promise<string> {
     return new Promise((resolvePromise, rejectPromise) => {
       const spawnConfig =
@@ -892,7 +906,10 @@ export class ClaudeAccountService {
       const child = spawn(spawnConfig.command, spawnConfig.args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: spawnConfig.shell,
-        env: spawnConfig.env
+        env: spawnConfig.env,
+        // Why: Claude auth can leave browser/login descendants alive after denial.
+        // A process group lets cancellation terminate the whole POSIX login tree.
+        detached: process.platform !== 'win32'
       })
 
       let settled = false
@@ -913,6 +930,7 @@ export class ClaudeAccountService {
         child.stderr.off('data', appendOutput)
         child.off('error', onError)
         child.off('close', onClose)
+        options?.signal?.removeEventListener('abort', onAbort)
       }
       const settle = (callback: () => void): void => {
         if (settled) {
@@ -923,11 +941,27 @@ export class ClaudeAccountService {
         callback()
       }
       const timeoutError = new Error('Claude sign-in took too long to finish.')
-      timeout = setTimeout(() => {
+      const cancelError = new Error('Claude sign-in was cancelled.')
+      const killChild = (): void => {
+        if (process.platform !== 'win32' && child.pid) {
+          try {
+            process.kill(-child.pid)
+            return
+          } catch {
+            // Fall back to the direct child if the process group is unavailable.
+          }
+        }
         child.kill()
+      }
+      timeout = setTimeout(() => {
+        killChild()
         settle(() => rejectPromise(timeoutError))
       }, timeoutMs)
 
+      const onAbort = (): void => {
+        killChild()
+        settle(() => rejectPromise(cancelError))
+      }
       const onError = (error: Error): void => {
         settle(() => rejectPromise(error))
       }
@@ -952,6 +986,11 @@ export class ClaudeAccountService {
       child.stderr.on('data', appendOutput)
       child.on('error', onError)
       child.on('close', onClose)
+      if (options?.signal?.aborted) {
+        onAbort()
+      } else {
+        options?.signal?.addEventListener('abort', onAbort, { once: true })
+      }
     })
   }
 
