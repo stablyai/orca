@@ -763,18 +763,30 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo?.id ?? null
     )
   }, [selectedRepo, settings])
+  // Why: key the recipe load on the repo's stable identity, not the whole repo
+  // object. `updateRepo` (e.g. saving the setup-startup policy from this very
+  // composer, or a GitHub upstream backfill) replaces the selected repo object
+  // by reference; depending on the object would re-run this effect and silently
+  // reset the user's manually-chosen recipe via setSelectedEphemeralVmRecipeId(null).
+  const selectedRecipeRepoId = selectedRepo?.id ?? null
+  const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
   useEffect(() => {
     let cancelled = false
     setEphemeralVmRecipes([])
     setSelectedEphemeralVmRecipeId(null)
     setEphemeralVmRecipeError(null)
-    if (!selectedRepo || !selectedRepoIsGit || selectedRepo.connectionId || isProjectGroupTarget) {
+    if (
+      !selectedRecipeRepoId ||
+      !selectedRepoIsGit ||
+      selectedRecipeRepoConnectionId ||
+      isProjectGroupTarget
+    ) {
       return () => {
         cancelled = true
       }
     }
     void window.api.ephemeralVm
-      .listRecipes({ repoId: selectedRepo.id })
+      .listRecipes({ repoId: selectedRecipeRepoId })
       .then((result) => {
         if (cancelled) {
           return
@@ -807,7 +819,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [initialEphemeralVmRecipeId, isProjectGroupTarget, selectedRepo, selectedRepoIsGit])
+  }, [
+    initialEphemeralVmRecipeId,
+    isProjectGroupTarget,
+    selectedRecipeRepoConnectionId,
+    selectedRecipeRepoId,
+    selectedRepoIsGit
+  ])
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)

@@ -1927,10 +1927,9 @@ app.on('will-quit', (e) => {
 app.on('window-all-closed', () => {
   // Why: headless `orca serve` has no desktop window, and offscreen browser
   // windows are disposable implementation details. Closing/crashing the last
-  // one must not take down terminal/runtime RPC for the VM workspace.
-  if (isServeMode) {
-    return
-  }
+  // one must not take down terminal/runtime RPC for the VM workspace — the
+  // policy fn returns false for serve mode so the app stays alive.
+  //
   // Why: on macOS, closing all windows normally keeps the app alive (dock
   // stays active). But when a quit is in progress (Cmd+Q), the window close
   // handler defers to the renderer for buffer capture, which cancels the

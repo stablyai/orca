@@ -5,6 +5,7 @@ import { RuntimeClientError } from '../runtime-client'
 import { parseOrcaYaml } from '../../shared/orca-yaml'
 import {
   doctorEphemeralVmRecipe,
+  getEphemeralVmRecipeResultProjectRoot,
   getEphemeralVmRecipeResultWarnings,
   redactEphemeralVmRecipeDiagnosticText,
   type EphemeralVmRecipeDoctorCheck,
@@ -134,7 +135,7 @@ async function doctorRecipeWithProvision(
     {
       id: 'recipe.result.project_root',
       status: 'pass',
-      message: `Recipe returned projectRoot: ${start.result.projectRoot}`
+      message: `Recipe returned projectRoot: ${getEphemeralVmRecipeResultProjectRoot(start.result)}`
     }
   ]
   for (const warning of getEphemeralVmRecipeResultWarnings(start.result)) {

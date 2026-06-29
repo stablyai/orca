@@ -23,13 +23,17 @@ export default function WorktreeCreationPanel({
 }): React.JSX.Element | null {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const [now, setNow] = React.useState(() => Date.now())
+  // Why: depend on the primitive status only — provisioning appends a log to the
+  // entry on every stderr chunk, giving a fresh `entry` reference each tick that
+  // would otherwise tear down and recreate this interval before it can fire.
+  const entryStatus = entry?.status
   React.useEffect(() => {
-    if (!entry || entry.status !== 'creating') {
+    if (entryStatus !== 'creating') {
       return
     }
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [entry])
+  }, [entryStatus])
   if (!entry) {
     return null
   }

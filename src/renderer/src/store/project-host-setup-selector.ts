@@ -15,6 +15,10 @@ const mergedProjectHostSetupProjectionCache = new WeakMap<
   AppState['repos'],
   WeakMap<Project[], WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>>
 >()
+const normalizedProjectHostSetupProjectionCache = new WeakMap<
+  AppState['repos'],
+  WeakMap<Project[], WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>>
+>()
 
 function getCachedProjectHostSetupProjection(repos: AppState['repos']): ProjectHostSetupProjection {
   const cachedProjection = projectHostSetupProjectionCache.get(repos)
@@ -96,6 +100,38 @@ function mergeProjectHostSetupProjection(
   return projection
 }
 
+function getCachedNormalizedProjectHostSetupProjection(
+  repos: AppState['repos'],
+  projects: Project[],
+  setups: ProjectHostSetup[],
+  derived: ProjectHostSetupProjection,
+  normalized: ProjectHostSetupProjection
+): ProjectHostSetupProjection {
+  const cachedByProjects = normalizedProjectHostSetupProjectionCache.get(repos)
+  const cachedBySetups = cachedByProjects?.get(projects)
+  const cachedProjection = cachedBySetups?.get(setups)
+  if (cachedProjection) {
+    return cachedProjection
+  }
+  const projection = {
+    projects: mergeById(derived.projects, normalized.projects),
+    setups: mergeById(derived.setups, normalized.setups)
+  }
+  const nextCachedByProjects =
+    cachedByProjects ??
+    new WeakMap<Project[], WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>>()
+  const nextCachedBySetups =
+    cachedBySetups ?? new WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>()
+  nextCachedBySetups.set(setups, projection)
+  if (!cachedBySetups) {
+    nextCachedByProjects.set(projects, nextCachedBySetups)
+  }
+  if (!cachedByProjects) {
+    normalizedProjectHostSetupProjectionCache.set(repos, nextCachedByProjects)
+  }
+  return projection
+}
+
 export function getProjectHostSetupProjectionFromState(
   state: Pick<AppState, 'repos'> & Partial<Pick<AppState, 'projects' | 'projectHostSetups'>>
 ): ProjectHostSetupProjection {
@@ -126,10 +162,16 @@ export function getProjectHostSetupProjectionFromState(
       derived
     )
     if (normalized.changed) {
-      return {
-        projects: mergeById(derived.projects, normalized.projects),
-        setups: mergeById(derived.setups, normalized.setups)
-      }
+      // Why: this is a zustand selector compared with Object.is, so the merged
+      // result must be reference-stable per (repos, projects, setups) input or
+      // every render returns a fresh object and triggers a re-render storm.
+      return getCachedNormalizedProjectHostSetupProjection(
+        state.repos,
+        state.projects as Project[],
+        state.projectHostSetups as ProjectHostSetup[],
+        derived,
+        normalized
+      )
     }
     return getCachedProvidedProjectHostSetupProjection(
       state.projects as Project[],
