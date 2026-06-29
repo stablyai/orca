@@ -71,6 +71,10 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('resolveGitHubPrStartPointForRepo')
     expect(section).toContain('repoId: runRepo.id')
     expect(section).toContain('settings: itemRepoSettings')
+    expect(section).toContain('smartGitHubPrStartPointSelectionRef.current = startPointSelection')
+    expect(section).toContain(
+      'if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection)'
+    )
     expect(section).not.toContain('repoId: repoForItem.id')
     expect(section).not.toContain('repo: repoForItem.id')
   })
@@ -201,6 +205,17 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitLookup).toContain("kind: 'metadata-only'")
     expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
     expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
+    const selectedPrSubmitLookup = sourceBetween(
+      submitLookup,
+      'if (linkedWorkItem) {',
+      'const intent = getSmartGitHubSubmitIntent(name)'
+    )
+    expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
+    expect(selectedPrSubmitLookup).toContain("linkedWorkItem.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
+    expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
+      selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
+    )
 
     const fullSubmit = sourceBetween(
       HOOK_SOURCE,
