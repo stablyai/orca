@@ -5356,11 +5356,7 @@
           "d536b5e20d": "Choose which network address to advertise in the QR code. Use your LAN address for same-network pairing, or an overlay network address (Tailscale, ZeroTier) for cross-network access.",
           "406a35121c": "Network Interface",
           "c541f67790": "Generate QR Code",
-          "1e64659126": "Regenerate",
-          "new-combobox-placeholder": "Search or type an address…",
-          "new-combobox-empty": "No matching interfaces",
-          "use-address-row": "Use \"{{address}}\"",
-          "new-combobox-listbox": "Network interfaces"
+          "1e64659126": "Regenerate"
         },
         "MobilePane": {
           "dd3cd78d04": "Scan with Orca Mobile",
@@ -9833,6 +9829,20 @@
             "cefd048225": "Back",
             "c5ad56786d": "spinner"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "Custom network address",
+          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "label": "Address",
+          "placeholder": "my-mac.ts.net or 192.168.1.50",
+          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "cancel": "Cancel",
+          "use": "Use address"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "Network address to advertise",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…"
         }
       },
       "gitlab": {

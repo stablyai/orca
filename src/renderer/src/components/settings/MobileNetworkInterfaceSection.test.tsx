@@ -10,10 +10,9 @@ import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { TooltipProvider } from '../ui/tooltip'
 
-// Why: Radix Popover portals its content to <body> and does not always unmount
-// it synchronously when the test's container is torn down, so multiple
-// popover-triggers can leak between tests. Forcing cleanup restores the DOM
-// to the empty state before the next render.
+// Why: Radix Select/Dialog portal their content to <body> and don't always
+// unmount synchronously when the test container tears down, so content can
+// leak between tests. Forcing cleanup restores the empty DOM before each render.
 afterEach(() => {
   cleanup()
 })
@@ -53,36 +52,43 @@ describe('MobileNetworkInterfaceSection', () => {
     expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
   })
 
-  it('lets the user type a custom address and confirms via the Use row', async () => {
+  it('renders the (custom) label on the trigger when the selection is a manual address', () => {
+    renderSection({ selectedAddress: 'my-mac.tail-abcd.ts.net' })
+    expect(screen.getByRole('combobox')).toHaveTextContent('my-mac.tail-abcd.ts.net (custom)')
+  })
+
+  it('commits an OS interface picked from the list', async () => {
     const { user, onSelectedAddressChange } = renderSection()
     await user.click(screen.getByRole('combobox'))
-    const input = screen.getByPlaceholderText(/search or type/i)
-    await user.type(input, 'my-mac.tail-abcd.ts.net')
-    await user.click(screen.getByRole('button', { name: /Use "my-mac\.tail-abcd\.ts\.net"/ }))
+    await user.click(screen.getByRole('option', { name: '192.168.1.24 (en0)' }))
+    expect(onSelectedAddressChange).toHaveBeenCalledWith('192.168.1.24')
+  })
+
+  it('opens the custom-address dialog from the Add custom address row', async () => {
+    const { user } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: /add custom address/i }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByLabelText('Address')).toBeInTheDocument()
+  })
+
+  it('confirms a valid custom address typed into the dialog', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: /add custom address/i }))
+    await user.type(screen.getByLabelText('Address'), 'my-mac.tail-abcd.ts.net')
+    await user.click(screen.getByRole('button', { name: /use address/i }))
     expect(onSelectedAddressChange).toHaveBeenCalledWith('my-mac.tail-abcd.ts.net')
   })
 
-  it('shows an inline error and no Use row when the query is invalid', async () => {
-    const { user } = renderSection()
+  it('disables the confirm button while the typed address is invalid', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
     await user.click(screen.getByRole('combobox'))
-    await user.type(screen.getByPlaceholderText(/search or type/i), 'not an address')
-    expect(
-      screen.getByText(/Enter an IPv4 address or Tailscale MagicDNS hostname/i)
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Use / })).not.toBeInTheDocument()
-  })
-
-  it('suppresses the Use row when the typed address matches an existing interface', async () => {
-    const { user } = renderSection()
-    await user.click(screen.getByRole('combobox'))
-    await user.type(screen.getByPlaceholderText(/search or type/i), '192.168.1.24')
-    expect(screen.getByRole('button', { name: '192.168.1.24 (en0)' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Use "192\.168\.1\.24"/ })).not.toBeInTheDocument()
-  })
-
-  it('renders the (custom) label on the trigger after a custom selection', () => {
-    renderSection({ selectedAddress: 'my-mac.tail-abcd.ts.net' })
-    expect(screen.getByRole('combobox')).toHaveTextContent('my-mac.tail-abcd.ts.net (custom)')
+    await user.click(screen.getByRole('option', { name: /add custom address/i }))
+    await user.type(screen.getByLabelText('Address'), 'not an address')
+    expect(screen.getByRole('button', { name: /use address/i })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /use address/i }))
+    expect(onSelectedAddressChange).not.toHaveBeenCalled()
   })
 
   it('shows No interfaces found when the list is empty', () => {

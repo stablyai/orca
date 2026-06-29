@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
-import { NetworkInterfaceCombobox } from './NetworkInterfaceCombobox'
+import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
@@ -162,13 +162,13 @@ export function HeroFlow({
                 <span className="mp-network-label">
                   {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
                 </span>
-                <NetworkInterfaceCombobox
+                <NetworkInterfacePicker
                   networkInterfaces={networkInterfaces}
                   selectedAddress={selectedAddress}
                   onSelectedAddressChange={onSelectedAddressChange}
-                  // Why: keep the typeable popover reachable when interface
-                  // discovery is empty — that is the only path to enter a
-                  // manual MagicDNS / static IP.
+                  // Why: keep the picker reachable when interface discovery is
+                  // empty — "Add custom address…" is the only path to enter a
+                  // manual Tailscale hostname / static IP.
                   disabled={false}
                   className="mp-network-select"
                 />

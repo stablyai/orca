@@ -5304,11 +5304,7 @@
           "d536b5e20d": "QR 코드에 광고할 네트워크 주소를 선택하세요. 동일한 네트워크 페어링에는 LAN 주소를 사용하고, 교차 네트워크 액세스에는 오버레이 네트워크 주소(Tailscale, ZeroTier)를 사용하세요.",
           "406a35121c": "네트워크 인터페이스",
           "c541f67790": "QR 코드 생성",
-          "1e64659126": "재생성",
-          "new-combobox-placeholder": "Search or type an address…",
-          "new-combobox-empty": "No matching interfaces",
-          "use-address-row": "Use \"{{address}}\"",
-          "new-combobox-listbox": "Network interfaces"
+          "1e64659126": "재생성"
         },
         "MobilePane": {
           "dd3cd78d04": "Orca 모바일로 스캔",
@@ -9833,6 +9829,20 @@
             "cefd048225": "뒤로",
             "c5ad56786d": "스피너"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "사용자 지정 네트워크 주소",
+          "description": "같은 Wi-Fi에 있지 않을 때 휴대폰이 연결할 수 있는 주소를 알립니다. 예: Tailscale 호스트 이름 또는 고정 IP.",
+          "label": "주소",
+          "placeholder": "my-mac.ts.net 또는 192.168.1.50",
+          "hint": "IP 주소 또는 Tailscale 호스트 이름(.ts.net으로 끝남)을 입력하세요.",
+          "cancel": "취소",
+          "use": "주소 사용"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "알릴 네트워크 주소",
+          "custom-option": "{{address}} (사용자 지정)",
+          "add-custom": "사용자 지정 주소 추가…"
         }
       },
       "gitlab": {

@@ -4,7 +4,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { NetworkInterfaceCombobox } from '../mobile/NetworkInterfaceCombobox'
+import { NetworkInterfacePicker } from '../mobile/NetworkInterfacePicker'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
@@ -49,7 +49,7 @@ export function MobileNetworkInterfaceSection({
       </p>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <NetworkInterfaceCombobox
+          <NetworkInterfacePicker
             networkInterfaces={networkInterfaces}
             selectedAddress={selectedAddress}
             onSelectedAddressChange={onSelectedAddressChange}

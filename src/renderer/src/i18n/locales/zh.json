@@ -5304,11 +5304,7 @@
           "d536b5e20d": "选择要在 QR 码中公布的网络地址。使用 LAN 地址进行同网络配对，或使用覆盖网络地址（Tailscale、ZeroTier）进行跨网络访问。",
           "406a35121c": "网络接口",
           "c541f67790": "生成二维码",
-          "1e64659126": "再生",
-          "new-combobox-placeholder": "Search or type an address…",
-          "new-combobox-empty": "No matching interfaces",
-          "use-address-row": "Use \"{{address}}\"",
-          "new-combobox-listbox": "Network interfaces"
+          "1e64659126": "再生"
         },
         "MobilePane": {
           "dd3cd78d04": "使用 Orca Mobile 扫描",
@@ -9833,6 +9829,20 @@
             "cefd048225": "返回",
             "c5ad56786d": "旋转器"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "自定义网络地址",
+          "description": "指定当手机不在同一 Wi-Fi 时可以访问的地址，例如 Tailscale 主机名或静态 IP。",
+          "label": "地址",
+          "placeholder": "my-mac.ts.net 或 192.168.1.50",
+          "hint": "请输入 IP 地址或 Tailscale 主机名（以 .ts.net 结尾）。",
+          "cancel": "取消",
+          "use": "使用地址"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "要公布的网络地址",
+          "custom-option": "{{address}}（自定义）",
+          "add-custom": "添加自定义地址…"
         }
       },
       "gitlab": {
