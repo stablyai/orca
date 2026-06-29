@@ -79,6 +79,7 @@ import {
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { hardenExistingSecureFile } from '../shared/secure-file'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
@@ -360,6 +361,10 @@ export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDi
   mkdirSync(targetUserDataDir, { recursive: true })
   for (const { sourcePath, targetPath } of migrations) {
     copyFileSync(sourcePath, targetPath)
+    // Why: these are credential files (device tokens, E2EE secret key). copyFileSync
+    // does not carry Windows ACLs, so re-assert the current-user-only restriction on
+    // the copy instead of relying on the runtime's later lazy re-harden on read.
+    hardenExistingSecureFile(targetPath)
   }
 }
 

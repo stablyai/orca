@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+// Import from the production source of truth so a filename rename can't silently
+// pass these tests against stale names.
+import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
 // Mutable userData the electron mock resolves. We flip it mid-test to simulate
 // app.setName('Orca') changing how app.getPath('userData') resolves (e.g. from
@@ -19,9 +22,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8')
   }
 }))
-
-const DEVICE_REGISTRY_FILENAME = 'orca-devices.json'
-const E2EE_KEYPAIR_FILENAME = 'orca-e2ee-keypair.json'
 
 describe('mobile pairing userData path stability', () => {
   let root: string
@@ -158,6 +158,35 @@ describe('mobile pairing userData path stability', () => {
 
     expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
     expect(readFileSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME), 'utf-8')).toBe(canonicalKeypair)
+  })
+
+  it('no-ops when the source path equals the canonical path (no rename happened)', async () => {
+    // Case-insensitive filesystems (macOS/Windows) resolve both paths to the same
+    // dir, so migration must be a clean no-op rather than copy a file onto itself.
+    appState.userData = canonicalDir
+    const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
+      await import('../persistence')
+    initDataPath()
+
+    const devices = JSON.stringify([
+      { deviceId: 'phone', name: 'iPhone', token: 't', scope: 'mobile', pairedAt: 1, lastSeenAt: 2 }
+    ])
+    writeFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), devices)
+
+    expect(() => migrateMobilePairingDataToCanonicalUserDataPath(canonicalDir)).not.toThrow()
+    expect(readFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), 'utf-8')).toBe(devices)
+  })
+
+  it('no-ops on a fresh install with no legacy pairing files to migrate', async () => {
+    appState.userData = canonicalDir
+    const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
+      await import('../persistence')
+    initDataPath()
+
+    appState.userData = lateDir
+    expect(() => migrateMobilePairingDataToCanonicalUserDataPath(appState.userData)).not.toThrow()
+    expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(false)
+    expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(false)
   })
 
   it('a previously paired device is still found after a restart on the canonical path', async () => {
