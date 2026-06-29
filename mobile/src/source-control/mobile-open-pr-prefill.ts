@@ -31,13 +31,33 @@ export async function buildOpenPrPrefill(
   if (!client) {
     return { provider: 'github', base: 'main', title: branchLabel, body: '' }
   }
-  const up = status?.upstreamStatus
+  const gitReadiness = getMobilePrEligibilityReadiness(status)
   return resolveMobilePrPrefill(client, worktreeId, {
     branch: status?.branch,
     title: branchLabel,
-    hasUncommittedChanges: (status?.entries?.length ?? 0) > 0,
-    hasUpstream: up?.hasUpstream === true,
-    ahead: up?.ahead ?? 0,
-    behind: up?.behind ?? 0
+    ...gitReadiness
   })
+}
+
+export function getMobilePrEligibilityReadiness(status: MobileGitStatusResult | null): {
+  hasUncommittedChanges?: boolean
+  hasUpstream?: boolean
+  ahead?: number
+  behind?: number
+} {
+  if (!status) {
+    return {}
+  }
+  const up = status?.upstreamStatus
+  const upstreamReadiness = up
+    ? {
+        hasUpstream: up.hasUpstream,
+        ahead: up.ahead,
+        behind: up.behind
+      }
+    : {}
+  return {
+    hasUncommittedChanges: (status.entries?.length ?? 0) > 0,
+    ...upstreamReadiness
+  }
 }

@@ -1,4 +1,8 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   FolderWorkspace,
@@ -14,7 +18,7 @@ export type WorktreeRuntimeOwnerState = {
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<string, readonly Pick<Worktree, 'id' | 'repoId' | 'hostId'>[]>
-  folderWorkspaces?: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId'>[]
+  folderWorkspaces?: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
 }
 
@@ -35,25 +39,36 @@ function findFolderProjectGroup(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
 ): Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'> | null {
-  const folderWorkspace = state.folderWorkspaces?.find(
-    (workspace) => workspace.id === folderWorkspaceId
-  )
+  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
   if (!folderWorkspace) {
     return null
   }
   return state.projectGroups?.find((group) => group.id === folderWorkspace.projectGroupId) ?? null
 }
 
+function findFolderWorkspace(
+  state: WorktreeRuntimeOwnerState,
+  folderWorkspaceId: string
+): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'> | null {
+  return state.folderWorkspaces?.find((workspace) => workspace.id === folderWorkspaceId) ?? null
+}
+
 function getRuntimeEnvironmentIdForFolderWorkspace(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
 ): string | null {
+  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
   const parsed = parseExecutionHostId(projectGroup?.executionHostId)
   if (parsed?.kind === 'runtime') {
     return parsed.environmentId
   }
-  if (parsed?.kind === 'local' || parsed?.kind === 'ssh' || projectGroup?.connectionId) {
+  if (
+    parsed?.kind === 'local' ||
+    parsed?.kind === 'ssh' ||
+    folderWorkspace?.connectionId?.trim() ||
+    projectGroup?.connectionId?.trim()
+  ) {
     return null
   }
   return state.settings?.activeRuntimeEnvironmentId?.trim() || null
@@ -94,13 +109,15 @@ function getExecutionHostIdForFolderWorkspace(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
 ): ExecutionHostId {
+  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
   const parsed = parseExecutionHostId(projectGroup?.executionHostId)
   if (parsed) {
     return parsed.id
   }
-  if (projectGroup?.connectionId) {
-    return `ssh:${encodeURIComponent(projectGroup.connectionId)}`
+  const connectionId = folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()
+  if (connectionId) {
+    return toSshExecutionHostId(connectionId)
   }
   const environmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
   return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'

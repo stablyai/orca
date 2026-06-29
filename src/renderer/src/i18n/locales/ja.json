@@ -56,7 +56,8 @@
     "zoomOut": "ズームアウト",
     "openWorktreePalette": "ワークツリーパレットを開く",
     "window": "ウィンドウ",
-    "help": "ヘルプ"
+    "help": "ヘルプ",
+    "paste": "Paste"
   },
   "tray": {
     "openOrca": "Orcaを開く",
@@ -356,6 +357,13 @@
             }
           }
         },
+        "worktree": {
+          "background": {
+            "terminals": {
+              "setupTitle": "Setup"
+            }
+          }
+        },
         "work": {
           "item": {
             "direct": {
@@ -386,6 +394,13 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            }
+          }
+        },
+        "mobile": {
+          "emulator": {
+            "tab": {
+              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
         }
@@ -534,7 +549,9 @@
         "ba6cb77082": "プロジェクトへの接続に失敗しました。",
         "chooseOrAddProjectBeforeWorkspace": "ワークスペースを作成する前に、プロジェクトを選択または追加。",
         "folderWorkspaceCreateFailedTitle": "フォルダーワークスペースを作成できませんでした",
-        "folderWorkspaceCreateFailedMessage": "フォルダーワークスペースを作成できませんでした。上のエラー詳細を確認して、もう一度お試しください。"
+        "folderWorkspaceCreateFailedMessage": "フォルダーワークスペースを作成できませんでした。上のエラー詳細を確認して、もう一度お試しください。",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
+        "5f3d2c8a1b": "Failed to resolve MR base."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
@@ -1123,7 +1140,9 @@
         "notePasteTooLarge": "メモ欄への貼り付け内容が大きすぎます。",
         "reuseExistingBranch": "ブランチを再利用",
         "reuseExistingBranchHint": "既存のブランチから新しいブランチを作成せず、そのブランチをチェックアウトします。",
-        "createMultiple": "さらに作成"
+        "createMultiple": "さらに作成",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "ワークツリーを作成する",
@@ -2237,7 +2256,25 @@
             "2ddbd6fe8a": "チェック済み",
             "ee81adfcef": "表示",
             "4d0b72481c": "無視",
-            "9cc26c019d": "削除"
+            "9cc26c019d": "削除",
+            "0e2d235c63": "Inactive workspace scan ready",
+            "4a35c08764": "Review",
+            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
+            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "3d957ff117": "No workspaces match these filters.",
+            "e94b1f8bb4": "Clear filters",
+            "efb3843e75": "Filter and sort workspaces",
+            "93b7381d50": "Filters",
+            "a615e24679": "Sort",
+            "4cc5b73efe": "Finding inactive workspaces...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
+            "searchPlaceholder": "Search workspaces",
+            "ageFilter": "Age",
+            "reviewFilter": "Review",
+            "gitFilter": "Git",
+            "contextFilter": "Context",
+            "sortBy": "Sort by",
+            "sortDirection": "Direction"
           }
         }
       },
@@ -2381,7 +2418,8 @@
             "f3eeb1de13": "コピー",
             "c2f0b72b8d": "入れる",
             "925f49f210": "ペインを展開する",
-            "df766809e0": "ペインを折りたたむ"
+            "df766809e0": "ペインを折りたたむ",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "デーモンを再起動します",
@@ -2431,7 +2469,10 @@
                   "38e41edc6e": "このワークスペースを git ワークツリーにフォークすることはできません。",
                   "f867385bb5": "このフォークのソース ワークスペースが見つかりませんでした。",
                   "046e8d853c": "フォークする terminal コンテキストがありません",
-                  "c00421d320": "フォークコンテキストがコピーされました。agent を起動し、貼り付けてフォークを開始します。"
+                  "c00421d320": "フォークコンテキストがコピーされました。agent を起動し、貼り付けてフォークを開始します。",
+                  "f62b40e2c7": "No terminal context to copy",
+                  "373a3103e7": "Context copied",
+                  "3fc568a49d": "Failed to copy context."
                 }
               }
             },
@@ -2499,7 +2540,9 @@
             "couldNotReadPayload": "セッションのドラッグデータを読み取れませんでした。",
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
-            "sessionQueued": "セッションをキューに追加しました"
+            "sessionQueued": "セッションをキューに追加しました",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新しい分割"
@@ -2604,7 +2647,7 @@
             "39676a184c": "任意のファイル、URL、agent などを開きます..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "コマンド",
+            "a2c7a33831": "クイックコマンドを追加…",
             "20bbd75896": "コマンドはありません",
             "b82e237a4b": "よりクイックなコマンド",
             "85482c57bc": "クイックコマンドを実行する",
@@ -4343,6 +4386,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "ブランチ"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
+          "d9f7b2a14c": "{{value0}} の外部で作成された新しいワークツリーを折りたたむ",
+          "e2c4a8d91f": "{{value0}} の外部で作成された新しいワークツリーを展開",
+          "7c4e9b2a81": "外部で作成された新しいワークツリー",
+          "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
+          "4d7a1c9e53": "これらのワークツリーは Orca の外部で作成されました。",
+          "8b3f2e1d74": "インポート",
+          "1c9e7a4b28": "非表示のままにする",
+          "6f2d8c1e95": "すべてインポート",
+          "c3e8a1f4b2": "今後表示しない"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "外部ワークツリーを非表示のままにできませんでした。もう一度お試しください。",
+          "b7e4d1a062": "外部ワークツリーをインポートできませんでした。もう一度お試しください。",
+          "c94f0b3a15": "外部ワークツリーを永続的に非表示にできませんでした。もう一度お試しください。"
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "外部ワークツリーを非表示にしますか?",
+          "6e91b3c4d2": "{{value0}} では、今後作成されるものを含め、外部ワークツリーはサイドバーにもこのリストにも表示されません。",
+          "1f8a5d9e73": "後でプロジェクト設定から再度有効にできます。",
+          "8c0b2e7a41": "Non-Orca ワークツリー設定を開く",
+          "5d1c9f0a82": "キャンセル",
+          "3b7e4a1c96": "外部ワークツリーを非表示"
         }
       },
       "shared": {
@@ -4491,7 +4559,9 @@
           "copiedCommand": "コマンドをコピーしました。",
           "failedToCopyCommand": "コマンドのコピーに失敗しました。",
           "copyCommandAria": "コマンドをコピー",
-          "runCommandDescription": "Enter を押してコマンドを実行します。"
+          "runCommandDescription": "Enter を押してコマンドを実行します。",
+          "5f818f12ab": "準備中...",
+          "4c05b9d7cb": "セットアップ用ターミナルを準備しています。"
         },
         "AgentsPane": {
           "d83834f5e6": "インストールされている agents を検出しています…",
@@ -4584,10 +4654,19 @@
             "tintOpacity": "色合いの強さ",
             "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
           },
-          "workspaceCardLayoutGuidance": "ワークスペースサイドバーのオプションメニュー > カードレイアウト > コンパクト を使用します。",
+          "workspaceCardLayoutGuidance": "ワークスペースサイドバーで管理されます。",
           "872af9556e": "システムトレイ",
           "2edf606c46": "閉じるときにトレイへ最小化",
-          "b707773a0d": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
+          "b707773a0d": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。",
+          "interfaceDefaultFont": "デフォルトフォント",
+          "terminalDefaultFont": "デフォルトフォント",
+          "interfaceTitle": "インターフェイス",
+          "terminalTitle": "ターミナル",
+          "windowSidebarTitle": "ウィンドウとサイドバー",
+          "windowSidebarSummary": "サイドバー、ステータスバー、ファイルエクスプローラー",
+          "statusBarCount": "{{value0}} 個のインジケーターが表示中。",
+          "gitIgnoredGlossary": ".gitignore に一致するファイル。",
+          "statusBarDescription": "Choose which indicators appear in the status bar."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4912,6 +4991,17 @@
             "description": "更新された worktree カードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
             "title": "新しいカードスタイル",
             "toggleLabel": "新しいカードスタイルを切り替え"
+          },
+          "nativeChat": {
+            "title": "Native chat",
+            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "toggleLabel": "Toggle native chat",
+            "defaultTitle": "Default view",
+            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultViewLabel": "Default native chat view",
+            "defaultViewTerminal": "Terminal chat",
+            "defaultViewNative": "Native chat"
           }
         },
         "FloatingWorkspacePane": {
@@ -5142,7 +5232,11 @@
           "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
           "changesFirst": "変更を先頭",
           "stagedFirst": "ステージ済みを先頭",
-          "untrackedFirst": "未追跡を先頭"
+          "untrackedFirst": "未追跡を先頭",
+          "compareAgainstUpstreamTitle": "既定の比較ベース",
+          "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
+          "compareBaseRepositoryDefault": "リポジトリ既定",
+          "compareBaseBranchUpstream": "ブランチの上流"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "プレースホルダーの切り替え",
@@ -5311,7 +5405,10 @@
           "4f2205f3b6": "Orca CLI を有効にする",
           "ff4b7e65d6": "コーディング agents が Orca CLI コマンドを使用してアクティブなモバイル エミュレータを制御できるようにします。",
           "2a674aa810": "Agent モバイル エミュレータ制御",
-          "cdeaed9e37": "Orca CLIをPATHに登録しました。"
+          "cdeaed9e37": "Orca CLIをPATHに登録しました。",
+          "3d34423e88": "Orca CLI を登録しています",
+          "3be27641c9": "agent のシェルからエミュレーターコマンドを実行できるようにします。",
+          "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "コピー",
@@ -5336,7 +5433,12 @@
           "a4f1c82d90": "無効",
           "b5e2d93e01": "確認中...",
           "c6f3ea4f12": "準備完了",
-          "d704fb5023": "設定が必要"
+          "d704fb5023": "設定が必要",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "QR コードを再生成し、Orca モバイル アプリからスキャンします。",
@@ -5383,7 +5485,10 @@
           "b5a2ed83ff": "アプリストア",
           "c8491c17ef": "QR コードをスキャンしてスマートフォンから Orca を制御します。ベータ/早期プレビュー - バグや重大な変更が予想されます。 iOS アプリを次の場所から入手します。",
           "e7a3ae8c4e": "モバイル",
-          "174f4a3c6d": "スマートフォンから terminals と agents を操作"
+          "174f4a3c6d": "スマートフォンから terminals と agents を操作",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "テスト通知を送信する",
@@ -5633,7 +5738,9 @@
           "2b6356e744": "保存されました",
           "81057d5f71": "保存中...",
           "da37d6f10e": "コピー",
-          "3149964b66": "コピーされました"
+          "3149964b66": "コピーされました",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo カラーを使用する",
@@ -6232,7 +6339,9 @@
           "4415beb958": "無効",
           "4e7d41a9f0": "有効",
           "e90afcc44f": "オフ",
-          "16c471ee03": "の上"
+          "16c471ee03": "オン",
+          "typographyAdvanced": "タイポグラフィ",
+          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "ピクセル",
@@ -6263,12 +6372,12 @@
           "3d88af864d": "PowerShell シェル オプションで、新規 terminal ペインに対して Windows PowerShell を起動するか PowerShell 7+ を起動するかを選択します。",
           "8a956cc91e": "文字はダブルクリック選択の単語境界として扱われます。",
           "4bebcc2b2c": "単語の区切り文字",
-          "12e06178fa": "MB",
+          "12e06178fa": "行",
           "907b0b9d3e": "カスタム",
-          "5336c096af": "{{value0}}メガバイト",
-          "81d86b2dd2": "新規 terminal ペインの最大 terminal スクロールバック バッファ サイズ。",
-          "9df53f7c14": "スクロールバックのサイズ",
-          "c3810b2b42": "terminal スクロールバック バッファの最大サイズ。",
+          "5336c096af": "{{value0}} 行",
+          "81d86b2dd2": "新規および開いているペインで保持するデスクトップ terminal 行数。",
+          "9df53f7c14": "スクロールバック行数",
+          "c3810b2b42": "保持するデスクトップ terminal 行数。",
           "267d020745": "スクロールバック、単語境界、およびプラットフォーム固有の terminal 動作。",
           "5e5f06c82c": "詳細設定",
           "003df129fe": "水平方向に分割",
@@ -6760,7 +6869,7 @@
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",
-              "description": "ワークスペースサイドバーのオプションメニューから、コンパクト表示と詳細表示のワークスペースカードを切り替えます。",
+              "description": "ワークスペースカードはコンパクトまたは詳細レイアウトを使用できます。",
               "compact": "コンパクト",
               "compactDisplay": "コンパクト表示",
               "workspaceCards": "ワークスペースカード",
@@ -7050,6 +7159,10 @@
               "title": "新しいカードスタイル",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "nativeChat": {
+              "title": "Native chat",
+              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
             }
           }
         },
@@ -7263,7 +7376,19 @@
             "stagedFirst": "ステージ済みを先頭",
             "untrackedFirst": "未追跡を先頭",
             "sourceControl": "ソース管理",
-            "gitChanges": "git の変更"
+            "gitChanges": "git の変更",
+            "compareAgainstUpstreamTitle": "既定の比較ベース",
+            "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
+            "compareBase": "比較基準",
+            "currentBranch": "現在のブランチ",
+            "upstream": "上流",
+            "localChanges": "ローカルの変更",
+            "originMaster": "origin/master",
+            "committedChanges": "コミット済みの変更",
+            "defaultCompareBase": "既定の比較ベース",
+            "defaultBranch": "既定ブランチ",
+            "repositoryDefault": "リポジトリ既定",
+            "branchUpstream": "ブランチ上流"
           }
         },
         "input": {
@@ -7450,7 +7575,9 @@
               "f4ed142753": "スマートフォン",
               "f213400800": "モバイル",
               "671eb4173c": "スマートフォンから terminals と agents を操作",
-              "ffd52a96e4": "モバイル"
+              "ffd52a96e4": "モバイル",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -7907,8 +8034,9 @@
             "957a0203fc": "単語の区切り文字",
             "56fff3d113": "メモリ",
             "fffdff40a7": "バッファ",
-            "f7d56b6281": "terminal スクロールバック バッファの最大サイズ。",
-            "7674e758e1": "スクロールバックのサイズ",
+            "rows": "行",
+            "f7d56b6281": "保持するデスクトップ terminal 行数。",
+            "7674e758e1": "スクロールバック行数",
             "411229c636": "ライト",
             "781f49d942": "ディバイダー",
             "77d9f9cd55": "ライト モードでペイン間の分割分割線を制御します。",
@@ -8357,6 +8485,24 @@
           "wslUnavailable": "WSL is not available on this machine.",
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+        },
+        "MobileEmulatorSdkStatus": {
+          "536026130e": "Emulator SDKs",
+          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "027cbf668a": "Android SDK",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
+          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
+          "b94ff260e6": "Download Android Studio",
+          "18925b082d": "Locate SDK folder",
+          "8c52684db8": "Clear",
+          "76eb88b88e": "iOS Simulator (Xcode)",
+          "c6f3ea4f12": "Ready",
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
+        },
+        "AppearanceAdvancedDisclosure": {
+          "advanced": "詳細設定"
         }
       },
       "right": {
@@ -9126,6 +9272,8 @@
                   "2d8f185fbc": "部分的にステージングされたファイルを commit する前に、すべての変更をステージングします。",
                   "a6457b46a7": "commit する前に競合を解決する",
                   "484f45c439": "{{value0}} が進行中です…",
+                  "6f7a8b9c0d": "Remote operation in progress…",
+                  "7f8a9b0c1d": "Remote operation in progress — try again once it finishes",
                   "74fc171e99": "強制プッシュ中です…",
                   "16aee3a5c1": "Commit 中です…",
                   "e61b0d7a3c": "commits を公開する前にブランチをチェックアウトしてください。",
@@ -9145,6 +9293,7 @@
                   "d8a4c0e369": "Authenticate before creating a {{value0}}.",
                   "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
+                  "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
                   "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
@@ -9215,7 +9364,10 @@
             "agents": "エージェント",
             "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
-            "worktreeUnavailable": "ワークツリーは利用できなくなりました。"
+            "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9733,7 +9885,12 @@
           "a6cffbbb0b": "コードを生成する",
           "e59a252eca": "コードを再生成する",
           "d0b52871ce": "スマートフォンはペアリングされています。",
-          "051978a785": "スマートフォンはペアリングされています。"
+          "051978a785": "スマートフォンはペアリングされています。",
+          "channel": {
+            "group": "リリースチャンネル",
+            "preview": "プレビュー",
+            "stable": "安定版"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -9752,7 +9909,11 @@
           "ad2284a9e2": "閉じる・Esc",
           "9883b58693": "Orca モバイルを閉じる",
           "fb5f28330e": "サイドバーに表示",
-          "c669abcf8f": "サイドバーから隠す"
+          "c669abcf8f": "サイドバーから隠す",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal セッション",
@@ -9763,7 +9924,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Android カメラでスキャンして、GitHub リリースから最新の APK をダウンロードします。",
-              "432db52b73": "iPhone のカメラでスキャンして App Store を開きます。"
+              "432db52b73": "iPhone のカメラでスキャンして App Store を開きます。",
+              "preview": {
+                "tagline": "最新機能を毎日更新。"
+              },
+              "stable": {
+                "tagline": "一般公開版、毎週更新。"
+              }
             }
           }
         },
@@ -10467,7 +10634,10 @@
             "21f5687c07": "Orca CLI スキル",
             "64fb057667": "このワークツリーの orca エミュレーターコマンドを agents に教えます。",
             "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
-            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal",
+            "3d34423e88": "Orca CLI を登録しています",
+            "3be27641c9": "agent のシェルからエミュレーターコマンドを実行できるようにします。",
+            "3941719a56": "スキル設定を開く前に Orca CLI を確認しています。"
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "閉じる",
@@ -10849,7 +11019,14 @@
           "32ae8d7d57": "前の一致",
           "158c645829": "リッチ markdown エディタで検索",
           "98b89276f3": "リッチエディターで検索",
-          "a86958d508": "結果はありません"
+          "a86958d508": "結果はありません",
+          "e8c147435f": "置換を非表示",
+          "9cdc38be33": "置換を表示",
+          "482b637099": "大文字と小文字を区別",
+          "68d090241d": "単語全体に一致",
+          "fd97c7e585": "置換",
+          "44682b4159": "リッチ markdown エディタで置換",
+          "c2884f5e95": "すべて置換"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "ブロックが見つかりませんでした",
@@ -11018,7 +11195,8 @@
           "b3e7f9a1c2": "チェック修正コンテキストを利用できません",
           "d5a8c2f1b9": "既定の AI エージェントでこのチェックを修正",
           "e2b4d7c8a1": "このチェックのエージェントを選択",
-          "f1c9e3a6d4": "チェックを修正するエージェントを選択"
+          "f1c9e3a6d4": "チェックを修正するエージェントを選択",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11039,6 +11217,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "貼り付け内容が大きすぎます。"
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {
@@ -11656,6 +11841,11 @@
           "chooseHost": "Choose automation host",
           "adding": "Adding project…",
           "addProject": "Add project"
+        },
+        "AutomationSetupDecisionField": {
+          "5a7863909c": "新しいワークスペースごとにセットアップを実行",
+          "18f000ad4e": "Advanced",
+          "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
       "agent": {
@@ -11878,6 +12068,11 @@
             "later": "Later"
           }
         }
+      },
+      "nativeChat": {
+        "contextMenu": {
+          "copy": "Copy"
+        }
       }
     },
     "i18n": {
@@ -11891,6 +12086,94 @@
           "b3d7e0f1a8": "MR",
           "a2c6d9e0f7": "MR",
           "91b5c8d7e6": "GitLab"
+        }
+      }
+    }
+  },
+  "components": {
+    "native-chat": {
+      "composer": {
+        "imageUnsupported": "Image paste is not supported for this agent.",
+        "send": "Send",
+        "noPty": "No live terminal — toggle back to reconnect.",
+        "locked": "Input is held by another device.",
+        "placeholder": "Send a message…",
+        "mentionHint": "Referencing file:",
+        "attach": "Attach file",
+        "startDictation": "Start dictation",
+        "stopDictation": "Stop dictation",
+        "noSkills": "No matching skills",
+        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
+        "removeAttachment": "Remove attachment"
+      },
+      "tool": {
+        "running": "Running…",
+        "result": "Result"
+      },
+      "status": {
+        "responding": "Agent is responding"
+      },
+      "jumpToLatest": "Jump to latest",
+      "toggle": {
+        "showTerminal": "Show terminal",
+        "showChat": "Show chat view"
+      },
+      "state": {
+        "loading": {
+          "title": "Loading conversation…",
+          "subtitle": "Reading the agent transcript."
+        },
+        "error": {
+          "title": "Could not load conversation",
+          "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
+        },
+        "notAgent": {
+          "title": "No conversation here",
+          "subtitle": "This terminal is not running a recognized coding agent."
+        },
+        "empty": {
+          "title": "Start a chat with {{value0}}",
+          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+        }
+      },
+      "stop": "Stop the agent",
+      "copyMessage": {
+        "copied": "Copied",
+        "copy": "Copy message"
+      },
+      "scrollMessageToTop": "Scroll this message to top",
+      "loadingEarlier": "Loading…",
+      "loadEarlier": "Load earlier messages",
+      "question": {
+        "step": "Step {{value0}}",
+        "other": "Other…",
+        "otherPlaceholder": "Type your answer",
+        "cancel": "Cancel",
+        "send": "Send answer",
+        "next": "Next"
+      },
+      "approval": {
+        "title": "Allow {{value0}}?",
+        "allow": "Allow",
+        "deny": "Deny"
+      }
+    },
+    "tab": {
+      "bar": {
+        "SortableTabContextMenu": {
+          "switchToTerminalView": "Switch to terminal view",
+          "switchToChatView": "Switch to chat view"
+        }
+      }
+    },
+    "workspace": {
+      "cleanup": {
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "Review alpha cleanup"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     }

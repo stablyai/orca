@@ -10,6 +10,7 @@ import { readMobileBranchCompareResult, readMobileGitStatusResult } from './mobi
 export type MobilePrBranchContext = {
   branch: string | null
   headSha: string | null
+  status: MobileGitStatusResult | null
   isGithubRepo: boolean
   repoLoaded: boolean
   loaded: boolean
@@ -22,10 +23,11 @@ export type MobilePrBranchContext = {
 export function deriveMobilePrBranchContext(
   status: MobileGitStatusResult | null,
   branchCompare: MobileGitBranchCompareResult | null
-): { branch: string | null; headSha: string | null } {
+): { branch: string | null; headSha: string | null; status: MobileGitStatusResult | null } {
   return {
     branch: status?.branch ?? null,
-    headSha: status?.head ?? branchCompare?.summary.headOid ?? null
+    headSha: status?.head ?? branchCompare?.summary.headOid ?? null,
+    status
   }
 }
 
@@ -41,6 +43,7 @@ export function useMobilePrBranchContext(input: {
   const [context, setContext] = useState<MobilePrBranchContext>({
     branch: null,
     headSha: null,
+    status: null,
     isGithubRepo: false,
     repoLoaded: false,
     loaded: false
@@ -54,6 +57,7 @@ export function useMobilePrBranchContext(input: {
       setContext({
         branch: null,
         headSha: null,
+        status: null,
         isGithubRepo: false,
         repoLoaded: false,
         loaded: false
@@ -63,6 +67,7 @@ export function useMobilePrBranchContext(input: {
     setContext({
       branch: null,
       headSha: null,
+      status: null,
       isGithubRepo: false,
       repoLoaded: false,
       loaded: false
@@ -108,6 +113,7 @@ export function useMobilePrBranchContext(input: {
             ...prev,
             branch: null,
             headSha: null,
+            status: null,
             loaded: true
           }))
         }
@@ -142,7 +148,7 @@ export async function loadMobilePrRepoContext(
 export async function loadMobilePrBranchIdentity(
   client: RpcClient,
   worktreeId: string
-): Promise<Pick<MobilePrBranchContext, 'branch' | 'headSha'>> {
+): Promise<Pick<MobilePrBranchContext, 'branch' | 'headSha' | 'status'>> {
   const [status, branchCompare] = await Promise.all([
     readGitStatus(client, worktreeId),
     // Why: the standalone PR entry point only needs branchCompare as a head-SHA

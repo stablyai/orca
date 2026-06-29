@@ -4,6 +4,14 @@ const { execFileAsyncMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn()
 }))
 
+const { isPwshAvailableMock, isWslAvailableMock, listWslDistrosMock, isGitBashAvailableMock } =
+  vi.hoisted(() => ({
+    isPwshAvailableMock: vi.fn(),
+    isWslAvailableMock: vi.fn(),
+    listWslDistrosMock: vi.fn(),
+    isGitBashAvailableMock: vi.fn()
+  }))
+
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
@@ -11,11 +19,19 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
+vi.mock('../main/pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('../main/wsl', () => ({
+  isWslAvailable: isWslAvailableMock,
+  listWslDistros: listWslDistrosMock
+}))
+vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
+
 import {
   buildCommandLookupSpec,
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
-  isCommandOnPathForRelay
+  isCommandOnPathForRelay,
+  PreflightHandler
 } from './preflight-handler'
 
 function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
@@ -43,6 +59,10 @@ function fishLookupArgs(command: string): string[] {
 
 beforeEach(() => {
   execFileAsyncMock.mockReset()
+  isPwshAvailableMock.mockReset()
+  isWslAvailableMock.mockReset()
+  listWslDistrosMock.mockReset()
+  isGitBashAvailableMock.mockReset()
 })
 
 describe('buildCommandLookupSpec', () => {
@@ -212,5 +232,47 @@ describe('hasAbsoluteCommandPath', () => {
     expect(
       hasAbsoluteCommandPath('C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd\r\n', 'win32')
     ).toBe(true)
+  })
+})
+
+describe('PreflightHandler', () => {
+  it('reports remote Windows shell capabilities through the SSH preflight path', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    isWslAvailableMock.mockReturnValue(true)
+    listWslDistrosMock.mockReturnValue(['Ubuntu'])
+    isPwshAvailableMock.mockReturnValue(true)
+    isGitBashAvailableMock.mockReturnValue(true)
+
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+
+    try {
+      const handler = requestHandlers.get('preflight.detectWindowsTerminalCapabilities')
+      expect(handler).toBeDefined()
+      await expect(handler!({})).resolves.toEqual({
+        wslAvailable: true,
+        wslDistros: ['Ubuntu'],
+        pwshAvailable: true,
+        gitBashAvailable: true,
+        hostPlatform: 'win32'
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 })

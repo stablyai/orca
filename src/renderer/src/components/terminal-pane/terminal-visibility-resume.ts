@@ -9,6 +9,7 @@ import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
+const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
 
 export type TerminalHiddenReason = 'surface' | 'tab'
 
@@ -33,6 +34,11 @@ type HideTerminalVisibilityArgs = {
 type HideTerminalVisibilityResult = {
   hiddenReason: TerminalHiddenReason | null
   renderingSuspended: boolean
+}
+
+type RecoverVisibleTerminalWindowWakeArgs = {
+  manager: PaneManager
+  isActive: boolean
 }
 
 export function resumeTerminalVisibility({
@@ -105,6 +111,27 @@ export function hideTerminalVisibility({
     return { hiddenReason: 'surface', renderingSuspended: false }
   }
   return { hiddenReason: null, renderingSuspended: false }
+}
+
+export function recoverVisibleTerminalWindowWake({
+  manager,
+  isActive
+}: RecoverVisibleTerminalWindowWakeArgs): void {
+  // Why: macOS screensaver/display wake can leave xterm visible but with a
+  // stale renderer/input surface; Orca's own hidden-state resume never runs.
+  for (const pane of manager.getPanes()) {
+    requestTerminalBacklogRecovery(pane.terminal)
+    flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
+  }
+  manager.resumeRendering()
+  if (isActive) {
+    fitAndFocusPanes(manager)
+  } else {
+    fitPanes(manager)
+  }
+  enforceTerminalViewportIntents(manager)
+  resetAllTerminalWebglAtlases()
+  manager.refreshAllPanes?.()
 }
 
 function requestLightTabBacklogRecovery(manager: PaneManager): void {

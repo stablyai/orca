@@ -285,6 +285,27 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('normalizes terminal scrollback row updates and drops legacy byte updates', async () => {
+    store.getSettings.mockReturnValue({ terminalScrollbackRows: 5_000 })
+    store.updateSettings.mockReturnValue({ terminalScrollbackRows: 50_000 })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      terminalScrollbackRows: 75_000,
+      terminalScrollbackBytes: 250_000_000
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { terminalScrollbackRows: 50_000 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('normalizes custom terminal themes from renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ terminalCustomThemes: [] })
     store.updateSettings.mockReturnValue({ terminalCustomThemes: [] })

@@ -102,6 +102,54 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe('orca-ide claude-teams')
   })
 
+  it('uses the plain orca shim for Claude Agent Teams on Linux SSH remotes', () => {
+    // Why: the SSH relay deploys the CLI shim as `orca` (not the local-only
+    // `orca-ide` GNOME-screen-reader workaround), so a remote launch must not
+    // emit `orca-ide claude-teams` — that name is not on the remote PATH and
+    // `claude-teams` is rejected by the relay's CLI switch (issue #6500).
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      isRemote: true,
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca claude-teams')
+  })
+
+  it('keeps the Windows orca.cmd shim for Claude Agent Teams on SSH remotes', () => {
+    // Why: the Windows remote shim is also `orca.cmd`, matching the local
+    // win32 override, so remoteness must not alter the Windows command.
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'win32',
+      isRemote: true,
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca.cmd claude-teams')
+  })
+
+  it('keeps the Linux orca-ide wrapper for local (non-remote) Claude Agent Teams', () => {
+    // Why: the `orca-ide` rename is still required for a local Linux desktop
+    // install (avoids shadowing the GNOME Orca screen reader), so an explicit
+    // isRemote:false must preserve it.
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      isRemote: false,
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca-ide claude-teams')
+  })
+
   it('launches OpenClaude as a distinct argv agent', () => {
     const plan = buildAgentStartupPlan({
       agent: 'openclaude',
@@ -133,6 +181,23 @@ describe('tui agent startup plans', () => {
       expectedProcess: 'vibe',
       followupPrompt: 'fix it',
       launchConfig: { agentCommand: 'vibe', agentArgs: '', agentEnv: {} }
+    })
+  })
+
+  it('launches Qwen Code through the installed qwen executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'qwen-code',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'qwen-code',
+      launchCommand: 'qwen',
+      expectedProcess: 'qwen',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'qwen', agentArgs: '', agentEnv: {} }
     })
   })
 

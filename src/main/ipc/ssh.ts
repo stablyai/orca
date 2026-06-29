@@ -586,6 +586,19 @@ export function registerSshHandlers(
     connectionManager = new SshConnectionManager(callbacks)
   }
   portForwardManager ??= new SshPortForwardManager()
+  portForwardManager.setCallbacks({
+    onForwardClosed: (entry, reason) => {
+      if (reason.kind === 'unexpected-exit') {
+        console.warn(
+          `[ssh] Port forward ${entry.localPort} → ${entry.remoteHost}:${entry.remotePort} closed unexpectedly${
+            reason.detail ? `: ${reason.detail}` : ''
+          }`
+        )
+      }
+      persistPortForwardsWithUnrestored(entry.connectionId)
+      broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
+    }
+  })
   refreshActiveRelaySessions()
   registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
@@ -1094,8 +1107,8 @@ export function registerSshHandlers(
     }
   )
 
-  ipcMain.handle('ssh:removePortForward', (_event, args: { id: string }) => {
-    const removed = portForwardManager!.removeForward(args.id)
+  ipcMain.handle('ssh:removePortForward', async (_event, args: { id: string }) => {
+    const removed = await portForwardManager!.removeForwardAndWait(args.id)
     if (removed) {
       persistPortForwards(removed.connectionId)
       broadcastPortForwards(getCurrentMainWindow, removed.connectionId)

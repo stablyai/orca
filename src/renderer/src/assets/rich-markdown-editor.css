@@ -370,25 +370,81 @@
   right: 12px;
   z-index: 20;
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: stretch;
+  gap: 2px;
   width: fit-content;
-  max-width: min(calc(100% - 24px), 460px);
-  padding: 0 2px 0 4px;
+  max-width: min(calc(100% - 24px), 520px);
+  padding: 4px 4px 4px 2px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--background);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
+/* Why: the expand toggle spans both rows on the left like the source editor's
+   find widget, so it stays vertically centered across the find/replace stack. */
+.rich-markdown-search-toggle {
+  width: 16px;
+  min-width: 16px;
+  height: auto;
+  align-self: stretch;
+  padding: 0;
+  border-radius: 2px;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-search-toggle:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-search-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rich-markdown-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+}
+
 .rich-markdown-search-field {
   display: flex;
   align-items: center;
+  gap: 1px;
   min-width: 0;
-  width: 220px;
+  width: 240px;
+  padding-right: 2px;
   border: 1px solid var(--ring);
   background: var(--background);
   flex: 0 1 auto;
+}
+
+.rich-markdown-search-option {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted-foreground);
+  flex: 0 0 auto;
+}
+
+.rich-markdown-search-option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.rich-markdown-search-option[data-active='true'] {
+  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
 }
 
 .rich-markdown-search-status {
@@ -412,6 +468,8 @@
 .rich-markdown-search-input {
   font-size: 13px;
   line-height: 1;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .rich-markdown-search-button {

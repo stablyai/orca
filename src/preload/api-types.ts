@@ -48,6 +48,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus,
   GitHubAssignableUser,
@@ -258,7 +259,8 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeTerminalPresentation
 } from '../shared/runtime-types'
 import type {
   CommitMessageAgentCapability,
@@ -362,6 +364,7 @@ import type {
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
 import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
+import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -391,6 +394,7 @@ import type {
   WorkspaceCleanupLocalProcessArgs,
   WorkspaceCleanupLocalProcessResult,
   WorkspaceCleanupScanArgs,
+  WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
@@ -484,6 +488,24 @@ export type EmulatorApi = {
   onFrameStreamError: (
     callback: (data: { streamId: string; message: string }) => void
   ) => () => void
+  startVideoStream: (args: { deviceId: string; streamId: string }) => Promise<{ streamId: string }>
+  stopVideoStream: (args: { streamId: string }) => Promise<void>
+  onVideoStreamMeta: (
+    callback: (data: {
+      streamId: string
+      deviceId: string
+      meta: { codecId: string; width: number; height: number }
+    }) => void
+  ) => () => void
+  onVideoStreamFrame: (
+    callback: (data: {
+      streamId: string
+      deviceId: string
+      config: boolean
+      keyFrame: boolean
+      bytes: ArrayBuffer
+    }) => void
+  ) => () => void
 }
 
 export type DetectedBrowserProfileInfo = {
@@ -547,6 +569,13 @@ export type PreflightApi = {
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+  detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }>
 }
 
 // Why: renderer-facing mirror of the daemon's `SessionInfo` + protocolVersion
@@ -712,6 +741,46 @@ export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
 }
 
+export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
+
+/** Messages appended to a live-tailed transcript since the previous emit. */
+export type NativeChatAppendedMessages = NativeChatMessage[]
+
+/** Wire payload for the `nativeChat:appended` push channel. */
+export type NativeChatAppendedPayload = {
+  subscriptionId: string
+  messages: NativeChatAppendedMessages
+}
+
+export type NativeChatSubscribeArgs = {
+  /** Unique per-caller id, echoed on every append so multiple live panes in
+   *  one renderer don't cross-talk. */
+  subscriptionId: string
+  agent: AgentType
+  sessionId: string
+  /** Authoritative transcript path from the agent hook (providerSession). */
+  transcriptPath?: string
+}
+
+export type NativeChatApi = {
+  /** Read the on-disk transcript for an agent + session id, windowed to the most
+   *  recent `limit` turns (defaults to the desktop window). The renderer raises
+   *  `limit` to page in older history as it scrolls to the top. `transcriptPath`
+   *  is the hook-reported authoritative file path, preferred over the id glob. */
+  readSession: (
+    agent: AgentType,
+    sessionId: string,
+    limit?: number,
+    transcriptPath?: string
+  ) => Promise<NativeChatReadSessionResult>
+  /** Live-tail a transcript: `onAppended` fires with only newly-appended
+   *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
+  subscribe: (
+    args: NativeChatSubscribeArgs,
+    onAppended: (messages: NativeChatAppendedMessages) => void
+  ) => () => void
+}
+
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
@@ -731,10 +800,11 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
-  /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
-   *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
-   *  keyboard-layout probe to distinguish layouts whose base layer matches
-   *  US QWERTY but whose Option layer composes characters (issue #1205).
+  /** Returns the macOS active input mode, or layout ID when no IME mode is
+   *  selected (e.g. `com.apple.keylayout.PolishPro`). Used by the
+   *  keyboard-layout probe to distinguish CJK IMEs and layouts whose base
+   *  layer matches US QWERTY but whose Option layer composes characters
+   *  (issue #1205).
    *  Returns null on non-Darwin platforms or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
   /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
@@ -758,6 +828,7 @@ export type PreloadApi = {
     get: () => {
       platform: NodeJS.Platform
       osRelease: string
+      displayServer: 'wayland' | 'x11' | null
     }
   }
   e2e: {
@@ -788,11 +859,16 @@ export type PreloadApi = {
           | 'issueSourcePreference'
           | 'externalWorktreeVisibility'
           | 'externalWorktreeVisibilityPromptDismissedAt'
+          | 'externalWorktreeInboxBaselinePaths'
+          | 'importedExternalWorktreePaths'
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'
         >
-      > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+      > & {
+        sourceControlAi?: Repo['sourceControlAi'] | null
+        externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
     pickFolders: () => Promise<string[]>
@@ -989,7 +1065,10 @@ export type PreloadApi = {
     ) => () => void
   }
   workspaceCleanup: {
-    scan: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
+    scan: (
+      args?: WorkspaceCleanupScanArgs,
+      onProgress?: (progress: WorkspaceCleanupScanProgress) => void
+    ) => Promise<WorkspaceCleanupScanResult>
     dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
     clearDismissals: () => Promise<void>
     hasKillableLocalProcesses: (
@@ -1072,6 +1151,7 @@ export type PreloadApi = {
       cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
     } | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number
@@ -1449,6 +1529,7 @@ export type PreloadApi = {
         state?: MRListState
         page?: number
         perPage?: number
+        query?: string
       }
     ) => Promise<ListMergeRequestsResult>
     /** Combined MR + issue list filtered by state. Issues are skipped
@@ -1458,6 +1539,7 @@ export type PreloadApi = {
         state?: MRListState
         page?: number
         perPage?: number
+        query?: string
       }
     ) => Promise<ListMergeRequestsResult>
     issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<GitLabIssueInfo | null>
@@ -1820,6 +1902,7 @@ export type PreloadApi = {
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
     }) => Promise<ClaudeRateLimitAccountsState>
+    cancelPendingLogin: () => Promise<boolean>
     reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     select: (args: {
@@ -2000,6 +2083,7 @@ export type PreloadApi = {
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
   aiVault: AiVaultApi
+  nativeChat: NativeChatApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
@@ -2130,6 +2214,12 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
+    }) => Promise<GitStatusResult>
+    submoduleStatus: (args: {
+      worktreePath: string
+      submodulePath: string
+      connectionId?: string
+      area?: GitStagingArea
     }) => Promise<GitStatusResult>
     checkIgnored: (args: {
       worktreePath: string
@@ -2407,6 +2497,7 @@ export type PreloadApi = {
         title?: string
         ptyId?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -2428,6 +2519,7 @@ export type PreloadApi = {
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
       }) => void
     ) => () => void
     replyTerminalCreate: (reply: {

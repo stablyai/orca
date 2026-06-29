@@ -674,6 +674,60 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
+  it('recovers visible terminal rendering and input when the window regains focus', () => {
+    const terminal = { name: 'terminal-a' }
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1, terminal }]),
+      resumeRendering: vi.fn(),
+      resetWebglTextureAtlases: vi.fn(),
+      refreshAllPanes: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => ({ id: 1, terminal }))
+    }
+
+    registerManagerForReset(manager)
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    const focusListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === 'focus')
+
+    expect(focusListener).toBeDefined()
+    const listener = focusListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected focus listener')
+    }
+    manager.resumeRendering.mockClear()
+    manager.resetWebglTextureAtlases.mockClear()
+    manager.refreshAllPanes.mockClear()
+    mocks.fitAndFocusPanes.mockClear()
+    mocks.flushTerminalOutput.mockClear()
+    mocks.requestTerminalBacklogRecovery.mockClear()
+
+    listener(new Event('focus'))
+
+    expect(mocks.requestTerminalBacklogRecovery).toHaveBeenCalledWith(terminal)
+    expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, { maxChars: 64 * 1024 })
+    expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
+    expect(mocks.fitAndFocusPanes).toHaveBeenCalledWith(manager)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
+  })
+
   it('clears WebGL texture atlases when the active visible terminal document becomes visible', () => {
     let visibilityState: DocumentVisibilityState = 'hidden'
     const documentListeners = new Map<string, EventListenerOrEventListenerObject>()

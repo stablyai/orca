@@ -1,0 +1,132 @@
+name: Linux Wayland GPU Sandbox
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/linux-wayland-gpu-sandbox.yml
+      - config/scripts/linux-wayland-renderer-diagnostics.mjs
+      - config/scripts/linux-wayland-terminal-exercise.mjs
+      - config/scripts/linux-wayland-validation-watchdog.mjs
+      - config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+      - src/main/startup/configure-process.ts
+      - src/main/startup/configure-process.test.ts
+      - src/preload/api-types.ts
+      - src/preload/index.ts
+      - src/renderer/src/components/terminal-pane/pty-connection.ts
+      - src/renderer/src/lib/pane-manager/terminal-webgl-auto-policy.ts
+      - src/renderer/src/web/web-preload-api.ts
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: wayland terminal input
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install native build tools and Wayland compositor
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh weston
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: mirrors pr.yml so native module rebuilds do not use pnpm's
+      # non-executable bundled gyp_main.py on Linux runners.
+      - name: Use external node-gyp to avoid pnpm's bundled copy
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Prepare dependency install
+        run: |
+          if [ -e node_modules ]; then
+            ls -ld node_modules
+            rm -rf node_modules
+          fi
+
+      - name: Install dependencies
+        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
+        # runners while creating the root node_modules. Use the normal resolver
+        # path, then verify package metadata stayed unchanged.
+        run: |
+          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
+          git diff --exit-code package.json pnpm-lock.yaml
+
+      - name: Start Weston
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          unset DISPLAY
+          weston --backend=headless-backend.so --socket=wayland-1 --idle-time=0 --log="$RUNNER_TEMP/weston.log" &
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "WAYLAND_DISPLAY=wayland-1" >> "$GITHUB_ENV"
+          echo "XDG_SESSION_TYPE=wayland" >> "$GITHUB_ENV"
+          echo "ELECTRON_OZONE_PLATFORM_HINT=wayland" >> "$GITHUB_ENV"
+          echo "ORCA_WAYLAND_GPU_VERBOSE=1" >> "$GITHUB_ENV"
+          for _ in $(seq 1 50); do
+            if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
+              break
+            fi
+            sleep 0.2
+          done
+          test -S "$XDG_RUNTIME_DIR/wayland-1"
+
+      - name: Reproduce terminal input freeze without the workaround
+        id: reproduce_base
+        if: github.event_name == 'pull_request'
+        # Why: still collect fixed-path Wayland evidence when the base repro
+        # stops reproducing; the final gate below fails the job in that case.
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          # Why: keep the new verifier scripts, but run them against the
+          # unfixed production terminal/GPU path instead of a hybrid checkout.
+          git checkout "${{ github.event.pull_request.base.sha }}" -- \
+            src/main/startup/configure-process.ts \
+            src/preload/api-types.ts \
+            src/preload/index.ts \
+            src/renderer/src/components/terminal-pane/pty-connection.ts \
+            src/renderer/src/lib/pane-manager/terminal-webgl-auto-policy.ts \
+            src/renderer/src/web/web-preload-api.ts
+          rm -rf out
+          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs --mode=expect-repro
+
+      - name: Verify terminal input under Wayland GPU sandbox workaround
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          git checkout --force "$GITHUB_SHA"
+          rm -rf out
+          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+
+      - name: Require base reproduction
+        if: ${{ github.event_name == 'pull_request' && steps.reproduce_base.outcome != 'success' }}
+        run: |
+          echo "The unfixed base build did not reproduce the Wayland terminal input failure."
+          exit 1
+
+      - name: Upload Weston log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: weston-log
+          path: ${{ runner.temp }}/weston.log
+          retention-days: 7
+          if-no-files-found: ignore

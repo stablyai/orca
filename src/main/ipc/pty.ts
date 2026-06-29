@@ -86,6 +86,7 @@ import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
+import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   assertFolderWorkspacePathUsable,
@@ -751,9 +752,10 @@ export function buildPtyHostEnv(
   // in lock-step across spawn paths without pushing process.env onto the
   // IPC wire unnecessarily.
   const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
-  const piAgentKind = detectPiAgentKindFromCommand(opts.launchCommand)
+  const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
+  const piAgentKind = detectPiAgentKindFromCommand(launchCommandHint)
   const hasLaunchCommand =
-    typeof opts.launchCommand === 'string' && opts.launchCommand.trim().length > 0
+    typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
   // Why: source shadows are agent-scoped. Trusting the other kind's source
   // would reintroduce the exact Pi/OMP extension-state shadowing this PR fixes.
@@ -783,7 +785,7 @@ export function buildPtyHostEnv(
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
-    if (isMimoLaunchCommand(opts.launchCommand)) {
+    if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
       Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
       if (baseEnv.MIMOCODE_HOME) {
@@ -1880,6 +1882,9 @@ export function registerPtyHandlers(
       if (args.command !== undefined) {
         spawnOptions.command = args.command
       }
+      if (args.commandDelivery !== undefined) {
+        spawnOptions.commandDelivery = args.commandDelivery
+      }
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
@@ -2224,6 +2229,7 @@ export function registerPtyHandlers(
       lastTitle?: string
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
     } | null> => {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
         return null
@@ -2255,6 +2261,7 @@ export function registerPtyHandlers(
         env?: Record<string, string>
         envToDelete?: string[]
         command?: string
+        commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
         launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
@@ -2555,6 +2562,9 @@ export function registerPtyHandlers(
       }
       if (args.command !== undefined) {
         spawnOptions.command = args.command
+      }
+      if (args.commandDelivery !== undefined) {
+        spawnOptions.commandDelivery = args.commandDelivery
       }
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery

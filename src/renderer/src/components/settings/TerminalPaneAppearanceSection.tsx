@@ -22,13 +22,9 @@ export function TerminalPaneAppearanceSection({
           'auto.components.settings.TerminalAppearanceSection.e1a5c25555',
           'Terminal Panes'
         )}
-        description={translate(
-          'auto.components.settings.TerminalAppearanceSection.1b79379d4f',
-          'Control inactive pane dimming and split divider thickness.'
-        )}
       />
 
-      <div className="divide-y divide-border/40">
+      <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
           title={translate(
             'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
@@ -45,9 +41,10 @@ export function TerminalPaneAppearanceSection({
               'auto.components.settings.TerminalAppearanceSection.a6fdd6a3b1',
               'Inactive Pane Opacity'
             )}
+            // Why: clarify which panes get dimmed; tightened per the copy audit.
             description={translate(
-              'auto.components.settings.TerminalAppearanceSection.db632cb50e',
-              'Opacity applied to panes that are not currently active.'
+              'auto.components.settings.TerminalAppearanceSection.dimUnfocusedPanes',
+              'Dim unfocused panes.'
             )}
             value={paneStyleOptions.inactivePaneOpacity}
             defaultValue={0.8}
@@ -78,10 +75,7 @@ export function TerminalPaneAppearanceSection({
               'auto.components.settings.TerminalAppearanceSection.f27a99978d',
               'Divider Thickness'
             )}
-            description={translate(
-              'auto.components.settings.TerminalAppearanceSection.a14a427ae4',
-              'Thickness of the pane divider line.'
-            )}
+            description=""
             value={paneStyleOptions.dividerThicknessPx}
             defaultValue={1}
             min={1}
