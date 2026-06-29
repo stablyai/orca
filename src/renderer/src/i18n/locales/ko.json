@@ -876,7 +876,9 @@
       "openImage": "이미지 열기",
       "image": "이미지",
       "moreRows": "{n}행 더",
-      "moreColumns": "{n}열 더"
+      "moreColumns": "{n}열 더",
+      "moreRow": "{n}개 행 더 있음",
+      "moreColumn": "{n}개 열 더 있음"
     },
     "terminalShortcut": {
       "groupHeading": "단축키 바",
@@ -1087,7 +1089,8 @@
       "resolvedCommentBy": "{author}이(가) 댓글 해결함",
       "all": "전체",
       "reviewRequested": "리뷰 요청됨",
-      "conversation": "대화"
+      "conversation": "대화",
+      "replyCountSuffix": " ({{count}}개)"
     },
     "prChecks": {
       "title": "체크",
@@ -1122,7 +1125,9 @@
       "unsentNote": "보내지 않은 메모",
       "unsentNotes": "보내지 않은 메모들",
       "showFilterA11y": "{filter} 검토 파일 표시",
-      "all": "전체"
+      "all": "전체",
+      "unsentCountOne": "보내지 않은 메모 {{count}}개",
+      "unsentCountOther": "보내지 않은 메모 {{count}}개"
     },
     "diffFooter": {
       "stage": "스테이지",

@@ -250,7 +250,7 @@ function CommentGroupView({
             : t('mobile.prComments.resolvedCommentBy', 'Resolved comment by {{author}}', {
                 author: root.author
               })}
-          {count > 1 ? ` (${count})` : ''}
+          {count > 1 ? t('mobile.prComments.replyCountSuffix', ' ({{count}})', { count }) : ''}
         </Text>
       </Pressable>
       {expanded ? <View style={shared.sectionBody}>{cards}</View> : null}

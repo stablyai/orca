@@ -876,7 +876,9 @@
       "openImage": "Open image",
       "image": "image",
       "moreRows": "{n} more rows",
-      "moreColumns": "{n} more columns"
+      "moreColumns": "{n} more columns",
+      "moreRow": "{n} more row",
+      "moreColumn": "{n} more column"
     },
     "terminalShortcut": {
       "groupHeading": "SHORTCUT BAR",
@@ -1087,7 +1089,8 @@
       "resolvedCommentBy": "Resolved comment by {author}",
       "all": "All",
       "reviewRequested": "Review requested",
-      "conversation": "Conversation"
+      "conversation": "Conversation",
+      "replyCountSuffix": " ({{count}})"
     },
     "prChecks": {
       "title": "Checks",
@@ -1122,7 +1125,9 @@
       "unsentNote": "unsent note",
       "unsentNotes": "unsent notes",
       "showFilterA11y": "Show {filter} review files",
-      "all": "All"
+      "all": "All",
+      "unsentCountOne": "{{count}} unsent note",
+      "unsentCountOther": "{{count}} unsent notes"
     },
     "diffFooter": {
       "stage": "Stage",

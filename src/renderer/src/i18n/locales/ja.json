@@ -876,7 +876,9 @@
       "openImage": "画像を開く",
       "image": "画像",
       "moreRows": "他 {n} 行",
-      "moreColumns": "他 {n} 列"
+      "moreColumns": "他 {n} 列",
+      "moreRow": "他 {n} 行",
+      "moreColumn": "他 {n} 列"
     },
     "terminalShortcut": {
       "groupHeading": "ショートカット バー",
@@ -1087,7 +1089,8 @@
       "resolvedCommentBy": "{author} がコメントを解決",
       "all": "すべて",
       "reviewRequested": "レビュー要求済み",
-      "conversation": "会話"
+      "conversation": "会話",
+      "replyCountSuffix": "（{{count}}）"
     },
     "prChecks": {
       "title": "チェック",
@@ -1122,7 +1125,9 @@
       "unsentNote": "未送信メモ",
       "unsentNotes": "未送信メモ",
       "showFilterA11y": "{filter} のレビュー ファイルを表示",
-      "all": "すべて"
+      "all": "すべて",
+      "unsentCountOne": "未送信のメモ {{count}} 件",
+      "unsentCountOther": "未送信のメモ {{count}} 件"
     },
     "diffFooter": {
       "stage": "ステージ",

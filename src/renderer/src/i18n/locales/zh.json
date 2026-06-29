@@ -876,7 +876,9 @@
       "openImage": "打开图片",
       "image": "图片",
       "moreRows": "还有 {n} 行",
-      "moreColumns": "还有 {n} 列"
+      "moreColumns": "还有 {n} 列",
+      "moreRow": "还有 {n} 行",
+      "moreColumn": "还有 {n} 列"
     },
     "terminalShortcut": {
       "groupHeading": "快捷键栏",
@@ -1087,7 +1089,8 @@
       "resolvedCommentBy": "{author} 解决了评论",
       "all": "全部",
       "reviewRequested": "已请求评审",
-      "conversation": "会话"
+      "conversation": "会话",
+      "replyCountSuffix": "（共 {{count}} 条）"
     },
     "prChecks": {
       "title": "检查",
@@ -1122,7 +1125,9 @@
       "unsentNote": "条未发送笔记",
       "unsentNotes": "条未发送笔记",
       "showFilterA11y": "显示 {filter} 评审文件",
-      "all": "全部"
+      "all": "全部",
+      "unsentCountOne": "{{count}} 条未发送的备注",
+      "unsentCountOther": "{{count}} 条未发送的备注"
     },
     "diffFooter": {
       "stage": "暂存",

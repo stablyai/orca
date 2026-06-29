@@ -168,13 +168,19 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                 {hiddenRows > 0 || hiddenColumns > 0 ? (
                   <Text style={styles.tableTruncated}>
                     {hiddenRows > 0
-                      ? t('mobile.markdown.moreRows', '{n} more rows', { n: hiddenRows })
+                      ? hiddenRows === 1
+                        ? t('mobile.markdown.moreRow', '{n} more row', { n: hiddenRows })
+                        : t('mobile.markdown.moreRows', '{n} more rows', { n: hiddenRows })
                       : ''}
                     {hiddenRows > 0 && hiddenColumns > 0 ? ' · ' : ''}
                     {hiddenColumns > 0
-                      ? t('mobile.markdown.moreColumns', '{n} more columns', {
-                          n: hiddenColumns
-                        })
+                      ? hiddenColumns === 1
+                        ? t('mobile.markdown.moreColumn', '{n} more column', {
+                            n: hiddenColumns
+                          })
+                        : t('mobile.markdown.moreColumns', '{n} more columns', {
+                            n: hiddenColumns
+                          })
                       : ''}
                   </Text>
                 ) : null}

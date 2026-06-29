@@ -3,7 +3,7 @@ import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { useTranslate } from '../i18n/useTranslate'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
-import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
+import { REVIEW_FILTERS } from '../session/mobile-diff-review-screen-model'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 
@@ -90,11 +90,13 @@ export function MobileDiffReviewHeader({
           })}
         </Text>
         <Text style={styles.progressText}>
-          {mobileReviewCountLabel(
-            unsentCount,
-            t('mobile.diffHeader.unsentNote', 'unsent note'),
-            t('mobile.diffHeader.unsentNotes', 'unsent notes')
-          )}
+          {unsentCount === 1
+            ? t('mobile.diffHeader.unsentCountOne', '{{count}} unsent note', {
+                count: unsentCount
+              })
+            : t('mobile.diffHeader.unsentCountOther', '{{count}} unsent notes', {
+                count: unsentCount
+              })}
         </Text>
       </View>
       <FlatList
