@@ -11,6 +11,7 @@ import { PRSection } from './PRSection'
 import { canShowMobilePRAutoMergeControl } from './pr-auto-merge-availability'
 import { resolveMobilePrMergeMethod, resolvePrActionAvailability } from './pr-actions-state'
 import { prActionsStyles as styles } from './pr-actions-styles'
+import { useTranslate } from '../../i18n/useTranslate'
 
 type Props = {
   pr: PRInfo
@@ -29,6 +30,7 @@ type Confirm =
 // ConfirmModal first (R5). The firing row shows a spinner in place of its icon
 // and disables; other rows stay interactive (uniform visual).
 export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }: Props) {
+  const { t } = useTranslate()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [unlinking, setUnlinking] = useState(false)
 
@@ -66,22 +68,32 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
   const confirmCopy = (): { title: string; message: string; confirmLabel: string } => {
     if (confirm?.kind === 'merge') {
       return {
-        title: 'Merge pull request?',
-        message: `This will merge #${pr.number} into its base branch.`,
-        confirmLabel: 'Merge'
+        title: t('mobile.prActions.mergeConfirmTitle', 'Merge pull request?'),
+        message: t(
+          'mobile.prActions.mergeConfirmMessage',
+          'This will merge #{{number}} into its base branch.',
+          { number: pr.number }
+        ),
+        confirmLabel: t('mobile.prActions.mergeConfirmLabel', 'Merge')
       }
     }
     if (confirm?.kind === 'state' && confirm.state === 'closed') {
       return {
-        title: 'Close pull request?',
-        message: `#${pr.number} will be closed without merging.`,
-        confirmLabel: 'Close'
+        title: t('mobile.prActions.closeConfirmTitle', 'Close pull request?'),
+        message: t(
+          'mobile.prActions.closeConfirmMessage',
+          '#{{number}} will be closed without merging.',
+          { number: pr.number }
+        ),
+        confirmLabel: t('mobile.prActions.closeConfirmLabel', 'Close')
       }
     }
     return {
-      title: 'Reopen pull request?',
-      message: `#${pr.number} will be reopened.`,
-      confirmLabel: 'Reopen'
+      title: t('mobile.prActions.reopenConfirmTitle', 'Reopen pull request?'),
+      message: t('mobile.prActions.reopenConfirmMessage', '#{{number}} will be reopened.', {
+        number: pr.number
+      }),
+      confirmLabel: t('mobile.prActions.reopenConfirmLabel', 'Reopen')
     }
   }
 
@@ -99,7 +111,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
   const copy = confirmCopy()
 
   return (
-    <PRSection title="Actions">
+    <PRSection title={t('mobile.prActions.title', 'Actions')}>
       {/* Merge controls only while the PR can still be merged (open/draft). */}
       {avail.canMerge ? (
         <Pressable
@@ -111,7 +123,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
           onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
           disabled={mergeBusy}
           accessibilityRole="button"
-          accessibilityLabel="Merge pull request"
+          accessibilityLabel={t('mobile.prActions.merge', 'Merge pull request')}
         >
           {mergeBusy ? (
             <ActivityIndicator color={colors.onMergeGreen} />
@@ -119,7 +131,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
             <GitMerge size={16} color={colors.onMergeGreen} strokeWidth={2.2} />
           )}
           <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>
-            Merge pull request
+            {t('mobile.prActions.merge', 'Merge pull request')}
           </Text>
         </Pressable>
       ) : null}
@@ -127,20 +139,22 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
       {/* Auto-merge toggle — optimistic, reverts on transient failure. */}
       {showAutoMerge ? (
         <View style={styles.toggleRow}>
-          <Text style={styles.toggleLabel}>Auto-merge when ready</Text>
+          <Text style={styles.toggleLabel}>
+            {t('mobile.prActions.autoMergeLabel', 'Auto-merge when ready')}
+          </Text>
           <Pressable
             style={[styles.togglePill, autoMerge && styles.togglePillOn]}
             onPress={() => actions.setAutoMerge(!autoMerge, effectiveMethod)}
             disabled={autoMergeBusy}
             accessibilityRole="switch"
             accessibilityState={{ checked: autoMerge }}
-            accessibilityLabel="Toggle auto-merge"
+            accessibilityLabel={t('mobile.prActions.toggleAutoMerge', 'Toggle auto-merge')}
           >
             {autoMergeBusy ? (
               <ActivityIndicator color={colors.textSecondary} />
             ) : (
               <Text style={[styles.togglePillText, autoMerge && styles.togglePillTextOn]}>
-                {autoMerge ? 'On' : 'Off'}
+                {autoMerge ? t('mobile.prActions.on', 'On') : t('mobile.prActions.off', 'Off')}
               </Text>
             )}
           </Pressable>
@@ -154,13 +168,19 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
           onPress={() => setConfirm({ kind: 'state', state: avail.canClose ? 'closed' : 'open' })}
           disabled={stateBusy}
           accessibilityRole="button"
-          accessibilityLabel={avail.canClose ? 'Close pull request' : 'Reopen pull request'}
+          accessibilityLabel={
+            avail.canClose
+              ? t('mobile.prActions.closePullRequest', 'Close pull request')
+              : t('mobile.prActions.reopenPullRequest', 'Reopen pull request')
+          }
         >
           {stateBusy ? <ActivityIndicator color={colors.textSecondary} /> : null}
           <Text
             style={[styles.actionButtonText, avail.canClose && styles.actionButtonDestructiveText]}
           >
-            {avail.canClose ? 'Close' : 'Reopen'}
+            {avail.canClose
+              ? t('mobile.prActions.close', 'Close')
+              : t('mobile.prActions.reopen', 'Reopen')}
           </Text>
         </Pressable>
       ) : null}
@@ -176,14 +196,14 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
           onPress={() => void unlink()}
           disabled={unlinking || mergeBusy || autoMergeBusy || stateBusy}
           accessibilityRole="button"
-          accessibilityLabel="Unlink pull request"
+          accessibilityLabel={t('mobile.prActions.unlinkPullRequest', 'Unlink pull request')}
         >
           {unlinking ? (
             <ActivityIndicator color={colors.textSecondary} />
           ) : (
             <Link2Off size={16} color={colors.textSecondary} strokeWidth={2.2} />
           )}
-          <Text style={styles.actionButtonText}>Unlink</Text>
+          <Text style={styles.actionButtonText}>{t('mobile.prActions.unlink', 'Unlink')}</Text>
         </Pressable>
       ) : null}
 

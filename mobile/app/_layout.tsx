@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -11,6 +11,9 @@ import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
 import { loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
+import { I18nProvider } from '../src/i18n/I18nProvider'
+import { initI18n, getI18n } from '../src/i18n/init'
+import { loadUiLanguage } from '../src/storage/preferences'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -34,6 +37,29 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const router = useRouter()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+  const [ready, setReady] = useState(false)
+
+  // Why: i18next must finish loading resources before the first t() call.
+  // Without this gate, screens mounted during the first render would see an
+  // uninitialized i18n and fall back to English even after we switch.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const lang = await loadUiLanguage()
+        await initI18n(lang)
+      } catch (error) {
+        // Why: if resource loading fails (corrupt zh.json, missing module),
+        // fall back to English so the app still boots.
+        console.warn('[i18n] init failed; defaulting to en', error)
+        try {
+          await initI18n('en')
+        } catch (fallbackError) {
+          console.error('[i18n] fallback init also failed', fallbackError)
+        }
+      }
+      setReady(true)
+    })()
+  }, [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -135,45 +161,58 @@ export default function RootLayout() {
     await SplashScreen.hideAsync()
   }, [])
 
-  return (
-    <RpcClientProvider>
-      <View style={styles.root} onLayout={onNavigatorLayout}>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.bgPanel },
-            headerTintColor: colors.textPrimary,
-            headerTitleStyle: { fontSize: 16, fontWeight: '600' },
-            contentStyle: { backgroundColor: colors.bgBase },
-            headerShadowVisible: false
-            // Why: deliberately no `orientation` screenOption. react-native-screens
-            // has no value that respects the device rotation lock — even 'default'
-            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
-            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
-            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
-          }}
-        >
-          <Stack.Screen
-            name="index"
-            options={{
-              headerShown: false,
-              headerTitle: () => <OrcaLogo size={22} />
-            }}
-          />
-          <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
-          <Stack.Screen name="pair" options={{ headerShown: false }} />
-          <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="notifications" options={{ headerShown: false }} />
-          <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
-          <Stack.Screen name="about" options={{ headerShown: false }} />
-          <Stack.Screen name="h" options={{ headerShown: false }} />
-        </Stack>
+  // Why: this gate is placed AFTER all hook calls so the Rules of Hooks
+  // remain satisfied. The early splash prevents any t() call before i18n
+  // is initialized, which would otherwise silently fall back to English.
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
       </View>
-    </RpcClientProvider>
+    )
+  }
+
+  return (
+    <I18nProvider i18n={getI18n()}>
+      <RpcClientProvider>
+        <View style={styles.root} onLayout={onNavigatorLayout}>
+          <StatusBar style="light" />
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.bgPanel },
+              headerTintColor: colors.textPrimary,
+              headerTitleStyle: { fontSize: 16, fontWeight: '600' },
+              contentStyle: { backgroundColor: colors.bgBase },
+              headerShadowVisible: false
+              // Why: deliberately no `orientation` screenOption. react-native-screens
+              // has no value that respects the device rotation lock — even 'default'
+              // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+              // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+              // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
+            }}
+          >
+            <Stack.Screen
+              name="index"
+              options={{
+                headerShown: false,
+                headerTitle: () => <OrcaLogo size={22} />
+              }}
+            />
+            <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
+            <Stack.Screen name="pair" options={{ headerShown: false }} />
+            <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+            <Stack.Screen name="settings" options={{ headerShown: false }} />
+            <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="notifications" options={{ headerShown: false }} />
+            <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+            <Stack.Screen name="about" options={{ headerShown: false }} />
+            <Stack.Screen name="h" options={{ headerShown: false }} />
+          </Stack>
+        </View>
+      </RpcClientProvider>
+    </I18nProvider>
   )
 }
 

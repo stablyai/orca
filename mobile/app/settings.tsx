@@ -11,13 +11,16 @@ import {
   LifeBuoy,
   Mic,
   Globe,
+  Languages,
   Terminal as TerminalIcon
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { useTranslate } from '../src/i18n/useTranslate'
 
 export default function SettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -25,7 +28,7 @@ export default function SettingsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Settings</Text>
+        <Text style={styles.heading}>{t('mobile.settings.title', 'Settings')}</Text>
       </View>
 
       <View style={styles.section}>
@@ -34,7 +37,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/terminal-settings')}
         >
           <TerminalIcon size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Terminal</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.terminal', 'Terminal')}</Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -43,7 +46,16 @@ export default function SettingsScreen() {
           onPress={() => router.push('/browser-settings')}
         >
           <Globe size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Browser</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.browser', 'Browser')}</Text>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Pressable>
+        <View style={styles.separator} />
+        <Pressable
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => router.push('/language-settings')}
+        >
+          <Languages size={16} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>{t('mobile.settings.language', 'Language')}</Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -52,7 +64,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/voice-settings')}
         >
           <Mic size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Voice</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.voice', 'Voice')}</Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -61,7 +73,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/notifications')}
         >
           <Bell size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Notifications</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.notifications', 'Notifications')}</Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -70,7 +82,9 @@ export default function SettingsScreen() {
           onPress={() => router.push('/troubleshoot')}
         >
           <Wrench size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Troubleshooting</Text>
+          <Text style={styles.rowLabel}>
+            {t('mobile.settings.troubleshooting', 'Troubleshooting')}
+          </Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
         <View style={styles.separator} />
@@ -79,7 +93,7 @@ export default function SettingsScreen() {
           onPress={() => router.push('/about')}
         >
           <Info size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>About</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.about', 'About')}</Text>
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
       </View>
@@ -90,7 +104,7 @@ export default function SettingsScreen() {
           onPress={() => void Linking.openURL('https://www.onorca.dev/privacy')}
         >
           <Shield size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Privacy Policy</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.privacy', 'Privacy Policy')}</Text>
         </Pressable>
         <View style={styles.separator} />
         <Pressable
@@ -98,7 +112,7 @@ export default function SettingsScreen() {
           onPress={() => void Linking.openURL('https://github.com/stablyai/orca/issues')}
         >
           <LifeBuoy size={16} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Support</Text>
+          <Text style={styles.rowLabel}>{t('mobile.settings.support', 'Support')}</Text>
         </Pressable>
       </View>
     </View>

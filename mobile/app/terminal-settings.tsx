@@ -23,6 +23,7 @@ import {
   saveTerminalAutocompleteEnabled,
   saveTerminalTextScale
 } from '../src/storage/preferences'
+import { useTranslate } from '../src/i18n/useTranslate'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -30,35 +31,80 @@ type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | '
 
 // scale = baseline zoom the terminal WebView applies on top of fit-to-width.
 // Keep in sync with TERMINAL_TEXT_SCALES; pinch-to-zoom snaps to these values.
-const TEXT_SIZE_OPTIONS: (PickerOption<TextSizeValue> & { scale: number })[] = [
-  { value: 'smallest', label: 'Smallest (50%)', scale: 0.5 },
-  { value: 'smaller', label: 'Smaller (75%)', scale: 0.75 },
-  { value: 'default', label: 'Default (100%)', scale: 1 },
-  { value: 'large', label: 'Large (125%)', scale: 1.25 },
-  { value: 'larger', label: 'Larger (150%)', scale: 1.5 },
-  { value: 'largest', label: 'Largest (200%)', scale: 2 }
-]
+type TextSizeOption = PickerOption<TextSizeValue> & { scale: number }
+type AutoRestoreOption = PickerOption<RestoreValue> & { ms: number | null }
 
-function textSizeValueFromScale(scale: number): TextSizeValue {
-  return TEXT_SIZE_OPTIONS.find((o) => o.scale === scale)?.value ?? 'default'
+type TranslateFn = (key: string, fallback: string, options?: Record<string, unknown>) => string
+
+function buildTextSizeOptions(t: TranslateFn): TextSizeOption[] {
+  return [
+    {
+      value: 'smallest',
+      label: t('mobile.terminalSettings.textSizeSmallest', 'Smallest (50%)'),
+      scale: 0.5
+    },
+    {
+      value: 'smaller',
+      label: t('mobile.terminalSettings.textSizeSmaller', 'Smaller (75%)'),
+      scale: 0.75
+    },
+    {
+      value: 'default',
+      label: t('mobile.terminalSettings.textSizeDefault', 'Default (100%)'),
+      scale: 1
+    },
+    {
+      value: 'large',
+      label: t('mobile.terminalSettings.textSizeLarge', 'Large (125%)'),
+      scale: 1.25
+    },
+    {
+      value: 'larger',
+      label: t('mobile.terminalSettings.textSizeLarger', 'Larger (150%)'),
+      scale: 1.5
+    },
+    {
+      value: 'largest',
+      label: t('mobile.terminalSettings.textSizeLargest', 'Largest (200%)'),
+      scale: 2
+    }
+  ]
 }
 
-function textSizeSummary(scale: number): string {
-  return (TEXT_SIZE_OPTIONS.find((o) => o.scale === scale) ?? TEXT_SIZE_OPTIONS[0]!).label
+function textSizeValueFromScale(options: TextSizeOption[], scale: number): TextSizeValue {
+  return options.find((o) => o.scale === scale)?.value ?? 'default'
 }
 
-const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | null })[] = [
-  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
-  { value: '60s', label: 'After 1 minute', ms: 60_000 },
-  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
-]
+function textSizeSummary(options: TextSizeOption[], scale: number): string {
+  return (options.find((o) => o.scale === scale) ?? options[0]!).label
+}
 
-function valueFromMs(ms: number | null | undefined): RestoreValue {
+function buildAutoRestoreOptions(t: TranslateFn): AutoRestoreOption[] {
+  return [
+    {
+      value: 'indefinite',
+      label: t('mobile.terminalSettings.restoreIndefinite', 'Keep at phone size (default)'),
+      ms: null
+    },
+    { value: '60s', label: t('mobile.terminalSettings.restore60s', 'After 1 minute'), ms: 60_000 },
+    {
+      value: '5m',
+      label: t('mobile.terminalSettings.restore5m', 'After 5 minutes'),
+      ms: 5 * 60_000
+    },
+    {
+      value: '30m',
+      label: t('mobile.terminalSettings.restore30m', 'After 30 minutes'),
+      ms: 30 * 60_000
+    }
+  ]
+}
+
+function valueFromMs(options: AutoRestoreOption[], ms: number | null | undefined): RestoreValue {
   if (ms == null) {
     return 'indefinite'
   }
-  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+  const exact = options.find((o) => o.ms === ms)
   if (exact) {
     return exact.value
   }
@@ -66,9 +112,9 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
   // or server-side clamp). Snap to the closest finite preset so the
   // picker's selected radio agrees with the row sublabel rendered by
   // autoRestoreSummary ("After Xs").
-  let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
+  let closest: AutoRestoreOption | null = null
   let bestDelta = Infinity
-  for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
+  for (const opt of options) {
     if (opt.ms == null) {
       continue
     }
@@ -81,26 +127,36 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
   return closest ? closest.value : 'indefinite'
 }
 
-function autoRestoreSummary(ms: number | null | undefined): string {
+function autoRestoreSummary(
+  options: AutoRestoreOption[],
+  t: TranslateFn,
+  ms: number | null | undefined
+): string {
   if (ms === undefined) {
     return '…'
   }
   if (ms === null) {
-    return AUTO_RESTORE_FIT_OPTIONS[0]!.label
+    return options[0]!.label
   }
-  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
+  const exact = options.find((o) => o.ms === ms)
+  return exact
+    ? exact.label
+    : t('mobile.terminalSettings.restoreCustom', 'After {seconds}s', {
+        seconds: Math.round(ms / 1000)
+      })
 }
 
 function HostFitRow({
   client,
   hostName,
   ms,
+  autoRestoreOptions,
   onPress
 }: {
   client: RpcClient | null
   hostName: string
   ms: number | null | undefined
+  autoRestoreOptions: { options: AutoRestoreOption[]; t: TranslateFn }
   onPress: () => void
 }): React.JSX.Element {
   return (
@@ -112,7 +168,9 @@ function HostFitRow({
       <Smartphone size={16} color={colors.textSecondary} />
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{hostName}</Text>
-        <Text style={styles.rowSublabel}>{autoRestoreSummary(ms)}</Text>
+        <Text style={styles.rowSublabel}>
+          {autoRestoreSummary(autoRestoreOptions.options, autoRestoreOptions.t, ms)}
+        </Text>
       </View>
       <ChevronRight size={16} color={colors.textMuted} />
     </Pressable>
@@ -122,6 +180,9 @@ function HostFitRow({
 export default function TerminalSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
+  const textSizeOptions = buildTextSizeOptions(t)
+  const autoRestoreFitOptions = buildAutoRestoreOptions(t)
   const [hosts, setHosts] = useState<HostProfile[]>([])
   useEffect(() => {
     void loadHosts().then(setHosts)
@@ -146,14 +207,17 @@ export default function TerminalSettingsScreen() {
   useEffect(() => {
     void loadTerminalTextScale().then(setTextScale)
   }, [])
-  const selectTextSize = useCallback((value: TextSizeValue) => {
-    const opt = TEXT_SIZE_OPTIONS.find((o) => o.value === value)
-    if (!opt) {
-      return
-    }
-    setTextScale(opt.scale)
-    void saveTerminalTextScale(opt.scale)
-  }, [])
+  const selectTextSize = useCallback(
+    (value: TextSizeValue) => {
+      const opt = textSizeOptions.find((o) => o.value === value)
+      if (!opt) {
+        return
+      }
+      setTextScale(opt.scale)
+      void saveTerminalTextScale(opt.scale)
+    },
+    [textSizeOptions]
+  )
 
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   // Why: a fast toggle before the initial load resolves must win — otherwise the
@@ -210,7 +274,7 @@ export default function TerminalSettingsScreen() {
     if (!client) {
       return
     }
-    const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
+    const opt = autoRestoreFitOptions.find((o) => o.value === value)
     if (!opt) {
       return
     }
@@ -259,7 +323,7 @@ export default function TerminalSettingsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Terminal</Text>
+        <Text style={styles.heading}>{t('mobile.terminalSettings.title', 'Terminal')}</Text>
       </View>
 
       <Animated.ScrollView
@@ -272,18 +336,23 @@ export default function TerminalSettingsScreen() {
           scrollContentHeight.value = height
         }}
       >
-        <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
+        <Text style={styles.groupHeading}>
+          {t('mobile.terminalSettings.whenYouLeaveApp', 'WHEN YOU LEAVE THE APP')}
+        </Text>
         <Text style={styles.groupDescription}>
-          While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
-          you close the app or switch away, this controls whether it stays at phone size (so
-          interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
-          use Restore this terminal or Restore all terminals on the banner to resize manually.
+          {t(
+            'mobile.terminalSettings.whenYouLeaveDesc',
+            'While you’re using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don’t reflow) or resizes back to your desktop. You can always use Restore this terminal or Restore all terminals on the banner to resize manually.'
+          )}
         </Text>
 
         {hosts.length === 0 ? (
           <View style={[styles.section, styles.sectionTopGap]}>
             <Text style={styles.emptyText}>
-              No paired desktops yet. Pair one to control terminal behavior.
+              {t(
+                'mobile.terminalSettings.noHosts',
+                'No paired desktops yet. Pair one to control terminal behavior.'
+              )}
             </Text>
           </View>
         ) : (
@@ -297,6 +366,7 @@ export default function TerminalSettingsScreen() {
                     client={client}
                     hostName={host.name}
                     ms={hostMs[host.id]}
+                    autoRestoreOptions={{ options: autoRestoreFitOptions, t }}
                     onPress={() => setPickerHostId(host.id)}
                   />
                 </View>
@@ -305,12 +375,14 @@ export default function TerminalSettingsScreen() {
           </View>
         )}
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEXT SIZE</Text>
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>
+          {t('mobile.terminalSettings.textSize', 'TEXT SIZE')}
+        </Text>
         <Text style={styles.groupDescription}>
-          Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes
-          show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal
-          itself, which updates this setting. Per-device display only; doesn&apos;t change the
-          desktop terminal.
+          {t(
+            'mobile.terminalSettings.textSizeDesc',
+            'Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn’t change the desktop terminal.'
+          )}
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <Pressable
@@ -319,25 +391,35 @@ export default function TerminalSettingsScreen() {
           >
             <Type size={16} color={colors.textSecondary} />
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Text size</Text>
-              <Text style={styles.rowSublabel}>{textSizeSummary(textScale)}</Text>
+              <Text style={styles.rowLabel}>
+                {t('mobile.terminalSettings.textSizeLabel', 'Text size')}
+              </Text>
+              <Text style={styles.rowSublabel}>{textSizeSummary(textSizeOptions, textScale)}</Text>
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
         </View>
 
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>
+          {t('mobile.terminalSettings.keyboardInput', 'KEYBOARD INPUT')}
+        </Text>
         <Text style={styles.groupDescription}>
-          Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
-          command bar. Off by default so the keyboard never rewrites commands, flags, or paths.
-          Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes,
-          so suggestions don&apos;t apply there.
+          {t(
+            'mobile.terminalSettings.keyboardInputDesc',
+            'Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal command bar. Off by default so the keyboard never rewrites commands, flags, or paths. Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes, so suggestions don’t apply there.'
+          )}
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Autocomplete &amp; autocorrect</Text>
-              <Text style={styles.rowSublabel}>{autocompleteEnabled ? 'On' : 'Off'}</Text>
+              <Text style={styles.rowLabel}>
+                {t('mobile.terminalSettings.autocomplete', 'Autocomplete & autocorrect')}
+              </Text>
+              <Text style={styles.rowSublabel}>
+                {autocompleteEnabled
+                  ? t('mobile.terminalSettings.on', 'On')
+                  : t('mobile.terminalSettings.off', 'Off')}
+              </Text>
             </View>
             <Switch
               value={autocompleteEnabled}
@@ -358,9 +440,15 @@ export default function TerminalSettingsScreen() {
 
       <PickerModal<RestoreValue>
         visible={pickerHost != null}
-        title={pickerHost ? `Restore ${pickerHost.name}` : ''}
-        options={AUTO_RESTORE_FIT_OPTIONS}
-        selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null)}
+        title={
+          pickerHost
+            ? t('mobile.terminalSettings.restoreHostTitle', 'Restore {name}', {
+                name: pickerHost.name
+              })
+            : ''
+        }
+        options={autoRestoreFitOptions}
+        selected={valueFromMs(autoRestoreFitOptions, pickerHost ? hostMs[pickerHost.id] : null)}
         onSelect={(v) => {
           if (pickerHost) {
             void selectValue(pickerHost.id, v)
@@ -371,9 +459,9 @@ export default function TerminalSettingsScreen() {
 
       <PickerModal<TextSizeValue>
         visible={textSizePickerOpen}
-        title="Terminal text size"
-        options={TEXT_SIZE_OPTIONS}
-        selected={textSizeValueFromScale(textScale)}
+        title={t('mobile.terminalSettings.textSizePickerTitle', 'Terminal text size')}
+        options={textSizeOptions}
+        selected={textSizeValueFromScale(textSizeOptions, textScale)}
         onSelect={selectTextSize}
         onClose={() => setTextSizePickerOpen(false)}
       />

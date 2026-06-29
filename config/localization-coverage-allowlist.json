@@ -1,1 +1,1982 @@
-[]
+[
+  {
+    "filePath": "mobile/src/browser/MobileBrowserKeyRow.tsx",
+    "line": 26,
+    "column": 61,
+    "kind": "jsx-expression",
+    "text": "Esc",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in browser — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1086,
+    "column": 17,
+    "kind": "jsx-attribute:label",
+    "text": "Back",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (label) — used by browser but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1093,
+    "column": 17,
+    "kind": "jsx-attribute:label",
+    "text": "Forward",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (label) — used by browser but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1100,
+    "column": 17,
+    "kind": "jsx-attribute:label",
+    "text": "Reload",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (label) — used by browser but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1119,
+    "column": 23,
+    "kind": "jsx-attribute:placeholder",
+    "text": "URL",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (placeholder) — used by browser but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1229,
+    "column": 48,
+    "kind": "jsx-text",
+    "text": "Browser Dialog",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in browser — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1240,
+    "column": 59,
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in browser — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1251,
+    "column": 91,
+    "kind": "jsx-text",
+    "text": "OK",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in browser — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPane.tsx",
+    "line": 1279,
+    "column": 25,
+    "kind": "jsx-attribute:placeholder",
+    "text": "Type on page…",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (placeholder) — used by browser but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "line": 7,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Cmd",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in browser. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "line": 8,
+    "column": 24,
+    "kind": "object-property:label",
+    "text": "Ctrl",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in browser. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "line": 9,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Alt",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in browser. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "line": 10,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Shift",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in browser. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserViewModeSwitch.tsx",
+    "line": 12,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Web",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in browser. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/browser/MobileBrowserViewModeSwitch.tsx",
+    "line": 13,
+    "column": 26,
+    "kind": "object-property:label",
+    "text": "Mobile",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in browser. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/AuthFailedBanner.tsx",
+    "line": 22,
+    "column": 9,
+    "kind": "jsx-text",
+    "text": "Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/AuthFailedBanner — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/AuthFailedBanner.tsx",
+    "line": 27,
+    "column": 45,
+    "kind": "jsx-text",
+    "text": "Retry",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/AuthFailedBanner — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/AuthFailedBanner.tsx",
+    "line": 31,
+    "column": 43,
+    "kind": "jsx-text",
+    "text": "Re-pair",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/AuthFailedBanner — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/AuthFailedBanner.tsx",
+    "line": 34,
+    "column": 74,
+    "kind": "jsx-text",
+    "text": "Remove",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/AuthFailedBanner — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/DragReorderList.tsx",
+    "line": 302,
+    "column": 38,
+    "kind": "object-property:label",
+    "text": "Move up",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/DragReorderList. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/DragReorderList.tsx",
+    "line": 303,
+    "column": 40,
+    "kind": "object-property:label",
+    "text": "Move down",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/DragReorderList. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 43,
+    "column": 32,
+    "kind": "jsx-attribute:text",
+    "text": "Loading review...",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (text) — used by components/MobileDiffReviewBody but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 48,
+    "column": 53,
+    "kind": "jsx-attribute:title",
+    "text": "Review Unavailable",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by components/MobileDiffReviewBody but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 48,
+    "column": 76,
+    "kind": "jsx-attribute:title",
+    "text": "Unable to Load Review",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by components/MobileDiffReviewBody but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 55,
+    "column": 33,
+    "kind": "jsx-attribute:title",
+    "text": "No Reviewable Changes",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by components/MobileDiffReviewBody but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 55,
+    "column": 62,
+    "kind": "jsx-attribute:text",
+    "text": "Try a different review filter.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (text) — used by components/MobileDiffReviewBody but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 58,
+    "column": 32,
+    "kind": "jsx-attribute:text",
+    "text": "Loading diff...",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (text) — used by components/MobileDiffReviewBody but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 94,
+    "column": 46,
+    "kind": "jsx-text",
+    "text": "Diff truncated for mobile preview.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobileDiffReviewBody — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewBody.tsx",
+    "line": 157,
+    "column": 42,
+    "kind": "jsx-text",
+    "text": "Retry",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobileDiffReviewBody — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewDrawers.tsx",
+    "line": 297,
+    "column": 76,
+    "kind": "jsx-text",
+    "text": "reviewed,",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobileDiffReviewDrawers — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileDiffReviewFileSummary.tsx",
+    "line": 70,
+    "column": 29,
+    "kind": "jsx-expression",
+    "text": "from",
+    "dynamic": true,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in components/MobileDiffReviewFileSummary — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileHtmlPreview.tsx",
+    "line": 29,
+    "column": 43,
+    "kind": "jsx-text",
+    "text": "Preview",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobileHtmlPreview — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileHtmlPreview.tsx",
+    "line": 37,
+    "column": 43,
+    "kind": "jsx-text",
+    "text": "Source",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobileHtmlPreview — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileMarkdown.tsx",
+    "line": 196,
+    "column": 27,
+    "kind": "jsx-expression",
+    "text": "[x]",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in components/MobileMarkdown — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobilePRSidebar.tsx",
+    "line": 152,
+    "column": 40,
+    "kind": "jsx-text",
+    "text": "Loading pull request…",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobilePRSidebar — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobilePRSidebar.tsx",
+    "line": 168,
+    "column": 42,
+    "kind": "jsx-text",
+    "text": "Retry",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/MobilePRSidebar — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobilePrBasePicker.tsx",
+    "line": 89,
+    "column": 23,
+    "kind": "jsx-attribute:placeholder",
+    "text": "main",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (placeholder) — used by components/MobilePrBasePicker but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 93,
+    "column": 34,
+    "kind": "object-property:label",
+    "text": "Body",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 94,
+    "column": 33,
+    "kind": "object-property:label",
+    "text": "H1",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 95,
+    "column": 33,
+    "kind": "object-property:label",
+    "text": "H2",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 96,
+    "column": 33,
+    "kind": "object-property:label",
+    "text": "H3",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 97,
+    "column": 29,
+    "kind": "object-property:label",
+    "text": "Bold",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 98,
+    "column": 31,
+    "kind": "object-property:label",
+    "text": "Italic",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 99,
+    "column": 31,
+    "kind": "object-property:label",
+    "text": "Strike",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 100,
+    "column": 35,
+    "kind": "object-property:label",
+    "text": "Bullet list",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 101,
+    "column": 36,
+    "kind": "object-property:label",
+    "text": "Numbered list",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 102,
+    "column": 33,
+    "kind": "object-property:label",
+    "text": "Checklist",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 103,
+    "column": 30,
+    "kind": "object-property:label",
+    "text": "Quote",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 104,
+    "column": 29,
+    "kind": "object-property:label",
+    "text": "Link",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 105,
+    "column": 30,
+    "kind": "object-property:label",
+    "text": "Image",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 106,
+    "column": 35,
+    "kind": "object-property:label",
+    "text": "Inline code",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileRichMarkdownEditor.tsx",
+    "line": 107,
+    "column": 34,
+    "kind": "object-property:label",
+    "text": "Code block",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/MobileRichMarkdownEditor. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/MobileWorkspaceNameInput.tsx",
+    "line": 35,
+    "column": 19,
+    "kind": "jsx-attribute:placeholder",
+    "text": "Workspace name",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (placeholder) — used by components/MobileWorkspaceNameInput but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/WorkspaceDetailPlaceholder.tsx",
+    "line": 13,
+    "column": 34,
+    "kind": "jsx-text",
+    "text": "No workspace open",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/WorkspaceDetailPlaceholder — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/WorkspaceDetailPlaceholder.tsx",
+    "line": 14,
+    "column": 33,
+    "kind": "jsx-text",
+    "text": "Pick a workspace from the sidebar to open its terminal here.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/WorkspaceDetailPlaceholder — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/new-worktree-agent-selection.ts",
+    "line": 21,
+    "column": 10,
+    "kind": "object-property:label",
+    "text": "Blank Terminal",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/new-worktree-agent-selection. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/MermaidDiagram.tsx",
+    "line": 28,
+    "column": 40,
+    "kind": "jsx-text",
+    "text": "mermaid",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: inline <Text> child in components/pr-sidebar — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/MobileLinkPrForm.tsx",
+    "line": 69,
+    "column": 21,
+    "kind": "jsx-attribute:placeholder",
+    "text": "#123 or https://github.com/owner/repo/pull/123",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (placeholder) — used by components/pr-sidebar but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/MobilePrViewPanel.tsx",
+    "line": 68,
+    "column": 20,
+    "kind": "object-property:message",
+    "text": "Hosted review panel unavailable for this provider.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/MobilePrViewPanel.tsx",
+    "line": 73,
+    "column": 22,
+    "kind": "object-property:message",
+    "text": "Current branch unavailable.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/MobilePrViewPanel.tsx",
+    "line": 105,
+    "column": 15,
+    "kind": "jsx-text",
+    "text": "Pull Request",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: inline <Text> child in components/pr-sidebar — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/PRCommentComposer.tsx",
+    "line": 72,
+    "column": 45,
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/pr-sidebar — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/PRConflictingFilesSection.tsx",
+    "line": 82,
+    "column": 22,
+    "kind": "jsx-attribute:title",
+    "text": "Conflicts",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by components/pr-sidebar but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/PRReviewersSection.tsx",
+    "line": 51,
+    "column": 13,
+    "kind": "jsx-attribute:title",
+    "text": "Reviewers",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by components/pr-sidebar but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/PRReviewersSection.tsx",
+    "line": 64,
+    "column": 40,
+    "kind": "jsx-text",
+    "text": "No reviewers requested",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in components/pr-sidebar — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 76,
+    "column": 82,
+    "kind": "object-property:label",
+    "text": "No checks",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 224,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Approved",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 226,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Changes requested",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 228,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Commented",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 230,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Dismissed",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 232,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Pending",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-checks-presentation.ts",
+    "line": 235,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Reviewed",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-comment-audience.ts",
+    "line": 10,
+    "column": 26,
+    "kind": "object-property:label",
+    "text": "All",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-comment-audience.ts",
+    "line": 11,
+    "column": 28,
+    "kind": "object-property:label",
+    "text": "Humans",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/components/pr-sidebar/pr-comment-audience.ts",
+    "line": 12,
+    "column": 26,
+    "kind": "object-property:label",
+    "text": "Bots",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in components/pr-sidebar. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFileExplorerPanel.tsx",
+    "line": 176,
+    "column": 52,
+    "kind": "jsx-text",
+    "text": "Unavailable on mobile",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFileExplorerPanel.tsx",
+    "line": 205,
+    "column": 11,
+    "kind": "jsx-text",
+    "text": "Files",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFileExplorerPanel.tsx",
+    "line": 209,
+    "column": 24,
+    "kind": "jsx-expression",
+    "text": "- Showing first 5000",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in src — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFileExplorerPanel.tsx",
+    "line": 231,
+    "column": 40,
+    "kind": "jsx-text",
+    "text": "Retry",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFileExplorerPanel.tsx",
+    "line": 236,
+    "column": 38,
+    "kind": "jsx-text",
+    "text": "No files found",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFilePreviewScreen.tsx",
+    "line": 40,
+    "column": 46,
+    "kind": "object-property:message",
+    "text": "Loading preview...",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFilePreviewScreen.tsx",
+    "line": 50,
+    "column": 48,
+    "kind": "object-property:message",
+    "text": "Waiting for desktop...",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFilePreviewScreen.tsx",
+    "line": 122,
+    "column": 50,
+    "kind": "object-property:message",
+    "text": "Unable to load preview",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFilePreviewScreen.tsx",
+    "line": 154,
+    "column": 42,
+    "kind": "jsx-text",
+    "text": "Retry",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFilePreviewScreen.tsx",
+    "line": 163,
+    "column": 40,
+    "kind": "jsx-text",
+    "text": "Empty file",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/MobileFilePreviewSourceText.tsx",
+    "line": 38,
+    "column": 7,
+    "kind": "jsx-text",
+    "text": "Preview truncated. File size:",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in src — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-request.ts",
+    "line": 95,
+    "column": 40,
+    "kind": "object-property:message",
+    "text": "Binary preview unavailable",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-request.ts",
+    "line": 98,
+    "column": 40,
+    "kind": "object-property:message",
+    "text": "File too large for mobile preview",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-request.ts",
+    "line": 105,
+    "column": 40,
+    "kind": "object-property:message",
+    "text": "Unable to reach the desktop filesystem",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-request.ts",
+    "line": 113,
+    "column": 40,
+    "kind": "object-property:message",
+    "text": "File not found",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-request.ts",
+    "line": 115,
+    "column": 38,
+    "kind": "object-property:message",
+    "text": "Unable to load preview",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/files/mobile-file-preview-route.ts",
+    "line": 43,
+    "column": 34,
+    "kind": "object-property:message",
+    "text": "Unable to load preview",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/github-pr-mutations.ts",
+    "line": 121,
+    "column": 32,
+    "kind": "object-property:error",
+    "text": "Failed to update title.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/github-pr-mutations.ts",
+    "line": 284,
+    "column": 32,
+    "kind": "object-property:error",
+    "text": "Failed to update review thread.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/mobile-diff-review-loaders.ts",
+    "line": 61,
+    "column": 32,
+    "kind": "object-property:error",
+    "text": "Committed changes response was invalid",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/mobile-diff-review-loaders.ts",
+    "line": 74,
+    "column": 46,
+    "kind": "object-property:message",
+    "text": "Update Orca desktop to review changes on mobile.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/mobile-diff-review-queue.ts",
+    "line": 217,
+    "column": 15,
+    "kind": "object-property:subtitle",
+    "text": "Committed on branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:subtitle in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-diff-review-controller.ts",
+    "line": 66,
+    "column": 48,
+    "kind": "object-property:message",
+    "text": "Missing worktree",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-diff-review-controller.ts",
+    "line": 70,
+    "column": 48,
+    "kind": "object-property:message",
+    "text": "Waiting for desktop...",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: kind=object-property:message in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-image-attachment.ts",
+    "line": 73,
+    "column": 21,
+    "kind": "user-visible-call",
+    "text": "Attach failed (disconnected)",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=user-visible-call in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-image-attachment.ts",
+    "line": 77,
+    "column": 21,
+    "kind": "user-visible-call",
+    "text": "Photo permission denied",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=user-visible-call in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-image-attachment.ts",
+    "line": 81,
+    "column": 21,
+    "kind": "user-visible-call",
+    "text": "Image too large to attach",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=user-visible-call in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-image-attachment.ts",
+    "line": 84,
+    "column": 19,
+    "kind": "user-visible-call",
+    "text": "Attach failed",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=user-visible-call in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/session/use-mobile-pr-actions.ts",
+    "line": 150,
+    "column": 58,
+    "kind": "object-property:error",
+    "text": "Not connected",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
+    "line": 34,
+    "column": 17,
+    "kind": "jsx-expression",
+    "text": "..HEAD",
+    "dynamic": true,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in source-control — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
+    "line": 35,
+    "column": 17,
+    "kind": "jsx-expression",
+    "text": "Committed on branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in source-control — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
+    "line": 53,
+    "column": 43,
+    "kind": "jsx-text",
+    "text": "Unable to Load Diff",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileBranchDiffPreviewDrawer.tsx",
+    "line": 59,
+    "column": 52,
+    "kind": "jsx-text",
+    "text": "Diff truncated for mobile preview.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileCommitFailurePanel.tsx",
+    "line": 23,
+    "column": 51,
+    "kind": "jsx-text",
+    "text": "Commit failed",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileCommitFailurePanel.tsx",
+    "line": 44,
+    "column": 59,
+    "kind": "jsx-text",
+    "text": "Fix",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileCommitFailurePanel.tsx",
+    "line": 62,
+    "column": 27,
+    "kind": "jsx-expression",
+    "text": "Hide details",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in source-control — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileCommitFailurePanel.tsx",
+    "line": 62,
+    "column": 44,
+    "kind": "jsx-expression",
+    "text": "Show details",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in source-control — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 73,
+    "column": 58,
+    "kind": "jsx-text",
+    "text": "changed",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 74,
+    "column": 56,
+    "kind": "jsx-text",
+    "text": "staged",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 76,
+    "column": 67,
+    "kind": "jsx-text",
+    "text": "on branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 131,
+    "column": 49,
+    "kind": "jsx-text",
+    "text": "Stage All",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 147,
+    "column": 49,
+    "kind": "jsx-text",
+    "text": "Unstage All",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 167,
+    "column": 43,
+    "kind": "jsx-text",
+    "text": "No Changes",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 168,
+    "column": 42,
+    "kind": "jsx-text",
+    "text": "Working tree is clean.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 225,
+    "column": 60,
+    "kind": "jsx-text",
+    "text": "No staged files",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlContent.tsx",
+    "line": 232,
+    "column": 27,
+    "kind": "jsx-attribute:placeholder",
+    "text": "Commit message",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (placeholder) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlFileRows.tsx",
+    "line": 69,
+    "column": 15,
+    "kind": "jsx-text",
+    "text": "from",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlFileRows.tsx",
+    "line": 73,
+    "column": 15,
+    "kind": "jsx-text",
+    "text": "Unresolved conflict",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlFileRows.tsx",
+    "line": 169,
+    "column": 45,
+    "kind": "jsx-text",
+    "text": "Committed on Branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlFileRows.tsx",
+    "line": 181,
+    "column": 48,
+    "kind": "jsx-text",
+    "text": "Loading committed changes...",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlHeader.tsx",
+    "line": 37,
+    "column": 11,
+    "kind": "jsx-text",
+    "text": "Source Control",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 42,
+    "column": 15,
+    "kind": "jsx-attribute:title",
+    "text": "Source Control",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 50,
+    "column": 15,
+    "kind": "jsx-attribute:title",
+    "text": "Discard Change",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 53,
+    "column": 15,
+    "kind": "jsx-attribute:message",
+    "text": "Discard changes to \"",
+    "dynamic": true,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (message) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 53,
+    "column": 15,
+    "kind": "jsx-attribute:message",
+    "text": "\"? This cannot be undone.",
+    "dynamic": true,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (message) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 72,
+    "column": 15,
+    "kind": "jsx-attribute:title",
+    "text": "Switch Branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 91,
+    "column": 15,
+    "kind": "jsx-attribute:title",
+    "text": "Pull Request Created",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (title) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 94,
+    "column": 15,
+    "kind": "jsx-attribute:message",
+    "text": "Open it in your browser?",
+    "dynamic": true,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (message) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlModals.tsx",
+    "line": 95,
+    "column": 15,
+    "kind": "jsx-attribute:message",
+    "text": "Open it in your browser?",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: prop attribute (message) — used by source-control but not statically translatable in PR2 scope. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlPanel.tsx",
+    "line": 84,
+    "column": 51,
+    "kind": "jsx-expression",
+    "text": "Source Control Unavailable",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in source-control — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlPanel.tsx",
+    "line": 84,
+    "column": 82,
+    "kind": "jsx-expression",
+    "text": "Unable to Load",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: JSX expression in source-control — template literal or inline value. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/MobileSourceControlPanel.tsx",
+    "line": 102,
+    "column": 46,
+    "kind": "jsx-text",
+    "text": "Retry",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-branch-compare.ts",
+    "line": 32,
+    "column": 12,
+    "kind": "object-property:title",
+    "text": "Committed on Branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:title in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-commit-message-ai.ts",
+    "line": 25,
+    "column": 37,
+    "kind": "object-property:error",
+    "text": "Failed to generate commit message",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-hosted-review-create-intent.ts",
+    "line": 102,
+    "column": 14,
+    "kind": "object-property:error",
+    "text": "Resolve conflicts before creating a pull request.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-hosted-review-create-intent.ts",
+    "line": 133,
+    "column": 16,
+    "kind": "object-property:error",
+    "text": "Branch changed while preparing the pull request.",
+    "dynamic": false,
+    "count": 6,
+    "reason": "PR2 follow-up: kind=object-property:error in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-hosted-review-create-intent.ts",
+    "line": 144,
+    "column": 14,
+    "kind": "object-property:error",
+    "text": "Resolve or stage changes before creating a pull request.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-hosted-review-create-intent.ts",
+    "line": 157,
+    "column": 16,
+    "kind": "object-property:error",
+    "text": "Could not generate a commit message. Add one in Source Control, then retry.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-hosted-review-service.ts",
+    "line": 163,
+    "column": 34,
+    "kind": "object-property:error",
+    "text": "Push failed. Resolve the push error, then try again.",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: kind=object-property:error in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 86,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Commit",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 95,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Commit & Push",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 104,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Commit & Sync",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 128,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Create PR",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 137,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Push & Create PR",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 169,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Fetch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 177,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Publish Branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 205,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Rebase onto base",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 213,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "Switch branch",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-actions.ts",
+    "line": 220,
+    "column": 14,
+    "kind": "object-property:label",
+    "text": "History",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/mobile-source-control-review-entry.tsx",
+    "line": 54,
+    "column": 33,
+    "kind": "jsx-text",
+    "text": "Review Changes",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: inline <Text> child in source-control — text directly between tags. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/source-control/use-mobile-source-control-loaders.ts",
+    "line": 204,
+    "column": 26,
+    "kind": "object-property:message",
+    "text": "Update Orca desktop to use Source Control on mobile.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:message in source-control. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/tasks/sparse-preset-draft.ts",
+    "line": 43,
+    "column": 14,
+    "kind": "object-property:error",
+    "text": "Use repo-relative directories, not root, absolute paths, or parent segments.",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: kind=object-property:error in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/tasks/sparse-preset-draft.ts",
+    "line": 52,
+    "column": 14,
+    "kind": "object-property:error",
+    "text": "Add at least one directory.",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:error in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 203,
+    "column": 26,
+    "kind": "object-property:label",
+    "text": "Esc",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 204,
+    "column": 23,
+    "kind": "object-property:label",
+    "text": "Tab",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 205,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Enter",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 207,
+    "column": 28,
+    "kind": "object-property:label",
+    "text": "Shift+Tab",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 208,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Space",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 212,
+    "column": 12,
+    "kind": "object-property:label",
+    "text": "Del",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 239,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+C",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 240,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+D",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 241,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+L",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 242,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+Z",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 243,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+R",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 244,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+A",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 245,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+E",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 246,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+W",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/terminal/terminal-accessory-keys.ts",
+    "line": 247,
+    "column": 25,
+    "kind": "object-property:label",
+    "text": "Ctrl+U",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 42,
+    "column": 42,
+    "kind": "object-property:label",
+    "text": "Auth failed",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 47,
+    "column": 37,
+    "kind": "object-property:label",
+    "text": "Connected",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 50,
+    "column": 37,
+    "kind": "object-property:label",
+    "text": "Connecting…",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 54,
+    "column": 37,
+    "kind": "object-property:label",
+    "text": "Disconnected",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 62,
+    "column": 16,
+    "kind": "object-property:label",
+    "text": "Can't reach desktop",
+    "dynamic": false,
+    "count": 4,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 76,
+    "column": 38,
+    "kind": "object-property:label",
+    "text": "Can't connect",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/transport/connection-health.ts",
+    "line": 79,
+    "column": 35,
+    "kind": "object-property:label",
+    "text": "Reconnecting…",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in src. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/mobile-workspace-statuses.ts",
+    "line": 6,
+    "column": 29,
+    "kind": "object-property:label",
+    "text": "Done",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/mobile-workspace-statuses.ts",
+    "line": 7,
+    "column": 29,
+    "kind": "object-property:label",
+    "text": "In review",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/mobile-workspace-statuses.ts",
+    "line": 10,
+    "column": 12,
+    "kind": "object-property:label",
+    "text": "In progress",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/mobile-workspace-statuses.ts",
+    "line": 14,
+    "column": 24,
+    "kind": "object-property:label",
+    "text": "Todo",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 8,
+    "column": 12,
+    "kind": "object-property:label",
+    "text": "Agent activity",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 9,
+    "column": 15,
+    "kind": "object-property:subtitle",
+    "text": "Agents that need attention, then recent activity",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:subtitle in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 11,
+    "column": 27,
+    "kind": "object-property:label",
+    "text": "Name",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 11,
+    "column": 45,
+    "kind": "object-property:subtitle",
+    "text": "Alphabetical by name",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:subtitle in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 12,
+    "column": 29,
+    "kind": "object-property:label",
+    "text": "Recent",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 12,
+    "column": 49,
+    "kind": "object-property:subtitle",
+    "text": "Most recent output first",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:subtitle in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 13,
+    "column": 27,
+    "kind": "object-property:label",
+    "text": "Repo",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 13,
+    "column": 45,
+    "kind": "object-property:subtitle",
+    "text": "Repository, then workspace name",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:subtitle in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 14,
+    "column": 29,
+    "kind": "object-property:label",
+    "text": "Manual",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 14,
+    "column": 49,
+    "kind": "object-property:subtitle",
+    "text": "Server order",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:subtitle in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 18,
+    "column": 27,
+    "kind": "object-property:label",
+    "text": "No Grouping",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 19,
+    "column": 38,
+    "kind": "object-property:label",
+    "text": "Status",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 20,
+    "column": 27,
+    "kind": "object-property:label",
+    "text": "Repository",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  },
+  {
+    "filePath": "mobile/src/worktree/workspace-list-picker-options.ts",
+    "line": 21,
+    "column": 31,
+    "kind": "object-property:label",
+    "text": "PR Status",
+    "dynamic": false,
+    "count": 2,
+    "reason": "PR2 follow-up: kind=object-property:label in worktree/worktree. Per-site translation work deferred to PR3."
+  }
+]

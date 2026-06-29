@@ -2,6 +2,7 @@ import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'luci
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { useTranslate } from '../i18n/useTranslate'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { AgentSpinner } from './AgentSpinner'
@@ -69,8 +70,9 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
   onLongPress,
   onToggleLineage
 }: Props<T>) {
+  const { t } = useTranslate()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
-  const folderMeta = item.comment?.trim() || item.path || 'Folder'
+  const folderMeta = item.comment?.trim() || item.path || t('mobile.worktreeList.folder', 'Folder')
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
   const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
   const lineageChildCount = item.lineageChildCount ?? 0
@@ -129,7 +131,9 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
           )}
           {isFolderWorkspace && (
             <View style={styles.folderBadge}>
-              <Text style={styles.folderBadgeText}>Folder</Text>
+              <Text style={styles.folderBadgeText}>
+                {t('mobile.worktreeList.folder', 'Folder')}
+              </Text>
             </View>
           )}
           <WorktreeMetaGlyphs
@@ -144,7 +148,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
           {lineageDepth > 0 && (
             <View style={styles.childBadge}>
               <GitBranch size={10} color={colors.textMuted} />
-              <Text style={styles.childBadgeText}>Child</Text>
+              <Text style={styles.childBadgeText}>{t('mobile.worktreeList.child', 'Child')}</Text>
             </View>
           )}
           {/* Repo glyph+name only when not already grouped under this repo;
@@ -182,7 +186,9 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
             )}
             <GitBranch size={12} color={colors.textSecondary} />
             <Text style={styles.lineageToggleText}>
-              {lineageChildCount} {lineageChildCount === 1 ? 'child' : 'children'}
+              {lineageChildCount === 1
+                ? t('mobile.worktreeList.childCount', '{n} child', { n: lineageChildCount })
+                : t('mobile.worktreeList.childrenCount', '{n} children', { n: lineageChildCount })}
             </Text>
           </Pressable>
         ) : null}

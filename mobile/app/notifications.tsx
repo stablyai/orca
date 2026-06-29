@@ -13,6 +13,7 @@ import {
   getNotificationPermissionState,
   type NotificationPermissionState
 } from '../src/notifications/mobile-notifications'
+import { useTranslate } from '../src/i18n/useTranslate'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -23,6 +24,7 @@ const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
 export default function NotificationsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
 
@@ -68,8 +70,11 @@ export default function NotificationsScreen() {
   const switchEnabled = pushEnabled && permissionState.granted
   const notificationsBlocked = permissionState.status === 'denied'
   const hint = notificationsBlocked
-    ? 'Notifications are disabled in system settings.'
-    : 'Receive notifications when an agent task completes on your desktop.'
+    ? t('mobile.notifications.blockedHint', 'Notifications are disabled in system settings.')
+    : t(
+        'mobile.notifications.defaultHint',
+        'Receive notifications when an agent task completes on your desktop.'
+      )
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -77,12 +82,14 @@ export default function NotificationsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Notifications</Text>
+        <Text style={styles.heading}>{t('mobile.notifications.title', 'Notifications')}</Text>
       </View>
 
       <View style={styles.section}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Push Notifications</Text>
+          <Text style={styles.rowLabel}>
+            {t('mobile.notifications.push', 'Push Notifications')}
+          </Text>
           <Switch
             value={switchEnabled}
             disabled={notificationsBlocked}
@@ -100,7 +107,9 @@ export default function NotificationsScreen() {
             ]}
             onPress={() => void Linking.openSettings()}
           >
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
+            <Text style={styles.settingsButtonText}>
+              {t('mobile.notifications.openSettings', 'Open Settings')}
+            </Text>
           </Pressable>
         )}
       </View>

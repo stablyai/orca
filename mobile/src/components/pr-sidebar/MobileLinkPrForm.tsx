@@ -5,6 +5,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
+import { useTranslate } from '../../i18n/useTranslate'
 
 type Props = {
   client: RpcClient | null
@@ -17,6 +18,7 @@ type Props = {
 // it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
 // form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
+  const { t } = useTranslate()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,18 +48,20 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   return (
     <View>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Link existing pull request</Text>
+        <Text style={styles.heading}>
+          {t('mobile.prLink.heading', 'Link existing pull request')}
+        </Text>
         <Pressable
           onPress={onCancel}
           disabled={submitting}
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t('mobile.prLink.cancel', 'Cancel')}
           hitSlop={8}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('mobile.prLink.cancel', 'Cancel')}</Text>
         </Pressable>
       </View>
-      <Text style={styles.label}>PR number or GitHub URL</Text>
+      <Text style={styles.label}>{t('mobile.prLink.label', 'PR number or GitHub URL')}</Text>
       <TextInput
         style={styles.input}
         value={input}
@@ -81,7 +85,11 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
         {submitting ? (
           <ActivityIndicator size="small" color={colors.bgBase} />
         ) : (
-          <Text style={styles.submitText}>{parsed ? `Link #${parsed}` : 'Link pull request'}</Text>
+          <Text style={styles.submitText}>
+            {parsed
+              ? t('mobile.prLink.submitWithNumber', 'Link #{{number}}', { number: parsed })
+              : t('mobile.prLink.submit', 'Link pull request')}
+          </Text>
         )}
       </Pressable>
     </View>

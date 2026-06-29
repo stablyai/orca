@@ -1,18 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Switch,
-  StyleSheet,
-  Platform,
-  ActivityIndicator
-} from 'react-native'
+import { View, Text, TextInput, Pressable, Switch, ActivityIndicator } from 'react-native'
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { useTranslate } from '../i18n/useTranslate'
+import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
@@ -41,6 +33,7 @@ import {
   resolveNewWorktreeAgentSelection,
   type NewWorktreeAgentOption as AgentOption
 } from './new-worktree-agent-selection'
+import { styles } from './new-worktree-modal-styles'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
 import {
@@ -170,6 +163,7 @@ function NewWorktreeModalContent({
   onCreated,
   onClose
 }: Props) {
+  const { t } = useTranslate()
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
@@ -352,7 +346,10 @@ function NewWorktreeModalContent({
           setSshState({
             targetId: selectedRepoConnectionId,
             status: 'error',
-            error: err instanceof Error ? err.message : 'Failed to read SSH connection state.',
+            error:
+              err instanceof Error
+                ? err.message
+                : t('mobile.newWorktree.failedToReadSsh', 'Failed to read SSH connection state.'),
             reconnectAttempt: 0
           })
         }
@@ -476,7 +473,10 @@ function NewWorktreeModalContent({
       setSshState({
         targetId: selectedRepoConnectionId,
         status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to connect to SSH repository.',
+        error:
+          err instanceof Error
+            ? err.message
+            : t('mobile.newWorktree.failedToConnectSsh', 'Failed to connect to SSH repository.'),
         reconnectAttempt: 0
       })
     } finally {
@@ -514,7 +514,13 @@ function NewWorktreeModalContent({
 
     try {
       if (sshGate.requiresConnection) {
-        setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
+        setError(
+          t(
+            'mobile.newWorktree.connectBeforeCreating',
+            'Connect {repo} before creating a workspace.',
+            { repo: selectedRepo.displayName }
+          )
+        )
         return
       }
       let latestRuntimeSettings = runtimeSettings
@@ -534,7 +540,12 @@ function NewWorktreeModalContent({
       ) {
         setSelectedAgent(pickPreferredNewWorktreeAgent(latestRuntimeSettings, detectedAgentIds))
         setAgentOverridden(false)
-        setError('Selected agent is disabled. Choose an enabled agent before creating.')
+        setError(
+          t(
+            'mobile.newWorktree.agentDisabled',
+            'Selected agent is disabled. Choose an enabled agent before creating.'
+          )
+        )
         return
       }
 
@@ -577,7 +588,9 @@ function NewWorktreeModalContent({
           setupDecision = options.setupOverride
         } else if (setupRunPolicy === 'ask') {
           if (!setupDecisionChoice) {
-            setError('Choose whether to run the setup script.')
+            setError(
+              t('mobile.newWorktree.chooseSetupScript', 'Choose whether to run the setup script.')
+            )
             return
           }
           setupDecision = setupDecisionChoice
@@ -634,9 +647,13 @@ function NewWorktreeModalContent({
           break
         }
       }
-      setError(lastError ?? 'Failed to create workspace')
+      setError(lastError ?? t('mobile.newWorktree.createFailed', 'Failed to create workspace'))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create workspace')
+      setError(
+        e instanceof Error
+          ? e.message
+          : t('mobile.newWorktree.createFailed', 'Failed to create workspace')
+      )
     } finally {
       setCreating(false)
     }
@@ -671,9 +688,12 @@ function NewWorktreeModalContent({
     <>
       <BottomDrawer visible={visible} onClose={onClose}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create Workspace</Text>
+          <Text style={styles.title}>{t('mobile.newWorktree.title', 'Create Workspace')}</Text>
           <Text style={styles.subtitle}>
-            Pick a repository and agent to spin up a new workspace.
+            {t(
+              'mobile.newWorktree.subtitle',
+              'Pick a repository and agent to spin up a new workspace.'
+            )}
           </Text>
         </View>
 
@@ -683,12 +703,14 @@ function NewWorktreeModalContent({
           </View>
         ) : repos.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.emptyText}>No repositories found</Text>
+            <Text style={styles.emptyText}>
+              {t('mobile.newWorktree.noRepositories', 'No repositories found')}
+            </Text>
           </View>
         ) : (
           <>
             <View style={styles.field}>
-              <Text style={styles.label}>Repository</Text>
+              <Text style={styles.label}>{t('mobile.newWorktree.repository', 'Repository')}</Text>
               <Pressable style={styles.fieldButton} onPress={() => setShowRepoPicker(true)}>
                 {selectedRepo ? (
                   <View
@@ -699,7 +721,8 @@ function NewWorktreeModalContent({
                   style={[styles.fieldButtonText, !selectedRepo && styles.fieldButtonPlaceholder]}
                   numberOfLines={1}
                 >
-                  {selectedRepo?.displayName ?? 'Select a repository'}
+                  {selectedRepo?.displayName ??
+                    t('mobile.newWorktree.selectRepository', 'Select a repository')}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
@@ -707,7 +730,9 @@ function NewWorktreeModalContent({
 
             {selectedRepoConnectionId ? (
               <View style={styles.field}>
-                <Text style={styles.label}>SSH Connection</Text>
+                <Text style={styles.label}>
+                  {t('mobile.newWorktree.sshConnection', 'SSH Connection')}
+                </Text>
                 <View style={styles.sshBox}>
                   <View style={styles.sshRow}>
                     <View
@@ -722,7 +747,8 @@ function NewWorktreeModalContent({
                     />
                     <View style={styles.sshCopy}>
                       <Text style={styles.sshTitle} numberOfLines={1}>
-                        {selectedRepo?.displayName ?? 'Remote repository'}
+                        {selectedRepo?.displayName ??
+                          t('mobile.newWorktree.remoteRepository', 'Remote repository')}
                       </Text>
                       <Text style={styles.sshSubtitle}>
                         {workspaceSshStatusLabel(sshGate.status)}
@@ -738,7 +764,9 @@ function NewWorktreeModalContent({
                         onPress={() => void connectSelectedSshRepo()}
                       >
                         <Text style={styles.sshConnectText}>
-                          {sshGate.connectInProgress ? 'Connecting...' : 'Connect'}
+                          {sshGate.connectInProgress
+                            ? t('mobile.newWorktree.connecting', 'Connecting...')
+                            : t('mobile.newWorktree.connect', 'Connect')}
                         </Text>
                       </Pressable>
                     )}
@@ -750,13 +778,16 @@ function NewWorktreeModalContent({
 
             <View style={styles.field}>
               <Text style={styles.label}>
-                Workspace Name <Text style={styles.labelHint}>[Optional]</Text>
+                {t('mobile.newWorktree.workspaceName', 'Workspace Name')}{' '}
+                <Text style={styles.labelHint}>
+                  {t('mobile.newWorktree.optional', '[Optional]')}
+                </Text>
               </Text>
               <MobileWorkspaceNameInput
                 style={styles.input}
                 value={name}
-                onChangeText={(t) => {
-                  setName(t)
+                onChangeText={(value) => {
+                  setName(value)
                   setError('')
                 }}
                 placeholderTextColor={colors.textMuted}
@@ -771,7 +802,7 @@ function NewWorktreeModalContent({
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Agent</Text>
+              <Text style={styles.label}>{t('mobile.newWorktree.agent', 'Agent')}</Text>
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
@@ -779,14 +810,18 @@ function NewWorktreeModalContent({
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
                 <Text style={styles.fieldButtonText} numberOfLines={1}>
-                  {sshGate.requiresConnection ? 'Connect repository first' : selectedAgent.label}
+                  {sshGate.requiresConnection
+                    ? t('mobile.newWorktree.connectRepoFirst', 'Connect repository first')
+                    : selectedAgent.label}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
             </View>
 
             <Pressable style={styles.advancedToggle} onPress={() => setShowAdvanced(!showAdvanced)}>
-              <Text style={styles.advancedText}>Advanced</Text>
+              <Text style={styles.advancedText}>
+                {t('mobile.newWorktree.advanced', 'Advanced')}
+              </Text>
               {showAdvanced ? (
                 <ChevronUp size={14} color={colors.textSecondary} />
               ) : (
@@ -797,12 +832,12 @@ function NewWorktreeModalContent({
             {showAdvanced && (
               <>
                 <View style={styles.field}>
-                  <Text style={styles.label}>Note</Text>
+                  <Text style={styles.label}>{t('mobile.newWorktree.note', 'Note')}</Text>
                   <TextInput
                     style={styles.input}
                     value={note}
                     onChangeText={setNote}
-                    placeholder="Write a note"
+                    placeholder={t('mobile.newWorktree.writeNote', 'Write a note')}
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -812,11 +847,15 @@ function NewWorktreeModalContent({
                 {setupCommand ? (
                   <View style={styles.field}>
                     <View style={styles.setupHeader}>
-                      <Text style={styles.label}>Setup script</Text>
+                      <Text style={styles.label}>
+                        {t('mobile.newWorktree.setupScript', 'Setup script')}
+                      </Text>
                       {setupSource && (
                         <View style={styles.sourceBadge}>
                           <Text style={styles.sourceBadgeText}>
-                            {setupSource === 'orca.yaml' ? 'ORCA.YAML' : 'HOOKS'}
+                            {setupSource === 'orca.yaml'
+                              ? t('mobile.newWorktree.sourceOrcaYaml', 'ORCA.YAML')
+                              : t('mobile.newWorktree.sourceHooks', 'HOOKS')}
                           </Text>
                         </View>
                       )}
@@ -831,7 +870,9 @@ function NewWorktreeModalContent({
                             ]}
                             onPress={() => setSetupDecisionChoice('run')}
                           >
-                            <Text style={styles.setupChoiceText}>Run</Text>
+                            <Text style={styles.setupChoiceText}>
+                              {t('mobile.newWorktree.run', 'Run')}
+                            </Text>
                           </Pressable>
                           <Pressable
                             style={[
@@ -840,12 +881,16 @@ function NewWorktreeModalContent({
                             ]}
                             onPress={() => setSetupDecisionChoice('skip')}
                           >
-                            <Text style={styles.setupChoiceText}>Skip</Text>
+                            <Text style={styles.setupChoiceText}>
+                              {t('mobile.newWorktree.skip', 'Skip')}
+                            </Text>
                           </Pressable>
                         </View>
                       ) : (
                         <View style={styles.setupToggleRow}>
-                          <Text style={styles.setupToggleLabel}>Run setup command</Text>
+                          <Text style={styles.setupToggleLabel}>
+                            {t('mobile.newWorktree.runSetupCommand', 'Run setup command')}
+                          </Text>
                           <Switch
                             value={runSetup}
                             onValueChange={setRunSetup}
@@ -876,7 +921,9 @@ function NewWorktreeModalContent({
                   <ActivityIndicator size="small" color={colors.bgBase} />
                 ) : (
                   <Text style={styles.createText}>
-                    {sshGate.requiresConnection ? 'Connect Repository' : 'Create Workspace'}
+                    {sshGate.requiresConnection
+                      ? t('mobile.newWorktree.connectRepository', 'Connect Repository')
+                      : t('mobile.newWorktree.createWorkspace', 'Create Workspace')}
                   </Text>
                 )}
               </Pressable>
@@ -889,7 +936,7 @@ function NewWorktreeModalContent({
           layer on top and scroll without touch conflicts. */}
       <PickerListDrawer
         visible={visible && showRepoPicker}
-        title="Repository"
+        title={t('mobile.newWorktree.repository', 'Repository')}
         items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
         onSelect={(item) => setSelectedRepo(item.repo)}
@@ -901,7 +948,7 @@ function NewWorktreeModalContent({
 
       <PickerListDrawer
         visible={visible && showAgentPicker}
-        title="Agent"
+        title={t('mobile.newWorktree.selectAgent', 'Select an agent')}
         items={pickerAgentOptions}
         selectedId={selectedAgent.id}
         onSelect={(agent) => {
@@ -921,18 +968,26 @@ function NewWorktreeModalContent({
             <View style={styles.trustHeader}>
               <Text style={styles.title}>
                 {setupTrustPrompt.previouslyApproved
-                  ? `${setupTrustPrompt.repoName}'s setup script changed`
-                  : `Run setup from ${setupTrustPrompt.repoName}?`}
+                  ? t('mobile.newWorktree.setupScriptChanged', "{repo}'s setup script changed", {
+                      repo: setupTrustPrompt.repoName
+                    })
+                  : t('mobile.newWorktree.runSetupFrom', 'Run setup from {repo}?', {
+                      repo: setupTrustPrompt.repoName
+                    })}
               </Text>
               <Text style={styles.subtitle}>
-                This repository's orca.yaml runs before the workspace starts. Only run it if you
-                trust this repository.
+                {t(
+                  'mobile.newWorktree.setupTrustBody',
+                  "This repository's orca.yaml runs before the workspace starts. Only run it if you trust this repository."
+                )}
               </Text>
             </View>
 
             <View style={styles.trustScriptBox}>
               <Text style={styles.trustScriptLabel}>
-                {setupTrustPrompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+                {setupTrustPrompt.previouslyApproved
+                  ? t('mobile.newWorktree.newSetupScript', 'New setup script')
+                  : t('mobile.newWorktree.setupScript', 'Setup script')}
               </Text>
               <Text style={styles.trustScriptText}>{setupTrustPrompt.scriptContent}</Text>
             </View>
@@ -956,13 +1011,22 @@ function NewWorktreeModalContent({
                         approvedSetupContentHash: approvedHash
                       })
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : t(
+                              'mobile.newWorktree.failedToTrustSetup',
+                              'Failed to trust setup script.'
+                            )
+                      )
                     }
                   })()
                 }
               >
                 <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.trustActionText}>Run hooks</Text>
+                <Text style={styles.trustActionText}>
+                  {t('mobile.newWorktree.runHooks', 'Run hooks')}
+                </Text>
               </Pressable>
               <View style={styles.trustActionSeparator} />
               <Pressable
@@ -983,13 +1047,22 @@ function NewWorktreeModalContent({
                         approvedSetupContentHash: approvedHash
                       })
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : t(
+                              'mobile.newWorktree.failedToTrustSetup',
+                              'Failed to trust setup script.'
+                            )
+                      )
                     }
                   })()
                 }
               >
                 <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.trustActionText}>Always trust and run</Text>
+                <Text style={styles.trustActionText}>
+                  {t('mobile.newWorktree.alwaysTrustAndRun', 'Always trust and run')}
+                </Text>
               </Pressable>
               <View style={styles.trustActionSeparator} />
               <Pressable
@@ -1000,7 +1073,9 @@ function NewWorktreeModalContent({
                   void handleCreate({ setupOverride: 'skip' })
                 }}
               >
-                <Text style={styles.trustActionText}>Don't run</Text>
+                <Text style={styles.trustActionText}>
+                  {t('mobile.newWorktree.dontRun', "Don't run")}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1009,291 +1084,3 @@ function NewWorktreeModalContent({
     </>
   )
 }
-
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  loadingContainer: {
-    paddingVertical: spacing.xl,
-    alignItems: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
-  fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  fieldButtonText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  fieldButtonPlaceholder: {
-    color: colors.textMuted
-  },
-  repoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  disabled: {
-    opacity: 0.55
-  },
-  sshBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs
-  },
-  sshRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  sshDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  sshDotConnected: {
-    backgroundColor: colors.statusGreen
-  },
-  sshDotProgress: {
-    backgroundColor: colors.statusAmber
-  },
-  sshDotDisconnected: {
-    backgroundColor: colors.statusRed
-  },
-  sshCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  sshTitle: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  sshSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 1
-  },
-  sshConnectButton: {
-    borderRadius: radii.button,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sshConnectText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  errorInline: {
-    color: colors.statusRed,
-    fontSize: 12
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: typography.bodySize,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  error: {
-    color: colors.statusRed,
-    fontSize: 13,
-    marginBottom: spacing.md
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  advancedText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textSecondary
-  },
-  setupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs
-  },
-  sourceBadge: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: 4,
-    paddingHorizontal: spacing.xs + 2,
-    paddingVertical: 2
-  },
-  sourceBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5
-  },
-  setupBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md
-  },
-  setupToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  setupToggleLabel: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  setupChoiceRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  setupChoiceButton: {
-    flex: 1,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingVertical: spacing.sm
-  },
-  setupChoiceButtonSelected: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.textSecondary
-  },
-  setupChoiceText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  setupSwitch: {
-    transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
-  },
-  setupCommandBlock: {
-    backgroundColor: colors.bgBase,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.sm
-  },
-  setupCommand: {
-    fontSize: 13,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
-  trustHeader: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  trustScriptBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  trustScriptLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm
-  },
-  trustScriptText: {
-    fontSize: 13,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
-  trustActionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    overflow: 'hidden'
-  },
-  trustActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  trustActionText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '500'
-  },
-  trustActionSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: spacing.sm
-  },
-  createButton: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    minWidth: 160,
-    alignItems: 'center'
-  },
-  createButtonDisabled: {
-    opacity: 0.4
-  },
-  createText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})

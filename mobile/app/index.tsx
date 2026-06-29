@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native'
+import { View, Text, Pressable, FlatList } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
@@ -46,13 +46,15 @@ import { ActionSheetModal, type ActionSheetAction } from '../src/components/Acti
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
-import { colors, spacing, radii } from '../src/theme/mobile-theme'
+import { colors, spacing } from '../src/theme/mobile-theme'
 import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
 } from '../src/tasks/mobile-task-providers'
 import { useResponsiveLayout } from '../src/layout/responsive-layout'
+import { useTranslate } from '../src/i18n/useTranslate'
+import { indexStyles as styles } from './index-styles'
 
 function endpointLabel(endpoint: string): string {
   try {
@@ -300,9 +302,38 @@ function repoColor(name: string): string {
 export default function HomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
   // Why: cap and center content on wide/tablet canvases so cards don't stretch
   // edge-to-edge on iPad; on phones isWideLayout is false and layout is unchanged.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
+  // Why: built inside the component (not module-scope) so each step's strings
+  // are resolved via translate() and respond to language changes.
+  const onboardingSteps = useMemo(
+    () => [
+      {
+        title: t('mobile.onboarding.step1Title', 'Open Orca desktop'),
+        desc: t(
+          'mobile.onboarding.step1Desc',
+          'Go to Settings → Mobile and generate a pairing QR code.'
+        )
+      },
+      {
+        title: t('mobile.onboarding.step2Title', 'Scan the code'),
+        desc: t(
+          'mobile.onboarding.step2Desc',
+          'Tap the button above to open the scanner. Point at the QR code on your screen.'
+        )
+      },
+      {
+        title: t('mobile.onboarding.step3Title', "You're connected"),
+        desc: t(
+          'mobile.onboarding.step3Desc',
+          'Your desktop will appear here. Everything is encrypted end-to-end.'
+        )
+      }
+    ],
+    [t]
+  )
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
@@ -655,11 +686,11 @@ export default function HomeScreen() {
         <ListTodo size={18} color={colors.textSecondary} />
       </View>
       <View style={styles.taskHomeMain}>
-        <Text style={styles.taskHomeTitle}>Tasks</Text>
+        <Text style={styles.taskHomeTitle}>{t('mobile.tasks.title', 'Title')}</Text>
         <Text style={styles.taskHomeSubtitle} numberOfLines={1}>
           {primaryTaskProviders.length > 0
             ? primaryTaskProviders.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
-            : 'No task sources connected'}
+            : t('mobile.tasks.noTaskSources', 'No task sources connected')}
         </Text>
       </View>
       <View style={styles.taskHomeTrailing}>
@@ -730,7 +761,7 @@ export default function HomeScreen() {
           <View style={styles.logoMark}>
             <OrcaLogo size={18} />
           </View>
-          <Text style={styles.brandName}>Orca</Text>
+          <Text style={styles.brandName}>{t('mobile.about.brandName', 'Orca')}</Text>
         </View>
         <Pressable
           style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
@@ -750,20 +781,28 @@ export default function HomeScreen() {
           ]}
         >
           <View style={styles.emptyHero}>
-            <Text style={styles.emptyTitle}>Connect your desktop</Text>
+            <Text style={styles.emptyTitle}>
+              {t('mobile.onboarding.emptyTitle', 'Connect your desktop')}
+            </Text>
             <Text style={styles.emptyBody}>
-              Pair with Orca on your computer to check on your agents, jump into any terminal, and
-              drive work from your phone.
+              {t(
+                'mobile.onboarding.emptyBody',
+                'Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.'
+              )}
             </Text>
             <Pressable style={styles.primaryButton} onPress={() => router.push('/pair-scan')}>
               <QrCode size={17} color={colors.bgBase} />
-              <Text style={styles.primaryButtonText}>Pair Desktop</Text>
+              <Text style={styles.primaryButtonText}>
+                {t('mobile.pair.pairDesktop', 'Pair with desktop')}
+              </Text>
             </Pressable>
           </View>
 
           <View style={styles.stepsSection}>
-            <Text style={styles.sectionHeading}>How it works</Text>
-            {ONBOARDING_STEPS.map((step, i) => (
+            <Text style={styles.sectionHeading}>
+              {t('mobile.onboarding.howItWorks', 'How it works')}
+            </Text>
+            {onboardingSteps.map((step, i) => (
               <View key={step.title} style={[styles.stepRow, i > 0 && styles.stepRowBorder]}>
                 <View style={styles.stepNum}>
                   <Text style={styles.stepNumText}>{i + 1}</Text>
@@ -792,7 +831,7 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <View>
               <View style={styles.hero}>
-                <Text style={styles.heroTitle}>Welcome back</Text>
+                <Text style={styles.heroTitle}>{t('mobile.home.welcomeBack', 'Welcome back')}</Text>
               </View>
 
               {stats && (
@@ -801,20 +840,24 @@ export default function HomeScreen() {
                     <Text style={styles.statValue}>
                       {stats.totalAgentsSpawned.toLocaleString()}
                     </Text>
-                    <Text style={styles.statLabel}>Agents spawned</Text>
+                    <Text style={styles.statLabel}>
+                      {t('mobile.home.agentsSpawned', 'Agents spawned')}
+                    </Text>
                   </View>
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>{formatDuration(stats.totalAgentTimeMs)}</Text>
-                    <Text style={styles.statLabel}>Agent time</Text>
+                    <Text style={styles.statLabel}>{t('mobile.home.agentTime', 'Agent time')}</Text>
                   </View>
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>{stats.totalPRsCreated.toLocaleString()}</Text>
-                    <Text style={styles.statLabel}>PRs created</Text>
+                    <Text style={styles.statLabel}>
+                      {t('mobile.home.prsCreated', 'PRs created')}
+                    </Text>
                   </View>
                 </View>
               )}
 
-              <Text style={styles.sectionHeading}>Desktops</Text>
+              <Text style={styles.sectionHeading}>{t('mobile.home.desktops', 'Desktops')}</Text>
             </View>
           }
           ItemSeparatorComponent={CardGap}
@@ -861,7 +904,14 @@ export default function HomeScreen() {
                     <Text style={[styles.hostMetaItem, isError && { color: colors.statusRed }]}>
                       {verdict.label}
                       {connected && info
-                        ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
+                        ? t(
+                            'mobile.home.worktreesAndActive',
+                            ' · {{n}} worktree · {{active}} active',
+                            {
+                              n: info.totalWorktrees,
+                              active: info.activeCount
+                            }
+                          )
                         : ''}
                     </Text>
                   </View>
@@ -875,7 +925,9 @@ export default function HomeScreen() {
               {/* ─── Resume card ─── */}
               {resumeWorktree ? (
                 <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Resume</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>
+                    {t('mobile.home.resume', 'Resume')}
+                  </Text>
                   <Pressable
                     style={({ pressed }) => [styles.resumeCard, pressed && styles.hostCardPressed]}
                     onPress={() =>
@@ -907,18 +959,24 @@ export default function HomeScreen() {
                     </View>
                     <ChevronRight size={16} color={colors.textMuted} />
                   </Pressable>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>
+                    {t('mobile.tasks.title', 'Title')}
+                  </Text>
                   {renderTaskHomeCard()}
                 </>
               ) : (
                 <>
-                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>Tasks</Text>
+                  <Text style={[styles.sectionHeading, styles.sectionHeadingTightTop]}>
+                    {t('mobile.tasks.title', 'Title')}
+                  </Text>
                   {renderTaskHomeCard()}
                 </>
               )}
 
               {/* ─── Quick actions ─── */}
-              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
+              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
+                {t('mobile.home.quickActions', 'Quick Actions')}
+              </Text>
               <View style={styles.quickActions}>
                 <Pressable
                   style={({ pressed }) => [styles.quickAction, pressed && styles.hostCardPressed]}
@@ -927,7 +985,9 @@ export default function HomeScreen() {
                   <View style={styles.quickActionIcon}>
                     <QrCode size={16} color={colors.textSecondary} />
                   </View>
-                  <Text style={styles.quickActionLabel}>Pair Desktop</Text>
+                  <Text style={styles.quickActionLabel}>
+                    {t('mobile.pair.pairDesktop', 'Pair with desktop')}
+                  </Text>
                 </Pressable>
                 <Pressable
                   disabled={!primaryConnectedHost}
@@ -945,7 +1005,9 @@ export default function HomeScreen() {
                   <View style={styles.quickActionIcon}>
                     <Plus size={16} color={colors.textSecondary} />
                   </View>
-                  <Text style={styles.quickActionLabel}>New Workspace</Text>
+                  <Text style={styles.quickActionLabel}>
+                    {t('mobile.workspaces.newWorkspaceButton', 'New Workspace')}
+                  </Text>
                 </Pressable>
               </View>
 
@@ -953,7 +1015,7 @@ export default function HomeScreen() {
               {accountsHosts.length > 0 ? (
                 <>
                   <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>
-                    Account usage
+                    {t('mobile.home.accountUsage', 'Account usage')}
                   </Text>
                   {accountsHosts.map(({ host, snapshot }) => {
                     const claudeActiveId = snapshot.claude.activeAccountId
@@ -1004,17 +1066,18 @@ export default function HomeScreen() {
                               </View>
                               <View style={styles.accountsInfo}>
                                 <Text style={styles.accountsEmail} numberOfLines={1}>
-                                  {active?.email ?? 'System default'}
+                                  {active?.email ??
+                                    t('mobile.accounts.systemDefault', 'System default')}
                                 </Text>
                                 <View style={styles.accountsBars}>
                                   <UsageBar
-                                    label="5h"
+                                    label={t('mobile.home.usageFiveHour', '5h')}
                                     usedPercent={sessionBar.usedPercent}
                                     unavailable={sessionBar.unavailable}
                                     loading={sessionBar.loading}
                                   />
                                   <UsageBar
-                                    label="7d"
+                                    label={t('mobile.home.usageSevenDay', '7d')}
                                     usedPercent={weeklyBar.usedPercent}
                                     unavailable={weeklyBar.unavailable}
                                     loading={weeklyBar.loading}
@@ -1058,7 +1121,10 @@ export default function HomeScreen() {
           const hasEverConnected = (hostLastConnected[host.id] ?? null) != null
           const items: ActionSheetAction[] = []
           items.push({
-            label: hasEverConnected && isLive ? 'Reconnect' : 'Connect',
+            label:
+              hasEverConnected && isLive
+                ? t('mobile.home.reconnect', 'Reconnect')
+                : t('mobile.home.connect', 'Connect'),
             icon: RefreshCw,
             onPress: () => {
               setActionTarget(null)
@@ -1067,7 +1133,7 @@ export default function HomeScreen() {
           })
           if (isLive) {
             items.push({
-              label: 'Disconnect',
+              label: t('mobile.home.disconnect', 'Disconnect'),
               icon: PowerOff,
               onPress: () => {
                 setActionTarget(null)
@@ -1076,7 +1142,7 @@ export default function HomeScreen() {
             })
           }
           items.push({
-            label: 'Rename',
+            label: t('mobile.home.rename', 'Rename'),
             icon: Edit3,
             onPress: () => {
               setActionTarget(null)
@@ -1084,7 +1150,7 @@ export default function HomeScreen() {
             }
           })
           items.push({
-            label: 'Remove',
+            label: t('mobile.home.remove', 'Remove'),
             destructive: true,
             onPress: () => {
               setActionTarget(null)
@@ -1098,19 +1164,21 @@ export default function HomeScreen() {
 
       <TextInputModal
         visible={renameTarget != null}
-        title="Rename Host"
-        message="Enter a new name for this host."
+        title={t('mobile.home.renameHost', 'Rename Host')}
+        message={t('mobile.home.renameHostMessage', 'Enter a new name for this host.')}
         defaultValue={renameTarget?.name ?? ''}
-        placeholder="Host name"
+        placeholder={t('mobile.home.hostNamePlaceholder', 'Host name')}
         onSubmit={(name) => void handleRename(name)}
         onCancel={() => setRenameTarget(null)}
       />
 
       <ConfirmModal
         visible={confirmRemove != null}
-        title="Remove Host"
-        message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('mobile.home.removeHost', 'Remove Host')}
+        message={t('mobile.home.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
+          name: confirmRemove?.name ?? ''
+        })}
+        confirmLabel={t('mobile.home.remove', 'Remove')}
         destructive
         onConfirm={() => void handleRemove()}
         onCancel={() => setConfirmRemove(null)}
@@ -1122,457 +1190,3 @@ export default function HomeScreen() {
 function CardGap() {
   return <View style={styles.cardGap} />
 }
-
-const ONBOARDING_STEPS = [
-  {
-    title: 'Open Orca desktop',
-    desc: 'Go to Settings → Mobile and generate a pairing QR code.'
-  },
-  {
-    title: 'Scan the code',
-    desc: 'Tap the button above to open the scanner. Point at the QR code on your screen.'
-  },
-  {
-    title: "You're connected",
-    desc: 'Your desktop will appear here. Everything is encrypted end-to-end.'
-  }
-]
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-
-  /* ─── Top bar ─── */
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md
-  },
-  brandLockup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0
-  },
-  logoMark: {
-    marginRight: spacing.sm
-  },
-  brandName: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '700'
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-
-  /* ─── Hero / greeting ─── */
-  hero: {
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md
-  },
-  heroTitle: {
-    color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.3
-  },
-
-  /* ─── Stat cards ─── */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: spacing.lg
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: 'rgba(26,26,26,0.6)',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.md
-  },
-  statValue: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3
-  },
-  statLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2
-  },
-
-  /* ─── Section heading ─── */
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  sectionHeadingTightTop: {
-    marginTop: spacing.lg
-  },
-
-  /* ─── List ─── */
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl
-  },
-  cardGap: {
-    height: spacing.sm
-  },
-
-  /* ─── Host cards ─── */
-  hostCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  hostCardPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  hostIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14,
-    position: 'relative'
-  },
-  hostMain: {
-    flex: 1,
-    minWidth: 0,
-    marginRight: spacing.sm
-  },
-  hostName: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20
-  },
-  hostMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3
-  },
-  hostMetaItem: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  hostMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.textMuted,
-    marginHorizontal: 8
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
-  },
-
-  /* ─── Resume card ─── */
-  resumeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12
-  },
-  resumeIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14
-  },
-  resumeMain: {
-    flex: 1,
-    minWidth: 0
-  },
-  resumeTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  resumeSub: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3
-  },
-  repoDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
-  },
-  resumeSubText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    flex: 1
-  },
-
-  /* ─── Tasks card ─── */
-  taskHomeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    minHeight: 72,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12
-  },
-  taskHomeIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14
-  },
-  taskHomeMain: {
-    flex: 1,
-    minWidth: 0
-  },
-  taskHomeTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  taskHomeSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 3
-  },
-  taskHomeTrailing: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
-    marginLeft: spacing.sm
-  },
-  taskHomeProviderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 2
-  },
-  taskHomeProviderButton: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  taskHomeProviderButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-
-  /* ─── Account usage ─── */
-  accountsCard: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  accountsHostLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  accountsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2
-  },
-  accountsIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  accountsInfo: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2
-  },
-  accountsEmail: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  accountsBars: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: 4
-  },
-
-  /* ─── Quick actions ─── */
-  quickActions: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  quickAction: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    gap: 10
-  },
-  quickActionDisabled: {
-    opacity: 0.45
-  },
-  quickActionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  quickActionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-
-  /* ─── Empty state ─── */
-  emptyContainer: {
-    flex: 1
-  },
-  emptyGreeting: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm
-  },
-  emptyHero: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingBottom: 40
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 10
-  },
-  emptyBody: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: radii.card
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: 15,
-    fontWeight: '700'
-  },
-
-  /* ─── Onboarding steps ─── */
-  stepsSection: {
-    paddingHorizontal: spacing.xl
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingVertical: spacing.lg
-  },
-  stepRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle
-  },
-  stepNum: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1
-  },
-  stepNumText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary
-  },
-  stepText: {
-    flex: 1
-  },
-  stepTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 3
-  },
-  stepDesc: {
-    fontSize: 12,
-    color: colors.textMuted,
-    lineHeight: 17
-  }
-})

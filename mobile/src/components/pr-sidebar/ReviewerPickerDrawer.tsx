@@ -7,6 +7,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useTranslate } from '../../i18n/useTranslate'
 
 type Props = {
   visible: boolean
@@ -38,6 +39,7 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  const { t } = useTranslate()
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 
@@ -84,12 +86,12 @@ export function ReviewerPickerDrawer({
 
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
-      <Text style={styles.pickerTitle}>Reviewers</Text>
+      <Text style={styles.pickerTitle}>{t('mobile.reviewerPicker.title', 'Reviewers')}</Text>
       <TextInput
         style={styles.pickerSearch}
         value={query}
         onChangeText={setQuery}
-        placeholder="Search people"
+        placeholder={t('mobile.reviewerPicker.searchPlaceholder', 'Search people')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
@@ -104,7 +106,9 @@ export function ReviewerPickerDrawer({
         </View>
       ) : ordered.length === 0 ? (
         <View style={styles.pickerStateArea}>
-          <Text style={styles.emptyText}>No matching people</Text>
+          <Text style={styles.emptyText}>
+            {t('mobile.reviewerPicker.noMatching', 'No matching people')}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -120,7 +124,7 @@ export function ReviewerPickerDrawer({
                 onPress={() => onToggle(item.login)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: requested }}
-                accessibilityLabel={`${requested ? 'Remove' : 'Request'} ${item.login}`}
+                accessibilityLabel={`${requested ? t('mobile.reviewerPicker.remove', 'Remove') : t('mobile.reviewerPicker.request', 'Request')} ${item.login}`}
               >
                 <View style={styles.rowTrailing}>
                   {requested ? (

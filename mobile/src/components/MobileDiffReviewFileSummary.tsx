@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 import { ArrowDown, ArrowUp } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/types'
+import { useTranslate } from '../i18n/useTranslate'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { MOBILE_GIT_STATUS_LABELS } from '../source-control/mobile-git-status'
@@ -49,6 +50,7 @@ export function MobileDiffReviewFileSummary({
   onEditNote,
   onJumpHunk
 }: Props) {
+  const { t } = useTranslate()
   const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
   const badgeColor = statusColor(item.status)
   return (
@@ -73,15 +75,21 @@ export function MobileDiffReviewFileSummary({
         <Text style={styles.fileMeta}>
           {currentIndex + 1}/{filteredCount}
         </Text>
-        {item.isReviewed ? <Text style={styles.reviewedPill}>Reviewed</Text> : null}
-        {item.changedSinceReview ? <Text style={styles.stalePill}>Changed</Text> : null}
+        {item.isReviewed ? (
+          <Text style={styles.reviewedPill}>{t('mobile.diffReview.reviewed', 'Reviewed')}</Text>
+        ) : null}
+        {item.changedSinceReview ? (
+          <Text style={styles.stalePill}>{t('mobile.diffReview.changed', 'Changed')}</Text>
+        ) : null}
         {item.noteCount > 0 ? (
           <Text style={styles.fileMeta}>
             {mobileReviewCountLabel(item.noteCount, 'note', 'notes')}
           </Text>
         ) : null}
         {item.staleNoteCount > 0 ? (
-          <Text style={styles.staleText}>{item.staleNoteCount} stale</Text>
+          <Text style={styles.staleText}>
+            {t('mobile.diffReview.staleCount', '{n} stale', { n: item.staleNoteCount })}
+          </Text>
         ) : null}
       </View>
       {fileNotes.length > 0 ? (
@@ -92,12 +100,14 @@ export function MobileDiffReviewFileSummary({
               style={({ pressed }) => [styles.fileNote, pressed && styles.fileNotePressed]}
               onPress={() => onEditNote(note)}
               accessibilityRole="button"
-              accessibilityLabel="Edit file note"
+              accessibilityLabel={t('mobile.diffReview.editFileNote', 'Edit file note')}
             >
               <Text style={styles.fileNoteText} numberOfLines={2}>
                 {note.body}
               </Text>
-              {staleCommentIds.has(note.id) ? <Text style={styles.staleText}>Stale</Text> : null}
+              {staleCommentIds.has(note.id) ? (
+                <Text style={styles.staleText}>{t('mobile.diffReview.stale', 'Stale')}</Text>
+              ) : null}
             </Pressable>
           ))}
         </View>
@@ -108,20 +118,20 @@ export function MobileDiffReviewFileSummary({
           disabled={hunkDisabled}
           onPress={() => onJumpHunk('previous')}
           accessibilityRole="button"
-          accessibilityLabel="Previous hunk"
+          accessibilityLabel={t('mobile.diffReview.previousHunk', 'Previous hunk')}
         >
           <ArrowUp size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>Hunk</Text>
+          <Text style={styles.hunkButtonText}>{t('mobile.diffReview.hunk', 'Hunk')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.hunkButton, pressed && styles.hunkButtonPressed]}
           disabled={hunkDisabled}
           onPress={() => onJumpHunk('next')}
           accessibilityRole="button"
-          accessibilityLabel="Next hunk"
+          accessibilityLabel={t('mobile.diffReview.nextHunk', 'Next hunk')}
         >
           <ArrowDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>Hunk</Text>
+          <Text style={styles.hunkButtonText}>{t('mobile.diffReview.hunk', 'Hunk')}</Text>
         </Pressable>
       </View>
     </View>

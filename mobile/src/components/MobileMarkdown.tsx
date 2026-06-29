@@ -1,5 +1,6 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useTranslate } from '../i18n/useTranslate'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
@@ -19,7 +20,7 @@ function openMarkdownUrl(url: string): void {
   }
 }
 
-function renderInline(text: string): ReactNode[] {
+function renderInline(text: string, imageFallback: string): ReactNode[] {
   const parts: ReactNode[] = []
   const pattern =
     /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
@@ -37,7 +38,7 @@ function renderInline(text: string): ReactNode[] {
     if (image) {
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownUrl(image[2]!)}>
-          {image[1] || 'image'}
+          {image[1] || imageFallback}
         </Text>
       )
     } else if (link) {
@@ -87,7 +88,9 @@ function renderInline(text: string): ReactNode[] {
 }
 
 function MobileMarkdownInner({ content, fallback = '' }: Props) {
+  const { t } = useTranslate()
   const text = content?.trim() ?? ''
+  const imageFallback = t('mobile.markdown.image', 'image')
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
   if (!text) {
@@ -103,14 +106,14 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
               key={index}
               style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
             >
-              {renderInline(block.text)}
+              {renderInline(block.text, imageFallback)}
             </Text>
           )
         }
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <Text style={styles.quoteText}>{renderInline(block.text)}</Text>
+              <Text style={styles.quoteText}>{renderInline(block.text, imageFallback)}</Text>
             </View>
           )
         }
@@ -129,7 +132,9 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
               style={styles.imageFrame}
               onPress={() => openMarkdownUrl(block.url)}
             >
-              <Text style={styles.link}>{block.alt || 'Open image'}</Text>
+              <Text style={styles.link}>
+                {block.alt || t('mobile.markdown.openImage', 'Open image')}
+              </Text>
               <Text style={styles.imageCaption} numberOfLines={1}>
                 {block.url}
               </Text>
@@ -147,7 +152,7 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                 <View style={styles.tableRow}>
                   {visibleHeaders.map((header, cellIndex) => (
                     <Text key={cellIndex} style={[styles.tableCell, styles.tableHeader]}>
-                      {renderInline(header)}
+                      {renderInline(header, imageFallback)}
                     </Text>
                   ))}
                 </View>
@@ -155,16 +160,22 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                   <View key={rowIndex} style={styles.tableRow}>
                     {visibleHeaders.map((_, cellIndex) => (
                       <Text key={cellIndex} style={styles.tableCell}>
-                        {renderInline(row[cellIndex] ?? '')}
+                        {renderInline(row[cellIndex] ?? '', imageFallback)}
                       </Text>
                     ))}
                   </View>
                 ))}
                 {hiddenRows > 0 || hiddenColumns > 0 ? (
                   <Text style={styles.tableTruncated}>
-                    {hiddenRows > 0 ? `${hiddenRows} more rows` : ''}
+                    {hiddenRows > 0
+                      ? t('mobile.markdown.moreRows', '{n} more rows', { n: hiddenRows })
+                      : ''}
                     {hiddenRows > 0 && hiddenColumns > 0 ? ' · ' : ''}
-                    {hiddenColumns > 0 ? `${hiddenColumns} more columns` : ''}
+                    {hiddenColumns > 0
+                      ? t('mobile.markdown.moreColumns', '{n} more columns', {
+                          n: hiddenColumns
+                        })
+                      : ''}
                   </Text>
                 ) : null}
               </View>
@@ -185,7 +196,7 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
                         ? '[x]'
                         : '[ ]'}
                   </Text>
-                  <Text style={styles.listText}>{renderInline(item.text)}</Text>
+                  <Text style={styles.listText}>{renderInline(item.text, imageFallback)}</Text>
                 </View>
               ))}
             </View>
@@ -199,7 +210,7 @@ function MobileMarkdownInner({ content, fallback = '' }: Props) {
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}
-                {renderInline(line)}
+                {renderInline(line, imageFallback)}
               </Fragment>
             ))}
           </Text>

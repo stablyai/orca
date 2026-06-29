@@ -16,13 +16,13 @@
     {
       "files": ["app/h/*/tasks.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 14682, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 15500, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
       "files": ["app/h/*/session/*.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 4988, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 5500, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
@@ -50,6 +50,12 @@
       }
     },
     {
+      "files": ["app/h/*/index-styles.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
       "files": ["src/browser/MobileBrowserPane.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 1594, "skipBlankLines": true, "skipComments": true }]
@@ -59,6 +65,12 @@
       "files": ["app/index.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 1422, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["app/index-styles.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 500, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

@@ -27,6 +27,7 @@ import {
 } from './pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
+import { useTranslate } from '../../i18n/useTranslate'
 
 type Props = {
   details: GitHubWorkItemDetails | null
@@ -49,6 +50,7 @@ const COMMENT_PAGE = 12
 // card, then a Comments section with an audience filter (PRs only), threaded
 // review comments, reactions, and collapsible resolved threads.
 export function PRCommentsSection({ details, prState, prRepo, actions }: Props) {
+  const { t } = useTranslate()
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
   const loadingDetails = details === null
   const body = details?.body ?? ''
@@ -91,18 +93,20 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
 
   return (
     <>
-      <PRSection title="Description">
+      <PRSection title={t('mobile.prComments.description', 'Description')}>
         {loadingDetails ? (
           <ActivityIndicator color={colors.textSecondary} />
         ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
-          <Text style={styles.noDescription}>No description provided.</Text>
+          <Text style={styles.noDescription}>
+            {t('mobile.prComments.noDescription', 'No description provided.')}
+          </Text>
         )}
       </PRSection>
 
       <PRSection
-        title="Comments"
+        title={t('mobile.prComments.comments', 'Comments')}
         trailing={
           comments.length > 0 ? (
             <View style={styles.countChip}>
@@ -116,7 +120,9 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
         ) : (
           <View style={styles.list}>
             {comments.length === 0 ? (
-              <Text style={styles.empty}>No comments yet.</Text>
+              <Text style={styles.empty}>
+                {t('mobile.prComments.noComments', 'No comments yet.')}
+              </Text>
             ) : (
               <>
                 {isPr ? (
@@ -164,8 +170,18 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
                         accessibilityRole="button"
                       >
                         <Text style={styles.showMoreText}>
-                          Show {Math.min(remaining, COMMENT_PAGE)} more
-                          {remaining > COMMENT_PAGE ? ` of ${remaining}` : ''}
+                          {remaining > COMMENT_PAGE
+                            ? t(
+                                'mobile.prComments.showMoreOf',
+                                'Show {{count}} more of {{total}}',
+                                {
+                                  count: Math.min(remaining, COMMENT_PAGE),
+                                  total: remaining
+                                }
+                              )
+                            : t('mobile.prComments.showMore', 'Show {{count}} more', {
+                                count: Math.min(remaining, COMMENT_PAGE)
+                              })}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -177,8 +193,8 @@ export function PRCommentsSection({ details, prState, prRepo, actions }: Props) 
             {canComment && actions ? (
               <View style={styles.rootComposer}>
                 <PRCommentComposer
-                  placeholder="Add a comment…"
-                  submitLabel="Comment"
+                  placeholder={t('mobile.prComments.addCommentPlaceholder', 'Add a comment…')}
+                  submitLabel={t('mobile.prComments.comment', 'Comment')}
                   submitting={actions.isRootBusy}
                   onSubmit={actions.addRootComment}
                 />
@@ -198,6 +214,7 @@ function CommentGroupView({
   group: PRCommentGroup
   actions?: PRCommentCardActions
 }) {
+  const { t } = useTranslate()
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'
@@ -226,7 +243,13 @@ function CommentGroupView({
       >
         <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
         <Text style={styles.resolvedHeaderText} numberOfLines={1}>
-          Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+          {group.kind === 'thread'
+            ? t('mobile.prComments.resolvedThreadBy', 'Resolved thread by {{author}}', {
+                author: root.author
+              })
+            : t('mobile.prComments.resolvedCommentBy', 'Resolved comment by {{author}}', {
+                author: root.author
+              })}
           {count > 1 ? ` (${count})` : ''}
         </Text>
       </Pressable>

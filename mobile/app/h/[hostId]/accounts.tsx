@@ -26,10 +26,12 @@ import {
   hasActiveProviderUsage,
   UsageBar
 } from '../../../src/components/AccountUsage'
+import { useTranslate } from '../../../src/i18n/useTranslate'
 
 export default function AccountsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
@@ -51,7 +53,7 @@ export default function AccountsScreen() {
       }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError('Host not found')
+        setError(t('mobile.accounts.hostNotFound', 'Host not found'))
         return
       }
       setHostName(host.name)
@@ -112,7 +114,10 @@ export default function AccountsScreen() {
       try {
         const res = await client.sendRequest(method, { accountId })
         if (!res.ok) {
-          Alert.alert('Could not switch account', res.error.message)
+          Alert.alert(
+            t('mobile.accounts.couldNotSwitch', 'Could not switch account'),
+            res.error.message
+          )
         } else {
           // Why: optimistic refresh — the streaming subscription will also
           // emit, but a one-shot keeps the UI responsive even if the stream
@@ -120,7 +125,10 @@ export default function AccountsScreen() {
           await refresh()
         }
       } catch (e) {
-        Alert.alert('Could not switch account', e instanceof Error ? e.message : String(e))
+        Alert.alert(
+          t('mobile.accounts.couldNotSwitch', 'Could not switch account'),
+          e instanceof Error ? e.message : String(e)
+        )
       } finally {
         setBusyAccountId(null)
       }
@@ -151,21 +159,25 @@ export default function AccountsScreen() {
             disabled={busyAccountId !== null || connState !== 'connected'}
           >
             <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>System default</Text>
-              <Text style={styles.rowSubtitle}>Use the agent's own login</Text>
+              <Text style={styles.rowTitle}>
+                {t('mobile.accounts.systemDefault', 'System default')}
+              </Text>
+              <Text style={styles.rowSubtitle}>
+                {t('mobile.accounts.systemDefaultSub', "Use the agent's own login")}
+              </Text>
               {/* Why: when system default is the active selection, activeUsage
                   holds the system-default login's rate limits — surface them
                   here so non-managed users still see their usage. */}
               {state.activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
                 <View style={styles.usageRow}>
                   <UsageBar
-                    label="5h"
+                    label={t('mobile.home.usageFiveHour', '5h')}
                     usedPercent={activeSessionBar.usedPercent}
                     unavailable={activeSessionBar.unavailable}
                     loading={activeSessionBar.loading}
                   />
                   <UsageBar
-                    label="7d"
+                    label={t('mobile.home.usageSevenDay', '7d')}
                     usedPercent={activeWeeklyBar.usedPercent}
                     unavailable={activeWeeklyBar.unavailable}
                     loading={activeWeeklyBar.loading}
@@ -207,13 +219,13 @@ export default function AccountsScreen() {
                     </Text>
                     <View style={styles.usageRow}>
                       <UsageBar
-                        label="5h"
+                        label={t('mobile.home.usageFiveHour', '5h')}
                         usedPercent={sessionBar.usedPercent}
                         unavailable={sessionBar.unavailable}
                         loading={sessionBar.loading}
                       />
                       <UsageBar
-                        label="7d"
+                        label={t('mobile.home.usageSevenDay', '7d')}
                         usedPercent={weeklyBar.usedPercent}
                         unavailable={weeklyBar.unavailable}
                         loading={weeklyBar.loading}
@@ -248,7 +260,7 @@ export default function AccountsScreen() {
           <ChevronLeft size={22} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.titleWrap}>
-          <Text style={styles.heading}>Accounts</Text>
+          <Text style={styles.heading}>{t('mobile.accounts.title', 'Accounts')}</Text>
           {hostName ? (
             <Text style={styles.subheading} numberOfLines={1}>
               {hostName}
@@ -281,7 +293,11 @@ export default function AccountsScreen() {
         {connState !== 'connected' && !snapshot ? (
           <View style={styles.placeholder}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Connecting to {hostName || 'host'}…</Text>
+            <Text style={styles.placeholderText}>
+              {t('mobile.accounts.connectingToHost', 'Connecting to {name}…', {
+                name: hostName || 'host'
+              })}
+            </Text>
           </View>
         ) : error && !snapshot ? (
           <View style={styles.placeholder}>
@@ -290,16 +306,21 @@ export default function AccountsScreen() {
         ) : !snapshot ? (
           <View style={styles.placeholder}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Loading accounts…</Text>
+            <Text style={styles.placeholderText}>
+              {t('mobile.accounts.loadingAccounts', 'Loading accounts…')}
+            </Text>
           </View>
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            {renderProviderSection('claude', t('mobile.accounts.claude', 'Claude'))}
+            {renderProviderSection('codex', t('mobile.accounts.codex', 'Codex'))}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
-                Add or re-authenticate accounts from desktop Settings → Accounts.
+                {t(
+                  'mobile.accounts.footerHint',
+                  'Add or re-authenticate accounts from desktop Settings → Accounts.'
+                )}
               </Text>
             </View>
           </>

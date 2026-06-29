@@ -1,5 +1,6 @@
 import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
+import { useTranslate } from '../i18n/useTranslate'
 import { colors } from '../theme/mobile-theme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
@@ -35,6 +36,7 @@ export function MobileDiffReviewHeader({
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
+  const { t } = useTranslate()
   // The dedicated PR icon appears on any GitHub repo in narrow/overlay mode; in wide
   // mode the sidebar is docked, so it is hidden (not disabled).
   const showPRTrigger = shouldShowTrigger({
@@ -49,13 +51,13 @@ export function MobileDiffReviewHeader({
           style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t('mobile.diffHeader.back', 'Back')}
         >
           <ChevronLeft size={19} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.title} numberOfLines={1}>
-            Review Changes
+            {t('mobile.diffHeader.title', 'Review Changes')}
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
             {worktreeLabel}
@@ -66,7 +68,7 @@ export function MobileDiffReviewHeader({
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
             onPress={onOpenPRSidebar}
             accessibilityRole="button"
-            accessibilityLabel="Open pull request sidebar"
+            accessibilityLabel={t('mobile.diffHeader.openPrSidebar', 'Open pull request sidebar')}
           >
             <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
           </Pressable>
@@ -75,17 +77,24 @@ export function MobileDiffReviewHeader({
           style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           onPress={onOpenActions}
           accessibilityRole="button"
-          accessibilityLabel="Open review actions"
+          accessibilityLabel={t('mobile.diffHeader.openReviewActions', 'Open review actions')}
         >
           <MoreHorizontal size={19} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
       </View>
       <View style={styles.progressRow}>
         <Text style={styles.progressText}>
-          {reviewedCount}/{queueLength} reviewed
+          {t('mobile.diffHeader.reviewedOfTotal', '{reviewed}/{total} reviewed', {
+            reviewed: reviewedCount,
+            total: queueLength
+          })}
         </Text>
         <Text style={styles.progressText}>
-          {mobileReviewCountLabel(unsentCount, 'unsent note', 'unsent notes')}
+          {mobileReviewCountLabel(
+            unsentCount,
+            t('mobile.diffHeader.unsentNote', 'unsent note'),
+            t('mobile.diffHeader.unsentNotes', 'unsent notes')
+          )}
         </Text>
       </View>
       <FlatList
@@ -104,10 +113,18 @@ export function MobileDiffReviewHeader({
             onPress={() => onSelectFilter(item)}
             accessibilityRole="button"
             accessibilityState={{ selected: filter === item }}
-            accessibilityLabel={`Show ${item} review files`}
+            accessibilityLabel={t(
+              'mobile.diffHeader.showFilterA11y',
+              'Show {filter} review files',
+              {
+                filter
+              }
+            )}
           >
             <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-              {item === 'all' ? 'All' : item[0]?.toUpperCase() + item.slice(1)}
+              {item === 'all'
+                ? t('mobile.diffHeader.all', 'All')
+                : item[0]?.toUpperCase() + item.slice(1)}
             </Text>
           </Pressable>
         )}

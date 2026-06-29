@@ -14,11 +14,6 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  WifiOff,
-  Shield,
-  Monitor,
-  Clock,
-  Globe,
   Activity,
   CheckCircle2,
   XCircle,
@@ -31,6 +26,8 @@ import {
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
 import { formatEndpoint, testHostReachability } from '../src/diagnostics/host-reachability'
+import { useTranslate } from '../src/i18n/useTranslate'
+import { buildTroubleshootSections } from './troubleshoot-sections'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -39,66 +36,6 @@ type CheckResult = {
   status: 'pass' | 'fail' | 'warn'
   detail: string
 }
-
-type TroubleshootSection = {
-  id: string
-  icon: React.ReactNode
-  title: string
-  steps: string[]
-}
-
-const sections: TroubleshootSection[] = [
-  {
-    id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
-    title: 'Different WiFi Networks',
-    steps: [
-      'Both devices must be on the same local network.',
-      'Ethernet and WiFi must share the same subnet.',
-      'Try reconnecting WiFi on both devices.'
-    ]
-  },
-  {
-    id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
-    title: 'Firewall Blocking Port 6768',
-    steps: [
-      'macOS: System Settings → Network → Firewall — allow Orca.',
-      'Windows: Defender Firewall → Allow app — enable Orca for Private networks.',
-      'Linux: sudo ufw allow 6768',
-      'Corporate/school networks may block P2P — try a personal hotspot.'
-    ]
-  },
-  {
-    id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
-    title: 'Desktop App Not Running',
-    steps: [
-      'Orca must be open on your desktop to accept connections.',
-      'Try restarting Orca — the companion server starts on launch.',
-      'After an update, you may need to re-pair via QR code.'
-    ]
-  },
-  {
-    id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
-    title: 'Connection Timeout',
-    steps: [
-      'Check WiFi signal strength on your phone.',
-      'Go back to the host list and tap your host to retry.',
-      'Restart both apps if timeouts persist.'
-    ]
-  },
-  {
-    id: 'vpn',
-    icon: <Globe size={16} color={colors.textSecondary} />,
-    title: 'VPN Interference',
-    steps: [
-      'VPNs can route local traffic through a remote server.',
-      'Disable the VPN or enable split tunneling / "Allow LAN".'
-    ]
-  }
-]
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
   switch (status) {
@@ -114,6 +51,8 @@ function StatusIcon({ status }: { status: CheckResult['status'] }) {
 export default function TroubleshootScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
+  const sections = buildTroubleshootSections(t)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus>('idle')
   const [checks, setChecks] = useState<CheckResult[]>([])
@@ -149,15 +88,29 @@ export default function TroubleshootScreen() {
     const results: CheckResult[] = []
     const isCurrentRun = () => !abortRef.current && diagnosticRunRef.current === runId
 
+    const pairedLabel = t('mobile.troubleshoot.pairedHosts', 'Paired hosts')
+
     try {
       const hosts = await loadHosts()
       results.push(
         hosts.length > 0
-          ? { label: 'Paired hosts', status: 'pass', detail: `${hosts.length} paired` }
-          : { label: 'Paired hosts', status: 'fail', detail: 'None — scan a QR to pair' }
+          ? {
+              label: pairedLabel,
+              status: 'pass',
+              detail: t('mobile.troubleshoot.pairedCount', '{n} paired', { n: hosts.length })
+            }
+          : {
+              label: pairedLabel,
+              status: 'fail',
+              detail: t('mobile.troubleshoot.pairedNone', 'None — scan a QR to pair')
+            }
       )
     } catch {
-      results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
+      results.push({
+        label: pairedLabel,
+        status: 'warn',
+        detail: t('mobile.troubleshoot.pairedError', 'Could not read host data')
+      })
     }
 
     if (!isCurrentRun()) {
@@ -167,6 +120,7 @@ export default function TroubleshootScreen() {
 
     const internetCheck = startDiagnosticFetchTimeout(5000)
     activeInternetCheckRef.current = internetCheck
+    const internetLabel = t('mobile.troubleshoot.internet', 'Internet')
     try {
       const resp = await fetch('https://dns.google/resolve?name=example.com&type=A', {
         signal: internetCheck.signal
@@ -176,14 +130,26 @@ export default function TroubleshootScreen() {
       }
       results.push(
         resp.ok
-          ? { label: 'Internet', status: 'pass', detail: 'Connected' }
-          : { label: 'Internet', status: 'warn', detail: 'Unexpected response' }
+          ? {
+              label: internetLabel,
+              status: 'pass',
+              detail: t('mobile.troubleshoot.internetConnected', 'Connected')
+            }
+          : {
+              label: internetLabel,
+              status: 'warn',
+              detail: t('mobile.troubleshoot.internetWarn', 'Unexpected response')
+            }
       )
     } catch {
       if (!isCurrentRun()) {
         return
       }
-      results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
+      results.push({
+        label: internetLabel,
+        status: 'fail',
+        detail: t('mobile.troubleshoot.internetFail', 'No connection')
+      })
     } finally {
       internetCheck.dispose()
       if (activeInternetCheckRef.current === internetCheck) {
@@ -210,13 +176,21 @@ export default function TroubleshootScreen() {
           label: host.name,
           status: reachable ? 'pass' : 'fail',
           detail: reachable
-            ? `Reachable at ${formatEndpoint(host.endpoint)}`
-            : `Cannot reach ${formatEndpoint(host.endpoint)}`
+            ? t('mobile.troubleshoot.hostReachable', 'Reachable at {endpoint}', {
+                endpoint: formatEndpoint(host.endpoint)
+              })
+            : t('mobile.troubleshoot.hostUnreachable', 'Cannot reach {endpoint}', {
+                endpoint: formatEndpoint(host.endpoint)
+              })
         })
         setChecks([...results])
       }
     } catch {
-      results.push({ label: 'Hosts', status: 'warn', detail: 'Could not test' })
+      results.push({
+        label: t('mobile.troubleshoot.hostsLabel', 'Hosts'),
+        status: 'warn',
+        detail: t('mobile.troubleshoot.hostsCouldNotTest', 'Could not test')
+      })
     }
 
     if (!isCurrentRun()) {
@@ -224,14 +198,14 @@ export default function TroubleshootScreen() {
     }
 
     results.push({
-      label: 'Platform',
+      label: t('mobile.troubleshoot.platform', 'Platform'),
       status: 'pass',
       detail: `${Platform.OS} ${Platform.Version ?? ''}`
     })
 
     setChecks([...results])
     setDiagnosticStatus('done')
-  }, [])
+  }, [t])
 
   return (
     <View
@@ -242,7 +216,7 @@ export default function TroubleshootScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
+        <Text style={styles.heading}>{t('mobile.troubleshoot.title', 'Troubleshooting')}</Text>
       </View>
 
       <ScrollView
@@ -266,10 +240,10 @@ export default function TroubleshootScreen() {
           )}
           <Text style={styles.diagnosticButtonLabel}>
             {diagnosticStatus === 'running'
-              ? 'Running…'
+              ? t('mobile.troubleshoot.running', 'Running…')
               : diagnosticStatus === 'done'
-                ? 'Run again'
-                : 'Run diagnostics'}
+                ? t('mobile.troubleshoot.runAgain', 'Run again')
+                : t('mobile.troubleshoot.runDiagnostics', 'Run diagnostics')}
           </Text>
         </Pressable>
 
@@ -292,7 +266,9 @@ export default function TroubleshootScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionHeading}>Common issues</Text>
+        <Text style={styles.sectionHeading}>
+          {t('mobile.troubleshoot.commonIssues', 'Common issues')}
+        </Text>
 
         <View style={styles.section}>
           {sections.map((section, i) => (

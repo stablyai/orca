@@ -11,9 +11,12 @@ import {
   loadHostSidebarWidth,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
+  loadUiLanguage,
   saveHostSidebarWidth,
   saveTerminalAutocompleteEnabled,
-  saveTerminalLinkOpenMode
+  saveTerminalLinkOpenMode,
+  saveUiLanguage,
+  type MobileUiLanguage
 } from './preferences'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -142,5 +145,35 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('loadUiLanguage / saveUiLanguage', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('returns "system" when no value is stored', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValueOnce(null)
+    await expect(loadUiLanguage()).resolves.toBe<MobileUiLanguage>('system')
+  })
+
+  it('round-trips a stored value', async () => {
+    vi.mocked(AsyncStorage.setItem).mockResolvedValueOnce(undefined)
+    vi.mocked(AsyncStorage.getItem).mockResolvedValueOnce('zh')
+    await saveUiLanguage('zh')
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:uiLanguage', 'zh')
+    await expect(loadUiLanguage()).resolves.toBe('zh')
+  })
+
+  it('falls back to "system" for a corrupted value', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValueOnce('not-a-language')
+    await expect(loadUiLanguage()).resolves.toBe('system')
+  })
+
+  it('falls back to "system" when AsyncStorage throws', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('disk full'))
+    await expect(loadUiLanguage()).resolves.toBe('system')
   })
 })

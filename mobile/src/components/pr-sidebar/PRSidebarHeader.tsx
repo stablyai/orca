@@ -10,6 +10,7 @@ import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
+import { useTranslate } from '../../i18n/useTranslate'
 
 type Props = {
   pr: PRInfo
@@ -21,6 +22,7 @@ type Props = {
 // Header: state badge (incl. draft — display-only), title, author, head->base.
 // The title is inline-editable on an open/draft PR (desktop parity).
 export function PRSidebarHeader({ pr, details, titleAction }: Props) {
+  const { t } = useTranslate()
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -40,7 +42,11 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
           onPress={openPr}
           disabled={!openPr}
           accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${pr.number} on the web`}
+          accessibilityLabel={t(
+            'mobile.prSidebar.openPrOnWeb',
+            'Open pull request #{{number}} on the web',
+            { number: pr.number }
+          )}
           style={({ pressed }) => [
             styles.badge,
             { borderColor: badgeColor },
@@ -56,7 +62,9 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
           openPr={openPr}
           titleAction={titleAction}
         />
-        {author ? <Text style={styles.prMeta}>by {author}</Text> : null}
+        {author ? (
+          <Text style={styles.prMeta}>{t('mobile.prSidebar.by', 'by {{author}}', { author })}</Text>
+        ) : null}
         {baseRef && headRef ? (
           // head -> base reads in merge direction (desktop ChecksPanel parity).
           <View style={styles.branchRow}>
@@ -83,6 +91,7 @@ function PRTitle({
   openPr: (() => void) | undefined
   titleAction: MobilePrTitleAction
 }) {
+  const { t } = useTranslate()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 
@@ -122,21 +131,21 @@ function PRTitle({
             onPress={cancel}
             disabled={titleAction.saving}
             accessibilityRole="button"
-            accessibilityLabel="Cancel editing title"
+            accessibilityLabel={t('mobile.prSidebar.cancelEditTitle', 'Cancel editing title')}
           >
-            <Text style={composerStyles.cancelText}>Cancel</Text>
+            <Text style={composerStyles.cancelText}>{t('mobile.prSidebar.cancel', 'Cancel')}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [composerStyles.submit, pressed && composerStyles.pressed]}
             onPress={() => void save()}
             disabled={titleAction.saving}
             accessibilityRole="button"
-            accessibilityLabel="Save title"
+            accessibilityLabel={t('mobile.prSidebar.saveTitle', 'Save title')}
           >
             {titleAction.saving ? (
               <ActivityIndicator size="small" color={colors.bgBase} />
             ) : (
-              <Text style={composerStyles.submitText}>Save</Text>
+              <Text style={composerStyles.submitText}>{t('mobile.prSidebar.save', 'Save')}</Text>
             )}
           </Pressable>
         </View>
@@ -150,7 +159,9 @@ function PRTitle({
       onPress={editable ? startEdit : undefined}
       disabled={!editable}
       accessibilityRole={editable ? 'button' : undefined}
-      accessibilityLabel={editable ? 'Edit pull request title' : undefined}
+      accessibilityLabel={
+        editable ? t('mobile.prSidebar.editTitle', 'Edit pull request title') : undefined
+      }
     >
       <Text style={styles.prTitle}>
         {title}{' '}
@@ -158,7 +169,11 @@ function PRTitle({
           style={styles.prMeta}
           onPress={openPr}
           accessibilityRole="link"
-          accessibilityLabel={`Open pull request #${number} on the web`}
+          accessibilityLabel={t(
+            'mobile.prSidebar.openPrOnWeb',
+            'Open pull request #{{number}} on the web',
+            { number }
+          )}
         >
           #{number}
         </Text>

@@ -6,6 +6,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { useTranslate } from '../i18n/useTranslate'
 
 type Props = {
   setup: MobileSpeechSetup
@@ -24,16 +25,18 @@ function formatSize(bytes: number | null): string {
   return `${Math.round(bytes / 1_000_000)} MB`
 }
 
-function modelMeta(model: MobileSpeechModel): string {
+type TranslateFn = (key: string, fallback: string, options?: Record<string, unknown>) => string
+
+function modelMeta(model: MobileSpeechModel, t: TranslateFn): string {
   if (model.provider === 'openai') {
-    return 'OpenAI API'
+    return t('mobile.voiceModel.openaiApi', 'OpenAI API')
   }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {
     return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
   }
   if (model.status === 'extracting') {
-    return `${formatSize(model.sizeBytes)} · extracting…`
+    return `${formatSize(model.sizeBytes)} · ${t('mobile.voiceModel.extracting', 'extracting…')}`
   }
   return formatSize(model.sizeBytes)
 }
@@ -48,6 +51,7 @@ export function VoiceModelList({
   onDownload,
   onDelete
 }: Props): React.JSX.Element {
+  const { t } = useTranslate()
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
       {setup.models.map((model, idx) => {
@@ -67,20 +71,28 @@ export function VoiceModelList({
                   <Text style={styles.modelLabel} numberOfLines={1}>
                     {model.label}
                   </Text>
-                  {model.recommended ? <Text style={styles.recommended}>Recommended</Text> : null}
+                  {model.recommended ? (
+                    <Text style={styles.recommended}>
+                      {t('mobile.voiceModel.recommended', 'Recommended')}
+                    </Text>
+                  ) : null}
                 </View>
-                <Text style={styles.modelMeta}>{modelMeta(model)}</Text>
+                <Text style={styles.modelMeta}>{modelMeta(model, t)}</Text>
               </View>
               {model.provider === 'openai' ? (
                 <Text style={styles.modelStateText}>
-                  {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
+                  {model.status === 'ready'
+                    ? t('mobile.voiceModel.apiKeySet', 'API key set')
+                    : t('mobile.voiceModel.setUpOnDesktop', 'Set up on desktop')}
                 </Text>
               ) : model.status === 'ready' ? (
                 <View style={styles.readyActions}>
                   {isSelected ? (
                     <View style={styles.selectedTag}>
                       <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                      <Text style={styles.selectedText}>In use</Text>
+                      <Text style={styles.selectedText}>
+                        {t('mobile.voiceModel.inUse', 'In use')}
+                      </Text>
                     </View>
                   ) : (
                     <Pressable
@@ -94,7 +106,7 @@ export function VoiceModelList({
                       {selectBusy ? (
                         <ActivityIndicator size="small" color={colors.textSecondary} />
                       ) : (
-                        <Text style={styles.actionText}>Use</Text>
+                        <Text style={styles.actionText}>{t('mobile.voiceModel.use', 'Use')}</Text>
                       )}
                     </Pressable>
                   )}
@@ -102,7 +114,9 @@ export function VoiceModelList({
                     style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                     disabled={anyBusy}
                     onPress={() => onDelete(model)}
-                    accessibilityLabel={'Delete ' + model.label}
+                    accessibilityLabel={t('mobile.voiceModel.deleteA11y', 'Delete {name}', {
+                      name: model.label
+                    })}
                   >
                     {deleteBusy ? (
                       <ActivityIndicator size="small" color={colors.statusRed} />
@@ -118,7 +132,9 @@ export function VoiceModelList({
                   style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                   disabled={anyBusy}
                   onPress={() => onDownload(model)}
-                  accessibilityLabel={'Download ' + model.label}
+                  accessibilityLabel={t('mobile.voiceModel.downloadA11y', 'Download {name}', {
+                    name: model.label
+                  })}
                 >
                   {downloadBusy ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />

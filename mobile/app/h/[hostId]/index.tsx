@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  TextInput
-} from 'react-native'
+import { View, Text, SectionList, Pressable, ActivityIndicator, TextInput } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -44,9 +36,9 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
-import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
+import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
@@ -59,7 +51,7 @@ import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
@@ -94,6 +86,8 @@ import {
 import type { DesktopStatus, RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
+import { useTranslate } from '../../../src/i18n/useTranslate'
+import { hostScreenStyles as styles } from './index-styles'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
@@ -121,6 +115,7 @@ export function HostScreen({
   action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
+  const { t } = useTranslate()
   const params = useLocalSearchParams<{ hostId: string; action?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const action = actionProp ?? params.action
@@ -364,7 +359,7 @@ export function HostScreen({
       }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError('Host not found')
+        setError(t('mobile.workspaces.hostNotFound', 'Host not found'))
         return
       }
       setHostName(host.name)
@@ -854,7 +849,7 @@ export function HostScreen({
             style={styles.backButton}
             onPress={leaveHost}
             accessibilityRole="button"
-            accessibilityLabel="Back to hosts"
+            accessibilityLabel={t('mobile.workspaces.backToHosts', 'Back to hosts')}
             hitSlop={8}
           >
             <ChevronLeft size={22} color={colors.textPrimary} />
@@ -870,7 +865,7 @@ export function HostScreen({
                 <View style={styles.hostIdentity}>
                   <StatusDot state={connState} verdict={headerVerdict} />
                   <Text style={styles.hostNameText} numberOfLines={1}>
-                    {hostName || 'Host'}
+                    {hostName || t('mobile.workspaces.host', 'Host')}
                   </Text>
                 </View>
                 {connState !== 'connected' &&
@@ -893,7 +888,9 @@ export function HostScreen({
                         onPress={() => void forceReconnectHost(hostId!)}
                         hitSlop={8}
                       >
-                        <Text style={styles.reconnectButtonText}>Reconnect</Text>
+                        <Text style={styles.reconnectButtonText}>
+                          {t('mobile.workspaces.reconnect', 'Reconnect')}
+                        </Text>
                       </Pressable>
                     )
                   })()}
@@ -905,7 +902,7 @@ export function HostScreen({
               style={styles.sidebarCollapseButton}
               onPress={onHideSidebar}
               accessibilityRole="button"
-              accessibilityLabel="Hide sidebar"
+              accessibilityLabel={t('mobile.workspaces.hideSidebar', 'Hide sidebar')}
               hitSlop={8}
             >
               <PanelLeftClose size={14} color={colors.textSecondary} />
@@ -925,7 +922,13 @@ export function HostScreen({
                 ]}
                 onPress={() => setShowFilterModal(true)}
                 accessibilityRole="button"
-                accessibilityLabel={`Filter workspaces${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
+                accessibilityLabel={
+                  activeFilterCount > 0
+                    ? t('mobile.workspaces.filterA11yActive', 'Filter workspaces, {{n}} active', {
+                        n: activeFilterCount
+                      })
+                    : t('mobile.workspaces.filterA11y', 'Filter workspaces')
+                }
               >
                 <Filter
                   size={12}
@@ -938,7 +941,8 @@ export function HostScreen({
                   ]}
                   numberOfLines={1}
                 >
-                  Filter{activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
+                  {t('mobile.workspaces.filter', 'Filter')}
+                  {activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
                 </Text>
               </Pressable>
 
@@ -946,7 +950,9 @@ export function HostScreen({
                 style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowSortPicker(true)}
                 accessibilityRole="button"
-                accessibilityLabel={`Sort by ${selectedSortLabel}`}
+                accessibilityLabel={t('mobile.workspaces.sortA11y', 'Sort by {label}', {
+                  label: selectedSortLabel
+                })}
               >
                 <SlidersHorizontal size={14} color={colors.textSecondary} />
                 <Text style={styles.sortLabel} numberOfLines={1}>
@@ -958,17 +964,17 @@ export function HostScreen({
                 style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowGroupPicker(true)}
                 accessibilityRole="button"
-                accessibilityLabel="Group workspaces"
+                accessibilityLabel={t('mobile.workspaces.groupWorkspacesA11y', 'Group workspaces')}
               >
                 <Layers size={14} color={colors.textSecondary} />
                 <Text style={styles.sortLabel} numberOfLines={1}>
                   {groupMode === 'none'
-                    ? 'Group'
+                    ? t('mobile.workspaces.groupNone', 'Group')
                     : groupMode === 'workspaceStatus'
-                      ? 'Status'
+                      ? t('mobile.workspaces.groupStatus', 'Status')
                       : groupMode === 'repo'
-                        ? 'Repo'
-                        : 'PR'}
+                        ? t('mobile.workspaces.groupRepo', 'Repo')
+                        : t('mobile.workspaces.groupPr', 'PR')}
                 </Text>
               </Pressable>
             </View>
@@ -982,7 +988,7 @@ export function HostScreen({
                 onPress={() => navigateFromHostList(`/h/${hostId}/accounts`)}
                 disabled={connState !== 'connected'}
                 accessibilityRole="button"
-                accessibilityLabel="Accounts"
+                accessibilityLabel={t('mobile.workspaces.accounts', 'Accounts')}
               >
                 <UserCircle
                   size={16}
@@ -998,7 +1004,7 @@ export function HostScreen({
                 onPress={() => navigateFromHostList(`/h/${hostId}/tasks`)}
                 disabled={connState !== 'connected'}
                 accessibilityRole="button"
-                accessibilityLabel="Tasks"
+                accessibilityLabel={t('mobile.workspaces.tasks', 'Tasks')}
               >
                 <List
                   size={16}
@@ -1014,7 +1020,7 @@ export function HostScreen({
                 onPress={openNewWorktreeModal}
                 disabled={connState !== 'connected'}
                 accessibilityRole="button"
-                accessibilityLabel="New workspace"
+                accessibilityLabel={t('mobile.workspaces.newWorkspace', 'New workspace')}
               >
                 <Plus
                   size={16}
@@ -1052,7 +1058,8 @@ export function HostScreen({
                   activeFilterCount > 0 && styles.filterChipTextActive
                 ]}
               >
-                Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                {t('mobile.workspaces.filter', 'Filter')}
+                {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </Text>
             </Pressable>
 
@@ -1067,12 +1074,12 @@ export function HostScreen({
               <Layers size={14} color={colors.textSecondary} />
               <Text style={styles.sortLabel} numberOfLines={1}>
                 {groupMode === 'none'
-                  ? 'Group'
+                  ? t('mobile.workspaces.groupNone', 'Group')
                   : groupMode === 'workspaceStatus'
-                    ? 'Status'
+                    ? t('mobile.workspaces.groupStatus', 'Status')
                     : groupMode === 'repo'
-                      ? 'Repo'
-                      : 'PR'}
+                      ? t('mobile.workspaces.groupRepo', 'Repo')
+                      : t('mobile.workspaces.groupPr', 'PR')}
               </Text>
             </Pressable>
 
@@ -1129,7 +1136,7 @@ export function HostScreen({
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder="Search worktrees…"
+            placeholder={t('mobile.workspaces.searchPlaceholder', 'Search worktrees…')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -1157,10 +1164,10 @@ export function HostScreen({
         <View style={styles.centered}>
           <Text style={styles.emptyText}>
             {search
-              ? 'No matching worktrees'
+              ? t('mobile.workspaces.emptyNoMatching', 'No matching worktrees')
               : activeFilterCount > 0
-                ? 'No worktrees match filters'
-                : 'No worktrees'}
+                ? t('mobile.workspaces.emptyFiltered', 'No worktrees match filters')
+                : t('mobile.workspaces.empty', 'No worktrees')}
           </Text>
         </View>
       )}
@@ -1244,7 +1251,7 @@ export function HostScreen({
 
       <PickerModal
         visible={showSortPicker}
-        title="Sort By"
+        title={t('mobile.workspaces.sortBy', 'Sort By')}
         options={SORT_OPTIONS}
         selected={sortMode}
         onSelect={handleSortChange}
@@ -1253,7 +1260,7 @@ export function HostScreen({
 
       <PickerModal
         visible={showGroupPicker}
-        title="Group By"
+        title={t('mobile.workspaces.groupBy', 'Group By')}
         options={GROUP_OPTIONS}
         selected={groupMode}
         onSelect={handleGroupChange}
@@ -1262,30 +1269,42 @@ export function HostScreen({
 
       <BottomDrawer visible={showFilterModal} onClose={() => setShowFilterModal(false)}>
         <View style={styles.filterModalHeader}>
-          <Text style={styles.filterModalTitle}>Filter</Text>
+          <Text style={styles.filterModalTitle}>
+            {t('mobile.workspaces.filterModalTitle', 'Filter')}
+          </Text>
           {activeFilterCount > 0 && (
             <Pressable onPress={clearFilters}>
-              <Text style={styles.clearFiltersText}>Clear filters</Text>
+              <Text style={styles.clearFiltersText}>
+                {t('mobile.workspaces.clearFilters', 'Clear filters')}
+              </Text>
             </Pressable>
           )}
         </View>
 
-        <Text style={styles.filterSectionLabel}>Workspaces</Text>
+        <Text style={styles.filterSectionLabel}>
+          {t('mobile.workspaces.filterWorkspaces', 'Workspaces')}
+        </Text>
         <View style={styles.filterGroup}>
           <Pressable style={styles.filterRow} onPress={toggleHideSleeping}>
-            <Text style={styles.filterRowText}>Hide sleeping</Text>
+            <Text style={styles.filterRowText}>
+              {t('mobile.workspaces.hideSleeping', 'Hide sleeping')}
+            </Text>
             {filters.hideSleeping && <Check size={14} color={colors.textPrimary} />}
           </Pressable>
           <View style={styles.filterSeparator} />
           <Pressable style={styles.filterRow} onPress={toggleHideDefaultBranch}>
-            <Text style={styles.filterRowText}>Hide default branch</Text>
+            <Text style={styles.filterRowText}>
+              {t('mobile.workspaces.hideDefaultBranch', 'Hide default branch')}
+            </Text>
             {filters.hideDefaultBranch && <Check size={14} color={colors.textPrimary} />}
           </Pressable>
         </View>
 
         {uniqueRepos.length > 1 && (
           <>
-            <Text style={styles.filterSectionLabel}>Repositories</Text>
+            <Text style={styles.filterSectionLabel}>
+              {t('mobile.workspaces.filterRepositories', 'Repositories')}
+            </Text>
             <View style={styles.filterGroup}>
               {uniqueRepos.map((repo, i) => (
                 <View key={repo.id}>
@@ -1317,9 +1336,14 @@ export function HostScreen({
         {confirmDelete ? (
           <View>
             <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>Delete Worktree</Text>
+              <Text style={styles.confirmTitle}>
+                {t('mobile.workspaces.deleteTitle', 'Delete Worktree')}
+              </Text>
               <Text style={styles.confirmMessage}>
-                Delete "{confirmDelete.displayName || confirmDelete.repo}" ({confirmDelete.branch})?
+                {t('mobile.workspaces.deleteConfirm', 'Delete "{name}" ({branch})?', {
+                  name: confirmDelete.displayName || confirmDelete.repo,
+                  branch: confirmDelete.branch
+                })}
               </Text>
             </View>
             <View style={styles.confirmButtons}>
@@ -1331,7 +1355,9 @@ export function HostScreen({
                 ]}
                 onPress={() => setConfirmDelete(null)}
               >
-                <Text style={styles.confirmBtnCancelText}>Cancel</Text>
+                <Text style={styles.confirmBtnCancelText}>
+                  {t('mobile.common.cancel', 'Cancel')}
+                </Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
@@ -1347,7 +1373,9 @@ export function HostScreen({
                   setActionTarget(null)
                 }}
               >
-                <Text style={styles.confirmBtnDestructiveText}>Delete</Text>
+                <Text style={styles.confirmBtnDestructiveText}>
+                  {t('mobile.workspaces.delete', 'Delete')}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1409,9 +1437,15 @@ export function HostScreen({
       {/* Host remove confirmation */}
       <ConfirmModal
         visible={confirmRemoveHost}
-        title="Remove Host"
-        message={`Remove "${hostName}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('mobile.workspaces.removeHost', 'Remove Host')}
+        message={t(
+          'mobile.workspaces.removeHostConfirm',
+          'Remove "{name}"? You can re-pair later.',
+          {
+            name: hostName ?? ''
+          }
+        )}
+        confirmLabel={t('mobile.workspaces.remove', 'Remove')}
         destructive
         onConfirm={() => void handleRemoveHost()}
         onCancel={() => setConfirmRemoveHost(false)}
@@ -1454,319 +1488,3 @@ export default function HostWorktreeRoute() {
 function ListSeparator() {
   return <View style={styles.separator} />
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  topChrome: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 34,
-    paddingTop: spacing.xs,
-    paddingHorizontal: spacing.lg
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  sidebarCollapseButton: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    marginLeft: spacing.xs
-  },
-  hostIdentity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
-    marginRight: spacing.md
-  },
-  hostNameText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  reconnectButton: {
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  reconnectButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  embeddedToolbar: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  embeddedToolbarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  embeddedFilterChip: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  embeddedModeButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  filterChipActive: {
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.bgRaised
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  filterChipTextActive: {
-    color: colors.textPrimary
-  },
-  modeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sortLabel: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  toolbarSpacer: {
-    flex: 1
-  },
-  toolbarIconButton: {
-    width: 32,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  embeddedToolbarIconButton: {
-    flex: 1,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  toolbarIconDisabled: {
-    opacity: 0.6
-  },
-  searchToggle: {
-    padding: spacing.xs
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingVertical: 2
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  list: {
-    paddingBottom: spacing.lg
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginLeft: spacing.xs
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 24,
-    marginRight: spacing.lg
-  },
-  filterModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  clearFiltersText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  filterSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  filterGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: spacing.md
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2,
-    gap: spacing.sm
-  },
-  filterRowText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  filterSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  filterRepoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  confirmContent: {
-    paddingBottom: spacing.lg
-  },
-  confirmTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  confirmMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
-  },
-  confirmBtnDestructive: {
-    backgroundColor: colors.statusRed
-  },
-  confirmBtnPressed: {
-    opacity: 0.7
-  },
-  confirmBtnCancelText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  confirmBtnDestructiveText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: '#fff'
-  }
-})

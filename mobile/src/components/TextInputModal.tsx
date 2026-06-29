@@ -8,6 +8,7 @@ import {
   Platform,
   type KeyboardTypeOptions
 } from 'react-native'
+import { useTranslate } from '../i18n/useTranslate'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 
@@ -38,6 +39,9 @@ export function TextInputModal({
   onSubmit,
   onCancel
 }: Props) {
+  const { t } = useTranslate()
+  const resolvedSubmitLabel =
+    submitLabel === 'Save' ? t('mobile.textInput.defaultSubmit', 'Save') : submitLabel
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
@@ -90,7 +94,7 @@ export function TextInputModal({
           style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
           onPress={onCancel}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{t('mobile.textInput.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -101,7 +105,7 @@ export function TextInputModal({
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>{submitLabel}</Text>
+          <Text style={styles.submitText}>{resolvedSubmitLabel}</Text>
         </Pressable>
       </View>
     </BottomDrawer>

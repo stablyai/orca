@@ -489,7 +489,7 @@ function parseArgs(argv) {
     check: false,
     format: 'summary',
     outputPath: null,
-    sourceRoot: path.join('src', 'renderer', 'src')
+    sourceRoots: [path.join('src', 'renderer', 'src'), path.join('mobile', 'src')]
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -507,8 +507,13 @@ function parseArgs(argv) {
       options.outputPath = argv[index + 1] ?? null
       index += 1
     } else if (arg === '--source-root') {
-      options.sourceRoot = argv[index + 1] ?? options.sourceRoot
-      index += 1
+      // Why: support repeated --source-root flags so the mobile and
+      // renderer surfaces share the same coverage gate.
+      const next = argv[index + 1]
+      if (next) {
+        options.sourceRoots.push(next)
+        index += 1
+      }
     }
   }
 
@@ -569,8 +574,11 @@ function findNewCandidates(reports, allowlist) {
 
 export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
   const options = parseArgs(argv)
-  const absoluteSourceRoot = path.resolve(root, options.sourceRoot)
-  const files = await collectSourceFiles(root, absoluteSourceRoot)
+  const files = []
+  for (const sourceRoot of options.sourceRoots) {
+    const absoluteSourceRoot = path.resolve(root, sourceRoot)
+    files.push(...(await collectSourceFiles(root, absoluteSourceRoot)))
+  }
   const reports = []
 
   for (const filePath of files) {
@@ -582,7 +590,7 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
     const allowlist = await readAllowlist(root, options.allowlistPath)
     const newCandidates = findNewCandidates(reports, allowlist)
     if (newCandidates.length > 0) {
-      console.error('New unlocalized renderer strings were found.')
+      console.error('New unlocalized strings were found.')
       console.error('Localize them or add a reviewed exclusion to the localization allowlist.')
       console.error('')
       console.error(formatReports(root, newCandidates))

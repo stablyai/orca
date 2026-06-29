@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
+import { useTranslate } from '../i18n/useTranslate'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 type Props = {
@@ -17,28 +18,28 @@ const LEVEL_COLOR: Record<ConnectionLogEntry['level'], string> = {
   error: colors.statusRed
 }
 
-const LEVEL_GLYPH: Record<ConnectionLogEntry['level'], string> = {
-  info: '•',
-  success: '✓',
-  warn: '!',
-  error: '✕'
-}
-
-function formatTime(ts: number, baseTs: number): string {
+function formatTime(ts: number, baseTs: number, t: ReturnType<typeof useTranslate>['t']): string {
   // Why: show elapsed seconds since the first entry — absolute wall-clock
   // time isn't actionable when debugging "why is connecting stuck".
   const elapsed = Math.max(0, ts - baseTs) / 1000
   if (elapsed < 10) {
-    return `+${elapsed.toFixed(2)}s`
+    return t('mobile.connectionLog.elapsedSeconds', '+{s}s', { s: elapsed.toFixed(2) })
   }
   if (elapsed < 100) {
-    return `+${elapsed.toFixed(1)}s`
+    return t('mobile.connectionLog.elapsedSeconds', '+{s}s', { s: elapsed.toFixed(1) })
   }
-  return `+${Math.round(elapsed)}s`
+  return t('mobile.connectionLog.elapsedSeconds', '+{s}s', { s: Math.round(elapsed) })
 }
 
 export function ConnectionLog({ entries, title }: Props) {
+  const { t } = useTranslate()
   const scrollRef = useRef<ScrollView | null>(null)
+  const levelGlyph: Record<ConnectionLogEntry['level'], string> = {
+    info: t('mobile.connectionLog.levelInfo', '•'),
+    success: t('mobile.connectionLog.levelSuccess', '✓'),
+    warn: t('mobile.connectionLog.levelWarn', '!'),
+    error: t('mobile.connectionLog.levelError', '✕')
+  }
 
   if (entries.length === 0) {
     return null
@@ -57,9 +58,9 @@ export function ConnectionLog({ entries, title }: Props) {
       >
         {entries.map((entry) => (
           <View key={entry.id} style={styles.row}>
-            <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs)}</Text>
+            <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs, t)}</Text>
             <Text style={[styles.glyph, { color: LEVEL_COLOR[entry.level] }]}>
-              {LEVEL_GLYPH[entry.level]}
+              {levelGlyph[entry.level]}
             </Text>
             <View style={styles.rowText}>
               <Text style={[styles.message, { color: LEVEL_COLOR[entry.level] }]}>

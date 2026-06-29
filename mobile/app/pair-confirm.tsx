@@ -13,6 +13,7 @@ import { saveHost, getNextHostName } from '../src/transport/host-store'
 import type { ConnectionLogEntry, RpcResponse } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import { useTranslate } from '../src/i18n/useTranslate'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -26,6 +27,7 @@ const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 export default function PairConfirmScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslate()
   const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
@@ -124,8 +126,15 @@ export default function PairConfirmScreen() {
       setStatus('error')
       setErrorMessage(
         timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : 'Cannot connect — check that your computer is on the same network'
+          ? t(
+              'mobile.pairConfirm.connectTimeout',
+              "Couldn't connect within {seconds}s — see log below for where it stalled",
+              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
+            )
+          : t(
+              'mobile.pairConfirm.cannotConnectNetwork',
+              'Cannot connect — check that your computer is on the same network'
+            )
       )
       return
     }
@@ -137,8 +146,10 @@ export default function PairConfirmScreen() {
       setStatus('error')
       setErrorMessage(
         response.error.code === 'unauthorized'
-          ? 'Authentication failed — token may be expired'
-          : `Server error: ${response.error.message}`
+          ? t('mobile.pairConfirm.authFailed', 'Authentication failed — token may be expired')
+          : t('mobile.pairConfirm.serverError', 'Server error: {message}', {
+              message: response.error.message
+            })
       )
       return
     }
@@ -165,7 +176,13 @@ export default function PairConfirmScreen() {
       console.warn('[pair-confirm] save failed', err)
       setStatus('error')
       setErrorMessage(
-        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+        t(
+          'mobile.pairConfirm.saveHostFailed',
+          "Pairing succeeded but couldn't save the host: {message}",
+          {
+            message: err instanceof Error ? err.message : String(err)
+          }
+        )
       )
     }
   }
@@ -181,16 +198,23 @@ export default function PairConfirmScreen() {
       <View style={styles.content}>
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
-            <Text style={styles.title}>Pair with this desktop?</Text>
+            <Text style={styles.title}>
+              {t('mobile.pairConfirm.pairTitle', 'Pair with this desktop?')}
+            </Text>
             <Text style={styles.subtitle}>
-              You opened a pairing link from your desktop. Confirm to add it to your hosts.
+              {t(
+                'mobile.pairConfirm.pairSubtitle',
+                'You opened a pairing link from your desktop. Confirm to add it to your hosts.'
+              )}
             </Text>
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-                <Text style={styles.primaryButtonText}>Pair</Text>
+                <Text style={styles.primaryButtonText}>{t('mobile.pairConfirm.pair', 'Pair')}</Text>
               </Pressable>
               <Pressable style={styles.secondaryButton} onPress={cancel}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {t('mobile.pairConfirm.cancel', 'Cancel')}
+                </Text>
               </Pressable>
             </View>
           </>
@@ -199,9 +223,14 @@ export default function PairConfirmScreen() {
         {resolvedStatus === 'connecting' && (
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
+            <Text style={styles.connectingText}>
+              {t('mobile.pairConfirm.connecting', 'Connecting…')}
+            </Text>
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
+              <ConnectionLog
+                entries={logs}
+                title={t('mobile.pairConfirm.logTitle', 'Pairing log')}
+              />
             </View>
           </>
         )}
@@ -211,12 +240,17 @@ export default function PairConfirmScreen() {
             <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
             {logs.length > 0 && (
               <View style={styles.logSlot}>
-                <ConnectionLog entries={logs} title="Pairing log" />
+                <ConnectionLog
+                  entries={logs}
+                  title={t('mobile.pairConfirm.logTitle', 'Pairing log')}
+                />
               </View>
             )}
             <View style={styles.actionStack}>
               <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+                <Text style={styles.primaryButtonText}>
+                  {t('mobile.pairConfirm.backToHome', 'Back to home')}
+                </Text>
               </Pressable>
             </View>
           </>

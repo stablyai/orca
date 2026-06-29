@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from './BottomDrawer'
+import { useTranslate } from '../i18n/useTranslate'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -34,6 +35,7 @@ function formatSize(bytes: number | null): string {
 // Lets the user enable dictation and download a speech model on the paired
 // desktop, from the phone. Polls while a download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
+  const { t } = useTranslate()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -46,9 +48,11 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
     try {
       setSetup(await fetchDictationSetup(client))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load')
+      setError(
+        err instanceof Error ? err.message : t('mobile.dictation.failedToLoad', 'Failed to load')
+      )
     }
-  }, [client])
+  }, [client, t])
 
   useEffect(() => {
     if (visible) {
@@ -84,7 +88,11 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         await refresh()
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Download failed')
+        setError(
+          err instanceof Error
+            ? err.message
+            : t('mobile.dictation.downloadFailed', 'Download failed')
+        )
       } finally {
         setBusy(null)
       }
@@ -106,12 +114,16 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         onReady?.()
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Could not select model')
+        setError(
+          err instanceof Error
+            ? err.message
+            : t('mobile.dictation.couldNotSelectModel', 'Could not select model')
+        )
       } finally {
         setBusy(null)
       }
     },
-    [client, onReady]
+    [client, onReady, t]
   )
 
   const handleToggleEnabled = useCallback(
@@ -123,10 +135,14 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       try {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
+        setError(
+          err instanceof Error
+            ? err.message
+            : t('mobile.dictation.couldNotUpdate', 'Could not update')
+        )
       }
     },
-    [client]
+    [client, t]
   )
 
   return (
@@ -134,9 +150,14 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
           a nested capped ScrollView cut off the lower controls. */}
       <View>
-        <Text style={styles.heading}>Set up voice dictation</Text>
+        <Text style={styles.heading}>
+          {t('mobile.dictation.heading', 'Set up voice dictation')}
+        </Text>
         <Text style={styles.subtitle}>
-          Download a model and enable dictation on your desktop — all from here.
+          {t(
+            'mobile.dictation.subtitle',
+            'Download a model and enable dictation on your desktop — all from here.'
+          )}
         </Text>
 
         {setup === null ? (
@@ -146,7 +167,9 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         ) : (
           <>
             <View style={styles.enableRow}>
-              <Text style={styles.enableLabel}>Dictation enabled</Text>
+              <Text style={styles.enableLabel}>
+                {t('mobile.dictation.dictationEnabled', 'Dictation enabled')}
+              </Text>
               <Switch value={setup.enabled} onValueChange={(v) => void handleToggleEnabled(v)} />
             </View>
 
@@ -160,27 +183,35 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                     <View style={styles.modelTitleRow}>
                       <Text style={styles.modelLabel}>{model.label}</Text>
                       {model.recommended ? (
-                        <Text style={styles.recommended}>Recommended</Text>
+                        <Text style={styles.recommended}>
+                          {t('mobile.dictation.recommended', 'Recommended')}
+                        </Text>
                       ) : null}
                     </View>
                     <Text style={styles.modelMeta}>
-                      {model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes)}
+                      {model.provider === 'openai'
+                        ? t('mobile.dictation.openaiApi', 'OpenAI API')
+                        : formatSize(model.sizeBytes)}
                       {inFlight && model.progress != null
                         ? ` · ${Math.round(model.progress * 100)}%`
                         : model.status === 'extracting'
-                          ? ' · extracting…'
+                          ? ` · ${t('mobile.dictation.extracting', 'extracting…')}`
                           : ''}
                     </Text>
                   </View>
                   {model.provider === 'openai' ? (
                     <Text style={styles.modelStateText}>
-                      {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
+                      {model.status === 'ready'
+                        ? t('mobile.dictation.apiKeySet', 'API key set')
+                        : t('mobile.dictation.setUpOnDesktop', 'Set up on desktop')}
                     </Text>
                   ) : model.status === 'ready' ? (
                     isSelected ? (
                       <View style={styles.selectedTag}>
                         <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
-                        <Text style={styles.selectedText}>In use</Text>
+                        <Text style={styles.selectedText}>
+                          {t('mobile.dictation.inUse', 'In use')}
+                        </Text>
                       </View>
                     ) : (
                       <Pressable
@@ -191,7 +222,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                         disabled={rowBusy}
                         onPress={() => void handleUseModel(model)}
                       >
-                        <Text style={styles.actionText}>Use</Text>
+                        <Text style={styles.actionText}>{t('mobile.dictation.use', 'Use')}</Text>
                       </Pressable>
                     )
                   ) : inFlight ? (
@@ -210,7 +241,9 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                       ) : (
                         <>
                           <Download size={13} color={colors.textSecondary} strokeWidth={2.2} />
-                          <Text style={styles.actionText}>Download</Text>
+                          <Text style={styles.actionText}>
+                            {t('mobile.dictation.download', 'Download')}
+                          </Text>
                         </>
                       )}
                     </Pressable>
