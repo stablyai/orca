@@ -78,6 +78,30 @@ describe('resolveComposerBranchSelection', () => {
       })
     ).toBeUndefined()
   })
+
+  it('uses a slash-containing typed branch name as the create override in branch mode', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBe('feature/user-profile')
+  })
+
+  it('keeps plain typed branch names on the existing sanitized-name path', () => {
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature-user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBeUndefined()
+  })
 })
 
 describe('isBranchCheckedOutInWorktrees', () => {
