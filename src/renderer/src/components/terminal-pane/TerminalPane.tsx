@@ -559,14 +559,18 @@ export default function TerminalPane({
       )?.label
   )
   // The native-chat toggle joins the pane header's split/close cluster. Eligible
-  // when Orca launched an agent here or one was detected live (any pane of this
-  // tab has an agent-status entry, keyed `${tabId}:…`).
-  const hasDetectedAgent = useAppStore((store) =>
-    Object.keys(store.agentStatusByPaneKey).some((paneKey) => {
+  // when Orca launched a *supported* agent here or one was detected live (a pane
+  // of this tab has an agent-status entry, keyed `${tabId}:…`). Carry the agent
+  // identity, not just "an agent exists", so the gate can reject Grok et al.
+  const detectedAgent = useAppStore((store) => {
+    for (const [paneKey, entry] of Object.entries(store.agentStatusByPaneKey)) {
       const sep = paneKey.indexOf(':')
-      return sep > 0 && paneKey.slice(0, sep) === tabId
-    })
-  )
+      if (sep > 0 && paneKey.slice(0, sep) === tabId) {
+        return entry.agentType ?? null
+      }
+    }
+    return null
+  })
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const terminalTab = useAppStore((store) =>
@@ -581,8 +585,8 @@ export default function TerminalPane({
     experimentalNativeChatEnabled: nativeChatEnabled,
     contentType: 'terminal',
     launchAgent: terminalTab?.launchAgent,
-    hasDetectedAgent,
-    hasResolvedAgent: titleResolvedAgent !== null,
+    detectedAgent,
+    resolvedAgent: titleResolvedAgent,
     isChatViewMode
   })
   const toggleNativeChatForLeaf = useCallback(
