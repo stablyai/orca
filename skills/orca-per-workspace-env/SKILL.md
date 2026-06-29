@@ -52,9 +52,14 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
 6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code.
 7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8).
-8. **Doctor** — `orca vm recipe doctor <recipe-id> --repo-path <repo>` (§9).
-9. **[CHECKPOINT] Optional live test** — only if asked: create a workspace via `Run on → Ephemeral VM`,
-   then verify sleep/wake/delete. Spends money.
+8. **Dry-run doctor** — `orca vm recipe doctor <recipe-id> --repo-path <repo> --json` (free, static; §9).
+   Fix every failure before going live.
+9. **[CHECKPOINT] Live self-test** — get the user's OK once, then run
+   `orca vm recipe doctor <recipe-id> --provision --json` as a loop: it runs create → validates →
+   destroys, and on failure returns a full transcript. Read it, fix the scripts, and re-run yourself until
+   it passes (§9). Spends cloud money; the one approval covers the loop.
+10. **[CHECKPOINT] Optional workspace test** — only if asked: create a workspace via the picker, then
+    verify sleep/wake/delete.
 
 ---
 
@@ -269,17 +274,48 @@ Prefer the lifecycle names.
 
 ## 9. Doctor and validation
 
-`orca vm recipe doctor <recipe-id> --repo-path <repo>` is **non-destructive** and only validates static
-wiring — it does **not** boot a VM or verify snapshots/auth. It checks: local-host execution (v1), repo
-path, recipe id exists, create/destroy/suspend/resume command paths resolve, suspend/resume are paired,
-and each script is executable (POSIX exec bit; skipped on Windows).
+Validate in two stages — the cheap dry run first, then the live self-test.
 
-Because doctor can't see snapshot/auth state, also confirm manually:
+### Dry run (free, non-destructive) — always do this first
 
-- `create` (and `resume`, if set) print valid recipe JSON on stdout; logs/errors go to stderr.
-- `pairingCode` present and not logged; `projectRoot` is an absolute remote path.
-- State has a populated **authenticated** `snapshotId` (Phases 2–3 done).
-- Destroy is implemented and tested, or explicitly `none`.
+`orca vm recipe doctor <recipe-id> --repo-path <repo> --json` validates **static wiring only** — it does
+**not** boot anything. It checks: local-host execution (v1), repo path, recipe id exists,
+create/destroy/suspend/resume command paths resolve, suspend/resume are paired, and each script is
+executable (POSIX exec bit; skipped on Windows). Fix every failure here before spending any cloud money.
+
+### Live self-test (`--provision`) — diagnose and iterate yourself
+
+`orca vm recipe doctor <recipe-id> --repo-path <repo> --provision --json` actually runs the recipe end
+to end: it executes `create`, validates the returned recipe JSON, then runs `destroy` to **tear the
+environment back down** (so the test leaves nothing running, as long as `destroy` works). It spends real
+cloud money, so get the user's OK **once** before starting — that one approval covers the whole loop
+below; do not re-ask before each run.
+
+On failure, the JSON result includes a `provisionTranscript` with the **complete** captured output of
+each stage so you can self-diagnose without asking the user to relay logs:
+
+```json
+{
+  "ok": false,
+  "checks": [ { "id": "recipe.provision", "status": "fail", "message": "…" } ],
+  "provisionTranscript": {
+    "provision": { "exitCode": 0, "signal": null, "stdout": "…", "stderr": "…", "parseError": "…" },
+    "destroy":   { "exitCode": 0, "signal": null, "stdout": "…", "stderr": "…" }
+  }
+}
+```
+
+**Run it as a loop:** read `provisionTranscript.provision.stderr` / `.stdout` / `.parseError` (and
+`destroy.*`), fix the script, and re-run `--provision` until `ok` is `true` — iterating on your own
+rather than waiting for the user to paste errors. Common reads: a non-empty `stderr` with `exitCode 0`
+plus a `parseError` means `create` ran but printed something other than the single recipe-result JSON on
+stdout (often a stray `echo` — route it to stderr, see §10); a non-zero `exitCode` is a provider/script
+failure described in `stderr`. Each stream is redacted and capped (head+tail) — large logs keep both the
+setup context and the failure.
+
+The self-test cannot see provider-side truth beyond what the scripts print, so still confirm: state has a
+populated **authenticated** `snapshotId` (Phases 2–3 done), and `destroy` is implemented/tested (or
+explicitly `none` — in which case the self-test won't tear down, so clean up manually).
 
 ---
 
@@ -296,7 +332,8 @@ Because doctor can't see snapshot/auth state, also confirm manually:
   Phase 3. Warn that short-lived tokens may need periodic re-auth.
 - **Leaked paid resource.** Every long script must trap errors and remove the sandbox it created.
 - **`create` emits non-JSON on stdout.** A stray `echo` corrupts the result — stdout is for the final
-  JSON only; everything else to stderr.
+  JSON only; everything else to stderr. The `--provision` self-test surfaces this as `exitCode 0` + a
+  `parseError` with the offending stdout in `provisionTranscript` (§9).
 
 ---
 

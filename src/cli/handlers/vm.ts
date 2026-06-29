@@ -83,7 +83,39 @@ function readTextFile(path: string): string {
   return readFileSync(path, 'utf8')
 }
 
-type DoctorResult = EphemeralVmRecipeDoctorResult
+// Why: give the agent the full create/destroy output so it can self-diagnose a
+// failed provision instead of relaying logs through the user. Each stream is
+// redacted and capped (head+tail) so a huge log stays readable but complete enough.
+type ProvisionStageTranscript = {
+  exitCode: number | null
+  signal: NodeJS.Signals | null
+  stdout: string
+  stderr: string
+  parseError?: string
+}
+
+type ProvisionTranscript = {
+  provision: ProvisionStageTranscript
+  destroy?: ProvisionStageTranscript
+}
+
+type DoctorResult = EphemeralVmRecipeDoctorResult & {
+  provisionTranscript?: ProvisionTranscript
+}
+
+const MAX_TRANSCRIPT_STREAM_BYTES = 16_000
+
+// Why: keep both ends of a long log — the script's setup context (head) and the
+// failure itself (tail) — rather than only the last 500 chars.
+function capTranscriptStream(value: string): string {
+  const redacted = redactEphemeralVmRecipeDiagnosticText(value)
+  if (redacted.length <= MAX_TRANSCRIPT_STREAM_BYTES) {
+    return redacted
+  }
+  const half = Math.floor(MAX_TRANSCRIPT_STREAM_BYTES / 2)
+  const omitted = redacted.length - half * 2
+  return `${redacted.slice(0, half)}\n…[${omitted} chars omitted]…\n${redacted.slice(-half)}`
+}
 
 async function doctorRecipeWithProvision(
   repoPath: string,
@@ -123,7 +155,18 @@ async function doctorRecipeWithProvision(
           message: start.error,
           remediation: buildProvisionFailureRemediation(start.stderr, start.stdout)
         }
-      ]
+      ],
+      // Why: the create script failed — hand the agent the complete output (not a
+      // tail) so it can see what the script printed and why parsing/exit failed.
+      provisionTranscript: {
+        provision: {
+          exitCode: start.exitCode,
+          signal: start.signal,
+          stdout: capTranscriptStream(start.stdout),
+          stderr: capTranscriptStream(start.stderr),
+          parseError: start.error
+        }
+      }
     }
   }
 
@@ -177,10 +220,32 @@ async function doctorRecipeWithProvision(
     })
   }
 
+  // Why: include both stages' full output even on success — the agent can confirm
+  // pairing/teardown looked right, and diagnose a destroy failure without re-running.
+  const provisionTranscript: ProvisionTranscript = {
+    provision: {
+      exitCode: 0,
+      signal: null,
+      stdout: capTranscriptStream(start.stdout),
+      stderr: capTranscriptStream(start.stderr)
+    },
+    ...(cleanup.skipped
+      ? {}
+      : {
+          destroy: {
+            exitCode: cleanup.exitCode,
+            signal: cleanup.signal,
+            stdout: capTranscriptStream(cleanup.stdout),
+            stderr: capTranscriptStream(cleanup.stderr)
+          }
+        })
+  }
+
   return {
     ...baseline,
     ok: checks.every((check) => check.status !== 'fail'),
-    checks
+    checks,
+    provisionTranscript
   }
 }
 
@@ -199,7 +264,7 @@ function loadRecipe(repoPath: string, recipeId: string): OrcaVmRecipe | null {
 }
 
 function formatDoctorResult(result: DoctorResult): string {
-  return [
+  const lines = [
     `recipe: ${result.recipeId}`,
     `repoPath: ${result.repoPath}`,
     `ok: ${result.ok}`,
@@ -207,7 +272,28 @@ function formatDoctorResult(result: DoctorResult): string {
       const suffix = check.remediation ? `\n  next: ${check.remediation}` : ''
       return `${check.status.toUpperCase()} ${check.id}: ${check.message}${suffix}`
     })
-  ].join('\n')
+  ]
+  if (result.provisionTranscript) {
+    lines.push(...formatTranscriptStage('create', result.provisionTranscript.provision))
+    if (result.provisionTranscript.destroy) {
+      lines.push(...formatTranscriptStage('destroy', result.provisionTranscript.destroy))
+    }
+  }
+  return lines.join('\n')
+}
+
+function formatTranscriptStage(label: string, stage: ProvisionStageTranscript): string[] {
+  const out = [`--- ${label} (exit ${stage.exitCode ?? stage.signal ?? 'unknown'}) ---`]
+  if (stage.parseError) {
+    out.push(`parseError: ${stage.parseError}`)
+  }
+  if (stage.stdout.trim()) {
+    out.push(`stdout:\n${stage.stdout}`)
+  }
+  if (stage.stderr.trim()) {
+    out.push(`stderr:\n${stage.stderr}`)
+  }
+  return out
 }
 
 function getStringFlag(flags: Map<string, string | boolean>, name: string): string | null {

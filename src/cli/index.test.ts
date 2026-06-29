@@ -2037,6 +2037,10 @@ describe('orca cli worktree awareness', () => {
       const output = JSON.parse(String(logSpy.mock.calls[0][0])) as {
         ok: boolean
         checks: { id: string; status: string }[]
+        provisionTranscript?: {
+          provision: { exitCode: number | null; stdout: string; stderr: string }
+          destroy?: { exitCode: number | null; stdout: string; stderr: string }
+        }
       }
       if (!output.ok) {
         throw new Error(JSON.stringify(output))
@@ -2050,6 +2054,9 @@ describe('orca cli worktree awareness', () => {
           expect.objectContaining({ id: 'recipe.destroy.run', status: 'pass' })
         ])
       )
+      // The transcript carries both stages so the agent can self-diagnose.
+      expect(output.provisionTranscript?.provision.exitCode).toBe(0)
+      expect(output.provisionTranscript?.destroy?.exitCode).toBe(0)
       const cleanupPayload = JSON.parse(
         String(vi.mocked(cleanupChild.stdin.end).mock.calls[0]?.[0])
       ) as { recipeId: string; recipeResult: { projectRoot: string } }
@@ -2057,6 +2064,80 @@ describe('orca cli worktree awareness', () => {
         recipeId: 'cloud-sandbox',
         recipeResult: { projectRoot: '/workspace/repo' }
       })
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns the full create transcript when provision fails so the agent can self-diagnose', async () => {
+    const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-provision-fail-'))
+    try {
+      mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
+      writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'start.js'), 'process.exit(0)')
+      writeFileSync(
+        path.join(repoPath, 'orca.yaml'),
+        [
+          'vmRecipes:',
+          '  - id: cloud-sandbox',
+          '    name: Cloud Sandbox',
+          `    create: ${JSON.stringify(`${process.execPath} ./scripts/orca-vm/start.js`)}`,
+          '    destroy: none'
+        ].join('\n')
+      )
+      const { EventEmitter } = await import('events')
+      const startChild = Object.assign(new EventEmitter(), {
+        stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
+        stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
+        stdin: { write: vi.fn(), end: vi.fn() },
+        kill: vi.fn()
+      })
+      // create emits a non-JSON line to stdout + a real diagnostic to stderr, then exits 0
+      spawnMock.mockImplementationOnce(() => {
+        process.nextTick(() => {
+          startChild.stdout.emit('data', 'Provisioning sandbox...\n')
+          startChild.stderr.emit('data', 'vercel: error: missing scope\n')
+          startChild.emit('exit', 0, null)
+          startChild.emit('close', 0, null)
+        })
+        return startChild
+      })
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+
+      await main([
+        'vm',
+        'recipe',
+        'doctor',
+        'cloud-sandbox',
+        '--repo-path',
+        repoPath,
+        '--provision',
+        '--json'
+      ])
+
+      const output = JSON.parse(String(logSpy.mock.calls[0][0])) as {
+        ok: boolean
+        checks: { id: string; status: string }[]
+        provisionTranscript?: {
+          provision: {
+            exitCode: number | null
+            stdout: string
+            stderr: string
+            parseError?: string
+          }
+        }
+      }
+      expect(output.ok).toBe(false)
+      expect(output.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'recipe.provision', status: 'fail' })
+        ])
+      )
+      // The agent gets the full create output, not a 500-char tail.
+      expect(output.provisionTranscript?.provision.stdout).toContain('Provisioning sandbox...')
+      expect(output.provisionTranscript?.provision.stderr).toContain('missing scope')
+      expect(output.provisionTranscript?.provision.parseError).toBeTruthy()
+      process.exitCode = priorExitCode
     } finally {
       rmSync(repoPath, { recursive: true, force: true })
     }
