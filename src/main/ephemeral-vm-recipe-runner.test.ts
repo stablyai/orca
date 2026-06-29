@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
+import { getEphemeralVmRecipeResultProjectRoot } from '../shared/ephemeral-vm-recipes'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload,
@@ -71,7 +72,7 @@ describe('runEphemeralVmRecipeStart', () => {
     if (result.ok) {
       expect(result.context.recipeId).toBe('cloud-sandbox')
       expect(result.context.instanceId).toMatch(/^orca-/)
-      expect(result.result.projectRoot).toBe('/workspace/repo')
+      expect(getEphemeralVmRecipeResultProjectRoot(result.result)).toBe('/workspace/repo')
       expect(result.result.userData).toEqual({ providerResourceId: result.context.instanceId })
       expect(result.stderr).toContain(`cwd:${realpathSync(repoPath)}`)
       expect(result.stderr).toContain(`instance:${result.context.instanceId}`)

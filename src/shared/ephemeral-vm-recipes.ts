@@ -5,7 +5,10 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from './ssh-types'
-export { doctorEphemeralVmRecipe, firstRecipeCommandToken } from './ephemeral-vm-recipe-doctor'
+// Why: ephemeral-vm-recipe-doctor imports Node's fs/path, so it must NOT be
+// re-exported through this barrel — the renderer/web-client imports this module
+// and would otherwise pull Node built-ins into the browser bundle (build fails).
+// Node callers import doctorEphemeralVmRecipe directly from the doctor module.
 export {
   getEphemeralVmRecipeResultWarnings,
   redactEphemeralVmRecipeDiagnosticText,
