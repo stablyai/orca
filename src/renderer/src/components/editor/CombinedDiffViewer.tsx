@@ -622,7 +622,8 @@ export default function CombinedDiffViewer({
       let result: GitDiffResult
       let error: string | undefined
       try {
-        const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+        const sectionFilePath = joinPath(file.filePath, entry.path)
+        const connectionId = getConnectionIdForFile(file.worktreeId, sectionFilePath) ?? undefined
         const state = useAppStore.getState()
         const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
         if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {

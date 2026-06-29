@@ -256,6 +256,46 @@ describe('getConnectionId', () => {
     expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/README.md')).toBeUndefined()
   })
 
+  it('resolves folder workspace combined diff sections by child repo path', () => {
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [
+        {
+          id: 'group-1',
+          name: 'Platform',
+          parentPath: '/home/neil/platform',
+          parentGroupId: null,
+          createdFrom: 'folder-scan',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      repos: [
+        makeRepo({
+          id: 'repo-local',
+          path: '/home/neil/platform/web',
+          projectGroupId: 'group-1'
+        }),
+        makeRepo({
+          id: 'repo-ssh',
+          path: '/home/neil/platform/api',
+          projectGroupId: 'group-1',
+          connectionId: 'ssh-1'
+        })
+      ],
+      worktreesByRepo: {}
+    })
+
+    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform')).toBeUndefined()
+    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/api/src/index.ts')).toBe(
+      'ssh-1'
+    )
+  })
+
   it('keeps explicit folder workspace provenance isolated from unrelated same-path SSH repos', () => {
     useAppStore.setState({
       folderWorkspaces: [
