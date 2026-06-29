@@ -6,10 +6,20 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 
 const handlers = new Map<string, (_event: unknown, args: never) => Promise<unknown> | unknown>()
-const { handleMock, removeHandlerMock, getPathMock } = vi.hoisted(() => ({
+const {
+  handleMock,
+  removeHandlerMock,
+  getPathMock,
+  connectRuntimeOwnedSshTargetMock,
+  disconnectRuntimeOwnedSshTargetMock,
+  removeRuntimeOwnedSshTargetMock
+} = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
-  getPathMock: vi.fn()
+  getPathMock: vi.fn(),
+  connectRuntimeOwnedSshTargetMock: vi.fn(),
+  disconnectRuntimeOwnedSshTargetMock: vi.fn(),
+  removeRuntimeOwnedSshTargetMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -20,6 +30,12 @@ vi.mock('electron', () => ({
     handle: handleMock,
     removeHandler: removeHandlerMock
   }
+}))
+
+vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+  connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
+  disconnectRuntimeOwnedSshTarget: disconnectRuntimeOwnedSshTargetMock,
+  removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
@@ -74,6 +90,21 @@ describe('registerEphemeralVmHandlers', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     getPathMock.mockReset()
+    connectRuntimeOwnedSshTargetMock.mockReset()
+    disconnectRuntimeOwnedSshTargetMock.mockReset()
+    removeRuntimeOwnedSshTargetMock.mockReset()
+    connectRuntimeOwnedSshTargetMock.mockResolvedValue({
+      targetId: 'runtime-ssh-orca-instance-1',
+      target: {
+        id: 'runtime-ssh-orca-instance-1',
+        label: 'Sandbox',
+        host: 'sandbox.example.com',
+        port: 22,
+        username: 'root'
+      }
+    })
+    disconnectRuntimeOwnedSshTargetMock.mockResolvedValue(undefined)
+    removeRuntimeOwnedSshTargetMock.mockResolvedValue(undefined)
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)
     })
@@ -222,6 +253,89 @@ describe('registerEphemeralVmHandlers', () => {
         workspaceId: 'repo-1::/workspace/repo/worktree'
       })
     )
+  })
+
+  it('provisions an ssh recipe without creating a runtime environment', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
+    const startPath = join(repoPath, 'scripts', 'start-ssh.js')
+    writeFileSync(
+      startPath,
+      [
+        'console.log(JSON.stringify({',
+        '  schemaVersion: 1,',
+        '  connection: {',
+        "    type: 'ssh',",
+        "    projectRoot: '/workspace/repo',",
+        '    target: {',
+        "      label: 'Sandbox',",
+        "      host: 'sandbox.example.com',",
+        '      port: 22,',
+        "      username: 'root'",
+        '    }',
+        '  },',
+        "  userData: { sandboxId: 'sandbox-123' }",
+        '}))'
+      ].join('\n')
+    )
+    writeFileSync(
+      join(repoPath, 'orca.yaml'),
+      [
+        'vmRecipes:',
+        '  - id: cloud-sandbox',
+        '    name: Cloud Sandbox',
+        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
+        '    destroy: none'
+      ].join('\n')
+    )
+
+    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const result = (await handlers.get('ephemeralVm:provision')?.(null, {
+      repoId: 'repo-1',
+      recipeId: 'cloud-sandbox',
+      workspaceName: 'Fix Login Race'
+    } as never)) as {
+      ok: boolean
+      connectionType?: string
+      sshTargetId?: string
+      runtime?: {
+        id: string
+        repoId?: string
+        status?: string
+        connectionMode?: string
+        sshTargetId?: string
+      }
+      environment?: { id: string; name: string }
+    }
+
+    expect(result).toMatchObject({
+      ok: true,
+      connectionType: 'ssh',
+      sshTargetId: 'runtime-ssh-orca-instance-1',
+      runtime: {
+        repoId: 'repo-1',
+        status: 'running',
+        connectionMode: 'ssh',
+        sshTargetId: 'runtime-ssh-orca-instance-1'
+      }
+    })
+    expect(result.environment).toBeUndefined()
+    expect(connectRuntimeOwnedSshTargetMock).toHaveBeenCalledWith({
+      runtimeId: result.runtime?.id,
+      connection: {
+        type: 'ssh',
+        projectRoot: '/workspace/repo',
+        target: {
+          label: 'Sandbox',
+          host: 'sandbox.example.com',
+          port: 22,
+          username: 'root'
+        }
+      }
+    })
+    expect(listEnvironments(userDataPath)).toEqual([])
   })
 
   it('runs suspend and resume for an attached ephemeral VM workspace', async () => {

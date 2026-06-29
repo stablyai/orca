@@ -58,6 +58,95 @@ describe('parseEphemeralVmRecipeResult', () => {
     }
   })
 
+  it('parses an orca-server connection result', () => {
+    const pairingCode = makePairingCode()
+
+    expect(
+      parseEphemeralVmRecipeResult(
+        JSON.stringify({
+          schemaVersion: 1,
+          connection: {
+            type: 'orca-server',
+            pairingCode,
+            projectRoot: '/workspace/repo'
+          }
+        })
+      )
+    ).toEqual({
+      ok: true,
+      result: {
+        schemaVersion: 1,
+        connection: {
+          type: 'orca-server',
+          pairingCode,
+          projectRoot: '/workspace/repo'
+        }
+      }
+    })
+  })
+
+  it('parses an ssh connection result', () => {
+    const result = parseEphemeralVmRecipeResult(
+      JSON.stringify({
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo',
+          target: {
+            label: 'Sandbox',
+            host: 'sandbox.example.com',
+            port: 22,
+            username: 'root',
+            proxyCommand: 'sandbox ssh-proxy sandbox-123'
+          }
+        },
+        userData: { sandboxId: 'sandbox-123' }
+      })
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      result: {
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo',
+          target: {
+            label: 'Sandbox',
+            host: 'sandbox.example.com',
+            port: 22,
+            username: 'root',
+            proxyCommand: 'sandbox ssh-proxy sandbox-123'
+          }
+        },
+        userData: { sandboxId: 'sandbox-123' }
+      }
+    })
+  })
+
+  it('rejects ssh results with relative project roots', () => {
+    expect(
+      parseEphemeralVmRecipeResult(
+        JSON.stringify({
+          schemaVersion: 1,
+          connection: {
+            type: 'ssh',
+            projectRoot: 'workspace/repo',
+            target: {
+              label: 'Sandbox',
+              host: 'sandbox.example.com',
+              port: 22,
+              username: 'root'
+            }
+          }
+        })
+      )
+    ).toEqual({
+      ok: false,
+      error: 'Recipe result projectRoot must be an absolute runtime path.'
+    })
+  })
+
   it('rejects non-json stdout', () => {
     expect(parseEphemeralVmRecipeResult('Pairing URL: nope')).toEqual({
       ok: false,
@@ -129,9 +218,17 @@ describe('parseEphemeralVmRecipeResult', () => {
 
     expect(
       redactEphemeralVmRecipeDiagnosticText(
-        JSON.stringify({ pairingCode, token: 'provider-token', ok: true })
+        JSON.stringify({
+          pairingCode,
+          token: 'provider-token',
+          identityFile: '/secret/key',
+          proxyCommand: 'provider token',
+          ok: true
+        })
       )
-    ).toBe('{"pairingCode":"[redacted]","token":"[redacted]","ok":true}')
+    ).toBe(
+      '{"pairingCode":"[redacted]","token":"[redacted]","identityFile":"[redacted]","proxyCommand":"[redacted]","ok":true}'
+    )
     expect(
       redactEphemeralVmRecipeResultForDiagnostics({
         schemaVersion: 1,
@@ -151,6 +248,39 @@ describe('parseEphemeralVmRecipeResult', () => {
         providerResourceId: 'sandbox-123',
         accessToken: '[redacted]',
         nested: { apiKey: '[redacted]', region: 'us-east-1' }
+      }
+    })
+    expect(
+      redactEphemeralVmRecipeResultForDiagnostics({
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo',
+          target: {
+            label: 'Sandbox',
+            host: 'sandbox.example.com',
+            port: 22,
+            username: 'root',
+            identityFile: '/secret/key',
+            identityAgent: '/secret/agent.sock',
+            proxyCommand: 'provider ssh-proxy sandbox-123'
+          }
+        }
+      })
+    ).toEqual({
+      schemaVersion: 1,
+      connection: {
+        type: 'ssh',
+        projectRoot: '/workspace/repo',
+        target: {
+          label: 'Sandbox',
+          host: 'sandbox.example.com',
+          port: 22,
+          username: 'root',
+          identityFile: '[redacted-path]',
+          identityAgent: '[redacted-path]',
+          proxyCommand: '[redacted]'
+        }
       }
     })
   })

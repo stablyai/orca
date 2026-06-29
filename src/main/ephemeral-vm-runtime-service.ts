@@ -5,6 +5,7 @@ import {
   upsertEphemeralVmRuntime
 } from '../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
+import { getEphemeralVmRecipeResultConnection } from '../shared/ephemeral-vm-recipes'
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeResume,
@@ -115,6 +116,7 @@ export async function provisionEphemeralVmRuntime(
   }
 
   const now = args.now ?? Date.now()
+  const connection = getEphemeralVmRecipeResultConnection(start.result)
   const runtime = upsertEphemeralVmRuntime(args.userDataPath, {
     id: start.context.instanceId ?? start.context.recipeId,
     recipeId: args.recipe.id,
@@ -123,6 +125,7 @@ export async function provisionEphemeralVmRuntime(
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
     status: 'running',
+    connectionMode: connection.type,
     cleanupStatus: args.recipe.destroyDisabled ? 'disabled' : 'not_started',
     ...(args.recipe.destroyDisabled ? { cleanupDisabled: true } : {}),
     createdAt: now,

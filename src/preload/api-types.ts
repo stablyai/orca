@@ -2032,8 +2032,17 @@ export type PreloadApi = {
     }) => Promise<
       | {
           ok: true
+          connectionType: 'orca-server'
           runtime: EphemeralVmRuntimeRecord
           environment: PublicKnownRuntimeEnvironment
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | {
+          ok: true
+          connectionType: 'ssh'
+          runtime: EphemeralVmRuntimeRecord
+          sshTargetId: string
           stderr: string
           warnings: EphemeralVmRecipeResultWarning[]
         }

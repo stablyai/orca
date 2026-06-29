@@ -1,9 +1,12 @@
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
 } from '../../../shared/types'
-import type { EphemeralVmRecipeResultWarning } from '../../../shared/ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultProjectRoot,
+  type EphemeralVmRecipeResultWarning
+} from '../../../shared/ephemeral-vm-recipes'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
 
@@ -23,7 +26,7 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
       ok: true
       setup: ProjectHostSetupResult
       runtimeId: string
-      environmentId: string
+      environmentId?: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
     }
@@ -47,18 +50,25 @@ export async function prepareEphemeralVmWorkspaceTarget(
     return { ok: false, error: provisioned.error, stderr: provisioned.stderr }
   }
 
-  try {
-    await assertRuntimeEnvironmentCapability(
-      provisioned.environment.id,
-      PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-      'The recipe-created Orca server does not support project setup.'
-    )
-  } catch (error) {
-    await cleanupProvisionedRuntime(provisioned.runtime.id)
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-      stderr: provisioned.stderr
+  const hostId =
+    provisioned.connectionType === 'ssh'
+      ? toSshExecutionHostId(provisioned.sshTargetId)
+      : toRuntimeExecutionHostId(provisioned.environment.id)
+
+  if (provisioned.connectionType === 'orca-server') {
+    try {
+      await assertRuntimeEnvironmentCapability(
+        provisioned.environment.id,
+        PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+        'The recipe-created Orca server does not support project setup.'
+      )
+    } catch (error) {
+      await cleanupProvisionedRuntime(provisioned.runtime.id)
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        stderr: provisioned.stderr
+      }
     }
   }
 
@@ -66,8 +76,8 @@ export async function prepareEphemeralVmWorkspaceTarget(
   try {
     setup = await args.setupExistingFolder({
       projectId: args.projectId,
-      hostId: toRuntimeExecutionHostId(provisioned.environment.id),
-      path: provisioned.runtime.recipeResult.projectRoot,
+      hostId,
+      path: getEphemeralVmRecipeResultProjectRoot(provisioned.runtime.recipeResult),
       setupMethod: 'imported-existing-folder'
     })
   } catch (error) {
@@ -86,25 +96,27 @@ export async function prepareEphemeralVmWorkspaceTarget(
       stderr: provisioned.stderr
     }
   }
-  const runtimeHostId = toRuntimeExecutionHostId(provisioned.environment.id)
   setup = {
     ...setup,
     setup: {
       ...setup.setup,
       // Why: the sandbox reports its own checkout as "local"; the desktop app
       // must route follow-up worktree operations back through this runtime.
-      hostId: runtimeHostId
+      hostId
     }
   }
 
-  return {
+  const success = {
     ok: true,
     setup,
     runtimeId: provisioned.runtime.id,
-    environmentId: provisioned.environment.id,
     stderr: provisioned.stderr,
     warnings: provisioned.warnings
-  }
+  } satisfies PrepareEphemeralVmWorkspaceTargetResult
+
+  return provisioned.connectionType === 'orca-server'
+    ? { ...success, environmentId: provisioned.environment.id }
+    : success
 }
 
 async function cleanupProvisionedRuntime(runtimeId: string): Promise<void> {

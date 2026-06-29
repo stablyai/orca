@@ -60,7 +60,9 @@ export async function prepareRequestForCreate(
     repoId: preparedTarget.setup.repo.id,
     ...getEphemeralVmPortableBaseSelection(request),
     ephemeralVmRuntimeId: preparedTarget.runtimeId,
-    ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId,
+    ...(preparedTarget.environmentId
+      ? { ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId }
+      : {}),
     workspaceRunContext: {
       kind: 'workspace-run',
       projectId: preparedTarget.setup.setup.projectId,

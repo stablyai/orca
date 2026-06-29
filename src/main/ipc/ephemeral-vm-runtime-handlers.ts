@@ -7,6 +7,10 @@ import {
 } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import {
+  getEphemeralVmRecipeResultConnection,
+  getEphemeralVmRecipeResultPairingCode
+} from '../../shared/ephemeral-vm-recipes'
+import {
   removeEnvironment,
   updateEnvironmentFromPairingCode
 } from '../../shared/runtime-environment-store'
@@ -19,6 +23,11 @@ import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
 } from '../ephemeral-vm-recipe-runner'
+import {
+  connectRuntimeOwnedSshTarget,
+  disconnectRuntimeOwnedSshTarget,
+  removeRuntimeOwnedSshTarget
+} from '../ephemeral-vm-runtime-ssh'
 import { getRecipeRepo, getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 
 export type EphemeralVmCleanupCommandResult = {
@@ -84,6 +93,18 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           cleanupLastError: `Recipe not found: ${runtime.recipeId}`
         })
       }
+      const disconnectError = await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).then(
+        () => null,
+        (error: unknown) => (error instanceof Error ? error.message : String(error))
+      )
+      if (disconnectError) {
+        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+          status: 'cleanup_failed',
+          cleanupStatus: 'failed',
+          cleanupLastAttemptAt: Date.now(),
+          cleanupLastError: disconnectError
+        })
+      }
       const result = await cleanupEphemeralVmRuntime({
         userDataPath,
         repoPath: repo.repo.path,
@@ -97,6 +118,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.
         }
+      }
+      if (result.ok && runtime.sshTargetId) {
+        await removeRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
       }
       return result.runtime
     }
@@ -116,6 +140,15 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         return null
       }
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+      const disconnectError = await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).then(
+        () => null,
+        (error: unknown) => (error instanceof Error ? error.message : String(error))
+      )
+      if (disconnectError) {
+        return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+          status: 'suspend_failed'
+        })
+      }
       const result = await suspendEphemeralVmRuntime({
         userDataPath,
         repoPath: recipeContext.repo.repo.path,
@@ -156,9 +189,31 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         throw new Error(result.error)
       }
       if (!result.skipped && runtime.runtimeEnvironmentId) {
+        const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
+        if (!pairingCode) {
+          throw new Error('Resume result did not include an Orca Server pairing code.')
+        }
         updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-          pairingCode: result.runtime.recipeResult.pairingCode
+          pairingCode
         })
+      }
+      const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
+      if (!result.skipped && connection.type === 'ssh') {
+        try {
+          const ssh = await connectRuntimeOwnedSshTarget({
+            runtimeId: result.runtime.id,
+            connection
+          })
+          return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+            connectionMode: 'ssh',
+            sshTargetId: ssh.targetId
+          })
+        } catch (error) {
+          updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+            status: 'resume_failed'
+          })
+          throw error
+        }
       }
       return result.runtime
     }

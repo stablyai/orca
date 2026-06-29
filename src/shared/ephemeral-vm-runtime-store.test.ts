@@ -124,6 +124,41 @@ describe('ephemeral VM runtime store', () => {
     expect(recovered.cleanupLastError).toBeUndefined()
   })
 
+  it('persists runtime connection metadata', () => {
+    const userDataPath = makeUserDataPath()
+    upsertEphemeralVmRuntime(
+      userDataPath,
+      runtimeRecord({
+        connectionMode: 'ssh',
+        sshTargetId: 'runtime-ssh-orca-instance-1',
+        recipeResult: {
+          schemaVersion: 1,
+          connection: {
+            type: 'ssh',
+            projectRoot: '/workspace/repo',
+            target: {
+              label: 'Sandbox',
+              host: 'sandbox.example.com',
+              port: 22,
+              username: 'root'
+            }
+          }
+        }
+      })
+    )
+
+    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({
+      connectionMode: 'ssh',
+      sshTargetId: 'runtime-ssh-orca-instance-1',
+      recipeResult: {
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo'
+        }
+      }
+    })
+  })
+
   it('removes cleaned runtimes', () => {
     const userDataPath = makeUserDataPath()
     const record = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())

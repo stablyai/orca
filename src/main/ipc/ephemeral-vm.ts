@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import { loadHooks } from '../hooks'
 import {
   doctorEphemeralVmRecipe,
+  getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultWarnings,
   redactEphemeralVmRecipeDiagnosticText,
   type EphemeralVmRecipeResultWarning,
@@ -19,6 +20,7 @@ import {
   cleanupEphemeralVmRuntime,
   provisionEphemeralVmRuntime
 } from '../ephemeral-vm-runtime-service'
+import { connectRuntimeOwnedSshTarget } from '../ephemeral-vm-runtime-ssh'
 import {
   getRecipeRepo,
   listRecipeCatalog,
@@ -32,8 +34,17 @@ const activeProvisionControllers = new Map<string, AbortController>()
 export type EphemeralVmProvisionIpcResult =
   | {
       ok: true
+      connectionType: 'orca-server'
       runtime: EphemeralVmRuntimeRecord
       environment: PublicKnownRuntimeEnvironment
+      stderr: string
+      warnings: EphemeralVmRecipeResultWarning[]
+    }
+  | {
+      ok: true
+      connectionType: 'ssh'
+      runtime: EphemeralVmRuntimeRecord
+      sshTargetId: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
     }
@@ -137,11 +148,50 @@ export function registerEphemeralVmHandlers(store: Store): void {
           stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
         }
       }
+      const connection = getEphemeralVmRecipeResultConnection(result.start.result)
+      if (connection.type === 'ssh') {
+        try {
+          const ssh = await connectRuntimeOwnedSshTarget({
+            runtimeId: result.runtime.id,
+            connection
+          })
+          const runtime = updateEphemeralVmRuntimeStatus(
+            app.getPath('userData'),
+            result.runtime.id,
+            {
+              connectionMode: 'ssh',
+              sshTargetId: ssh.targetId
+            }
+          )
+          return {
+            ok: true,
+            connectionType: 'ssh',
+            runtime,
+            sshTargetId: ssh.targetId,
+            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
+            warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
+          }
+        } catch (error) {
+          await cleanupEphemeralVmRuntime({
+            userDataPath: app.getPath('userData'),
+            repoPath: repo.repo.path,
+            recipe,
+            runtimeId: result.runtime.id
+          }).catch(() => undefined)
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+            stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
+            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
+          }
+        }
+      }
+
       let environment: ReturnType<typeof addEnvironmentFromPairingCode>
       try {
         environment = addEnvironmentFromPairingCode(app.getPath('userData'), {
           name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
-          pairingCode: result.start.result.pairingCode,
+          pairingCode: connection.pairingCode,
           source: 'ephemeral-vm'
         })
       } catch (error) {
@@ -159,10 +209,12 @@ export function registerEphemeralVmHandlers(store: Store): void {
         }
       }
       const runtime = updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
+        connectionMode: 'orca-server',
         runtimeEnvironmentId: environment.id
       })
       return {
         ok: true,
+        connectionType: 'orca-server',
         runtime,
         environment: redactRuntimeEnvironment(environment),
         stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),

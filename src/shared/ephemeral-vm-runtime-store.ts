@@ -57,7 +57,9 @@ export function updateEphemeralVmRuntimeStatus(
     cleanupLastError?: string | null
     workspaceId?: string
     workspaceName?: string
+    connectionMode?: EphemeralVmRuntimeRecord['connectionMode']
     runtimeEnvironmentId?: string
+    sshTargetId?: string
     recipeResult?: EphemeralVmRuntimeRecord['recipeResult']
     updatedAt?: number
   }
@@ -84,7 +86,9 @@ export function updateEphemeralVmRuntimeStatus(
         : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
+    ...(args.connectionMode ? { connectionMode: args.connectionMode } : {}),
     ...(args.runtimeEnvironmentId ? { runtimeEnvironmentId: args.runtimeEnvironmentId } : {}),
+    ...(args.sshTargetId ? { sshTargetId: args.sshTargetId } : {}),
     ...(args.recipeResult ? { recipeResult: args.recipeResult } : {}),
     updatedAt: args.updatedAt ?? Date.now()
   })

@@ -1,5 +1,10 @@
 import { parsePairingCode } from './pairing'
-import type { EphemeralVmRecipeResult, JsonValue } from './ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultConnection,
+  type EphemeralVmRecipeConnection,
+  type EphemeralVmRecipeResult,
+  type JsonValue
+} from './ephemeral-vm-recipes'
 
 export type EphemeralVmRecipeResultWarning = {
   id: string
@@ -10,7 +15,11 @@ export type EphemeralVmRecipeResultWarning = {
 export function getEphemeralVmRecipeResultWarnings(
   result: EphemeralVmRecipeResult
 ): EphemeralVmRecipeResultWarning[] {
-  const pairing = parsePairingCode(result.pairingCode)
+  const connection = getEphemeralVmRecipeResultConnection(result)
+  if (connection.type !== 'orca-server') {
+    return []
+  }
+  const pairing = parsePairingCode(connection.pairingCode)
   if (!pairing) {
     return []
   }
@@ -32,7 +41,7 @@ export function redactEphemeralVmRecipeDiagnosticText(text: string): string {
   return text
     .replace(/orca:\/\/pair\?code=[A-Za-z0-9_-]+/g, 'orca://pair?code=[redacted]')
     .replace(
-      /("(?:pairingCode|deviceToken|publicKeyB64|token|secret|password|apiKey|accessToken)"\s*:\s*)"[^"]*"/gi,
+      /("(?:pairingCode|deviceToken|publicKeyB64|token|secret|password|apiKey|accessToken|identityFile|identityAgent|proxyCommand)"\s*:\s*)"[^"]*"/gi,
       '$1"[redacted]"'
     )
 }
@@ -41,10 +50,32 @@ export function redactEphemeralVmRecipeResultForDiagnostics(
   result: EphemeralVmRecipeResult
 ): EphemeralVmRecipeResult {
   const userData = result.userData ? redactJsonObject(result.userData) : undefined
+  if ('connection' in result) {
+    return {
+      ...result,
+      connection: redactConnection(result.connection),
+      ...(userData ? { userData } : {})
+    }
+  }
   return {
     ...result,
     pairingCode: 'orca://pair?code=[redacted]',
     ...(userData ? { userData } : {})
+  }
+}
+
+function redactConnection(connection: EphemeralVmRecipeConnection): EphemeralVmRecipeConnection {
+  if (connection.type === 'orca-server') {
+    return { ...connection, pairingCode: 'orca://pair?code=[redacted]' }
+  }
+  return {
+    ...connection,
+    target: {
+      ...connection.target,
+      ...(connection.target.identityFile ? { identityFile: '[redacted-path]' } : {}),
+      ...(connection.target.identityAgent ? { identityAgent: '[redacted-path]' } : {}),
+      ...(connection.target.proxyCommand ? { proxyCommand: '[redacted]' } : {})
+    }
   }
 }
 

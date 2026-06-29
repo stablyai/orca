@@ -3,6 +3,7 @@ import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+import { getEphemeralVmRecipeResultProjectRoot } from '../../../../shared/ephemeral-vm-recipes'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
@@ -264,7 +265,7 @@ function EphemeralVmRuntimeRow({
           {hasError ? <AlertTriangle className="size-3.5 shrink-0 text-destructive" /> : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {runtime.recipeId} · {runtime.recipeResult.projectRoot}
+          {runtime.recipeId} · {getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)}
         </p>
         {runtime.cleanupLastError ? (
           <p className="mt-0.5 truncate text-xs text-destructive">{runtime.cleanupLastError}</p>
