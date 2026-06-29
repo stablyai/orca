@@ -1042,13 +1042,46 @@ function computeHeaderDragRowOffsets(args: {
   for (let i = headerIndex; i < endIndex; i++) {
     blockKeys.add(getRenderRowKey(args.renderRows[i]!))
   }
-  const rows = args.virtualItems.map((item) => ({
-    key: getRenderRowKey(args.renderRows[item.index]!),
-    top: item.start
-  }))
+  // Segment the visible rows into movable units (whole blocks) so a block's
+  // children always shift with their header. Project drag moves project blocks
+  // (group headers stay put); group drag moves sibling-group blocks (their whole
+  // subtree, including nested group headers, moves together).
+  const startsUnit = (row: RenderRow): boolean =>
+    row.type === 'header' &&
+    (isGroup
+      ? row.projectGroup != null &&
+        row.projectGroup.id !== null &&
+        (row.projectGroupDepth ?? 0) === draggedDepth
+      : row.repo != null)
+  const continuesUnit = (row: RenderRow): boolean =>
+    isGroup && row.type === 'header' && (row.projectGroupDepth ?? 0) > draggedDepth
+  const units: { headerTop: number; rowKeys: string[] }[] = []
+  let current: { headerTop: number; rowKeys: string[] } | null = null
+  const flush = (): void => {
+    if (current && current.rowKeys.length > 0) {
+      units.push(current)
+    }
+    current = null
+  }
+  for (let i = 0; i < args.renderRows.length; i++) {
+    const row = args.renderRows[i]!
+    const key = getRenderRowKey(row)
+    if (startsUnit(row)) {
+      flush()
+      const top = startByIndex.get(i)
+      current = top === undefined ? null : { headerTop: top, rowKeys: [key] }
+    } else if (row.type === 'header' && !continuesUnit(row)) {
+      // A header that is not part of the current block (e.g. a group header
+      // during project drag) stays put and closes the open unit.
+      flush()
+    } else if (current) {
+      current.rowKeys.push(key)
+    }
+  }
+  flush()
   return {
     offsets: computeHeaderDragRowShifts({
-      rows,
+      units,
       blockKeys,
       blockTop,
       blockBottom,

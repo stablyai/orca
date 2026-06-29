@@ -2,54 +2,59 @@ import { describe, expect, it } from 'vitest'
 
 import { computeHeaderDragRowShifts } from './header-drag-row-shifts'
 
-const rows = [
-  { key: 'a', top: 0 }, // block (height 20: 0..20)
-  { key: 'b', top: 20 },
-  { key: 'c', top: 40 },
-  { key: 'd', top: 60 }
+// Two group units, each a header + one worktree child:
+//   unit A: header@0, child@20   (block, height 40: 0..40)
+//   unit B: header@40, child@60
+//   unit C: header@80, child@100
+const units = [
+  { headerTop: 0, rowKeys: ['a-hdr', 'a-wt'] },
+  { headerTop: 40, rowKeys: ['b-hdr', 'b-wt'] },
+  { headerTop: 80, rowKeys: ['c-hdr', 'c-wt'] }
 ]
 
 describe('computeHeaderDragRowShifts', () => {
-  it('shifts the rows between the block and the drop line up when moving down', () => {
+  it('shifts a whole unit (header + children) together when moving down', () => {
     const offsets = computeHeaderDragRowShifts({
-      rows,
-      blockKeys: new Set(['a']),
+      units,
+      blockKeys: new Set(['a-hdr', 'a-wt']),
       blockTop: 0,
-      blockBottom: 20,
-      dropY: 60
+      blockBottom: 40,
+      dropY: 80
     })
-    // b and c are between the block bottom (20) and the drop line (60).
-    expect(offsets.get('b')).toBe(-20)
-    expect(offsets.get('c')).toBe(-20)
-    // d is at/after the drop line — it stays put (block lands above it).
-    expect(offsets.has('d')).toBe(false)
-    // the dragged block row is never shifted (it is hidden).
-    expect(offsets.has('a')).toBe(false)
+    // unit B is between the block (bottom 40) and the drop line (80): both its
+    // header AND its child shift up by the block height — no detaching.
+    expect(offsets.get('b-hdr')).toBe(-40)
+    expect(offsets.get('b-wt')).toBe(-40)
+    // unit C is at/after the drop line — it stays put.
+    expect(offsets.has('c-hdr')).toBe(false)
+    expect(offsets.has('c-wt')).toBe(false)
+    // the dragged unit never shifts (it is hidden).
+    expect(offsets.has('a-hdr')).toBe(false)
   })
 
-  it('shifts the rows between the drop line and the block down when moving up', () => {
+  it('shifts whole units down together when moving up', () => {
     const offsets = computeHeaderDragRowShifts({
-      rows,
-      blockKeys: new Set(['d']),
-      blockTop: 60,
-      blockBottom: 80,
-      dropY: 20
+      units,
+      blockKeys: new Set(['c-hdr', 'c-wt']),
+      blockTop: 80,
+      blockBottom: 120,
+      dropY: 40
     })
-    // b and c are between the drop line (20) and the block (60).
-    expect(offsets.get('b')).toBe(20)
-    expect(offsets.get('c')).toBe(20)
-    expect(offsets.has('a')).toBe(false)
-    expect(offsets.has('d')).toBe(false)
+    // unit B (header@40) is between the drop line and the block: shifts down.
+    expect(offsets.get('b-hdr')).toBe(40)
+    expect(offsets.get('b-wt')).toBe(40)
+    // unit A (header@0) is above the drop line — stays.
+    expect(offsets.has('a-hdr')).toBe(false)
   })
 
   it('returns no offsets when the block has no height', () => {
     expect(
       computeHeaderDragRowShifts({
-        rows,
-        blockKeys: new Set(['a']),
+        units,
+        blockKeys: new Set(['a-hdr', 'a-wt']),
         blockTop: 10,
         blockBottom: 10,
-        dropY: 60
+        dropY: 80
       }).size
     ).toBe(0)
   })
