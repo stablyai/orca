@@ -11647,6 +11647,13 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
 
+    if (opts.notifyClients === false && this.store?.getWorktreeMeta(worktree.id)?.isUnread) {
+      // Why: mobile/web session activation intentionally bypasses renderer
+      // selection, so the runtime must acknowledge the unread state itself.
+      this.store.setWorktreeMeta(worktree.id, { isUnread: false })
+      this.notifyWorktreesChanged(repo.id)
+    }
+
     if (opts.notifyClients !== false) {
       // Why: inactive worktree terminal panes are renderer-owned and may not have
       // live PTYs until the desktop activates the worktree and mounts them.

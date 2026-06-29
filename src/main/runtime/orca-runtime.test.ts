@@ -11945,6 +11945,147 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('clears unread metadata on mobile worktree activation without focusing desktop clients', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+      return metaById[worktreeId]
+    })
+    const activateWorktree = vi.fn()
+    const worktreesChanged = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    } as never)
+    runtime.setNotifier({
+      worktreesChanged,
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
+
+    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { isUnread: false })
+    expect(metaById[TEST_WORKTREE_ID]?.isUnread).toBe(false)
+    expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
+    expect(activateWorktree).not.toHaveBeenCalled()
+  })
+
+  it('does not rewrite unread metadata when a mobile activation finds the worktree already read', async () => {
+    // Why: seed instanceId so worktree resolution does not emit its own
+    // metadata-stamp write, isolating the assertion to the unread clear.
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false, instanceId: 'wt-instance' })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+      return metaById[worktreeId]
+    })
+    const worktreesChanged = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    } as never)
+    runtime.setNotifier({
+      worktreesChanged,
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
+
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+    expect(worktreesChanged).not.toHaveBeenCalled()
+
+    metaById[TEST_WORKTREE_ID] = makeWorktreeMeta({ isUnread: true, instanceId: 'wt-instance' })
+    setWorktreeMeta.mockClear()
+    worktreesChanged.mockClear()
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
+
+    expect(setWorktreeMeta).toHaveBeenCalledTimes(1)
+    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { isUnread: false })
+    expect(worktreesChanged).toHaveBeenCalledTimes(1)
+    expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
+  })
+
+  it('returns unread:false from worktree.ps after a mobile activation clears the flag', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+      return metaById[worktreeId]
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    } as never)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    const beforeActivation = await runtime.getWorktreePs()
+    expect(
+      beforeActivation.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+        ?.unread
+    ).toBe(true)
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
+
+    const afterActivation = await runtime.getWorktreePs()
+    expect(
+      afterActivation.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.unread
+    ).toBe(false)
+  })
+
   it('materializes pending mobile session terminals without focusing desktop clients', async () => {
     const persistedPtyId = `${TEST_WORKTREE_ID}@@mobile-only-pty`
     const spawn = vi.fn().mockResolvedValue({ id: persistedPtyId })
