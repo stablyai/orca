@@ -8267,7 +8267,10 @@ export class OrcaRuntimeService {
       if (!worktreeTerminals || worktreeTerminals.length === 0) {
         continue
       }
-      const groups = this.buildTerminalVisualGroups(snapshot, summariesByLeafKey)
+      const groups = this.withFallbackTerminalVisualTabs(
+        this.buildTerminalVisualGroups(snapshot, summariesByLeafKey),
+        worktreeTerminals
+      )
       if (groups.length === 0) {
         continue
       }
@@ -8291,6 +8294,80 @@ export class OrcaRuntimeService {
       })
     }
     return layouts
+  }
+
+  private withFallbackTerminalVisualTabs(
+    groups: RuntimeTerminalVisualGroupNode[],
+    terminals: RuntimeTerminalSummary[]
+  ): RuntimeTerminalVisualGroupNode[] {
+    if (terminals.length === 0) {
+      return groups
+    }
+    const visibleLeafKeys = new Set<string>()
+    for (const group of groups) {
+      for (const tab of group.tabs) {
+        this.collectTerminalVisualPaneLeafKeys(tab.panes, visibleLeafKeys)
+      }
+    }
+    const missingTerminals = terminals.filter(
+      (terminal) => !visibleLeafKeys.has(this.getLeafKey(terminal.tabId, terminal.leafId))
+    )
+    if (missingTerminals.length === 0) {
+      return groups
+    }
+    const fallbackTabs = missingTerminals.map(
+      (terminal): RuntimeTerminalVisualTab => ({
+        tabId: terminal.tabId,
+        title: this.tabs.get(terminal.tabId)?.title ?? terminal.title ?? null,
+        activeLeafId: terminal.leafId,
+        panes: {
+          type: 'terminal',
+          handle: terminal.handle,
+          tabId: terminal.tabId,
+          leafId: terminal.leafId,
+          title: terminal.title,
+          connected: terminal.connected,
+          active: true
+        }
+      })
+    )
+    if (groups.length === 0) {
+      return [
+        {
+          type: 'group',
+          groupId: null,
+          activeTabId: fallbackTabs[0]?.tabId ?? null,
+          tabs: fallbackTabs
+        }
+      ]
+    }
+    const [firstGroup, ...restGroups] = groups
+    if (!firstGroup) {
+      return groups
+    }
+    // Why: renderer graph can know about a live background/reused automation PTY
+    // before the mobile tab snapshot includes its parent tab. Keep terminal.list
+    // open targets complete instead of letting callers fall back to a blank shell.
+    return [
+      {
+        ...firstGroup,
+        activeTabId: firstGroup.activeTabId ?? fallbackTabs[0]?.tabId ?? null,
+        tabs: [...firstGroup.tabs, ...fallbackTabs]
+      },
+      ...restGroups
+    ]
+  }
+
+  private collectTerminalVisualPaneLeafKeys(
+    node: RuntimeTerminalVisualPaneNode,
+    leafKeys: Set<string>
+  ): void {
+    if (node.type === 'terminal') {
+      leafKeys.add(this.getLeafKey(node.tabId, node.leafId))
+      return
+    }
+    this.collectTerminalVisualPaneLeafKeys(node.first, leafKeys)
+    this.collectTerminalVisualPaneLeafKeys(node.second, leafKeys)
   }
 
   private buildTerminalVisualGroups(

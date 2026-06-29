@@ -11878,6 +11878,96 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('adds live graph terminals missing from the mobile visual snapshot', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-visible',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Visible run',
+          activeLeafId: 'leaf-visible',
+          layout: { type: 'leaf', leafId: 'leaf-visible' }
+        },
+        {
+          tabId: 'tab-missing',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Reused run',
+          activeLeafId: 'leaf-missing',
+          layout: { type: 'leaf', leafId: 'leaf-missing' }
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-visible',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-visible',
+          paneRuntimeId: 1,
+          ptyId: 'pty-visible',
+          paneTitle: 'Visible pane'
+        },
+        {
+          tabId: 'tab-missing',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-missing',
+          paneRuntimeId: 2,
+          ptyId: 'pty-missing',
+          paneTitle: 'Reused pane'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-visible::leaf-visible',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-visible::leaf-visible',
+              parentTabId: 'tab-visible',
+              leafId: 'leaf-visible',
+              title: 'Visible run',
+              parentLayout: {
+                root: { type: 'leaf', leafId: 'leaf-visible' },
+                activeLeafId: 'leaf-visible',
+                expandedLeafId: null,
+                ptyIdsByLeafId: { 'leaf-visible': 'pty-visible' }
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.visualLayouts).toMatchObject([
+      {
+        root: {
+          type: 'group',
+          tabs: expect.arrayContaining([
+            expect.objectContaining({
+              tabId: 'tab-visible'
+            }),
+            expect.objectContaining({
+              tabId: 'tab-missing',
+              activeLeafId: 'leaf-missing',
+              panes: expect.objectContaining({
+                type: 'terminal',
+                leafId: 'leaf-missing'
+              })
+            })
+          ])
+        }
+      }
+    ])
+  })
+
   it('omits stale browser session tabs that no longer have live webContents', async () => {
     const runtime = new OrcaRuntimeService(store)
     const tabList = vi.fn(() => ({
