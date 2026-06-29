@@ -21,16 +21,25 @@ const IPV4_LITERAL_RE =
   /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
 // Tailscale assigns node IPs from the 100.64.0.0/10 CGNAT range (second octet 64–127).
 const TAILSCALE_CGNAT_RE = /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./
+// Tailscale also assigns each node an IPv6 address from the fd7a:115c:a1e0::/48 ULA
+// block, and pairing endpoints can carry an IPv6 literal (see resolvePairingEndpoint).
+const TAILSCALE_IPV6_RE = /^fd7a:115c:a1e0:/i
 
 function extractHost(endpoint: string): string | null {
+  let host: string | null
   try {
-    return new URL(endpoint).hostname || null
+    host = new URL(endpoint).hostname || null
   } catch {
     // Why: a bare host (no scheme) isn't a valid URL; strip any scheme and take
     // the authority up to the first port/path/query delimiter.
-    const host = endpoint.replace(/^[a-z]+:\/\//i, '').split(/[/:?#]/, 1)[0]
-    return host || null
+    host = endpoint.replace(/^[a-z]+:\/\//i, '').split(/[/:?#]/, 1)[0] || null
   }
+  if (!host) {
+    return null
+  }
+  // Why: WHATWG URL keeps IPv6 literals bracketed (`[fd7a:…]`) and FQDNs can carry
+  // a trailing dot; normalize both so the host checks below see a bare address/name.
+  return host.replace(/^\[|\]$/g, '').replace(/\.$/, '') || null
 }
 
 export function isTailscaleEndpoint(endpoint: string | null | undefined): boolean {
@@ -43,7 +52,8 @@ export function isTailscaleEndpoint(endpoint: string | null | undefined): boolea
   }
   return (
     TAILSCALE_MAGIC_DNS_SUFFIX_RE.test(host) ||
-    (IPV4_LITERAL_RE.test(host) && TAILSCALE_CGNAT_RE.test(host))
+    (IPV4_LITERAL_RE.test(host) && TAILSCALE_CGNAT_RE.test(host)) ||
+    TAILSCALE_IPV6_RE.test(host)
   )
 }
 

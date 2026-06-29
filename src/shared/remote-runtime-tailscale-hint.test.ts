@@ -17,6 +17,14 @@ describe('isTailscaleEndpoint', () => {
     expect(isTailscaleEndpoint('ws://100.127.255.255:6768')).toBe(true)
   })
 
+  it('matches Tailscale IPv6 (fd7a:115c:a1e0::/48) literals', () => {
+    // Pairing endpoints can carry a bracketed IPv6 literal (resolvePairingEndpoint).
+    expect(isTailscaleEndpoint('wss://[fd7a:115c:a1e0::1]:443')).toBe(true)
+    expect(isTailscaleEndpoint('ws://[fd7a:115c:a1e0:ab12:4843:cd96:626b:1]:6768')).toBe(true)
+    expect(isTailscaleEndpoint('ws://[2001:db8::1]:6768')).toBe(false)
+    expect(isTailscaleEndpoint('ws://[::1]:6768')).toBe(false)
+  })
+
   it('rejects non-Tailscale hosts and the surrounding 100.x space', () => {
     expect(isTailscaleEndpoint('ws://192.168.1.10:6768')).toBe(false)
     expect(isTailscaleEndpoint('wss://orca.example.com')).toBe(false)
@@ -29,6 +37,8 @@ describe('isTailscaleEndpoint', () => {
 
   it('handles bare hosts without a scheme and empty input', () => {
     expect(isTailscaleEndpoint('host.ts.net')).toBe(true)
+    // A trailing-dot FQDN is still the same tailnet host.
+    expect(isTailscaleEndpoint('wss://host.ts.net.')).toBe(true)
     expect(isTailscaleEndpoint('')).toBe(false)
     expect(isTailscaleEndpoint(null)).toBe(false)
     expect(isTailscaleEndpoint(undefined)).toBe(false)
@@ -44,10 +54,7 @@ describe('withRemoteRuntimeTailscaleHint', () => {
   })
 
   it('points at tailnet-specific causes when the endpoint is already Tailscale', () => {
-    const result = withRemoteRuntimeTailscaleHint(
-      UNREACHABLE,
-      'wss://example-host.tailnet.ts.net'
-    )
+    const result = withRemoteRuntimeTailscaleHint(UNREACHABLE, 'wss://example-host.tailnet.ts.net')
     expect(result).toContain('Funnel reverted to tailnet-only')
     expect(result).toContain('already-paired devices reconnect with their saved token')
     expect(result).not.toContain('https://tailscale.com/download')
