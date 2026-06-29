@@ -135,10 +135,7 @@ import {
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
 import { computeHeaderDragRowShifts } from './header-drag-row-shifts'
-import {
-  getProjectHeaderDragBucketKey,
-  getSidebarOrderedRepoHeaderIdsByBucket
-} from './project-header-drop'
+import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
 import { useGroupHeaderDrag } from './group-header-drag'
 import { getSiblingGroupIdsByParent } from './group-header-drop'
 import {
@@ -985,10 +982,6 @@ function computeHeaderDragRowOffsets(args: {
   draggingRepoId: string | null
   draggingGroupId: string | null
   dropY: number | null
-  // Gap-opening is only well-defined for same-bucket reorders and group
-  // reorders. Cross-group project moves still hide the source block, but skip
-  // the reflow (group dividers make a uniform shift overlap).
-  allowGap: boolean
   renderRows: readonly RenderRow[]
   virtualItems: readonly { index: number; start: number; size: number }[]
 }): { offsets: Map<string, number>; blockKeys: Set<string> } | null {
@@ -1050,16 +1043,17 @@ function computeHeaderDragRowOffsets(args: {
     blockKeys.add(getRenderRowKey(args.renderRows[i]!))
   }
   // Segment the visible rows into movable units (whole blocks) so a block's
-  // children always shift with their header. Project drag moves project blocks
-  // (group headers stay put); group drag moves sibling-group blocks (their whole
-  // subtree, including nested group headers, moves together).
+  // children always shift with their header. Project drag treats every header
+  // (project AND group) as its own unit, so the list reflows flatly — group
+  // dividers slide up with everything else, leaving no overlap. Group drag
+  // moves sibling-group blocks (their whole subtree, nested headers included).
   const startsUnit = (row: RenderRow): boolean =>
     row.type === 'header' &&
     (isGroup
       ? row.projectGroup != null &&
         row.projectGroup.id !== null &&
         (row.projectGroupDepth ?? 0) === draggedDepth
-      : row.repo != null)
+      : true)
   const continuesUnit = (row: RenderRow): boolean =>
     isGroup && row.type === 'header' && (row.projectGroupDepth ?? 0) > draggedDepth
   const units: { headerTop: number; rowKeys: string[] }[] = []
@@ -1087,15 +1081,9 @@ function computeHeaderDragRowOffsets(args: {
   }
   flush()
   const offsets =
-    args.dropY !== null && args.allowGap
-      ? computeHeaderDragRowShifts({
-          units,
-          blockKeys,
-          blockTop,
-          blockBottom,
-          dropY: args.dropY
-        })
-      : new Map<string, number>()
+    args.dropY === null
+      ? new Map<string, number>()
+      : computeHeaderDragRowShifts({ units, blockKeys, blockTop, blockBottom, dropY: args.dropY })
   return { offsets, blockKeys }
 }
 
@@ -2408,25 +2396,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
-  // A cross-group project move can't gap-open cleanly (group dividers stay
-  // fixed, so a uniform shift overlaps them) — hide the source block but skip
-  // the reflow there. Same-bucket reorders and group reorders gap-open.
-  const draggedProjectBucket =
-    repoDrag.state.draggingRepoId !== null
-      ? getProjectHeaderDragBucketKey(
-          repoMap.get(repoDrag.state.draggingRepoId) ?? { projectGroupId: null }
-        )
-      : null
-  const isCrossGroupProjectMove =
-    draggedProjectBucket !== null &&
-    repoDrag.state.targetBucketKey !== null &&
-    repoDrag.state.targetBucketKey !== draggedProjectBucket
-  // Gap-opening offsets for an active header reorder drag.
+  // Gap-opening offsets for an active header reorder drag. Project drag reflows
+  // flatly (group dividers slide too), so cross-group moves open the gap
+  // without overlap.
   const headerDragShift = computeHeaderDragRowOffsets({
     draggingRepoId: canReorderRepoHeaders ? repoDrag.state.draggingRepoId : null,
     draggingGroupId: canReorderRepoHeaders ? groupDrag.state.draggingGroupId : null,
     dropY: headerDropIndicatorY,
-    allowGap: !isCrossGroupProjectMove,
     renderRows,
     virtualItems
   })
