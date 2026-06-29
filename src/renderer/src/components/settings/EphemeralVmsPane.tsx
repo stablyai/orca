@@ -1,6 +1,328 @@
+import { ArrowRight, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
 import type React from 'react'
-import { EphemeralVmSetupPlan } from './EphemeralVmSetupPlan'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import type { OrcaHooks } from '../../../../shared/types'
+import type { EphemeralVmRecipeDoctorResult } from '../../../../shared/ephemeral-vm-recipes'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { useAppStore } from '@/store'
+import { Button } from '../ui/button'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { RecipeDoctorDialog } from './EphemeralVmRecipeDialogs'
+import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
+import { translate } from '@/i18n/i18n'
+import {
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  ensureOrcaCliAvailableForAgentSkillTerminal
+} from '@/lib/agent-skill-cli-prerequisite'
+import {
+  EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
+  EPHEMERAL_VMS_SKILL_NAME,
+  EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import {
+  buildSkillCommandForRuntime,
+  ensureWslCliAvailableForAgentSkillTerminal,
+  getWslCliDistroRequest
+} from './CliSkillRuntimeSetup'
+
+type RecipeCatalogEntry = Awaited<
+  ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
+>[number]
+type Recipe = NonNullable<OrcaHooks['vmRecipes']>[number]
+
+// Why: the pane leans on the skill, so the nudge is one line — the skill carries
+// provider choice, prerequisites, the snapshot build, agent auth, and validation.
+const AGENT_PROMPT = 'Use the ephemeral-vms skill to set up VMs for this repo.'
 
 export function EphemeralVmsPane(): React.JSX.Element {
-  return <EphemeralVmSetupPlan />
+  const openModal = useAppStore((state) => state.openModal)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [doctorResult, setDoctorResult] = useState<EphemeralVmRecipeDoctorResult | null>(null)
+  const [doctorOpen, setDoctorOpen] = useState(false)
+  const [doctorBusyKey, setDoctorBusyKey] = useState<string | null>(null)
+  const [promptCopied, setPromptCopied] = useState(false)
+  const mountedRef = useMountedRef()
+
+  const installCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillCommandForRuntime(
+          EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
+          activeSkillRuntime.agentRuntime
+        )
+      : EPHEMERAL_VMS_SKILL_INSTALL_COMMAND
+  const updateCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillCommandForRuntime(
+          EPHEMERAL_VMS_SKILL_UPDATE_COMMAND,
+          activeSkillRuntime.agentRuntime
+        )
+      : EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
+
+  const {
+    installed: skillDetected,
+    loading: skillLoading,
+    error: skillError,
+    refresh: refreshSkill
+  } = useInstalledAgentSkill(EPHEMERAL_VMS_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+
+  const refresh = useCallback(async (): Promise<void> => {
+    if (mountedRef.current) {
+      setIsLoading(true)
+    }
+    try {
+      const nextCatalog = await window.api.ephemeralVm.listRecipeCatalog()
+      if (mountedRef.current) {
+        setCatalog(nextCatalog)
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.EphemeralVmsPane.loadError',
+                'Could not load VM recipes.'
+              )
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsLoading(false)
+      }
+    }
+  }, [mountedRef])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const runDoctor = async (entry: RecipeCatalogEntry, recipe: Recipe): Promise<void> => {
+    const key = `${entry.repoId}:${recipe.id}`
+    setDoctorBusyKey(key)
+    try {
+      const result = await window.api.ephemeralVm.doctor({
+        repoId: entry.repoId,
+        recipeId: recipe.id
+      })
+      if (mountedRef.current) {
+        setDoctorResult(result)
+        setDoctorOpen(true)
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.EphemeralVmsPane.doctorError',
+                'Could not run recipe doctor.'
+              )
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setDoctorBusyKey(null)
+      }
+    }
+  }
+
+  const openWorkspaceComposerForRecipe = (repoId: string, recipeId: string): void => {
+    openModal('new-workspace-composer', {
+      initialRepoId: repoId,
+      initialEphemeralVmRecipeId: recipeId,
+      telemetrySource: 'settings'
+    })
+  }
+
+  const copyPrompt = async (): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(AGENT_PROMPT)
+      useAppStore.getState().recordFeatureInteraction('ephemeral-vm-setup')
+      setPromptCopied(true)
+      setTimeout(() => setPromptCopied(false), 1500)
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.settings.EphemeralVmsPane.copyError',
+          'Could not copy the prompt.'
+        )
+      )
+    }
+  }
+
+  const recipes = catalog.flatMap((entry) => entry.recipes.map((recipe) => ({ entry, recipe })))
+
+  return (
+    <div className="space-y-6" data-settings-section="ephemeral-vms">
+      <AgentSkillSetupPanel
+        title={translate(
+          'auto.components.settings.EphemeralVmsPane.skillTitle',
+          'Ephemeral VMs skill'
+        )}
+        description={translate(
+          'auto.components.settings.EphemeralVmsPane.skillDescription',
+          'Sets up, builds, authenticates, and validates repo-owned VM recipes.'
+        )}
+        command={installCommand}
+        installedCommand={updateCommand}
+        terminalTitle="Ephemeral VMs setup"
+        terminalAriaLabel="Ephemeral VMs skill install terminal"
+        terminalWorktreeId="settings-ephemeral-vms-skill-terminal"
+        terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+        installed={skillDetected}
+        loading={skillLoading}
+        error={activeSkillRuntime.installDisabledReason ?? skillError}
+        installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
+        icon={<Server className="size-5" />}
+        preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+        getPrerequisiteStatus={() =>
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+            ? window.api.cli.getWslInstallStatus(
+                getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
+              )
+            : window.api.cli.getInstallStatus()
+        }
+        onBeforeOpenTerminal={async () => {
+          await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+            ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
+            : ensureOrcaCliAvailableForAgentSkillTerminal())
+        }}
+        onRecheck={refreshSkill}
+      />
+
+      <div className="space-y-3 rounded-lg border border-border/60 bg-card/30 p-4">
+        <div className="text-sm font-medium">
+          {translate(
+            'auto.components.settings.EphemeralVmsPane.whatTitle',
+            'What the skill does, with you'
+          )}
+        </div>
+        <ul className="space-y-2">
+          <WhatItem
+            text={translate(
+              'auto.components.settings.EphemeralVmsPane.whatScaffold',
+              'Writes the recipe & scripts for your provider.'
+            )}
+          />
+          <WhatItem
+            text={translate(
+              'auto.components.settings.EphemeralVmsPane.whatBuild',
+              'Builds a reusable VM image and signs your agent in (uses your cloud account).'
+            )}
+          />
+          <WhatItem
+            text={translate(
+              'auto.components.settings.EphemeralVmsPane.whatValidate',
+              'Validates it so you can create a workspace on it.'
+            )}
+          />
+        </ul>
+        <div className="space-y-2 pt-1">
+          <div className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.EphemeralVmsPane.promptHint',
+              'Then, in a normal workspace for this repo, ask your agent:'
+            )}
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/50 px-3 py-2">
+            <code className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+              {AGENT_PROMPT}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              className="shrink-0 gap-1.5"
+              onClick={() => void copyPrompt()}
+            >
+              {promptCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              {promptCopied
+                ? translate('auto.components.settings.EphemeralVmsPane.copied', 'Copied')
+                : translate('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 space-y-0.5">
+            <div className="text-sm font-medium">
+              {translate('auto.components.settings.EphemeralVmsPane.recipes', 'Recipes')}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.EphemeralVmsPane.recipesHelp',
+                'Appear here once your agent adds them to orca.yaml — then Doctor and create a workspace.'
+              )}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={translate(
+              'auto.components.settings.EphemeralVmsPane.refresh',
+              'Refresh ephemeral VM recipes'
+            )}
+            onClick={() => void refresh()}
+            disabled={isLoading}
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          </Button>
+        </div>
+
+        <div className="rounded-lg border border-border/50 bg-card/30">
+          {recipes.length === 0 ? (
+            <div className="px-3 py-4 text-sm text-muted-foreground">
+              {isLoading
+                ? translate(
+                    'auto.components.settings.EphemeralVmsPane.checking',
+                    'Checking VM recipes...'
+                  )
+                : translate(
+                    'auto.components.settings.EphemeralVmsPane.none',
+                    'No ephemeral VM recipes found yet.'
+                  )}
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {recipes.map(({ entry, recipe }) => (
+                <EphemeralVmRecipeRow
+                  key={`${entry.repoId}:${recipe.id}`}
+                  entry={entry}
+                  recipe={recipe}
+                  doctorBusy={doctorBusyKey === `${entry.repoId}:${recipe.id}`}
+                  onDoctor={() => void runDoctor(entry, recipe)}
+                  onUse={() => openWorkspaceComposerForRecipe(entry.repoId, recipe.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <RecipeDoctorDialog open={doctorOpen} result={doctorResult} onOpenChange={setDoctorOpen} />
+    </div>
+  )
+}
+
+function WhatItem({ text }: { text: string }): React.JSX.Element {
+  return (
+    <li className="flex items-start gap-2.5 text-sm text-muted-foreground">
+      <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <span>{text}</span>
+    </li>
+  )
 }

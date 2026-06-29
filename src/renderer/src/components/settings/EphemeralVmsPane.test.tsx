@@ -106,13 +106,12 @@ describe('EphemeralVmsPane', () => {
     document.body.replaceChildren()
   })
 
-  it('renders the staged setup plan and opens the composer with the recipe selected', async () => {
+  it('renders the skill panel and recipe, and opens the composer with the recipe selected', async () => {
     const container = await renderPane()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
     await vi.waitFor(() => expect(container.textContent).toContain('Ephemeral VMs skill'))
-    expect(container.textContent).toContain('Setup plan')
-    expect(container.textContent).toContain('Set up & build with your agent')
+    expect(container.textContent).toContain('What the skill does, with you')
     const useButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Use in workspace'
     )

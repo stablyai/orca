@@ -1527,7 +1527,7 @@ function Settings(): React.JSX.Element {
                   badge="Beta"
                   description={translate(
                     'auto.components.settings.Settings.ephemeralVmsDescription',
-                    'Run each workspace on a temporary cloud VM you own. Install the skill and your agent sets up the rest for this repo — a one-time step.'
+                    'Run each workspace on a temporary cloud VM you own. The skill sets it up for this repo.'
                   )}
                   searchEntries={getSectionSearchEntries('ephemeral-vms')}
                 >
