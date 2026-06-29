@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { collectRendererDiagnostics } from './linux-wayland-renderer-diagnostics.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const outMain = path.join(rootDir, 'out', 'main', 'index.js')
@@ -186,141 +187,6 @@ async function getTerminalContent(page, charLimit = 12_000) {
   }, charLimit)
 }
 
-async function collectRendererDiagnostics(page) {
-  if (!page) {
-    return null
-  }
-  try {
-    return await pollWithTimeout('renderer diagnostics', () =>
-      page.evaluate(async () => {
-        const timed = (label, promise) =>
-          Promise.race([
-            Promise.resolve(promise).then(
-              (value) => ({ value }),
-              (error) => ({
-                error: error instanceof Error ? error.message : String(error)
-              })
-            ),
-            new Promise((resolve) =>
-              setTimeout(() => resolve({ error: `Timed out collecting ${label}` }), 1_000)
-            )
-          ])
-        const rectFor = (element) => {
-          if (!(element instanceof Element)) {
-            return null
-          }
-          const rect = element.getBoundingClientRect()
-          return {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height
-          }
-        }
-        const styleFor = (element) => {
-          if (!(element instanceof Element)) {
-            return null
-          }
-          const style = getComputedStyle(element)
-          return {
-            display: style.display,
-            visibility: style.visibility,
-            opacity: style.opacity
-          }
-        }
-        const store = window.__store
-        const state = store?.getState?.()
-        const worktreeId = state?.activeWorktreeId ?? null
-        const tabId = state?.activeTabId ?? null
-        const tabs = worktreeId ? (state?.tabsByWorktree?.[worktreeId] ?? []) : []
-        const activeTab = tabId ? (tabs.find((tab) => tab.id === tabId) ?? null) : null
-        const layout = tabId ? (state?.terminalLayoutsByTabId?.[tabId] ?? null) : null
-        const tabCount = worktreeId ? (state?.tabsByWorktree?.[worktreeId]?.length ?? 0) : null
-        const manager = tabId ? window.__paneManagers?.get(tabId) : null
-        const activePane = manager?.getActivePane?.() ?? null
-        const paneDiagnostics = (manager?.getPanes?.() ?? []).map((pane) => {
-          const xtermElement = pane.container?.querySelector?.('.xterm') ?? pane.terminal?.element
-          const viewport = pane.container?.querySelector?.('.xterm-viewport') ?? null
-          return {
-            paneId: pane.id ?? null,
-            leafId: pane.leafId ?? null,
-            isActive: activePane?.id === pane.id,
-            datasetPtyId: pane.container?.dataset?.ptyId ?? null,
-            terminalCols: pane.terminal?.cols ?? null,
-            terminalRows: pane.terminal?.rows ?? null,
-            containerConnected: pane.container?.isConnected ?? null,
-            containerRect: rectFor(pane.container),
-            containerStyle: styleFor(pane.container),
-            xtermRect: rectFor(xtermElement),
-            viewportRect: rectFor(viewport),
-            viewportScroll: viewport
-              ? {
-                  scrollTop: viewport.scrollTop,
-                  scrollHeight: viewport.scrollHeight,
-                  clientHeight: viewport.clientHeight
-                }
-              : null
-          }
-        })
-        return {
-          hasStore: Boolean(store),
-          workspaceSessionReady: state?.workspaceSessionReady ?? null,
-          hydrationSucceeded: state?.hydrationSucceeded ?? null,
-          activeRepoId: state?.activeRepoId ?? null,
-          activeWorktreeId: worktreeId,
-          activeWorkspaceKey: state?.activeWorkspaceKey ?? null,
-          activeTabType: state?.activeTabType ?? null,
-          activeTabId: tabId,
-          repoIds: (state?.repos ?? []).map((repo) => repo.id),
-          worktreeIdsByRepo: Object.fromEntries(
-            Object.entries(state?.worktreesByRepo ?? {}).map(([id, worktrees]) => [
-              id,
-              worktrees.map((worktree) => worktree.id)
-            ])
-          ),
-          tabIdsByWorktree: Object.fromEntries(
-            Object.entries(state?.tabsByWorktree ?? {}).map(([id, worktreeTabs]) => [
-              id,
-              worktreeTabs.map((tab) => tab.id)
-            ])
-          ),
-          tabCount,
-          activeTab: activeTab
-            ? {
-                id: activeTab.id,
-                ptyId: activeTab.ptyId ?? null,
-                title: activeTab.title ?? null,
-                pendingActivationSpawn: activeTab.pendingActivationSpawn ?? null
-              }
-            : null,
-          livePtyIdsForTab: tabId ? (state?.ptyIdsByTabId?.[tabId] ?? null) : null,
-          terminalLayout: layout
-            ? {
-                activeLeafId: layout.activeLeafId ?? null,
-                expandedLeafId: layout.expandedLeafId ?? null,
-                ptyIdsByLeafId: layout.ptyIdsByLeafId ?? null,
-                root: layout.root ?? null
-              }
-            : null,
-          hasPaneManager: Boolean(manager),
-          paneDiagnostics,
-          renderingDiagnostics: manager?.getRenderingDiagnostics?.() ?? null,
-          ptyConnectDiagnostics: globalThis.__ptyConnectDiag ?? null,
-          ptySessions: await timed('PTY sessions', window.api?.pty?.listSessions?.()),
-          rendererDeliveryDebug: await timed(
-            'renderer delivery debug',
-            window.api?.pty?.getRendererDeliveryDebugSnapshot?.()
-          )
-        }
-      })
-    )
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : String(error)
-    }
-  }
-}
-
 async function sendToTerminal(page, ptyId, text) {
   await page.evaluate(
     ({ ptyId: id, text: input }) => {
@@ -432,20 +298,47 @@ async function assertWheelScrollWorks(page, ptyId, runId) {
     (await getTerminalContent(page)).includes(`WAYLAND_SCROLL_${runId}_160`)
   )
   await focusActiveTerminal(page)
-  const before = await waitFor('scrollable terminal viewport', () =>
+  const before = await waitFor('scrollable terminal buffer', () =>
     page.evaluate(() => {
-      const viewport = document.querySelector('.xterm-viewport')
-      if (!(viewport instanceof HTMLElement)) {
+      const store = window.__store
+      const state = store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabId =
+        state?.activeTabType === 'terminal'
+          ? state.activeTabId
+          : worktreeId
+            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+            : null
+      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      if (!pane) {
         return null
       }
-      const maxScrollTop = viewport.scrollHeight - viewport.clientHeight
-      if (maxScrollTop < 40) {
+      const buffer = pane.terminal.buffer.active
+      if (buffer.baseY < 40) {
         return null
       }
-      viewport.scrollTop = maxScrollTop
-      const rect = viewport.getBoundingClientRect()
+      pane.terminal.scrollToBottom()
+      if (buffer.viewportY < buffer.baseY - 1) {
+        return null
+      }
+      const target =
+        pane.container.querySelector('.xterm-screen') ??
+        pane.container.querySelector('.xterm-viewport') ??
+        pane.terminal.element ??
+        pane.container
+      if (!(target instanceof HTMLElement)) {
+        return null
+      }
+      const viewport = pane.container.querySelector('.xterm-viewport')
+      const rect = target.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
       return {
-        scrollTop: viewport.scrollTop,
+        viewportY: buffer.viewportY,
+        baseY: buffer.baseY,
+        scrollTop: viewport instanceof HTMLElement ? viewport.scrollTop : null,
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2
       }
@@ -454,17 +347,40 @@ async function assertWheelScrollWorks(page, ptyId, runId) {
   await page.mouse.move(before.x, before.y)
   await page.mouse.wheel(0, -600)
   const after = await waitFor('terminal wheel scroll response', () =>
-    page.evaluate((previousScrollTop) => {
-      const viewport = document.querySelector('.xterm-viewport')
-      if (!(viewport instanceof HTMLElement)) {
+    page.evaluate((previousViewportY) => {
+      const store = window.__store
+      const state = store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabId =
+        state?.activeTabType === 'terminal'
+          ? state.activeTabId
+          : worktreeId
+            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+            : null
+      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      if (!pane) {
         return null
       }
-      return viewport.scrollTop < previousScrollTop
-        ? { scrollTop: viewport.scrollTop, previousScrollTop }
+      const buffer = pane.terminal.buffer.active
+      const viewport = pane.container.querySelector('.xterm-viewport')
+      return buffer.viewportY < previousViewportY
+        ? {
+            viewportY: buffer.viewportY,
+            previousViewportY,
+            baseY: buffer.baseY,
+            scrollTop: viewport instanceof HTMLElement ? viewport.scrollTop : null
+          }
         : null
-    }, before.scrollTop)
+    }, before.viewportY)
   )
-  return { beforeScrollTop: before.scrollTop, afterScrollTop: after.scrollTop }
+  return {
+    beforeScrollTop: before.scrollTop,
+    afterScrollTop: after.scrollTop,
+    beforeViewportY: before.viewportY,
+    afterViewportY: after.viewportY,
+    baseY: after.baseY
+  }
 }
 
 async function assertKeyboardInputWorks(page, ptyId, repoPath, runId) {
@@ -628,7 +544,14 @@ async function runValidation(mode) {
 }
 
 const { mode } = parseArgs()
-runValidation(mode).catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : error)
-  process.exit(1)
-})
+runValidation(mode).then(
+  () => {
+    // Why: a reproduced GPU stall can leave Playwright/Electron handles alive
+    // after cleanup; CI should finish once validation has made its decision.
+    process.exit(0)
+  },
+  (error) => {
+    console.error(error instanceof Error ? error.stack || error.message : error)
+    process.exit(1)
+  }
+)
