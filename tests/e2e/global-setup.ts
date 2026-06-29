@@ -12,7 +12,7 @@
 
 import { execSync } from 'child_process'
 import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'fs'
 import path from 'path'
 import os from 'os'
 
@@ -56,7 +56,10 @@ export default function globalSetup(): void {
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
-  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
+  // Why: realpathSync so the seeded path matches the store's repo.path on
+  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
+  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
