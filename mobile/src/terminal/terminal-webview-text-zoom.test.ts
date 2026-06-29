@@ -32,6 +32,28 @@ output = chunks.map(function(chunk) { return normalizeStatusDotPresentation(chun
   return context.output ?? ''
 }
 
+function resolveTerminalFontFamily(navigatorValue: {
+  userAgent: string
+  platform: string
+  maxTouchPoints: number
+}) {
+  const functionStart = terminalHtmlSource.indexOf('  function isIOSWebView()')
+  const declarationEnd = terminalHtmlSource.indexOf(
+    '  // Why: change the real font size',
+    functionStart
+  )
+  expect(functionStart).toBeGreaterThanOrEqual(0)
+  expect(declarationEnd).toBeGreaterThan(functionStart)
+  const context: { navigator: typeof navigatorValue; output?: string } = {
+    navigator: navigatorValue
+  }
+  new Script(`
+${terminalHtmlSource.slice(functionStart, declarationEnd)}
+output = terminalFontFamily;
+`).runInNewContext(context)
+  return context.output ?? ''
+}
+
 describe('TerminalWebView text zoom', () => {
   it('pins textZoom to 100 so Android system font scale cannot inflate glyphs past xterm cell metrics', () => {
     const start = terminalWebViewSource.indexOf('<WebView')
@@ -123,12 +145,34 @@ describe('TerminalWebView text zoom', () => {
     expect(replay).toBeGreaterThan(unicode)
   })
 
-  it('uses the bundled WebGL-capable xterm stack and desktop font fallbacks', () => {
+  it('uses the bundled WebGL-capable xterm stack and platform-safe font fallbacks', () => {
     expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
     expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
-    expect(terminalHtmlSource).toContain('"SF Mono", "Menlo", "Monaco", "Cascadia Mono"')
+    expect(terminalHtmlSource).toContain('function isIOSWebView()')
+    expect(terminalHtmlSource).toContain('\'ui-monospace, "Menlo", "Monaco", "Cascadia Mono"')
+    expect(terminalHtmlSource).toContain('\'"SF Mono", "Menlo", "Monaco", "Cascadia Mono"')
+    expect(terminalHtmlSource).toContain('fontFamily: terminalFontFamily')
     expect(terminalHtmlSource).toContain("fontWeight: '300'")
     expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
     expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
+  })
+
+  it('starts iOS WebViews on a WebKit-safe monospace family instead of SF Mono', () => {
+    const fontFamily = resolveTerminalFontFamily({
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15',
+      platform: 'iPhone',
+      maxTouchPoints: 5
+    })
+    expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
+    expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
+  })
+
+  it('keeps the SF Mono desktop fallback chain outside iOS WebViews', () => {
+    const fontFamily = resolveTerminalFontFamily({
+      userAgent: 'Mozilla/5.0 (Linux; Android 16)',
+      platform: 'Linux armv8l',
+      maxTouchPoints: 5
+    })
+    expect(fontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
   })
 })

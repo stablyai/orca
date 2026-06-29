@@ -253,6 +253,15 @@ window.onerror = function(msg) {
   function fontPxForScale(scale) {
     return Math.max(MIN_FONT_PX, Math.round(BASE_FONT_PX * scale));
   }
+  function isIOSWebView() {
+    if (/iP(ad|hone|od)/.test(navigator.userAgent)) return true;
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  }
+  // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name.
+  // Start with WebKit's monospace generic there to avoid script/italic fallback.
+  var terminalFontFamily = isIOSWebView()
+    ? 'ui-monospace, "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
+    : '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
   // Why: change the real font size, then resize the grid to fit the viewport at
   // the new cell metrics so the text shows at its true size immediately. RN's
   // refit (measure → updateViewport) then makes the server reflow the PTY to the
@@ -729,7 +738,7 @@ window.onerror = function(msg) {
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
-      fontFamily: '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace',
+      fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',
       fontWeightBold: '500',
