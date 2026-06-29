@@ -154,7 +154,12 @@ export function useSidebarHeaderPointerDrag<
         container.scrollTop = autoscroll.scrollTop
         refreshHeaderRects()
       }
-      applyDrop(session, configRef.current.computeDrop(session, container))
+      const drop = configRef.current.computeDrop(session, container)
+      // Why: same as the move handler — skip null drops to keep the last
+      // indicator visible when the pointer is outside the header band.
+      if (drop !== null) {
+        applyDrop(session, drop)
+      }
       autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
     },
     [applyDrop, cancelAutoscroll, refreshHeaderRects]
@@ -199,10 +204,19 @@ export function useSidebarHeaderPointerDrag<
           }
         }
         refreshHeaderRects()
-        applyDrop(session, null)
+        // Why: null here is intentional — sets the initial dragging state
+        // (indicator hidden) on promotion. Unlike mid-drag moves, we always
+        // write this null so the dragging identity appears in state immediately.
+        setState(configRef.current.buildState(configRef.current.getSessionId(session), null))
       }
       refreshHeaderRects()
-      applyDrop(session, configRef.current.computeDrop(session, container))
+      const drop = configRef.current.computeDrop(session, container)
+      // Why: only update when the pointer is over a valid drop zone. If
+      // computeDrop returns null (pointer left the header band) the last
+      // indicator stays rendered, matching the original behavior.
+      if (drop !== null) {
+        applyDrop(session, drop)
+      }
       ensureAutoscroll()
     }
     const onPointerUp = (e: PointerEvent): void => {
@@ -244,8 +258,12 @@ export function useSidebarHeaderPointerDrag<
     }
   }, [applyDrop, cancelAutoscroll, endDrag, ensureAutoscroll, refreshHeaderRects, sessionArmed])
 
+  // Why: depend only on the dragging identity, not the full state object,
+  // so the cursor/userSelect effect does not re-run every frame when only
+  // drop coordinates change (matches original per-id dependency).
+  const draggingId = configRef.current.getDraggingId(state)
   useEffect(() => {
-    if (configRef.current.getDraggingId(state) === null) {
+    if (draggingId === null) {
       return
     }
     const body = document.body
@@ -257,7 +275,7 @@ export function useSidebarHeaderPointerDrag<
       body.style.cursor = prevCursor
       body.style.userSelect = prevUserSelect
     }
-  }, [state])
+  }, [draggingId])
 
   const onHandlePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>, id: string) => {
     const session = configRef.current.createSession(event, id)
