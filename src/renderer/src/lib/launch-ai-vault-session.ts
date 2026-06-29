@@ -25,6 +25,8 @@ export function launchAiVaultSessionInNewTab(args: {
   const tab = store.createTab(args.worktreeId, targetGroupId)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
+    // Resume commands must be pasted so Windows shell wraps are not re-quoted as spawn commands.
+    delivery: 'terminal-paste',
     ...(args.env ? { env: args.env } : {}),
     ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
     telemetry: {

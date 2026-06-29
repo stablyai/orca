@@ -65,6 +65,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude --resume session-1',
+      delivery: 'terminal-paste',
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',
@@ -91,6 +92,7 @@ describe('launchAiVaultSessionInNewTab', () => {
 
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      delivery: 'terminal-paste',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
       launchConfig: {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
@@ -104,6 +106,30 @@ describe('launchAiVaultSessionInNewTab', () => {
         request_kind: 'resume'
       }
     })
+  })
+
+  it('pastes Windows shell-wrapped history resume commands instead of passing them to spawn', () => {
+    const command =
+      'cmd /d /s /c "cd /d ""D:\\tydic\\code\\log-diagnosis"" && claude ""--dangerously-skip-permissions"" ""--resume"" ""session-1"""'
+
+    launchAiVaultSessionInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      command,
+      launchConfig: {
+        agentCommand: 'claude "--dangerously-skip-permissions"',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: {}
+      }
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command,
+        delivery: 'terminal-paste'
+      })
+    )
   })
 
   it('creates a split group before launching when a split direction is provided', () => {
