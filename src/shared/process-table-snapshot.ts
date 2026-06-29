@@ -10,10 +10,15 @@ const execFile = promisify(execFileCb)
 const PS_ARGS = ['-axo', 'pid=,ppid=,stat=,command='] as const
 const PS_TIMEOUT_MS = 3000
 
-// Why: 500ms is below the active poll's minimum inter-poll gap (~675ms = 750ms
-// less jitter), so a single pane never reuses a snapshot older than it would
-// have scanned itself — freshness is equal-or-better, while a burst of panes
-// polling in the same window collapses from up to 8 scans/sec down to ~2/sec.
+// Why: 500ms is below the active cadence poll's minimum inter-poll gap (~675ms
+// = 750ms less jitter), so a cadence-driven pane never reuses a snapshot older
+// than it would have scanned itself; a burst of panes polling in the same
+// window collapses from up to 8 scans/sec down to ~2/sec. The faster
+// event-driven follow-up inspections (e.g. the pending-title confirmation,
+// which can re-fire <500ms apart) intentionally accept a <=500ms-stale table:
+// they only confirm the same agent still owns the pane, and process-exit is
+// debounced across repeated samples, so a near-instant cached scan answers
+// identically to a fresh fork.
 const DEFAULT_SNAPSHOT_TTL_MS = 500
 
 type Snapshot = { stdout: string; capturedAtMs: number }
