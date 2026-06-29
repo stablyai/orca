@@ -1,15 +1,38 @@
 import type { IDisposable } from '@xterm/xterm'
 
-export type MacCjkInputSourceTracker = IDisposable & {
+export type MacNativeTextInputSourceFeatures = Readonly<{
+  forwardAsciiPunctuation: boolean
+  forwardShortTextReplacements: boolean
+}>
+
+export type MacNativeTextInputSourceTracker = IDisposable & {
   isActive: () => boolean
+  getFeatures: () => MacNativeTextInputSourceFeatures
   refresh: () => Promise<void>
 }
 
 type KeyboardInputSourceReader = () => Promise<string | null>
 
+export const DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardAsciiPunctuation: false,
+  forwardShortTextReplacements: false
+}) satisfies MacNativeTextInputSourceFeatures
+
+const CJK_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardAsciiPunctuation: true,
+  forwardShortTextReplacements: false
+}) satisfies MacNativeTextInputSourceFeatures
+
+const VIETNAMESE_NATIVE_TEXT_INPUT_SOURCE_FEATURES = Object.freeze({
+  forwardAsciiPunctuation: false,
+  forwardShortTextReplacements: true
+}) satisfies MacNativeTextInputSourceFeatures
+
 const CJK_INPUT_SOURCE_TERMS = [
+  'bytedance',
   'cangjie',
   'chinese',
+  'doubao',
   'hangul',
   'hanin',
   'hiragana',
@@ -31,11 +54,19 @@ const CJK_INPUT_SOURCE_TERMS = [
   'zhuyin'
 ] as const
 
+const VIETNAMESE_INPUT_SOURCE_TERMS = ['telex', 'unikey', 'vietnam', 'vni'] as const
+
 function defaultKeyboardInputSourceReader(): KeyboardInputSourceReader {
   return async () => {
     const api = (
       globalThis as {
-        window?: { api?: { app?: { getKeyboardInputSourceId?: () => Promise<string | null> } } }
+        window?: {
+          api?: {
+            app?: {
+              getKeyboardInputSourceId?: () => Promise<string | null>
+            }
+          }
+        }
       }
     ).window?.api
     const reader = api?.app?.getKeyboardInputSourceId
@@ -50,20 +81,28 @@ function defaultKeyboardInputSourceReader(): KeyboardInputSourceReader {
   }
 }
 
-export function isMacCjkInputSourceId(id: string | null | undefined): boolean {
+export function getMacNativeTextInputSourceFeatures(
+  id: string | null | undefined
+): MacNativeTextInputSourceFeatures {
   const normalized = id?.trim().toLowerCase()
   if (!normalized) {
-    return false
+    return DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
   }
-  return CJK_INPUT_SOURCE_TERMS.some((term) => normalized.includes(term))
+  if (CJK_INPUT_SOURCE_TERMS.some((term) => normalized.includes(term))) {
+    return CJK_NATIVE_TEXT_INPUT_SOURCE_FEATURES
+  }
+  if (VIETNAMESE_INPUT_SOURCE_TERMS.some((term) => normalized.includes(term))) {
+    return VIETNAMESE_NATIVE_TEXT_INPUT_SOURCE_FEATURES
+  }
+  return DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
 }
 
-export function createMacCjkInputSourceTracker(
+export function createMacNativeTextInputSourceTracker(
   win: Window = window,
   options: { readInputSourceId?: KeyboardInputSourceReader } = {}
-): MacCjkInputSourceTracker {
+): MacNativeTextInputSourceTracker {
   const readInputSourceId = options.readInputSourceId ?? defaultKeyboardInputSourceReader()
-  let active = false
+  let features: MacNativeTextInputSourceFeatures = DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
   let disposed = false
   let refreshGeneration = 0
 
@@ -78,7 +117,7 @@ export function createMacCjkInputSourceTracker(
     if (disposed || generation !== refreshGeneration) {
       return
     }
-    active = isMacCjkInputSourceId(inputSourceId)
+    features = getMacNativeTextInputSourceFeatures(inputSourceId)
   }
 
   const onFocus = (): void => {
@@ -89,7 +128,8 @@ export function createMacCjkInputSourceTracker(
   void refresh()
 
   return {
-    isActive: () => active,
+    isActive: () => features.forwardAsciiPunctuation || features.forwardShortTextReplacements,
+    getFeatures: () => features,
     refresh,
     dispose: () => {
       disposed = true
@@ -98,14 +138,14 @@ export function createMacCjkInputSourceTracker(
   }
 }
 
-let singleton: MacCjkInputSourceTracker | null = null
+let singleton: MacNativeTextInputSourceTracker | null = null
 
-export function getMacCjkInputSourceTracker(): MacCjkInputSourceTracker {
-  singleton ??= createMacCjkInputSourceTracker()
+export function getMacNativeTextInputSourceTracker(): MacNativeTextInputSourceTracker {
+  singleton ??= createMacNativeTextInputSourceTracker()
   return singleton
 }
 
-export function _resetMacCjkInputSourceTrackerForTests(): void {
+export function _resetMacNativeTextInputSourceTrackerForTests(): void {
   singleton?.dispose()
   singleton = null
 }
