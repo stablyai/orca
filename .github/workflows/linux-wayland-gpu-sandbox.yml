@@ -10,6 +10,11 @@ on:
       - config/scripts/verify-linux-wayland-gpu-sandbox.mjs
       - src/main/startup/configure-process.ts
       - src/main/startup/configure-process.test.ts
+      - src/preload/api-types.ts
+      - src/preload/index.ts
+      - src/renderer/src/components/terminal-pane/pty-connection.ts
+      - src/renderer/src/lib/pane-manager/terminal-webgl-auto-policy.ts
+      - src/renderer/src/web/web-preload-api.ts
   workflow_dispatch:
 
 jobs:
@@ -90,7 +95,15 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-          git checkout "${{ github.event.pull_request.base.sha }}" -- src/main/startup/configure-process.ts
+          # Why: keep the new verifier scripts, but run them against the
+          # unfixed production terminal/GPU path instead of a hybrid checkout.
+          git checkout "${{ github.event.pull_request.base.sha }}" -- \
+            src/main/startup/configure-process.ts \
+            src/preload/api-types.ts \
+            src/preload/index.ts \
+            src/renderer/src/components/terminal-pane/pty-connection.ts \
+            src/renderer/src/lib/pane-manager/terminal-webgl-auto-policy.ts \
+            src/renderer/src/web/web-preload-api.ts
           rm -rf out
           node config/scripts/verify-linux-wayland-gpu-sandbox.mjs --mode=expect-repro
 
