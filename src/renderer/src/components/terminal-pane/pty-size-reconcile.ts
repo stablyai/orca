@@ -166,6 +166,14 @@ export function reconcilePtySizeAcrossFrames(
           if (cancelled || !options.isAlive()) {
             return
           }
+          // Why: the override can flip to parked while this async read is in
+          // flight (a mobile client takes the PTY mid-verification). Re-check
+          // here — the synchronous guard above only gated issuing the read, not
+          // this resolution — so we never re-forward desktop dims onto a PTY
+          // that is now legitimately parked at phone dims.
+          if (options.isParked()) {
+            return
+          }
           if (applied && (applied.cols !== lastSentCols || applied.rows !== lastSentRows)) {
             // The PTY never took our size — re-forward and keep the loop running.
             options.resize(lastSentCols, lastSentRows)

@@ -3379,6 +3379,24 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ).toBe(false)
   })
 
+  it('translates the GitHub clean-status rejection into an actionable message', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid' })
+      })
+      .mockRejectedValueOnce(new Error('GraphQL: Pull request is in clean status'))
+
+    await expect(
+      setPRAutoMerge('/repo-root', 7, true, 'squash', undefined, {
+        owner: 'stablyai',
+        repo: 'orca'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'This pull request can already be merged. Use Merge instead of auto-merge.'
+    })
+  })
+
   it('uses the queue-aware gh merge path when the base branch has a merge queue', async () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({

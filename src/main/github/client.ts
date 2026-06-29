@@ -4077,10 +4077,20 @@ export async function setPRAutoMerge(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifyGhError(message).message }
+    return { ok: false, error: classifySetAutoMergeError(message) }
   } finally {
     release()
   }
+}
+
+// Why: GitHub rejects enabling auto-merge on a PR that can already merge with
+// "Pull request is in clean status". Surface the actionable next step (merge
+// directly) instead of the raw GraphQL error.
+function classifySetAutoMergeError(message: string): string {
+  if (/in clean status/i.test(message)) {
+    return 'This pull request can already be merged. Use Merge instead of auto-merge.'
+  }
+  return classifyGhError(message).message
 }
 
 type PRAutoMergeIdentity = {

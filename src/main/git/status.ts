@@ -21,6 +21,7 @@ import {
   getEffectiveGitUpstreamStatus,
   splitRemoteBranchName
 } from '../../shared/git-effective-upstream'
+import { createGitConfigSnapshotRunner } from '../../shared/git-config-snapshot-runner'
 import { isBinaryBuffer } from '../../shared/binary-buffer'
 import {
   applyLineStats,
@@ -654,11 +655,14 @@ async function probeEffectiveUpstreamStatus(
   options: GitRuntimeOptions = {}
 ): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
   let probedSameNameOriginRef = false
+  const snapshotRunner = createGitConfigSnapshotRunner((args) =>
+    gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+  )
   const status = await getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
       probedSameNameOriginRef = true
     }
-    return gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    return snapshotRunner(args)
   })
   return { status, probedSameNameOriginRef }
 }

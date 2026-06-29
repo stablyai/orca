@@ -92,6 +92,24 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
+  it('suppresses enable auto-merge but keeps disable when direct merge is available', () => {
+    // Why: enabling auto-merge on a directly-mergeable PR fails with GitHub's
+    // "clean status" error, so the dropdown must not offer it.
+    expect(
+      presentGitHubPRMergeState({
+        state: 'open',
+        checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0 }
+      })
+    ).toMatchObject({ label: 'Checks passed', directMergeAvailable: true, autoMergeAction: null })
+    expect(presentGitHubPRMergeState(pr())).toMatchObject({
+      directMergeAvailable: true,
+      autoMergeAction: null
+    })
+    expect(presentGitHubPRMergeState(pr({ autoMergeEnabled: true })).autoMergeAction).toMatchObject(
+      { kind: 'disable' }
+    )
+  })
+
   it('blocks conflicts and behind branches, but not optional aggregate check failures', () => {
     expect(
       presentGitHubPRMergeState(pr({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }))
