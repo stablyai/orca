@@ -279,11 +279,11 @@ export function setupGuestShortcutForwarding(args: {
   ): boolean => {
     const keybindings = getKeybindings?.()
     if (action?.type === 'zoom') {
-      // Why: keyboard zoom is Orca chrome zoom. Focused guests bypass the
-      // main-window shortcut path, so forward to the shared renderer zoom router.
+      // Why: focused browser guests own page zoom, but their key events never
+      // reach the renderer-owned webview ref that can apply Orca's page zoom.
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
-      renderer?.send('terminal:zoom', action.direction)
+      renderer?.send('ui:zoomBrowserPage', action.direction)
       return true
     }
     if (input.isAutoRepeat) {
