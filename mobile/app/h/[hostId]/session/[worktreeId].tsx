@@ -5614,11 +5614,14 @@ export default function SessionScreen() {
       />
       <TextInputModal
         visible={showCreateBrowserModal}
-        title="New Browser"
-        message="Enter a URL, or leave blank for a new tab."
+        title={t('mobile.session.newBrowserTitle', 'New Browser')}
+        message={t(
+          'mobile.session.newBrowserMessage',
+          'Enter a URL, or leave blank for a new tab.'
+        )}
         defaultValue=""
         placeholder="https://example.com"
-        submitLabel="Open"
+        submitLabel={t('mobile.session.open', 'Open')}
         allowEmpty
         selectTextOnFocus
         keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}

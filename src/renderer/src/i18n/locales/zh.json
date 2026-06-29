@@ -799,7 +799,8 @@
       "checkHostConnection": "请检查主机连接",
       "newAgentSession": "新 Agent 会话",
       "copyNotesInstead": "改为复制笔记",
-      "backToWorktrees": "返回工作区列表"
+      "backToWorktrees": "返回工作区列表",
+      "newBrowserMessage": "输入网址，或留空以创建新标签页。"
     },
     "newWorktree": {
       "title": "创建工作区",

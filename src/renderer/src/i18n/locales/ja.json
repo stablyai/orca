@@ -788,7 +788,7 @@
       "discardChangesBody": "スマートフォンの下書きを最新のデスクトップ ファイルで置き換えますか？",
       "renameTerminalTitle": "ターミナル名を変更",
       "terminalNamePlaceholder": "ターミナル名",
-      "newBrowserTitle": "新しいブラウザ",
+      "newBrowserTitle": "新しいブラウザー",
       "enterUrlHint": "URL を入力、または空欄で新しいタブを開きます。",
       "urlPlaceholder": "https://example.com",
       "removeShortcutTitle": "このカスタム ショートカットを削除しますか？",
@@ -799,7 +799,8 @@
       "checkHostConnection": "ホスト接続を確認してください",
       "newAgentSession": "新規エージェント セッション",
       "copyNotesInstead": "代わりにメモをコピー",
-      "backToWorktrees": "ワークツリーに戻る"
+      "backToWorktrees": "ワークツリーに戻る",
+      "newBrowserMessage": "URL を入力するか、空白のままにして新しいタブを開きます。"
     },
     "newWorktree": {
       "title": "ワークスペースを作成",

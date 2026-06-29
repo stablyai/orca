@@ -799,7 +799,8 @@
       "checkHostConnection": "Check the host connection",
       "newAgentSession": "New agent session",
       "copyNotesInstead": "Copy notes instead",
-      "backToWorktrees": "Back to worktrees"
+      "backToWorktrees": "Back to worktrees",
+      "newBrowserMessage": "Enter a URL, or leave blank for a new tab."
     },
     "newWorktree": {
       "title": "Create Workspace",

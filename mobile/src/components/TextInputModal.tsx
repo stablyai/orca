@@ -32,6 +32,11 @@ export function TextInputModal({
   message,
   defaultValue = '',
   placeholder,
+  // Caller is responsible for translating this — pass t('mobile.*', 'English').
+  // We intentionally don't auto-translate here: matching 'Save' by string and
+  // silently translating it would surprise callers who pass other English labels
+  // and expect them to render verbatim (or who pass a pre-translated string and
+  // get it double-translated). One consistent rule: caller passes a final string.
   submitLabel = 'Save',
   selectTextOnFocus = false,
   allowEmpty = false,
@@ -40,8 +45,6 @@ export function TextInputModal({
   onCancel
 }: Props) {
   const { t } = useTranslate()
-  const resolvedSubmitLabel =
-    submitLabel === 'Save' ? t('mobile.textInput.defaultSubmit', 'Save') : submitLabel
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
@@ -105,7 +108,7 @@ export function TextInputModal({
           disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>{resolvedSubmitLabel}</Text>
+          <Text style={styles.submitText}>{submitLabel}</Text>
         </Pressable>
       </View>
     </BottomDrawer>

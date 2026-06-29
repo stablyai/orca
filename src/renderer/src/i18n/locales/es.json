@@ -663,7 +663,7 @@
       "sendReturn": "Send Return",
       "cancel": "Cancel",
       "save": "Save",
-      "open": "Open",
+      "open": "Abrir",
       "close": "Close",
       "copy": "Copy",
       "copyAll": "Copy all",
@@ -788,7 +788,7 @@
       "discardChangesBody": "Replace the phone draft with the latest desktop file?",
       "renameTerminalTitle": "Rename Terminal",
       "terminalNamePlaceholder": "Terminal name",
-      "newBrowserTitle": "New Browser",
+      "newBrowserTitle": "Nuevo navegador",
       "enterUrlHint": "Enter a URL, or leave blank for a new tab.",
       "urlPlaceholder": "https://example.com",
       "removeShortcutTitle": "Remove this custom shortcut?",
@@ -799,7 +799,8 @@
       "checkHostConnection": "Check the host connection",
       "newAgentSession": "New agent session",
       "copyNotesInstead": "Copy notes instead",
-      "backToWorktrees": "Back to worktrees"
+      "backToWorktrees": "Back to worktrees",
+      "newBrowserMessage": "Introduce una URL o deja en blanco para una pestaña nueva."
     },
     "newWorktree": {
       "title": "Create Workspace",

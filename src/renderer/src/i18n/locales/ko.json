@@ -799,7 +799,8 @@
       "checkHostConnection": "호스트 연결을 확인하세요",
       "newAgentSession": "새 에이전트 세션",
       "copyNotesInstead": "대신 메모 복사",
-      "backToWorktrees": "워크트리로 돌아가기"
+      "backToWorktrees": "워크트리로 돌아가기",
+      "newBrowserMessage": "URL을 입력하거나 빈칸으로 두면 새 탭이 열립니다."
     },
     "newWorktree": {
       "title": "워크스페이스 만들기",
