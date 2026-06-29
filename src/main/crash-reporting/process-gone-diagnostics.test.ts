@@ -64,6 +64,30 @@ describe('process gone diagnostics', () => {
     })
   })
 
+  it('preserves renderer recovery summary fields in persisted crash details', () => {
+    expect(
+      buildProcessGoneCrashDetails({
+        processType: 'renderer',
+        rendererRecoveryTotalProcessGoneCount: 3,
+        rendererRecoveryRecentProcessGoneCount: 3,
+        rendererRecoverySuppressedRecoveryCount: 1,
+        rendererRecoveryLastReason: 'crashed',
+        rendererRecoveryLastExitCode: 5,
+        rendererRecoveryDegraded: true,
+        rendererRecoveryDegradedUntil: 123_456
+      })
+    ).toMatchObject({
+      processType: 'renderer',
+      rendererRecoveryTotalProcessGoneCount: 3,
+      rendererRecoveryRecentProcessGoneCount: 3,
+      rendererRecoverySuppressedRecoveryCount: 1,
+      rendererRecoveryLastReason: 'crashed',
+      rendererRecoveryLastExitCode: 5,
+      rendererRecoveryDegraded: true,
+      rendererRecoveryDegradedUntil: 123_456
+    })
+  })
+
   it('preserves child process identity on suppressed breadcrumbs', () => {
     expect(
       buildSuppressedProcessGoneBreadcrumbData({

@@ -63,8 +63,8 @@ export function shouldRecordProcessGoneCrash({
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
 }): boolean {
-  // Why: GPU, Network Service, and Audio Service exits are recoverable Chromium
-  // child-process churn; treating them as app crashes creates noisy user prompts.
+  // Why: GPU and named Chromium utility service exits are recoverable child
+  // process churn; treating them as app crashes creates noisy user prompts.
   if (isRecoverableChromiumChildProcess({ source, processType, serviceName, reason })) {
     return false
   }

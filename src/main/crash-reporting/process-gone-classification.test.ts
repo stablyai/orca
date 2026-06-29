@@ -211,6 +211,26 @@ describe('shouldRecordProcessGoneCrash', () => {
         expectedTeardown: 'none'
       })
     ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
+        reason: 'crashed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
+        reason: 'abnormal-exit',
+        exitCode: 512,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
   })
 
   it('still records unknown child process crashes', () => {
@@ -243,6 +263,16 @@ describe('shouldRecordProcessGoneCrash', () => {
         serviceName: 'network.mojom.NetworkService',
         reason: 'launch-failed',
         exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'video_capture.mojom.VideoCaptureService',
+        reason: 'oom',
+        exitCode: 1,
         expectedTeardown: 'none'
       })
     ).toBe(true)

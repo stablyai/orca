@@ -86,6 +86,7 @@ import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import type { RendererRecoverySummary } from './window/renderer-recovery-guard'
 import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { CodexAccountService } from './codex-accounts/service'
@@ -669,17 +670,21 @@ function openMainWindow(): BrowserWindow {
       isQuitting = false
       clearExpectedRendererReload()
     },
-    onRendererProcessGone: (details, webContentsId) => {
+    onRendererProcessGone: (details, webContentsId, recoverySummary) => {
       recordProcessGoneCrash(
         'renderer',
         'renderer',
         details.reason,
         details.exitCode ?? null,
         {
-          processType: 'renderer'
+          processType: 'renderer',
+          ...toRendererRecoveryCrashDetails(recoverySummary)
         },
         webContentsId
       )
+    },
+    onRendererRecoveryEvent: (name, summary) => {
+      recordCrashBreadcrumb(name, toRendererRecoveryCrashDetails(summary))
     },
     shouldRecordRendererCrash: (details, webContentsId) =>
       shouldRecordProcessGoneCrash({
@@ -918,6 +923,20 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   const webContents =
     targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
   webContents?.send('ui:openCrashReport')
+}
+
+function toRendererRecoveryCrashDetails(
+  summary: RendererRecoverySummary
+): Record<string, string | number | boolean | null> {
+  return {
+    rendererRecoveryTotalProcessGoneCount: summary.totalProcessGoneCount,
+    rendererRecoveryRecentProcessGoneCount: summary.recentProcessGoneCount,
+    rendererRecoverySuppressedRecoveryCount: summary.suppressedRecoveryCount,
+    rendererRecoveryLastReason: summary.lastReason,
+    rendererRecoveryLastExitCode: summary.lastExitCode,
+    rendererRecoveryDegraded: summary.degraded,
+    rendererRecoveryDegradedUntil: summary.degradedUntil
+  }
 }
 
 function recordProcessGoneCrash(
