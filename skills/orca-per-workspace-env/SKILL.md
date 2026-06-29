@@ -35,6 +35,11 @@ them in order:
 
 Then the **per-workspace contract** (create/suspend/resume/destroy) runs fast (§8).
 
+**Quick-start (happy path):** ask the provider + read its CLI docs → scaffold `scripts/orca-vm/` from §7
+→ run the base-snapshot script, then the auth script (you invoke these by hand; not via `orca.yaml`) →
+wire `vmRecipes` in `orca.yaml` → `orca vm recipe doctor <id> --json` (free) → then the `--provision`
+self-test loop (§9) until it passes.
+
 ---
 
 ## 1. Setup workflow
@@ -44,11 +49,14 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
 
 1. **Inspect the repo** for an existing `vmRecipes` entry, `scripts/orca-vm/`, a state file, or setup
    notes. If a working recipe exists, jump to Doctor (§9) instead of rebuilding.
-2. **Pick the provider** if the repo doesn't make it obvious (Vercel Sandbox, Fly, Modal, raw VM…) and
-   which coding-agent CLI runs in the VM (`codex`, `claude`…).
-3. **Check prerequisites (§2)** — detect provider CLI + auth; ask for scope/project, plan limits, and
+2. **Ask the user which provider** to use (Vercel Sandbox, Fly, Modal, an existing SSH host…) and which
+   coding-agent CLI runs in it (`codex`, `claude`…). Don't pick for them (§11). Then **read that
+   provider's CLI/SDK docs** (or `<cli> --help`) before scaffolding — you'll need its exact verbs for
+   create/exec/snapshot/remove; don't guess them.
+3. **Check prerequisites (§2)** — detect the provider CLI + auth; ask for scope/project, plan limits, and
    the git token source. Don't guess.
-4. **Scaffold scripts + state file** from §7, filling in the provider's commands. Make them executable.
+4. **Scaffold scripts + state file** from §7 (worked Vercel example: §7f; SSH host: §7g; Windows: §7h),
+   filling in the provider's real commands. Make them executable.
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
 6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code.
 7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8).
@@ -178,6 +186,10 @@ set -euo pipefail
 # print only the state JSON to stdout
 ```
 
+Worked Vercel commands for this phase are in §7f. You run this script by hand (not via `orca.yaml`),
+after exporting the first-run inputs the state file doesn't have yet — e.g. provider scope/project, the
+repo URL/ref, and a git token (`GH_TOKEN`); later runs read them back from state.
+
 ### 7b. Auth (`<provider>-base-auth.sh`) — Phase 3
 
 ```bash
@@ -200,14 +212,43 @@ set -euo pipefail
 # read authenticated snapshotId/scope/project/port/repo*/project_root (env→state→fallback)
 # fail clearly if snapshotId is missing (point back to Phases 2–3)
 # name = orca-${ORCA_VM_RECIPE_ID}-${ORCA_VM_INSTANCE_ID} (sanitized, length-capped)
-# 1. boot sandbox from snapshotId with a published port; capture public URL → pairing address
-#    trap: remove sandbox on error
+# 1. boot sandbox from snapshotId with a published port; capture the public URL → pairing address
+#    (an externally reachable wss:// URL); trap: remove sandbox on error
 # 2. remote exec: ensure repo at desired commit; rebuild only if commit changed (cache marker)
-# 3. start `orca serve --port <port> --project-root <root> --pairing-address <addr> --recipe-json`
-#    in the background; poll until it writes valid recipe JSON, then read it
-# 4. print one object: { schemaVersion:1, pairingCode, projectRoot,
-#    userData:{ provider, resourceId:name, snapshotId, port } }
+# 3. remote exec: start orca serve in the background and read the recipe JSON it writes (see below)
+# 4. print serve's JSON to stdout, optionally enriched with userData:
+#    { schemaVersion:1, pairingCode, projectRoot, userData:{ provider, resourceId:name, snapshotId } }
 ```
+
+**The exact `orca serve` invocation and its output (verified — do not improvise the flags).** Inside the
+VM, run:
+
+```bash
+orca serve \
+  --port "$PORT" \
+  --project-root "$ABS_REPO_PATH_ON_REMOTE" \
+  --pairing-address "$EXTERNAL_WSS_URL" \
+  --recipe-json
+```
+
+**Binary name:** in a VM built from source (the Phase-2 flow), run it as `pnpm exec orca-dev serve …`
+from the repo root — `orca-dev` is the in-repo entrypoint and is what the §7f example uses. Plain
+`orca serve …` is the same command when the built CLI is installed on the VM's PATH. The flags/output
+are identical either way.
+
+There is **no `--host` flag**. `--project-root` must be an absolute directory on the remote. With
+`--recipe-json` the server **stays running** and prints exactly this single object to **stdout**, then
+keeps serving:
+
+```json
+{ "schemaVersion": 1, "pairingCode": "<orca pairing URL>", "projectRoot": "<the --project-root you passed>" }
+```
+
+`pairingCode` is the pairing URL, already pointing at whatever you passed as `--pairing-address` — so set
+`--pairing-address` to the externally reachable address and **pass `pairingCode` through unchanged; never
+hand-rewrite it**. Because serve runs in the foreground and doesn't exit, redirect its stdout to a file
+and poll until that file parses as JSON (and bail if the process dies — dump its stderr log). Your
+`create` script then prints that JSON (optionally merging `userData`). Concrete pattern: §7f.
 
 ### 7d. Suspend / resume / destroy — per workspace
 
@@ -223,6 +264,146 @@ resource_id="$(node -e 'const d=JSON.parse(process.argv[1]); process.stdout.writ
 ```
 
 ### 7e. State file — scaffold with scope/project/repo filled in and snapshot ids empty (§6).
+
+### 7f. Worked example — Vercel Sandbox (all three phases)
+
+A real, working shape (the Vercel surface is a CLI: `vercel sandbox create|exec|snapshot|remove`). Adapt
+names; verify flags against `vercel sandbox --help` for the user's CLI version before relying on them.
+These ground §7a (base snapshot) and §7b (auth), which are otherwise generic skeletons.
+
+**Phase 2 — base snapshot (§7a):** provision → install tools + clone + headless build → snapshot.
+
+```bash
+# provision a fresh build sandbox (retain a couple of snapshots); trap-remove on error
+vercel sandbox create --name "$base" --runtime node24 --timeout 30m --vcpus 4 --publish-port "$port" \
+  --snapshot-expiration 30d --keep-last-snapshots 2 "${vercel_args[@]}" >&2
+# remote build (long timeout): install pkgs+gh+pnpm+agent CLI, clone with GIT_ASKPASS, write the
+# headless main-only build config (drop the renderer), dev setup, build CLI + headless main, smoke-check
+vercel sandbox exec "$base" "${vercel_args[@]}" --timeout 25m --env "GH_TOKEN=$gh_token" … -- bash -lc '…build…' >&2
+# snapshot the STOPPED sandbox and parse the id from CLI output (fail if unparseable)
+out="$(vercel sandbox snapshot "$base" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
+snapshot_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' | tail -1)"
+# merge { baseName, snapshotId, scope, project, port, repoUrl, repoRef, projectRoot } into state; print state JSON
+```
+
+**Phase 3 — agent-auth snapshot (§7b):** boot the base, log the agent in interactively, re-snapshot.
+(`codex` below is an example — substitute the user's chosen agent's login/status verbs, e.g. `claude`.)
+
+```bash
+vercel sandbox create --name "$auth" --snapshot "$snapshot_id" --timeout 30m --publish-port "$port" "${vercel_args[@]}" >&2
+# INTERACTIVE: the user completes the device-auth URL/code in their browser
+vercel sandbox exec --interactive --tty "$auth" "${vercel_args[@]}" -- bash -lc 'codex login --device-auth'
+# refuse to snapshot an unauthenticated VM
+vercel sandbox exec "$auth" "${vercel_args[@]}" --timeout 30s -- bash -lc 'codex login status' | grep -qi 'logged in' \
+  || { echo "agent not logged in; not snapshotting" >&2; exit 1; }
+out="$(vercel sandbox snapshot "$auth" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
+new_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' | tail -1)"
+# overwrite state.snapshotId = new_id, record authSourceSnapshotId = snapshot_id; remove the auth sandbox
+```
+
+**Per-workspace `create`** (the fast path):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+# resolve from env→state→fallback: snapshot_id, scope, project, port, repo_url, repo_ref, project_root
+vercel_args=(); [ -n "$scope" ] && vercel_args+=(--scope "$scope"); [ -n "$project" ] && vercel_args+=(--project "$project")
+[ -n "$snapshot_id" ] || { echo "snapshotId missing — run Phases 2–3 first" >&2; exit 1; }
+gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(command -v gh >/dev/null 2>&1 && gh auth token 2>/dev/null || true)}}"
+name="orca-${ORCA_VM_RECIPE_ID:-vercel-sandbox}-${ORCA_VM_INSTANCE_ID:-$(date +%s)}"  # sanitize+cap to 63 chars
+
+# Arm cleanup BEFORE create so a failing create can't leak a half-built paid sandbox.
+cleanup_on_error() { [ "$?" -ne 0 ] && vercel sandbox remove "$name" "${vercel_args[@]}" >/dev/null 2>&1 || true; }
+trap cleanup_on_error EXIT
+
+# 1. boot from the authenticated snapshot, publish the serve port
+create_output="$(vercel sandbox create --name "$name" --snapshot "$snapshot_id" \
+  --timeout 30m --publish-port "$port" "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$create_output" >&2
+# Vercel prints the published https URL; derive the external wss:// pairing address from it
+public_url="$(printf '%s\n' "$create_output" | sed -nE 's#.*(https://[^[:space:]]+\.vercel\.run).*#\1#p' | head -1)"
+[ -n "$public_url" ] || { echo "no published URL in create output" >&2; exit 1; }
+pairing_ws="${public_url/https:\/\//wss://}"
+
+# 2. (remote) ensure the repo is at the right commit; rebuild only if the commit changed (cache marker)
+vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 20m \
+  --env "GH_TOKEN=$gh_token" --env "ORCA_PROJECT_ROOT=$project_root" \
+  --env "ORCA_REPO_URL=$repo_url" --env "ORCA_REPO_REF=$repo_ref" \
+  -- bash -lc 'set -euo pipefail; cd "$ORCA_PROJECT_ROOT"; \
+    # Re-establish git auth for the private-repo fetch (same as §5); without this it hangs on a prompt.
+    if [ -n "${GH_TOKEN:-}" ]; then \
+      printf "%s\n" "#!/usr/bin/env bash" "case \"\$1\" in *Username*) echo x-access-token;; *Password*) echo \"$GH_TOKEN\";; esac" > /tmp/askpass.sh; \
+      chmod 700 /tmp/askpass.sh; export GIT_ASKPASS=/tmp/askpass.sh GIT_TERMINAL_PROMPT=0; fi; \
+    git fetch origin "$ORCA_REPO_REF"; \
+    git checkout -B "$ORCA_REPO_REF" FETCH_HEAD; \
+    c="$(git rev-parse HEAD)"; [ -f .orca-built ] && [ "$(cat .orca-built)" = "$c" ] || { \
+      pnpm install --prefer-offline && pnpm run build:cli && \
+      node config/scripts/run-electron-vite-build.mjs --config config/electron-vite.vm-serve.config.ts && \
+      printf "%s" "$c" > .orca-built; }' >&2
+
+# 3. (remote) start orca serve in the background, writing recipe JSON to a file; poll until it parses
+recipe_json="$(vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 60s \
+  --env "ORCA_PORT=$port" --env "ORCA_PROJECT_ROOT=$project_root" --env "ORCA_PAIRING_ADDRESS=$pairing_ws" \
+  -- bash -lc 'set -euo pipefail; cd "$ORCA_PROJECT_ROOT"; rm -f /tmp/orca-recipe.json /tmp/orca-serve.log; \
+    nohup pnpm exec orca-dev serve --port "$ORCA_PORT" --project-root "$ORCA_PROJECT_ROOT" \
+      --pairing-address "$ORCA_PAIRING_ADDRESS" --recipe-json >/tmp/orca-recipe.json 2>/tmp/orca-serve.log </dev/null & \
+    pid=$!; for _ in $(seq 1 80); do \
+      node -e "JSON.parse(require(\"node:fs\").readFileSync(\"/tmp/orca-recipe.json\",\"utf8\"))" >/dev/null 2>&1 && { cat /tmp/orca-recipe.json; exit 0; }; \
+      kill -0 "$pid" 2>/dev/null || { cat /tmp/orca-serve.log >&2; exit 1; }; sleep 0.25; \
+    done; cat /tmp/orca-serve.log >&2; echo "serve recipe JSON timed out" >&2; exit 1')"
+
+# 4. print serve's JSON enriched with userData (single object on stdout)
+node -e 'const p=JSON.parse(process.argv[1]); console.log(JSON.stringify({...p, schemaVersion:1,
+  userData:{...p.userData, provider:"vercel-sandbox", resourceId:process.argv[2], snapshotId:process.argv[3]}}))' \
+  "$recipe_json" "$name" "$snapshot_id"
+trap - EXIT
+```
+
+`suspend`/`resume`/`destroy` use `vercel sandbox stop|...|remove "$resource_id"` reading
+`userData.resourceId` from stdin (§7d). Note: a `connection.type` of `orca-server` is implied here (the
+pairing URL is an Orca-server pairing). To connect over **SSH** instead, see §7g.
+
+### 7g. Worked example — existing SSH host (no provider CLI)
+
+For a machine you already reach over SSH, there is **no provider CLI and usually no native "snapshot"**
+— so Phases 2–3 don't apply the same way. Treat the host (or a per-workspace clone of it) as the base;
+the agent's auth and toolchain must already be present or be installed by `create`. This variant is less
+battle-tested than Vercel — **flag these assumptions to the user and confirm before relying on them.**
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+# resolve from env→state→fallback: ssh_host (user@host), port, project_root, repo_url, repo_ref
+# 1. ensure the remote repo is at the right commit (ssh "$ssh_host" 'git -C ... fetch/checkout; build if changed')
+# 2. start orca serve on the remote, reachable from your desktop. Two common ways to expose it:
+#    a) SSH local port-forward: ssh -fN -L "$port:127.0.0.1:$port" "$ssh_host"  → pairing-address ws://127.0.0.1:$port
+#    b) a tunnel/public address the host already has → pairing-address wss://<that-address>
+#    Then (remote) run orca serve with --recipe-json exactly as in §7c, capture its JSON (poll a file).
+# 3. print serve's JSON with userData:{ provider:"ssh", resourceId:"$ssh_host" }
+# suspend/resume/destroy: there may be nothing to suspend/destroy on a persistent host —
+#   set `destroy: none` and omit suspend/resume unless the host genuinely supports them.
+```
+
+If the SSH host *is* an ephemeral/snapshot-capable VM (e.g. your own hypervisor or a cloud VM with
+image support), use the Phase-2/3 + §7f model with that provider's CLI instead — the SSH-only shape
+above is for persistent hosts.
+
+### 7h. Windows local-side scripts
+
+The local-side scripts run on the user's desktop. On **Windows**, a bare `.sh` won't execute. Either
+require WSL/Git-Bash (and point `orca.yaml` at e.g. `bash ./scripts/orca-vm/<name>.sh` via a `.cmd`
+launcher), or scaffold PowerShell equivalents. Minimal PowerShell shape:
+
+```powershell
+#requires -Version 5
+$ErrorActionPreference = 'Stop'
+# resolve env→state→fallback; run the provider CLI / ssh the same way;
+# capture provider output; build the final result object and write ONE line of JSON to stdout:
+@{ schemaVersion = 1; pairingCode = $pairingCode; projectRoot = $projectRoot;
+   userData = @{ provider = $provider; resourceId = $name } } | ConvertTo-Json -Compress
+# progress/errors → Write-Error / the error stream, never stdout.
+```
+
+The remote-side commands you run *inside* the Linux VM stay bash regardless of the desktop OS.
 
 ---
 
@@ -263,9 +444,10 @@ Lifecycle hooks (all run locally):
 - `resume`: optional. Wake; reads payload on stdin and **prints fresh recipe JSON** (pairing may change).
 - `destroy`: optional unless `destroy: none`. Delete/cleanup; reads payload on stdin.
 
-Start Orca remotely with `orca serve --host 0.0.0.0 --port "$PORT" --recipe-json`. If the provider
-exposes a public URL, ensure the emitted pairing code points at the externally reachable address;
-tunneling/port mapping is the script's job.
+Start Orca remotely with `orca serve --port "$PORT" --project-root "$ABS_ROOT" --pairing-address
+"$EXTERNAL_WSS_URL" --recipe-json` (exact flags + output in §7c). Set `--pairing-address` to the
+externally reachable address so the emitted `pairingCode` is reachable; tunneling/port mapping is the
+script's job.
 
 Backward compatibility: `command`→`create`, `cleanup`→`destroy`, `cleanup: none`→`destroy: none`.
 Prefer the lifecycle names.
