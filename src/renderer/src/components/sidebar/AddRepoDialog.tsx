@@ -193,22 +193,26 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
   })
-  const { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction } =
-    useAddRepoNestedImportFlow({
-      nestedAttemptId,
-      nestedScan,
-      nestedSelectedPaths,
-      nestedRuntimeKind,
-      nestedConnectionId,
-      nestedGroupName,
-      nestedImportScanId,
-      activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-      fetchWorktrees,
-      importNestedRepos,
-      getNestedRepoRuntimeKind,
-      onGitRepoReady: completeGitRepoAdd,
-      setIsAdding
-    })
+  const {
+    handleImportNestedRepos,
+    handleOpenNestedRootFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  } = useAddRepoNestedImportFlow({
+    nestedAttemptId,
+    nestedScan,
+    nestedSelectedPaths,
+    nestedRuntimeKind,
+    nestedConnectionId,
+    nestedGroupName,
+    nestedImportScanId,
+    activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
+    fetchWorktrees,
+    importNestedRepos,
+    getNestedRepoRuntimeKind,
+    onGitRepoReady: completeGitRepoAdd,
+    setIsAdding
+  })
 
   const resetState = useCallback(() => {
     // Why: kill the git clone process if one is running, so backing out
@@ -381,6 +385,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         onNestedGroupNameChange={setNestedGroupName}
         onNestedSelectedPathsChange={setNestedSelectedPaths}
         onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}
+        onOpenNestedRootFolder={() => void handleOpenNestedRootFolder()}
         onCreateNameChange={(value) => {
           setCreateName(value)
           setCreateError(null)

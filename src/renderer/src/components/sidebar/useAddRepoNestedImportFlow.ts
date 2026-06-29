@@ -50,6 +50,7 @@ export function useAddRepoNestedImportFlow({
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
+  handleOpenNestedRootFolder: () => Promise<void>
   resetNestedImportFlow: () => void
   trackNestedBackAction: () => void
 } {
@@ -236,5 +237,47 @@ export function useAddRepoNestedImportFlow({
     ]
   )
 
-  return { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction }
+  const handleOpenNestedRootFolder = useCallback(async (): Promise<void> => {
+    if (!nestedScan) {
+      return
+    }
+    const gen = ++nestedImportGenRef.current
+    const path = nestedScan.selectedPath
+    setIsAdding(true)
+    try {
+      const state = useAppStore.getState()
+      if (nestedConnectionId) {
+        state.closeModal()
+        state.openModal('confirm-non-git-folder', {
+          folderPath: path,
+          connectionId: nestedConnectionId
+        })
+        return
+      }
+      const repo = await state.addNonGitFolder(path, {
+        runtimeEnvironmentId: activeRuntimeEnvironmentId?.trim() || null
+      })
+      if (gen !== nestedImportGenRef.current) {
+        return
+      }
+      if (repo) {
+        useAppStore.getState().closeModal()
+      }
+    } catch (err) {
+      if (gen === nestedImportGenRef.current) {
+        toast.error(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      if (gen === nestedImportGenRef.current) {
+        setIsAdding(false)
+      }
+    }
+  }, [activeRuntimeEnvironmentId, nestedConnectionId, nestedScan, setIsAdding])
+
+  return {
+    handleImportNestedRepos,
+    handleOpenNestedRootFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  }
 }
