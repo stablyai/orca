@@ -403,6 +403,21 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'ssh',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
+              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
+            ),
+            icon: Cable,
+            searchEntries: getSshPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     {
       id: 'servers',
       title: translate(
@@ -425,28 +440,13 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.ephemeralVmsDescription',
-        'Use repo-owned recipes to give each workspace its own on-demand, disposable environment.'
+        'Give each workspace its own on-demand, disposable environment on any provider, connected over an Orca server or SSH.'
       ),
       icon: Server,
       searchEntries: [getEphemeralVmsSearchEntry()],
       group: 'remote',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'ssh',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-            ),
-            icon: Cable,
-            searchEntries: getSshPaneSearchEntries(),
-            group: 'remote'
-          }
-        ]
-      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {
