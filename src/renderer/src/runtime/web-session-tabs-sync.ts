@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import type { AppState } from '../store'
 import { useAppStore } from '../store'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -182,6 +183,13 @@ export function shouldApplyWebSessionTabsSnapshot(
     // a later replacement snapshot that may never arrive.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     return true
+  }
+  if (snapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID) {
+    // Why: the floating workspace is a local synthetic terminal. A focused
+    // remote runtime can publish an empty same-id snapshot while the user has a
+    // local ssh/tmux tab open; treating that as authoritative deletes the local
+    // floating tabs.
+    return false
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
@@ -1589,6 +1597,9 @@ export function applyWebSessionTabsSnapshot(
   now = Date.now()
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const worktreeId = rawSnapshot.worktree
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return state
+  }
   // Why: a remote close prunes the local mirror immediately, but an in-flight
   // pre-close snapshot can still list the tab and flash it back. Drop any tab
   // the client is closing until the host confirms removal; reconcile the intents

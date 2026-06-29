@@ -151,6 +151,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
 
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const webContents = { send: vi.fn() }
     const send = vi.fn((channel: string, data: { requestId: string }) => {
       expect(channel).toBe('browser:requestTabCreate')
       const handler = ipcMainOnMock.mock.calls.find(
@@ -161,8 +162,16 @@ describe('RuntimeBrowserCommands browser screencast', () => {
             reply: { requestId: string; browserPageId?: string; error?: string }
           ) => void)
         | undefined
-      handler?.({} as never, { requestId: data.requestId, browserPageId: 'page-new' })
+      handler?.({ sender: { send: vi.fn() } } as never, {
+        requestId: data.requestId,
+        error: 'spoofed renderer reply'
+      })
+      handler?.({ sender: webContents } as never, {
+        requestId: data.requestId,
+        browserPageId: 'page-new'
+      })
     })
+    webContents.send = send
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-new', 101]])),
       getActivePageId: vi.fn(() => 'page-new'),
@@ -173,7 +182,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       createHost({
         getAgentBrowserBridge: () => bridge,
         getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
-        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send } }) as never)
+        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
       })
     )
 

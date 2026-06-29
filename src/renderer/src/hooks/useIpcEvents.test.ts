@@ -1698,7 +1698,8 @@ describe('useIpcEvents updater integration', () => {
       settings: {
         terminalFontSize: 13,
         experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        openAgentTabsInChatByDefault: false,
+        activeRuntimeEnvironmentId: undefined as string | undefined
       }
     }
     const createTerminalListenerRef: {
@@ -1739,6 +1740,7 @@ describe('useIpcEvents updater integration', () => {
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
+            source?: 'runtime-session'
           }) => void)
         | null
     } = { current: null }
@@ -2183,6 +2185,42 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-new',
       title: 'Codex'
     })
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    storeState.settings.activeRuntimeEnvironmentId = 'focused-runtime'
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-runtime-session',
+      worktreeId: 'wt-2',
+      targetGroupId: 'group-left',
+      title: 'Runtime Terminal',
+      command: 'codex',
+      activate: true,
+      source: 'runtime-session'
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, undefined)
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-runtime-session',
+      tabId: 'tab-new',
+      title: 'Runtime Terminal'
+    })
+
+    createTab.mockClear()
+    replyTerminalCreate.mockClear()
+    storeState.settings.activeRuntimeEnvironmentId = 'focused-runtime'
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-runtime-blocked',
+      worktreeId: 'wt-2',
+      title: 'Blocked Local Terminal'
+    })
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-runtime-blocked',
+      error: 'Local terminal creation is unavailable while a remote runtime is active'
+    })
+    storeState.settings.activeRuntimeEnvironmentId = undefined
 
     if (typeof focusTerminalListenerRef.current !== 'function') {
       throw new Error('Expected focus-terminal listener to be registered')

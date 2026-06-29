@@ -15366,10 +15366,10 @@ export class OrcaRuntimeService {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         r: { requestId: string; tabId?: string; title?: string; error?: string }
       ): void => {
-        if (r.requestId !== requestId) {
+        if (event.sender !== win.webContents || r.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -15528,10 +15528,10 @@ export class OrcaRuntimeService {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         r: { requestId: string; tabId?: string; title?: string; error?: string }
       ): void => {
-        if (r.requestId !== requestId) {
+        if (event.sender !== win.webContents || r.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -15553,6 +15553,7 @@ export class OrcaRuntimeService {
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
         ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
         startupCommandDelivery: startupCommand.startupCommandDelivery,
+        source: 'runtime-session',
         activate: opts.activate
       })
     })

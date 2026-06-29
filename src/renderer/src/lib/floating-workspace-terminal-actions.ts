@@ -9,10 +9,6 @@ import {
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
-import {
-  activateWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
 export {
@@ -35,7 +31,6 @@ type FloatingWorkspaceTabSwitchStore = Pick<
   | 'groupsByWorktree'
   | 'openFiles'
   | 'setActiveTab'
-  | 'settings'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
 >
@@ -136,28 +131,13 @@ function activateFloatingWorkspaceCyclableTab(
     store.activateTab(next.tabId)
   }
 
-  const runtimeEnvironmentId = store.settings?.activeRuntimeEnvironmentId?.trim()
   if (next.type === 'terminal') {
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void activateWebRuntimeSessionTab({
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        tabId: next.id,
-        environmentId: runtimeEnvironmentId
-      })
-    }
     store.setActiveTab(next.id)
     focusTerminalTabSurface(next.id)
     return
   }
 
   if (next.type === 'browser') {
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void activateWebRuntimeSessionTab({
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        tabId: next.tabId ?? next.id,
-        environmentId: runtimeEnvironmentId
-      })
-    }
     const workspace = getFloatingWorkspaceBrowserTab(store, next.id)
     if (workspace?.activePageId && typeof window !== 'undefined' && window.api?.browser) {
       void window.api.browser.notifyActiveTabChanged({ browserPageId: workspace.activePageId })
