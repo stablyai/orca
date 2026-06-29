@@ -71,7 +71,7 @@
       "comment": "Comentario",
       "issue": "Asunto",
       "port": "Puerto",
-      "pr": "relaciones públicas"
+      "pr": "PR"
     }
   },
   "auto": {
@@ -370,7 +370,7 @@
               "3de6371df3": "No se pudo generar el comando de inicio del agente.",
               "67e103dd60": "Espacio de trabajo creado pero no se pudo activar.",
               "19c7683acf": "El agente seleccionado no está disponible en el espacio de trabajo creado.",
-              "8bc45efdbc": "No se pudo resolver el jefe de relaciones públicas.",
+              "8bc45efdbc": "No se pudo resolver el jefe de PR.",
               "agent": {
                 "ceeeb509b5": "El Agent tardó demasiado en comenzar. El espacio de trabajo está listo: pegue {{value0}} cuando el Agent esté inactivo."
               }
@@ -492,7 +492,7 @@
         "palette": {
           "search": {
             "9ccec2316b": "Asunto",
-            "ca40ffcbec": "relaciones públicas",
+            "ca40ffcbec": "PR",
             "0b01ff98d2": "Puerto",
             "7d732521ec": "Comentario"
           }
@@ -543,7 +543,7 @@
       },
       "useComposerState": {
         "7eb3f44ff7": "El agente seleccionado está deshabilitado. Elija un agente habilitado antes de crear.",
-        "b2ead86962": "No se pudo resolver la base de relaciones públicas.",
+        "b2ead86962": "No se pudo resolver la base de PR.",
         "a9ff236145": "Algunos archivos adjuntos no se pudieron cargar.",
         "3db83fc58a": "No hay ninguna ruta de proyecto remoto disponible para los archivos adjuntos.",
         "ba6cb77082": "No se pudo conectar al proyecto.",
@@ -778,8 +778,8 @@
         "f2d02cdf8c": "archivos vistos",
         "1257d1435d": "Mostrar árbol de archivos",
         "a341343303": "Se agregó el comentario de revisión.",
-        "d1fa2cf888": "No se puede comentar sin el jefe de relaciones públicas SHA.",
-        "829674460a": "La diferencia no está disponible porque faltan los SHA de commit de relaciones públicas.",
+        "d1fa2cf888": "No se puede comentar sin el jefe de PR SHA.",
+        "829674460a": "La diferencia no está disponible porque faltan los SHA de commit de PR.",
         "af924014f8": "Visto",
         "2d89a38d9d": "{{value0}} {{value1}} tal como se ve",
         "70e84e3d0b": "No hay revisores que coincidan.",
@@ -821,7 +821,7 @@
         "06482d6190": "No se puede crear un espacio de trabajo de reparación automáticamente.",
         "f64dd90102": "Responder",
         "5752c25aff": "Destino…",
-        "ec5c4b3ab2": "Reabrir relaciones públicas",
+        "ec5c4b3ab2": "Reabrir PR",
         "21860b58d0": "Cerrar solicitud de extracción",
         "5932578f51": "La fusión requiere un repo local registrado",
         "ce8a85d209": "por defecto",
@@ -840,7 +840,7 @@
         "b0b09778c8": "No se pudo agregar el comentario de revisión.",
         "16c1abe76c": "Marcar visto",
         "ba8e329d92": "Desmarcar visto",
-        "3f79ffc8b7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
+        "3f79ffc8b7": "Abra los detalles de PR para ver los revisores actuales.",
         "5c1c973855": "Eliminar revisor",
         "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
         "timeline": {
@@ -1163,7 +1163,7 @@
         "b0e80f083d": "quiere fusionarse en",
         "8ecda455a0": "Abrir en GitHub",
         "1a2570e18e": "Iniciar nuevo espacio de trabajo",
-        "57c13a5aa4": "Más acciones en el espacio de trabajo de relaciones públicas",
+        "57c13a5aa4": "Más acciones en el espacio de trabajo de PR",
         "25690a3855": "Iniciar espacio de trabajo desde PR",
         "a459866967": "Reanudar espacio de trabajo adjunto a PR",
         "347034903a": "Copiar enlace de GitHub",
@@ -1254,8 +1254,8 @@
         "89e80af1c7": "archivos vistos",
         "319cf2d54b": "Mostrar árbol de archivos",
         "eff839f438": "Se agregó el comentario de revisión.",
-        "d8c3ba91c4": "No se puede comentar sin el jefe de relaciones públicas SHA.",
-        "74660bd80b": "La diferencia no está disponible porque faltan los SHA de commit de relaciones públicas.",
+        "d8c3ba91c4": "No se puede comentar sin el jefe de PR SHA.",
+        "74660bd80b": "La diferencia no está disponible porque faltan los SHA de commit de PR.",
         "2e528e1c2d": "Visto",
         "ff84e1f54c": "{{value0}} {{value1}} tal como se ve",
         "5ad00c7a0e": "No hay revisores que coincidan.",
@@ -1291,7 +1291,7 @@
         "c4c02ea23e": "No se puede crear un espacio de trabajo de reparación automáticamente.",
         "f119e5f5ef": "Responder",
         "894cfd884b": "Destino…",
-        "9d5425918e": "Reabrir relaciones públicas",
+        "9d5425918e": "Reabrir PR",
         "96d013ed28": "Cerrar solicitud de extracción",
         "d65f70786e": "cerrado",
         "eca289e593": "La fusión requiere un repo local registrado",
@@ -1312,7 +1312,7 @@
         "19628e058d": "No se pudo agregar el comentario de revisión.",
         "50b8fb290f": "Marcar visto",
         "2b4fdb880c": "Desmarcar visto",
-        "56ec6eafb7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
+        "56ec6eafb7": "Abra los detalles de PR para ver los revisores actuales.",
         "7f964a365a": "Eliminar revisor",
         "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
         "8ff5ae8866": "Responsables",
@@ -1497,7 +1497,7 @@
         "ff53631e6f": "Actualizar el trabajo de GitHub",
         "6ffa6be99f": "Actualización del trabajo de GitHub",
         "b15ceb409d": "Buscar problemas de GitHub...",
-        "eee4df4c66": "Buscar relaciones públicas de GitHub...",
+        "eee4df4c66": "Buscar PR de GitHub...",
         "e592d99051": "Todos los sitios de Jira",
         "d09b7631b7": "No se pudo cambiar el sitio de Jira.",
         "8029e2bd4d": "Seleccione un equipo lineal para abrir en Linear",
@@ -1536,7 +1536,7 @@
         "a161925adc": "Solicitud de extracción fusionada",
         "0506a78337": "Esto actualizará la solicitud de extracción en GitHub.",
         "844dc193c7": "{{value0}} PR #{{value1}}?",
-        "995dd6af9b": "Abrir cheques de relaciones públicas",
+        "995dd6af9b": "Abrir cheques de PR",
         "8a22eb3f7b": "No hay revisores que coincidan.",
         "67755a83a1": "Todos los demás",
         "3ace2e6bcf": "Sugerencias",
@@ -1569,7 +1569,7 @@
         "a6f7e93d7f": "Lista",
         "e78ec261ed": "Vistas",
         "727069bee5": "Proyectos",
-        "137e2a8a01": "relaciones públicas",
+        "137e2a8a01": "PR",
         "18451e99df": "Hecho",
         "4b6e40e42c": "Todo abierto",
         "bd9965df51": "Reportado",
@@ -1624,7 +1624,7 @@
         "93d5f21fc1": "pr",
         "e104fa3d3d": "Iniciar espacio de trabajo desde el problema",
         "2193a99ec1": "Abrir espacio de trabajo adjunto al problema",
-        "7deb9e59a5": "Más acciones de relaciones públicas",
+        "7deb9e59a5": "Más acciones de PR",
         "7753652524": "Reanudar",
         "e4b29c5bcf": "Iniciar espacio de trabajo desde PR",
         "67d881244c": "Reanudar espacio de trabajo adjunto a PR",
@@ -1640,7 +1640,7 @@
         "2af3ab5c58": "Selecciona un equipo para abrir en Linear",
         "aec5feeb69": "No se pudo crear el problema de Jira.",
         "7437e340b4": "No se pudo crear el problema.",
-        "9e03c17847": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
+        "9e03c17847": "Abra los detalles de PR para ver los revisores actuales.",
         "3b7f34282f": "cerrado",
         "246bd64aed": "Abrir {{value0}} en Linear",
         "ff90d0abc7": "Iniciar espacio de trabajo desde {{value0}}",
@@ -1842,7 +1842,7 @@
             "c5f949e489": "Asunto",
             "8d669084f6": "Restringido",
             "6efdc0d920": "Borrador",
-            "d0d0e13a5a": "relaciones públicas",
+            "d0d0e13a5a": "PR",
             "af5d8c912a": "Artículo restringido",
             "bb7ebc11e3": "Añadir número",
             "9cb1a0c984": "Agregar texto",
@@ -3815,7 +3815,7 @@
           "bdd23b4e07": "Issues de GitHub",
           "44713a5d04": "Issues de Linear",
           "cc17bd443b": "Detallado",
-          "0f9b959b31": "relaciones públicas",
+          "0f9b959b31": "PR",
           "e029a2d775": "Estado",
           "c2c7a45cda": "Ninguno",
           "680043342f": "compacto",
@@ -5160,7 +5160,7 @@
           "1f744a72f4": "configuración"
         },
         "GitPane": {
-          "d2eede4c54": "Agregue la atribución de Orca a commits, relaciones públicas y problemas.",
+          "d2eede4c54": "Agregue la atribución de Orca a commits, PR y problemas.",
           "e02ea23a32": "Atribución de Orca",
           "e71ce09c42": "orca",
           "b9b5771bb1": "atribución",
@@ -6989,7 +6989,7 @@
                 "b261c88609": "pr",
                 "110be48b81": "solicitud de extracción",
                 "001ca3f2af": "Valores predeterminados utilizados cuando se abre el compositor Crear PR.",
-                "eefd33788c": "Valores predeterminados de creación de relaciones públicas",
+                "eefd33788c": "Valores predeterminados de creación de PR",
                 "d32936bb2a": "rama",
                 "127d512e75": "commit",
                 "d22a6459e4": "conflictos",
@@ -7316,7 +7316,7 @@
             "6bdea421bb": "pr",
             "16f53f7323": "gh",
             "d088806071": "github",
-            "118c23484b": "Agregue la atribución de Orca a commits, relaciones públicas y problemas.",
+            "118c23484b": "Agregue la atribución de Orca a commits, PR y problemas.",
             "bc7d9f69ce": "Atribución de Orca",
             "40f9b815fd": "presupuesto API",
             "b7e52124c7": "límite de tasa",
@@ -8528,7 +8528,7 @@
             "ea9b649ce3": "¿Eliminar comentario?",
             "5788d1059d": "No se pudo actualizar el hilo de revisión. Consulta el presupuesto de la API de GitHub.",
             "07871c0589": "Vincular otro PR",
-            "7202f4a40a": "desvincular relaciones públicas",
+            "7202f4a40a": "desvincular PR",
             "7f4489f370": "Refrescar",
             "5c88c6db07": "Abierto el {{value0}}",
             "7fad8509fe": "Arreglar con IA",
@@ -8542,7 +8542,7 @@
             "fdb27637f2": "Publicación…",
             "e56c42122e": "destructivo",
             "786e3c143f": "Borrar",
-            "653c105ecc": "Más acciones de relaciones públicas",
+            "653c105ecc": "Más acciones de PR",
             "f316a8ca2b": "No hay comentarios sin resolver seleccionados.",
             "d00ebdc402": "Resolver comentarios de {{value0}} con IA",
             "ed3f79c031": "Revisa el prompt antes de iniciar un agente. Los hilos seleccionados se marcan como resueltos después del inicio.",
@@ -9031,7 +9031,7 @@
                 "755be805f6": "Sin comentarios",
                 "751f7c6e5c": "Mostrando los primeros 100 comentarios por fuente",
                 "94557d68e2": "Comentarios",
-                "3fff651d32": "Añadir un comentario de relaciones públicas",
+                "3fff651d32": "Añadir un comentario de PR",
                 "ea9fd5ed6a": "Iniciar conversación...",
                 "0fc6f743b3": "por",
                 "8987d5a3dd": "Resuelto",
@@ -9073,7 +9073,7 @@
                 "3a71a6ed0b": "Resuelva los conflictos antes de que se puedan completar las comprobaciones y la fusión.",
                 "60186d8498": "Los conflictos bloquean esto",
                 "c16762ac8c": "Las comprobaciones y comentarios a continuación muestran el contexto obtenido actualmente.",
-                "9d0e7bcefc": "Sin acciones de relaciones públicas de bloqueo",
+                "9d0e7bcefc": "Sin acciones de PR de bloqueo",
                 "5856874b59": "Orca actualizará los controles mientras este panel permanezca abierto.",
                 "5341023167": "controlar",
                 "b45db92d0e": "Arreglar",
@@ -9261,7 +9261,7 @@
                   "1884cf34af": "Publicar esta rama en origen",
                   "7b4d02e6b8": "Rama de publicación",
                   "3d5dccef0b": "Nada que comprometer. PR ya está fusionado.",
-                  "41d4bcf157": "Comprobando el estado de las relaciones públicas...",
+                  "41d4bcf157": "Comprobando el estado de las PR...",
                   "acce237921": "Nada que comprometer. La sucursal no tiene cambios para publicar.",
                   "fa3bd4f40c": "Prepare al menos un archivo para commit",
                   "5a477d80cb": "Organiza todos los cambios",
@@ -10291,7 +10291,7 @@
             "f4d5e1a7b2": "3 checks"
           },
           "ReviewShipAnimatedVisual": {
-            "4d99496b8c": "Crear relaciones públicas",
+            "4d99496b8c": "Crear PR",
             "62544e0852": "Cancelar",
             "bcd5cae3c4": "Descripción de la solicitud de extracción",
             "3774b80eae": "Descripción",
@@ -10391,7 +10391,7 @@
                 },
                 "ship": {
                   "styles": {
-                    "90cdcd2ecc": ".ravs-ship-root { posición: absoluta; recuadro: 0; } .ravs-ship-stack { posición: absoluta; recuadro: 0; pantalla: cuadrícula; columnas-plantilla-cuadrícula: 232px minmax(0,1fr); espacio: 14px; relleno: 4px 2px; /* Por qué: las tarjetas se ajustan al tamaño de su contenido en lugar de extenderse hasta la altura total del padre, para que las dos tarjetas no muestren espacios vacíos debajo de su contenido. */ alinear-elementos: inicio; } /* Minibarra lateral de control de código fuente: encabezado de recuento anticipado, área de texto de Commit + botón de Commit dividido, luego una sección de CAMBIOS con filas de archivos. Las filas del archivo son la superficie sobre la que se anima el pulso de \"lectura\". */ .ravs-sc-card { pantalla: flex; dirección flexible: columna; fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; desbordamiento: oculto; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); } /* Ambos encabezados de tarjetas comparten la misma altura fija, por lo que la tarjeta SC y el cuadro de diálogo PR se alinean en el borde superior independientemente del contenido del encabezado. */ .ravs-sc-header, .ravs-pr-head { altura: 36px; tamaño de caja: cuadro de borde; } .ravs-sc-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-sc-ahead { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } .ravs-sc-ahead svg { color: var(--silenciado-primer plano, #71717a); } .ravs-sc-commit-area { pantalla: flex; dirección flexible: columna; espacio: 6px; relleno: 8px 10px; } .ravs-sc-textarea { posición: relativa; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); relleno: 6px 26px 6px 8px; altura mínima: 56px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-sc-textarea .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-sc-sparkle { posición: absoluta; derecha: 6px; arriba: 6px; ancho: 20px; altura: 20 píxeles; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-sc-sparkle.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-sc-split { pantalla: flex; alinear elementos: estirar; } /* Por qué: Commit y crear relaciones públicas rodean a Chrome; las posibilidades violetas de la IA son los puntos focales. Representelos como botones secundarios silenciosos para que no compitan con las señales de brillo/escaneo. */ .ravs-sc-split .ravs-primary { flex: 1; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; espacio: 5px; relleno: 5px 10px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); tamaño de fuente: 11px; peso de fuente: 500; radio de borde: 6px 0 0 6px; borde: 1px var sólido (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } .ravs-sc-split .ravs-chev { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano silenciado, #71717a); radio de borde: 0 6px 6px 0; borde: 1px var sólido (--borde); borde izquierdo: var sólido de 1 px (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } /* Por qué: cuando la IA haya completado el mensaje de Commit, tiñe el botón Commit de verde para indicar \"listo para confirmar\". Utiliza la misma familia de éxito verde que el flash PR para que los dos tiempos rimen. La mezcla es intencionalmente fuerte (~28%): al 14% desapareció junto al brillo violeta y el flash PR, por lo que los usuarios solo vieron el PR cambiar de color. */ .ravs-sc-split.is-ready .ravs-primary, .ravs-sc-split.is-ready .ravs-chev { fondo: mezcla de colores (en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad; } .ravs-sc-split.is-ready .ravs-chev { borde-izquierdo-color: rgba(34, 197, 94, 0,55); } .ravs-sc-changes-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 8px 10px 4px; tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-sc-changes-count { color: var(--primer plano, #18181b); peso de fuente: 600; margen izquierdo: 2px; } .ravs-sc-view-all { tamaño de fuente: 10px; peso de fuente: 500; transformación de texto: ninguna; espacio entre letras: 0; color: var(--primer plano silenciado, #71717a); } .ravs-sc-files { mostrar: flex; dirección flexible: columna; relleno: 2px 6px 8px; flexión: 1; altura mínima: 0; desbordamiento: oculto; } .ravs-sc-file { mostrar: cuadrícula; columnas-plantilla-cuadrícula: 14px minmax(0,1fr) 12px; alinear elementos: centro; espacio: 6px; relleno: 3px 6px; radio del borde: 4px; tamaño de fuente: 11px; altura de línea: 1,35; color: var(--primer plano, #18181b); posición: relativa; transición: facilidad de fondo 220 ms; } .ravs-sc-ficon { color: rgb(180 83 9); pantalla: flexible en línea; } .ravs-sc-fname { ancho mínimo: 0; desbordamiento: oculto; desbordamiento de texto: puntos suspensivos; espacio en blanco: nowrap; } .ravs-sc-fmark { familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; tamaño de fuente: 10px; alineación de texto: derecha; color: rgb(180 83 9); } .ravs-sc-file.is-reading { fondo: color-mix(en srgb, rgb(139 92 246) 14%, transparente); sombra de cuadro: inserción 0 0 0 1px mezcla de colores (en srgb, rgb (139 92 246) 28%, transparente); } /* Cuadro de diálogo PR: coincide con el cromo de la tarjeta .ravs-sc (mismo borde, radio, elevación) para que las dos tarjetas se lean como un solo lenguaje de diseño. */ .ravs-pr-dialog { fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); pantalla: flexible; dirección flexible: columna; ancho mínimo: 0; desbordamiento: oculto; } .ravs-pr-head { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; espacio: 6px; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-pr-title-text { tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } /* Chip de asistencia de IA de solo íconos: refleja .ravs-sc-sparkle para que la capacidad se lea de manera idéntica en ambas tarjetas. */ .ravs-pr-gen-btn { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; altura: 22 píxeles; relleno: 0; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; borde: 0; cursor: puntero; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-pr-gen-btn:hover { fondo: rgba(24,24,27,0.06); color: var(--primer plano, #18181b); } .ravs-pr-gen-btn.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-pr-body { pantalla: flex; dirección flexible: columna; espacio: 8px; relleno: 10px; } .ravs-pr-field { pantalla: flex; dirección flexible: columna; espacio: 4px; } .ravs-pr-field-label { tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-pr-base { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; relleno: 4px 9px; borde: 1px var sólido (--borde); radio del borde: 6px; tamaño de fuente: 11px; familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--primer plano, #18181b); fondo: var(--editor-surface, var(--card)); alineación propia: inicio flexible; } .ravs-pr-base svg { color: var(--primer plano silenciado, #71717a); } .ravs-pr-input { posición: relativa; relleno: 6px 8px; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); altura mínima: 28px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-pr-input.is-body { altura mínima: 50px; tamaño de fuente: 11px; altura de línea: 1,4; } .ravs-pr-input .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-pr-footer { pantalla: flex; alinear elementos: centro; espacio: 6px; justificar contenido: extremo flexible; margen superior: 2px; } .ravs-pr-btn { tamaño de fuente: 11px; peso de fuente: 500; relleno: 5px 10px; radio del borde: 6px; altura de línea: 1; borde: 1px sólido transparente; esquema: ninguno; } .ravs-pr-btn:focus, .ravs-pr-btn:focus-visible { esquema: ninguno; } /* Cancelar se lee como un botón fantasma silencioso para que no compita con la acción afirmativa Crear PR. */ .ravs-pr-btn.is-outline { fondo: transparente; color: var(--primer plano silenciado, #71717a); color del borde: transparente; } .ravs-pr-btn.is-outline:hover { fondo: rgba(24,24,27,0.05); color: var(--primer plano, #18181b); } /* Relleno secundario silencioso: consulte la nota .ravs-sc-split anterior. El anillo de destello todavía usa el color verde exitoso para que se lea el ritmo \"PR creado\". El botón Crear-PR es ligeramente más grande que Cancelar, por lo que la acción afirmativa sigue siendo el objetivo más importante. */ .ravs-pr-btn.is-solid { fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); color del borde: var(--borde); tamaño de fuente: 12px; relleno: 7px 14px; transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad, cuadro de sombra con 220 ms de facilidad; } .ravs-pr-btn.is-solid.is-ready { fondo: color-mix(en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); } .ravs-pr-btn.is-solid.is-flash { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.30); } .ravs-cursor { posición: absoluta; índice z: 40; eventos de puntero: ninguno; transición: transformar 600 ms cúbico-bezier (.45, .05, .2,1), opacidad 200 ms facilidad; transformar: traducir (-30px, 220px); opacidad: 0; } .ravs-cursor.is-visible { opacidad: 1; } .ravs-cursor .ravs-ripple { posición: absoluta; izquierda: -6px; arriba: -6px; ancho: 28px; altura: 28 píxeles; radio del borde: 999px; borde: 2px rgba sólido (24,24,27,0.5); opacidad: 0; } .ravs-cursor.is-clicking .ravs-ripple { animación: ravs-ripple 460 ms hacia adelante; } @keyframes ravs-ripple { 0% { transformar: escala(0.4); opacidad: 0,9; } 100% { transformar: escala(1.4); opacidad: 0; } } .ravs-caret { mostrar: bloque en línea; ancho: 1,5 px; altura: 1em; fondo: color actual; alineación vertical: -2px; margen izquierdo: 1px; animación: ravs-caret-blink 1,05s pasos(1) infinito; } @keyframes ravs-caret-blink { 0%, 50% { opacidad: 1 } 51%, 100% { opacidad: 0 } }"
+                    "90cdcd2ecc": ".ravs-ship-root { posición: absoluta; recuadro: 0; } .ravs-ship-stack { posición: absoluta; recuadro: 0; pantalla: cuadrícula; columnas-plantilla-cuadrícula: 232px minmax(0,1fr); espacio: 14px; relleno: 4px 2px; /* Por qué: las tarjetas se ajustan al tamaño de su contenido en lugar de extenderse hasta la altura total del padre, para que las dos tarjetas no muestren espacios vacíos debajo de su contenido. */ alinear-elementos: inicio; } /* Minibarra lateral de control de código fuente: encabezado de recuento anticipado, área de texto de Commit + botón de Commit dividido, luego una sección de CAMBIOS con filas de archivos. Las filas del archivo son la superficie sobre la que se anima el pulso de \"lectura\". */ .ravs-sc-card { pantalla: flex; dirección flexible: columna; fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; desbordamiento: oculto; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); } /* Ambos encabezados de tarjetas comparten la misma altura fija, por lo que la tarjeta SC y el cuadro de diálogo PR se alinean en el borde superior independientemente del contenido del encabezado. */ .ravs-sc-header, .ravs-pr-head { altura: 36px; tamaño de caja: cuadro de borde; } .ravs-sc-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-sc-ahead { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } .ravs-sc-ahead svg { color: var(--silenciado-primer plano, #71717a); } .ravs-sc-commit-area { pantalla: flex; dirección flexible: columna; espacio: 6px; relleno: 8px 10px; } .ravs-sc-textarea { posición: relativa; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); relleno: 6px 26px 6px 8px; altura mínima: 56px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-sc-textarea .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-sc-sparkle { posición: absoluta; derecha: 6px; arriba: 6px; ancho: 20px; altura: 20 píxeles; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-sc-sparkle.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-sc-split { pantalla: flex; alinear elementos: estirar; } /* Por qué: Commit y crear PR rodean a Chrome; las posibilidades violetas de la IA son los puntos focales. Representelos como botones secundarios silenciosos para que no compitan con las señales de brillo/escaneo. */ .ravs-sc-split .ravs-primary { flex: 1; pantalla: flexible en línea; alinear elementos: centro; justificar-contenido: centro; espacio: 5px; relleno: 5px 10px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); tamaño de fuente: 11px; peso de fuente: 500; radio de borde: 6px 0 0 6px; borde: 1px var sólido (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } .ravs-sc-split .ravs-chev { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; fondo: var(--secundario, #f5f5f5); color: var(--primer plano silenciado, #71717a); radio de borde: 0 6px 6px 0; borde: 1px var sólido (--borde); borde izquierdo: var sólido de 1 px (--borde); transición: fondo con 240 ms de facilidad, color de borde con 240 ms de facilidad, color con 240 ms de facilidad; } /* Por qué: cuando la IA haya completado el mensaje de Commit, tiñe el botón Commit de verde para indicar \"listo para confirmar\". Utiliza la misma familia de éxito verde que el flash PR para que los dos tiempos rimen. La mezcla es intencionalmente fuerte (~28%): al 14% desapareció junto al brillo violeta y el flash PR, por lo que los usuarios solo vieron el PR cambiar de color. */ .ravs-sc-split.is-ready .ravs-primary, .ravs-sc-split.is-ready .ravs-chev { fondo: mezcla de colores (en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad; } .ravs-sc-split.is-ready .ravs-chev { borde-izquierdo-color: rgba(34, 197, 94, 0,55); } .ravs-sc-changes-header { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; relleno: 8px 10px 4px; tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-sc-changes-count { color: var(--primer plano, #18181b); peso de fuente: 600; margen izquierdo: 2px; } .ravs-sc-view-all { tamaño de fuente: 10px; peso de fuente: 500; transformación de texto: ninguna; espacio entre letras: 0; color: var(--primer plano silenciado, #71717a); } .ravs-sc-files { mostrar: flex; dirección flexible: columna; relleno: 2px 6px 8px; flexión: 1; altura mínima: 0; desbordamiento: oculto; } .ravs-sc-file { mostrar: cuadrícula; columnas-plantilla-cuadrícula: 14px minmax(0,1fr) 12px; alinear elementos: centro; espacio: 6px; relleno: 3px 6px; radio del borde: 4px; tamaño de fuente: 11px; altura de línea: 1,35; color: var(--primer plano, #18181b); posición: relativa; transición: facilidad de fondo 220 ms; } .ravs-sc-ficon { color: rgb(180 83 9); pantalla: flexible en línea; } .ravs-sc-fname { ancho mínimo: 0; desbordamiento: oculto; desbordamiento de texto: puntos suspensivos; espacio en blanco: nowrap; } .ravs-sc-fmark { familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; tamaño de fuente: 10px; alineación de texto: derecha; color: rgb(180 83 9); } .ravs-sc-file.is-reading { fondo: color-mix(en srgb, rgb(139 92 246) 14%, transparente); sombra de cuadro: inserción 0 0 0 1px mezcla de colores (en srgb, rgb (139 92 246) 28%, transparente); } /* Cuadro de diálogo PR: coincide con el cromo de la tarjeta .ravs-sc (mismo borde, radio, elevación) para que las dos tarjetas se lean como un solo lenguaje de diseño. */ .ravs-pr-dialog { fondo: var(--card, #fff); borde: 1px var sólido (--borde); radio del borde: 10px; sombra de cuadro: 0 1px 2px rgba(24,24,27,0.04); pantalla: flexible; dirección flexible: columna; ancho mínimo: 0; desbordamiento: oculto; } .ravs-pr-head { pantalla: flex; alinear elementos: centro; justificar contenido: espacio entre; espacio: 6px; relleno: 0 10px; borde inferior: var sólido de 1 px (--borde); } .ravs-pr-title-text { tamaño de fuente: 11px; peso de fuente: 500; color: var(--primer plano, #18181b); } /* Chip de asistencia de IA de solo íconos: refleja .ravs-sc-sparkle para que la capacidad se lea de manera idéntica en ambas tarjetas. */ .ravs-pr-gen-btn { pantalla: inline-flex; alinear elementos: centro; justificar-contenido: centro; ancho: 22px; altura: 22 píxeles; relleno: 0; radio del borde: 4px; color: var(--primer plano silenciado, #71717a); fondo: transparente; borde: 0; cursor: puntero; transición: color con 160 ms de facilidad, fondo con 160 ms de facilidad; } .ravs-pr-gen-btn:hover { fondo: rgba(24,24,27,0.06); color: var(--primer plano, #18181b); } .ravs-pr-gen-btn.is-scanning { color: rgb(109 40 217); fondo: mezcla de colores (en srgb, rgb(139 92 246) 18%, transparente); } .ravs-pr-body { pantalla: flex; dirección flexible: columna; espacio: 8px; relleno: 10px; } .ravs-pr-field { pantalla: flex; dirección flexible: columna; espacio: 4px; } .ravs-pr-field-label { tamaño de fuente: 10px; peso de fuente: 600; transformación de texto: mayúsculas; espacio entre letras: 0,05 em; color: var(--primer plano silenciado, #71717a); } .ravs-pr-base { mostrar: inline-flex; alinear elementos: centro; espacio: 5px; relleno: 4px 9px; borde: 1px var sólido (--borde); radio del borde: 6px; tamaño de fuente: 11px; familia de fuentes: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--primer plano, #18181b); fondo: var(--editor-surface, var(--card)); alineación propia: inicio flexible; } .ravs-pr-base svg { color: var(--primer plano silenciado, #71717a); } .ravs-pr-input { posición: relativa; relleno: 6px 8px; borde: 1px var sólido (--borde); radio del borde: 6px; fondo: var(--editor-surface, var(--card)); altura mínima: 28px; tamaño de fuente: 12px; altura de línea: 1,45; color: var(--primer plano, #18181b); espacio en blanco: preenvoltura; salto de palabra: salto de palabra; desbordamiento: oculto; } .ravs-pr-input.is-body { altura mínima: 50px; tamaño de fuente: 11px; altura de línea: 1,4; } .ravs-pr-input .ravs-placeholder { color: rgba(113,113,122,0.7); } .ravs-pr-footer { pantalla: flex; alinear elementos: centro; espacio: 6px; justificar contenido: extremo flexible; margen superior: 2px; } .ravs-pr-btn { tamaño de fuente: 11px; peso de fuente: 500; relleno: 5px 10px; radio del borde: 6px; altura de línea: 1; borde: 1px sólido transparente; esquema: ninguno; } .ravs-pr-btn:focus, .ravs-pr-btn:focus-visible { esquema: ninguno; } /* Cancelar se lee como un botón fantasma silencioso para que no compita con la acción afirmativa Crear PR. */ .ravs-pr-btn.is-outline { fondo: transparente; color: var(--primer plano silenciado, #71717a); color del borde: transparente; } .ravs-pr-btn.is-outline:hover { fondo: rgba(24,24,27,0.05); color: var(--primer plano, #18181b); } /* Relleno secundario silencioso: consulte la nota .ravs-sc-split anterior. El anillo de destello todavía usa el color verde exitoso para que se lea el ritmo \"PR creado\". El botón Crear-PR es ligeramente más grande que Cancelar, por lo que la acción afirmativa sigue siendo el objetivo más importante. */ .ravs-pr-btn.is-solid { fondo: var(--secundario, #f5f5f5); color: var(--primer plano secundario, #171717); color del borde: var(--borde); tamaño de fuente: 12px; relleno: 7px 14px; transición: fondo con 220 ms de facilidad, color de borde con 220 ms de facilidad, color con 220 ms de facilidad, cuadro de sombra con 220 ms de facilidad; } .ravs-pr-btn.is-solid.is-ready { fondo: color-mix(en srgb, rgb(34 197 94) 28%, var(--secundario, #f5f5f5)); color del borde: rgb(34 197 94); color: rgb(21 128 61); } .ravs-pr-btn.is-solid.is-flash { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.30); } .ravs-cursor { posición: absoluta; índice z: 40; eventos de puntero: ninguno; transición: transformar 600 ms cúbico-bezier (.45, .05, .2,1), opacidad 200 ms facilidad; transformar: traducir (-30px, 220px); opacidad: 0; } .ravs-cursor.is-visible { opacidad: 1; } .ravs-cursor .ravs-ripple { posición: absoluta; izquierda: -6px; arriba: -6px; ancho: 28px; altura: 28 píxeles; radio del borde: 999px; borde: 2px rgba sólido (24,24,27,0.5); opacidad: 0; } .ravs-cursor.is-clicking .ravs-ripple { animación: ravs-ripple 460 ms hacia adelante; } @keyframes ravs-ripple { 0% { transformar: escala(0.4); opacidad: 0,9; } 100% { transformar: escala(1.4); opacidad: 0; } } .ravs-caret { mostrar: bloque en línea; ancho: 1,5 px; altura: 1em; fondo: color actual; alineación vertical: -2px; margen izquierdo: 1px; animación: ravs-caret-blink 1,05s pasos(1) infinito; } @keyframes ravs-caret-blink { 0%, 50% { opacidad: 1 } 51%, 100% { opacidad: 0 } }"
                   }
                 }
               }
@@ -10527,7 +10527,7 @@
             "3c6c478462": "X termina, envíale la tarea de revisión”.",
             "298301b7a0": "árbol de trabajo",
             "864e2db28f": "“Cuando el agente en",
-            "7fc6f02099": "y crear relaciones públicas para cada uno”.",
+            "7fc6f02099": "y crear PR para cada uno”.",
             "27c567a89c": "árboles de trabajo",
             "55846c7f95": "“Divide este PR en dos",
             "4795ac2d4a": "Intenta preguntar:",
@@ -12091,7 +12091,7 @@
     "i18n": {
       "hostedReview": {
         "copy": {
-          "f0a4b8c2d1": "relaciones públicas",
+          "f0a4b8c2d1": "PR",
           "e9f3a7b1c0": "solicitud de extracción",
           "d8e2f6a0b9": "Solicitud de extracción",
           "c7d1e5f9a8": "GitHub",
