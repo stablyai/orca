@@ -186,6 +186,37 @@ async function getTerminalContent(page, charLimit = 12_000) {
   }, charLimit)
 }
 
+async function collectRendererDiagnostics(page) {
+  if (!page) {
+    return null
+  }
+  try {
+    return await pollWithTimeout('renderer diagnostics', () =>
+      page.evaluate(() => {
+        const store = window.__store
+        const state = store?.getState?.()
+        const worktreeId = state?.activeWorktreeId ?? null
+        const tabId = state?.activeTabId ?? null
+        const tabCount = worktreeId ? (state?.tabsByWorktree?.[worktreeId]?.length ?? 0) : null
+        const manager = tabId ? window.__paneManagers?.get(tabId) : null
+        return {
+          hasStore: Boolean(store),
+          activeWorktreeId: worktreeId,
+          activeTabType: state?.activeTabType ?? null,
+          activeTabId: tabId,
+          tabCount,
+          hasPaneManager: Boolean(manager),
+          renderingDiagnostics: manager?.getRenderingDiagnostics?.() ?? null
+        }
+      })
+    )
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
 async function sendToTerminal(page, ptyId, text) {
   await page.evaluate(
     ({ ptyId: id, text: input }) => {
@@ -352,6 +383,7 @@ async function runValidation(mode) {
   const userDataPath = mkdtempSync(path.join(tmpdir(), 'orca-wayland-gpu-userdata-'))
   const runId = `${Date.now()}`
   let app
+  let page
   let terminalExerciseStarted = false
   let commandLineSwitches = null
   const stderrLines = []
@@ -386,7 +418,8 @@ async function runValidation(mode) {
     commandLineSwitches = await app.evaluate(({ app: electronApp }) => ({
       disableGpuSandbox: electronApp.commandLine.hasSwitch('disable-gpu-sandbox'),
       disableGpu: electronApp.commandLine.hasSwitch('disable-gpu'),
-      ozonePlatform: electronApp.commandLine.getSwitchValue('ozone-platform')
+      ozonePlatform: electronApp.commandLine.getSwitchValue('ozone-platform'),
+      enableFeatures: electronApp.commandLine.getSwitchValue('enable-features')
     }))
 
     if (mode === 'expect-repro' && commandLineSwitches.disableGpuSandbox) {
@@ -406,7 +439,7 @@ async function runValidation(mode) {
       throw new Error('Expected hardware acceleration to remain enabled, but --disable-gpu is set.')
     }
 
-    const page = await app.firstWindow()
+    page = await app.firstWindow()
     await page.waitForLoadState('domcontentloaded')
     const ptyId = await setupTerminal(page, repoPath)
     terminalExerciseStarted = true
@@ -440,6 +473,7 @@ async function runValidation(mode) {
     )
   } catch (error) {
     const gpuCrashLines = stderrLines.filter((line) => gpuCrashPattern.test(line))
+    const rendererDiagnostics = await collectRendererDiagnostics(page)
     if (
       mode === 'expect-repro' &&
       !(error instanceof MissingReproductionError) &&
@@ -452,6 +486,7 @@ async function runValidation(mode) {
             reproduced: true,
             reason: error instanceof Error ? error.message : String(error),
             switches: commandLineSwitches,
+            rendererDiagnostics,
             gpuCrashLines
           },
           null,
@@ -460,6 +495,19 @@ async function runValidation(mode) {
       )
       return
     }
+    console.error(
+      JSON.stringify(
+        {
+          mode,
+          reason: error instanceof Error ? error.message : String(error),
+          switches: commandLineSwitches,
+          rendererDiagnostics,
+          gpuCrashLines
+        },
+        null,
+        2
+      )
+    )
     throw error
   } finally {
     await closeElectronApp(app)

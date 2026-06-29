@@ -488,7 +488,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     platform: {
       get: () => ({
         platform: getBrowserPlatform(),
-        osRelease: ''
+        osRelease: '',
+        displayServer: null
       })
     },
     e2e: {

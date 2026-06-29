@@ -198,6 +198,20 @@ type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
 
+function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
+  if (process.platform !== 'linux') {
+    return null
+  }
+  if (
+    process.env.WAYLAND_DISPLAY ||
+    process.env.XDG_SESSION_TYPE?.toLowerCase() === 'wayland' ||
+    process.env.ELECTRON_OZONE_PLATFORM_HINT?.toLowerCase() === 'wayland'
+  ) {
+    return 'wayland'
+  }
+  return process.env.DISPLAY ? 'x11' : null
+}
+
 type AppRestartPrepOptions = {
   startedEventName: string
   abortedEventName: string
@@ -459,7 +473,9 @@ const api = {
     get: () => ({
       platform: process.platform,
       osRelease:
-        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ?? ''
+        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ??
+        '',
+      displayServer: getLinuxDisplayServer()
     })
   } satisfies PreloadApi['platform'],
 

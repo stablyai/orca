@@ -807,6 +807,7 @@ export type PreloadApi = {
     get: () => {
       platform: NodeJS.Platform
       osRelease: string
+      displayServer: 'wayland' | 'x11' | null
     }
   }
   e2e: {
