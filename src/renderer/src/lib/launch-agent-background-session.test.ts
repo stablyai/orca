@@ -180,7 +180,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/repo/worktree',
-        command: "claude '--dangerously-skip-permissions' 'run the automation'",
+        command: "claude '--dangerously-skip-permissions'",
         env: expect.objectContaining({
           ORCA_WORKTREE_ID: 'wt-1'
         }),
@@ -225,6 +225,15 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId,
+        content: 'run the automation',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true
+      })
+    )
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
   })
 
@@ -310,9 +319,17 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        command: "claude '--dangerously-skip-permissions'",
         connectionId: null,
         worktreeId: 'wt-1'
+      })
+    )
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "don't use powershell quoting",
+        agent: 'claude',
+        submit: true,
+        forcePaste: true
       })
     )
   })
@@ -331,6 +348,63 @@ describe('launchAgentBackgroundSession', () => {
       workspacePath: '/repo/worktree'
     })
     expect(mockSpawn).toHaveBeenCalled()
+  })
+
+  it('submits argv-mode prompts after ready instead of embedding them in the launch command', async () => {
+    const prompt = 'run the automation with "quotes", $(shell), and\nmultiple lines'
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'cursor',
+      worktreeId: 'wt-1',
+      prompt
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "cursor-agent '--yolo'"
+      })
+    )
+    expect(mockSpawn.mock.calls[0]?.[0]?.command).not.toContain(prompt)
+    const { tabId } = expectStablePaneSpawn()
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId,
+        content: prompt,
+        agent: 'cursor',
+        submit: true,
+        forcePaste: true
+      })
+    )
+  })
+
+  it('submits flag-mode prompts after ready instead of embedding them in the launch command', async () => {
+    const prompt = 'fix this without leaking --prompt into argv'
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'opencode',
+      worktreeId: 'wt-1',
+      prompt
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'opencode'
+      })
+    )
+    expect(mockSpawn.mock.calls[0]?.[0]?.command).not.toContain('--prompt')
+    expect(mockSpawn.mock.calls[0]?.[0]?.command).not.toContain(prompt)
+    const { tabId } = expectStablePaneSpawn()
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId,
+        content: prompt,
+        agent: 'opencode',
+        submit: true,
+        forcePaste: true
+      })
+    )
   })
 
   it('parses agent status from hidden PTY output', async () => {
@@ -371,6 +445,14 @@ describe('launchAgentBackgroundSession', () => {
     })
 
     const { paneKey } = expectStablePaneSpawn()
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'check the status spinner',
+        agent: 'command-code',
+        submit: true,
+        forcePaste: true
+      })
+    )
     expect(state.setAgentStatus).toHaveBeenCalledWith(
       paneKey,
       {
@@ -458,7 +540,7 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
+  it('waits for shell-ready before injecting SSH background commands with pasted prompts', async () => {
     vi.useFakeTimers()
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
@@ -471,24 +553,32 @@ describe('launchAgentBackgroundSession', () => {
         title: 'Nightly audit'
       })
 
-      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBe(
-        "claude '--dangerously-skip-permissions' 'run the automation'"
-      )
+      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBe("claude '--dangerously-skip-permissions'")
       expect(mockSpawn.mock.calls[0]?.[0]?.startupCommandDelivery).toBeUndefined()
+      const { tabId } = expectStablePaneSpawn()
+      expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId,
+          content: 'run the automation',
+          agent: 'claude',
+          submit: true,
+          forcePaste: true
+        })
+      )
       const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
+      expect(mockWrite).not.toHaveBeenCalled()
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "claude '--dangerously-skip-permissions' 'run the automation'\r"
-      )
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "claude '--dangerously-skip-permissions'\r")
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('waits for shell-ready before injecting payload-bearing SSH background commands', async () => {
+  it('waits for shell-ready before injecting SSH background Codex commands with pasted prompts', async () => {
     vi.useFakeTimers()
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
@@ -503,8 +593,18 @@ describe('launchAgentBackgroundSession', () => {
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
-          startupCommandDelivery: 'shell-ready'
+          command: "codex '--dangerously-bypass-approvals-and-sandbox'"
+        })
+      )
+      expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
+      const { tabId } = expectStablePaneSpawn()
+      expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId,
+          content: 'run the automation',
+          agent: 'codex',
+          submit: true,
+          forcePaste: true
         })
       )
       const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
@@ -517,7 +617,7 @@ describe('launchAgentBackgroundSession', () => {
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
       )
     } finally {
       vi.useRealTimers()
@@ -633,7 +733,7 @@ describe('launchAgentBackgroundSession', () => {
       method: 'terminal.create',
       params: expect.objectContaining({
         worktree: 'id:wt-1',
-        command: "claude '--dangerously-skip-permissions' 'run the automation'",
+        command: "claude '--dangerously-skip-permissions'",
         launchAgent: 'claude',
         env: expect.objectContaining({
           ORCA_PANE_KEY: `${tabId}:${leafId}`,
@@ -668,5 +768,14 @@ describe('launchAgentBackgroundSession', () => {
       paneKey: `${tabId}:${leafId}`,
       ptyId: 'remote:env-1@@terminal-1'
     })
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId,
+        content: 'run the automation',
+        agent: 'claude',
+        submit: true,
+        forcePaste: true
+      })
+    )
   })
 })

@@ -71,13 +71,20 @@ export async function launchAgentBackgroundSession(
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
+  const sshConnectionId = repo?.connectionId ?? null
+  // Route by the worktree's owner host, not the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+  )
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const shouldPastePromptAfterLaunch = hasPrompt
 
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
-  if (hasPrompt && isFollowupPath) {
+  if (shouldPastePromptAfterLaunch) {
+    // Why: automation prompts can be large and include shell metacharacters. Start
+    // the hosted TUI cleanly, then submit through its input path instead of argv.
     startupPlan = buildAgentStartupPlan({
       agent,
       prompt: '',
@@ -127,21 +134,19 @@ export async function launchAgentBackgroundSession(
     ORCA_WORKTREE_ID: worktreeId,
     ORCA_AGENT_LAUNCH_TOKEN: launchToken
   }
-  const sshConnectionId = repo?.connectionId ?? null
   const sshStartupDelivery = createSshBackgroundStartupDelivery({
     command: sshConnectionId ? startupPlan.launchCommand : null,
     waitForShellReady:
       Boolean(sshConnectionId) &&
-      shouldUseShellReadyStartupDelivery({
+      (shouldUseShellReadyStartupDelivery({
         command: startupPlan.launchCommand,
         startupCommandDelivery: startupPlan.startupCommandDelivery
-      }),
+      }) ||
+        // Why: prompts are now pasted after launch, but SSH still needs the
+        // bare startup command submitted only after the remote shell is writable.
+        shouldPastePromptAfterLaunch),
     write: (ptyId, data) => window.api.pty.write(ptyId, data)
   })
-  // Route by the worktree's owner host, not the focused runtime.
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
-  )
   let ptyId = ''
   try {
     if (runtimeTarget.kind === 'environment') {
@@ -220,7 +225,7 @@ export async function launchAgentBackgroundSession(
     store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
-  if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+  if (agent === 'command-code' && hasPrompt) {
     // Why: Command Code does not expose a prompt-start hook; seed working for
     // hidden prompt launches so sidebar/activity surfaces do not stay idle.
     store.setAgentStatus(
@@ -298,6 +303,7 @@ export async function launchAgentBackgroundSession(
       content: pasteDraftAfterLaunch,
       agent,
       submit: true,
+      forcePaste: true,
       onTimeout: () => showAutomationPromptNotSentToast(agent)
     })
   }
