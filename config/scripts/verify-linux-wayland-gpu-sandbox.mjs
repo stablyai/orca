@@ -8,13 +8,23 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { collectRendererDiagnostics } from './linux-wayland-renderer-diagnostics.mjs'
+import {
+  assertKeyboardInputWorks,
+  assertWheelScrollWorks,
+  setupTerminal
+} from './linux-wayland-terminal-exercise.mjs'
+import {
+  createPhaseLogger,
+  runWithTimeout,
+  startValidationWatchdog
+} from './linux-wayland-validation-watchdog.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const outMain = path.join(rootDir, 'out', 'main', 'index.js')
 const timeoutMs = 45_000
-const pollTimeoutMs = 2_500
+const rendererSetupTimeoutMs = 30_000
 const appCloseTimeoutMs = 5_000
-const typingSamples = 'abcdefghijklmnop'
+const validationWatchdogMs = 7 * 60_000
 const gpuCrashPattern =
   /GPU process (?:exited unexpectedly|isn't usable)|gpu_data_manager|exit[_ -]?code=8704/i
 
@@ -75,55 +85,6 @@ function createGitRepo() {
   return repoDir
 }
 
-function interactivePromptScript(runId) {
-  return `
-process.stdin.setEncoding('utf8')
-if (process.stdin.isTTY) process.stdin.setRawMode(true)
-process.stdin.resume()
-let seq = 0
-const interrupt = String.fromCharCode(3)
-process.stdout.write('WAYLAND_TYPING_READY_${runId}\\n')
-process.stdin.on('data', (chunk) => {
-  if (chunk.includes(interrupt)) {
-    process.exit(0)
-  }
-  for (const char of chunk) {
-    if (char === '\\r' || char === '\\n') continue
-    seq += 1
-    process.stdout.write('WAYLAND_TYPED_${runId}_' + seq + ':' + char + '\\n')
-  }
-})
-`
-}
-
-async function pollWithTimeout(label, read) {
-  const readPromise = Promise.resolve().then(read)
-  readPromise.catch(() => undefined)
-  // Why: the unfixed Wayland GPU stall can freeze renderer protocol calls, so
-  // each poll needs its own deadline instead of relying only on waitFor's loop.
-  const result = await Promise.race([
-    readPromise.then((value) => ({ timedOut: false, value })),
-    delay(pollTimeoutMs).then(() => ({ timedOut: true, value: null }))
-  ])
-  if (result.timedOut) {
-    throw new Error(`Timed out polling ${label} after ${pollTimeoutMs}ms.`)
-  }
-  return result.value
-}
-
-async function waitFor(label, read, timeout = timeoutMs) {
-  const startedAt = Date.now()
-  let lastValue
-  while (Date.now() - startedAt < timeout) {
-    lastValue = await pollWithTimeout(label, read)
-    if (lastValue) {
-      return lastValue
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-  throw new Error(`Timed out waiting for ${label}; last value: ${JSON.stringify(lastValue)}`)
-}
-
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -167,240 +128,6 @@ async function closeElectronApp(app) {
   }
 }
 
-async function getTerminalContent(page, charLimit = 12_000) {
-  return page.evaluate((limit) => {
-    const store = window.__store
-    if (!store || !window.__paneManagers) {
-      return ''
-    }
-    const state = store.getState()
-    const worktreeId = state.activeWorktreeId
-    const tabId =
-      state.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    return (pane?.serializeAddon?.serialize?.() ?? '').slice(-limit)
-  }, charLimit)
-}
-
-async function sendToTerminal(page, ptyId, text) {
-  await page.evaluate(
-    ({ ptyId: id, text: input }) => {
-      window.api.pty.write(id, input)
-    },
-    { ptyId, text }
-  )
-}
-
-async function focusActiveTerminal(page) {
-  await page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('No active terminal pane to focus.')
-    }
-    pane.terminal.focus()
-    pane.container.querySelector('.xterm-helper-textarea')?.focus()
-  })
-}
-
-async function setupTerminal(page, repoPath) {
-  await waitFor('renderer store exposure', () => page.evaluate(() => Boolean(window.__store)))
-  await waitFor('workspace session hydration', () =>
-    page.evaluate(() => {
-      const state = window.__store?.getState?.()
-      return Boolean(state?.workspaceSessionReady && state?.hydrationSucceeded)
-    })
-  )
-  const repoId = await page.evaluate(async (pathToAdd) => {
-    const result = await window.api.repos.add({ path: pathToAdd, kind: 'git' })
-    if ('error' in result) {
-      throw new Error(result.error)
-    }
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available.')
-    }
-    await store.getState().fetchRepos()
-    await store.getState().fetchWorktrees(result.repo.id, { requireAuthoritative: true })
-    return result.repo.id
-  }, repoPath)
-
-  // Why: startup hydration can reset activeWorktreeId; after it completes, set
-  // worktree, tab, and visible type in one renderer transaction for CI setup.
-  await waitFor('active terminal workspace setup', () =>
-    page.evaluate((id) => {
-      const store = window.__store
-      if (!store) {
-        return false
-      }
-      let state = store.getState()
-      const worktree = state.worktreesByRepo[id]?.[0]
-      if (!worktree) {
-        return false
-      }
-      state.setActiveWorktree(worktree.id)
-      state = store.getState()
-      const tabs = state.tabsByWorktree[worktree.id] ?? []
-      const tab =
-        tabs[0] ??
-        state.createTab(worktree.id, undefined, undefined, {
-          activate: true,
-          pendingActivationSpawn: true
-        })
-      state = store.getState()
-      state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
-      state = store.getState()
-      if (
-        state.activeWorktreeId !== worktree.id ||
-        state.activeTabType !== 'terminal' ||
-        state.activeTabId !== tab.id
-      ) {
-        return false
-      }
-      return true
-    }, repoId)
-  )
-
-  return waitFor('active terminal PTY binding', () =>
-    page.evaluate(() => {
-      const store = window.__store
-      const state = store?.getState()
-      const tabId = state?.activeTabId
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      return pane?.container?.dataset?.ptyId ?? null
-    })
-  )
-}
-
-async function assertWheelScrollWorks(page, ptyId, runId) {
-  await sendToTerminal(
-    page,
-    ptyId,
-    `for i in $(seq 1 160); do echo WAYLAND_SCROLL_${runId}_$i; done\r`
-  )
-  await waitFor('terminal scrollback marker', async () =>
-    (await getTerminalContent(page)).includes(`WAYLAND_SCROLL_${runId}_160`)
-  )
-  await focusActiveTerminal(page)
-  const before = await waitFor('scrollable terminal buffer', () =>
-    page.evaluate(() => {
-      const store = window.__store
-      const state = store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const tabId =
-        state?.activeTabType === 'terminal'
-          ? state.activeTabId
-          : worktreeId
-            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-            : null
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      if (!pane) {
-        return null
-      }
-      const buffer = pane.terminal.buffer.active
-      if (buffer.baseY < 40) {
-        return null
-      }
-      pane.terminal.scrollToBottom()
-      if (buffer.viewportY < buffer.baseY - 1) {
-        return null
-      }
-      const target =
-        pane.container.querySelector('.xterm-screen') ??
-        pane.container.querySelector('.xterm-viewport') ??
-        pane.terminal.element ??
-        pane.container
-      if (!(target instanceof HTMLElement)) {
-        return null
-      }
-      const viewport = pane.container.querySelector('.xterm-viewport')
-      const rect = target.getBoundingClientRect()
-      if (rect.width <= 0 || rect.height <= 0) {
-        return null
-      }
-      return {
-        viewportY: buffer.viewportY,
-        baseY: buffer.baseY,
-        scrollTop: viewport instanceof HTMLElement ? viewport.scrollTop : null,
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2
-      }
-    })
-  )
-  await page.mouse.move(before.x, before.y)
-  await page.mouse.wheel(0, -600)
-  const after = await waitFor('terminal wheel scroll response', () =>
-    page.evaluate((previousViewportY) => {
-      const store = window.__store
-      const state = store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const tabId =
-        state?.activeTabType === 'terminal'
-          ? state.activeTabId
-          : worktreeId
-            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-            : null
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      if (!pane) {
-        return null
-      }
-      const buffer = pane.terminal.buffer.active
-      const viewport = pane.container.querySelector('.xterm-viewport')
-      return buffer.viewportY < previousViewportY
-        ? {
-            viewportY: buffer.viewportY,
-            previousViewportY,
-            baseY: buffer.baseY,
-            scrollTop: viewport instanceof HTMLElement ? viewport.scrollTop : null
-          }
-        : null
-    }, before.viewportY)
-  )
-  return {
-    beforeScrollTop: before.scrollTop,
-    afterScrollTop: after.scrollTop,
-    beforeViewportY: before.viewportY,
-    afterViewportY: after.viewportY,
-    baseY: after.baseY
-  }
-}
-
-async function assertKeyboardInputWorks(page, ptyId, repoPath, runId) {
-  const scriptPath = path.join(repoPath, `.orca-wayland-typing-${runId}.mjs`)
-  writeFileSync(scriptPath, interactivePromptScript(runId))
-  await sendToTerminal(page, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-  await waitFor('interactive prompt readiness', async () =>
-    (await getTerminalContent(page)).includes(`WAYLAND_TYPING_READY_${runId}`)
-  )
-  await focusActiveTerminal(page)
-  for (const [index, char] of [...typingSamples].entries()) {
-    await page.keyboard.type(char)
-    await waitFor(`typed marker ${index + 1}`, async () =>
-      (await getTerminalContent(page)).includes(`WAYLAND_TYPED_${runId}_${index + 1}:${char}`)
-    )
-  }
-  await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
-  return typingSamples.length
-}
-
 async function runValidation(mode) {
   assertWaylandHost()
   ensureElectronRuntime()
@@ -414,23 +141,66 @@ async function runValidation(mode) {
   let terminalExerciseStarted = false
   let commandLineSwitches = null
   const stderrLines = []
+  const validationState = {
+    startedAt: Date.now(),
+    phase: 'initial'
+  }
+  const logPhase = createPhaseLogger({
+    startedAt: validationState.startedAt,
+    onPhase: (phase) => {
+      validationState.phase = phase
+    }
+  })
+  const stopWatchdog = startValidationWatchdog({
+    timeoutMs: validationWatchdogMs,
+    onTimeout: async () => {
+      const gpuCrashLines = stderrLines.filter((line) => gpuCrashPattern.test(line))
+      const rendererDiagnostics = await collectRendererDiagnostics(page)
+      const reproduced =
+        mode === 'expect-repro' && (terminalExerciseStarted || gpuCrashLines.length > 0)
+      const payload = {
+        mode,
+        watchdogTimedOut: true,
+        reproduced,
+        phase: validationState.phase,
+        elapsedMs: Date.now() - validationState.startedAt,
+        switches: commandLineSwitches,
+        rendererDiagnostics,
+        gpuCrashLines
+      }
+      const output = JSON.stringify(payload, null, 2)
+      if (reproduced) {
+        console.log(output)
+        return 0
+      }
+      console.error(output)
+      return 1
+    }
+  })
 
   try {
     const { ELECTRON_RUN_AS_NODE: _unused, DISPLAY: _display, ...env } = process.env
     void _unused
     void _display
-    app = await electron.launch({
-      args: ['--ozone-platform=wayland', outMain],
-      env: {
-        ...env,
-        NODE_ENV: 'development',
-        ORCA_DEV_USER_DATA_PATH: userDataPath,
-        ELECTRON_ENABLE_LOGGING: '1',
-        ELECTRON_ENABLE_STACK_DUMPING: '1',
-        ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
-        XDG_SESSION_TYPE: 'wayland'
-      }
-    })
+    logPhase('launch.start')
+    app = await runWithTimeout(
+      'Electron launch',
+      () =>
+        electron.launch({
+          args: ['--ozone-platform=wayland', outMain],
+          env: {
+            ...env,
+            NODE_ENV: 'development',
+            ORCA_DEV_USER_DATA_PATH: userDataPath,
+            ELECTRON_ENABLE_LOGGING: '1',
+            ELECTRON_ENABLE_STACK_DUMPING: '1',
+            ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
+            XDG_SESSION_TYPE: 'wayland'
+          }
+        }),
+      timeoutMs
+    )
+    logPhase('launch.done')
     app.process().stderr?.on('data', (chunk) => {
       const text = chunk.toString()
       stderrLines.push(...text.split(/\r?\n/).filter(Boolean))
@@ -439,15 +209,30 @@ async function runValidation(mode) {
       }
     })
 
-    await app.evaluate(async ({ app: electronApp }) => {
-      await electronApp.whenReady()
-    })
-    commandLineSwitches = await app.evaluate(({ app: electronApp }) => ({
-      disableGpuSandbox: electronApp.commandLine.hasSwitch('disable-gpu-sandbox'),
-      disableGpu: electronApp.commandLine.hasSwitch('disable-gpu'),
-      ozonePlatform: electronApp.commandLine.getSwitchValue('ozone-platform'),
-      enableFeatures: electronApp.commandLine.getSwitchValue('enable-features')
-    }))
+    logPhase('app.when-ready')
+    await runWithTimeout(
+      'Electron app readiness',
+      () =>
+        app.evaluate(async ({ app: electronApp }) => {
+          await electronApp.whenReady()
+        }),
+      rendererSetupTimeoutMs
+    )
+    commandLineSwitches = await runWithTimeout(
+      'Electron command-line switches',
+      () =>
+        app.evaluate(({ app: electronApp }) => ({
+          disableGpuSandbox: electronApp.commandLine.hasSwitch('disable-gpu-sandbox'),
+          disableGpu: electronApp.commandLine.hasSwitch('disable-gpu'),
+          ozonePlatform: electronApp.commandLine.getSwitchValue('ozone-platform'),
+          enableFeatures: electronApp.commandLine.getSwitchValue('enable-features')
+        })),
+      rendererSetupTimeoutMs
+    )
+    logPhase(
+      'app.switches',
+      `disableGpuSandbox=${commandLineSwitches.disableGpuSandbox} disableGpu=${commandLineSwitches.disableGpu}`
+    )
 
     if (mode === 'expect-repro' && commandLineSwitches.disableGpuSandbox) {
       throw new MissingReproductionError(
@@ -466,12 +251,20 @@ async function runValidation(mode) {
       throw new Error('Expected hardware acceleration to remain enabled, but --disable-gpu is set.')
     }
 
-    page = await app.firstWindow()
-    await page.waitForLoadState('domcontentloaded')
-    const ptyId = await setupTerminal(page, repoPath)
+    logPhase('window.first')
+    page = await runWithTimeout('first renderer window', () => app.firstWindow(), timeoutMs)
+    logPhase('window.load')
+    await runWithTimeout(
+      'renderer domcontentloaded',
+      () => page.waitForLoadState('domcontentloaded'),
+      rendererSetupTimeoutMs
+    )
+    logPhase('window.loaded')
+    const ptyId = await setupTerminal(page, repoPath, logPhase)
     terminalExerciseStarted = true
-    const scroll = await assertWheelScrollWorks(page, ptyId, runId)
-    const typedMarkers = await assertKeyboardInputWorks(page, ptyId, repoPath, runId)
+    logPhase('exercise.start')
+    const scroll = await assertWheelScrollWorks(page, ptyId, runId, logPhase)
+    const typedMarkers = await assertKeyboardInputWorks(page, ptyId, repoPath, runId, logPhase)
     const gpuCrashLines = stderrLines.filter((line) => gpuCrashPattern.test(line))
 
     if (mode === 'expect-repro') {
@@ -487,6 +280,7 @@ async function runValidation(mode) {
       JSON.stringify(
         {
           mode,
+          phase: validationState.phase,
           waylandDisplay: process.env.WAYLAND_DISPLAY ?? null,
           xdgSessionType: process.env.XDG_SESSION_TYPE ?? null,
           switches: commandLineSwitches,
@@ -512,6 +306,7 @@ async function runValidation(mode) {
             mode,
             reproduced: true,
             reason: error instanceof Error ? error.message : String(error),
+            phase: validationState.phase,
             switches: commandLineSwitches,
             rendererDiagnostics,
             gpuCrashLines
@@ -527,6 +322,7 @@ async function runValidation(mode) {
         {
           mode,
           reason: error instanceof Error ? error.message : String(error),
+          phase: validationState.phase,
           switches: commandLineSwitches,
           rendererDiagnostics,
           gpuCrashLines
@@ -537,6 +333,7 @@ async function runValidation(mode) {
     )
     throw error
   } finally {
+    stopWatchdog()
     await closeElectronApp(app)
     rmSync(repoPath, { recursive: true, force: true })
     rmSync(userDataPath, { recursive: true, force: true })

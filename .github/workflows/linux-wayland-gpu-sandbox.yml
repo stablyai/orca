@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/linux-wayland-gpu-sandbox.yml
       - config/scripts/linux-wayland-renderer-diagnostics.mjs
+      - config/scripts/linux-wayland-terminal-exercise.mjs
+      - config/scripts/linux-wayland-validation-watchdog.mjs
       - config/scripts/verify-linux-wayland-gpu-sandbox.mjs
       - src/main/startup/configure-process.ts
       - src/main/startup/configure-process.test.ts
