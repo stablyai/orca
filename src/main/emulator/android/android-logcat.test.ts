@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { logcatArgs, parseLogcatLine, type LogcatEntry } from './android-logcat'
 
 describe('logcatArgs', () => {
-  it('builds base streaming args with the time format', () => {
-    expect(logcatArgs('emulator-5554')).toEqual(['-s', 'emulator-5554', 'logcat', '-v', 'time'])
+  it('builds base streaming args with the threadtime format', () => {
+    expect(logcatArgs('emulator-5554')).toEqual([
+      '-s',
+      'emulator-5554',
+      'logcat',
+      '-v',
+      'threadtime'
+    ])
   })
 
   it('adds -d before the format when dump is true', () => {
@@ -13,7 +19,7 @@ describe('logcatArgs', () => {
       'logcat',
       '-d',
       '-v',
-      'time'
+      'threadtime'
     ])
   })
 
@@ -23,7 +29,7 @@ describe('logcatArgs', () => {
       'emulator-5554',
       'logcat',
       '-v',
-      'time',
+      'threadtime',
       '-t',
       '100'
     ])
@@ -35,7 +41,7 @@ describe('logcatArgs', () => {
       'emulator-5554',
       'logcat',
       '-v',
-      'time',
+      'threadtime',
       'MyTag:D',
       '*:S'
     ])
@@ -44,12 +50,23 @@ describe('logcatArgs', () => {
   it('combines dump, lines, and filters in order', () => {
     expect(
       logcatArgs('emulator-5554', { dump: true, lines: 50, filters: ['MyTag:D', '*:S'] })
-    ).toEqual(['-s', 'emulator-5554', 'logcat', '-d', '-v', 'time', '-t', '50', 'MyTag:D', '*:S'])
+    ).toEqual([
+      '-s',
+      'emulator-5554',
+      'logcat',
+      '-d',
+      '-v',
+      'threadtime',
+      '-t',
+      '50',
+      'MyTag:D',
+      '*:S'
+    ])
   })
 })
 
 describe('parseLogcatLine', () => {
-  it('parses a well-formed time-format line', () => {
+  it('parses a well-formed threadtime-format line', () => {
     expect(
       parseLogcatLine('06-26 12:00:00.123  1234  5678 D MyTag: hello world')
     ).toEqual<LogcatEntry>({

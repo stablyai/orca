@@ -5,9 +5,11 @@ import { cn } from '@/lib/utils'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { AndroidLogo, IosBrandIcon } from '../mobile/MobileBrandIcons'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
-import { MobileEmulatorSdkStatus } from './MobileEmulatorSdkStatus'
+import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
@@ -80,9 +82,23 @@ function deviceLabel(device: SimulatorDeviceRow): string {
   return `${name} (${state})`
 }
 
+function isAndroidDevice(device: SimulatorDeviceRow): boolean {
+  return device.runtime === 'Android'
+}
+
+function DeviceSelectItemLabel({ device }: { device: SimulatorDeviceRow }): React.JSX.Element {
+  const Icon = isAndroidDevice(device) ? AndroidLogo : IosBrandIcon
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Icon className="size-3.5 shrink-0 fill-current text-muted-foreground" />
+      <span className="truncate">{deviceLabel(device)}</span>
+    </span>
+  )
+}
+
 function availabilityDetail(availability: EmulatorAvailability | null): string {
   if (!availability) {
-    return 'Checking iOS (Xcode) and Android (Android Studio) emulator support.'
+    return 'Checking Android SDK and iOS Simulator support.'
   }
   if (availability.available) {
     return `${availability.devices.length} emulator device${
@@ -171,15 +187,18 @@ export function MobileEmulatorSettingsPane({
           onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
         />
 
-        <SettingsRow
-          alignTop
-          label={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
-            'Availability'
-          )}
-          description={availabilityDetail(availability)}
-          control={
-            <div className="flex items-center gap-2">
+        <div className="py-2">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
+                  'Availability'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">{availabilityDetail(availability)}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <Badge
                 variant="outline"
                 className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
@@ -205,8 +224,19 @@ export function MobileEmulatorSettingsPane({
                 )}
               </Button>
             </div>
-          }
-        />
+          </div>
+
+          {enabled ? (
+            <MobileEmulatorAvailabilityDetails
+              availability={availability}
+              configuredPath={settings.androidSdkPath ?? null}
+              onSetAndroidSdkPath={async (path) => {
+                await updateSettings({ androidSdkPath: path })
+                await refreshAvailability()
+              }}
+            />
+          ) : null}
+        </div>
 
         <SettingsRow
           alignTop
@@ -234,9 +264,10 @@ export function MobileEmulatorSettingsPane({
                   <SelectItem
                     key={device.udid}
                     value={device.udid}
+                    textValue={deviceLabel(device)}
                     disabled={device.isAvailable === false}
                   >
-                    {deviceLabel(device)}
+                    <DeviceSelectItemLabel device={device} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -244,17 +275,6 @@ export function MobileEmulatorSettingsPane({
           }
         />
       </SearchableSetting>
-
-      {enabled && availability ? (
-        <MobileEmulatorSdkStatus
-          availability={availability}
-          configuredPath={settings.androidSdkPath ?? null}
-          onSetAndroidSdkPath={async (path) => {
-            await updateSettings({ androidSdkPath: path })
-            await refreshAvailability()
-          }}
-        />
-      ) : null}
 
       {enabled ? (
         <SearchableSetting

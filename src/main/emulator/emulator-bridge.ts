@@ -313,9 +313,6 @@ export class EmulatorBridge {
   }
 
   private async backendForDevice(device: string): Promise<EmulatorBackend> {
-    if (this.backends.length === 1) {
-      return this.backends[0]
-    }
     for (const backend of this.backends) {
       if (await backend.ownsDevice(device)) {
         return backend

@@ -1,4 +1,4 @@
-import { ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { randomUUID } from 'crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
@@ -23,8 +23,14 @@ export function registerEmulatorVideoStreamHandlers(): void {
   ipcMain.handle(
     'emulator:videoStreamStart',
     (event, args: { deviceId: string; streamId?: string }) => {
-      emulatorProbe('video.subscribe', { deviceId: args.deviceId })
       const owner = event.sender
+      if (!BrowserWindow.fromWebContents(owner)) {
+        throw new Error('Emulator video stream must originate from a BrowserWindow.')
+      }
+      if (typeof args?.deviceId !== 'string') {
+        throw new Error('Emulator video stream requires a deviceId string.')
+      }
+      emulatorProbe('video.subscribe', { deviceId: args.deviceId })
       const streamId = args.streamId ?? randomUUID()
       const existing = subscriptions.get(streamId)
       if (existing && existing.owner !== owner) {

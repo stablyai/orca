@@ -1,9 +1,10 @@
 // Pure arg-building and line parsing for `adb logcat`. No process execution
 // here: the caller prepends the resolved adb binary path to every arg array.
 
-// `adb -s <serial> logcat` with `-d` to dump-and-exit (vs. follow), the `time`
-// format always, an optional `-t <lines>` tail, and trailing filterspec tokens
-// (e.g. ['MyTag:D', '*:S']) that must come last on the adb command line.
+// `adb -s <serial> logcat` with `-d` to dump-and-exit (vs. follow), the
+// `threadtime` format always (gives pid/tid and matches the parser), an optional
+// `-t <lines>` tail, and trailing filterspec tokens (e.g. ['MyTag:D', '*:S'])
+// that must come last on the adb command line.
 export function logcatArgs(
   serial: string,
   options?: { dump?: boolean; lines?: number; filters?: readonly string[] }
@@ -12,7 +13,7 @@ export function logcatArgs(
   if (options?.dump) {
     args.push('-d')
   }
-  args.push('-v', 'time')
+  args.push('-v', 'threadtime')
   if (options?.lines !== undefined) {
     args.push('-t', String(options.lines))
   }

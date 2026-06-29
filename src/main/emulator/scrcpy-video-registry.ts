@@ -6,6 +6,11 @@ import type { ScrcpyVideoMeta } from './android/scrcpy-video-frame-parser'
 // (keyframe + following deltas) so a late subscriber can initialize its WebCodecs
 // decoder and decode from the keyframe immediately, not after the next GOP.
 
+// scrcpy keyframes ~every 10s; high-motion content can otherwise buffer
+// hundreds of deltas. Cap the replayed GOP so memory stays bounded and a
+// late subscriber isn't flooded — always keep the keyframe at index 0.
+const MAX_GOP_FRAMES = 120
+
 export type ScrcpyVideoFrameMessage = {
   config: boolean
   keyFrame: boolean
@@ -60,6 +65,10 @@ class ScrcpyVideoRegistry {
       // Only buffer deltas once a keyframe anchors the GOP (a delta alone is
       // undecodable); deltas before the first keyframe are still sent live below.
       entry.gop.push(frame)
+      // Drop the oldest delta (never index 0, the keyframe) so replay stays decodable.
+      if (entry.gop.length > MAX_GOP_FRAMES) {
+        entry.gop.splice(1, 1)
+      }
     }
     for (const subscriber of entry.subscribers) {
       subscriber({ type: 'frame', frame })

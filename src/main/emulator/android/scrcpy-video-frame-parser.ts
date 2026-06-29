@@ -5,6 +5,9 @@
 
 const FRAME_HEADER_SIZE = 12
 const CODEC_META_SIZE = 12
+// scrcpy frames are well under this at the configured max_size; a larger
+// size means a desynced stream — fail fast instead of buffering toward OOM.
+const MAX_FRAME_BYTES = 16 * 1024 * 1024
 // Top two bits of the 64-bit PTS field carry packet flags.
 const CONFIG_FLAG = 1n << 63n
 const KEY_FRAME_FLAG = 1n << 62n
@@ -56,6 +59,9 @@ export function parseScrcpyVideoFrames(pending: Buffer, chunk: Buffer): ScrcpyFr
   while (buffer.length - offset >= FRAME_HEADER_SIZE) {
     const meta = buffer.readBigUInt64BE(offset)
     const size = buffer.readUInt32BE(offset + 8)
+    if (size > MAX_FRAME_BYTES) {
+      throw new Error(`scrcpy frame size ${size} exceeds ${MAX_FRAME_BYTES}; stream desynced`)
+    }
     const dataStart = offset + FRAME_HEADER_SIZE
     if (buffer.length - dataStart < size) {
       break

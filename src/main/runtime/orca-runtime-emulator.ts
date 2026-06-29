@@ -14,12 +14,18 @@ import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/types'
 
+// Settings slice the emulator surface needs; keeps the host contract honest (no widening cast).
+type EmulatorHostSettings = Pick<
+  GlobalSettings,
+  'mobileEmulatorEnabled' | 'mobileEmulatorDefaultDeviceUdid' | 'androidSdkPath'
+>
+
 // Why: dedicated file for "one surface" separation (emulator), parallel to orca-runtime-browser.ts. Keeps OrcaRuntimeService focused; emulator routing easy to scan. No max-lines disable (split further if grows; per AGENTS + plan Phase 3).
 export type RuntimeEmulatorCommandHost = {
   getEmulatorBridge(): EmulatorBridge | null
   resolveWorktreeSelector(selector: string): Promise<{ id: string }>
   getAuthoritativeWindow(): BrowserWindow
-  getSettings(): Pick<GlobalSettings, 'mobileEmulatorEnabled' | 'mobileEmulatorDefaultDeviceUdid'>
+  getSettings(): EmulatorHostSettings
 }
 
 type EmulatorTargetParams = { device?: string; emulator?: string; worktree?: string }
@@ -33,7 +39,7 @@ export class RuntimeEmulatorCommands {
       throw new EmulatorError('emulator_no_active', 'No emulator session is active')
     }
     // Honor the user's configured Android SDK path before the backend resolves it.
-    setConfiguredAndroidSdkPath((this.host.getSettings() as GlobalSettings).androidSdkPath ?? null)
+    setConfiguredAndroidSdkPath(this.host.getSettings().androidSdkPath ?? null)
     return bridge
   }
 
@@ -41,13 +47,9 @@ export class RuntimeEmulatorCommands {
   private static readonly OK = { ok: true as const }
 
   // High-level delegation (mirror browser* methods).
-  async emulatorTap(params: {
-    x: number
-    y: number
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<{ ok: true }> {
+  async emulatorTap(
+    params: EmulatorTargetParams & { x: number; y: number }
+  ): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.tap(params.x, params.y, { device: params.device ?? params.emulator, worktreeId })
@@ -303,23 +305,22 @@ export class RuntimeEmulatorCommands {
     return { ok: true, deviceUdid: shutdownUdid }
   }
 
-  // Why: mirror browser:pane-focus — scoped per worktree, no cross-worktree yank unless user is already there.
-  private notifyRendererEmulatorPaneFocus(worktreeId: string): void {
+  // Window may not exist during shutdown, so sends are best-effort.
+  private sendToRenderer(channel: string, payload: unknown): void {
     try {
-      const win = this.host.getAuthoritativeWindow()
-      win.webContents.send('emulator:pane-focus', { worktreeId })
+      this.host.getAuthoritativeWindow().webContents.send(channel, payload)
     } catch {
       // Window may not exist during shutdown
     }
   }
 
+  // Why: mirror browser:pane-focus — scoped per worktree, no cross-worktree yank unless user is already there.
+  private notifyRendererEmulatorPaneFocus(worktreeId: string): void {
+    this.sendToRenderer('emulator:pane-focus', { worktreeId })
+  }
+
   private notifyRendererEmulatorAutoAttach(worktreeId: string, info: EmulatorSessionInfo): void {
-    try {
-      const win = this.host.getAuthoritativeWindow()
-      win.webContents.send('ui:emulatorAutoAttach', { worktreeId, info })
-    } catch {
-      // Window may not exist during shutdown
-    }
+    this.sendToRenderer('ui:emulatorAutoAttach', { worktreeId, info })
   }
 
   // Raw for extensibility.

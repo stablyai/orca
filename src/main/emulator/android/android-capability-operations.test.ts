@@ -93,7 +93,7 @@ describe('dumpAndroidAccessibilityTree', () => {
 describe('captureAndroidLogcat', () => {
   it('dumps and parses non-empty logcat lines', async () => {
     const line = '06-26 12:00:00.123  1234  5678 D MyTag: hello'
-    const runner = runnerReturning({ '-s s logcat -d -v time': ok(`${line}\n`) })
+    const runner = runnerReturning({ '-s s logcat -d -v threadtime': ok(`${line}\n`) })
     const entries = await captureAndroidLogcat(runner, SDK, 's')
     expect(entries).toEqual([
       { timestamp: '06-26 12:00:00.123', level: 'D', tag: 'MyTag', message: 'hello' }

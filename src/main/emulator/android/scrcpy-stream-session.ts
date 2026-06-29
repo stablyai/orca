@@ -14,6 +14,7 @@ import {
 import {
   parseScrcpyVideoFrames,
   parseScrcpyVideoMeta,
+  type ScrcpyFrameParseResult,
   type ScrcpyVideoFrame,
   type ScrcpyVideoMeta
 } from './scrcpy-video-frame-parser'
@@ -197,6 +198,12 @@ export class ScrcpyStreamSession {
     socket.on('error', (error) =>
       emulatorProbeError('scrcpy.control.fail', error, { serial: this.options.serial })
     )
+    // Drop the ref on reset so sendControl() can't write to a dead socket (half-open session).
+    socket.on('close', () => {
+      if (this.controlSocket === socket) {
+        this.controlSocket = null
+      }
+    })
     this.controlSocket = socket
   }
 
@@ -226,9 +233,18 @@ export class ScrcpyStreamSession {
       this.rejectReady = null
       buffer = Buffer.from(buffer.subarray(12))
     }
-    const { frames, pending } = parseScrcpyVideoFrames(Buffer.alloc(0), buffer)
-    this.pendingVideo = pending
-    for (const frame of frames) {
+    // The parser throws on a desynced stream (e.g. an absurd frame size); catch
+    // it here so it fails the session via the normal teardown path rather than
+    // surfacing as an unhandled exception in this socket 'data' listener.
+    let result: ScrcpyFrameParseResult
+    try {
+      result = parseScrcpyVideoFrames(Buffer.alloc(0), buffer)
+    } catch (error) {
+      this.fail(error instanceof Error ? error.message : String(error))
+      return
+    }
+    this.pendingVideo = result.pending
+    for (const frame of result.frames) {
       this.callbacks.onFrame(frame)
     }
   }

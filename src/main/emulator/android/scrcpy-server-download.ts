@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { createWriteStream, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { get } from 'node:https'
+import { pipeline } from 'node:stream/promises'
 import type { IncomingMessage } from 'node:http'
 import { EmulatorError } from '../emulator-errors'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
@@ -76,8 +77,15 @@ function downloadTo(url: string, dest: string, redirects = 0): Promise<void> {
       const status = res.statusCode ?? 0
       // GitHub release downloads 302-redirect to the asset CDN.
       if (status >= 300 && status < 400 && res.headers.location) {
+        // Resolve relative Locations and refuse protocol downgrades (http:).
+        const next = new URL(res.headers.location, url)
+        if (next.protocol !== 'https:') {
+          res.resume()
+          reject(new Error(`refusing non-https redirect to ${next.protocol}`))
+          return
+        }
         res.resume()
-        downloadTo(res.headers.location, dest, redirects + 1).then(resolve, reject)
+        downloadTo(next.toString(), dest, redirects + 1).then(resolve, reject)
         return
       }
       if (status !== 200) {
@@ -85,10 +93,9 @@ function downloadTo(url: string, dest: string, redirects = 0): Promise<void> {
         reject(new Error(`HTTP ${status}`))
         return
       }
-      const file = createWriteStream(dest)
-      res.pipe(file)
-      file.on('finish', () => file.close(() => resolve()))
-      file.on('error', reject)
+      // pipeline destroys the write stream and rejects on any stream error
+      // (incl. mid-body errors on res), so the Promise always settles.
+      pipeline(res, createWriteStream(dest)).then(resolve, reject)
     })
     req.on('error', reject)
     // Don't hang forever if GitHub/CDN stalls before or during the response.

@@ -149,7 +149,14 @@ export function useEmulatorVideoStream(
       // to the next keyframe (Annex-B), since WebCodecs needs them with the IDR.
       if (msg.config) {
         if (!configured) {
-          decoder.configure({ codec: H264_CODEC, optimizeForLatency: true })
+          // configure() can throw synchronously (TypeError on a bad config); the
+          // decoder's async error callback won't catch it, so surface via fatal().
+          try {
+            decoder.configure({ codec: H264_CODEC, optimizeForLatency: true })
+          } catch (err) {
+            fatal(err instanceof Error ? err.message : 'Failed to configure the H.264 decoder.')
+            return
+          }
           configured = true
         }
         configBytes = data
@@ -168,13 +175,19 @@ export function useEmulatorVideoStream(
         chunkData.set(data, configBytes.length)
         configBytes = null
       }
-      decoder.decode(
-        new ChunkCtor({
-          type: msg.keyFrame ? 'key' : 'delta',
-          timestamp: (timestamp += 1),
-          data: chunkData
-        })
-      )
+      // decode() can throw synchronously (DataError/InvalidStateError on malformed
+      // wire bytes); the async error callback won't catch it, so surface via fatal().
+      try {
+        decoder.decode(
+          new ChunkCtor({
+            type: msg.keyFrame ? 'key' : 'delta',
+            timestamp: (timestamp += 1),
+            data: chunkData
+          })
+        )
+      } catch (err) {
+        fatal(err instanceof Error ? err.message : 'Failed to decode an Android video frame.')
+      }
     })
 
     void api
