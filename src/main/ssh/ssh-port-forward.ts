@@ -150,6 +150,10 @@ export class SshPortForwardManager {
     return forward.entry
   }
 
+  async removeForwardAndWait(id: string): Promise<PortForwardEntry | null> {
+    return this.removeForwardAsync(id)
+  }
+
   // Why: server.close()/process exit are async — callers that need to rebind
   // the same port (update/reconnect) must wait until the owner fully releases it.
   private removeForwardAsync(id: string): Promise<PortForwardEntry | null> {

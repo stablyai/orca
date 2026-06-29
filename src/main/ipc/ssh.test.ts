@@ -66,6 +66,7 @@ const {
     addForward: vi.fn(),
     updateForward: vi.fn(),
     removeForward: vi.fn(),
+    removeForwardAndWait: vi.fn(),
     listForwards: vi.fn().mockReturnValue([]),
     removeAllForwards: vi.fn(),
     dispose: vi.fn(),
@@ -301,6 +302,7 @@ describe('SSH IPC handlers', () => {
     mockPortForwardManager.addForward.mockReset()
     mockPortForwardManager.updateForward.mockReset()
     mockPortForwardManager.removeForward.mockReset()
+    mockPortForwardManager.removeForwardAndWait.mockReset()
     mockPortForwardManager.listForwards.mockReset().mockReturnValue([])
     mockPortForwardManager.removeAllForwards.mockReset()
     mockPortForwardManager.dispose.mockReset()
@@ -688,7 +690,7 @@ describe('SSH IPC handlers', () => {
       .mockResolvedValueOnce(forward)
       .mockResolvedValueOnce(newForward)
     mockPortForwardManager.updateForward.mockResolvedValue(updatedForward)
-    mockPortForwardManager.removeForward.mockReturnValue(updatedForward)
+    mockPortForwardManager.removeForwardAndWait.mockResolvedValue(updatedForward)
     mockPortForwardManager.listForwards.mockReturnValue([forward])
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })

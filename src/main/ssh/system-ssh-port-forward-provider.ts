@@ -16,7 +16,7 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
 
   async start(conn: SshConnection, options: PortForwardStartOptions): Promise<StartedPortForward> {
     const target = conn.getTarget()
-    const forward = startSystemSshPortForwardProcess(
+    const forward = await startSystemSshPortForwardProcess(
       target,
       options.localPort,
       options.remoteHost,

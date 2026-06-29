@@ -1,4 +1,5 @@
 import { createServer, type Server, type Socket } from 'net'
+import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import type {
   PortForwardStartOptions,
@@ -23,6 +24,7 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
     const server = createServer((socket) => {
       activeSockets.add(socket)
       socket.on('close', () => activeSockets.delete(socket))
+      socket.on('error', () => socket.destroy())
 
       client.forwardOut(
         options.localHost,
@@ -31,6 +33,11 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
         options.remotePort,
         (err, channel) => {
           if (err) {
+            socket.destroy()
+            return
+          }
+          if (closed || socket.destroyed) {
+            closeChannel(channel)
             socket.destroy()
             return
           }
@@ -90,4 +97,12 @@ function listen(server: Server, host: string, port: number): Promise<void> {
     server.once('listening', onListening)
     server.listen(port, host)
   })
+}
+
+function closeChannel(channel: ClientChannel): void {
+  try {
+    channel.close()
+  } catch {
+    /* best-effort cleanup for late ssh2 callbacks */
+  }
 }

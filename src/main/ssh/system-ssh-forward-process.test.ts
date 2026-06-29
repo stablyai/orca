@@ -1,10 +1,11 @@
 import { EventEmitter } from 'events'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-const { existsSyncMock, spawnMock, connectMock } = vi.hoisted(() => ({
+const { existsSyncMock, spawnMock, connectMock, createServerMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  connectMock: vi.fn()
+  connectMock: vi.fn(),
+  createServerMock: vi.fn()
 }))
 
 vi.mock('fs', async (importOriginal) => {
@@ -20,13 +21,15 @@ vi.mock('child_process', () => ({
 }))
 
 vi.mock('net', () => ({
-  connect: connectMock
+  connect: connectMock,
+  createServer: createServerMock
 }))
 
 import {
   SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS,
   SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS,
   spawnSystemSshPortForward,
+  startSystemSshPortForwardProcess,
   waitForSystemSshForwardStartup,
   waitForSystemSshForwardStop
 } from './system-ssh-forward-process'
@@ -74,6 +77,19 @@ function createFakeSocket(): FakeSocket {
   return socket
 }
 
+function createFakeServer() {
+  const server = new EventEmitter() as EventEmitter & {
+    listen: ReturnType<typeof vi.fn>
+    close: ReturnType<typeof vi.fn>
+  }
+  server.listen = vi.fn().mockImplementation(() => {
+    queueMicrotask(() => server.emit('listening'))
+    return server
+  })
+  server.close = vi.fn().mockImplementation((cb?: () => void) => cb?.())
+  return server
+}
+
 function mockSystemSshExists(): void {
   existsSyncMock.mockImplementation((p: string) => p === SYSTEM_SSH_PATH)
 }
@@ -83,6 +99,7 @@ describe('system SSH forward process', () => {
     existsSyncMock.mockReset()
     spawnMock.mockReset()
     connectMock.mockReset()
+    createServerMock.mockReset().mockImplementation(createFakeServer)
     mockSystemSshExists()
   })
 
@@ -126,6 +143,30 @@ describe('system SSH forward process', () => {
     const args = spawnMock.mock.calls[0][1] as string[]
     expect(args).toEqual(expect.arrayContaining(['-p', '2222', '-i', '/home/user/.ssh/id_ed25519']))
     expect(args).toContain('deploy@example.com')
+  })
+
+  it('does not spawn ssh when the requested local forward port is already in use', async () => {
+    const server = createFakeServer()
+    server.listen.mockImplementation(() => {
+      queueMicrotask(() => server.emit('error', new Error('EADDRINUSE')))
+      return server
+    })
+    createServerMock.mockReturnValue(server)
+
+    await expect(
+      startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
+    ).rejects.toThrow('Local port 127.0.0.1:5173 is not available')
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('spawns ssh after the requested local forward port preflight succeeds', async () => {
+    const child = createFakeProcess()
+    spawnMock.mockReturnValue(child)
+
+    const forward = await startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
+
+    expect(spawnMock).toHaveBeenCalled()
+    expect(forward.process).toBe(child)
   })
 
   it('rejects startup when ssh exits early with stderr', async () => {

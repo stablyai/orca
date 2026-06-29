@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { connect } from 'net'
+import { connect, createServer } from 'net'
 import { buildSshArgs, findSystemSsh } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
 
@@ -57,20 +57,43 @@ export function startSystemSshPortForwardProcess(
   localPort: number,
   remoteHost: string,
   remotePort: number
-): SystemSshPortForwardProcess {
-  const process = spawnSystemSshPortForward(target, localPort, remoteHost, remotePort)
-  return {
-    process,
-    waitForStartup: () => waitForSystemSshForwardStartup(process, localPort),
-    close: () => waitForSystemSshForwardStop(process),
-    dispose: () => {
-      try {
-        process.kill('SIGTERM')
-      } catch {
-        /* best-effort teardown */
+): Promise<SystemSshPortForwardProcess> {
+  return assertLocalForwardPortAvailable(localPort).then(() => {
+    const process = spawnSystemSshPortForward(target, localPort, remoteHost, remotePort)
+    return {
+      process,
+      waitForStartup: () => waitForSystemSshForwardStartup(process, localPort),
+      close: () => waitForSystemSshForwardStop(process),
+      dispose: () => {
+        try {
+          process.kill('SIGTERM')
+        } catch {
+          /* best-effort teardown */
+        }
       }
     }
-  }
+  })
+}
+
+export function assertLocalForwardPortAvailable(localPort: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    const cleanup = (): void => {
+      server.removeListener('error', onError)
+      server.removeListener('listening', onListening)
+    }
+    const onError = (err: Error): void => {
+      cleanup()
+      reject(new Error(`Local port 127.0.0.1:${localPort} is not available: ${err.message}`))
+    }
+    const onListening = (): void => {
+      cleanup()
+      server.close(() => resolve())
+    }
+    server.once('error', onError)
+    server.once('listening', onListening)
+    server.listen(localPort, '127.0.0.1')
+  })
 }
 
 export function waitForSystemSshForwardStartup(

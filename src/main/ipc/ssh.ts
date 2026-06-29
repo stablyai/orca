@@ -1107,8 +1107,8 @@ export function registerSshHandlers(
     }
   )
 
-  ipcMain.handle('ssh:removePortForward', (_event, args: { id: string }) => {
-    const removed = portForwardManager!.removeForward(args.id)
+  ipcMain.handle('ssh:removePortForward', async (_event, args: { id: string }) => {
+    const removed = await portForwardManager!.removeForwardAndWait(args.id)
     if (removed) {
       persistPortForwards(removed.connectionId)
       broadcastPortForwards(getCurrentMainWindow, removed.connectionId)
