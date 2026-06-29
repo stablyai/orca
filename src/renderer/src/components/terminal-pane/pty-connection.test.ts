@@ -2160,7 +2160,8 @@ describe('connectPanePty', () => {
     )
 
     const remountDeps = createDeps()
-    connectPanePty(createPane(1) as never, createManager(2) as never, remountDeps as never)
+    const remountPane = createPane(1)
+    connectPanePty(remountPane as never, createManager(2) as never, remountDeps as never)
 
     setupSpawn.resolve('pty-setup')
     mainSpawn.resolve('pty-main')
@@ -2171,8 +2172,36 @@ describe('connectPanePty', () => {
     expect(remountTransport.attach).toHaveBeenCalledWith(
       expect.objectContaining({ existingPtyId: 'pty-main' })
     )
+    expect(remountPane.container.dataset.ptyId).toBe('pty-main')
     expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-main')
     expect(remountDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-main')
+  })
+
+  it('binds a fresh spawn that resolves as a daemon reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    let currentPtyId: string | null = null
+    const transport = createMockTransport()
+    transport.getPtyId.mockImplementation(() => currentPtyId)
+    transport.connect.mockImplementation(async () => {
+      currentPtyId = 'pty-daemon-reattach'
+      return { id: currentPtyId, isReattach: true }
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+
+    const pane = createPane(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(pane.container.dataset.ptyId).toBe('pty-daemon-reattach')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-daemon-reattach')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-daemon-reattach')
   })
 
   it('drops xterm onData while pane is replaying restored bytes', async () => {
@@ -3272,12 +3301,14 @@ describe('connectPanePty', () => {
       restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
     })
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    const pane = createPane(1)
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
 
     expect(transport.attach).toHaveBeenCalledWith(
       expect.objectContaining({ existingPtyId: eagerPtyId })
     )
+    expect(pane.container.dataset.ptyId).toBe(eagerPtyId)
     expect(transport.connect).not.toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: eagerPtyId })
     )
