@@ -1105,10 +1105,11 @@ function TabBarInner({
                 const resolvedAgent =
                   resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') ??
                   resolveTabAgentFromTitle(terminalTab.title)
-                const detectedAgent = unifiedTabForItem
-                  ? (findTabAgentEntry(agentStatusByPaneKey ?? {}, unifiedTabForItem.id)
-                      ?.agentType ?? null)
-                  : null
+                // Key the live-agent lookup by the backing terminal tab id —
+                // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
+                // the unified tab id can differ from it.
+                const detectedAgent =
+                  findTabAgentEntry(agentStatusByPaneKey ?? {}, terminalTab.id)?.agentType ?? null
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
