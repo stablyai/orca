@@ -2667,6 +2667,12 @@ export default function SessionScreen() {
   }, [router])
 
   useEffect(() => {
+    // Why: Expo can reuse this screen across worktrees. Reset pending
+    // keyboard listeners, snapshot floors, and tombstones so prior route state
+    // cannot open stale UI or reject the next worktree's first snapshot.
+    sessionTabActionSheetRequestSeqRef.current += 1
+    sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+    sessionTabActionSheetKeyboardHideSubRef.current = null
     clearTerminalCache()
     activeHandleRef.current = null
     activeSessionTabTypeRef.current = null
@@ -2675,10 +2681,6 @@ export default function SessionScreen() {
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null
     initialEmptySessionAutoCreateRef.current = null
-    // Why: snapshot version floor and close tombstones are per-worktree. This
-    // screen can be reused across worktrees, so a prior worktree's high version
-    // would reject the next one's first snapshot (same renderer epoch) and stale
-    // tombstones could suppress same-id tabs.
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
@@ -2701,6 +2703,8 @@ export default function SessionScreen() {
     setFileDocs(new Map())
     clearDelayedActionTimers()
     return () => {
+      sessionTabActionSheetRequestSeqRef.current += 1
+      sessionTabActionSheetKeyboardHideSubRef.current?.remove()
       clearDelayedActionTimers()
     }
   }, [clearDelayedActionTimers, clearTerminalCache, hostId, worktreeId])
