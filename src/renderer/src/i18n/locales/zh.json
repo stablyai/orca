@@ -5131,7 +5131,11 @@
           "5567191a6e": "浏览",
           "0e9fc0eadc": "工作区目录",
           "e2955d9ccb": "配置创建新工作区的位置。",
-          "7511097c5d": "工作区"
+          "7511097c5d": "工作区",
+          "worktreeFolderNameTemplateTitle": "Workspace Folder Name Template",
+          "worktreeFolderNameTemplateDescription": "Sets the on-disk workspace folder name with tokens. Leave empty for the default name; nesting layout is unchanged.",
+          "worktreeFolderNameTemplatePlaceholder": "%projectName%_%workspaceName%",
+          "worktreeFolderNameTemplateTokens": "Tokens: %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, %shortId%."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "应用更改",
@@ -5788,7 +5792,11 @@
           "addPlannedHostToHost": "添加 {{host}}",
           "addPlannedHostConfirm": "这仅记录项目应在此主机上可用。你可以稍后添加文件夹或克隆。",
           "projectRuntime": "项目运行时",
-          "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。"
+          "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+          "worktreeFolderNameTemplateTitle": "Workspace Folder Name Template",
+          "worktreeFolderNameTemplateDescription": "Project-specific on-disk folder name pattern for new workspaces.",
+          "worktreeFolderNameTemplateDefaultPlaceholder": "Use global default",
+          "worktreeFolderNameTemplateTokens": "Tokens include %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, and %shortId%."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "命令模板",

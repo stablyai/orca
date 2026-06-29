@@ -149,6 +149,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
+    worktreeFolderNameTemplate: overrides.worktreeFolderNameTemplate ?? '',
     diffWordWrap: overrides.diffWordWrap ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',

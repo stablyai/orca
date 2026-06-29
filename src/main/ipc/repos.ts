@@ -1936,6 +1936,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
+            | 'worktreeFolderNameTemplate'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
@@ -1998,6 +1999,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           delete updates.worktreeBasePath
         } else {
           updates.worktreeBasePath = v.trim() || undefined
+        }
+      }
+      if (
+        'worktreeFolderNameTemplate' in updates &&
+        updates.worktreeFolderNameTemplate !== undefined
+      ) {
+        const v = updates.worktreeFolderNameTemplate as unknown
+        if (typeof v !== 'string') {
+          delete updates.worktreeFolderNameTemplate
+        } else {
+          updates.worktreeFolderNameTemplate = v.trim() || undefined
         }
       }
       if ('repoIcon' in updates) {

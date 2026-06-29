@@ -12,6 +12,7 @@ import {
   computeWorktreePath,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
+  getEffectiveWorktreeFolderNameTemplate,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
   shouldSetDisplayName,
@@ -277,6 +278,44 @@ describe('computeWorktreePath', () => {
         { useConfiguredAbsolutePath: true }
       )
     ).toBe('C:\\Remote\\worktrees\\feature')
+  })
+})
+
+describe('getEffectiveWorktreeFolderNameTemplate', () => {
+  it('prefers a non-empty repo template over the global template', () => {
+    expect(
+      getEffectiveWorktreeFolderNameTemplate(
+        { worktreeFolderNameTemplate: '  %projectName%_%workspaceName%  ' },
+        { worktreeFolderNameTemplate: '%workspaceName%' }
+      )
+    ).toBe('%projectName%_%workspaceName%')
+  })
+
+  it('falls back to the trimmed global template when the repo template is empty', () => {
+    expect(
+      getEffectiveWorktreeFolderNameTemplate(
+        { worktreeFolderNameTemplate: '   ' },
+        { worktreeFolderNameTemplate: '  %workspaceName%  ' }
+      )
+    ).toBe('%workspaceName%')
+  })
+
+  it('returns an empty string when no template is configured', () => {
+    expect(
+      getEffectiveWorktreeFolderNameTemplate(
+        { worktreeFolderNameTemplate: undefined },
+        { worktreeFolderNameTemplate: '   ' }
+      )
+    ).toBe('')
+  })
+
+  it('tolerates a global settings object missing the field (pre-existing persisted settings)', () => {
+    // Why: settings persisted before this field existed omit it entirely;
+    // resolving the template must not throw on the absent global.
+    expect(getEffectiveWorktreeFolderNameTemplate({}, {})).toBe('')
+    expect(
+      getEffectiveWorktreeFolderNameTemplate({ worktreeFolderNameTemplate: '%workspaceName%' }, {})
+    ).toBe('%workspaceName%')
   })
 })
 

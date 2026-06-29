@@ -6,11 +6,14 @@ import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
-type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'>
+type RepositoryWorktreeDefaultsUpdate = Pick<
+  Repo,
+  'worktreeBasePath' | 'worktreeBaseRef' | 'worktreeFolderNameTemplate'
+>
 
 type RepositoryWorktreeDefaultsSectionProps = {
   repo: Repo
-  settings: Pick<GlobalSettings, 'workspaceDir'> | null
+  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeFolderNameTemplate'> | null
   updateRepo: (repoId: string, updates: Partial<RepositoryWorktreeDefaultsUpdate>) => void
   forceVisible: boolean
 }
@@ -21,6 +24,7 @@ export function RepositoryWorktreeDefaultsSection({
   updateRepo,
   forceVisible
 }: RepositoryWorktreeDefaultsSectionProps): React.JSX.Element {
+  const globalFolderNameTemplate = settings?.worktreeFolderNameTemplate?.trim() || ''
   return (
     <>
       <SearchableSetting
@@ -99,6 +103,79 @@ export function RepositoryWorktreeDefaultsSection({
           {translate(
             'auto.components.settings.RepositoryPane.15a99d9b9f',
             'Relative paths resolve from this project root.'
+          )}
+        </p>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.RepositoryPane.worktreeFolderNameTemplateTitle',
+          'Workspace Folder Name Template'
+        )}
+        description={translate(
+          'auto.components.settings.RepositoryPane.worktreeFolderNameTemplateDescription',
+          'Project-specific on-disk folder name pattern for new workspaces.'
+        )}
+        keywords={[
+          repo.displayName,
+          'worktree folder',
+          'workspace folder',
+          'folder name',
+          'template',
+          'token'
+        ]}
+        className="space-y-2"
+        forceVisible={forceVisible}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <Label className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.RepositoryPane.worktreeFolderNameTemplateTitle',
+              'Workspace Folder Name Template'
+            )}
+          </Label>
+          {repo.worktreeFolderNameTemplate ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => updateRepo(repo.id, { worktreeFolderNameTemplate: undefined })}
+            >
+              {translate('auto.components.settings.RepositoryPane.8ccacbeb5a', 'Use Global')}
+            </Button>
+          ) : null}
+        </div>
+        <RepoSettingsDraftInput
+          repoId={repo.id}
+          storeValue={repo.worktreeFolderNameTemplate ?? ''}
+          placeholder={
+            globalFolderNameTemplate ||
+            translate(
+              'auto.components.settings.RepositoryPane.worktreeFolderNameTemplateDefaultPlaceholder',
+              'Use global default'
+            )
+          }
+          onTextChange={() => {}}
+          onBlur={(e) => {
+            const worktreeFolderNameTemplate = e.currentTarget.value.trim() || undefined
+            if (
+              worktreeFolderNameTemplate === (repo.worktreeFolderNameTemplate?.trim() || undefined)
+            ) {
+              return
+            }
+            updateRepo(repo.id, { worktreeFolderNameTemplate })
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              e.currentTarget.blur()
+            }
+          }}
+          className="h-9 text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.RepositoryPane.worktreeFolderNameTemplateTokens',
+            'Tokens include %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, and %shortId%.'
           )}
         </p>
       </SearchableSetting>

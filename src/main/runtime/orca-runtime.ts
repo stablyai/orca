@@ -39,7 +39,7 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
-import { createHash, randomUUID } from 'crypto'
+import { createHash, randomBytes, randomUUID } from 'crypto'
 import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
@@ -624,6 +624,7 @@ import {
   computeWorkspaceRoot,
   ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
+  getEffectiveWorktreeFolderNameTemplate,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
   isOrphanCompatiblePreflightError,
@@ -633,6 +634,10 @@ import {
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
+import {
+  buildWorktreeFolderNameTokens,
+  expandWorktreeFolderName
+} from '../ipc/worktree-folder-name-template'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaLeftoverDirectory,
@@ -760,6 +765,7 @@ type RuntimeStore = {
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
+    worktreeFolderNameTemplate?: string
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
@@ -10032,6 +10038,7 @@ export class OrcaRuntimeService {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
+        | 'worktreeFolderNameTemplate'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -10054,6 +10061,12 @@ export class OrcaRuntimeService {
     const sanitizedUpdates = omitUndefinedProperties(updates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
+    }
+    if (
+      'worktreeFolderNameTemplate' in updates &&
+      updates.worktreeFolderNameTemplate === undefined
+    ) {
+      sanitizedUpdates.worktreeFolderNameTemplate = undefined
     }
     if (
       'externalWorktreeDiscoverySuppressedAt' in updates &&
@@ -12633,6 +12646,22 @@ export class OrcaRuntimeService {
       username,
       localWorktreeGitOptions
     )
+    const folderNameTemplate = getEffectiveWorktreeFolderNameTemplate(repo, settings)
+    const folderShortId = randomBytes(4).toString('hex')
+    const folderNow = Date.now()
+    const folderLeafBase =
+      expandWorktreeFolderName(
+        folderNameTemplate,
+        buildWorktreeFolderNameTokens({
+          repoPath: repo.path,
+          sanitizedName,
+          branchName,
+          settings,
+          username,
+          now: folderNow,
+          shortId: folderShortId
+        })
+      ) ?? sanitizedName
 
     const baseBranch =
       args.baseBranch ||
@@ -12727,6 +12756,7 @@ export class OrcaRuntimeService {
     let worktreePathResolved = !args.branchNameOverride
     for (let suffix = 1; suffix < 100; suffix += 1) {
       effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
+      const effectiveFolderLeaf = suffix === 1 ? folderLeafBase : `${folderLeafBase}-${suffix}`
       effectiveRequestedName =
         suffix === 1
           ? args.name
@@ -12734,7 +12764,7 @@ export class OrcaRuntimeService {
             ? `${args.name}-${suffix}`
             : effectiveSanitizedName
       worktreePath = ensurePathWithinWorkspace(
-        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
+        computeWorktreePath(effectiveFolderLeaf, repo.path, worktreePathSettings),
         workspaceRoot
       )
       if (!args.branchNameOverride || !(await pathExists(worktreePath))) {

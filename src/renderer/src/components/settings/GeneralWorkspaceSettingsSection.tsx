@@ -1,5 +1,8 @@
+import { useId } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
@@ -15,6 +18,7 @@ export function GeneralWorkspaceSettingsSection({
   settings,
   updateSettings
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
+  const folderNameTemplateInputId = useId()
   return (
     <section key="workspace" className="space-y-4">
       <SettingsSubsectionHeader
@@ -29,6 +33,48 @@ export function GeneralWorkspaceSettingsSection({
       />
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.worktreeFolderNameTemplateTitle',
+          'Workspace Folder Name Template'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.worktreeFolderNameTemplateDescription',
+          'Sets the on-disk workspace folder name with tokens. Leave empty for the default name; nesting layout is unchanged.'
+        )}
+        keywords={['folder', 'name', 'template', 'pattern', 'token', 'workspace', 'directory']}
+        className="space-y-2"
+      >
+        <Label htmlFor={folderNameTemplateInputId}>
+          {translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.worktreeFolderNameTemplateTitle',
+            'Workspace Folder Name Template'
+          )}
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.worktreeFolderNameTemplateDescription',
+            'Sets the on-disk workspace folder name with tokens. Leave empty for the default name; nesting layout is unchanged.'
+          )}
+        </p>
+        <Input
+          id={folderNameTemplateInputId}
+          value={settings.worktreeFolderNameTemplate}
+          onChange={(e) => updateSettings({ worktreeFolderNameTemplate: e.target.value })}
+          placeholder={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.worktreeFolderNameTemplatePlaceholder',
+            '%projectName%_%workspaceName%'
+          )}
+          className="h-9 text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.worktreeFolderNameTemplateTokens',
+            'Tokens: %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, %shortId%.'
+          )}
+        </p>
+      </SearchableSetting>
 
       <SearchableSetting
         title={translate(

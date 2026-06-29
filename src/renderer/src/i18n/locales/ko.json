@@ -5131,7 +5131,11 @@
           "5567191a6e": "찾아보기",
           "0e9fc0eadc": "워크스페이스 디렉토리",
           "e2955d9ccb": "새 워크스페이스가 생성되는 위치를 구성합니다.",
-          "7511097c5d": "워크스페이스"
+          "7511097c5d": "워크스페이스",
+          "worktreeFolderNameTemplateTitle": "Workspace Folder Name Template",
+          "worktreeFolderNameTemplateDescription": "Sets the on-disk workspace folder name with tokens. Leave empty for the default name; nesting layout is unchanged.",
+          "worktreeFolderNameTemplatePlaceholder": "%projectName%_%workspaceName%",
+          "worktreeFolderNameTemplateTokens": "Tokens: %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, %shortId%."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "변경 사항 적용",
@@ -5788,7 +5792,11 @@
           "addPlannedHostToHost": "{{host}} 추가",
           "addPlannedHostConfirm": "이 프로젝트를 이 호스트에서 사용할 예정이라는 사실만 기록합니다. 폴더 추가나 클론은 나중에 할 수 있습니다.",
           "projectRuntime": "프로젝트 런타임",
-          "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다."
+          "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다.",
+          "worktreeFolderNameTemplateTitle": "Workspace Folder Name Template",
+          "worktreeFolderNameTemplateDescription": "Project-specific on-disk folder name pattern for new workspaces.",
+          "worktreeFolderNameTemplateDefaultPlaceholder": "Use global default",
+          "worktreeFolderNameTemplateTokens": "Tokens include %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, and %shortId%."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "명령 템플릿",

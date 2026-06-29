@@ -185,6 +185,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
     nestWorkspaces: true,
+    worktreeFolderNameTemplate: '',
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,

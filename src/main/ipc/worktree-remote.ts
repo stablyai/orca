@@ -10,7 +10,7 @@
 import type { BrowserWindow } from 'electron'
 import { posix, win32 } from 'path'
 import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type {
   AutomationWorkspaceProvenance,
@@ -72,11 +72,16 @@ import {
   ensurePathWithinWorkspace,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
+  getEffectiveWorktreeFolderNameTemplate,
   hasRepoWorktreeBasePath,
   shouldSetDisplayName,
   mergeWorktree,
   areWorktreePathsEqual
 } from './worktree-logic'
+import {
+  buildWorktreeFolderNameTokens,
+  expandWorktreeFolderName
+} from './worktree-folder-name-template'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
@@ -1427,8 +1432,24 @@ export async function createRemoteWorktree(
     settings,
     username
   )
+  const folderNameTemplate = getEffectiveWorktreeFolderNameTemplate(repo, settings)
+  const folderShortId = randomBytes(4).toString('hex')
+  const folderNow = Date.now()
+  const folderLeafBase =
+    expandWorktreeFolderName(
+      folderNameTemplate,
+      buildWorktreeFolderNameTokens({
+        repoPath: repo.path,
+        sanitizedName,
+        branchName,
+        settings,
+        username,
+        now: folderNow,
+        shortId: folderShortId
+      })
+    ) ?? sanitizedName
 
-  let remotePath = computeRemoteWorktreePath(sanitizedName, repo.path, worktreePathSettings, {
+  let remotePath = computeRemoteWorktreePath(folderLeafBase, repo.path, worktreePathSettings, {
     useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
   })
 
@@ -1468,20 +1489,16 @@ export async function createRemoteWorktree(
   let remotePathResolved = !args.branchNameOverride
   for (let suffix = 1; args.branchNameOverride && suffix < 100; suffix += 1) {
     effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
+    const effectiveFolderLeaf = suffix === 1 ? folderLeafBase : `${folderLeafBase}-${suffix}`
     effectiveRequestedName =
       suffix === 1
         ? args.name
         : args.name.trim()
           ? `${args.name}-${suffix}`
           : effectiveSanitizedName
-    remotePath = computeRemoteWorktreePath(
-      effectiveSanitizedName,
-      repo.path,
-      worktreePathSettings,
-      {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
-      }
-    )
+    remotePath = computeRemoteWorktreePath(effectiveFolderLeaf, repo.path, worktreePathSettings, {
+      useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+    })
     if (!(await remotePathExists(fsProvider, remotePath))) {
       remotePathResolved = true
       break
@@ -1658,9 +1675,7 @@ export async function createRemoteWorktree(
   const gitWorktrees = await timing.time('list_created_worktree', async () =>
     provider.listWorktrees(repo.path)
   )
-  const created = gitWorktrees.find(
-    (gw) => gw.branch?.endsWith(branchName) || gw.path.endsWith(effectiveSanitizedName)
-  )
+  const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, remotePath))
   if (!created) {
     throw new Error('Worktree created but not found in listing')
   }
@@ -1945,6 +1960,10 @@ export async function createLocalWorktree(
   let effectiveSanitizedName = sanitizedName
   let branchName = ''
   let worktreePath = ''
+  const folderNameTemplate = getEffectiveWorktreeFolderNameTemplate(repo, settings)
+  const folderShortId = randomBytes(4).toString('hex')
+  const folderNow = Date.now()
+  let folderLeafBase = ''
 
   // Why: silently resolve branch/path/PR name collisions by appending -2/-3/etc.
   // instead of failing and forcing the user back to the name picker. This is
@@ -1980,6 +1999,21 @@ export async function createLocalWorktree(
       username,
       localWorktreeGitOptions
     )
+    if (suffix === 1) {
+      folderLeafBase =
+        expandWorktreeFolderName(
+          folderNameTemplate,
+          buildWorktreeFolderNameTokens({
+            repoPath: repo.path,
+            sanitizedName,
+            branchName,
+            settings,
+            username,
+            now: folderNow,
+            shortId: folderShortId
+          })
+        ) ?? sanitizedName
+    }
     checkoutExistingBranch = await canCheckoutExistingLocalBranch(
       repo.path,
       branchName,
@@ -2070,8 +2104,9 @@ export async function createLocalWorktree(
       }
     }
 
+    const effectiveFolderLeaf = suffix === 1 ? folderLeafBase : `${folderLeafBase}-${suffix}`
     worktreePath = ensurePathWithinWorkspace(
-      computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
+      computeWorktreePath(effectiveFolderLeaf, repo.path, worktreePathSettings),
       workspaceRoot
     )
     if (existsSync(worktreePath)) {

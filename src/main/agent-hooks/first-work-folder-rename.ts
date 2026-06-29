@@ -9,6 +9,7 @@ import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { planWorktreeFolderRename } from '../ipc/worktree-folder-rename-target'
+import { getEffectiveWorktreeFolderNameTemplate } from '../ipc/worktree-logic'
 
 export type FirstWorkFolderRenameDeps = {
   getRepo: (repoId: string) => Repo | undefined
@@ -39,12 +40,14 @@ export async function renameWorktreeFolderOnFirstWork(
   if (!repo || !parsed) {
     return false
   }
+  const settings = deps.getSettings()
   const plan = planWorktreeFolderRename({
     repoId: repo.id,
     repoPath: repo.path,
     oldWorktreePath: parsed.worktreePath,
     newLeaf,
-    settings: deps.getSettings(),
+    settings,
+    worktreeFolderNameTemplate: getEffectiveWorktreeFolderNameTemplate(repo, settings),
     platform: process.platform,
     isRemote: getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
   })

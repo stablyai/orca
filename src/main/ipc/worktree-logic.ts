@@ -7,6 +7,11 @@ import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+// Why: optional here on purpose — settings persisted before this field existed
+// can omit it, and partial settings shapes (e.g. the runtime store) type it loose.
+type WorktreeFolderNameTemplateSettings = Partial<
+  Pick<GlobalSettings, 'worktreeFolderNameTemplate'>
+>
 
 export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
 export { mergeWorktree } from './worktree-metadata-merge'
@@ -153,6 +158,17 @@ export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): b
   return getRepoWorktreeBasePath(repo) !== undefined
 }
 
+export function getEffectiveWorktreeFolderNameTemplate(
+  repo: Pick<Repo, 'worktreeFolderNameTemplate'>,
+  settings: WorktreeFolderNameTemplateSettings
+): string {
+  // Why: settings persisted before this field existed (or partial settings
+  // shapes) can omit it, so guard the global before trimming.
+  return (
+    getRepoWorktreeFolderNameTemplate(repo) ?? settings.worktreeFolderNameTemplate?.trim() ?? ''
+  )
+}
+
 export function areWorktreePathsEqual(
   leftPath: string,
   rightPath: string,
@@ -234,6 +250,13 @@ function getEffectiveWorktreeBasePath(
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
   const trimmed = repo.worktreeBasePath?.trim()
+  return trimmed || undefined
+}
+
+function getRepoWorktreeFolderNameTemplate(
+  repo: Pick<Repo, 'worktreeFolderNameTemplate'>
+): string | undefined {
+  const trimmed = repo.worktreeFolderNameTemplate?.trim()
   return trimmed || undefined
 }
 

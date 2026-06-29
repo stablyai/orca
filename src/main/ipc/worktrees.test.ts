@@ -789,6 +789,66 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('expands a configured folder-name template into the on-disk worktree leaf', async () => {
+    // Why: the template must drive the folder leaf passed to path computation
+    // (and therefore `git worktree add`) while leaving the branch name alone.
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace',
+      worktreeFolderNameTemplate: '%projectName%_%workspaceName%'
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo_feature',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature'
+    })) as CreateWorktreeResult
+
+    expect(computeWorktreePathMock).toHaveBeenCalledWith('repo_feature', '/workspace/repo', {
+      nestWorkspaces: false,
+      workspaceDir: '/workspace'
+    })
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/repo_feature',
+      'feature',
+      'origin/main',
+      false
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({ path: '/workspace/repo_feature', branch: 'feature' })
+    })
+  })
+
+  it('keeps the legacy sanitized leaf when no folder-name template is set', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'feature' })
+
+    expect(computeWorktreePathMock).toHaveBeenCalledWith('feature', '/workspace/repo', {
+      nestWorkspaces: false,
+      workspaceDir: '/workspace'
+    })
+  })
+
   it('registers local worktree roots immediately after create', async () => {
     listWorktreesMock.mockResolvedValue([
       {

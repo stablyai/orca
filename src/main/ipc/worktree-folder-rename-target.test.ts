@@ -65,4 +65,30 @@ describe('planWorktreeFolderRename', () => {
       })
     ).toBeNull()
   })
+
+  it('skips when a folder-name template is configured (folder leaf is user-authored)', () => {
+    expect(
+      planWorktreeFolderRename({
+        ...base,
+        oldWorktreePath: '/ws/cunner',
+        newLeaf: 'fix-auth',
+        worktreeFolderNameTemplate: '%projectName%_%workspaceName%'
+      })
+    ).toBeNull()
+  })
+
+  it('still plans a rename when the template override is blank/whitespace', () => {
+    expect(
+      planWorktreeFolderRename({
+        ...base,
+        oldWorktreePath: '/ws/cunner',
+        newLeaf: 'fix-auth',
+        worktreeFolderNameTemplate: '   '
+      })
+    ).toEqual({
+      oldPath: '/ws/cunner',
+      newPath: '/ws/fix-auth',
+      newWorktreeId: 'repo1::/ws/fix-auth'
+    })
+  })
 })

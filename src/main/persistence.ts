@@ -1254,6 +1254,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'upstream'
       | 'gitRemoteIdentity'
       | 'worktreeBasePath'
+      | 'worktreeFolderNameTemplate'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
     >
@@ -1298,6 +1299,17 @@ function sanitizeRepoUpdatesForPersistence<
       sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
     } else {
       delete sanitized.worktreeBasePath
+    }
+  }
+  if (
+    'worktreeFolderNameTemplate' in sanitized &&
+    sanitized.worktreeFolderNameTemplate !== undefined
+  ) {
+    if (typeof sanitized.worktreeFolderNameTemplate === 'string') {
+      sanitized.worktreeFolderNameTemplate =
+        sanitized.worktreeFolderNameTemplate.trim() || undefined
+    } else {
+      delete sanitized.worktreeFolderNameTemplate
     }
   }
   if ('projectHostSetupMethod' in sanitized) {
@@ -3892,6 +3904,7 @@ export class Store {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
+        | 'worktreeFolderNameTemplate'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -3948,6 +3961,13 @@ export class Store {
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath
       delete sanitizedUpdates.worktreeBasePath
+    }
+    if (
+      'worktreeFolderNameTemplate' in sanitizedUpdates &&
+      sanitizedUpdates.worktreeFolderNameTemplate === undefined
+    ) {
+      delete repo.worktreeFolderNameTemplate
+      delete sanitizedUpdates.worktreeFolderNameTemplate
     }
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&

@@ -5146,7 +5146,11 @@
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
           "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace"
+          "7511097c5d": "Workspace",
+          "worktreeFolderNameTemplateTitle": "Workspace Folder Name Template",
+          "worktreeFolderNameTemplateDescription": "Sets the on-disk workspace folder name with tokens. Leave empty for the default name; nesting layout is unchanged.",
+          "worktreeFolderNameTemplatePlaceholder": "%projectName%_%workspaceName%",
+          "worktreeFolderNameTemplateTokens": "Tokens: %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, %shortId%."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -5840,7 +5844,11 @@
           "addPlannedHostToHost": "Add {{host}}",
           "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+          "worktreeFolderNameTemplateTitle": "Workspace Folder Name Template",
+          "worktreeFolderNameTemplateDescription": "Project-specific on-disk folder name pattern for new workspaces.",
+          "worktreeFolderNameTemplateDefaultPlaceholder": "Use global default",
+          "worktreeFolderNameTemplateTokens": "Tokens include %projectName%, %workspaceName%, %gitBranchName%, %gitBranchSlug%, %branchPrefix%, %gitUsername%, %date%, and %shortId%."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",

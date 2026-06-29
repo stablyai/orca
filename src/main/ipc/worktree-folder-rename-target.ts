@@ -28,9 +28,15 @@ export function planWorktreeFolderRename(args: {
   oldWorktreePath: string
   newLeaf: string
   settings: WorktreePathSettings
+  worktreeFolderNameTemplate?: string
   platform: NodeJS.Platform
   isRemote: boolean
 }): WorktreeFolderRenamePlan | null {
+  // Why: a configured folder-name template makes the folder leaf user-authored,
+  // so first-work auto-rename should not fight it.
+  if (args.worktreeFolderNameTemplate?.trim()) {
+    return null
+  }
   if (args.isRemote || args.platform === 'win32') {
     return null
   }
