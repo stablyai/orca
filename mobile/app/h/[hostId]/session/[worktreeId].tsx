@@ -229,6 +229,7 @@ import type {
 } from './mobile-session-route-types'
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
+const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
 // Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
 // photos can exceed the upload byte budget; resize the raster down to fit before upload.
@@ -1048,6 +1049,10 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
+    typeof Keyboard.addListener
+  > | null>(null)
+  const sessionTabActionSheetRequestSeqRef = useRef(0)
   const dictationRouteContextRef = useRef<{
     readonly handle: string | null
     readonly liveInputEnabled: boolean
@@ -3165,6 +3170,72 @@ export default function SessionScreen() {
     liveInputRef.current?.focus()
   }, [canSend, liveInputEnabled])
 
+  const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
+    sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+    sessionTabActionSheetKeyboardHideSubRef.current = null
+  }, [])
+
+  const openSessionTabActionSheet = useCallback((tab: MobileSessionTab) => {
+    if (tab.type === 'terminal') {
+      if (typeof tab.terminal !== 'string') {
+        return
+      }
+      setActionTarget({
+        handle: tab.terminal,
+        title: tab.title,
+        isActive: tab.terminal === activeHandleRef.current
+      })
+    } else if (tab.type === 'markdown') {
+      setMarkdownActionTarget(tab)
+    } else if (tab.type === 'file') {
+      setFileActionTarget(tab)
+    } else {
+      setBrowserActionTarget(tab)
+    }
+  }, [])
+
+  const openSessionTabActionSheetAfterKeyboardDismiss = useCallback(
+    (tab: MobileSessionTab) => {
+      // Why: live input can have a queued refocus; action sheets should open after
+      // the terminal keyboard is gone, not race it under the drawer.
+      sessionTabActionSheetRequestSeqRef.current += 1
+      const requestSeq = sessionTabActionSheetRequestSeqRef.current
+      clearSessionTabActionSheetKeyboardListener()
+      let didOpen = false
+      const openAfterDismiss = () => {
+        if (didOpen || requestSeq !== sessionTabActionSheetRequestSeqRef.current) {
+          return
+        }
+        didOpen = true
+        clearSessionTabActionSheetKeyboardListener()
+        openSessionTabActionSheet(tab)
+      }
+
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+
+      if (keyboardHeight <= 0) {
+        liveInputRef.current?.blur()
+        Keyboard.dismiss()
+        openAfterDismiss()
+        return
+      }
+
+      sessionTabActionSheetKeyboardHideSubRef.current = Keyboard.addListener(
+        'keyboardDidHide',
+        openAfterDismiss
+      )
+      liveInputRef.current?.blur()
+      Keyboard.dismiss()
+      scheduleDelayedAction(openAfterDismiss, TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS)
+    },
+    [
+      clearSessionTabActionSheetKeyboardListener,
+      keyboardHeight,
+      openSessionTabActionSheet,
+      scheduleDelayedAction
+    ]
+  )
+
   const handleTerminalTap = useCallback(
     (handle: string) => {
       if (handle !== activeHandleRef.current) {
@@ -3571,9 +3642,17 @@ export default function SessionScreen() {
       clearToastHideTimer()
       clearDelayedActionTimers()
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      sessionTabActionSheetRequestSeqRef.current += 1
+      clearSessionTabActionSheetKeyboardListener()
       stopAccessoryRepeat()
     },
-    [clearDelayedActionTimers, clearTerminalCache, clearToastHideTimer, stopAccessoryRepeat]
+    [
+      clearDelayedActionTimers,
+      clearSessionTabActionSheetKeyboardListener,
+      clearTerminalCache,
+      clearToastHideTimer,
+      stopAccessoryRepeat
+    ]
   )
 
   const handleSelectionMode = useCallback((handle: string, active: boolean) => {
@@ -4596,22 +4675,7 @@ export default function SessionScreen() {
                     onPress={() => switchSessionTab(t)}
                     onLongPress={() => {
                       triggerMediumImpact()
-                      if (t.type === 'terminal') {
-                        if (typeof t.terminal !== 'string') {
-                          return
-                        }
-                        setActionTarget({
-                          handle: t.terminal,
-                          title: t.title,
-                          isActive: t.terminal === activeHandle
-                        })
-                      } else if (t.type === 'markdown') {
-                        setMarkdownActionTarget(t)
-                      } else if (t.type === 'file') {
-                        setFileActionTarget(t)
-                      } else {
-                        setBrowserActionTarget(t)
-                      }
+                      openSessionTabActionSheetAfterKeyboardDismiss(t)
                     }}
                     delayLongPress={400}
                   >
