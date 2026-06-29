@@ -62,6 +62,115 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     }
   })
 
+  it('answers OSC foreground and background color queries from the active theme', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = {
+      foreground: '#2e3434',
+      background: '#ffffff'
+    }
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false
+    })
+
+    try {
+      await writeTerminal(term, '\x1b]10;?\x1b\\\x1b]11;?\x1b\\')
+
+      expect(sendInput).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+      expect(sendInput).toHaveBeenCalledWith('\x1b]11;rgb:ffff/ffff/ffff\x1b\\')
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('answers OSC color queries for active rgba and modern rgb theme colors', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = {
+      foreground: 'rgb(245 245 244 / 92%)',
+      background: 'rgba(17, 34, 51, 0.5)'
+    }
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false
+    })
+
+    try {
+      await writeTerminal(term, '\x1b]10;?\x1b\\\x1b]11;?\x1b\\')
+
+      expect(sendInput).toHaveBeenCalledWith('\x1b]10;rgb:f5f5/f5f5/f4f4\x1b\\')
+      expect(sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/2222/3333\x1b\\')
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('leaves non-query OSC color commands to other handlers', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = {
+      foreground: '#2e3434',
+      background: '#ffffff'
+    }
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const returnValues: boolean[] = []
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: {
+        registerCsiHandler: (id, cb) =>
+          term.parser.registerCsiHandler(id, (params) => cb(params) === true),
+        registerOscHandler: (id, cb) =>
+          term.parser.registerOscHandler(id, (data) => {
+            const value = cb(data) === true
+            returnValues.push(value)
+            return value
+          })
+      },
+      sendInput,
+      isReplaying: () => false
+    })
+
+    try {
+      await writeTerminal(term, '\x1b]10;#123456\x1b\\')
+
+      expect(sendInput).not.toHaveBeenCalled()
+      expect(returnValues).toEqual([false])
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('consumes replayed OSC color queries without sending input to the shell', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    term.options.theme = {
+      foreground: '#2e3434',
+      background: '#ffffff'
+    }
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b]11;?\x1b\\')
+
+      expect(sendInput).not.toHaveBeenCalled()
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
   it('answers window and cell pixel-size reports from renderer geometry', () => {
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
     const observe = createTerminalPixelSizeQueryResponder(
@@ -125,10 +234,12 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       parser: {
         registerCsiHandler: (id, cb) =>
           term.parser.registerCsiHandler(id, (params) => {
-            const value = cb(params) as boolean
+            const value = cb(params) === true
             returnValues.push(value)
             return value
-          })
+          }),
+        registerOscHandler: (id, cb) =>
+          term.parser.registerOscHandler(id, (data) => cb(data) === true)
       },
       sendInput,
       isReplaying: () => false

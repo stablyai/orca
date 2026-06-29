@@ -112,11 +112,7 @@ export function MobileSourceControlPanel({
         />
       )}
 
-      <MobileSourceControlModals
-        state={state}
-        worktreeId={worktreeId}
-        actionSheetActions={actionSheetActions}
-      />
+      <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />
     </View>
   )
 }

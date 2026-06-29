@@ -1,20 +1,16 @@
 /**
- * Polling-based file watcher for WSL paths.
+ * WSL-native file watcher for WSL paths.
  *
- * Why: @parcel/watcher uses ReadDirectoryChangesW which doesn't work across
- * the WSL network filesystem boundary (\\wsl.localhost\…).  Instead of
- * requiring the user to install extra tools inside WSL, we poll the
- * directory tree via Node's fs.readdir (which works on UNC paths) and diff
- * against a snapshot to detect changes.  A 2 s poll interval is a good
- * balance between responsiveness and CPU cost — nobody stares at the file
- * explorer waiting for instant refresh.
+ * Why: polling \\wsl.localhost from Windows keeps waking the distro after
+ * `wsl --shutdown`, which can make WSL look wedged. Keep the polling process
+ * inside the distro so shutdown kills it instead of Orca restarting WSL.
  */
-import type { Dirent } from 'fs'
-import { readdir } from 'fs/promises'
-import * as path from 'path'
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
+import { StringDecoder } from 'string_decoder'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import { queueWatcherEvents } from './filesystem-watcher-event-batch'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -40,135 +36,115 @@ export type WslWatcherDeps = {
 }
 
 const POLL_INTERVAL_MS = 2000
-const SNAPSHOT_CHILD_READ_CONCURRENCY = 8
-const DIFF_EVENT_OVERFLOW_LIMIT = MAX_BATCHED_WATCHER_EVENTS + 1
+const POLL_INTERVAL_SECONDS = Math.max(1, Math.ceil(POLL_INTERVAL_MS / 1000))
+const STARTUP_TIMEOUT_MS = 10_000
+const SNAPSHOT_START = '\x1e'
+const SNAPSHOT_END = '\x1f'
+const MAX_STREAM_BUFFER_CHARS = 10 * 1024 * 1024
 
-type DirSnapshot = Map<string, Set<string>>
+type WslSnapshotEntry = {
+  path: string
+  type: string
+  mtime: string
+}
 
-async function readDirEntriesSafe(dirPath: string): Promise<Dirent[]> {
-  try {
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    return entries
-  } catch {
-    return []
+type WslSnapshot = Map<string, WslSnapshotEntry>
+
+function toWslUncPath(linuxPath: string, distro: string): string {
+  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
+}
+
+function quoteSafeFindName(name: string): string {
+  if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
+    throw new Error(`Unsupported WSL watcher ignore name: ${name}`)
   }
+  return `'${name}'`
 }
 
-function shouldIgnore(name: string, ignoreDirs: string[]): boolean {
-  return ignoreDirs.includes(name)
+function buildPruneExpression(ignoreDirs: readonly string[]): string {
+  if (ignoreDirs.length === 0) {
+    return ''
+  }
+  const names = ignoreDirs.map((name) => `-name ${quoteSafeFindName(name)}`).join(' -o ')
+  return `\\( -type d \\( ${names} \\) -prune \\) -o`
 }
 
-async function forEachWithConcurrency<T>(
-  items: readonly T[],
-  limit: number,
-  worker: (item: T) => Promise<void>
-): Promise<void> {
-  let nextIndex = 0
-  const workerCount = Math.min(limit, items.length)
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < items.length) {
-        const item = items[nextIndex++]
-        await worker(item)
-      }
-    })
-  )
+function buildSnapshotScript(ignoreDirs: readonly string[]): string {
+  const prune = buildPruneExpression(ignoreDirs)
+  return [
+    'set -efu',
+    'root=$1',
+    'while :; do',
+    "  printf '\\036'",
+    '  if [ -d "$root" ]; then',
+    `    find "$root" -mindepth 1 -maxdepth 2 ${prune} -printf '%y\\t%T@\\t%p\\0' 2>/dev/null || true`,
+    '  fi',
+    "  printf '\\037'",
+    `  sleep ${POLL_INTERVAL_SECONDS} || exit 0`,
+    'done'
+  ].join('\n')
 }
 
-/**
- * Take a snapshot of the root directory and one level of subdirectories.
- * Returns a map of dirPath → set of entry names.
- */
-async function takeSnapshot(rootPath: string, ignoreDirs: string[]): Promise<DirSnapshot> {
-  const snapshot: DirSnapshot = new Map()
-
-  const rootEntries = await readDirEntriesSafe(rootPath)
-  const filtered = rootEntries.filter((entry) => !shouldIgnore(entry.name, ignoreDirs))
-  snapshot.set(rootPath, new Set(filtered.map((entry) => entry.name)))
-
-  // Why: poll one level of subdirectories so changes inside immediate
-  // children are detected, but use Dirent metadata to avoid probing every
-  // root-level file with a failing readdir on each WSL poll.
-  const childDirs = filtered.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-  await forEachWithConcurrency(childDirs, SNAPSHOT_CHILD_READ_CONCURRENCY, async (entry) => {
-    const childPath = path.join(rootPath, entry.name)
-    const childEntries = await readDirEntriesSafe(childPath)
-    const childFiltered = childEntries
-      .filter((childEntry) => !shouldIgnore(childEntry.name, ignoreDirs))
-      .map((childEntry) => childEntry.name)
-    snapshot.set(childPath, new Set(childFiltered))
-  })
-
+function parseSnapshotFrame(frame: string, distro: string): WslSnapshot {
+  const snapshot: WslSnapshot = new Map()
+  for (const rawEntry of frame.split('\0')) {
+    if (!rawEntry) {
+      continue
+    }
+    const firstTab = rawEntry.indexOf('\t')
+    const secondTab = firstTab === -1 ? -1 : rawEntry.indexOf('\t', firstTab + 1)
+    if (firstTab <= 0 || secondTab <= firstTab + 1) {
+      continue
+    }
+    const linuxPath = rawEntry.slice(secondTab + 1)
+    if (!linuxPath.startsWith('/')) {
+      continue
+    }
+    const entry: WslSnapshotEntry = {
+      type: rawEntry.slice(0, firstTab),
+      mtime: rawEntry.slice(firstTab + 1, secondTab),
+      path: toWslUncPath(linuxPath, distro)
+    }
+    snapshot.set(entry.path, entry)
+  }
   return snapshot
 }
 
-function appendDiffEvent(events: WatcherEvent[], event: WatcherEvent): boolean {
-  events.push(event)
-  return events.length >= DIFF_EVENT_OVERFLOW_LIMIT
-}
-
-/**
- * Diff two snapshots and return synthetic watcher events.
- */
-function diffSnapshots(prev: DirSnapshot, next: DirSnapshot): WatcherEvent[] {
+function diffSnapshots(prev: WslSnapshot, next: WslSnapshot): WatcherEvent[] {
   const events: WatcherEvent[] = []
 
-  for (const [dirPath, nextEntries] of next) {
-    const prevEntries = prev.get(dirPath)
-    if (!prevEntries) {
-      // New directory appeared — emit create for all entries
-      for (const name of nextEntries) {
-        if (
-          appendDiffEvent(events, {
-            type: 'create',
-            path: path.join(dirPath, name)
-          } as WatcherEvent)
-        ) {
-          return events
-        }
-      }
+  for (const [entryPath, nextEntry] of next) {
+    const prevEntry = prev.get(entryPath)
+    if (!prevEntry) {
+      events.push({ type: 'create', path: entryPath } as WatcherEvent)
       continue
     }
-
-    // Check for new entries (create)
-    for (const name of nextEntries) {
-      if (!prevEntries.has(name)) {
-        if (
-          appendDiffEvent(events, {
-            type: 'create',
-            path: path.join(dirPath, name)
-          } as WatcherEvent)
-        ) {
-          return events
-        }
-      }
+    if (prevEntry.type !== nextEntry.type) {
+      events.push({ type: 'delete', path: entryPath } as WatcherEvent)
+      events.push({ type: 'create', path: entryPath } as WatcherEvent)
+      continue
     }
-
-    // Check for removed entries (delete)
-    for (const name of prevEntries) {
-      if (!nextEntries.has(name)) {
-        if (
-          appendDiffEvent(events, {
-            type: 'delete',
-            path: path.join(dirPath, name)
-          } as WatcherEvent)
-        ) {
-          return events
-        }
-      }
+    if (prevEntry.mtime !== nextEntry.mtime) {
+      events.push({ type: 'update', path: entryPath } as WatcherEvent)
     }
   }
 
-  // Check for directories that disappeared entirely
-  for (const [dirPath] of prev) {
-    if (!next.has(dirPath)) {
-      if (appendDiffEvent(events, { type: 'delete', path: dirPath } as WatcherEvent)) {
-        return events
-      }
+  for (const entryPath of prev.keys()) {
+    if (!next.has(entryPath)) {
+      events.push({ type: 'delete', path: entryPath } as WatcherEvent)
     }
   }
 
   return events
+}
+
+function markOverflowWithoutUncStat(root: WatchedRoot): void {
+  if (root.batch.timer) {
+    clearTimeout(root.batch.timer)
+    root.batch.timer = null
+  }
+  root.batch.events = []
+  root.batch.overflowed = true
 }
 
 export async function createWslWatcher(
@@ -176,54 +152,181 @@ export async function createWslWatcher(
   worktreePath: string,
   deps: WslWatcherDeps
 ): Promise<WatchedRoot> {
+  const wsl = parseWslUncPath(worktreePath)
+  if (!wsl) {
+    throw new Error(`Not a WSL path: ${worktreePath}`)
+  }
+  const distro = wsl.distro
+  const linuxPath = wsl.linuxPath
+
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
     batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
   }
 
-  // Take initial snapshot
-  let prevSnapshot = await takeSnapshot(worktreePath, deps.ignoreDirs)
-
-  let polling = false
   let disposed = false
-  const poll = async (): Promise<void> => {
-    if (polling || disposed) {
+  let prevSnapshot: WslSnapshot | null = null
+  let stopped = false
+  let streamBuffer = ''
+  const stdoutDecoder = new StringDecoder('utf8')
+  const stderrDecoder = new StringDecoder('utf8')
+  let stderrTail = ''
+
+  let resolveInitial!: () => void
+  let rejectInitial!: (error: Error) => void
+  let initialSettled = false
+  const initialSnapshotReady = new Promise<void>((resolve, reject) => {
+    resolveInitial = resolve
+    rejectInitial = reject
+  })
+
+  function settleInitial(error?: Error): void {
+    if (initialSettled) {
       return
     }
-    polling = true
-    try {
-      const nextSnapshot = await takeSnapshot(worktreePath, deps.ignoreDirs)
-      if (disposed) {
-        return
-      }
-      const events = diffSnapshots(prevSnapshot, nextSnapshot)
-      prevSnapshot = nextSnapshot
-
-      if (events.length > 0) {
-        queueWatcherEvents(root.batch, events)
-        deps.scheduleBatchFlush(rootKey, root)
-      }
-    } catch {
-      // Why: if the WSL filesystem becomes temporarily unavailable
-      // (e.g. WSL distro shuts down), skip this poll cycle rather
-      // than crashing.  The next cycle will retry.
-    } finally {
-      polling = false
+    initialSettled = true
+    if (error) {
+      rejectInitial(error)
+    } else {
+      resolveInitial()
     }
   }
 
-  const intervalId = setInterval(() => {
-    // Why: WSL UNC scans can exceed the poll interval on large repos or cold
-    // network filesystems. Run at most one tree diff at a time so a slow scan
-    // cannot stack concurrent readdir storms on the same root.
-    void poll()
-  }, POLL_INTERVAL_MS)
+  function signalWatcherStopped(): void {
+    if (stopped) {
+      return
+    }
+    if (!prevSnapshot) {
+      return
+    }
+    stopped = true
+    markOverflowWithoutUncStat(root)
+    deps.scheduleBatchFlush(rootKey, root)
+    deps.watchedRoots.delete(rootKey)
+  }
+
+  function ingestFrame(frame: string): void {
+    const nextSnapshot = parseSnapshotFrame(frame, distro)
+    if (!prevSnapshot) {
+      prevSnapshot = nextSnapshot
+      settleInitial()
+      return
+    }
+    const events = diffSnapshots(prevSnapshot, nextSnapshot)
+    prevSnapshot = nextSnapshot
+
+    if (events.length > 0) {
+      queueWatcherEvents(root.batch, events)
+      deps.scheduleBatchFlush(rootKey, root)
+    }
+  }
+
+  function drainFrames(): void {
+    while (true) {
+      const start = streamBuffer.indexOf(SNAPSHOT_START)
+      if (start === -1) {
+        streamBuffer = streamBuffer.slice(-1)
+        return
+      }
+      if (start > 0) {
+        streamBuffer = streamBuffer.slice(start)
+      }
+      const end = streamBuffer.indexOf(SNAPSHOT_END, 1)
+      if (end === -1) {
+        if (streamBuffer.length > MAX_STREAM_BUFFER_CHARS) {
+          streamBuffer = ''
+          markOverflowWithoutUncStat(root)
+          deps.scheduleBatchFlush(rootKey, root)
+        }
+        return
+      }
+      const frame = streamBuffer.slice(1, end)
+      streamBuffer = streamBuffer.slice(end + 1)
+      ingestFrame(frame)
+    }
+  }
+
+  let child: ChildProcessWithoutNullStreams
+  try {
+    child = spawn('wsl.exe', ['-d', distro, '--', 'sh', '-s', '--', linuxPath], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(String(error))
+  }
+
+  const startupTimer = setTimeout(() => {
+    settleInitial(new Error(`Timed out starting WSL watcher for ${worktreePath}`))
+    child.kill()
+  }, STARTUP_TIMEOUT_MS)
+
+  child.stdin.on('error', (error) => {
+    // Why: WSL can exit before reading the script; handle EPIPE here so the
+    // startup failure rejects the watcher instead of crashing on a stream error.
+    if (!initialSettled) {
+      settleInitial(error)
+    }
+  })
+
+  child.stdout.on('data', (chunk: Buffer) => {
+    if (disposed) {
+      return
+    }
+    streamBuffer += stdoutDecoder.write(chunk)
+    drainFrames()
+  })
+
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderrTail = (stderrTail + stderrDecoder.write(chunk)).slice(-4096)
+  })
+
+  child.stdout.on('error', (error) => {
+    if (!initialSettled) {
+      settleInitial(error)
+      return
+    }
+    if (!disposed) {
+      signalWatcherStopped()
+    }
+  })
+
+  child.stderr.on('error', () => {
+    // Ignore diagnostic stream failures; stdout/close determine watcher state.
+  })
+
+  child.once('error', (error) => {
+    if (!initialSettled) {
+      settleInitial(error)
+      return
+    }
+    if (!disposed) {
+      signalWatcherStopped()
+    }
+  })
+
+  child.once('close', (code, signal) => {
+    if (!initialSettled) {
+      const suffix = stderrTail.trim() ? `: ${stderrTail.trim()}` : ''
+      settleInitial(
+        new Error(`WSL watcher exited before first snapshot (${code ?? signal})${suffix}`)
+      )
+      return
+    }
+    if (!disposed) {
+      signalWatcherStopped()
+    }
+  })
+
+  child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
+
+  await initialSnapshotReady.finally(() => clearTimeout(startupTimer))
 
   root.subscription = {
     unsubscribe: async () => {
       disposed = true
-      clearInterval(intervalId)
+      child.kill()
     }
   }
 

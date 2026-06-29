@@ -39,6 +39,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
+import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
   isNonFastForwardRemoteError,
   resolveRemoteOperationErrorMessage
@@ -657,6 +658,7 @@ export type EditorSlice = {
     requestKey: string,
     result: { summary: GitBranchCompareSummary; entries: GitBranchChangeEntry[] }
   ) => void
+  clearGitBranchCompare: (worktreeId: string) => void
 
   // File search state
   fileSearchStateByWorktree: Record<
@@ -3545,8 +3547,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
   fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
+    const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
     try {
-      const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
       const status = await getRuntimeGitUpstreamStatus(
         {
           settings: runtimeSettings,
@@ -3567,6 +3569,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // re-publish, clobbering the upstream relationship. If the branch is
       // genuinely newly unpublished, the polling effect will eventually correct
       // the status on success.
+      if (pushTarget) {
+        // Why: an old automatic poll cache entry must not suppress the next
+        // retry after a post-push/fetch refresh fails transiently.
+        invalidateAutomaticPushTargetUpstreamStatusCache({
+          settings: runtimeSettings,
+          worktreeId,
+          worktreePath,
+          connectionId,
+          pushTarget
+        })
+      }
       console.error('fetchUpstreamStatus failed', error)
       return null
     }
@@ -3856,6 +3869,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitBranchCompareSummaryByWorktree: summaryUnchanged
           ? s.gitBranchCompareSummaryByWorktree
           : { ...s.gitBranchCompareSummaryByWorktree, [worktreeId]: result.summary }
+      }
+    }),
+  // Why: when the compare base resolves to "no base" (e.g. the prefer-upstream
+  // setting is on and the branch has no upstream), drop any stale summary so the
+  // committed-changes section and "vs" row disappear instead of lingering.
+  clearGitBranchCompare: (worktreeId) =>
+    set((s) => {
+      if (
+        s.gitBranchCompareSummaryByWorktree[worktreeId] === undefined &&
+        s.gitBranchChangesByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestKeyByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId] === undefined
+      ) {
+        return s
+      }
+      const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
+      const nextChanges = { ...s.gitBranchChangesByWorktree }
+      const nextRequestKey = { ...s.gitBranchCompareRequestKeyByWorktree }
+      const nextRequestHead = { ...s.gitBranchCompareRequestStatusHeadByWorktree }
+      delete nextSummary[worktreeId]
+      delete nextChanges[worktreeId]
+      delete nextRequestKey[worktreeId]
+      delete nextRequestHead[worktreeId]
+      return {
+        gitBranchCompareSummaryByWorktree: nextSummary,
+        gitBranchChangesByWorktree: nextChanges,
+        gitBranchCompareRequestKeyByWorktree: nextRequestKey,
+        gitBranchCompareRequestStatusHeadByWorktree: nextRequestHead
       }
     }),
 

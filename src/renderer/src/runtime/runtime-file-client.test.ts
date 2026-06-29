@@ -6,6 +6,7 @@ import {
   copyRuntimePath,
   createRuntimePath,
   deleteRuntimePath,
+  downloadRuntimeFile,
   getRuntimeFileReadScope,
   importExternalPathsToRuntime,
   listRuntimeFiles,
@@ -36,6 +37,12 @@ const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
 const fsPathExists = vi.fn()
 const fsSearch = vi.fn()
+const fsDownloadFile = vi.fn()
+const fsSaveDownloadedFile = vi.fn()
+const fsStartDownloadedFile = vi.fn()
+const fsAppendDownloadedFileChunk = vi.fn()
+const fsFinishDownloadedFile = vi.fn()
+const fsCancelDownloadedFile = vi.fn()
 const fsImportExternalPaths = vi.fn()
 const fsStageExternalPathsForRuntimeUpload = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -56,6 +63,12 @@ beforeEach(() => {
   fsStat.mockReset()
   fsPathExists.mockReset()
   fsSearch.mockReset()
+  fsDownloadFile.mockReset()
+  fsSaveDownloadedFile.mockReset()
+  fsStartDownloadedFile.mockReset()
+  fsAppendDownloadedFileChunk.mockReset()
+  fsFinishDownloadedFile.mockReset()
+  fsCancelDownloadedFile.mockReset()
   fsImportExternalPaths.mockReset()
   fsStageExternalPathsForRuntimeUpload.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -89,6 +102,12 @@ beforeEach(() => {
         stat: fsStat,
         pathExists: fsPathExists,
         search: fsSearch,
+        downloadFile: fsDownloadFile,
+        saveDownloadedFile: fsSaveDownloadedFile,
+        startDownloadedFile: fsStartDownloadedFile,
+        appendDownloadedFileChunk: fsAppendDownloadedFileChunk,
+        finishDownloadedFile: fsFinishDownloadedFile,
+        cancelDownloadedFile: fsCancelDownloadedFile,
         importExternalPaths: fsImportExternalPaths,
         stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
       },
@@ -346,6 +365,96 @@ describe('runtime file client', () => {
 
     expect(fsReadFile).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('downloads remote runtime files in chunks instead of using preview content', async () => {
+    fsStartDownloadedFile.mockResolvedValue({
+      canceled: false,
+      transferId: 'download-1',
+      destinationPath: '/downloads/archive.zip'
+    })
+    fsAppendDownloadedFileChunk.mockResolvedValue({ ok: true })
+    fsFinishDownloadedFile.mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/archive.zip'
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'chunk-1',
+        ok: true,
+        result: { contentBase64: 'YWJj', bytesRead: 3, eof: false },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'chunk-2',
+        ok: true,
+        result: { contentBase64: 'ZA==', bytesRead: 1, eof: true },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/archive.zip',
+        'archive.zip'
+      )
+    ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/archive.zip' })
+
+    expect(fsStartDownloadedFile).toHaveBeenCalledWith({ suggestedName: 'archive.zip' })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'files.readChunk',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 0,
+        length: 384 * 1024
+      },
+      timeoutMs: 60_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'files.readChunk',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 3,
+        length: 384 * 1024
+      },
+      timeoutMs: 60_000
+    })
+    expect(fsAppendDownloadedFileChunk).toHaveBeenCalledTimes(2)
+    expect(fsFinishDownloadedFile).toHaveBeenCalledWith({ transferId: 'download-1' })
+    expect(fsCancelDownloadedFile).not.toHaveBeenCalled()
+  })
+
+  it('cancels the local temp download when a remote chunk fails', async () => {
+    fsStartDownloadedFile.mockResolvedValue({
+      canceled: false,
+      transferId: 'download-1',
+      destinationPath: '/downloads/archive.zip'
+    })
+    fsCancelDownloadedFile.mockResolvedValue({ ok: true })
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('connection dropped'))
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/archive.zip',
+        'archive.zip'
+      )
+    ).rejects.toThrow('connection dropped')
+
+    expect(fsCancelDownloadedFile).toHaveBeenCalledWith({ transferId: 'download-1' })
+    expect(fsFinishDownloadedFile).not.toHaveBeenCalled()
   })
 
   it('routes root directory reads with an empty relative path', async () => {

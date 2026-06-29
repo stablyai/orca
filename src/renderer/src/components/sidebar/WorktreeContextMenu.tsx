@@ -58,7 +58,6 @@ type Props = {
   worktree: Worktree
   children: React.ReactNode
   contentClassName?: string
-  newCardStyle?: boolean
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onOpenChange?: (open: boolean) => void
@@ -123,10 +122,6 @@ function isWorktreeParentPickerDisabled(args: {
   eligibleParentCount: number
 }): boolean {
   return args.isDeleting || args.eligibleParentCount === 0
-}
-
-function shouldShowReadToggleContextMenuItem(args: { newCardStyle: boolean }): boolean {
-  return !args.newCardStyle
 }
 
 function getWorktreeParentPickerAnchor(
@@ -249,7 +244,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
-  newCardStyle = false,
   selectedWorktrees,
   onContextMenuSelect,
   onOpenChange
@@ -351,7 +345,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     (item) =>
       worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
   )
-  const showReadToggle = shouldShowReadToggleContextMenuItem({ newCardStyle })
   const eligibleParentCount = useMemo(
     () =>
       getEligibleWorktreeParents({
@@ -713,24 +706,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              {showReadToggle && (
-                <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                  {worktree.isUnread ? (
-                    <BellOff className="size-3.5" />
-                  ) : (
-                    <Bell className="size-3.5" />
-                  )}
-                  {worktree.isUnread
-                    ? translate(
-                        'auto.components.sidebar.WorktreeContextMenu.8dacff1fe0',
-                        'Mark Read'
-                      )
-                    : translate(
-                        'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                        'Mark Unread'
-                      )}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
+                {worktree.isUnread ? (
+                  <BellOff className="size-3.5" />
+                ) : (
+                  <Bell className="size-3.5" />
+                )}
+                {worktree.isUnread
+                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+                  : translate(
+                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
+                      'Mark Unread'
+                    )}
+              </DropdownMenuItem>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
@@ -922,7 +910,6 @@ export {
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
-  shouldShowReadToggleContextMenuItem,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope

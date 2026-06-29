@@ -58,13 +58,13 @@ import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
-import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
+import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { setForegroundTerminalWorktreeIds } from '@/lib/foreground-terminal-worktrees'
+import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
@@ -279,23 +279,23 @@ function Terminal(): React.JSX.Element | null {
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )
-  const foregroundTerminalWorktreeIds = useMemo(() => {
+  const foregroundTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
-    if (activeView === 'terminal' && renderedActiveWorktreeId) {
-      ids.add(renderedActiveWorktreeId)
+    if (activeView === 'terminal' && activeTabType === 'terminal' && activeTabId) {
+      ids.add(activeTabId)
     }
     for (const portal of activityTerminalPortals) {
-      ids.add(portal.worktreeId)
+      ids.add(portal.tabId)
     }
     return Array.from(ids)
-  }, [activeView, activityTerminalPortals, renderedActiveWorktreeId])
+  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
 
   useEffect(() => {
     // Why: hibernation must treat terminals portaled into foreground surfaces
-    // as visible even when they are not the singular active worktree.
-    setForegroundTerminalWorktreeIds(foregroundTerminalWorktreeIds)
-    return () => setForegroundTerminalWorktreeIds([])
-  }, [foregroundTerminalWorktreeIds])
+    // as visible even when they are not the singular active terminal tab.
+    setForegroundTerminalTabIds(foregroundTerminalTabIds)
+    return () => setForegroundTerminalTabIds([])
+  }, [foregroundTerminalTabIds])
 
   const tabs = useMemo(
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
@@ -716,27 +716,15 @@ function Terminal(): React.JSX.Element | null {
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
-      addBackgroundMountedTerminalWorktree(mountedWorktreeIdsRef.current, worktreeId, () =>
-        setBackgroundMountRevision((revision) => revision + 1)
-      )
-      if (!worktreeId) {
-        return
-      }
-      measurableBackgroundWorktreeIdsRef.current.add(worktreeId)
-      const existingTimer = timers.get(worktreeId)
-      if (existingTimer !== undefined) {
-        window.clearTimeout(existingTimer)
-      }
-      // Why: background renderer-backed terminal creation must be measurable
-      // for the first xterm fit, but it must not keep hidden worktrees laid
-      // out indefinitely after the PTY has started.
-      const timer = window.setTimeout(() => {
-        measurableBackgroundWorktreeIdsRef.current.delete(worktreeId)
-        timers.delete(worktreeId)
-        setBackgroundMountRevision((revision) => revision + 1)
-      }, 3000)
-      timers.set(worktreeId, timer)
-      setBackgroundMountRevision((revision) => revision + 1)
+      scheduleBackgroundTerminalWorktreeMeasure({
+        mountedWorktreeIds: mountedWorktreeIdsRef.current,
+        measurableBackgroundWorktreeIds: measurableBackgroundWorktreeIdsRef.current,
+        timers,
+        worktreeId,
+        onRevision: () => setBackgroundMountRevision((revision) => revision + 1),
+        setTimeoutFn: window.setTimeout,
+        clearTimeoutFn: window.clearTimeout
+      })
     }
     window.addEventListener(
       BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,

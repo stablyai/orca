@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
   ColorField,
@@ -29,6 +29,7 @@ type TerminalThemeCatalogSectionProps = {
   warpThemes: UseWarpThemeImportReturn
   showThemeImport: boolean
   preferredTarget?: TerminalThemeTarget
+  advancedContent?: ReactNode
 }
 
 export function TerminalThemeCatalogSection({
@@ -41,7 +42,8 @@ export function TerminalThemeCatalogSection({
   importedHighlightSignal,
   warpThemes,
   showThemeImport,
-  preferredTarget
+  preferredTarget,
+  advancedContent
 }: TerminalThemeCatalogSectionProps): React.JSX.Element {
   const [target, setTarget] = useState<TerminalThemeTarget>(preferredTarget ?? 'dark')
   const themeOptions = getAvailableTerminalThemeOptions(settings)
@@ -78,25 +80,23 @@ export function TerminalThemeCatalogSection({
   return (
     <section className="space-y-5">
       <SettingsSubsectionHeader
+        className="items-center"
         title={translate(
           'auto.components.settings.TerminalThemeSections.catalog_title',
           'Terminal Themes'
         )}
-        description={translate(
-          'auto.components.settings.TerminalThemeSections.catalog_description',
-          'Choose terminal themes and divider colors for dark and light mode.'
-        )}
+        action={
+          showThemeImport ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <WarpThemeImportButton warpThemes={warpThemes} />
+              <YamlThemeImportButton warpThemes={warpThemes} />
+            </div>
+          ) : null
+        }
       />
 
-      {showThemeImport ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <WarpThemeImportButton warpThemes={warpThemes} />
-          <YamlThemeImportButton warpThemes={warpThemes} />
-        </div>
-      ) : null}
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div>
+      <div className="ml-4 grid gap-4">
+        <div className={advancedContent ? 'border-b border-border/40' : undefined}>
           <div className="space-y-3">
             <SearchableSetting
               title={translate(
@@ -236,6 +236,8 @@ export function TerminalThemeCatalogSection({
             </div>
           </div>
         </div>
+
+        {advancedContent ? <div className="-mt-4">{advancedContent}</div> : null}
 
         <TerminalSettingsPreview
           title={

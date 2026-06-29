@@ -1,4 +1,9 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import {
+  commandSeparator,
+  quoteStartupArg,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import type { TuiAgent } from './types'
 
 export const AI_VAULT_AGENTS = [
@@ -106,8 +111,26 @@ export function buildAiVaultResumeShellCommand(args: {
   cwd: string | null
   platform: NodeJS.Platform
   codexHome?: string | null
+  // Why: the QUEUED resume command is typed into the live tab shell, so its
+  // cd/env prefix must match that shell. The copy-to-clipboard string omits this
+  // and keeps the self-contained `cmd /d /s /c` wrapper (its documented purpose).
+  shell?: AgentStartupShell
 }): string {
-  const { cwd, platform, codexHome } = args
+  const { cwd, platform, codexHome, shell } = args
+
+  // Why: on Windows the queued command must target the configured live shell
+  // (default PowerShell). PowerShell mis-parses the cmd `""`-doubled wrapper and
+  // reports "operable program or batch file", so only re-wrap with cmd when the
+  // live shell actually is cmd (or when no shell is given, i.e. the copy path).
+  if (platform === 'win32' && shell && shell !== 'cmd') {
+    return buildResumeShellCommandForShell({
+      resumeCommand: args.resumeCommand,
+      cwd,
+      codexHome: codexHome?.trim() || null,
+      shell
+    })
+  }
+
   const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
     args.resumeCommand
   }`
@@ -121,6 +144,33 @@ export function buildAiVaultResumeShellCommand(args: {
   }
 
   return `cd ${quoteShellArg(cwd, platform)} && ${resumeCommand}`
+}
+
+function buildResumeShellCommandForShell(args: {
+  resumeCommand: string
+  cwd: string | null
+  codexHome: string | null
+  shell: Exclude<AgentStartupShell, 'cmd'>
+}): string {
+  const { cwd, codexHome, shell } = args
+  if (shell === 'posix') {
+    // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
+    // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
+    const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
+    const command = `${envPrefix}${args.resumeCommand}`
+    return cwd ? `cd ${quoteStartupArg(cwd, shell)} && ${command}` : command
+  }
+
+  const separator = commandSeparator(shell)
+  const segments: string[] = []
+  if (cwd) {
+    segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)}`)
+  }
+  if (codexHome) {
+    segments.push(`$env:CODEX_HOME=${quoteStartupArg(codexHome, shell)}`)
+  }
+  segments.push(args.resumeCommand)
+  return segments.join(separator)
 }
 
 export function aiVaultAgentLabel(agent: AiVaultAgent): string {

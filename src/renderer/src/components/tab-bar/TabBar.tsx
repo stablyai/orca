@@ -77,6 +77,8 @@ import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
+import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -307,12 +309,18 @@ function TabBarInner({
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
-  const worktreeHasRemoteConnection = useAppStore((s) => {
+  const worktreeConnectionId = useAppStore((s) => {
     const worktree = Object.values(s.worktreesByRepo ?? {})
       .flat()
       .find((entry) => entry.id === worktreeId)
     const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
-    return Boolean(repo?.connectionId)
+    return repo?.connectionId?.trim() || null
+  })
+  const worktreeRemotePlatform = useAppStore((s) => {
+    if (!worktreeConnectionId) {
+      return null
+    }
+    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
   })
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
@@ -361,29 +369,36 @@ function TabBarInner({
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId
+    activeRuntimeEnvironmentId,
+    worktreeConnectionId
   )
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
   )
   const shouldProbeWindowsShellCapabilities =
-    (isWindows || Boolean(activeRuntimeEnvironmentId?.trim()) || isWebClient) &&
-    !worktreeHasRemoteConnection
+    isWindows ||
+    Boolean(activeRuntimeEnvironmentId?.trim()) ||
+    isWebClient ||
+    Boolean(worktreeConnectionId)
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget
+    runtimeTarget,
+    worktreeConnectionId
   )
+  const shellMenuHostPlatform = worktreeConnectionId
+    ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
+    : windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
     activeRuntimeEnvironmentId,
-    hostPlatform: windowsTerminalCapabilities.hostPlatform,
+    hostPlatform: shellMenuHostPlatform,
     isWindowsClient: isWindows,
-    worktreeHasRemoteConnection
+    worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
   const localProjectRuntime = useMemo(() => {
-    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim()) {
+    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim() || worktreeConnectionId) {
       return undefined
     }
     return getLocalProjectExecutionRuntimeContext(
@@ -414,6 +429,7 @@ function TabBarInner({
     repos,
     settings,
     showWindowsShellMenu,
+    worktreeConnectionId,
     windowsTerminalCapabilities.isLoading,
     windowsTerminalCapabilities.wslAvailable,
     windowsTerminalCapabilities.wslDistros,
@@ -432,6 +448,23 @@ function TabBarInner({
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
     [unifiedTabs]
   )
+
+  // Why: gate the tab long-press view-mode toggle to agent terminals. A tab is
+  // eligible when it launched an agent or has a live agent-status entry on any of
+  // its panes (paneKey = `${unifiedTabId}:…`), mirroring the toggle button's gate.
+  const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  const tabIdsWithLiveAgent = useMemo(() => {
+    const ids = new Set<string>()
+    for (const paneKey of Object.keys(agentStatusByPaneKey ?? {})) {
+      const separator = paneKey.indexOf(':')
+      if (separator > 0) {
+        ids.add(paneKey.slice(0, separator))
+      }
+    }
+    return ids
+  }, [agentStatusByPaneKey])
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.
@@ -553,8 +586,7 @@ function TabBarInner({
         hasNewBrowser: !terminalOnly,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
-        hasSimulator:
-          !terminalOnly && isMacOs && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
+        hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
         simulatorIsGoTo: workspaceHasSimulatorTab
       }),
     [
@@ -712,7 +744,7 @@ function TabBarInner({
     </DropdownMenuItem>
   ) : null
   const newSimulatorMenuItem =
-    !terminalOnly && isMacOs && mobileEmulatorEnabled && onNewSimulatorTab ? (
+    !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1076,6 +1108,20 @@ function TabBarInner({
                     item.data.title
                   )
                 }
+                const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
+                const hasResolvedAgent =
+                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') !== null ||
+                  resolveTabAgentFromTitle(terminalTab.title) !== null
+                const canToggleViewMode =
+                  unifiedTabForItem !== undefined &&
+                  canToggleNativeChat({
+                    experimentalNativeChatEnabled: nativeChatEnabled,
+                    contentType: 'terminal',
+                    launchAgent: terminalTab.launchAgent,
+                    hasDetectedAgent: tabIdsWithLiveAgent.has(unifiedTabForItem.id),
+                    hasResolvedAgent,
+                    isChatViewMode: unifiedTabForItem.viewMode === 'chat'
+                  })
                 return (
                   <SortableTab
                     key={item.id}
@@ -1083,6 +1129,11 @@ function TabBarInner({
                     unifiedTabId={item.unifiedTabId}
                     groupId={resolvedGroupId}
                     tabCount={orderedItems.length}
+                    canToggleViewMode={canToggleViewMode}
+                    isChatView={nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'}
+                    onToggleViewMode={
+                      unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
+                    }
                     hasTabsToRight={index < orderedItems.length - 1}
                     isActive={
                       (activeTabType === 'terminal' || activeTabType === 'simulator') &&

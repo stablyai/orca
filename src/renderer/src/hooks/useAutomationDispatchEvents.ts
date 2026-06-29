@@ -6,6 +6,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
+import { launchWorktreeBackgroundTerminals } from '@/lib/launch-worktree-background-terminals'
 import { useAppStore } from '@/store'
 import type {
   AutomationDispatchResult,
@@ -173,50 +174,51 @@ export function useAutomationDispatchEvents(): void {
           }
 
           const automationWorkspaceCreateRequestId = createBrowserUuid()
-          const worktree =
+          const createResult =
             automation.workspaceMode === 'new_per_run'
-              ? (
-                  await useAppStore
-                    .getState()
-                    .createWorktree(
-                      runRepoId,
-                      buildAutomationWorkspaceName(run.title, run.scheduledFor),
-                      automation.baseBranch ?? undefined,
-                      'inherit',
-                      undefined,
-                      'unknown',
-                      run.title,
-                      undefined,
-                      undefined,
-                      undefined,
-                      automation.agentId,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      {
-                        automationProvenanceRequest: {
-                          automationId: automation.id,
-                          automationRunId: run.id,
-                          dispatchToken,
-                          createRequestId: automationWorkspaceCreateRequestId
-                        }
+              ? await useAppStore
+                  .getState()
+                  .createWorktree(
+                    runRepoId,
+                    buildAutomationWorkspaceName(run.title, run.scheduledFor),
+                    automation.baseBranch ?? undefined,
+                    automation.setupDecision ?? 'skip',
+                    undefined,
+                    'unknown',
+                    run.title,
+                    undefined,
+                    undefined,
+                    undefined,
+                    automation.agentId,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                      automationProvenanceRequest: {
+                        automationId: automation.id,
+                        automationRunId: run.id,
+                        dispatchToken,
+                        createRequestId: automationWorkspaceCreateRequestId
                       }
-                    )
-                ).worktree
-              : automation.workspaceId
-                ? automationWorktree
-                : null
+                    }
+                  )
+              : null
+          const worktree = createResult
+            ? createResult.worktree
+            : automation.workspaceId
+              ? automationWorktree
+              : null
 
           if (!worktree) {
             await markDispatchResult({
@@ -233,6 +235,17 @@ export function useAutomationDispatchEvents(): void {
           }
           dispatchWorkspaceId = worktree.id
           dispatchWorkspaceDisplayName = worktree.displayName
+          if (createResult?.setup || createResult?.defaultTabs) {
+            void launchWorktreeBackgroundTerminals({
+              worktreeId: worktree.id,
+              setup: createResult.setup,
+              defaultTabs: createResult.defaultTabs
+            }).catch((error) => {
+              // Why: setup/defaultTabs match normal worktree creation: they are
+              // best-effort terminal work and must not block the automation agent.
+              console.warn('[automations] Failed to launch workspace setup/default tabs:', error)
+            })
+          }
 
           const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
           let latestAssistantMessage: string | null = null

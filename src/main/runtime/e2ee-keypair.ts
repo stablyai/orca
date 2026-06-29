@@ -5,8 +5,9 @@ import { existsSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import nacl from 'tweetnacl'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
-const KEYPAIR_FILENAME = 'orca-e2ee-keypair.json'
+const KEYPAIR_FILENAME = E2EE_KEYPAIR_FILENAME
 const KEYPAIR_VERSION = 1
 const MAX_KEYPAIR_FILE_BYTES = 8 * 1024
 

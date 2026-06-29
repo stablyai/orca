@@ -76,11 +76,19 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
-      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+      className={cn(
+        'flex gap-4',
+        description ? 'py-3' : 'py-2',
+        alignTop ? 'items-start' : 'items-center justify-between'
+      )}
     >
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <Label id={labelId}>{label}</Label>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <div className={cn('min-w-0 flex-1', description ? 'space-y-1' : 'space-y-0.5')}>
+        <Label id={labelId} className="select-text">
+          {label}
+        </Label>
+        {description ? (
+          <p className="select-text text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -218,16 +226,18 @@ type SettingsSubsectionHeaderProps = {
   title: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  className?: string
 }
 
 /** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
 export function SettingsSubsectionHeader({
   title,
   description,
-  action
+  action,
+  className
 }: SettingsSubsectionHeaderProps): React.JSX.Element {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}

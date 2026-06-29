@@ -17,6 +17,7 @@ import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobil
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
+import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
@@ -34,17 +35,13 @@ type Props = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  // Current git branch — feeds the create-PR prefill in the no-PR empty state.
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
   headSha: string | null
-  // Applied by the docked column so content clears the home indicator (the screen's
-  // SafeAreaView is edges={['top']} only).
   bottomInset?: number
 }
 
-// The shell switches on the controller's state machine and renders the sections
-// (header/actions/reviewers/checks). The mutation hook is created here (hooks must
-// run unconditionally) and only fires once a PR is ready. Style only from mobile-theme.
+// Mutation hooks run unconditionally here and gate internally until a PR is ready.
 export function MobilePRSidebar({
   state,
   onRetry,
@@ -53,6 +50,7 @@ export function MobilePRSidebar({
   connState,
   worktreeId,
   gitBranch,
+  gitStatus,
   headSha,
   bottomInset = 0
 }: Props) {
@@ -74,8 +72,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // Separate hook for the interactive comment timeline (reply/resolve/add). Like
-  // useMobilePrActions it must run unconditionally; it gates internally on a client.
   const commentActions = useMobilePrCommentActions({
     client,
     connState,
@@ -84,8 +80,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // Inline title-edit action. Like the others it must run unconditionally and gates
-  // internally on a client; refetches authoritative PR data after a successful edit.
   const titleAction = useMobilePrTitleAction({
     client,
     connState,
@@ -94,8 +88,6 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  // AI triage (Fix checks / Resolve conflicts). Like the other hooks it must run
-  // unconditionally; it gates internally on a connected client.
   const triage = useMobilePrAiTriage({ client, connState, worktreeId })
 
   return (
@@ -111,8 +103,10 @@ export function MobilePRSidebar({
         onRetry={onRetry}
         refetch={refetch}
         client={client}
+        connState={connState}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
+        gitStatus={gitStatus}
         actions={actions}
         commentActions={commentActions}
         titleAction={titleAction}
@@ -128,8 +122,10 @@ function PrSidebarContent({
   onRetry,
   refetch,
   client,
+  connState,
   worktreeId,
   gitBranch,
+  gitStatus,
   actions,
   commentActions,
   titleAction,
@@ -140,8 +136,10 @@ function PrSidebarContent({
   onRetry: () => void
   refetch: () => void
   client: RpcClient | null
+  connState: ConnectionState
   worktreeId: string
   gitBranch: string | null
+  gitStatus: MobileGitStatusResult | null
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
@@ -194,6 +192,8 @@ function PrSidebarContent({
         client={client}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
+        gitStatus={gitStatus}
+        connState={connState}
         onCreated={refetch}
       />
     )

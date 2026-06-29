@@ -6,6 +6,7 @@ import { parse } from 'yaml'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
+import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-startup-policy'
 import { gitExecFileSync } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
@@ -517,7 +518,8 @@ export function createSetupRunnerScript(
     worktreePath,
     script,
     'setup-runner',
-    getHookRuntimeTarget(projectRuntime)
+    getHookRuntimeTarget(projectRuntime),
+    shouldWaitForSetupBeforeAgentStartup(repo.hookSettings?.setupAgentStartupPolicy)
   )
 }
 
@@ -575,7 +577,8 @@ function createWorktreeRunnerScript(
   worktreePath: string,
   script: string,
   runnerBaseName: 'setup-runner' | 'issue-command-runner',
-  runtimeTarget?: HookRuntimeTarget
+  runtimeTarget?: HookRuntimeTarget,
+  waitForAgentStartup?: boolean
 ): WorktreeSetupLaunch {
   const envVars = getSetupEnvVars(repo, worktreePath)
   // Why: WSL worktrees run on a Linux filesystem even though process.platform
@@ -618,7 +621,11 @@ function createWorktreeRunnerScript(
     }
   }
 
-  return { runnerScriptPath, envVars }
+  return {
+    runnerScriptPath,
+    envVars,
+    ...(waitForAgentStartup === true ? { waitForAgentStartup: true } : {})
+  }
 }
 
 /**

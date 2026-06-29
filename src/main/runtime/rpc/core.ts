@@ -59,6 +59,11 @@ export type RpcContext = {
   // Why: WebSocket RPCs authenticate by mobile device token. State-owning
   // handlers use this to clean up when that paired device disconnects.
   clientId?: string
+  // Why: payload windowing/truncation tuned for the constrained mobile payload
+  // (e.g. native-chat block char cap) must not clip full-screen web/desktop
+  // clients. Carries the paired device's scope so handlers can gate the diet to
+  // phones only. Undefined for in-process callers → treat as full-class (no clip).
+  clientKind?: 'mobile' | 'runtime'
   // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
   // responses after the binary terminal cutover. Undefined on Unix/socket
   // transports and non-E2EE WebSocket paths.

@@ -223,7 +223,8 @@ function getGitHubChecksEntry(
     prChecksCacheSuffix(review.number, prRepo, review.headSha),
     args.settings,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
   const withoutHead = getGitHubRepoCacheKey(
     args.repo.path,
@@ -231,7 +232,8 @@ function getGitHubChecksEntry(
     prChecksCacheSuffix(review.number, prRepo),
     args.settings,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
   return args.checksCache[withHead] ?? args.checksCache[withoutHead]
 }
@@ -246,7 +248,8 @@ function getHostedReviewKey(
     args.settings,
     args.repo.id,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
 }
 
@@ -257,7 +260,8 @@ function getPRKey(args: BuildParentPrChecksRowsArgs & { repo: Repo }, branch: st
     branch,
     args.settings,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
 }
 

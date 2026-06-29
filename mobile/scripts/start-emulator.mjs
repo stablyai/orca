@@ -9,20 +9,29 @@
  * Options:
  *   --worktree <path>  Worktree path (default: auto-detect)
  *   --device <name>    Device name (default: 'iPhone 17 Pro')
- *   --port <port>      Metro port (default: Expo default)
+ *   --port <port>      Metro port (default: first available from 8081)
  *   --no-open          Don't open the app URL automatically
+ *   --no-pair          Don't create a temporary paired desktop runtime
  *   --wait-for-ready   Wait for Metro to be ready before opening URL
  *   --screenshot       Take a screenshot after opening
  */
 
 import { spawn, execFile } from 'node:child_process'
+import net from 'node:net'
 import os from 'node:os'
 import { promisify } from 'node:util'
 import path from 'node:path'
 import process from 'node:process'
 import readline from 'node:readline'
+import {
+  registerWorktreeForPairingRuntime,
+  startHeadlessPairingRuntime
+} from './start-emulator-pairing-runtime.mjs'
+import { ensureMobileExpoCli, getMobileExpoExecutablePath } from './mobile-expo-cli.mjs'
 
 const execFileAsync = promisify(execFile)
+const DEFAULT_METRO_PORT = 8081
+const METRO_PORT_SEARCH_LIMIT = 100
 
 // Parse CLI arguments
 const args = process.argv.slice(2)
@@ -31,6 +40,7 @@ const options = {
   device: 'iPhone 17 Pro',
   port: null,
   open: true,
+  pair: true,
   waitForReady: false,
   screenshot: false
 }
@@ -45,6 +55,8 @@ for (let i = 0; i < args.length; i++) {
     options.port = args[++i]
   } else if (arg === '--no-open') {
     options.open = false
+  } else if (arg === '--no-pair') {
+    options.pair = false
   } else if (arg === '--wait-for-ready') {
     options.waitForReady = true
   } else if (arg === '--screenshot') {
@@ -55,8 +67,9 @@ for (let i = 0; i < args.length; i++) {
 Options:
   --worktree <path>  Worktree path (default: auto-detect)
   --device <name>    Device name (default: 'iPhone 17 Pro')
-  --port <port>      Metro port (default: Expo default)
+  --port <port>      Metro port (default: first available from 8081)
   --no-open          Don't open the app URL automatically
+  --no-pair          Don't create a temporary paired desktop runtime
   --wait-for-ready   Wait for Metro to be ready before opening URL
   --screenshot       Take a screenshot after opening
   --help, -h         Show this help message
@@ -110,6 +123,7 @@ function assertIosSimulatorPlatform() {
 async function orca(args, options = {}) {
   const { stdout, stderr } = await execFileAsync(ORCA_CLI, args, {
     cwd: options.cwd || process.cwd(),
+    env: options.env || process.env,
     encoding: 'utf8',
     timeout: options.timeout || 30000
   })
@@ -146,13 +160,20 @@ function getMobileDir(worktree) {
   return path.join(worktree, 'mobile')
 }
 
+async function ensureMobileDependencies(worktree) {
+  const mobileDir = getMobileDir(worktree)
+  await ensureMobileExpoCli(mobileDir, { logStep, logSuccess })
+}
+
 // Attach to emulator
-async function attachEmulator(worktree, device) {
+async function attachEmulator(worktree, device, runtime) {
   logStep('1', `Attaching to emulator: ${device.name}`)
 
   try {
     await orca(['emulator', 'attach', device.udid, '--worktree', worktree, '--focus', '--json'], {
-      cwd: worktree
+      cwd: worktree,
+      env: runtime?.env || process.env,
+      timeout: 60000
     })
     logSuccess(`Attached to ${device.name}`)
   } catch (error) {
@@ -287,11 +308,55 @@ function devClientUrlForMetroUrl(url) {
   return `exp+orca-mobile://expo-development-client/?url=${encodeURIComponent(url)}`
 }
 
+function canListenOnPort(port) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer()
+    server.unref()
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+        resolve(false)
+        return
+      }
+      reject(error)
+    })
+    server.listen({ port, host: '0.0.0.0' }, () => {
+      server.close(() => resolve(true))
+    })
+  })
+}
+
+async function findAvailableMetroPort(startPort) {
+  const endPort = startPort + METRO_PORT_SEARCH_LIMIT
+  for (let port = startPort; port < endPort; port++) {
+    if (await canListenOnPort(port)) {
+      return port
+    }
+  }
+  throw new Error(`No available Metro port found from ${startPort} to ${endPort - 1}`)
+}
+
+async function resolveMetroPort() {
+  if (options.port) {
+    const requestedPort = Number(options.port)
+    if (!Number.isInteger(requestedPort) || requestedPort <= 0 || requestedPort > 65535) {
+      throw new Error(`Invalid Metro port: ${options.port}`)
+    }
+    return requestedPort
+  }
+
+  const port = await findAvailableMetroPort(DEFAULT_METRO_PORT)
+  if (port !== DEFAULT_METRO_PORT) {
+    logInfo(`Port ${DEFAULT_METRO_PORT} is already in use; using ${port} instead`)
+  }
+  return port
+}
+
 // Start Metro bundler
 async function startMetro(worktree) {
   logStep('2', 'Starting Metro bundler...')
 
   const mobileDir = getMobileDir(worktree)
+  const metroPort = await resolveMetroPort()
 
   return new Promise((resolve, reject) => {
     const env = {
@@ -300,11 +365,12 @@ async function startMetro(worktree) {
     }
 
     // Use local expo CLI directly instead of pnpm start to avoid workspace issues
-    const expoPath = path.join(mobileDir, 'node_modules', '.bin', 'expo')
-    const expoArgs = ['start', '--host', 'lan']
-    if (options.port) {
-      expoArgs.push('--port', options.port)
+    const expoPath = getMobileExpoExecutablePath(mobileDir)
+    if (!expoPath) {
+      reject(new Error('Mobile Expo CLI is missing after dependency setup.'))
+      return
     }
+    const expoArgs = ['start', '--host', 'lan', '--port', String(metroPort)]
     logInfo(`Using expo at: ${expoPath}`)
     const metro = spawn(expoPath, expoArgs, {
       cwd: mobileDir,
@@ -431,6 +497,25 @@ async function openInSimulator(url, deviceUdid) {
   }
 }
 
+async function openPairingUrlInSimulator(pairingUrl, deviceUdid, runtime, worktree) {
+  if (!pairingUrl || !options.open) {
+    return
+  }
+
+  logStep('4', 'Pairing mobile app to temporary desktop runtime...')
+  await execFileAsync('xcrun', ['simctl', 'openurl', deviceUdid, pairingUrl])
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  // Why: the mobile app intentionally asks for a trust confirmation before
+  // saving a host. This lands on the Pair button on current iPhone simulators.
+  await orca(['emulator', 'tap', '0.5', '0.56', '--worktree', worktree, '--json'], {
+    cwd: worktree,
+    env: runtime?.env || process.env,
+    timeout: 30000
+  })
+  logSuccess('Opened pairing link and confirmed Pair')
+}
+
 // Take a screenshot
 async function takeScreenshot(
   deviceUdid,
@@ -477,6 +562,7 @@ async function findReachableMetroUrl(initialUrl) {
 // Main function
 async function main() {
   log(colors.bright + 'Starting Orca Mobile in Emulator\n' + colors.reset)
+  let pairingRuntime = null
 
   try {
     assertIosSimulatorPlatform()
@@ -484,6 +570,21 @@ async function main() {
     // Get worktree
     const worktree = await getWorktree()
     logInfo(`Using worktree: ${worktree}`)
+    await ensureMobileDependencies(worktree)
+
+    pairingRuntime = await startHeadlessPairingRuntime({
+      enabled: options.pair,
+      orcaCli: ORCA_CLI,
+      cwd: process.cwd(),
+      lanIpCandidates,
+      logStep,
+      logSuccess
+    })
+    await registerWorktreeForPairingRuntime(pairingRuntime, worktree, {
+      orca,
+      logStep,
+      logSuccess
+    })
 
     // Find best device
     const device = await findBestDevice(options.device)
@@ -491,7 +592,7 @@ async function main() {
 
     // Why: emulator helpers are worktree-scoped in Orca; attach is idempotent
     // for the active worktree, while a global helper list cannot prove that.
-    await attachEmulator(worktree, device)
+    await attachEmulator(worktree, device, pairingRuntime)
 
     // Start Metro
     const metro = await startMetro(worktree)
@@ -514,6 +615,12 @@ async function main() {
     // Open in simulator
     if (options.open) {
       await openInSimulator(metro.url, device.udid)
+      await openPairingUrlInSimulator(
+        pairingRuntime?.pairingUrl,
+        device.udid,
+        pairingRuntime,
+        worktree
+      )
 
       // Take screenshot if requested
       if (options.screenshot) {
@@ -528,7 +635,7 @@ async function main() {
     }
 
     log(colors.bright + '\nSetup complete!' + colors.reset)
-    logInfo('Press Ctrl+C to stop Metro')
+    logInfo('Press Ctrl+C to stop Metro and the temporary desktop runtime')
 
     // Keep running until Metro exits
     await new Promise((resolve) => {
@@ -542,6 +649,7 @@ async function main() {
         process.off('SIGINT', stopMetro)
         process.off('SIGTERM', stopMetro)
         metro.closeOutput?.()
+        pairingRuntime?.stop()
         resolve()
       }
       const stopMetro = () => {
@@ -564,6 +672,7 @@ async function main() {
     })
     process.exit(0)
   } catch (error) {
+    pairingRuntime?.stop()
     logError(error.message)
     process.exit(1)
   }

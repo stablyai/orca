@@ -131,14 +131,19 @@ function isUnsupportedTranscriptControl(code: number): boolean {
   return code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127
 }
 
+export function buildBoundedSessionTranscript(capturedText: string): string | null {
+  const transcript = trimToContextBudget(
+    cleanAgentSessionForkTranscript(tailBoundForkCapture(capturedText))
+  )
+  return transcript || null
+}
+
 export function buildAgentSessionForkPrompt({
   capturedText,
   sourceLabel,
   agentLabel
 }: AgentSessionForkPromptInput): string | null {
-  const transcript = trimToContextBudget(
-    cleanAgentSessionForkTranscript(tailBoundForkCapture(capturedText))
-  )
+  const transcript = buildBoundedSessionTranscript(capturedText)
   if (!transcript) {
     return null
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAgentPermissionMode,
   resolveAgentPermissionModeSummary,
+  resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
   YOLO_TUI_AGENT_ENV
 } from './tui-agent-permissions'
@@ -47,5 +48,41 @@ describe('tui agent permissions', () => {
         agentDefaultEnv: YOLO_TUI_AGENT_ENV
       })
     ).toBe('mixed')
+  })
+
+  it('resolves one Codex yolo launch as yolo', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'codex',
+        agentArgs: YOLO_TUI_AGENT_ARGS.codex,
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+  })
+
+  it('resolves one empty Codex launch as manual', () => {
+    expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '', agentEnv: {} })).toBe(
+      'manual'
+    )
+  })
+
+  it('resolves custom Codex permission arguments as mixed', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'codex',
+        agentArgs: '--ask-for-approval on-request',
+        agentEnv: {}
+      })
+    ).toBe('mixed')
+  })
+
+  it('resolves env-driven yolo launches', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'goose',
+        agentArgs: '',
+        agentEnv: YOLO_TUI_AGENT_ENV.goose
+      })
+    ).toBe('yolo')
   })
 })
