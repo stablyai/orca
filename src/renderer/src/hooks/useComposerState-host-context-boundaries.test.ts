@@ -5,6 +5,7 @@ import {
   canResolveFolderSmartGitHubSubmit,
   getInitialAutoManagedWorkspaceName,
   isExplicitWorkspaceNameInput,
+  resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
 } from './useComposerState'
 
@@ -43,6 +44,30 @@ describe('useComposerState host-context boundaries', () => {
         initialLinkedWorkItem: null
       })
     ).toBe('')
+  })
+
+  it('preserves explicit names when a linked PR start point resolves at submit time', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'edited workspace',
+        nameIsAutoManaged: false
+      })
+    ).toEqual({ workspaceName: 'edited workspace', displayName: undefined })
+  })
+
+  it('keeps smart GitHub names for auto-managed PR start-point submissions', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'https://github.com/stablyai/orca/pull/6772',
+        nameIsAutoManaged: true
+      })
+    ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
   })
 
   it('auto-owns linked-item generated prefilled names', () => {
