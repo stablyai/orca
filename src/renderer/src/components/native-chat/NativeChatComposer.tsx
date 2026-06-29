@@ -278,20 +278,24 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       if (!target) {
         return
       }
-      // Images are deferred to submit (like text) so the GUI chips and the TUI
-      // input stay in sync and removing a chip needs no TUI un-paste. Send the
-      // attached images, then the text body, then Enter — atomically.
-      if (imagePaths.length > 0) {
+      // Slash commands are TUI controls, not chat turns — never attach images to
+      // one (the chat turn is suppressed below, so the images would leak into the
+      // runtime with no visible message). Otherwise images are deferred to submit
+      // (like text) so the GUI chips and TUI input stay in sync and removing a
+      // chip needs no TUI un-paste: send images, then text, then Enter atomically.
+      const isSlashCommand = isSlashCommandDraft(text)
+      if (isSlashCommand) {
+        sendNativeChatMessage(target.settings, target.ptyId, text)
+      } else if (imagePaths.length > 0) {
         sendNativeChatMessageWithImageAttachments(target.settings, target.ptyId, text, imagePaths)
       } else if (text.trim().length > 0) {
         sendNativeChatMessage(target.settings, target.ptyId, text)
       } else {
         submitNativeChatPrompt(target.settings, target.ptyId)
       }
-      // Slash commands are TUI controls, not chat turns: don't echo a user bubble,
-      // but DO surface a small "Ran /clear" system line so the command leaves a
-      // visible trace instead of seeming to do nothing.
-      if (isSlashCommandDraft(text)) {
+      // Slash commands don't echo a user bubble, but DO surface a small
+      // "Ran /clear" system line so the command leaves a visible trace.
+      if (isSlashCommand) {
         onSlashCommand?.(text.trim())
       } else {
         onOptimisticSend?.(text, imagePaths)

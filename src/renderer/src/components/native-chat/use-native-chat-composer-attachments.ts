@@ -38,6 +38,16 @@ export function useNativeChatComposerAttachments({
   )
   const imageAttachmentCounter = useRef(0)
 
+  // Reload chips from the cache when the composer is reused for a different pane
+  // (scope-key change), adjusting state during render rather than in an effect.
+  // Without this the previous pane's chips would stay live and be submitted to
+  // the new target now that images are deferred to submit.
+  const lastScopeKey = useRef(attachmentScopeKey)
+  if (lastScopeKey.current !== attachmentScopeKey) {
+    lastScopeKey.current = attachmentScopeKey
+    setImageAttachments(readNativeChatAttachmentCache(attachmentScopeKey))
+  }
+
   const updateImageAttachments = useCallback(
     (
       updater: (
