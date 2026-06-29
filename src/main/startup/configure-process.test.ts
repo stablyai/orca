@@ -320,9 +320,13 @@ describe('enableMainProcessGpuFeatures', () => {
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
     expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
-    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
       'enable-features',
-      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EstablishGpuChannelAsync')
     )
   })
 
@@ -340,6 +344,10 @@ describe('enableMainProcessGpuFeatures', () => {
     enableMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
   })
 
   it('does not disable the GPU sandbox outside Linux Wayland', async () => {
@@ -417,5 +425,32 @@ describe('enableMainProcessGpuFeatures', () => {
       'enable-features',
       'EarlyEstablishGpuChannel,EstablishGpuChannelAsync,ExistingFeature'
     )
+  })
+
+  it('preserves existing enable-features switches on Linux Wayland without eager GPU channel flags', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+    const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+    try {
+      setPlatform('linux')
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+      process.env.WAYLAND_DISPLAY = 'wayland-1'
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+      vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+        switchName === 'enable-features' ? 'ExistingFeature' : ''
+      )
+
+      enableMainProcessGpuFeatures()
+    } finally {
+      if (originalWaylandDisplay === undefined) {
+        delete process.env.WAYLAND_DISPLAY
+      } else {
+        process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+      }
+    }
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
   })
 })
