@@ -6977,16 +6977,19 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('injects runtime hook receiver env into terminal sessions', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-hooked' })
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      buildAgentHookPtyEnv: () => ({
-        ORCA_AGENT_HOOK_PORT: '5678',
-        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
-        ORCA_AGENT_HOOK_ENV: 'remote',
-        ORCA_AGENT_HOOK_VERSION: '1'
+  it('applies Settings agent defaults to bare agent command terminal creates', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } }
       })
-    })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -6996,26 +6999,141 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
-      env: {
-        ORCA_AGENT_HOOK_PORT: '1111',
-        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
-        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
-      }
+
+      title: 'worker'
     })
 
-    const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
-    expect(spawnCall?.env).toEqual(
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
+    expect(spawnCall?.env).toMatchObject({
+      CODEX_PROFILE: 'captured',
+      ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+    })
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+  })
+
+  it('keeps non-bare agent command terminal creates unchanged', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex exec summarize'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe('codex exec summarize')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+  })
+
+  it('keeps disabled bare agent command terminal creates unchanged', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: ['codex' as const],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex'
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toBe('codex')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+  })
+
+  it('sends Settings agent defaults through renderer-backed bare agent terminal creates', async () => {
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        {},
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Codex' }
+      )
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send }
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      rendererBacked: true
+    })
+
+    expect(send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
       expect.objectContaining({
-        ORCA_AGENT_HOOK_PORT: '5678',
-        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
-        ORCA_AGENT_HOOK_ENV: 'remote',
-        ORCA_AGENT_HOOK_VERSION: '1',
-        ORCA_PANE_KEY: expect.any(String),
-        ORCA_TAB_ID: expect.any(String),
-        ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+        worktreeId: TEST_WORKTREE_ID,
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+        env: { CODEX_PROFILE: 'captured' },
+        launchAgent: 'codex',
+        launchConfig: {
+          agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        }
       })
     )
-    expect(spawnCall?.env?.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
   })
 
   it.each([
@@ -7192,7 +7310,7 @@ describe('OrcaRuntimeService', () => {
     expect(compoundClaude.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(compoundClaude.env?.TMUX).toBeUndefined()
 
-    expect(normalAgent.command).toBe('codex')
+    expect(normalAgent.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
     expect(normalAgent.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(normalAgent.env?.TMUX).toBeUndefined()
   })
@@ -7551,7 +7669,7 @@ describe('OrcaRuntimeService', () => {
     })
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: 'codex',
+        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
         cwd: TEST_WORKTREE_PATH,
         worktreeId: TEST_WORKTREE_ID
       })
