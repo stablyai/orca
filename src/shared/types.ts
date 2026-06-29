@@ -938,7 +938,16 @@ export type BrowserTab = BrowserWorkspace
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
 export type BrowserSessionProfileSource = {
-  browserFamily: 'chrome' | 'chromium' | 'arc' | 'edge' | 'firefox' | 'safari' | 'comet' | 'manual'
+  browserFamily:
+    | 'chrome'
+    | 'chromium'
+    | 'arc'
+    | 'edge'
+    | 'firefox'
+    | 'safari'
+    | 'comet'
+    | 'helium'
+    | 'manual'
   profileName?: string
   importedAt: number
 }
