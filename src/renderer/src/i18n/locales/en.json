@@ -122,7 +122,13 @@
       "fe21e8f6f5": "Go back ({{value0}})",
       "064bd07810": "Go back",
       "ce37cf5279": "Toggle sidebar ({{value0}})",
-      "e4b9e7dff7": "Toggle sidebar"
+      "e4b9e7dff7": "Toggle sidebar",
+      "b956d8fc45": "Orca restored your workspace",
+      "f249f7d142": "Something went wrong, so Orca restarted once. You can keep working.",
+      "d9f205e7dc": "Orca recovered your workspace",
+      "e19372e30c": "Something went wrong, so Orca refreshed. You can keep working.",
+      "8cf930c298": "Orca recovered your workspace",
+      "d8d724bc38": "Orca refreshed to stay responsive. You can keep working."
     },
     "web": {
       "WebConnect": {

@@ -3,9 +3,16 @@ import type {
   CrashReportDetailValue
 } from '../../../shared/crash-reporting'
 import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
+import { markRendererRecoveryNotificationPending } from './renderer-recovery-notification'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
+// Why: recover only after sustained high heap usage, avoiding reloads for small
+// heaps or one-off spikes while still acting before likely renderer loss.
+const CRITICAL_HEAP_USAGE_RATIO = 0.85
+const CRITICAL_HEAP_MIN_MB = 512
+const CRITICAL_HEAP_SAMPLES_BEFORE_RELOAD = 2
+const MEMORY_PRESSURE_RELOAD_GUARD_KEY = 'orca:renderer-memory-pressure-reload-attempted'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
@@ -15,6 +22,7 @@ type BrowserPerformanceMemory = {
 
 let rendererCrashDiagnosticsInstalled = false
 let rendererMemoryInterval: number | null = null
+let criticalHeapPressureSampleCount = 0
 
 export function recordRendererCrashBreadcrumb(
   name: string,
@@ -66,6 +74,7 @@ function disposeRendererCrashDiagnostics(): void {
     window.clearInterval(rendererMemoryInterval)
     rendererMemoryInterval = null
   }
+  criticalHeapPressureSampleCount = 0
 }
 
 if (typeof import.meta !== 'undefined' && import.meta.hot) {
@@ -100,18 +109,29 @@ function recordRendererMemory(reason: string): void {
     return
   }
   const browserWebviews = getBrowserWebviewMemoryProfile()
+  const usedHeapMB = toMegabytes(memory.usedJSHeapSize)
+  const totalHeapMB = toMegabytes(memory.totalJSHeapSize)
+  const heapLimitMB = toMegabytes(memory.jsHeapSizeLimit)
 
   recordRendererCrashBreadcrumb(
     'renderer_memory',
     compactBreadcrumbData({
       reason,
-      usedHeapMB: toMegabytes(memory.usedJSHeapSize),
-      totalHeapMB: toMegabytes(memory.totalJSHeapSize),
-      heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
+      usedHeapMB,
+      totalHeapMB,
+      heapLimitMB,
       browserWebviews: browserWebviews.browserWebviewCount,
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
   )
+  maybeReloadForCriticalHeapPressure({
+    reason,
+    usedHeapMB,
+    totalHeapMB,
+    heapLimitMB,
+    browserWebviews: browserWebviews.browserWebviewCount,
+    registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
+  })
 }
 
 function getPerformanceMemory(): BrowserPerformanceMemory | undefined {
@@ -178,4 +198,90 @@ function toMegabytes(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.round(value / BYTES_PER_MEGABYTE)
     : undefined
+}
+
+function maybeReloadForCriticalHeapPressure({
+  reason,
+  usedHeapMB,
+  totalHeapMB,
+  heapLimitMB,
+  browserWebviews,
+  registeredBrowserGuests
+}: {
+  reason: string
+  usedHeapMB: number | undefined
+  totalHeapMB: number | undefined
+  heapLimitMB: number | undefined
+  browserWebviews: number
+  registeredBrowserGuests: number
+}): void {
+  if (
+    usedHeapMB === undefined ||
+    heapLimitMB === undefined ||
+    heapLimitMB <= 0 ||
+    usedHeapMB < CRITICAL_HEAP_MIN_MB ||
+    usedHeapMB / heapLimitMB < CRITICAL_HEAP_USAGE_RATIO
+  ) {
+    criticalHeapPressureSampleCount = 0
+    return
+  }
+
+  criticalHeapPressureSampleCount += 1
+  if (
+    criticalHeapPressureSampleCount < CRITICAL_HEAP_SAMPLES_BEFORE_RELOAD ||
+    hasAttemptedMemoryPressureReload()
+  ) {
+    return
+  }
+
+  if (!markMemoryPressureReloadAttempted()) {
+    return
+  }
+  recordRendererCrashBreadcrumb(
+    'renderer_memory_pressure_reload',
+    compactBreadcrumbData({
+      reason,
+      usedHeapMB,
+      totalHeapMB,
+      heapLimitMB,
+      heapUsageRatio: Math.round((usedHeapMB / heapLimitMB) * 100) / 100,
+      browserWebviews,
+      registeredBrowserGuests
+    })
+  )
+  markRendererRecoveryNotificationPending('memory-pressure-reload', 'session')
+  reloadRendererForMemoryPressure()
+}
+
+function hasAttemptedMemoryPressureReload(): boolean {
+  try {
+    return window.sessionStorage.getItem(MEMORY_PRESSURE_RELOAD_GUARD_KEY) === '1'
+  } catch {
+    // Why: without session-scoped storage we cannot prove a reload already ran,
+    // so fail closed rather than risking a reload loop during memory pressure.
+    return true
+  }
+}
+
+function markMemoryPressureReloadAttempted(): boolean {
+  try {
+    window.sessionStorage.setItem(MEMORY_PRESSURE_RELOAD_GUARD_KEY, '1')
+    return true
+  } catch {
+    // Why: without a written session guard, memory-pressure recovery could loop.
+    return false
+  }
+}
+
+function reloadRendererForMemoryPressure(): void {
+  try {
+    const reload = window.api?.app.reload
+    if (typeof reload === 'function') {
+      void reload().catch(() => window.location.reload())
+      return
+    }
+  } catch {
+    // Fall through to the browser primitive when the preload bridge is gone.
+  }
+  window.location.reload()
 }

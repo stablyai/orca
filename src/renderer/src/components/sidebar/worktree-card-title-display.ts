@@ -29,10 +29,14 @@ function isBranchTitle(
   return normalizedDisplayName !== null && normalizedDisplayName === normalizedBranchName
 }
 
-export function coerceWorktreeCardVisibleTitle(value: string | null | undefined): string {
-  // Why: the legacy card path can bypass title selection but still feeds trim()
-  // and inline rename props, so nullish persisted titles stop at this boundary.
-  return typeof value === 'string' ? value : ''
+export function coerceWorktreeCardVisibleTitle(
+  value: string | null | undefined,
+  fallback = ''
+): string {
+  const visibleTitle = typeof value === 'string' ? value : ''
+  // Why: legacy card paths still feed trim() and inline rename props, while
+  // recovered blank titles should borrow the safe selected identity.
+  return visibleTitle.trim() ? visibleTitle : fallback
 }
 
 export function getWorktreeCardTitleDisplay({
@@ -45,24 +49,18 @@ export function getWorktreeCardTitleDisplay({
   const normalizedStoredDisplayName = normalizeComparableTitle(storedDisplayName)
   const normalizedBranchName = normalizeComparableTitle(branchName)
   const visibleStoredDisplayName = coerceWorktreeCardVisibleTitle(storedDisplayName)
+  const linkedTitle =
+    normalizeTitle(linearIssueTitle) ?? normalizeTitle(issueTitle) ?? normalizeTitle(reviewTitle)
 
-  if (!normalizedBranchName) {
-    return normalizedStoredDisplayName ? visibleStoredDisplayName : ''
+  if (!normalizedStoredDisplayName) {
+    return linkedTitle ?? normalizedBranchName ?? ''
   }
 
-  if (
-    normalizedStoredDisplayName &&
-    !isBranchTitle(normalizedStoredDisplayName, normalizedBranchName)
-  ) {
+  if (!normalizedBranchName || !isBranchTitle(normalizedStoredDisplayName, normalizedBranchName)) {
     return visibleStoredDisplayName
   }
 
   // Why: branch names are available in hover/details; the closed card title
   // should prefer only a confirmed task/review subject, not repo/path guesses.
-  return (
-    normalizeTitle(linearIssueTitle) ??
-    normalizeTitle(issueTitle) ??
-    normalizeTitle(reviewTitle) ??
-    (normalizedStoredDisplayName ? visibleStoredDisplayName : '')
-  )
+  return linkedTitle ?? visibleStoredDisplayName
 }

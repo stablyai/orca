@@ -398,6 +398,81 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Human title')
   })
 
+  it('does not crash when legacy cards receive recovered metadata without a display name', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['status', 'branch']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: undefined as never })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('feature/local-branch')
+  })
+
+  it('uses recovered branch identity as the closed title for compact legacy cards', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['status', 'branch']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: undefined as never })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toMatch(
+      /data-worktree-title-inline-rename=""[^>]*>feature\/local-branch<\/span>/
+    )
+    expect(markup.match(/feature\/local-branch/g)).toHaveLength(2)
+  })
+
+  it('treats whitespace-only legacy display names as missing recovered titles', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+    worktreeCardProperties = ['status', 'branch']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: '   ' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toMatch(
+      /data-worktree-title-inline-rename=""[^>]*>feature\/local-branch<\/span>/
+    )
+  })
+
+  it('uses recovered linked review titles when new cards receive no display name', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ title: 'Recovered PR title' }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: undefined as never, linkedPR: 456 })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Recovered PR title')
+  })
+
   it('uses one whole-card hover even when detailed metadata icons are visible when new card style is on', async () => {
     settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
     worktreeCardProperties = ['status', 'issue', 'linear-issue', 'comment', 'ports']

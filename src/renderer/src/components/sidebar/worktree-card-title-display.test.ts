@@ -61,7 +61,7 @@ describe('worktree card title display', () => {
     ).toBe('test454545')
   })
 
-  it('uses linked work titles when the stored title is nullish and the branch is usable', () => {
+  it('uses linked work titles when recovered metadata has no stored title', () => {
     expect(
       getWorktreeCardTitleDisplay({
         storedDisplayName: undefined,
@@ -85,7 +85,7 @@ describe('worktree card title display', () => {
         storedDisplayName: '   ',
         branchName: 'feature/local-branch'
       })
-    ).toBe('')
+    ).toBe('feature/local-branch')
 
     expect(
       getWorktreeCardTitleDisplay({
@@ -96,7 +96,7 @@ describe('worktree card title display', () => {
     ).toBe('Fix stale Linear issue')
   })
 
-  it('skips linked-title replacement when the branch name is nullish or blank', () => {
+  it('uses linked titles even when the branch name is nullish or blank', () => {
     expect(
       getWorktreeCardTitleDisplay({
         storedDisplayName: 'Custom workspace',
@@ -111,12 +111,32 @@ describe('worktree card title display', () => {
         branchName: '   ',
         reviewTitle: 'Fix stale GH PR'
       })
-    ).toBe('')
+    ).toBe('Fix stale GH PR')
+  })
+
+  it('uses branch identity when recovered metadata has no stored or linked title', () => {
+    expect(
+      getWorktreeCardTitleDisplay({
+        storedDisplayName: undefined,
+        branchName: 'feature/recovered'
+      })
+    ).toBe('feature/recovered')
+  })
+
+  it('does not use loading placeholders for missing stored titles', () => {
+    expect(
+      getWorktreeCardTitleDisplay({
+        storedDisplayName: undefined,
+        branchName: 'feature/recovered',
+        reviewTitle: 'Loading PR...'
+      })
+    ).toBe('feature/recovered')
   })
 
   it('coerces legacy visible titles before downstream title operations', () => {
     expect(coerceWorktreeCardVisibleTitle(undefined).trim()).toBe('')
     expect(coerceWorktreeCardVisibleTitle(null).trim()).toBe('')
     expect(coerceWorktreeCardVisibleTitle('  Custom workspace  ')).toBe('  Custom workspace  ')
+    expect(coerceWorktreeCardVisibleTitle('   ', 'feature/recovered')).toBe('feature/recovered')
   })
 })

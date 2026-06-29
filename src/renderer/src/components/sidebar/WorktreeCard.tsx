@@ -255,20 +255,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const storedDisplayName = typeof worktree.displayName === 'string' ? worktree.displayName : ''
+  const trimmedStoredDisplayName = storedDisplayName.trim()
   const activeSurfaceIsSecondary = isActiveSurface && activeSurfaceVariant === 'secondary'
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       openModal('edit-meta', {
         worktreeId: worktree.id,
-        currentDisplayName: worktree.displayName,
+        currentDisplayName: storedDisplayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
         currentComment: worktree.comment,
         focus: 'issue'
       })
     },
-    [worktree, openModal]
+    [worktree, openModal, storedDisplayName]
   )
 
   const handleEditComment = useCallback(
@@ -276,14 +278,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
       e.stopPropagation()
       openModal('edit-meta', {
         worktreeId: worktree.id,
-        currentDisplayName: worktree.displayName,
+        currentDisplayName: storedDisplayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
         currentComment: worktree.comment,
         focus: 'comment'
       })
     },
-    [worktree, openModal]
+    [worktree, openModal, storedDisplayName]
   )
 
   const handleOpenAutomation = useCallback(
@@ -608,13 +610,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
         }
     : null
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
-    storedDisplayName: worktree.displayName,
+    storedDisplayName,
     branchName: branch,
     linearIssueTitle: linearIssueDisplay?.title,
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
   })
-  const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
+  const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName, cardTitleDisplay)
   const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
@@ -905,7 +907,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       }
       openModal('edit-meta', {
         worktreeId: worktree.id,
-        currentDisplayName: worktree.displayName,
+        currentDisplayName: storedDisplayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
         currentComment: worktree.comment
@@ -914,8 +916,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [
       openModal,
       affiliateListMode,
+      storedDisplayName,
       worktree.comment,
-      worktree.displayName,
       worktree.id,
       worktree.linkedIssue,
       worktree.linkedPR
@@ -1183,7 +1185,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     !isFolder &&
     branch.length > 0 &&
     !newCardStyle &&
-    (!compactCards || branch !== worktree.displayName)
+    (!compactCards || branch !== storedDisplayName)
   // Why: rebases already surface in source control; keep dense cards from
   // carrying a persistent rebase chip while preserving other interruption cues.
   const showConflictOperationBadge =
@@ -1259,7 +1261,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             automationProvenance={metaAutomationProvenance}
             automationHostId={worktree.hostId}
             branchName={showBranchIdentityHover ? branch : undefined}
-            workspaceTitle={worktree.displayName}
+            workspaceTitle={trimmedStoredDisplayName || undefined}
             identityOrder="branch-first"
             detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
             openDelay={100}
@@ -1929,7 +1931,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <AutoRenameFailedDialog
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
-            worktreeName={worktree.displayName}
+            worktreeName={storedDisplayName}
             error={worktree.firstAgentMessageRenameError}
           />
         )}

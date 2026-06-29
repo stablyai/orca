@@ -14,6 +14,7 @@ vi.mock('@/lib/react-error-boundary-reporting', () => ({
 }))
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+const RELOAD_RENDERER_BOOT_KEY = 'orca:lazy-chunk-reload-renderer-boot'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -60,6 +61,7 @@ describe('RecoverableRenderErrorBoundary lazy chunk containment', () => {
   })
 
   it('renders the fallback without reporting after guarded dynamic import exhaustion', async () => {
+    window.sessionStorage.setItem(RELOAD_RENDERER_BOOT_KEY, 'previous-renderer-boot')
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
     const LazyRejectingImport = lazyWithRetry(
       () =>
