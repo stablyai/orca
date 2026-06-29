@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from './ensure-simulator-tab'
 import {
   beginManualSimulatorLaunch,
@@ -43,7 +44,10 @@ function getLaunchErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message
   }
-  return 'Could not start the emulator. Check that Xcode is installed and try another device.'
+  return translate(
+    'auto.lib.open.mobile.emulator.tab.bf4f2a8a72',
+    'Could not start the emulator. Check iOS or Android emulator setup and try another device.'
+  )
 }
 
 export async function openMobileEmulatorTab(

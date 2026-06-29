@@ -7,7 +7,12 @@ import { pickDefaultSimulatorDevice } from './emulator-availability'
 export async function resolveDefaultAttachDevice(
   bridge: EmulatorBridge
 ): Promise<string | undefined> {
-  const iosDefault = pickDefaultSimulatorDevice(await bridge.listSimulators())?.udid
+  let iosDefault: string | undefined
+  try {
+    iosDefault = pickDefaultSimulatorDevice(await bridge.listSimulators())?.udid
+  } catch {
+    iosDefault = undefined
+  }
   if (iosDefault) {
     return iosDefault
   }

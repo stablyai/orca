@@ -249,9 +249,9 @@ export function MobileEmulatorSettingsPane({
         <MobileEmulatorSdkStatus
           availability={availability}
           configuredPath={settings.androidSdkPath ?? null}
-          onSetAndroidSdkPath={(path) => {
-            updateSettings({ androidSdkPath: path })
-            void refreshAvailability()
+          onSetAndroidSdkPath={async (path) => {
+            await updateSettings({ androidSdkPath: path })
+            await refreshAvailability()
           }}
         />
       ) : null}

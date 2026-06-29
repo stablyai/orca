@@ -23,6 +23,7 @@ import {
   execFileAndroidCommandRunner,
   type AndroidCommandRunner
 } from '../android/android-command-runner'
+import { ensureAdbOk } from '../android/android-adb-result'
 import {
   findRunningAvdSerial,
   listAndroidDevices,
@@ -177,7 +178,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     const sdk = this.requireSdk()
     const serial = await this.resolveDeviceId(deviceId)
     this.screenSizes.delete(serial)
-    await this.runner(sdk.adb, emuKillArgs(serial))
+    ensureAdbOk(await this.runner(sdk.adb, emuKillArgs(serial)), 'adb emulator shutdown')
   }
 
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {

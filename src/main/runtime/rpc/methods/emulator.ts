@@ -1,4 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
+import path from 'path'
 import { z } from 'zod'
 
 // Minimal schemas for emulator commands (loose for initial testing; can be tightened like browser-schemas).
@@ -62,7 +63,9 @@ const ExecParams = z.object({
 })
 
 const InstallParams = z.object({
-  path: z.string(),
+  path: z.string().refine((value) => path.isAbsolute(value), {
+    message: 'path must be absolute'
+  }),
   reinstall: z.boolean().optional(),
   device: z.string().optional(),
   emulator: z.string().optional(),
@@ -77,14 +80,34 @@ const LaunchParams = z.object({
   worktree: z.string().optional()
 })
 
-const PermissionsParams = z.object({
-  op: z.enum(['grant', 'revoke', 'reset']),
-  package: z.string(),
-  permission: z.string().optional(),
-  device: z.string().optional(),
-  emulator: z.string().optional(),
-  worktree: z.string().optional()
-})
+const PermissionsParams = z
+  .object({
+    op: z.enum(['grant', 'revoke', 'reset']),
+    package: z.string().optional(),
+    permission: z.string().optional(),
+    device: z.string().optional(),
+    emulator: z.string().optional(),
+    worktree: z.string().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.op === 'reset') {
+      return
+    }
+    if (!value.package) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['package'],
+        message: 'package is required for grant/revoke'
+      })
+    }
+    if (!value.permission) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['permission'],
+        message: 'permission is required for grant/revoke'
+      })
+    }
+  })
 
 const AxParams = z.object({
   device: z.string().optional(),

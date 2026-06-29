@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
+import { randomUUID } from 'crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
 
@@ -7,34 +8,63 @@ import { emulatorProbe } from '../emulator/emulator-probe'
 // units arrive on emulator:videoStreamMeta / emulator:videoStreamFrame. Mirrors
 // the MJPEG emulator-frame-stream handler but for the Android H.264 path.
 export function registerEmulatorVideoStreamHandlers(): void {
-  const unsubscribers = new Map<string, () => void>()
-  const keyFor = (webContentsId: number, deviceId: string): string => `${webContentsId}:${deviceId}`
+  type Subscription = { owner: WebContents; unsubscribe: () => void }
+  const subscriptions = new Map<string, Subscription>()
 
-  ipcMain.handle('emulator:videoStreamStart', (event, args: { deviceId: string }) => {
-    emulatorProbe('video.subscribe', { deviceId: args.deviceId })
-    const owner = event.sender
-    const key = keyFor(owner.id, args.deviceId)
-    unsubscribers.get(key)?.()
-    const unsubscribe = scrcpyVideoRegistry.subscribe(args.deviceId, (videoEvent) => {
-      if (owner.isDestroyed()) {
-        return
-      }
-      if (videoEvent.type === 'meta') {
-        owner.send('emulator:videoStreamMeta', { deviceId: args.deviceId, meta: videoEvent.meta })
-      } else {
-        owner.send('emulator:videoStreamFrame', { deviceId: args.deviceId, ...videoEvent.frame })
-      }
-    })
-    unsubscribers.set(key, unsubscribe)
-    owner.once('destroyed', () => {
-      unsubscribers.get(key)?.()
-      unsubscribers.delete(key)
-    })
-  })
+  const stopSubscription = (streamId: string, owner?: WebContents): void => {
+    const subscription = subscriptions.get(streamId)
+    if (!subscription || (owner && subscription.owner !== owner)) {
+      return
+    }
+    subscription.unsubscribe()
+    subscriptions.delete(streamId)
+  }
 
-  ipcMain.handle('emulator:videoStreamStop', (event, args: { deviceId: string }) => {
-    const key = keyFor(event.sender.id, args.deviceId)
-    unsubscribers.get(key)?.()
-    unsubscribers.delete(key)
+  ipcMain.handle(
+    'emulator:videoStreamStart',
+    (event, args: { deviceId: string; streamId?: string }) => {
+      emulatorProbe('video.subscribe', { deviceId: args.deviceId })
+      const owner = event.sender
+      const streamId = args.streamId ?? randomUUID()
+      const existing = subscriptions.get(streamId)
+      if (existing && existing.owner !== owner) {
+        throw new Error('Video stream id is already in use by another renderer')
+      }
+      stopSubscription(streamId, owner)
+      const pendingSubscription = { owner, unsubscribe: () => {} }
+      subscriptions.set(streamId, pendingSubscription)
+      setTimeout(() => {
+        if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
+          return
+        }
+        const unsubscribe = scrcpyVideoRegistry.subscribe(args.deviceId, (videoEvent) => {
+          if (owner.isDestroyed()) {
+            return
+          }
+          if (videoEvent.type === 'meta') {
+            owner.send('emulator:videoStreamMeta', {
+              streamId,
+              deviceId: args.deviceId,
+              meta: videoEvent.meta
+            })
+          } else {
+            owner.send('emulator:videoStreamFrame', {
+              streamId,
+              deviceId: args.deviceId,
+              ...videoEvent.frame
+            })
+          }
+        })
+        pendingSubscription.unsubscribe = unsubscribe
+      }, 0)
+      owner.once('destroyed', () => {
+        stopSubscription(streamId, owner)
+      })
+      return { streamId }
+    }
+  )
+
+  ipcMain.handle('emulator:videoStreamStop', (event, args: { streamId: string }) => {
+    stopSubscription(args.streamId, event.sender)
   })
 }

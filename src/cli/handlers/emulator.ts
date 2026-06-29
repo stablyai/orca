@@ -1,5 +1,8 @@
 import type { CommandHandler } from '../dispatch'
+import { formatLogcat } from '../emulator-logcat-format'
+import { parseEmulatorPermissionRequest } from '../emulator-permissions-args'
 import { printResult } from '../format'
+import { resolveRepoPathArgument } from '../repo-path-arguments'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -48,20 +51,6 @@ function formatEmulatorDevices(value: unknown): string {
       const platform = device.backend === 'android' ? 'Android' : 'iOS'
       return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
     })
-    .join('\n')
-}
-
-type LogcatRow = { timestamp?: string; level?: string; tag?: string; message?: string }
-
-function formatLogcat(value: unknown): string {
-  const entries = Array.isArray(value) ? (value as LogcatRow[]) : []
-  if (entries.length === 0) {
-    return 'No logcat output.'
-  }
-  return entries
-    .map((entry) =>
-      `${entry.timestamp ?? ''} ${entry.level ?? ''} ${entry.tag ?? ''}: ${entry.message ?? ''}`.trim()
-    )
     .join('\n')
 }
 
@@ -244,15 +233,20 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
   },
   'emulator install': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
-    const path = getRequiredStringFlag(flags, 'path')
+    const apkPath = resolveRepoPathArgument(
+      getRequiredStringFlag(flags, 'path'),
+      cwd,
+      client.isRemote,
+      'Remote emulator install'
+    )
     const res = await client.call('emulator.install', {
-      path,
+      path: apkPath,
       reinstall: flags.get('reinstall') === true,
       device: target.device,
       emulator: target.emulator,
       worktree: target.worktree
     })
-    printResult(res, json, () => `Installed ${path}`)
+    printResult(res, json, () => `Installed ${apkPath}`)
   },
   'emulator launch': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
@@ -268,20 +262,18 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
   },
   'emulator permissions': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
-    const op = getRequiredStringFlag(flags, 'op')
-    if (op !== 'grant' && op !== 'revoke' && op !== 'reset') {
-      throw new RuntimeClientError('invalid_argument', '<op> must be grant, revoke, or reset')
-    }
-    const packageName = getRequiredStringFlag(flags, 'package')
+    const request = parseEmulatorPermissionRequest(flags)
     const res = await client.call('emulator.permissions', {
-      op,
-      package: packageName,
-      permission: getOptionalStringFlag(flags, 'permission'),
+      op: request.op,
+      package: request.packageName,
+      permission: request.permission,
       device: target.device,
       emulator: target.emulator,
       worktree: target.worktree
     })
-    printResult(res, json, () => `${op} ${packageName}`)
+    printResult(res, json, () =>
+      request.op === 'reset' ? 'Reset runtime permissions' : `${request.op} ${request.packageName}`
+    )
   },
   'emulator ax': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)

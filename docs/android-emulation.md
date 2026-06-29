@@ -43,7 +43,7 @@ What is iOS-bound and needs an Android sibling:
 - Device management: `xcrun simctl` → `adb` / `emulator` / `avdmanager`.
 - Streaming helper: `serve-sim` (MJPEG/H.264 over HTTP+WS) → `scrcpy-server.jar`
   (H.264 + control over adb-forwarded sockets).
-- Input: serve-sim normalized-coord WS → scrcpy control socket.
+- Input: serve-sim normalized-coord WS → adb-backed Android input commands.
 - Availability gate: darwin-only → SDK-present on any OS.
 
 ## Goals
@@ -160,14 +160,18 @@ the existing `serve-sim-*` / `simctl-*` granularity (no file approaches the
   `emulator @<name>` spawn, shut down via `adb -s <serial> emu kill`.
 - `scrcpy-server-deploy.ts` — push the version-pinned `scrcpy-server.jar`, start
   it via `app_process`, and set up the `adb forward` tunnel(s).
-- `scrcpy-video-stream.ts` — read the video socket, parse scrcpy frame headers
+- `scrcpy-stream-session.ts` — owns the server process, adb tunnel, and video
+  socket lifecycle.
+- `scrcpy-video-frame-parser.ts` — read the video socket, parse scrcpy frame headers
   (PTS + length), and emit H.264 access units plus the codec config (SPS/PPS).
-- `scrcpy-control-channel.ts` — encode and send scrcpy control messages (touch
+- `scrcpy-control-protocol.ts` — encode scrcpy control messages (touch
   down/move/up with pointer id + pressure, inject keycode, inject UTF-8 text,
-  scroll, set screen power, rotate, clipboard).
+  scroll, set screen power, rotate, clipboard) for a future low-latency input path.
 - `android-input-mapping.ts` — convert normalized 0–1 ↔ device pixels using the
   live frame size; map button names → Android keycodes (BACK=4, HOME=3,
   APP_SWITCH=187, POWER=26, VOLUME_UP=24, VOLUME_DOWN=25).
+- `android-input-commands.ts` — current adb-backed tap/type/button/rotate/gesture
+  command construction.
 - `uiautomator-tree.ts` — `adb shell uiautomator dump` → parsed XML tree.
 - `android-app-control.ts` — `adb install <apk>`, `am start` package/activity.
 - `android-permissions.ts` — `pm grant` / `revoke` / `reset`.
@@ -177,13 +181,11 @@ the existing `serve-sim-*` / `simctl-*` granularity (no file approaches the
 
 ### Streaming & control data flow
 
-**Control rides the scrcpy control socket, not `adb shell input`.** `adb shell
-input tap` has ~150–250ms per-call latency; the scrcpy control socket accepts a
-binary touch stream, so multi-point gestures are smooth — the direct analog of
-the iOS WS gesture sender (`emulator-gesture-sender.ts`). Coordinates stay
-normalized 0–1 at every public boundary (CLI, RPC, renderer); only
-`android-input-mapping.ts` converts to device pixels, using the current frame
-dimensions reported by scrcpy.
+**Control currently uses `adb shell input` commands.** Coordinates stay
+normalized 0–1 at every public boundary (CLI, RPC, renderer); the Android backend
+maps them to device pixels before issuing adb-backed tap/gesture/button commands.
+The scrcpy control protocol encoders are present for a future low-latency input
+path, but video streaming does not require that path.
 
 **Video path (H.264 → renderer WebCodecs):**
 
@@ -205,11 +207,10 @@ dimensions reported by scrcpy.
 
 - Public API (CLI/RPC/pane gestures) stays normalized 0–1, top-left origin, as
   the iOS path already mandates.
-- `android-input-mapping.ts` multiplies by the live frame width/height for the
-  scrcpy control protocol, which expects device pixels plus the frame size for
-  scaling. Rotation changes the effective frame size; the mapper reads the
-  current size each gesture rather than caching.
-- Hardware buttons: the scrcpy control channel injects keycodes. Android adds
+- `android-input-mapping.ts` multiplies by the current device display size before
+  adb input commands are built. Rotation changes the effective frame size; the
+  mapper reads the current size each gesture rather than caching.
+- Hardware buttons: adb keyevents inject keycodes. Android adds
   **Back** and **Recents** (no iOS equivalent); the button name → keycode map
   and the renderer's hardware-button row gain Android variants.
 

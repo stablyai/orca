@@ -34,22 +34,30 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   jarPath,
   maxSize
 }) => {
-  const session = await ScrcpyStreamSession.start(
-    { runner, sdk, serial, localJarPath: jarPath, maxSize },
-    {
-      onMeta: (meta) => scrcpyVideoRegistry.pushMeta(serial, meta),
-      onFrame: (frame) =>
-        scrcpyVideoRegistry.pushFrame(serial, {
-          config: frame.config,
-          keyFrame: frame.keyFrame,
-          pts: frame.pts.toString(),
-          bytes: toArrayBuffer(frame.data)
-        }),
-      onError: () => scrcpyVideoRegistry.stop(serial),
-      onClose: () => scrcpyVideoRegistry.stop(serial)
-    }
-  )
-  scrcpyVideoRegistry.register(serial, () => session.close())
+  let session: ScrcpyStreamSession | null = null
+  // ScrcpyStreamSession.start waits for video meta, and that same startup path
+  // may emit config/keyframes. Register first so those events seed replay cache.
+  scrcpyVideoRegistry.register(serial, () => session?.close())
+  try {
+    session = await ScrcpyStreamSession.start(
+      { runner, sdk, serial, localJarPath: jarPath, maxSize },
+      {
+        onMeta: (meta) => scrcpyVideoRegistry.pushMeta(serial, meta),
+        onFrame: (frame) =>
+          scrcpyVideoRegistry.pushFrame(serial, {
+            config: frame.config,
+            keyFrame: frame.keyFrame,
+            pts: frame.pts.toString(),
+            bytes: toArrayBuffer(frame.data)
+          }),
+        onError: () => scrcpyVideoRegistry.stop(serial),
+        onClose: () => scrcpyVideoRegistry.stop(serial)
+      }
+    )
+  } catch (error) {
+    scrcpyVideoRegistry.stop(serial)
+    throw error
+  }
 
   let closed = false
   return {
@@ -60,7 +68,7 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
           return
         }
         closed = true
-        session.close()
+        session?.close()
         scrcpyVideoRegistry.stop(serial)
       }
     }

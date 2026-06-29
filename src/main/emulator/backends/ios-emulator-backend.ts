@@ -68,8 +68,9 @@ export class IosEmulatorBackend implements EmulatorBackend {
       return false
     }
     try {
-      await this.resolveDeviceId(id)
-      return true
+      const needle = id.toLowerCase()
+      const devices = await listSimulatorDevices()
+      return devices.some((device) => device.udid === id || device.name.toLowerCase() === needle)
     } catch {
       return false
     }

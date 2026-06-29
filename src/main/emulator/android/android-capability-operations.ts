@@ -1,6 +1,7 @@
 import { EmulatorError } from '../emulator-errors'
-import type { AndroidCommandResult, AndroidCommandRunner } from './android-command-runner'
+import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
+import { ensureAdbOk } from './android-adb-result'
 import { installApkArgs, launchAppArgs } from './android-app-control'
 import { permissionArgs, type AndroidPermissionOp } from './android-permissions'
 import { logcatArgs, parseLogcatLine, type LogcatEntry } from './android-logcat'
@@ -10,18 +11,6 @@ import { parseUiAutomatorXml, type AndroidAxNode } from './uiautomator-tree'
 // command runner. The backend exposes thin delegations to these.
 
 const UIAUTOMATOR_DUMP_PATH = '/sdcard/window_dump.xml'
-
-// AndroidCommandRunner resolves even on non-zero exit, so a failed adb command
-// otherwise becomes a silent no-op (offline device, bad package, denied perm).
-function ensureAdbOk(result: AndroidCommandResult, label: string): AndroidCommandResult {
-  if (result.code !== 0) {
-    throw new EmulatorError(
-      'emulator_error',
-      `${label} failed: ${(result.stderr || result.stdout).trim() || 'unknown error'}`
-    )
-  }
-  return result
-}
 
 export async function installAndroidApk(
   runner: AndroidCommandRunner,

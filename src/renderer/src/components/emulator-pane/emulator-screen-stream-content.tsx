@@ -38,6 +38,7 @@ export function EmulatorScreenStreamContent({
 
   const video = useEmulatorVideoStream(
     androidDeviceId ?? undefined,
+    streamKey,
     showStream && Boolean(androidDeviceId),
     onStreamSize
   )

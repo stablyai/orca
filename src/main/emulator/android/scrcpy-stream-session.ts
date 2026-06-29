@@ -3,6 +3,7 @@ import { connect, type Socket } from 'node:net'
 import { randomBytes } from 'node:crypto'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
+import { ensureAdbOk } from './android-adb-result'
 import {
   SCRCPY_DEVICE_JAR_PATH,
   pushScrcpyServerArgs,
@@ -26,6 +27,7 @@ import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
 const DEVICE_NAME_BYTES = 64
 const DUMMY_BYTE = 1
+const DYNAMIC_FORWARD_PORT = 0
 
 export type ScrcpyStreamCallbacks = {
   onMeta: (meta: ScrcpyVideoMeta) => void
@@ -59,32 +61,60 @@ export class ScrcpyStreamSession {
   private metaSeen = false
   private headerStripped = false
   private closed = false
+  private readonly ready: Promise<void>
+  private resolveReady: (() => void) | null = null
+  private rejectReady: ((error: Error) => void) | null = null
 
   private constructor(
     private readonly options: ScrcpyStreamOptions,
     private readonly callbacks: ScrcpyStreamCallbacks,
     private readonly scid: string,
-    private readonly port: number
-  ) {}
+    private port: number
+  ) {
+    this.ready = new Promise((resolve, reject) => {
+      this.resolveReady = resolve
+      this.rejectReady = reject
+    })
+  }
 
   static async start(
     options: ScrcpyStreamOptions,
     callbacks: ScrcpyStreamCallbacks
   ): Promise<ScrcpyStreamSession> {
     const scid = newScid()
-    const port = options.localPort ?? 27183
+    const port = options.localPort ?? DYNAMIC_FORWARD_PORT
     emulatorProbe('scrcpy.start', { serial: options.serial, port, scid })
     const session = new ScrcpyStreamSession(options, callbacks, scid, port)
-    await session.deploy()
-    session.spawnServer()
-    session.connectSockets()
+    try {
+      await session.deploy()
+      session.spawnServer()
+      session.connectSockets()
+      await session.ready
+    } catch (error) {
+      session.close()
+      throw error
+    }
     return session
   }
 
   private async deploy(): Promise<void> {
     const { runner, sdk, serial, localJarPath } = this.options
-    await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH))
-    await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid))
+    ensureAdbOk(
+      await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
+      'scrcpy server push'
+    )
+    const forward = ensureAdbOk(
+      await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid)),
+      'scrcpy port forward'
+    )
+    if (this.port === DYNAMIC_FORWARD_PORT) {
+      const allocated = Number.parseInt(forward.stdout.trim(), 10)
+      if (!Number.isFinite(allocated) || allocated <= 0) {
+        throw new Error('adb did not return a local scrcpy port')
+      }
+      this.port = allocated
+      emulatorProbe('scrcpy.forward.port', { serial, port: this.port })
+    }
   }
 
   private spawnServer(): void {
@@ -103,6 +133,10 @@ export class ScrcpyStreamSession {
     this.server.on('error', (error) => this.fail(error.message))
     this.server.on('exit', (code) => {
       emulatorProbe('scrcpy.server.exit', { code, log: serverLog.slice(0, 1000).trim() })
+      if (!this.metaSeen) {
+        this.fail('scrcpy server exited before the video stream started')
+        return
+      }
       this.close()
     })
   }
@@ -187,6 +221,9 @@ export class ScrcpyStreamSession {
       this.metaSeen = true
       emulatorProbe('scrcpy.meta', meta)
       this.callbacks.onMeta(meta)
+      this.resolveReady?.()
+      this.resolveReady = null
+      this.rejectReady = null
       buffer = Buffer.from(buffer.subarray(12))
     }
     const { frames, pending } = parseScrcpyVideoFrames(Buffer.alloc(0), buffer)
@@ -206,6 +243,9 @@ export class ScrcpyStreamSession {
       return
     }
     emulatorProbeError('scrcpy.fail', new Error(message), { serial: this.options.serial })
+    this.rejectReady?.(new Error(message))
+    this.resolveReady = null
+    this.rejectReady = null
     this.callbacks.onError(message)
     this.close()
   }

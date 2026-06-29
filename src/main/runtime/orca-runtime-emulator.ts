@@ -237,7 +237,7 @@ export class RuntimeEmulatorCommands {
   async emulatorPermissions(
     params: EmulatorTargetParams & {
       op: 'grant' | 'revoke' | 'reset'
-      package: string
+      package?: string
       permission?: string
     }
   ): Promise<{ ok: true }> {
@@ -246,7 +246,7 @@ export class RuntimeEmulatorCommands {
       'permissions',
       { device: params.device ?? params.emulator, worktreeId },
       (backend, device) =>
-        backend.setPermission!(device, params.op, params.package, params.permission)
+        backend.setPermission!(device, params.op, params.package ?? '', params.permission)
     )
     return RuntimeEmulatorCommands.OK
   }

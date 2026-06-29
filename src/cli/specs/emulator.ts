@@ -92,8 +92,9 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'permissions'],
-    summary: 'Grant/revoke/reset an Android runtime permission',
-    usage: 'orca emulator permissions <op> <package> [permission] [--device <id>] [--json]',
+    summary: 'Grant/revoke an Android runtime permission, or reset all runtime grants',
+    usage:
+      'orca emulator permissions <grant|revoke> <package> <permission> [--device <id>] [--json]\n       orca emulator permissions reset [--device <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'device',

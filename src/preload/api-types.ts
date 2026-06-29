@@ -484,16 +484,18 @@ export type EmulatorApi = {
   onFrameStreamError: (
     callback: (data: { streamId: string; message: string }) => void
   ) => () => void
-  startVideoStream: (args: { deviceId: string }) => Promise<void>
-  stopVideoStream: (args: { deviceId: string }) => Promise<void>
+  startVideoStream: (args: { deviceId: string; streamId: string }) => Promise<{ streamId: string }>
+  stopVideoStream: (args: { streamId: string }) => Promise<void>
   onVideoStreamMeta: (
     callback: (data: {
+      streamId: string
       deviceId: string
       meta: { codecId: string; width: number; height: number }
     }) => void
   ) => () => void
   onVideoStreamFrame: (
     callback: (data: {
+      streamId: string
       deviceId: string
       config: boolean
       keyFrame: boolean

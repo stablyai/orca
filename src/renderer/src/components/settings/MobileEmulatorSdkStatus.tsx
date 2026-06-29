@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleAlert } from 'lucide-react'
 import { Button } from '../ui/button'
+import { translate } from '@/i18n/i18n'
 
 type EmulatorSdkAvailability = {
   platform: string
@@ -11,14 +12,14 @@ type EmulatorSdkAvailability = {
 type MobileEmulatorSdkStatusProps = {
   availability: EmulatorSdkAvailability
   configuredPath?: string | null
-  onSetAndroidSdkPath: (path: string | null) => void
+  onSetAndroidSdkPath: (path: string | null) => void | Promise<void>
 }
 
 const ANDROID_STUDIO_URL = 'https://developer.android.com/studio'
 
 function StatusIcon({ ok }: { ok: boolean }): React.JSX.Element {
   return ok ? (
-    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-success" />
   ) : (
     <CircleAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
   )
@@ -41,16 +42,20 @@ export function MobileEmulatorSdkStatus({
       defaultPath: android.sdkPath ?? configuredPath ?? undefined
     })
     if (picked) {
-      onSetAndroidSdkPath(picked)
+      await onSetAndroidSdkPath(picked)
     }
   }
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
-      <p className="text-sm font-semibold">Emulator SDKs</p>
+    <div className="rounded-xl border border-border/60 bg-card/30 p-4">
+      <p className="text-sm font-semibold">
+        {translate('auto.components.settings.MobileEmulatorSdkStatus.536026130e', 'Emulator SDKs')}
+      </p>
       <p className="text-xs text-muted-foreground">
-        Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS
-        Simulators need Xcode on macOS.
+        {translate(
+          'auto.components.settings.MobileEmulatorSdkStatus.dde0ec1cd8',
+          'Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.'
+        )}
       </p>
 
       <div className="mt-3 divide-y divide-border/40">
@@ -58,16 +63,32 @@ export function MobileEmulatorSdkStatus({
           <StatusIcon ok={android.sdkFound} />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Android SDK</p>
+              <p className="text-sm font-medium">
+                {translate(
+                  'auto.components.settings.MobileEmulatorSdkStatus.027cbf668a',
+                  'Android SDK'
+                )}
+              </p>
               {android.sdkFound ? (
                 <p className="break-all text-[11px] text-muted-foreground">
-                  {configuredPath ? 'Using configured path ' : 'Detected at '}
+                  {configuredPath
+                    ? translate(
+                        'auto.components.settings.MobileEmulatorSdkStatus.f6d080d128',
+                        'Using configured path '
+                      )
+                    : translate(
+                        'auto.components.settings.MobileEmulatorSdkStatus.7fe4bd5907',
+                        'Detected at '
+                      )}
                   <code className="rounded bg-muted px-1 py-0.5">{android.sdkPath}</code>
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {android.message ||
-                    'Not found. Install Android Studio, then create a Virtual Device.'}
+                    translate(
+                      'auto.components.settings.MobileEmulatorSdkStatus.2784f0b22d',
+                      'Not found. Install Android Studio, then create a Virtual Device.'
+                    )}
                 </p>
               )}
             </div>
@@ -79,20 +100,29 @@ export function MobileEmulatorSdkStatus({
                   variant="outline"
                   onClick={() => void window.api.shell.openUrl(ANDROID_STUDIO_URL)}
                 >
-                  Download Android Studio
+                  {translate(
+                    'auto.components.settings.MobileEmulatorSdkStatus.b94ff260e6',
+                    'Download Android Studio'
+                  )}
                 </Button>
               ) : null}
               <Button type="button" size="sm" variant="outline" onClick={() => void handleLocate()}>
-                Locate SDK folder…
+                {translate(
+                  'auto.components.settings.MobileEmulatorSdkStatus.18925b082d',
+                  'Locate SDK folder…'
+                )}
               </Button>
               {configuredPath ? (
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  onClick={() => onSetAndroidSdkPath(null)}
+                  onClick={() => void onSetAndroidSdkPath(null)}
                 >
-                  Clear
+                  {translate(
+                    'auto.components.settings.MobileEmulatorSdkStatus.8c52684db8',
+                    'Clear'
+                  )}
                 </Button>
               ) : null}
             </div>
@@ -103,13 +133,24 @@ export function MobileEmulatorSdkStatus({
           <div className="flex items-start gap-3 py-3">
             <StatusIcon ok={iosOk} />
             <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-sm font-medium">iOS Simulator (Xcode)</p>
+              <p className="text-sm font-medium">
+                {translate(
+                  'auto.components.settings.MobileEmulatorSdkStatus.76eb88b88e',
+                  'iOS Simulator (Xcode)'
+                )}
+              </p>
               <p className="text-xs text-muted-foreground">
                 {iosOk
-                  ? 'Ready'
+                  ? translate(
+                      'auto.components.settings.MobileEmulatorSdkStatus.c6f3ea4f12',
+                      'Ready'
+                    )
                   : availability.simctl?.message ||
                     availability.serveSim?.message ||
-                    'Install Xcode and add an iOS Simulator runtime.'}
+                    translate(
+                      'auto.components.settings.MobileEmulatorSdkStatus.e4f14b50d7',
+                      'Install Xcode and add an iOS Simulator runtime.'
+                    )}
               </p>
             </div>
           </div>

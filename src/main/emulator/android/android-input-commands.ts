@@ -1,5 +1,6 @@
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
+import { ensureAdbOk } from './android-adb-result'
 import {
   androidButtonKeycode,
   normalizedToDevicePixels,
@@ -23,9 +24,12 @@ export async function androidTap(
   size: DeviceScreenSize
 ): Promise<void> {
   const pixel = normalizedToDevicePixels(x, y, size)
-  await runner(
-    sdk.adb,
-    androidShellArgs(serial, ['input', 'tap', String(pixel.x), String(pixel.y)])
+  ensureAdbOk(
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, ['input', 'tap', String(pixel.x), String(pixel.y)])
+    ),
+    'adb tap'
   )
 }
 
@@ -45,17 +49,20 @@ export async function androidSwipe(
   // endpoints; the scrcpy control phase replaces this with true multi-touch.
   const start = normalizedToDevicePixels(first.x, first.y, size)
   const end = normalizedToDevicePixels(last.x, last.y, size)
-  await runner(
-    sdk.adb,
-    androidShellArgs(serial, [
-      'input',
-      'swipe',
-      String(start.x),
-      String(start.y),
-      String(end.x),
-      String(end.y),
-      '300'
-    ])
+  ensureAdbOk(
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, [
+        'input',
+        'swipe',
+        String(start.x),
+        String(start.y),
+        String(end.x),
+        String(end.y),
+        '300'
+      ])
+    ),
+    'adb swipe'
   )
 }
 
@@ -66,7 +73,10 @@ export async function androidTypeText(
   text: string
 ): Promise<void> {
   // adb input text uses %s for spaces and cannot carry newlines.
-  await runner(sdk.adb, androidShellArgs(serial, ['input', 'text', text.replace(/ /g, '%s')]))
+  ensureAdbOk(
+    await runner(sdk.adb, androidShellArgs(serial, ['input', 'text', text.replace(/ /g, '%s')])),
+    'adb type'
+  )
 }
 
 export async function androidButton(
@@ -75,9 +85,12 @@ export async function androidButton(
   serial: string,
   name: string
 ): Promise<void> {
-  await runner(
-    sdk.adb,
-    androidShellArgs(serial, ['input', 'keyevent', String(androidButtonKeycode(name))])
+  ensureAdbOk(
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, ['input', 'keyevent', String(androidButtonKeycode(name))])
+    ),
+    'adb button'
   )
 }
 
@@ -87,19 +100,25 @@ export async function androidRotate(
   serial: string,
   orientation: string
 ): Promise<void> {
-  await runner(
-    sdk.adb,
-    androidShellArgs(serial, ['settings', 'put', 'system', 'accelerometer_rotation', '0'])
+  ensureAdbOk(
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, ['settings', 'put', 'system', 'accelerometer_rotation', '0'])
+    ),
+    'adb rotate'
   )
-  await runner(
-    sdk.adb,
-    androidShellArgs(serial, [
-      'settings',
-      'put',
-      'system',
-      'user_rotation',
-      String(orientationToRotation(orientation))
-    ])
+  ensureAdbOk(
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, [
+        'settings',
+        'put',
+        'system',
+        'user_rotation',
+        String(orientationToRotation(orientation))
+      ])
+    ),
+    'adb rotate'
   )
 }
 
@@ -111,7 +130,7 @@ export async function androidExec(
 ): Promise<string> {
   // Pass the whole command as a single arg so the device shell parses quotes,
   // pipes, and compound commands instead of naively splitting on spaces.
-  const result = await runner(sdk.adb, androidShellArgs(serial, [command]))
+  const result = ensureAdbOk(await runner(sdk.adb, androidShellArgs(serial, [command])), 'adb exec')
   return result.stdout
 }
 
