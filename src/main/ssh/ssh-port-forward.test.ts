@@ -1,14 +1,18 @@
 import { EventEmitter } from 'events'
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPortForwardManager } from './ssh-port-forward'
 
-const { spawnSystemSshPortForwardMock } = vi.hoisted(() => ({
-  spawnSystemSshPortForwardMock: vi.fn()
+const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
+  startSystemSshPortForwardProcessMock: vi.fn()
 }))
 
-vi.mock('./ssh-system-fallback', () => ({
-  spawnSystemSshPortForward: spawnSystemSshPortForwardMock
-}))
+vi.mock('./system-ssh-forward-process', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    startSystemSshPortForwardProcess: startSystemSshPortForwardProcessMock
+  }
+})
 
 function createMockConn(forwardOutErr?: Error) {
   const mockChannel = {
@@ -47,28 +51,28 @@ function createSystemSshConn() {
   }
 }
 
-function createFakeSystemSshProcess() {
-  const process = new EventEmitter() as EventEmitter & {
-    stderr: EventEmitter
-    kill: ReturnType<typeof vi.fn>
-    exitCode: number | null
-    signalCode: NodeJS.Signals | null
+function createFakeSystemSshForward() {
+  const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
+  return {
+    process,
+    waitForStartup: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+    dispose: vi.fn()
   }
-  process.stderr = new EventEmitter()
-  process.kill = vi.fn()
-  process.exitCode = null
-  process.signalCode = null
-  return process
 }
 
-// Mock the net module to avoid real TCP listeners
 vi.mock('net', () => {
-  const listeners = new Map<string, (...args: unknown[]) => void>()
   return {
     createServer: vi.fn().mockImplementation((connectionHandler) => {
+      const listeners = new Map<string, (...args: unknown[]) => void>()
       const server = {
-        listen: vi.fn().mockImplementation((_port, _host, cb) => cb()),
-        close: vi.fn(),
+        listen: vi.fn().mockImplementation(() => {
+          listeners.get('listening')?.()
+        }),
+        close: vi.fn().mockImplementation((cb?: () => void) => cb?.()),
+        once: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
+          listeners.set(event, handler)
+        }),
         on: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
           listeners.set(event, handler)
         }),
@@ -86,14 +90,10 @@ describe('SshPortForwardManager', () => {
 
   beforeEach(() => {
     manager = new SshPortForwardManager()
-    spawnSystemSshPortForwardMock.mockReset()
+    startSystemSshPortForwardProcessMock.mockReset()
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('adds a port forward and returns entry', async () => {
+  it('adds an ssh2 port forward and returns entry', async () => {
     const conn = createMockConn()
     const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
 
@@ -106,7 +106,7 @@ describe('SshPortForwardManager', () => {
     expect(entry.id).toBeDefined()
   })
 
-  it('throws when SSH client is not connected', async () => {
+  it('throws when no port forward provider can handle the connection', async () => {
     const conn = {
       getClient: vi.fn().mockReturnValue(null),
       usesSystemSshTransport: vi.fn().mockReturnValue(false)
@@ -117,21 +117,19 @@ describe('SshPortForwardManager', () => {
   })
 
   it('adds a system SSH port forward when no ssh2 client is available', async () => {
-    vi.useFakeTimers()
-    const process = createFakeSystemSshProcess()
-    spawnSystemSshPortForwardMock.mockReturnValue(process)
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
-    await vi.advanceTimersByTimeAsync(250)
-    const entry = await pending
+    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
 
-    expect(spawnSystemSshPortForwardMock).toHaveBeenCalledWith(
+    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
       conn.getTarget(),
       3000,
       '127.0.0.1',
       8080
     )
+    expect(forward.waitForStartup).toHaveBeenCalled()
     expect(entry).toMatchObject({
       connectionId: 'conn-1',
       localPort: 3000,
@@ -141,82 +139,74 @@ describe('SshPortForwardManager', () => {
     expect(manager.listForwards('conn-1')).toHaveLength(1)
   })
 
-  it('surfaces early system SSH port forward failures', async () => {
-    vi.useFakeTimers()
-    const process = createFakeSystemSshProcess()
-    spawnSystemSshPortForwardMock.mockReturnValue(process)
+  it('does not register a system SSH forward when startup fails', async () => {
+    const forward = createFakeSystemSshForward()
+    forward.waitForStartup.mockRejectedValue(new Error('bind: Address already in use'))
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
-    process.stderr.emit('data', Buffer.from('bind: Address already in use'))
-    process.emit('exit', 255)
-
-    await expect(pending).rejects.toThrow('bind: Address already in use')
+    await expect(
+      manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    ).rejects.toThrow('bind: Address already in use')
     expect(manager.listForwards('conn-1')).toHaveLength(0)
   })
 
-  it('kills a system SSH tunnel when removing the forward', async () => {
-    vi.useFakeTimers()
-    const process = createFakeSystemSshProcess()
-    spawnSystemSshPortForwardMock.mockReturnValue(process)
+  it('disposes a system SSH tunnel when removing the forward', async () => {
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
-    await vi.advanceTimersByTimeAsync(250)
-    const entry = await pending
+    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
 
     expect(manager.removeForward(entry.id)).toMatchObject({ id: entry.id })
-    expect(process.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(forward.dispose).toHaveBeenCalled()
     expect(manager.listForwards('conn-1')).toHaveLength(0)
   })
 
-  it('waits for system SSH tunnels to exit before async removal resolves', async () => {
-    vi.useFakeTimers()
-    const process = createFakeSystemSshProcess()
-    spawnSystemSshPortForwardMock.mockReturnValue(process)
+  it('awaits system SSH tunnel close before async removal resolves', async () => {
+    let resolveClose!: () => void
+    const forward = createFakeSystemSshForward()
+    forward.close.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveClose = resolve
+      })
+    )
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
-    await vi.advanceTimersByTimeAsync(250)
-    await pending
+    await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
 
     let resolved = false
     const removal = manager.removeAllForwards('conn-1').then(() => {
       resolved = true
     })
 
-    await vi.advanceTimersByTimeAsync(1_999)
-    expect(process.kill).toHaveBeenCalledWith('SIGTERM')
+    await Promise.resolve()
     expect(resolved).toBe(false)
-
-    process.emit('exit', null)
+    resolveClose()
     await removal
     expect(resolved).toBe(true)
   })
 
-  it('escalates stuck system SSH tunnels to SIGKILL before async removal resolves', async () => {
-    vi.useFakeTimers()
-    const process = createFakeSystemSshProcess()
-    spawnSystemSshPortForwardMock.mockReturnValue(process)
+  it('removes an unexpectedly exited system SSH forward and calls the close callback', async () => {
+    const onForwardClosed = vi.fn()
+    manager.setCallbacks({ onForwardClosed })
+    const forward = createFakeSystemSshForward()
+    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
     const conn = createSystemSshConn()
 
-    const pending = manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
-    await vi.advanceTimersByTimeAsync(250)
-    await pending
+    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+    forward.process.stderr.emit('data', Buffer.from('channel open failed'))
+    forward.process.emit('exit', 255)
 
-    let resolved = false
-    const removal = manager.removeAllForwards('conn-1').then(() => {
-      resolved = true
-    })
-
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(process.kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
-    expect(process.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
-    expect(resolved).toBe(false)
-
-    process.emit('exit', null)
-    await removal
-    expect(resolved).toBe(true)
+    expect(manager.listForwards('conn-1')).toHaveLength(0)
+    expect(onForwardClosed).toHaveBeenCalledWith(
+      entry,
+      expect.objectContaining({
+        kind: 'unexpected-exit',
+        detail: expect.stringContaining('channel open failed')
+      })
+    )
   })
 
   it('lists forwards filtered by connectionId', async () => {
@@ -249,7 +239,7 @@ describe('SshPortForwardManager', () => {
     await manager.addForward('conn-1', conn as never, 3001, 'localhost', 8081)
     await manager.addForward('conn-2', conn as never, 3002, 'localhost', 8082)
 
-    manager.removeAllForwards('conn-1')
+    await manager.removeAllForwards('conn-1')
     expect(manager.listForwards()).toHaveLength(1)
     expect(manager.listForwards('conn-2')).toHaveLength(1)
   })
@@ -275,5 +265,42 @@ describe('SshPortForwardManager', () => {
     )
 
     expect(entry.label).toBe('Web Server')
+  })
+
+  it('preserves the existing id when updating a forward succeeds', async () => {
+    const conn = createMockConn()
+    const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+
+    const updated = await manager.updateForward(entry.id, conn as never, 3001, 'localhost', 8081)
+
+    expect(updated.id).toBe(entry.id)
+    expect(updated.localPort).toBe(3001)
+    expect(updated.remotePort).toBe(8081)
+  })
+
+  it('rolls back a failed system SSH update with the original id', async () => {
+    const initialForward = createFakeSystemSshForward()
+    const failedForward = createFakeSystemSshForward()
+    const rollbackForward = createFakeSystemSshForward()
+    failedForward.waitForStartup.mockRejectedValue(new Error('bind failed'))
+    startSystemSshPortForwardProcessMock
+      .mockReturnValueOnce(initialForward)
+      .mockReturnValueOnce(failedForward)
+      .mockReturnValueOnce(rollbackForward)
+    const conn = createSystemSshConn()
+    const entry = await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
+
+    await expect(
+      manager.updateForward(entry.id, conn as never, 3001, '127.0.0.1', 8081)
+    ).rejects.toThrow('bind failed')
+
+    expect(initialForward.close).toHaveBeenCalled()
+    expect(manager.listForwards('conn-1')).toEqual([
+      expect.objectContaining({
+        id: entry.id,
+        localPort: 3000,
+        remotePort: 8080
+      })
+    ])
   })
 })

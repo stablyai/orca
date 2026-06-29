@@ -27,10 +27,10 @@ import {
   findSystemSsh,
   spawnSystemSsh,
   spawnSystemSshCommand,
-  spawnSystemSshPortForward,
   uploadDirectoryViaSystemSsh,
   writeFileViaSystemSsh
 } from './ssh-system-fallback'
+import { spawnSystemSshPortForward } from './system-ssh-forward-process'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 

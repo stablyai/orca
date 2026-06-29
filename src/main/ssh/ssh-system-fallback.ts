@@ -96,44 +96,6 @@ export function spawnSystemSshCommand(
   return wrapCommandProcess(proc)
 }
 
-export function spawnSystemSshPortForward(
-  target: SshTarget,
-  localPort: number,
-  remoteHost: string,
-  remotePort: number
-): ChildProcess {
-  const sshPath = findSystemSsh()
-  if (!sshPath) {
-    throw new Error(
-      'No system ssh binary found. Install OpenSSH to use system SSH port forwarding.'
-    )
-  }
-
-  const args = buildSshArgs(target)
-  const destinationIndex = args.lastIndexOf('--')
-  const forwardArgs = [
-    '-N',
-    '-o',
-    'ExitOnForwardFailure=yes',
-    '-L',
-    `127.0.0.1:${localPort}:${remoteHost}:${remotePort}`
-  ]
-  if (destinationIndex === -1) {
-    args.unshift(...forwardArgs)
-  } else {
-    // Why: OpenSSH parses options only before `--`; after it, args are the
-    // destination and optional remote command.
-    args.splice(destinationIndex, 0, ...forwardArgs)
-  }
-
-  // Why: port-forward ssh processes are not wired to Orca credential prompts;
-  // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
-  return spawn(sshPath, args, {
-    stdio: ['ignore', 'ignore', 'pipe'],
-    windowsHide: true
-  })
-}
-
 export async function uploadDirectoryViaSystemSsh(
   target: SshTarget,
   localDir: string,

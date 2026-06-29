@@ -1,31 +1,40 @@
-import type { ChildProcess } from 'child_process'
-import { createServer, type Server, type Socket } from 'net'
 import type { SshConnection } from './ssh-connection'
-import { spawnSystemSshPortForward } from './ssh-system-fallback'
+import { Ssh2PortForwardProvider } from './ssh2-port-forward-provider'
+import { SystemSshPortForwardProvider } from './system-ssh-port-forward-provider'
 import type { PortForwardEntry } from '../../shared/ssh-types'
+import type {
+  PortForwardCloseReason,
+  SshPortForwardProvider,
+  StartedPortForward
+} from './ssh-port-forward-provider'
 
 export type { PortForwardEntry }
+export type { PortForwardCloseReason }
 
-type ActiveForward = {
-  entry: PortForwardEntry
-} & (
-  | {
-      kind: 'ssh2'
-      server: Server
-      activeSockets: Set<Socket>
-    }
-  | {
-      kind: 'system-ssh'
-      process: ChildProcess
-    }
-)
-
-const SYSTEM_SSH_FORWARD_STARTUP_SETTLE_MS = 250
-const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
+type SshPortForwardManagerCallbacks = {
+  onForwardClosed?: (entry: PortForwardEntry, reason: PortForwardCloseReason) => void
+}
 
 export class SshPortForwardManager {
-  private forwards = new Map<string, ActiveForward>()
+  private forwards = new Map<string, StartedPortForward>()
   private nextId = 1
+  private providers: SshPortForwardProvider[]
+  private callbacks: SshPortForwardManagerCallbacks
+
+  constructor(
+    callbacks: SshPortForwardManagerCallbacks = {},
+    providers: SshPortForwardProvider[] = [
+      new Ssh2PortForwardProvider(),
+      new SystemSshPortForwardProvider()
+    ]
+  ) {
+    this.callbacks = callbacks
+    this.providers = providers
+  }
+
+  setCallbacks(callbacks: SshPortForwardManagerCallbacks): void {
+    this.callbacks = callbacks
+  }
 
   async addForward(
     connectionId: string,
@@ -55,108 +64,31 @@ export class SshPortForwardManager {
     remotePort: number,
     label?: string
   ): Promise<PortForwardEntry> {
-    const entry: PortForwardEntry = {
-      id,
-      connectionId,
-      localPort,
-      remoteHost,
-      remotePort,
-      label
-    }
-
-    const client = conn.getClient()
-    if (!client && conn.usesSystemSshTransport()) {
-      const target = conn.getTarget()
-      const process = spawnSystemSshPortForward(target, localPort, remoteHost, remotePort)
-      await this.waitForSystemSshForwardStartup(process)
-      const forward: ActiveForward = { kind: 'system-ssh', entry, process }
-      process.once('exit', () => {
-        const active = this.forwards.get(id)
-        if (active === forward) {
-          this.forwards.delete(id)
-        }
-      })
-      this.forwards.set(id, forward)
-      return entry
-    }
-    if (!client) {
+    const provider = this.providers.find((candidate) => candidate.canHandle(conn))
+    if (!provider) {
       throw new Error('SSH connection is not established')
     }
 
-    const activeSockets = new Set<Socket>()
-
-    const server = createServer((socket) => {
-      activeSockets.add(socket)
-      socket.on('close', () => activeSockets.delete(socket))
-
-      client.forwardOut('127.0.0.1', localPort, remoteHost, remotePort, (err, channel) => {
-        if (err) {
-          socket.destroy()
+    let forward: StartedPortForward | null = null
+    forward = await provider.start(conn, {
+      id,
+      connectionId,
+      localHost: '127.0.0.1',
+      localPort,
+      remoteHost,
+      remotePort,
+      label,
+      onUnexpectedClose: (entry, reason) => {
+        const active = this.forwards.get(id)
+        if (active !== forward) {
           return
         }
-        socket.pipe(channel).pipe(socket)
-        channel.on('close', () => socket.destroy())
-        channel.on('error', () => socket.destroy())
-        socket.on('close', () => channel.close())
-      })
+        this.forwards.delete(id)
+        this.callbacks.onForwardClosed?.(entry, reason)
+      }
     })
-
-    await new Promise<void>((resolve, reject) => {
-      server.on('error', reject)
-      server.listen(localPort, '127.0.0.1', () => {
-        server.removeListener('error', reject)
-        resolve()
-      })
-    })
-
-    this.forwards.set(id, { kind: 'ssh2', entry, server, activeSockets })
-    return entry
-  }
-
-  private waitForSystemSshForwardStartup(process: ChildProcess): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let stderr = ''
-      let settled = false
-      const cleanup = (): void => {
-        clearTimeout(timer)
-        process.off('error', onError)
-        process.off('exit', onExit)
-        process.stderr?.off('data', onStderr)
-      }
-      const finish = (callback: () => void): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        callback()
-      }
-      const onStderr = (chunk: Buffer): void => {
-        stderr += chunk.toString('utf-8')
-      }
-      const onError = (error: Error): void => {
-        finish(() => reject(error))
-      }
-      const onExit = (code: number | null): void => {
-        const detail = stderr.trim()
-        finish(() =>
-          reject(
-            new Error(
-              `System SSH port forward failed${code !== null ? ` (exit ${code})` : ''}${
-                detail ? `: ${detail}` : ''
-              }`
-            )
-          )
-        )
-      }
-      const timer = setTimeout(() => {
-        finish(resolve)
-      }, SYSTEM_SSH_FORWARD_STARTUP_SETTLE_MS)
-
-      process.stderr?.on('data', onStderr)
-      process.once('error', onError)
-      process.once('exit', onExit)
-    })
+    this.forwards.set(id, forward)
+    return forward.entry
   }
 
   async updateForward(
@@ -179,7 +111,8 @@ export class SshPortForwardManager {
     await this.removeForwardAsync(id)
 
     try {
-      return await this.addForward(
+      return await this.addForwardWithId(
+        oldEntry.id,
         oldEntry.connectionId,
         conn,
         localPort,
@@ -212,82 +145,20 @@ export class SshPortForwardManager {
     if (!forward) {
       return null
     }
-    this.teardownForward(forward)
+    forward.dispose()
     this.forwards.delete(id)
     return forward.entry
   }
 
-  // Why: server.close() is async — the OS may not release the port until the
-  // callback fires. callers that need to rebind the same port (updateForward)
-  // must await this variant.
+  // Why: server.close()/process exit are async — callers that need to rebind
+  // the same port (update/reconnect) must wait until the owner fully releases it.
   private removeForwardAsync(id: string): Promise<PortForwardEntry | null> {
     const forward = this.forwards.get(id)
     if (!forward) {
       return Promise.resolve(null)
     }
     this.forwards.delete(id)
-    if (forward.kind === 'system-ssh') {
-      return this.waitForSystemSshForwardStop(forward.process).then(() => forward.entry)
-    }
-    for (const socket of forward.activeSockets) {
-      socket.destroy()
-    }
-    return new Promise((resolve) => {
-      forward.server.close(() => resolve(forward.entry))
-    })
-  }
-
-  private waitForSystemSshForwardStop(process: ChildProcess): Promise<void> {
-    return new Promise((resolve) => {
-      let settled = false
-      const cleanup = (): void => {
-        clearTimeout(escalationTimer)
-        process.off('exit', onExit)
-      }
-      const finish = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        resolve()
-      }
-      const onExit = (): void => {
-        finish()
-      }
-      const hasExited = (): boolean => process.exitCode !== null || process.signalCode !== null
-      const kill = (signal: NodeJS.Signals): void => {
-        try {
-          const sent = process.kill(signal)
-          if (!sent && hasExited()) {
-            finish()
-          }
-        } catch {
-          if (hasExited()) {
-            finish()
-          }
-        }
-      }
-      const escalationTimer = setTimeout(() => {
-        // Why: update/reconnect callers must not rebind while a stubborn ssh -L
-        // process still owns the local port.
-        kill('SIGKILL')
-      }, SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
-
-      process.once('exit', onExit)
-      kill('SIGTERM')
-    })
-  }
-
-  private teardownForward(forward: ActiveForward): void {
-    if (forward.kind === 'system-ssh') {
-      forward.process.kill('SIGTERM')
-      return
-    }
-    for (const socket of forward.activeSockets) {
-      socket.destroy()
-    }
-    forward.server.close()
+    return forward.close().then(() => forward.entry)
   }
 
   listForwards(connectionId?: string): PortForwardEntry[] {
@@ -304,8 +175,6 @@ export class SshPortForwardManager {
     const toRemove = [...this.forwards.entries()]
       .filter(([, { entry }]) => entry.connectionId === connectionId)
       .map(([id]) => id)
-    // Why: await each removal so the OS fully releases ports before callers
-    // (like restorePortForwards) try to rebind on the same local ports.
     await Promise.all(toRemove.map((id) => this.removeForwardAsync(id)))
   }
 
