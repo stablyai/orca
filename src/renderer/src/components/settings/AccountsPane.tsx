@@ -504,9 +504,6 @@ export function AccountsPane({
         })
       }
     } catch (error) {
-      if (isClaudeAccountCancellation(error)) {
-        return
-      }
       toast.error(
         translate(
           'auto.components.settings.AccountsPane.5bf8764953',
@@ -557,6 +554,9 @@ export function AccountsPane({
         )
       }
     } catch (error) {
+      if (isClaudeAccountCancellation(error)) {
+        return
+      }
       toast.error(
         translate(
           'auto.components.settings.AccountsPane.2743cdc0af',

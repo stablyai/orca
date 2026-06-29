@@ -429,16 +429,22 @@ export class ClaudeAccountService {
     }
   ): Promise<CapturedClaudeAuth> {
     const tempConfig = this.createTemporaryClaudeConfigDir(location)
+    const loginAbortController = new AbortController()
+    this.cancelPendingClaudeLogin = () => {
+      if (loginAbortController.signal.aborted) {
+        return false
+      }
+      loginAbortController.abort()
+      return true
+    }
     const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
     let captured: CapturedClaudeAuth | null = null
     let captureError: unknown = null
     let cleanupError: unknown = null
-    const loginAbortController = new AbortController()
-    this.cancelPendingClaudeLogin = () => {
-      loginAbortController.abort()
-      return true
-    }
     try {
+      if (loginAbortController.signal.aborted) {
+        throw new Error('Claude sign-in was cancelled.')
+      }
       await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
         signal: loginAbortController.signal
       })
@@ -943,6 +949,15 @@ export class ClaudeAccountService {
       const timeoutError = new Error('Claude sign-in took too long to finish.')
       const cancelError = new Error('Claude sign-in was cancelled.')
       const killChild = (): void => {
+        if (process.platform === 'win32' && child.pid) {
+          const taskkill = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
+            stdio: 'ignore',
+            windowsHide: true
+          })
+          taskkill.on('error', () => {})
+          taskkill.unref()
+          return
+        }
         if (process.platform !== 'win32' && child.pid) {
           try {
             process.kill(-child.pid)
