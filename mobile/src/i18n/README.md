@@ -25,9 +25,11 @@ The v1 design (2026-06-28) shipped a `<T>` component where `i18nKey` was optiona
 
 ## Translation keys
 
-Keys live in `src/renderer/src/i18n/locales/{en,zh}.json` under a top-level `mobile.*` block. v2 PR1 ships ~30 keys (Settings + Language picker + Pair). v2 PR2 adds the remaining ~470 keys.
+Keys live in `src/renderer/src/i18n/locales/{en,zh,es,ja,ko}.json` under a top-level `mobile.*` block. The full v2 migration ships **1004 keys** across 5 locales with strict parity (verified by `pnpm run verify:localization-catalog`). en.json is the source of truth — adding a key to any non-en locale without adding it to en.json causes the catalog verifier to fail.
 
 Use semantic keys (`mobile.<feature>.<sub>.<field>`) for stable, reused strings. Reserve `auto.mobile.<file-without-ext>.<hash>` for one-off component copy.
+
+For interpolated values, use single-brace i18next syntax: `{name}`, `{count}`. Use pluralization keys (`moreRow` vs `moreRows`) instead of composing count + noun in JS — translators need to control word order.
 
 ## Initialization
 
@@ -35,4 +37,4 @@ i18n is initialized once in `mobile/app/_layout.tsx` (Task 9) before the Stack m
 
 ## Testing
 
-Unit tests cover the pure functions (`init.ts`, `translate.ts`, `useTranslate.ts`). No React Native component tests — the project has no RN testing infrastructure (no `@testing-library/react-native`, no RN Jest preset). Adding the infrastructure is a separate PR orthogonal to localization.
+Unit tests cover the pure functions (`init.ts`, `translate.ts`, `useTranslate.ts`) under `mobile/src/i18n/__tests__/`. The `useTranslate` test renders a tiny `react-test-renderer` host component to verify the hook returns the `{ t, resolvedLanguage }` contract subscribers rely on. Component-level RN tests are not in scope — the mobile vitest config uses `environment: 'node'` and intentionally avoids `@testing-library/react-native` to keep test runtime low.

@@ -294,8 +294,9 @@ return (
 
 - 上游新 metro.config.js（commit `c7b728da` 之后）只 watch `src/shared/`
 - v1 改成 watch `..`（整个 workspace root）是为了跨包引用 `src/renderer/src/i18n/locales/{en,zh}.json`
-- **v2 PR1 必须保留 v1 的全部 metro.config.js 改动**（watchFolders + nodeModulesPaths + disableHierarchicalLookup），并向 desktop maintainer 说明：mobile 需要 watch 整个根目录才能 import 桌面翻译键
-- 如需最小化分歧，可只保留 `watchFolders: [workspaceRoot, sharedRoot]`，删除 `nodeModulesPaths` 和 `disableHierarchicalLookup`（zh.json 是 JSON 文件，不需解析 desktop node_modules），但需 v2 PR1 验证 Metro 能正确解析
+- **v2 实际改动**：只把 `watchFolders` 缩窄到 `src/shared/` + `src/renderer/src/i18n/locales/`（两者都是 mobile 真正依赖的目录），其余上游默认配置（包含 hierarchical lookup）全部保留。`nodeModulesPaths` 和 `disableHierarchicalLookup` 都没引入 —— desktop 的翻译键是 JSON 文件，Metro 不需要解析 desktop 的 node_modules；hierarchical lookup 在 pnpm 严格布局下仍需要用来解析 `.pnpm/` 中的 peer deps（如 `@expo/metro-runtime`）。详见 `mobile/metro.config.js` 顶部注释。
+
+> **Spec 修订说明**：原 spec（v2 起草时）建议保留 v1 的全部 metro.config.js 改动 + 向 desktop maintainer 解释 watch 整个 workspace root 的必要性。实际验证发现 v1 的 `disableHierarchicalLookup: true` 会破坏 pnpm 的 peer dep 解析（`@expo/metro-runtime` 找不到），所以 v2 改为最小化方案：只添加必要的 `watchFolders`，其余保持上游默认。这一改动让 mobile 与上游 desktop 的 metro 配置 100% 对齐，没有 fork 任何行为。
 
 ## 6. 覆盖度闸门 + 测试
 
