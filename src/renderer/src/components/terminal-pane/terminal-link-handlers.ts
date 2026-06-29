@@ -46,6 +46,7 @@ export type LinkHandlerDeps = {
   worktreeId: string
   worktreePath: string
   startupCwd: string
+  getPaneLinkCwd?: (paneId: number) => string | null
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
   pathExistsCache: Map<string, boolean>
@@ -123,8 +124,9 @@ export function createFilePathLinkProvider(
         logicalLines.flatMap((logicalLine) =>
           extractTerminalFileLinkCandidates(logicalLine.text).map(
             async (parsed): Promise<ProvidedFileLink | null> => {
-              const resolved = startupCwd
-                ? resolveTerminalFileLink(parsed, startupCwd, deps.terminalHomePath)
+              const paneLinkCwd = deps.getPaneLinkCwd?.(paneId) ?? startupCwd
+              const resolved = paneLinkCwd
+                ? resolveTerminalFileLink(parsed, paneLinkCwd, deps.terminalHomePath)
                 : null
               if (!resolved) {
                 return null
@@ -289,7 +291,7 @@ export function installFilePathLinkClickFallback(
       position,
       terminal.cols,
       {
-        startupCwd: deps.startupCwd,
+        startupCwd: deps.getPaneLinkCwd?.(paneId) ?? deps.startupCwd,
         terminalHomePath: deps.terminalHomePath,
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,

@@ -44,6 +44,7 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
+import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -1099,17 +1100,6 @@ export function HostScreen({
               />
             </Pressable>
 
-            <Pressable
-              style={styles.newButton}
-              onPress={openNewWorktreeModal}
-              disabled={connState !== 'connected'}
-            >
-              <Plus
-                size={16}
-                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
-              />
-            </Pressable>
-
             <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
               {showSearch ? (
                 <X size={16} color={colors.textSecondary} />
@@ -1187,7 +1177,9 @@ export function HostScreen({
           // above the Samsung 3-button nav / iOS home indicator.
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: spacing.lg + insets.bottom },
+            // Phone shows a floating "+" button bottom-right; reserve room so the
+            // last row stays tappable above it. Embedded sidebars keep the toolbar +.
+            { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
@@ -1243,6 +1235,11 @@ export function HostScreen({
             />
           )}
         />
+      )}
+
+      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
+      {!embedded && (
+        <NewWorkspaceFab onPress={openNewWorktreeModal} disabled={connState !== 'connected'} />
       )}
 
       <PickerModal
@@ -1609,9 +1606,6 @@ const styles = StyleSheet.create({
   },
   toolbarIconDisabled: {
     opacity: 0.6
-  },
-  newButton: {
-    padding: spacing.xs
   },
   searchToggle: {
     padding: spacing.xs

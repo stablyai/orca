@@ -22,6 +22,7 @@ import {
   buildTitleDerivedAgentRows,
   resolveAgentTypeFromTerminalTitle
 } from './worktree-title-derived-agent-rows'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 
 function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {
   const parsed = parsePaneKey(entry.paneKey)
@@ -40,14 +41,19 @@ function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | nu
   }
 }
 
+/**
+ * Resolves the sidebar row agent type, prioritizing launch agent configuration
+ * and normalizing compatible agent kinds.
+ */
 function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
-  if (entry.agentType && entry.agentType !== 'unknown') {
-    return entry.agentType
+  const entryAgentType = resolveCompatibleAgentTypeForOwner(entry.agentType, tab?.launchAgent)
+  if (entryAgentType && entryAgentType !== 'unknown') {
+    return entryAgentType
   }
   return (
+    resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title, tab?.launchAgent) ??
     tab?.launchAgent ??
-    resolveAgentTypeFromTerminalTitle(entry.terminalTitle ?? tab?.title) ??
-    entry.agentType ??
+    entryAgentType ??
     'unknown'
   )
 }

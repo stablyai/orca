@@ -88,6 +88,10 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
   })
 
+  it('uses the shared desktop scrollback row default', () => {
+    expect(buildDefaultTerminalOptions().scrollback).toBe(5_000)
+  })
+
   it('slightly increases default terminal wheel scrolling while preserving fast scroll', () => {
     const options = buildDefaultTerminalOptions()
 

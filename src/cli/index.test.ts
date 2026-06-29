@@ -2433,7 +2433,8 @@ describe('orca cli worktree awareness', () => {
       worktree: 'path:/tmp/repo/feature',
       command: undefined,
       title: 'RUNNER',
-      focus: true
+      focus: true,
+      presentation: 'focused'
     })
   })
 
@@ -2545,6 +2546,7 @@ describe('orca cli worktree awareness', () => {
       command: 'codex',
       title: 'Codex',
       focus: true,
+      presentation: 'focused',
       rendererBacked: true,
       activate: true
     })

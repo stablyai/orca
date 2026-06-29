@@ -2,11 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Worktree } from '../../../shared/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
-import { useWorktreeById, useWorktreesForRepo } from '@/store/selectors'
+import { useWorktreesForRepo } from '@/store/selectors'
 
 export type RuntimeFileListState = {
   files: string[]
@@ -49,6 +49,32 @@ export type NestedWorktreeExcludeRequest = {
   key: string
 }
 
+export type RuntimeFileListTarget = {
+  canList: boolean
+  excludeRequest: NestedWorktreeExcludeRequest
+  worktreePath: string | null
+}
+
+export function getRuntimeFileListTarget(
+  worktreeId: string | null,
+  worktreePath: string | null | undefined,
+  repoWorktrees: readonly Worktree[]
+): RuntimeFileListTarget {
+  const resolvedWorktreePath = worktreePath ?? null
+  if (!worktreeId || !resolvedWorktreePath) {
+    return { canList: false, excludeRequest: { paths: [], key: '[]' }, worktreePath: null }
+  }
+  return {
+    canList: true,
+    excludeRequest: getNestedWorktreeExcludeRequest(
+      worktreeId,
+      resolvedWorktreePath,
+      repoWorktrees
+    ),
+    worktreePath: resolvedWorktreePath
+  }
+}
+
 export function getNestedWorktreeExcludeRequest(
   worktreeId: string | null,
   worktreePath: string | null,
@@ -70,20 +96,26 @@ export function useRuntimeFileListForWorktree({
   enabled: boolean
   worktreeId: string | null
 }): RuntimeFileListState {
-  const worktree = useWorktreeById(worktreeId)
+  const worktree = useAppStore((state) =>
+    // Why: folder workspaces live behind getKnownWorktreeById, not worktreesByRepo.
+    worktreeId ? (state.getKnownWorktreeById(worktreeId) ?? null) : null
+  )
+  const worktreePath = worktree?.path ?? null
   const repoWorktrees = useWorktreesForRepo(worktree?.repoId ?? null)
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const lastRequestKeyRef = useRef('')
 
-  const worktreePath = worktree?.path ?? null
-  const excludeRequest = useMemo(
-    () => getNestedWorktreeExcludeRequest(worktreeId, worktreePath, repoWorktrees),
+  const target = useMemo(
+    () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
     [repoWorktrees, worktreeId, worktreePath]
   )
+  const { excludeRequest } = target
 
-  const connectionId = useMemo(() => getConnectionId(worktreeId) ?? undefined, [worktreeId])
+  const connectionId = useAppStore(
+    (state) => getConnectionIdFromState(state, worktreeId) ?? undefined
+  )
   const activeTargetStatus = useAppStore((state) =>
     connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
   )
@@ -103,7 +135,7 @@ export function useRuntimeFileListForWorktree({
       return
     }
 
-    if (!worktreeId || !worktreePath) {
+    if (!target.canList || !worktreeId || !worktreePath) {
       setFiles([])
       setLoadError(null)
       setLoading(false)
@@ -155,7 +187,7 @@ export function useRuntimeFileListForWorktree({
     return () => {
       cancelled = true
     }
-  }, [connectionId, enabled, excludeRequest, requestKey, worktreeId, worktreePath])
+  }, [connectionId, enabled, excludeRequest, requestKey, target.canList, worktreeId, worktreePath])
 
   return { files, loading: loading || connectionPending, loadError }
 }

@@ -4,8 +4,8 @@ export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 type TerminalCapabilityRepliesDeps = {
-  terminal: Pick<Terminal, 'cols' | 'rows' | 'element'>
-  parser: Pick<IParser, 'registerCsiHandler'>
+  terminal: Pick<Terminal, 'cols' | 'rows' | 'element' | 'options'>
+  parser: Pick<IParser, 'registerCsiHandler' | 'registerOscHandler'>
   sendInput: (data: string) => boolean | void
   isReplaying: () => boolean
   da1Response?: string
@@ -44,6 +44,77 @@ function disposeAll(disposables: IDisposable[]): void {
   for (const disposable of disposables) {
     disposable.dispose()
   }
+}
+
+function cssColorToOscRgb(value: string | undefined): string | null {
+  if (!value) {
+    return null
+  }
+  const trimmed = value.trim()
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(trimmed)?.[1]
+  if (hex) {
+    const expanded =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((char) => `${char}${char}`)
+            .join('')
+        : hex
+    return `rgb:${byteHexToWord(expanded.slice(0, 2))}/${byteHexToWord(
+      expanded.slice(2, 4)
+    )}/${byteHexToWord(expanded.slice(4, 6))}`
+  }
+  const rgb = /^rgba?\(\s*([^)]+)\)$/i.exec(trimmed)
+  if (!rgb) {
+    return null
+  }
+  const channels = parseCssRgbChannels(rgb[1])
+  if (!channels) {
+    return null
+  }
+  const [red, green, blue] = channels.map((byte) => byte.toString(16).padStart(2, '0').repeat(2))
+  return `rgb:${red}/${green}/${blue}`
+}
+
+function byteHexToWord(byte: string): string {
+  return byte.repeat(2)
+}
+
+function parseCssRgbChannels(body: string): [number, number, number] | null {
+  const colorPart = body.split('/')[0]?.trim()
+  if (!colorPart) {
+    return null
+  }
+  const components = colorPart.includes(',')
+    ? colorPart.split(',').slice(0, 3)
+    : colorPart.split(/\s+/).slice(0, 3)
+  if (components.length !== 3) {
+    return null
+  }
+  const channels = components.map((component) => parseCssRgbChannel(component.trim()))
+  if (channels.some((channel) => channel === null)) {
+    return null
+  }
+  return channels as [number, number, number]
+}
+
+function parseCssRgbChannel(component: string): number | null {
+  const percent = /^(\d+(?:\.\d+)?)%$/.exec(component)?.[1]
+  if (percent !== undefined) {
+    return clampByte((Number(percent) / 100) * 255)
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(component)) {
+    return null
+  }
+  return clampByte(Number(component))
+}
+
+function clampByte(value: number): number {
+  return Math.min(255, Math.max(0, Math.round(value)))
+}
+
+function isOscColorQuery(data: string): boolean {
+  return data.trim() === '?'
 }
 
 export function createTerminalPixelSizeQueryResponder(
@@ -98,6 +169,34 @@ export function installTerminalCapabilityReplyHandlers(
       if (!deps.isReplaying()) {
         deps.sendInput(deps.da1Response ?? DEFAULT_DA1_RESPONSE)
       }
+      return true
+    }),
+    deps.parser.registerOscHandler(10, (data) => {
+      if (!isOscColorQuery(data)) {
+        return false
+      }
+      if (deps.isReplaying()) {
+        return true
+      }
+      const foreground = cssColorToOscRgb(deps.terminal.options.theme?.foreground)
+      if (!foreground) {
+        return false
+      }
+      deps.sendInput(`\x1b]10;${foreground}\x1b\\`)
+      return true
+    }),
+    deps.parser.registerOscHandler(11, (data) => {
+      if (!isOscColorQuery(data)) {
+        return false
+      }
+      if (deps.isReplaying()) {
+        return true
+      }
+      const background = cssColorToOscRgb(deps.terminal.options.theme?.background)
+      if (!background) {
+        return false
+      }
+      deps.sendInput(`\x1b]11;${background}\x1b\\`)
       return true
     })
   ]

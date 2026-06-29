@@ -7,6 +7,7 @@ import { dirname, extname, join, resolve } from 'path'
 import type { ChildProcess } from 'child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
+import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -17,6 +18,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GlobalSettings,
+  GitStagingArea,
   GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
@@ -37,6 +39,7 @@ import {
 } from '../../shared/text-search'
 import {
   getStatus,
+  getSubmoduleStatus,
   abortMerge,
   abortRebase,
   detectConflictOperation,
@@ -806,6 +809,14 @@ export function registerFilesystemHandlers(
         preserveSymlink: true
       })
 
+      // Why: WSL UNC targets (\\wsl.localhost\<distro>\...) have no Recycle Bin,
+      // so shell.trashItem throws. Hard-delete via `rm` inside the distro instead
+      // (true delete, honors Linux perms). Returns false for normal local paths,
+      // which still go to the Recycle Bin (issue #6415).
+      if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
+        return
+      }
+
       // Why: once auto-refresh exists, an external delete can race with a
       // UI-initiated delete. Swallowing ENOENT keeps the action idempotent
       // from the user's perspective (design §7.1).
@@ -1048,6 +1059,40 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       return getStatus(worktreePath, { ...options, ...gitOptions })
+    }
+  )
+
+  // Why: the parent status only reports one gitlink row per submodule. When the
+  // user expands a dirty submodule, this fetches the inner per-file changes by
+  // running a plain status inside the submodule's own worktree (read-only).
+  ipcMain.handle(
+    'git:submoduleStatus',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        submodulePath: string
+        connectionId?: string
+        area?: GitStagingArea
+      }
+    ): Promise<GitStatusResult> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getSubmoduleStatus(worktreePath, args.submodulePath, {
+        ...gitOptions,
+        ...(args.area === 'staged' ? { staged: true } : {})
+      })
     }
   )
 

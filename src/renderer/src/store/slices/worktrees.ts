@@ -38,6 +38,7 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-k
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
@@ -449,7 +450,10 @@ function mergeDetectedWorktreesForHost(
   hostId: ExecutionHostId,
   options?: WorktreeHostMatchOptions
 ): DetectedWorktreeListResult {
-  const refreshedForHost = refreshed.worktrees.map((worktree) => withRepoHostId(worktree, hostId))
+  const refreshedForHost = sanitizeHostedReviewLinksForBranchClears(
+    refreshed.worktrees,
+    current?.worktrees
+  ).map((worktree) => withRepoHostId(worktree, hostId))
   return {
     ...refreshed,
     worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
@@ -1219,6 +1223,250 @@ const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
   'linkedGiteaPR'
 ]
 
+const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<WorktreeMeta, HostedReviewLinkKey | 'pushTarget'> = {
+  linkedPR: null,
+  linkedGitLabMR: null,
+  linkedBitbucketPR: null,
+  linkedAzureDevOpsPR: null,
+  linkedGiteaPR: null,
+  pushTarget: undefined
+}
+
+const hostedReviewLinkMutationGenerationByWorktreeId = new Map<string, number>()
+const hostedReviewLinkClearTombstonesByWorktreeId = new Map<
+  string,
+  { branch: string; branchIdentity: string; generation: number; head?: string }
+>()
+const hostedReviewLinkWorktreeIdAliases = new Map<string, string>()
+
+function hasHostedReviewLinks(worktree: Worktree): boolean {
+  return HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null)
+}
+
+function hasBranchScopedHostedReviewContext(worktree: Worktree): boolean {
+  return hasHostedReviewLinks(worktree) || worktree.pushTarget !== undefined
+}
+
+function hasHostedReviewLinkUpdates(updates: Partial<WorktreeMeta>): boolean {
+  return HOSTED_REVIEW_LINK_KEYS.some((key) => key in updates) || 'pushTarget' in updates
+}
+
+function getHostedReviewLinkMutationGeneration(worktreeId: string): number {
+  return hostedReviewLinkMutationGenerationByWorktreeId.get(worktreeId) ?? 0
+}
+
+function bumpHostedReviewLinkMutationGeneration(worktreeId: string): void {
+  hostedReviewLinkMutationGenerationByWorktreeId.set(
+    worktreeId,
+    getHostedReviewLinkMutationGeneration(worktreeId) + 1
+  )
+  hostedReviewLinkClearTombstonesByWorktreeId.delete(worktreeId)
+  pruneHostedReviewLinkWorktreeAliasesForId(worktreeId)
+}
+
+function pruneHostedReviewLinkMutationGenerations(worktreeIds: Iterable<string>): void {
+  for (const worktreeId of worktreeIds) {
+    hostedReviewLinkMutationGenerationByWorktreeId.delete(worktreeId)
+    hostedReviewLinkClearTombstonesByWorktreeId.delete(worktreeId)
+    hostedReviewLinkWorktreeIdAliases.delete(worktreeId)
+    for (const [oldWorktreeId, newWorktreeId] of hostedReviewLinkWorktreeIdAliases) {
+      if (newWorktreeId === worktreeId) {
+        hostedReviewLinkWorktreeIdAliases.delete(oldWorktreeId)
+      }
+    }
+  }
+}
+
+function resolveHostedReviewLinkWorktreeId(worktreeId: string): string {
+  let current = worktreeId
+  const seen = new Set<string>()
+  while (!seen.has(current)) {
+    seen.add(current)
+    const next = hostedReviewLinkWorktreeIdAliases.get(current)
+    if (!next) {
+      return current
+    }
+    current = next
+  }
+  return worktreeId
+}
+
+function pruneHostedReviewLinkWorktreeAliasesForId(worktreeId: string): void {
+  for (const [alias, target] of Array.from(hostedReviewLinkWorktreeIdAliases)) {
+    if (
+      alias === worktreeId ||
+      target === worktreeId ||
+      resolveHostedReviewLinkWorktreeId(alias) === worktreeId
+    ) {
+      hostedReviewLinkWorktreeIdAliases.delete(alias)
+    }
+  }
+}
+
+function migrateHostedReviewLinkMutationGeneration(
+  oldWorktreeId: string,
+  newWorktreeId: string
+): void {
+  const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(oldWorktreeId)
+  for (const [alias, target] of hostedReviewLinkWorktreeIdAliases) {
+    if (target === oldWorktreeId) {
+      if (tombstone) {
+        hostedReviewLinkWorktreeIdAliases.set(alias, newWorktreeId)
+      } else {
+        hostedReviewLinkWorktreeIdAliases.delete(alias)
+      }
+    }
+  }
+  const hasGeneration = hostedReviewLinkMutationGenerationByWorktreeId.has(oldWorktreeId)
+  if (tombstone) {
+    hostedReviewLinkWorktreeIdAliases.set(oldWorktreeId, newWorktreeId)
+  }
+  if (hasGeneration) {
+    hostedReviewLinkMutationGenerationByWorktreeId.set(
+      newWorktreeId,
+      getHostedReviewLinkMutationGeneration(oldWorktreeId)
+    )
+    hostedReviewLinkMutationGenerationByWorktreeId.delete(oldWorktreeId)
+  }
+  if (tombstone) {
+    hostedReviewLinkClearTombstonesByWorktreeId.set(newWorktreeId, tombstone)
+    hostedReviewLinkClearTombstonesByWorktreeId.delete(oldWorktreeId)
+  }
+}
+
+export function getHostedReviewLinkMutationGenerationForTests(worktreeId: string): number {
+  return getHostedReviewLinkMutationGeneration(worktreeId)
+}
+
+export function getHostedReviewLinkWorktreeAliasCountForTests(): number {
+  return hostedReviewLinkWorktreeIdAliases.size
+}
+
+export function resetHostedReviewLinkMutationGenerationForTests(): void {
+  hostedReviewLinkMutationGenerationByWorktreeId.clear()
+  hostedReviewLinkClearTombstonesByWorktreeId.clear()
+  hostedReviewLinkWorktreeIdAliases.clear()
+}
+
+function hostedReviewLinksAreCleared(worktree: Worktree): boolean {
+  return HOSTED_REVIEW_LINK_KEYS.every((key) => worktree[key] == null) && !worktree.pushTarget
+}
+
+function getHostedReviewLinkUpdates(
+  worktree: Worktree
+): Pick<WorktreeMeta, HostedReviewLinkKey | 'pushTarget'> {
+  return {
+    linkedPR: worktree.linkedPR ?? null,
+    linkedGitLabMR: worktree.linkedGitLabMR ?? null,
+    linkedBitbucketPR: worktree.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: worktree.linkedGiteaPR ?? null,
+    pushTarget: worktree.pushTarget
+  }
+}
+
+function canonicalHostedReviewBranchIdentity(branch: string): string {
+  return branchName(branch).trim()
+}
+
+function rememberHostedReviewLinkClear(
+  worktreeId: string,
+  branch: string,
+  generation: number,
+  head?: string
+): void {
+  hostedReviewLinkClearTombstonesByWorktreeId.set(worktreeId, {
+    branch,
+    branchIdentity: canonicalHostedReviewBranchIdentity(branch),
+    generation,
+    head
+  })
+}
+
+function sanitizeHostedReviewLinksForBranchClear<
+  T extends Pick<Worktree, 'id' | 'branch'> &
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+>(worktree: T, currentWorktrees?: readonly T[]): T {
+  const hostedReviewWorktreeId = resolveHostedReviewLinkWorktreeId(worktree.id)
+  const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(hostedReviewWorktreeId)
+  const hasBranchScopedContext =
+    HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null) ||
+    worktree.pushTarget !== undefined
+  if (
+    !tombstone ||
+    tombstone.generation !== getHostedReviewLinkMutationGeneration(hostedReviewWorktreeId) ||
+    !hasBranchScopedContext
+  ) {
+    return worktree
+  }
+  const current = currentWorktrees?.find(
+    (entry) =>
+      entry.id === worktree.id ||
+      resolveHostedReviewLinkWorktreeId(entry.id) === hostedReviewWorktreeId
+  )
+  const currentClean =
+    current &&
+    !HOSTED_REVIEW_LINK_KEYS.some((key) => current[key] != null) &&
+    current.pushTarget === undefined
+      ? current
+      : null
+  const guardBranch = currentClean ? currentClean.branch : tombstone.branch
+  const guardHead = currentClean ? currentClean.head : tombstone.head
+  return {
+    ...worktree,
+    branch: guardBranch,
+    ...(guardHead !== undefined ? { head: guardHead } : {}),
+    ...CLEARED_HOSTED_REVIEW_LINK_UPDATES
+  }
+}
+
+function sanitizeHostedReviewLinksForBranchClears<
+  T extends Pick<Worktree, 'id' | 'branch'> &
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+>(worktrees: readonly T[], currentWorktrees?: readonly T[]): T[] {
+  let changed = false
+  const sanitized = worktrees.map((worktree) => {
+    const next = sanitizeHostedReviewLinksForBranchClear(worktree, currentWorktrees)
+    if (next !== worktree) {
+      changed = true
+    }
+    return next
+  })
+  return changed ? sanitized : [...worktrees]
+}
+
+function applyHostedReviewLinkClear(
+  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  worktreeId: string
+): void {
+  set((s) => {
+    const nextWorktrees = applyWorktreeUpdates(
+      s.worktreesByRepo,
+      worktreeId,
+      CLEARED_HOSTED_REVIEW_LINK_UPDATES
+    )
+    const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
+      s.detectedWorktreesByRepo,
+      worktreeId,
+      CLEARED_HOSTED_REVIEW_LINK_UPDATES
+    )
+    if (
+      nextWorktrees === s.worktreesByRepo &&
+      nextDetectedWorktrees === s.detectedWorktreesByRepo
+    ) {
+      return {}
+    }
+    return {
+      ...(nextWorktrees !== s.worktreesByRepo
+        ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
+        : {}),
+      ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
+        ? { detectedWorktreesByRepo: nextDetectedWorktrees }
+        : {})
+    }
+  })
+}
+
 function getPositiveHostedReviewLinkUpdateKey(
   updates: Partial<WorktreeMeta>
 ): HostedReviewLinkKey | null {
@@ -1459,6 +1707,7 @@ function buildWorktreeRenameState(
 
 function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
   const worktreeIdSet = new Set(worktreeIds)
+  pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
@@ -1468,6 +1717,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
       doomedTabIds.add(tab.id)
+      // Why: a removed worktree's panes are gone for good, so drop their
+      // hibernation output epochs from that module-level map (mirrors the
+      // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
+      forgetAgentHibernationTabOutput(tab.id)
     }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       doomedBrowserWorkspaceIds.add(workspace.id)
@@ -1769,8 +2022,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
-      const worktrees = toVisibleWorktrees(detected, hostId)
       const current = get().worktreesByRepo[repoId]
+      const worktrees = sanitizeHostedReviewLinksForBranchClears(
+        toVisibleWorktrees(detected, hostId),
+        current
+      )
       const currentMatchOptions = worktreeHostMatchOptions(get(), repoId, hostId)
       const currentForHost = (current ?? []).filter((worktree) =>
         worktreeMatchesHost(worktree, hostId, currentMatchOptions)
@@ -1893,7 +2149,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
           executionHostId: hostId
         })
-        const worktrees = toVisibleWorktrees(detected, hostId)
+        const worktrees = sanitizeHostedReviewLinksForBranchClears(
+          toVisibleWorktrees(detected, hostId),
+          get().worktreesByRepo[r.id]
+        )
         set((s) => {
           const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
           const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(s, r.id, detected, hostId)
@@ -1953,8 +2212,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             r.id,
             { executionHostId: hostId }
           )
-          const list = toVisibleWorktrees(detected, hostId)
           const current = get().worktreesByRepo[r.id]
+          const list = sanitizeHostedReviewLinksForBranchClears(
+            toVisibleWorktrees(detected, hostId),
+            current
+          )
           const currentMatchOptions = worktreeHostMatchOptions(get(), r.id, hostId)
           const currentForHost = (current ?? []).filter((worktree) =>
             worktreeMatchesHost(worktree, hostId, currentMatchOptions)
@@ -2074,11 +2336,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   updateWorktreeGitIdentity: (worktreeId, identity) => {
+    let shouldPersistHostedReviewClear = false
+    let clearedBranch: string | null = null
+    let clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const existing = get().worktreesByRepo[repoId]?.find((worktree) => worktree.id === worktreeId)
+    if (!existing) {
+      return
+    }
+    const expectedHead = identity.head ?? existing.head
+    const expectedBranch = identity.branch === null ? '' : (identity.branch ?? existing.branch)
+    if (expectedHead === existing.head && expectedBranch === existing.branch) {
+      return
+    }
+
     set((s) => {
-      const repoId = getRepoIdFromWorktreeId(worktreeId)
       const current = s.worktreesByRepo[repoId]
       if (!current) {
-        return {}
+        return s
       }
 
       let changed = false
@@ -2092,6 +2367,33 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         changed = true
+        const hostedReviewBranchChanged =
+          canonicalHostedReviewBranchIdentity(nextBranch) !==
+          canonicalHostedReviewBranchIdentity(worktree.branch)
+        const shouldClearHostedReviewContext =
+          hostedReviewBranchChanged && hasBranchScopedHostedReviewContext(worktree)
+        if (shouldClearHostedReviewContext) {
+          shouldPersistHostedReviewClear = true
+          clearedBranch = nextBranch
+          clearGeneration = getHostedReviewLinkMutationGeneration(worktreeId)
+          rememberHostedReviewLinkClear(worktreeId, nextBranch, clearGeneration, nextHead)
+        } else {
+          const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(worktreeId)
+          if (tombstone) {
+            const nextBranchIdentity = canonicalHostedReviewBranchIdentity(nextBranch)
+            hostedReviewLinkClearTombstonesByWorktreeId.set(worktreeId, {
+              ...tombstone,
+              branch: nextBranch,
+              branchIdentity: nextBranchIdentity,
+              head: nextHead
+            })
+            if (hostedReviewBranchChanged) {
+              shouldPersistHostedReviewClear = true
+              clearedBranch = nextBranch
+              clearGeneration = tombstone.generation
+            }
+          }
+        }
         // Why: terminal branch switches only patch branch/head here; auto-derived
         // titles need the same branch derivation that full worktree listing uses.
         const currentBranchName = branchName(worktree.branch)
@@ -2109,11 +2411,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         } else if (identity.branch !== undefined) {
           detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
         }
-        return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
+        return {
+          ...worktree,
+          head: nextHead,
+          branch: nextBranch,
+          displayName: nextDisplayName,
+          // Why: linked reviews are branch-scoped hints. If a terminal switches
+          // branches, keeping the old exact link makes Checks refresh the old PR.
+          ...(shouldClearHostedReviewContext ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : {})
+        }
       })
 
       if (!changed) {
-        return {}
+        return s
       }
 
       return {
@@ -2121,6 +2431,80 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         sortEpoch: s.sortEpoch + 1
       }
     })
+    if (!shouldPersistHostedReviewClear || clearedBranch === null) {
+      return
+    }
+
+    void Promise.resolve()
+      .then(async () => {
+        let currentWorktreeId = resolveHostedReviewLinkWorktreeId(worktreeId)
+        const persistedWorktreeIds = new Set<string>()
+        while (true) {
+          currentWorktreeId = resolveHostedReviewLinkWorktreeId(currentWorktreeId)
+          if (persistedWorktreeIds.has(currentWorktreeId)) {
+            return
+          }
+          persistedWorktreeIds.add(currentWorktreeId)
+          let current = get().getKnownWorktreeById(currentWorktreeId)
+          if (
+            !current ||
+            current.branch !== clearedBranch ||
+            getHostedReviewLinkMutationGeneration(currentWorktreeId) !== clearGeneration
+          ) {
+            return
+          }
+          if (!hostedReviewLinksAreCleared(current as Worktree)) {
+            // Why: a worktree refetch can rehydrate stale linked-review metadata
+            // before this async clear starts; clear it again instead of bailing out.
+            applyHostedReviewLinkClear(set, currentWorktreeId)
+            current = get().getKnownWorktreeById(currentWorktreeId)
+            if (!current || current.branch !== clearedBranch) {
+              return
+            }
+          }
+          await persistWorktreeMeta(
+            settingsForWorktreeOwner(get(), currentWorktreeId),
+            currentWorktreeId,
+            CLEARED_HOSTED_REVIEW_LINK_UPDATES
+          )
+          const migratedWorktreeId = resolveHostedReviewLinkWorktreeId(currentWorktreeId)
+          if (migratedWorktreeId === currentWorktreeId) {
+            break
+          }
+          // Why: worktree creation can migrate ids while this IPC is in flight;
+          // persist the branch-scoped clear under the new durable id as well.
+          currentWorktreeId = migratedWorktreeId
+        }
+        const latest = get().getKnownWorktreeById(currentWorktreeId)
+        if (
+          !latest ||
+          latest.branch !== clearedBranch ||
+          hostedReviewLinksAreCleared(latest as Worktree)
+        ) {
+          return
+        }
+        if (getHostedReviewLinkMutationGeneration(currentWorktreeId) !== clearGeneration) {
+          // Why: a delayed branch-switch clear must not win over a newer manual relink.
+          await persistWorktreeMeta(
+            settingsForWorktreeOwner(get(), currentWorktreeId),
+            currentWorktreeId,
+            getHostedReviewLinkUpdates(latest as Worktree)
+          )
+          return
+        }
+        // Why: a worktree refetch can briefly rehydrate old metadata before
+        // the branch-switch clear reaches disk; do not write that stale link back.
+        applyHostedReviewLinkClear(set, currentWorktreeId)
+      })
+      .catch((err) => {
+        if (isRuntimeSelectorNotFoundError(err)) {
+          void get().fetchWorktrees(
+            getRepoIdFromWorktreeId(resolveHostedReviewLinkWorktreeId(worktreeId))
+          )
+          return
+        }
+        console.error('Failed to persist branch-scoped review link clear:', err)
+      })
   },
 
   updateWorktreeBaseStatus: (event) => {
@@ -2762,6 +3146,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
         })
       }
+      pruneHostedReviewLinkMutationGenerations([worktreeId])
       return preservedBranch ? { ok: true as const, preservedBranch } : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a
@@ -3023,6 +3408,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
     if (shouldApplyUpdate && !didApply) {
       return
+    }
+    if (hasHostedReviewLinkUpdates(enriched)) {
+      bumpHostedReviewLinkMutationGeneration(worktreeId)
     }
 
     try {
@@ -3955,5 +4343,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     set((s) => buildWorktreeRenameState(s, oldWorktreeId, newWorktreeId))
+    migrateHostedReviewLinkMutationGeneration(oldWorktreeId, newWorktreeId)
   }
 })

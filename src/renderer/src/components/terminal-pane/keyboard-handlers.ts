@@ -132,6 +132,8 @@ type KeyboardHandlersDeps = {
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
+  onSetTitle: (paneId: number) => void
+  onClearPaneTitle: (paneId: number) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
@@ -139,6 +141,11 @@ type KeyboardHandlersDeps = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
+/**
+ * Installs terminal-pane shortcuts on the tab keyboard scope.
+ * Uses the shared shortcut policy before forwarding unmatched input to xterm
+ * so configurable Orca actions remain consistent across local and SSH panes.
+ */
 export function useTerminalKeyboardShortcuts({
   tabId,
   isActive,
@@ -157,6 +164,8 @@ export function useTerminalKeyboardShortcuts({
   onSearchSelectedText,
   onRequestClosePane,
   onClearPaneScrollback,
+  onSetTitle,
+  onClearPaneTitle,
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
@@ -389,6 +398,28 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'setTitle') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        onSetTitle(pane.id)
+        return
+      }
+
+      if (action.type === 'clearPaneTitle') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        onClearPaneTitle(pane.id)
+        return
+      }
+
       // Cmd+W closes the active split pane (or the whole tab when only one
       // pane remains). Always intercepted here so the tab-level handler in
       // Terminal.tsx never closes the entire tab directly — that would kill
@@ -458,6 +489,8 @@ export function useTerminalKeyboardShortcuts({
     onSearchSelectedText,
     onRequestClosePane,
     onClearPaneScrollback,
+    onSetTitle,
+    onClearPaneTitle,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,

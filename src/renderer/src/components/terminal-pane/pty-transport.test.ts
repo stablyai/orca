@@ -611,6 +611,21 @@ describe('createIpcPtyTransport', () => {
     expect(flushed.endsWith('TAIL$')).toBe(true)
   })
 
+  it('drains pre-handler data and exit into eager buffers for fast background PTYs', async () => {
+    const { ensurePtyDispatcher, registerEagerPtyBuffer } = await import('./pty-transport')
+    const onEagerExit = vi.fn()
+
+    ensurePtyDispatcher()
+    onData?.({ id: 'pty-fast-setup', data: 'setup failed fast\n' })
+    onExit?.({ id: 'pty-fast-setup', code: 1 })
+
+    const handle = registerEagerPtyBuffer('pty-fast-setup', onEagerExit)
+
+    expect(handle.flush()).toBe('setup failed fast\n')
+    await Promise.resolve()
+    expect(onEagerExit).toHaveBeenCalledWith('pty-fast-setup', 1)
+  })
+
   it('enforces the eager buffer cap in UTF-8 bytes for multi-byte output', async () => {
     const { registerEagerPtyBuffer } = await import('./pty-transport')
     const cap = 512 * 1024
@@ -1291,7 +1306,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',
         leafId: '11111111-1111-4111-8111-111111111111',
-        focus: false
+        focus: false,
+        presentation: 'background'
       },
       timeoutMs: 15_000
     })

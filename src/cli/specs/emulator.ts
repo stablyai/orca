@@ -9,6 +9,12 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
   {
+    path: ['emulator', 'devices'],
+    summary: 'List all emulator devices/AVDs across iOS and Android',
+    usage: 'orca emulator devices [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+  },
+  {
     path: ['emulator', 'attach'],
     summary: 'Attach/start helper for a device and make it active for the worktree',
     usage: 'orca emulator attach [device] [--worktree <selector>] [--focus] [--json]',
@@ -69,5 +75,47 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca emulator shutdown [--device <id>] [--emulator <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
+  },
+  {
+    path: ['emulator', 'install'],
+    summary: 'Install an APK onto the target Android device',
+    usage: 'orca emulator install <apkPath> [--reinstall] [--device <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'path', 'reinstall'],
+    positionalArgs: ['path']
+  },
+  {
+    path: ['emulator', 'launch'],
+    summary: 'Launch an Android app by package (and optional activity)',
+    usage: 'orca emulator launch <package> [--activity <name>] [--device <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'package', 'activity'],
+    positionalArgs: ['package']
+  },
+  {
+    path: ['emulator', 'permissions'],
+    summary: 'Grant/revoke an Android runtime permission, or reset all runtime grants',
+    usage:
+      'orca emulator permissions <grant|revoke> <package> <permission> [--device <id>] [--json]\n       orca emulator permissions reset [--device <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'device',
+      'emulator',
+      'worktree',
+      'op',
+      'package',
+      'permission'
+    ],
+    positionalArgs: ['op', 'package', 'permission']
+  },
+  {
+    path: ['emulator', 'ax'],
+    summary: 'Dump the Android accessibility (uiautomator) tree',
+    usage: 'orca emulator ax [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
+  },
+  {
+    path: ['emulator', 'logcat'],
+    summary: 'Capture a one-shot logcat dump from the Android device',
+    usage: 'orca emulator logcat [--lines <n>] [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'lines']
   }
 ]

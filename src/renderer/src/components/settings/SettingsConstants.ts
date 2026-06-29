@@ -1,10 +1,11 @@
 import type { OrcaHooks } from '../../../../shared/types'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS } from '../../../../shared/terminal-scrollback-policy'
 
 export type HookName = keyof OrcaHooks['scripts']
 export const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
 export const MAX_THEME_RESULTS = 80
-export const SCROLLBACK_PRESETS_MB = [10, 25, 50, 100, 250] as const
+export const SCROLLBACK_PRESETS_ROWS = DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS
 export const ZOOM_STEP = 0.5
 export const ZOOM_MIN = -3
 export const ZOOM_MAX = 5

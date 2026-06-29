@@ -56,7 +56,8 @@
     "zoomOut": "축소",
     "openWorktreePalette": "워크트리 팔레트 열기",
     "window": "창",
-    "help": "도움말"
+    "help": "도움말",
+    "paste": "Paste"
   },
   "tray": {
     "openOrca": "Orca 열기",
@@ -356,6 +357,13 @@
             }
           }
         },
+        "worktree": {
+          "background": {
+            "terminals": {
+              "setupTitle": "Setup"
+            }
+          }
+        },
         "work": {
           "item": {
             "direct": {
@@ -386,6 +394,13 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            }
+          }
+        },
+        "mobile": {
+          "emulator": {
+            "tab": {
+              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
         }
@@ -534,7 +549,9 @@
         "ba6cb77082": "프로젝트에 연결하지 못했습니다.",
         "chooseOrAddProjectBeforeWorkspace": "워크스페이스를 만들기 전에 프로젝트를 선택하거나 추가하세요.",
         "folderWorkspaceCreateFailedTitle": "폴더 워크스페이스를 만들지 못했습니다",
-        "folderWorkspaceCreateFailedMessage": "폴더 워크스페이스를 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요."
+        "folderWorkspaceCreateFailedMessage": "폴더 워크스페이스를 만들 수 없습니다. 위의 오류 세부 정보를 확인한 뒤 다시 시도하세요.",
+        "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
+        "5f3d2c8a1b": "Failed to resolve MR base."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
@@ -1123,7 +1140,9 @@
         "notePasteTooLarge": "메모 필드에 붙여넣을 내용이 너무 큽니다.",
         "reuseExistingBranch": "브랜치 재사용",
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
-        "createMultiple": "더 만들기"
+        "createMultiple": "더 만들기",
+        "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -2234,7 +2253,25 @@
             "2ddbd6fe8a": "확인됨",
             "ee81adfcef": "보기",
             "4d0b72481c": "무시",
-            "9cc26c019d": "제거"
+            "9cc26c019d": "제거",
+            "0e2d235c63": "Inactive workspace scan ready",
+            "4a35c08764": "Review",
+            "47123d0108": "Scanning inactive workspaces. You can close this and come back.",
+            "9a3be9f2df": "Scanning inactive workspaces. New rows appear here as they finish. You can close this and come back.",
+            "3d957ff117": "No workspaces match these filters.",
+            "e94b1f8bb4": "Clear filters",
+            "efb3843e75": "Filter and sort workspaces",
+            "93b7381d50": "Filters",
+            "a615e24679": "Sort",
+            "4cc5b73efe": "Finding inactive workspaces...",
+            "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
+            "searchPlaceholder": "Search workspaces",
+            "ageFilter": "Age",
+            "reviewFilter": "Review",
+            "gitFilter": "Git",
+            "contextFilter": "Context",
+            "sortBy": "Sort by",
+            "sortDirection": "Direction"
           }
         }
       },
@@ -2366,6 +2403,7 @@
             "copyTerminalId": "터미널 ID 복사",
             "2cf85a6a55": "창 ID 복사",
             "39809d152f": "제목 설정…",
+            "clearPaneTitle": "창 제목 지우기",
             "06c2b0f043": "창 크기 균등화",
             "98bccf4fa2": "Terminal을 아래로 분할",
             "20e565d865": "Terminal 오른쪽 분할",
@@ -2378,7 +2416,8 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소"
+            "df766809e0": "창 축소",
+            "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -2428,7 +2467,10 @@
                   "38e41edc6e": "이 워크스페이스는 git 작업 트리로 포크할 수 없습니다.",
                   "f867385bb5": "이 포크의 소스 워크스페이스를 찾을 수 없습니다.",
                   "046e8d853c": "포크할 terminal 컨텍스트가 없습니다.",
-                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다."
+                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다.",
+                  "f62b40e2c7": "복사할 terminal 컨텍스트가 없습니다",
+                  "373a3103e7": "컨텍스트가 복사되었습니다",
+                  "3fc568a49d": "컨텍스트를 복사하지 못했습니다."
                 }
               }
             },
@@ -2496,7 +2538,9 @@
             "couldNotReadPayload": "세션 드래그 데이터를 읽을 수 없습니다.",
             "localWorkspacesOnly": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다.",
             "openLocalWorkspace": "세션을 재개하기 전에 로컬 워크스페이스를 여세요.",
-            "sessionQueued": "세션이 대기열에 추가됨"
+            "sessionQueued": "세션이 대기열에 추가됨",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "새 분할"
@@ -2601,7 +2645,7 @@
             "39676a184c": "모든 파일, URL, agent를 엽니다..."
           },
           "TabBarQuickCommandsButton": {
-            "a2c7a33831": "명령",
+            "a2c7a33831": "빠른 명령 추가...",
             "20bbd75896": "명령 없음",
             "b82e237a4b": "빠른 명령 더 보기",
             "85482c57bc": "빠른 명령 실행",
@@ -4332,6 +4376,31 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "브랜치"
+        },
+        "NewExternalWorktreesInboxLine": {
+          "9f2d4c8b17": "{{value0}}의 외부 워크트리를 영구적으로 숨기기",
+          "d9f7b2a14c": "{{value0}}의 외부에서 생성된 새 워크트리 접기",
+          "e2c4a8d91f": "{{value0}}의 외부에서 생성된 새 워크트리 펼치기",
+          "7c4e9b2a81": "외부에서 생성된 새 워크트리",
+          "5e1b8d3f62": "외부 워크트리를 영구적으로 숨기기",
+          "4d7a1c9e53": "이 워크트리는 Orca 외부에서 생성되었습니다.",
+          "8b3f2e1d74": "가져오기",
+          "1c9e7a4b28": "숨긴 상태 유지",
+          "6f2d8c1e95": "모두 가져오기",
+          "c3e8a1f4b2": "다시 표시하지 않기"
+        },
+        "newExternalWorktreesInboxActions": {
+          "a11c2f6d89": "외부 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
+          "b7e4d1a062": "외부 워크트리를 가져올 수 없습니다. 다시 시도하세요.",
+          "c94f0b3a15": "외부 워크트리를 영구적으로 숨길 수 없습니다. 다시 시도하세요."
+        },
+        "SuppressExternalWorktreeInboxDialog": {
+          "a4c2d8f1b0": "외부 워크트리를 숨길까요?",
+          "6e91b3c4d2": "{{value0}}에서는 나중에 생성되는 항목을 포함해 외부 워크트리가 사이드바나 이 목록에 더 이상 표시되지 않습니다.",
+          "1f8a5d9e73": "나중에 프로젝트 설정에서 다시 켤 수 있습니다.",
+          "8c0b2e7a41": "Non-Orca 워크트리 설정 열기",
+          "5d1c9f0a82": "취소",
+          "3b7e4a1c96": "외부 워크트리 숨기기"
         }
       },
       "shared": {
@@ -4480,7 +4549,9 @@
           "copiedCommand": "명령 복사됨.",
           "failedToCopyCommand": "명령 복사 실패.",
           "copyCommandAria": "명령 복사",
-          "runCommandDescription": "Enter를 눌러 명령을 실행하세요."
+          "runCommandDescription": "Enter를 눌러 명령을 실행하세요.",
+          "5f818f12ab": "준비 중...",
+          "4c05b9d7cb": "설정 터미널을 준비하고 있습니다."
         },
         "AgentsPane": {
           "d83834f5e6": "설치된 agents 감지 중…",
@@ -4576,7 +4647,16 @@
             "tintOpacity": "색조 강도",
             "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
           },
-          "workspaceCardLayoutGuidance": "워크스페이스 사이드바 옵션 메뉴 > 카드 레이아웃 > 컴팩트를 사용하세요."
+          "workspaceCardLayoutGuidance": "워크스페이스 사이드바에서 관리됩니다.",
+          "interfaceDefaultFont": "기본 글꼴",
+          "terminalDefaultFont": "기본 글꼴",
+          "interfaceTitle": "인터페이스",
+          "terminalTitle": "터미널",
+          "windowSidebarTitle": "창 및 사이드바",
+          "windowSidebarSummary": "사이드바, 상태 표시줄 및 파일 탐색기",
+          "statusBarCount": "{{value0}}개 표시기가 보입니다.",
+          "gitIgnoredGlossary": ".gitignore와 일치하는 파일.",
+          "statusBarDescription": "Choose which indicators appear in the status bar."
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4901,6 +4981,17 @@
             "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
             "title": "새 카드 스타일",
             "toggleLabel": "새 카드 스타일 전환"
+          },
+          "nativeChat": {
+            "title": "Native chat",
+            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "toggleLabel": "Toggle native chat",
+            "defaultTitle": "Default view",
+            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultViewLabel": "Default native chat view",
+            "defaultViewTerminal": "Terminal chat",
+            "defaultViewNative": "Native chat"
           }
         },
         "FloatingWorkspacePane": {
@@ -5094,7 +5185,11 @@
           "sourceControlGroupOrderDescription": "소스 제어에서 변경 사항, 스테이징된 변경 사항 또는 추적되지 않는 파일 중 무엇을 먼저 표시할지 선택합니다.",
           "changesFirst": "변경 사항 먼저",
           "stagedFirst": "스테이징된 항목 먼저",
-          "untrackedFirst": "추적되지 않는 파일 먼저"
+          "untrackedFirst": "추적되지 않는 파일 먼저",
+          "compareAgainstUpstreamTitle": "기본 비교 기준",
+          "compareAgainstUpstreamDescription": "소스 제어가 커밋된 변경 사항 비교에 기본으로 사용할 기준을 선택합니다. 브랜치 업스트림은 현재 브랜치를 자동으로 따라가며, 업스트림이 없으면 저장소 기본 브랜치로 돌아갑니다. 비교 기준은 해당 worktree의 Git 패널에서 worktree별로 변경할 수 있습니다. Pull Request 및 리베이스 대상은 변경되지 않습니다.",
+          "compareBaseRepositoryDefault": "저장소 기본값",
+          "compareBaseBranchUpstream": "브랜치 업스트림"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "자리 표시자 토글",
@@ -5263,7 +5358,10 @@
           "4f2205f3b6": "Orca CLI 활성화",
           "ff4b7e65d6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "2a674aa810": "Agent 모바일 에뮬레이터 제어",
-          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다."
+          "cdeaed9e37": "PATH에 Orca CLI를 등록했습니다.",
+          "3d34423e88": "Orca CLI를 등록하는 중",
+          "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+          "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "복사",
@@ -5288,7 +5386,12 @@
           "a4f1c82d90": "비활성화됨",
           "b5e2d93e01": "확인 중...",
           "c6f3ea4f12": "준비됨",
-          "d704fb5023": "설정 필요"
+          "d704fb5023": "설정 필요",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "QR 코드를 재생성하고 Orca 모바일 앱에서 스캔하세요.",
@@ -5335,7 +5438,10 @@
           "b5a2ed83ff": "앱스토어",
           "c8491c17ef": "QR 코드를 스캔하여 휴대폰에서 Orca를 제어하세요. 베타/초기 미리보기 - 버그 및 주요 변경 사항이 예상됩니다. 다음에서 iOS 앱을 받으세요.",
           "e7a3ae8c4e": "모바일",
-          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요."
+          "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요.",
+          "1de96ec8a6": "Show Orca Mobile Button",
+          "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
         },
         "NotificationsPane": {
           "906b4afebf": "테스트 알림 보내기",
@@ -5585,7 +5691,9 @@
           "2b6356e744": "저장됨",
           "81057d5f71": "저장 중...",
           "da37d6f10e": "복사",
-          "3149964b66": "복사됨"
+          "3149964b66": "복사됨",
+          "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
@@ -6184,7 +6292,9 @@
           "4415beb958": "비활성",
           "4e7d41a9f0": "활성화됨",
           "e90afcc44f": "끔",
-          "16c471ee03": "켜짐"
+          "16c471ee03": "켜짐",
+          "typographyAdvanced": "타이포그래피",
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -6215,12 +6325,12 @@
           "3d88af864d": "PowerShell 셸 옵션이 새 terminal 패널에 대해 Windows PowerShell을 시작할지 아니면 PowerShell 7+를 시작할지 선택합니다.",
           "8a956cc91e": "두 번 클릭 선택 시 단어 경계로 처리되는 문자입니다.",
           "4bebcc2b2c": "단어 구분 기호",
-          "12e06178fa": "MB",
+          "12e06178fa": "행",
           "907b0b9d3e": "사용자 지정",
-          "5336c096af": "{{value0}} 메가바이트",
-          "81d86b2dd2": "새 terminal 패널의 최대 terminal 스크롤백 버퍼 크기입니다.",
-          "9df53f7c14": "스크롤백 크기",
-          "c3810b2b42": "최대 terminal 스크롤백 버퍼 크기.",
+          "5336c096af": "{{value0}} 행",
+          "81d86b2dd2": "새 패널과 열린 패널에 보관할 데스크톱 terminal 행입니다.",
+          "9df53f7c14": "스크롤백 행",
+          "c3810b2b42": "보관할 데스크톱 terminal 행입니다.",
           "267d020745": "스크롤백, 단어 경계 및 플랫폼별 terminal 동작.",
           "5e5f06c82c": "고급",
           "003df129fe": "수평으로 분할",
@@ -6714,7 +6824,7 @@
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",
             "workspaceCardLayout": {
               "title": "워크스페이스 카드 레이아웃",
-              "description": "워크스페이스 사이드바 옵션 메뉴에서 워크스페이스 카드를 컴팩트 또는 상세 보기로 전환합니다.",
+              "description": "워크스페이스 카드는 컴팩트 또는 상세 레이아웃을 사용할 수 있습니다.",
               "compact": "컴팩트",
               "compactDisplay": "컴팩트 보기",
               "workspaceCards": "워크스페이스 카드",
@@ -7002,6 +7112,10 @@
               "title": "새 카드 스타일",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "nativeChat": {
+              "title": "Native chat",
+              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
             }
           }
         },
@@ -7215,7 +7329,19 @@
             "stagedFirst": "스테이징된 항목 먼저",
             "untrackedFirst": "추적되지 않는 파일 먼저",
             "sourceControl": "소스 제어",
-            "gitChanges": "git 변경 사항"
+            "gitChanges": "git 변경 사항",
+            "compareAgainstUpstreamTitle": "기본 비교 기준",
+            "compareAgainstUpstreamDescription": "소스 제어가 커밋된 변경 사항 비교에 기본으로 사용할 기준을 선택합니다. 브랜치 업스트림은 현재 브랜치를 자동으로 따라가며, 업스트림이 없으면 저장소 기본 브랜치로 돌아갑니다. 비교 기준은 해당 worktree의 Git 패널에서 worktree별로 변경할 수 있습니다. Pull Request 및 리베이스 대상은 변경되지 않습니다.",
+            "compareBase": "비교 기준",
+            "currentBranch": "현재 브랜치",
+            "upstream": "업스트림",
+            "localChanges": "로컬 변경 사항",
+            "originMaster": "origin/master",
+            "committedChanges": "커밋된 변경 사항",
+            "defaultCompareBase": "기본 비교 기준",
+            "defaultBranch": "기본 브랜치",
+            "repositoryDefault": "저장소 기본값",
+            "branchUpstream": "브랜치 업스트림"
           }
         },
         "input": {
@@ -7402,7 +7528,9 @@
               "f4ed142753": "핸드폰",
               "f213400800": "모바일",
               "671eb4173c": "휴대폰에서 terminals과 agents를 제어하세요.",
-              "ffd52a96e4": "모바일"
+              "ffd52a96e4": "모바일",
+              "1de96ec8a6": "Show Orca Mobile Button",
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
             }
           }
         },
@@ -7845,8 +7973,9 @@
             "957a0203fc": "단어 구분 기호",
             "56fff3d113": "메모리",
             "fffdff40a7": "버퍼",
-            "f7d56b6281": "최대 terminal 스크롤백 버퍼 크기입니다.",
-            "7674e758e1": "스크롤백 크기",
+            "rows": "행",
+            "f7d56b6281": "보관할 데스크톱 terminal 행입니다.",
+            "7674e758e1": "스크롤백 행",
             "411229c636": "라이트",
             "781f49d942": "분할기",
             "77d9f9cd55": "라이트 모드에서 창 사이의 분할 구분선을 제어합니다.",
@@ -8346,6 +8475,24 @@
           "wslUnavailable": "WSL is not available on this machine.",
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
+        },
+        "MobileEmulatorSdkStatus": {
+          "536026130e": "Emulator SDKs",
+          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "027cbf668a": "Android SDK",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
+          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
+          "b94ff260e6": "Download Android Studio",
+          "18925b082d": "Locate SDK folder",
+          "8c52684db8": "Clear",
+          "76eb88b88e": "iOS Simulator (Xcode)",
+          "c6f3ea4f12": "Ready",
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
+        },
+        "AppearanceAdvancedDisclosure": {
+          "advanced": "고급"
         }
       },
       "right": {
@@ -9207,7 +9354,10 @@
             "agents": "에이전트",
             "sessionsShownCompact": "{{value0}} 표시됨",
             "originalPaneUnavailable": "원래 창은 더 이상 사용할 수 없습니다.",
-            "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다."
+            "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -9725,7 +9875,12 @@
           "a6cffbbb0b": "코드 생성",
           "e59a252eca": "코드 재생성",
           "d0b52871ce": "휴대전화가 페어링되었습니다.",
-          "051978a785": "휴대전화가 페어링되었습니다."
+          "051978a785": "휴대전화가 페어링되었습니다.",
+          "channel": {
+            "group": "릴리스 채널",
+            "preview": "미리 보기",
+            "stable": "안정 버전"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -9744,7 +9899,11 @@
           "ad2284a9e2": "닫기 · Esc",
           "9883b58693": "Orca 모바일 닫기",
           "fb5f28330e": "사이드바에 표시",
-          "c669abcf8f": "사이드바에서 숨기기"
+          "c669abcf8f": "사이드바에서 숨기기",
+          "e1c7b4a92d": "Configure in Settings > Mobile.",
+          "a4f8c2d91e": "Remove Orca Mobile from left sidebar",
+          "b7e3d1c84a": "Show Orca Mobile in left sidebar",
+          "f3d8e5b71a": "Adds the shortcut back to the left sidebar."
         },
         "PhoneCarousel": {
           "96d651cb87": "Terminal 세션",
@@ -9755,7 +9914,13 @@
           "platform": {
             "copy": {
               "2a532d6fd7": "Android 카메라로 스캔하여 GitHub 릴리스에서 최신 APK를 다운로드하세요.",
-              "432db52b73": "iPhone 카메라로 스캔하여 App Store를 엽니다."
+              "432db52b73": "iPhone 카메라로 스캔하여 App Store를 엽니다.",
+              "preview": {
+                "tagline": "최신 기능, 매일 업데이트."
+              },
+              "stable": {
+                "tagline": "정식 출시 버전, 매주 업데이트."
+              }
             }
           }
         },
@@ -10473,7 +10638,10 @@
             "21f5687c07": "Orca CLI 스킬",
             "64fb057667": "이 워크트리의 orca 에뮬레이터 명령을 agents에게 알려줍니다.",
             "5c59ea96ca": "모바일 에뮬레이터 Orca CLI 스킬 설정",
-            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
+            "bff5341ac3": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal",
+            "3d34423e88": "Orca CLI를 등록하는 중",
+            "3be27641c9": "agent 셸에서 에뮬레이터 명령을 실행할 수 있도록 합니다.",
+            "3941719a56": "스킬 설정을 열기 전에 Orca CLI를 확인하고 있습니다."
           },
           "MobileEmulatorTabIntroCallout": {
             "1924982130": "닫기",
@@ -10855,7 +11023,14 @@
           "32ae8d7d57": "이전 일치 항목",
           "158c645829": "리치 markdown 편집기에서 찾기",
           "98b89276f3": "리치 에디터에서 찾기",
-          "a86958d508": "결과 없음"
+          "a86958d508": "결과 없음",
+          "e8c147435f": "바꾸기 숨기기",
+          "9cdc38be33": "바꾸기 표시",
+          "482b637099": "대소문자 구분",
+          "68d090241d": "전체 단어 일치",
+          "fd97c7e585": "바꾸기",
+          "44682b4159": "리치 markdown 편집기에서 바꾸기",
+          "c2884f5e95": "모두 바꾸기"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "블록을 찾을 수 없습니다.",
@@ -11024,7 +11199,8 @@
           "b3e7f9a1c2": "체크 수정 컨텍스트를 사용할 수 없습니다.",
           "d5a8c2f1b9": "이 체크를 수정할 기본 AI agent 시작",
           "e2b4d7c8a1": "이 체크를 처리할 agent 선택",
-          "f1c9e3a6d4": "체크를 수정할 agent 선택"
+          "f1c9e3a6d4": "체크를 수정할 agent 선택",
+          "5e2a9c3f88": "Open file at this line"
         },
         "check": {
           "run": {
@@ -11045,6 +11221,13 @@
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "붙여넣기 내용이 너무 큽니다."
+        },
+        "CheckRunJobs": {
+          "1c0a4d7e02": "succeeded",
+          "2d3b8f1a55": "skipped",
+          "3e6c9a2b71": "pending",
+          "4f7d0c3e88": "steps failed",
+          "5a8e1d4f23": " · "
         }
       },
       "diff": {
@@ -11662,6 +11845,11 @@
           "chooseHost": "자동화 호스트 선택",
           "adding": "프로젝트 추가 중...",
           "addProject": "프로젝트 추가"
+        },
+        "AutomationSetupDecisionField": {
+          "5a7863909c": "새 워크스페이스마다 설정 실행",
+          "18f000ad4e": "Advanced",
+          "874b72195b": "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
         }
       },
       "agent": {
@@ -11884,6 +12072,11 @@
             "later": "Later"
           }
         }
+      },
+      "nativeChat": {
+        "contextMenu": {
+          "copy": "Copy"
+        }
       }
     },
     "i18n": {
@@ -11897,6 +12090,94 @@
           "b3d7e0f1a8": "MR",
           "a2c6d9e0f7": "머지 리퀘스트",
           "91b5c8d7e6": "GitLab"
+        }
+      }
+    }
+  },
+  "components": {
+    "native-chat": {
+      "composer": {
+        "imageUnsupported": "Image paste is not supported for this agent.",
+        "send": "Send",
+        "noPty": "No live terminal — toggle back to reconnect.",
+        "locked": "Input is held by another device.",
+        "placeholder": "Send a message…",
+        "mentionHint": "Referencing file:",
+        "attach": "Attach file",
+        "startDictation": "Start dictation",
+        "stopDictation": "Stop dictation",
+        "noSkills": "No matching skills",
+        "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
+        "removeAttachment": "Remove attachment"
+      },
+      "tool": {
+        "running": "Running…",
+        "result": "Result"
+      },
+      "status": {
+        "responding": "Agent is responding"
+      },
+      "jumpToLatest": "Jump to latest",
+      "toggle": {
+        "showTerminal": "Show terminal",
+        "showChat": "Show chat view"
+      },
+      "state": {
+        "loading": {
+          "title": "Loading conversation…",
+          "subtitle": "Reading the agent transcript."
+        },
+        "error": {
+          "title": "Could not load conversation",
+          "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
+        },
+        "notAgent": {
+          "title": "No conversation here",
+          "subtitle": "This terminal is not running a recognized coding agent."
+        },
+        "empty": {
+          "title": "Start a chat with {{value0}}",
+          "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+        }
+      },
+      "stop": "Stop the agent",
+      "copyMessage": {
+        "copied": "Copied",
+        "copy": "Copy message"
+      },
+      "scrollMessageToTop": "Scroll this message to top",
+      "loadingEarlier": "Loading…",
+      "loadEarlier": "Load earlier messages",
+      "question": {
+        "step": "Step {{value0}}",
+        "other": "Other…",
+        "otherPlaceholder": "Type your answer",
+        "cancel": "Cancel",
+        "send": "Send answer",
+        "next": "Next"
+      },
+      "approval": {
+        "title": "Allow {{value0}}?",
+        "allow": "Allow",
+        "deny": "Deny"
+      }
+    },
+    "tab": {
+      "bar": {
+        "SortableTabContextMenu": {
+          "switchToTerminalView": "Switch to terminal view",
+          "switchToChatView": "Switch to chat view"
+        }
+      }
+    },
+    "workspace": {
+      "cleanup": {
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "Review alpha cleanup"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     }

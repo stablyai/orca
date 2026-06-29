@@ -12,6 +12,11 @@ export type AgentCompletionDispatchMeta = {
   agentStatus?: AgentCompletionStatusSnapshot
 }
 
+export type AgentAttentionDispatchMeta = {
+  source: 'hook'
+  agentStatus: AgentCompletionStatusSnapshot
+}
+
 export type AgentCompletionCoordinatorOptions = {
   paneKey: string
   getPtyId: () => string | null
@@ -21,8 +26,10 @@ export type AgentCompletionCoordinatorOptions = {
     ptyId: string
   ) => Promise<RuntimeTerminalProcessInspection>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
+  dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
+  shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }
 
 export type AgentCompletionCoordinator = {

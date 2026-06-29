@@ -167,11 +167,11 @@ export default function AiVaultSessionDropLayer({
       }
 
       const targetStatus = getAiVaultResumeWorkspaceTargetStatus(useAppStore.getState(), worktreeId)
-      if (targetStatus === 'non-local') {
+      if (targetStatus === 'runtime') {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.localWorkspacesOnly',
-            'Resume from history is only available in local workspaces.'
+            'auto.components.tab.group.AiVaultSessionDropLayer.runtimeWorkspacesUnsupported',
+            'Resume from history is not available in runtime-hosted workspaces.'
           )
         )
         return true
@@ -179,8 +179,8 @@ export default function AiVaultSessionDropLayer({
       if (targetStatus === 'unknown') {
         toast.error(
           translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.openLocalWorkspace',
-            'Open a local workspace before resuming a session.'
+            'auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace',
+            'Open a local or SSH workspace before resuming a session.'
           )
         )
         return true

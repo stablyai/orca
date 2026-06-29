@@ -50,7 +50,10 @@ import { ActivityTitlebarControls } from './components/activity/ActivityTitlebar
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
-import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
+import {
+  getSystemPrefersDarkSnapshot,
+  useSystemPrefersDark
+} from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
@@ -119,7 +122,6 @@ import {
 } from './lib/startup-ui-hydration'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
-import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -1113,7 +1115,12 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      const systemPrefersDark = getSystemPrefersDark()
+      // Why: this subscriber fires on every store mutation (PTY/agent-status
+      // ticks). Read the cached prefers-dark snapshot — kept fresh by the shared
+      // listener that useSystemPrefersDark() below already mounts — instead of
+      // allocating a throwaway MediaQueryList via matchMedia on every tick,
+      // before the skip-gate even runs.
+      const systemPrefersDark = getSystemPrefersDarkSnapshot()
       // Why: skip the key build entirely when every input field is unchanged
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the

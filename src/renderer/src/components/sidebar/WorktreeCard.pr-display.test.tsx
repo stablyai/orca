@@ -650,6 +650,7 @@ describe('WorktreeCard linked PR display', () => {
           number: 6340,
           title: 'Remove split terminal from onboarding checklist',
           state: 'merged',
+          headSha: 'abc123',
           checksStatus: 'success'
         }),
         fetchedAt: Date.now()

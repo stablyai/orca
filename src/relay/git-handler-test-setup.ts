@@ -9,6 +9,9 @@ import { vi } from 'vitest'
 import { execFileSync } from 'child_process'
 import type { RelayDispatcher } from './dispatcher'
 
+const TEST_GIT_USER_EMAIL = 'test@test.com'
+const TEST_GIT_USER_NAME = 'Test'
+
 // Why: declare an explicit type so the inferred return type of
 // createMockDispatcher doesn't transitively reference `@vitest/spy`'s
 // internal `Procedure` type (from `vi.fn(...)`). Without this annotation,
@@ -78,13 +81,28 @@ export function createMockDispatcher(): MockDispatcher {
 
 export function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', TEST_GIT_USER_EMAIL], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.name', TEST_GIT_USER_NAME], { cwd: dir, stdio: 'pipe' })
 }
 
 export function gitCommit(dir: string, message: string): void {
   execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-m', message, '--allow-empty'], { cwd: dir, stdio: 'pipe' })
+  // Why: `git submodule add` creates a checkout that does not inherit the
+  // source repo's local identity config, and CI may have no global identity.
+  execFileSync(
+    'git',
+    [
+      '-c',
+      `user.email=${TEST_GIT_USER_EMAIL}`,
+      '-c',
+      `user.name=${TEST_GIT_USER_NAME}`,
+      'commit',
+      '-m',
+      message,
+      '--allow-empty'
+    ],
+    { cwd: dir, stdio: 'pipe' }
+  )
 }
 
 export type { RelayDispatcher }

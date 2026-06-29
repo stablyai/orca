@@ -85,6 +85,7 @@ export type KeybindingActionId =
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
   | 'editor.find'
+  | 'editor.replace'
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
@@ -102,6 +103,8 @@ export type KeybindingActionId =
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
+  | 'terminal.setTitle'
+  | 'terminal.clearPaneTitle'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
@@ -774,6 +777,20 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
+    id: 'editor.replace',
+    title: 'Replace in editor',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'replace', 'find', 'search'],
+    // Why: match the source editor's native replace shortcut — Cmd+Alt+F on
+    // macOS, Ctrl+H on Linux/Windows.
+    defaultBindings: {
+      darwin: ['Mod+Alt+F'],
+      linux: ['Mod+H'],
+      win32: ['Mod+H']
+    }
+  },
+  {
     id: 'editor.save',
     title: 'Save File',
     group: 'Editors',
@@ -925,6 +942,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.clearPaneTitle',
+    title: 'Clear Pane Title',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.closePane',
@@ -1483,6 +1516,51 @@ function canUsePhysicalCodeFallback(input: KeybindingInput): boolean {
   return PHYSICAL_CODE_FALLBACK_KEYS.has(input.key ?? '')
 }
 
+function isLatinShortcutKey(key: string): boolean {
+  // Why: A-Z / 0-9 are the only single chars a Latin shortcut token names; any
+  // other produced character (Cyrillic с, Greek π, ...) cannot be a deliberate
+  // remap of a Latin chord, so it is safe to fall back to the physical code.
+  if (key.length !== 1) {
+    return false
+  }
+  const upper = key.toUpperCase()
+  return (upper >= 'A' && upper <= 'Z') || (key >= '0' && key <= '9')
+}
+
+function shouldUseNonLatinShortcutPhysicalFallback(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: non-Latin layouts (Cyrillic, Greek, ...) report a non-Latin logical key
+  // for physical letter keys (issue #6274), so Ctrl/Meta shortcuts never match.
+  // Fall back to the physical code, but only when no logical shortcut token
+  // exists, a real primary modifier (Ctrl or Meta) is held, and this is not an
+  // AltGr (Ctrl+Alt) text-composition event. macOS is excluded — it already has
+  // dedicated Option-composed fallbacks and Cmd shortcuts are layout-stable.
+  if (getKeybindingPlatform(platform) === 'darwin') {
+    return false
+  }
+  const hasPrimaryModifier = hasModifier(input, 'control') || hasModifier(input, 'meta')
+  if (!hasPrimaryModifier) {
+    return false
+  }
+  // AltGr surfaces as Ctrl+Alt on Windows/Linux; treat it as text, not a chord.
+  if (hasModifier(input, 'control') && hasModifier(input, 'alt')) {
+    return false
+  }
+  if (logicalKeyTokenFromInput(input) !== null) {
+    return false
+  }
+  const key = input.key ?? ''
+  return key !== '' && !MODIFIER_KEYS.has(key) && !isLatinShortcutKey(key)
+}
+
+function canFallBackToPhysicalCode(input: KeybindingInput, platform: NodeJS.Platform): boolean {
+  return (
+    canUsePhysicalCodeFallback(input) || shouldUseNonLatinShortcutPhysicalFallback(input, platform)
+  )
+}
+
 function physicalCodeKeyTokenFromInput(input: KeybindingInput): string | null {
   const code = input.code ?? ''
   if (code.startsWith('Key') && code.length === 4) {
@@ -1534,7 +1612,8 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   }
   if (
     !canUsePhysicalCodeFallback(input) &&
-    !shouldUseMacOptionComposedCaptureFallback(input, platform)
+    !shouldUseMacOptionComposedCaptureFallback(input, platform) &&
+    !shouldUseNonLatinShortcutPhysicalFallback(input, platform)
   ) {
     return null
   }
@@ -1764,18 +1843,22 @@ function letterKeyMatches(
     return logicalKey === letter.toUpperCase()
   }
   return (
-    (canUsePhysicalCodeFallback(input) ||
+    (canFallBackToPhysicalCode(input, platform) ||
       shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) &&
     input.code === `Key${letter.toUpperCase()}`
   )
 }
 
-function digitKeyMatches(input: KeybindingInput, digit: string): boolean {
+function digitKeyMatches(
+  input: KeybindingInput,
+  digit: string,
+  platform: NodeJS.Platform
+): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canUsePhysicalCodeFallback(input) && input.code === `Digit${digit}`
+  return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
 }
 
 function isPunctuationKeyToken(token: string | null): token is string {
@@ -1823,7 +1906,7 @@ function keyMatches(
     return letterKeyMatches(input, parsedKey, parsed, platform)
   }
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
-    return digitKeyMatches(input, parsedKey)
+    return digitKeyMatches(input, parsedKey, platform)
   }
 
   if (parsedKey === 'NumpadAdd' || parsedKey === 'NumpadSubtract') {
@@ -1844,7 +1927,7 @@ function keyMatches(
       return semanticKey === parsedKey
     }
     return (
-      (canUsePhysicalCodeFallback(input) ||
+      (canFallBackToPhysicalCode(input, platform) ||
         shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
       physicalPunctuationKey(input) === parsedKey
     )
@@ -1854,7 +1937,9 @@ function keyMatches(
   if (logicalKey !== null) {
     return logicalKey === parsedKey
   }
-  return canUsePhysicalCodeFallback(input) && physicalCodeKeyTokenFromInput(input) === parsedKey
+  return (
+    canFallBackToPhysicalCode(input, platform) && physicalCodeKeyTokenFromInput(input) === parsedKey
+  )
 }
 
 function resolveModifierToken(
@@ -1928,10 +2013,10 @@ export function keybindingMatchesAction(
   )
 }
 
-function digitFromInput(input: KeybindingInput): string | null {
+function digitFromInput(input: KeybindingInput, platform: NodeJS.Platform): string | null {
   for (let value = 1; value <= 9; value++) {
     const digit = String(value)
-    if (digitKeyMatches(input, digit)) {
+    if (digitKeyMatches(input, digit, platform)) {
       return digit
     }
   }
@@ -1954,7 +2039,7 @@ export function matchKeybindingDigitIndex(
   if (!definition || !keybindingIsActiveInContext(definition, options)) {
     return null
   }
-  const digit = digitFromInput(input)
+  const digit = digitFromInput(input, platform)
   if (!digit) {
     return null
   }

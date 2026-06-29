@@ -22,7 +22,9 @@ const conclusionMap: Record<string, PRCheckDetail['conclusion']> = {
   timed_out: 'timed_out',
   skipped: 'skipped',
   neutral: 'neutral',
-  action_required: 'failure'
+  action_required: 'failure',
+  stale: 'failure',
+  startup_failure: 'failure'
 }
 
 export function mapCheckRunRESTConclusion(
@@ -57,6 +59,9 @@ export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
     return 'success'
   }
   if (s === 'FAILURE' || s === 'FAIL') {
+    return 'failure'
+  }
+  if (s === 'ACTION_REQUIRED' || s === 'STALE' || s === 'STARTUP_FAILURE') {
     return 'failure'
   }
   if (s === 'CANCELLED') {

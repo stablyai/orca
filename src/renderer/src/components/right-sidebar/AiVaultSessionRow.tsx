@@ -17,6 +17,7 @@ import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import {
+  AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
@@ -82,8 +83,13 @@ export function VaultSessionRow({
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
   const startResumeDrag = useCallback(
-    (event: React.DragEvent<HTMLButtonElement>): void => {
+    (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-ai-vault-session-actions]')) {
+        event.preventDefault()
+        return
+      }
       if (resumeDisabled) {
         event.preventDefault()
         return
@@ -106,11 +112,19 @@ export function VaultSessionRow({
       <ContextMenuTrigger asChild className="block w-full min-w-0">
         <div
           className={cn(
-            'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+            'group/session-row flex w-full min-w-0 flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+            resumeDisabled ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing',
             !detailsExpanded && 'min-h-[98px]'
           )}
+          // Why: users naturally drag the session row itself; matching that
+          // gesture avoids hidden affordances and text-selection false starts.
+          draggable={!resumeDisabled}
           onClick={() => {
             onToggleDetails()
+          }}
+          onDragStart={startResumeDrag}
+          onDragEnd={() => {
+            window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
@@ -140,7 +154,6 @@ export function VaultSessionRow({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
-              onStartResumeDrag={startResumeDrag}
             />
           </div>
           {detailsExpanded && worktreeInfo ? (

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  applyTerminalScrollbackRowsToMountedPanes,
+  clearQueuedInitialCwdAfterFirstPane,
   mapRestoredPaneTitlesByPaneId,
+  resolvePaneLinkCwd,
+  resolvePaneSeedCwd,
+  resolveQueuedInitialCwd,
+  scheduleVisibilityReconcilePass,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
@@ -76,6 +82,36 @@ describe('splitPaneWithOneShotStartup', () => {
 
     expect(splitPane).toHaveBeenCalledTimes(1)
     expect(deps.startup).toBeNull()
+  })
+})
+
+describe('applyTerminalScrollbackRowsToMountedPanes', () => {
+  it('updates mounted pane xterm scrollback options only when needed', () => {
+    const firstOptions = { scrollback: 1_000 }
+    const secondOptions = { scrollback: 5_000 }
+    const firstTerminal = { options: firstOptions }
+    let secondWrites = 0
+    const secondTerminal = {
+      options: {
+        get scrollback() {
+          return secondOptions.scrollback
+        },
+        set scrollback(value: number | undefined) {
+          secondWrites += 1
+          secondOptions.scrollback = value ?? 0
+        }
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [{ terminal: firstTerminal }, { terminal: secondTerminal }])
+    }
+
+    applyTerminalScrollbackRowsToMountedPanes(manager, 5_000)
+
+    expect(firstTerminal.options.scrollback).toBe(5_000)
+    expect(secondOptions.scrollback).toBe(5_000)
+    expect(secondWrites).toBe(0)
+    expect(manager.getPanes).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -161,6 +197,76 @@ describe('mapRestoredPaneTitlesByPaneId', () => {
   })
 })
 
+describe('resolveQueuedInitialCwd', () => {
+  it('consumes the queued initial cwd once when the ref is unset', () => {
+    const consumeTabInitialCwd = vi.fn(() => '/repo/packages/web')
+
+    expect(resolveQueuedInitialCwd(undefined, consumeTabInitialCwd, '/repo')).toEqual({
+      queuedInitialCwd: '/repo/packages/web',
+      startupCwd: '/repo/packages/web'
+    })
+    expect(consumeTabInitialCwd).toHaveBeenCalledTimes(1)
+  })
+
+  it('reuses the existing queued state without re-reading the store', () => {
+    const consumeTabInitialCwd = vi.fn(() => '/repo/packages/web')
+
+    expect(resolveQueuedInitialCwd(null, consumeTabInitialCwd, '/repo')).toEqual({
+      queuedInitialCwd: null,
+      startupCwd: '/repo'
+    })
+    expect(resolveQueuedInitialCwd('/repo/packages/web', consumeTabInitialCwd, '/repo')).toEqual({
+      queuedInitialCwd: '/repo/packages/web',
+      startupCwd: '/repo/packages/web'
+    })
+    expect(consumeTabInitialCwd).not.toHaveBeenCalled()
+  })
+})
+
+describe('clearQueuedInitialCwdAfterFirstPane', () => {
+  it('clears the one-shot cwd and restores the default cwd after the first pane', () => {
+    expect(
+      clearQueuedInitialCwdAfterFirstPane('/repo/packages/web', '/repo', '/repo/packages/web')
+    ).toEqual({
+      queuedInitialCwd: null,
+      ptyCwd: '/repo'
+    })
+  })
+
+  it('leaves the cwd unchanged when no one-shot override is queued', () => {
+    expect(clearQueuedInitialCwdAfterFirstPane(null, '/repo', '/repo')).toEqual({
+      queuedInitialCwd: null,
+      ptyCwd: '/repo'
+    })
+  })
+})
+
+describe('resolvePaneLinkCwd', () => {
+  it('prefers the pane-specific cwd when one has been seeded or confirmed', () => {
+    expect(
+      resolvePaneLinkCwd(
+        new Map([[2, { cwd: '/repo/packages/web', confirmed: false }]]),
+        2,
+        '/repo'
+      )
+    ).toBe('/repo/packages/web')
+  })
+
+  it('falls back to the lifecycle startup cwd when the pane has no cached cwd yet', () => {
+    expect(resolvePaneLinkCwd(new Map(), 2, '/repo')).toBe('/repo')
+  })
+})
+
+describe('resolvePaneSeedCwd', () => {
+  it('prefers the inherited split cwd before OSC 7 confirms the pane cwd', () => {
+    expect(resolvePaneSeedCwd('/repo/packages/web', '/repo')).toBe('/repo/packages/web')
+  })
+
+  it('falls back to the lifecycle cwd when the pane has no split override', () => {
+    expect(resolvePaneSeedCwd(undefined, '/repo')).toBe('/repo')
+  })
+})
+
 describe('suppressIntentionalPaneCloseExit', () => {
   it('suppresses the pane PTY exit before intentional close teardown destroys the transport', () => {
     const suppressPtyExit = vi.fn()
@@ -180,5 +286,42 @@ describe('suppressIntentionalPaneCloseExit', () => {
 
     expect(suppressIntentionalPaneCloseExit(transport, suppressPtyExit)).toBeNull()
     expect(suppressPtyExit).not.toHaveBeenCalled()
+  })
+})
+
+describe('scheduleVisibilityReconcilePass', () => {
+  it('schedules a reconcile pass over the bindings when becoming visible', async () => {
+    const reconcileIfSessionDead = vi.fn()
+    const listSessions = vi
+      .fn<() => Promise<{ id: string; cwd: string; title: string }[]>>()
+      .mockResolvedValue([{ id: 'live-1', cwd: '/a', title: 'a' }])
+
+    const scheduled = scheduleVisibilityReconcilePass({
+      isVisible: true,
+      bindings: [{ reconcileIfSessionDead }],
+      listSessions
+    })
+
+    expect(scheduled).toBe(true)
+    // Fire-and-forget: let the async listSessions resolve before asserting.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(listSessions).toHaveBeenCalledTimes(1)
+    expect(reconcileIfSessionDead).toHaveBeenCalledWith(new Set(['live-1']))
+  })
+
+  it('self-gates: does not schedule when hiding (isVisible false)', () => {
+    const listSessions = vi
+      .fn<() => Promise<{ id: string; cwd: string; title: string }[]>>()
+      .mockResolvedValue([])
+
+    const scheduled = scheduleVisibilityReconcilePass({
+      isVisible: false,
+      bindings: [{ reconcileIfSessionDead: vi.fn() }],
+      listSessions
+    })
+
+    expect(scheduled).toBe(false)
+    expect(listSessions).not.toHaveBeenCalled()
   })
 })

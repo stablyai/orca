@@ -1377,7 +1377,9 @@ describe('web UI preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    await expect(globals.window.api.skills.discover()).resolves.toMatchObject({
+    await expect(
+      globals.window.api.skills.discover({ cwd: '/repo/worktree' })
+    ).resolves.toMatchObject({
       skills: [{ name: 'computer-use', installed: true }],
       scannedAt: 123
     })
@@ -1393,7 +1395,7 @@ describe('web UI preload API', () => {
     })
     expect(calls).toEqual(
       expect.arrayContaining([
-        { method: 'skills.discover', params: undefined },
+        { method: 'skills.discover', params: { cwd: '/repo/worktree' } },
         { method: 'computer.permissionsStatus', params: {} },
         { method: 'computer.permissions', params: { id: 'accessibility' } }
       ])
