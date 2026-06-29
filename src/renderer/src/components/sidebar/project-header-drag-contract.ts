@@ -34,6 +34,7 @@ export type ProjectHeaderDragSession = {
   repoId: string
   bucketKey: ProjectHeaderDragBucketKey
   sidebarRepoHeaderIds: readonly string[]
+  sidebarRepoHeaderIdsByBucketAll?: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   pointerId: number
   headerRects: ProjectHeaderDragRect[]
   handleEl: HTMLElement

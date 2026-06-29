@@ -34,9 +34,13 @@ export function createProjectHeaderDragSession(args: {
   }
   const bucketKey = getProjectHeaderDragBucketKey(repo)
   const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: a single project in its bucket has nowhere to land, so skip arming
-  // drag and let the header click toggle collapse instead.
-  if (sidebarRepoHeaderIds.length <= 1) {
+  const totalHeaders = Array.from(args.sidebarRepoHeaderIdsByBucket.values()).reduce(
+    (sum, ids) => sum + ids.length,
+    0
+  )
+  // Why: a project can now move across buckets, so arming requires only that some
+  // other project exists somewhere, not that the source bucket has a sibling.
+  if (totalHeaders <= 1) {
     return null
   }
   const container = args.getScrollContainer()
@@ -50,6 +54,7 @@ export function createProjectHeaderDragSession(args: {
     repoId: args.repoId,
     bucketKey,
     sidebarRepoHeaderIds,
+    sidebarRepoHeaderIdsByBucketAll: args.sidebarRepoHeaderIdsByBucket,
     pointerId: args.event.pointerId,
     headerRects: measureProjectHeaderDragRects(container, bucketKey),
     handleEl,
