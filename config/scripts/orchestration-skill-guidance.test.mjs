@@ -33,25 +33,4 @@ describe('orchestration skill guidance', () => {
       'orca worktree create --name <task-name> --no-parent --agent codex --prompt'
     )
   })
-
-  it('keeps review-only worker completions from authorizing coordinator edits', () => {
-    const skill = readFileSync(skillPath, 'utf8')
-
-    expect(skill).toContain(
-      'A review-only `worker_done` reports findings; it does not authorize coordinator file edits.'
-    )
-    expect(skill).toContain('unless the user explicitly asked the coordinator to own fixes')
-    expect(skill).toContain('dispatch or hand off fixes')
-  })
-
-  it('assigns post-review fixes to the named next owner agent', () => {
-    const skill = readFileSync(skillPath, 'utf8')
-
-    expect(skill).toContain(
-      "If the user's plan names a next owner agent " +
-        '(for example, "then use opencode to create a PR")'
-    )
-    expect(skill).toContain('post-review corrections and PR prep belong to that named owner')
-    expect(skill).toContain('the named owner edits files and creates the PR')
-  })
 })

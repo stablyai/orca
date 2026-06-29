@@ -459,14 +459,23 @@ export function createRemoteRuntimePtyTransport(
           return await attachHostSessionMirror(options)
         }
 
+        const commandToSend = options.command ?? command
+        const startupCommandDeliveryToSend =
+          options.startupCommandDelivery ?? startupCommandDelivery
+        const envToSend = options.env ?? env
+        const launchConfigToSend = options.launchConfig ?? launchConfig
+        const launchTokenToSend = options.launchToken ?? launchToken
+        const launchAgentToSend = options.launchAgent ?? launchAgent
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          command: options.command ?? command,
-          startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery,
-          env: options.env ?? env,
-          launchConfig: options.launchConfig ?? launchConfig,
-          launchToken: options.launchToken ?? launchToken,
-          launchAgent: options.launchAgent ?? launchAgent,
+          ...(commandToSend !== undefined ? { command: commandToSend } : {}),
+          ...(startupCommandDeliveryToSend !== undefined
+            ? { startupCommandDelivery: startupCommandDeliveryToSend }
+            : {}),
+          ...(envToSend !== undefined ? { env: envToSend } : {}),
+          ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
+          ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
+          ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
           tabId,
           leafId,
           focus: false,
