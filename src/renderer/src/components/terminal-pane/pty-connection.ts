@@ -2201,26 +2201,26 @@ export function connectPanePty(
     // ResizeObserver stability loop. Each resize is gated on an actual change,
     // so a TUI sees at most a couple of SIGWINCH during startup, not a loop.
     const MAX_RECONCILE_FRAMES = 12
+    let frame = 0
     let lastSentCols = spawnCols
     let lastSentRows = spawnRows
-    let frame = 0
     const tick = (): void => {
       if (disposed || transport.getPtyId() !== ptyId) {
         return
       }
-      // Mobile legitimately parks the PTY at phone dims; never fight that.
-      if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
-        return
-      }
-      safeFit(pane)
-      const cols = pane.terminal.cols
-      const rows = pane.terminal.rows
-      if (cols > 0 && rows > 0 && (cols !== lastSentCols || rows !== lastSentRows)) {
-        // Initial spawn-time sync is authoritative, so it bypasses the
-        // visibility gate that onResize honors (but not the mobile guards above).
-        transport.resize(cols, rows)
-        lastSentCols = cols
-        lastSentRows = rows
+      // Mobile legitimately parks the PTY at phone dims; a transient guard
+      // should only skip this frame, not cancel the reconcile window.
+      if (!getFitOverrideForPty(ptyId) && !isPtyLocked(ptyId)) {
+        safeFit(pane)
+        const cols = pane.terminal.cols
+        const rows = pane.terminal.rows
+        if (cols > 0 && rows > 0 && (cols !== lastSentCols || rows !== lastSentRows)) {
+          // Initial spawn-time sync is authoritative, so it bypasses the
+          // visibility gate that onResize honors (but not the mobile guards above).
+          transport.resize(cols, rows)
+          lastSentCols = cols
+          lastSentRows = rows
+        }
       }
       frame += 1
       if (frame < MAX_RECONCILE_FRAMES) {

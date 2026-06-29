@@ -2156,6 +2156,55 @@ describe('connectPanePty', () => {
     expect(pane.container.dataset.ptyId).toBeUndefined()
   })
 
+  it('continues post-spawn size reconcile after a transient mobile presence lock', async () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const runNextFrame = (): void => {
+      const callback = frameCallbacks.shift()
+      if (!callback) {
+        throw new Error('expected a queued animation frame')
+      }
+      callback(0)
+    }
+
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+
+    const ptyId = 'pty-post-spawn-transient-lock'
+    setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      const transport = createMockTransport(ptyId)
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        ptyIdsByTabId: { 'tab-1': [] }
+      }
+      const pane = createPane(1)
+      pane.terminal.cols = 80
+      pane.terminal.rows = 24
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      runNextFrame()
+      await flushAsyncTicks()
+
+      pane.terminal.cols = 120
+      pane.terminal.rows = 40
+      runNextFrame()
+      expect(transport.resize).not.toHaveBeenCalled()
+
+      setDriverForPty(ptyId, { kind: 'idle' })
+      runNextFrame()
+
+      expect(transport.resize).toHaveBeenCalledWith(120, 40)
+    } finally {
+      setDriverForPty(ptyId, { kind: 'idle' })
+    }
+  })
+
   it('does not reuse a sibling split pane pending spawn after remount', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
