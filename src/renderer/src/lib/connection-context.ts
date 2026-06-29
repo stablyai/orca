@@ -56,11 +56,9 @@ export function isWorktreeConnectionResolved(worktreeId: string | null): boolean
     // getConnectionIdForFile decide ownership for the concrete path.
     return true
   }
-  const state = useAppStore.getState()
-  const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  const worktree = allWorktrees.find((w) => w.id === worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  return Boolean(state.repos?.some((r) => r.id === repoId))
+  // Why: getConnectionId returns undefined only when the backing repo is absent;
+  // any found repo yields a string or null, so this mirrors "repo has hydrated".
+  return getConnectionId(worktreeId) !== undefined
 }
 
 export function getConnectionIdForFile(
