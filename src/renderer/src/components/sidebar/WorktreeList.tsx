@@ -135,7 +135,10 @@ import {
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
 import { computeHeaderDragRowShifts } from './header-drag-row-shifts'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import {
+  getProjectHeaderDragBucketKey,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from './project-header-drop'
 import { useGroupHeaderDrag } from './group-header-drag'
 import { getSiblingGroupIdsByParent } from './group-header-drop'
 import {
@@ -982,10 +985,14 @@ function computeHeaderDragRowOffsets(args: {
   draggingRepoId: string | null
   draggingGroupId: string | null
   dropY: number | null
+  // Gap-opening is only well-defined for same-bucket reorders and group
+  // reorders. Cross-group project moves still hide the source block, but skip
+  // the reflow (group dividers make a uniform shift overlap).
+  allowGap: boolean
   renderRows: readonly RenderRow[]
   virtualItems: readonly { index: number; start: number; size: number }[]
 }): { offsets: Map<string, number>; blockKeys: Set<string> } | null {
-  if (args.dropY === null || (args.draggingRepoId === null && args.draggingGroupId === null)) {
+  if (args.draggingRepoId === null && args.draggingGroupId === null) {
     return null
   }
   const isGroup = args.draggingGroupId !== null
@@ -1079,16 +1086,17 @@ function computeHeaderDragRowOffsets(args: {
     }
   }
   flush()
-  return {
-    offsets: computeHeaderDragRowShifts({
-      units,
-      blockKeys,
-      blockTop,
-      blockBottom,
-      dropY: args.dropY
-    }),
-    blockKeys
-  }
+  const offsets =
+    args.dropY !== null && args.allowGap
+      ? computeHeaderDragRowShifts({
+          units,
+          blockKeys,
+          blockTop,
+          blockBottom,
+          dropY: args.dropY
+        })
+      : new Map<string, number>()
+  return { offsets, blockKeys }
 }
 
 function getPointerDropStatusTarget(args: {
@@ -2400,12 +2408,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
-  // Gap-opening offsets for an active header reorder drag (suppressed for
-  // drop-into-group, which highlights instead of showing a drop line).
+  // A cross-group project move can't gap-open cleanly (group dividers stay
+  // fixed, so a uniform shift overlaps them) — hide the source block but skip
+  // the reflow there. Same-bucket reorders and group reorders gap-open.
+  const draggedProjectBucket =
+    repoDrag.state.draggingRepoId !== null
+      ? getProjectHeaderDragBucketKey(
+          repoMap.get(repoDrag.state.draggingRepoId) ?? { projectGroupId: null }
+        )
+      : null
+  const isCrossGroupProjectMove =
+    draggedProjectBucket !== null &&
+    repoDrag.state.targetBucketKey !== null &&
+    repoDrag.state.targetBucketKey !== draggedProjectBucket
+  // Gap-opening offsets for an active header reorder drag.
   const headerDragShift = computeHeaderDragRowOffsets({
     draggingRepoId: canReorderRepoHeaders ? repoDrag.state.draggingRepoId : null,
     draggingGroupId: canReorderRepoHeaders ? groupDrag.state.draggingGroupId : null,
     dropY: headerDropIndicatorY,
+    allowGap: !isCrossGroupProjectMove,
     renderRows,
     virtualItems
   })
@@ -4111,7 +4132,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             }
 
             if (row.type === 'header') {
-              const isActiveStickyHeader = activeStickyHeaderIndexRef.current === vItem.index
+              // Why: a sticky (pinned) header is position:sticky with no
+              // transform, so it can't receive the gap-opening offset — it would
+              // stay pinned while its block's children slide. Drop stickiness
+              // during a header reorder drag so the whole block moves together.
+              const isActiveStickyHeader =
+                activeStickyHeaderIndexRef.current === vItem.index && !isHeaderReorderDragging
               // Why: when a host card is pinned, the group tier pins flush
               // beneath it instead of at the viewport top.
               const stickyTopClass =
