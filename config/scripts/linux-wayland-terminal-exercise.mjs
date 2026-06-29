@@ -265,17 +265,50 @@ export async function assertWheelScrollWorks(page, ptyId, runId, logPhase) {
     })
   )
   logPhase('scroll.buffer-ready', `baseY=${before.baseY} viewportY=${before.viewportY}`)
+  // Why: Playwright's native wheel injection can hang under headless Wayland;
+  // dispatch a renderer wheel event, then require xterm's buffer to move.
   await runWithTimeout(
-    'mouse move to terminal',
-    () => page.mouse.move(before.x, before.y),
+    'terminal wheel event dispatch',
+    () =>
+      page.evaluate(() => {
+        const store = window.__store
+        const state = store?.getState()
+        const worktreeId = state?.activeWorktreeId
+        const tabId =
+          state?.activeTabType === 'terminal'
+            ? state.activeTabId
+            : worktreeId
+              ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+              : null
+        const manager = tabId ? window.__paneManagers?.get(tabId) : null
+        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+        if (!pane) {
+          throw new Error('No active terminal pane for wheel dispatch.')
+        }
+        const screen = pane.container.querySelector('.xterm-screen')
+        const viewport = pane.container.querySelector('.xterm-viewport')
+        const targets = [screen, viewport, pane.terminal.element, pane.container].filter(
+          (target, index, allTargets) =>
+            target instanceof HTMLElement && allTargets.indexOf(target) === index
+        )
+        for (const target of targets) {
+          const rect = target.getBoundingClientRect()
+          target.dispatchEvent(
+            new WheelEvent('wheel', {
+              bubbles: true,
+              cancelable: true,
+              clientX: rect.left + rect.width / 2,
+              clientY: rect.top + rect.height / 2,
+              deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+              deltaY: -600,
+              view: window
+            })
+          )
+        }
+      }),
     rendererActionTimeoutMs
   )
-  await runWithTimeout(
-    'terminal wheel scroll',
-    () => page.mouse.wheel(0, -600),
-    rendererActionTimeoutMs
-  )
-  logPhase('scroll.wheel-sent')
+  logPhase('scroll.wheel-dispatched')
   const after = await waitFor('terminal wheel scroll response', () =>
     page.evaluate((previousViewportY) => {
       const store = window.__store
