@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
+import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import type { ComposerAutocomplete, SlashCommandSuggestion } from './native-chat-composer-state'
 import {
   NativeChatMentionHint,
@@ -125,7 +126,14 @@ export function NativeChatComposerField({
                     title={attachment.path}
                   >
                     <ImageIcon className="size-3.5 shrink-0" />
-                    <span className="max-w-56 truncate">{basename(attachment.path)}</span>
+                    <span className="max-w-56 truncate">
+                      {isNativeChatPastedImagePath(attachment.path)
+                        ? translate(
+                            'components.native-chat.composer.pastedImageLabel',
+                            'Pasted image'
+                          )
+                        : basename(attachment.path)}
+                    </span>
                     <button
                       type="button"
                       onClick={() => onRemoveImageAttachment(attachment.id)}
