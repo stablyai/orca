@@ -38,6 +38,7 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-k
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
@@ -1716,6 +1717,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
       doomedTabIds.add(tab.id)
+      // Why: a removed worktree's panes are gone for good, so drop their
+      // hibernation output epochs from that module-level map (mirrors the
+      // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
+      forgetAgentHibernationTabOutput(tab.id)
     }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       doomedBrowserWorkspaceIds.add(workspace.id)

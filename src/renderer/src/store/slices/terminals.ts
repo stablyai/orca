@@ -30,6 +30,7 @@ import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shar
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
@@ -1112,6 +1113,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
     get().dropAgentStatusByTabPrefix(tabId)
+    // Why: closing a tab permanently retires every pane under it (a reopen mints
+    // a fresh leafId at epoch 0), so drop the panes' hibernation output epochs to
+    // keep that module-level map from growing for the renderer's whole lifetime.
+    forgetAgentHibernationTabOutput(tabId)
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
       const workspaceItem = tabs.find(
         (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
