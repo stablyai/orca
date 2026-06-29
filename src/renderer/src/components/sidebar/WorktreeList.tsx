@@ -1724,10 +1724,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const folderPathStatusCacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(
     folderWorkspacePathStatuses
   )
-  const projectGroupByIdForFolderPathStatus = useMemo(
-    () => new Map(projectGroups.map((group) => [group.id, group])),
-    [projectGroups]
-  )
   const folderWorkspaceByIdForFolderPathStatus = useMemo(
     () => new Map(folderWorkspaces.map((workspace) => [workspace.id, workspace])),
     [folderWorkspaces]
@@ -1736,10 +1732,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     (request: Parameters<typeof fetchFolderWorkspacePathStatus>[0]) =>
       getFolderPathStatusRouteOptionsForRows({
         request,
-        projectGroupsById: projectGroupByIdForFolderPathStatus,
+        projectGroupsById: projectGroupsById,
         folderWorkspacesById: folderWorkspaceByIdForFolderPathStatus
       }),
-    [folderWorkspaceByIdForFolderPathStatus, projectGroupByIdForFolderPathStatus]
+    [folderWorkspaceByIdForFolderPathStatus, projectGroupsById]
   )
   useEffect(() => {
     const requests = new Map<
@@ -3888,7 +3884,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           groupDrag.state.draggingGroupId !== null &&
           groupDrag.state.dropIndicatorY !== null ? (
             <div
-              className="pointer-events-none absolute left-2 right-2 z-30 h-0.5 rounded-full bg-worktree-sidebar-ring"
+              role="presentation"
+              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
               style={{ top: `${groupDrag.state.dropIndicatorY}px` }}
             />
           ) : null}
