@@ -175,6 +175,23 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
     })
     expect(result?.dropIndex).toBe(0)
   })
+
+  it('highlights the target group (no line) when moving a project into a different group', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 60, // over group:2's (expanded) block
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 28 },
+        { repoId: 'b', bucketKey: 'group:2', headerIndex: 0, top: 50, bottom: 78 }
+      ],
+      groupZones: [],
+      draggingRepoId: 'a'
+    })
+    expect(result?.targetBucketKey).toBe('group:2')
+    expect(result?.intoGroupId).toBe('2')
+    expect(result?.dropIndex).toBe(1) // appended after group:2's project
+  })
 })
 
 describe('getProjectGroupOrderForSidebarDrop', () => {

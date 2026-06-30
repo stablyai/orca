@@ -237,11 +237,26 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
       break
     }
   }
-  // Within its own bucket, the slot right below the dragged project is a no-op
-  // (same as leaving it put); collapse it to the home position above.
   const draggedRect = args.draggingRepoId
     ? args.repoRects.find((rect) => rect.repoId === args.draggingRepoId)
     : undefined
+  // Moving a project into a different group reads as "join this group", so
+  // highlight the target group and append (no positional line) — matching the
+  // collapsed-group and context-menu "Move to group" behavior.
+  if (
+    draggedRect &&
+    draggedRect.bucketKey !== targetBucketKey &&
+    targetBucketKey.startsWith('group:')
+  ) {
+    return {
+      targetBucketKey,
+      dropIndex: targetRects.length,
+      dropIndicatorY: Math.max(args.scrollTop, indicatorY),
+      intoGroupId: targetBucketKey.slice('group:'.length)
+    }
+  }
+  // Within its own bucket, the slot right below the dragged project is a no-op
+  // (same as leaving it put); collapse it to the home position above.
   if (
     draggedRect &&
     draggedRect.bucketKey === targetBucketKey &&
