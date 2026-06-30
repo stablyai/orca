@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: system-ssh process wrapping and fallback file operations share cleanup contracts. */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { constants } from 'node:fs'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { lstat, open, readdir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -22,17 +22,24 @@ function getControlSocketPath(target: SshTarget): string | null {
   if (process.platform === 'win32') {
     return null
   }
-  const key = `${target.configHost || target.host}:${target.port || 22}:${target.username || ''}`
-  const hash = createHash('sha1').update(key).digest('hex').slice(0, 12)
-  // macOS socket path limit is ~104 chars. Keep path short.
+  // Why: target.id is already unique per target; include host/port/user so
+  // sockets remain stable if a target is removed and re-added with the same id.
+  const key = `${target.id}:${target.configHost || target.host}:${target.port || 22}:${target.username || ''}`
+  const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
   const dir = pathJoin(tmpdir(), 'orca-ssh-ctl')
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
+    // Why: verify dir is a real directory owned by us with tight permissions.
+    // mkdirSync mode is ignored on pre-existing dirs, so stat after to confirm.
+    const st = statSync(dir)
+    if (!st.isDirectory() || st.uid !== process.getuid!() || (st.mode & 0o77) !== 0) {
+      return null
+    }
   } catch {
     return null
   }
+  // Why: macOS Unix socket path limit is ~104 chars. Keep path short.
   const sockPath = pathJoin(dir, `${hash}.sock`)
-  // Socket path must be < 104 chars on macOS
   return sockPath.length < 100 ? sockPath : null
 }
 

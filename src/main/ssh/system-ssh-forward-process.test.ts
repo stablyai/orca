@@ -112,20 +112,22 @@ describe('system SSH forward process', () => {
 
     spawnSystemSshPortForward(createTarget({ configHost: 'fdpass-host' }), 5173, '127.0.0.1', 3000)
 
+    const args = spawnMock.mock.calls[0][1] as string[]
+    const terminatorIdx = args.indexOf('--')
+    const forwardFlagIdx = args.indexOf('-N')
+    const localForwardIdx = args.indexOf('-L')
+
+    expect(terminatorIdx).toBeGreaterThan(-1)
+    expect(forwardFlagIdx).toBeGreaterThan(-1)
+    expect(localForwardIdx).toBeGreaterThan(-1)
+    // Why: -N and -L must appear before -- or OpenSSH treats them as remote command args.
+    expect(forwardFlagIdx).toBeLessThan(terminatorIdx)
+    expect(localForwardIdx).toBeLessThan(terminatorIdx)
+    expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
+    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      [
-        '-o',
-        'BatchMode=no',
-        '-T',
-        '-N',
-        '-o',
-        'ExitOnForwardFailure=yes',
-        '-L',
-        '127.0.0.1:5173:127.0.0.1:3000',
-        '--',
-        'deploy@fdpass-host'
-      ],
+      args,
       expect.objectContaining({ stdio: ['ignore', 'ignore', 'pipe'] })
     )
   })
