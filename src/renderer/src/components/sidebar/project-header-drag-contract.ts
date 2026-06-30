@@ -40,8 +40,11 @@ export type RepoHeaderDragController = {
 export type ProjectHeaderDragSession = {
   repoId: string
   bucketKey: ProjectHeaderDragBucketKey
+  // Source bucket's repo headers (flat) for same-bucket reorder.
   sidebarRepoHeaderIds: readonly string[]
-  sidebarRepoHeaderIdsByBucketAll?: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  // Repo headers for every bucket, as currently shown in the sidebar (excludes
+  // filtered/collapsed members), used to resolve a cross-bucket drop's siblings.
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   pointerId: number
   headerRects: ProjectHeaderDragRect[]
   handleEl: HTMLElement

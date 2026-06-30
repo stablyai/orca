@@ -87,7 +87,7 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
         session,
         sidebarDropIndex: drop.dropIndex,
         targetBucketKey: drop.targetBucketKey,
-        sidebarRepoHeaderIdsByBucketAll: session.sidebarRepoHeaderIdsByBucketAll,
+        sidebarRepoHeaderIdsByBucket: session.sidebarRepoHeaderIdsByBucket,
         orderedRepoIds: argsRef.current.orderedRepoIds,
         repoById: argsRef.current.repoById,
         usesProjectGroupOrdering: argsRef.current.usesProjectGroupOrdering,

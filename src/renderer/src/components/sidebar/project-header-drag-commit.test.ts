@@ -88,7 +88,7 @@ describe('commitProjectHeaderDragDrop', () => {
       session: makeSession('c', ['c']), // c dragged out of group-1
       sidebarDropIndex: 1,
       targetBucketKey: 'group:group-2',
-      sidebarRepoHeaderIdsByBucketAll: new Map([
+      sidebarRepoHeaderIdsByBucket: new Map([
         ['group:group-1', ['a', 'c']],
         ['group:group-2', ['b']]
       ]),
@@ -114,7 +114,7 @@ describe('commitProjectHeaderDragDrop', () => {
       session: makeSession('a', ['a']),
       sidebarDropIndex: 1,
       targetBucketKey: 'ungrouped',
-      sidebarRepoHeaderIdsByBucketAll: new Map([
+      sidebarRepoHeaderIdsByBucket: new Map([
         ['group:group-1', ['a']],
         ['ungrouped', ['u']]
       ]),

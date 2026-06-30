@@ -57,7 +57,7 @@ export function createProjectHeaderDragSession(args: {
     repoId: args.repoId,
     bucketKey,
     sidebarRepoHeaderIds,
-    sidebarRepoHeaderIdsByBucketAll: args.sidebarRepoHeaderIdsByBucket,
+    sidebarRepoHeaderIdsByBucket: args.sidebarRepoHeaderIdsByBucket,
     pointerId: args.event.pointerId,
     headerRects: measureProjectHeaderDragRects(container, bucketKey),
     handleEl,

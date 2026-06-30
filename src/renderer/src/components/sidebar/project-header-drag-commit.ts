@@ -13,7 +13,7 @@ export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
   sidebarDropIndex: number
   targetBucketKey?: string
-  sidebarRepoHeaderIdsByBucketAll?: ReadonlyMap<string, readonly string[]>
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
   orderedRepoIds: readonly string[]
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
@@ -35,7 +35,7 @@ export function commitProjectHeaderDragDrop(args: {
     args.targetBucketKey !== sourceBucketKey
   ) {
     const targetGroupId = bucketKeyToProjectGroupId(args.targetBucketKey)
-    const targetSiblings = (args.sidebarRepoHeaderIdsByBucketAll?.get(args.targetBucketKey) ?? [])
+    const targetSiblings = (args.sidebarRepoHeaderIdsByBucket?.get(args.targetBucketKey) ?? [])
       .filter((repoId) => repoId !== args.session.repoId)
       .map((repoId) => args.repoById.get(repoId))
       .filter((repo): repo is Repo => repo !== undefined)
