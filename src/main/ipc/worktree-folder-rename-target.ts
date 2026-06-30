@@ -5,7 +5,7 @@ import { computeWorktreePath } from './worktree-logic'
 
 type WorktreePathSettings = Pick<
   GlobalSettings,
-  'nestWorkspaces' | 'workspaceDir' | 'worktreeNameFormat'
+  'nestWorkspaces' | 'workspaceDir' | 'worktreeNameFormat' | 'worktreeNamingMode'
 >
 
 export type WorktreeFolderRenamePlan = {

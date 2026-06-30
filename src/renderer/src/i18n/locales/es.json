@@ -8423,7 +8423,15 @@
           "3c4d5e6f7a": "Anula el valor predeterminado del cliente",
           "4d5e6f7a8b": "Hereda el valor predeterminado del cliente",
           "5e6f7a8b9c": "Restablecer",
-          "6f7a8b9cad": "Usa una ruta relativa (p. ej. .orca/worktrees) para una ubicación por proyecto, o una ruta absoluta para una carpeta compartida."
+          "6f7a8b9cad": "Usa una ruta relativa (p. ej. .orca/worktrees) para una ubicación por proyecto, o una ruta absoluta para una carpeta compartida.",
+          "7a8b9c0dae": "Worktree Naming",
+          "9a0b1c2dbe": "Flat — /workspaces/{name}",
+          "a1b2c3d4ef": "Nested by repo — /workspaces/{repoName}/{name}",
+          "b2c3d4e5fa": "Custom format…",
+          "c3d4e5f6ab": "Worktrees are created directly under the workspace directory.",
+          "d4e5f6a7bc": "Worktrees are grouped under a repo-named subfolder.",
+          "e5f6a7b8cd": "Use {repoName} (or {repo}) and {name} (or {branch}) placeholders. A / in the format creates nested folders.",
+          "f6a7b8c9de": "Preview"
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",

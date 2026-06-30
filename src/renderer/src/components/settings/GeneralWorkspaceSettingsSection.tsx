@@ -30,31 +30,6 @@ export function GeneralWorkspaceSettingsSection({
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
 
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-          'Nest Workspaces'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-          'Create workspaces inside a repo-named subfolder.'
-        )}
-        keywords={['nested', 'subfolder', 'directory']}
-      >
-        <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-            'Nest Workspaces'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-            'Create workspaces inside a repo-named subfolder.'
-          )}
-          checked={settings.nestWorkspaces}
-          onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
-        />
-      </SearchableSetting>
-
       {/* Why: the "Don't ask again" toast in the delete-worktree dialog
           deep-links here, so the wrapper id must stay stable. Renaming it
           breaks that toast action even though this pane still renders fine. */}

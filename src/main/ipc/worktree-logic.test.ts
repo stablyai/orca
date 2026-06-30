@@ -304,6 +304,58 @@ describe('computeWorktreePath', () => {
     ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
   })
 
+  it('supports {repo} alias for {repoName} in custom format', () => {
+    expect(
+      computeWorktreePath('fix-bug', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{repo}.{branch}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project.fix-bug'))
+  })
+
+  it('supports {branch} alias for {name} in custom format', () => {
+    expect(
+      computeWorktreePath('fix-bug', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{repo}/{branch}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project', 'fix-bug'))
+  })
+
+  it('nested mode preset resolves to repo-named subfolder', () => {
+    expect(
+      computeWorktreePath('fix-bug', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeNamingMode: 'nested',
+        worktreeNameFormat: '{repoName}/{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project', 'fix-bug'))
+  })
+
+  it('flat mode resolves to name only under workspace dir', () => {
+    expect(
+      computeWorktreePath('fix-bug', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/workspaces',
+        worktreeNamingMode: 'flat'
+      })
+    ).toBe(posix.join('/workspaces', 'fix-bug'))
+  })
+
+  it('custom mode with dot separator stays flat', () => {
+    expect(
+      computeWorktreePath('fix-bug', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/workspaces',
+        worktreeNamingMode: 'custom',
+        worktreeNameFormat: '{repoName}.{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project.fix-bug'))
+  })
+
   it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
     expect(
       computeRemoteWorktreePath('feature', '/remote/repo', {

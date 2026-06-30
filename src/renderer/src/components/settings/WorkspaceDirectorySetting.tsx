@@ -268,29 +268,7 @@ export function WorkspaceDirectorySetting({
         </p>
       )}
       {!editingHost && (
-        <div className="space-y-1.5">
-          <Label htmlFor={`${inputId}-format`}>
-            {translate(
-              'auto.components.settings.WorkspaceDirectorySetting.7a8b9c0dae',
-              'Worktree Name Format'
-            )}
-          </Label>
-          <Input
-            id={`${inputId}-format`}
-            value={settings.worktreeNameFormat ?? ''}
-            placeholder="{repoName}/{name}"
-            onChange={(e) => {
-              updateSettings({ worktreeNameFormat: e.target.value || undefined })
-            }}
-            className="text-xs"
-          />
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.WorkspaceDirectorySetting.8b9c0daebf',
-              'Customize the worktree folder name. Use {repoName} and {name} placeholders. Leave empty to use the Nest Workspaces setting.'
-            )}
-          </p>
-        </div>
+        <WorktreeNamingControl settings={settings} updateSettings={updateSettings} />
       )}
     </SearchableSetting>
   )
@@ -299,4 +277,158 @@ export function WorkspaceDirectorySetting({
 function isComposingKeyboardEvent(event: React.KeyboardEvent<HTMLInputElement>): boolean {
   const nativeEvent = event.nativeEvent
   return nativeEvent.isComposing || nativeEvent.keyCode === 229
+}
+
+type WorktreeNamingMode = 'flat' | 'nested' | 'custom'
+
+type WorktreeNamingControlProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}
+
+// Why: the naming mode dropdown is the single UI control for worktree folder
+// layout. Each option writes the full set of related fields in one update so
+// the runtime, persistence history, and legacy readers all stay in sync.
+function WorktreeNamingControl({
+  settings,
+  updateSettings
+}: WorktreeNamingControlProps): React.JSX.Element {
+  const inputId = useId()
+  const mode: WorktreeNamingMode = settings.worktreeNamingMode ?? 'nested'
+  const customFormat = settings.worktreeNameFormat ?? ''
+
+  const selectMode = (next: WorktreeNamingMode): void => {
+    if (next === 'flat') {
+      updateSettings({
+        worktreeNamingMode: 'flat',
+        nestWorkspaces: false,
+        worktreeNameFormat: undefined
+      })
+      return
+    }
+    if (next === 'nested') {
+      // Why: nested is a format preset so the runtime uses one code path;
+      // nestWorkspaces stays true for back-compat with legacy readers.
+      updateSettings({
+        worktreeNamingMode: 'nested',
+        nestWorkspaces: true,
+        worktreeNameFormat: '{repoName}/{name}'
+      })
+      return
+    }
+    // custom: keep whatever format the user had, or default to a flat example
+    // so the input is not empty on first switch.
+    const seed =
+      customFormat && customFormat !== '{repoName}/{name}' ? customFormat : '{repoName}.{name}'
+    updateSettings({
+      worktreeNamingMode: 'custom',
+      nestWorkspaces: false,
+      worktreeNameFormat: seed
+    })
+  }
+
+  const setCustomFormat = (value: string): void => {
+    updateSettings({ worktreeNameFormat: value || undefined })
+  }
+
+  const preview = renderWorktreeNamePreview(mode, customFormat, settings.workspaceDir)
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={`${inputId}-mode`}>
+        {translate(
+          'auto.components.settings.WorkspaceDirectorySetting.7a8b9c0dae',
+          'Worktree Naming'
+        )}
+      </Label>
+      <Select value={mode} onValueChange={(v) => selectMode(v as WorktreeNamingMode)}>
+        <SelectTrigger id={`${inputId}-mode`} size="sm" className="h-7 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="flat" className="text-xs">
+            {translate(
+              'auto.components.settings.WorkspaceDirectorySetting.9a0b1c2dbe',
+              'Flat — /workspaces/{name}'
+            )}
+          </SelectItem>
+          <SelectItem value="nested" className="text-xs">
+            {translate(
+              'auto.components.settings.WorkspaceDirectorySetting.a1b2c3d4ef',
+              'Nested by repo — /workspaces/{repoName}/{name}'
+            )}
+          </SelectItem>
+          <SelectItem value="custom" className="text-xs">
+            {translate(
+              'auto.components.settings.WorkspaceDirectorySetting.b2c3d4e5fa',
+              'Custom format…'
+            )}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        {mode === 'flat' &&
+          translate(
+            'auto.components.settings.WorkspaceDirectorySetting.c3d4e5f6ab',
+            'Worktrees are created directly under the workspace directory.'
+          )}
+        {mode === 'nested' &&
+          translate(
+            'auto.components.settings.WorkspaceDirectorySetting.d4e5f6a7bc',
+            'Worktrees are grouped under a repo-named subfolder.'
+          )}
+        {mode === 'custom' &&
+          translate(
+            'auto.components.settings.WorkspaceDirectorySetting.e5f6a7b8cd',
+            'Use {repoName} (or {repo}) and {name} (or {branch}) placeholders. A / in the format creates nested folders.'
+          )}
+      </p>
+      {mode === 'custom' && (
+        <div className="space-y-1.5">
+          <Input
+            id={`${inputId}-format`}
+            value={customFormat}
+            placeholder="{repoName}.{name}"
+            onChange={(e) => setCustomFormat(e.target.value)}
+            className="text-xs"
+          />
+          {preview && (
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.WorkspaceDirectorySetting.f6a7b8c9de',
+                'Preview'
+              )}
+              : <code className="text-xs">{preview}</code>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Why: render an illustrative preview so users see how their format resolves
+// before creating a worktree. Uses a sample repo/worktree name; the real path
+// is computed at creation time by computeWorktreePath in the main process.
+function renderWorktreeNamePreview(
+  mode: WorktreeNamingMode,
+  customFormat: string,
+  workspaceDir: string
+): string {
+  const repoName = 'my-project'
+  const name = 'fix-bug'
+  let relative: string
+  if (mode === 'flat') {
+    relative = name
+  } else if (mode === 'nested') {
+    relative = `${repoName}/${name}`
+  } else {
+    relative =
+      customFormat
+        .replace(/\{repoName\}/g, repoName)
+        .replace(/\{repo\}/g, repoName)
+        .replace(/\{name\}/g, name)
+        .replace(/\{branch\}/g, name) || name
+  }
+  return `${workspaceDir.replace(/\/$/, '')}/${relative}`
 }

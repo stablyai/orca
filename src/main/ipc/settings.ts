@@ -131,7 +131,9 @@ export function registerSettingsHandlers(
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
       ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces) ||
       ('worktreeNameFormat' in sanitizedArgs &&
-        before.worktreeNameFormat !== result.worktreeNameFormat)
+        before.worktreeNameFormat !== result.worktreeNameFormat) ||
+      ('worktreeNamingMode' in sanitizedArgs &&
+        before.worktreeNamingMode !== result.worktreeNamingMode)
     ) {
       void prepareLocalWorktreeRootsForRepos(store)
       scheduleCurrentWorktreeBaseDirectoryWatcherSync()

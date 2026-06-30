@@ -7,7 +7,7 @@ import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<
   GlobalSettings,
-  'nestWorkspaces' | 'workspaceDir' | 'worktreeNameFormat'
+  'nestWorkspaces' | 'workspaceDir' | 'worktreeNameFormat' | 'worktreeNamingMode'
 >
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
@@ -96,7 +96,9 @@ export function computeWorktreePath(
   if (settings.worktreeNameFormat) {
     const formatted = settings.worktreeNameFormat
       .replace(/\{repoName\}/g, repoName)
+      .replace(/\{repo\}/g, repoName)
       .replace(/\{name\}/g, sanitizedName)
+      .replace(/\{branch\}/g, sanitizedName)
     return pathOps.join(workspaceRoot, formatted)
   }
 
@@ -146,7 +148,8 @@ export function getWorktreePathSettings(
   return {
     nestWorkspaces: settings.nestWorkspaces,
     workspaceDir: getEffectiveWorktreeBasePath(repo, settings),
-    worktreeNameFormat: settings.worktreeNameFormat
+    worktreeNameFormat: settings.worktreeNameFormat,
+    worktreeNamingMode: settings.worktreeNamingMode
   }
 }
 
@@ -157,7 +160,8 @@ export function getWorktreeCreationLayout(
   return {
     path: getEffectiveWorktreeBasePath(repo, settings),
     nestWorkspaces: settings.nestWorkspaces,
-    worktreeNameFormat: settings.worktreeNameFormat
+    worktreeNameFormat: settings.worktreeNameFormat,
+    worktreeNamingMode: settings.worktreeNamingMode
   }
 }
 
