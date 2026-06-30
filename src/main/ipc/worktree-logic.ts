@@ -5,7 +5,10 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getWslHome, parseWslPath } from '../wsl'
 
-type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+type WorktreePathSettings = Pick<
+  GlobalSettings,
+  'nestWorkspaces' | 'workspaceDir' | 'worktreeNameFormat'
+>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
 export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
@@ -88,9 +91,16 @@ export function computeWorktreePath(
 ): string {
   const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
   const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+  const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+
+  if (settings.worktreeNameFormat) {
+    const formatted = settings.worktreeNameFormat
+      .replace(/\{repoName\}/g, repoName)
+      .replace(/\{name\}/g, sanitizedName)
+    return pathOps.join(workspaceRoot, formatted)
+  }
 
   if (settings.nestWorkspaces) {
-    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
   return pathOps.join(workspaceRoot, sanitizedName)
@@ -135,7 +145,8 @@ export function getWorktreePathSettings(
 ): WorktreePathSettings {
   return {
     nestWorkspaces: settings.nestWorkspaces,
-    workspaceDir: getEffectiveWorktreeBasePath(repo, settings)
+    workspaceDir: getEffectiveWorktreeBasePath(repo, settings),
+    worktreeNameFormat: settings.worktreeNameFormat
   }
 }
 
@@ -145,7 +156,8 @@ export function getWorktreeCreationLayout(
 ): OrcaWorkspaceLayout {
   return {
     path: getEffectiveWorktreeBasePath(repo, settings),
-    nestWorkspaces: settings.nestWorkspaces
+    nestWorkspaces: settings.nestWorkspaces,
+    worktreeNameFormat: settings.worktreeNameFormat
   }
 }
 

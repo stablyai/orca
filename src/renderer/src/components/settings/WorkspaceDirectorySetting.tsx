@@ -267,6 +267,31 @@ export function WorkspaceDirectorySetting({
           )}
         </p>
       )}
+      {!editingHost && (
+        <div className="space-y-1.5">
+          <Label htmlFor={`${inputId}-format`}>
+            {translate(
+              'auto.components.settings.WorkspaceDirectorySetting.7a8b9c0dae',
+              'Worktree Name Format'
+            )}
+          </Label>
+          <Input
+            id={`${inputId}-format`}
+            value={settings.worktreeNameFormat ?? ''}
+            placeholder="{repoName}/{name}"
+            onChange={(e) => {
+              updateSettings({ worktreeNameFormat: e.target.value || undefined })
+            }}
+            className="text-xs"
+          />
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.WorkspaceDirectorySetting.8b9c0daebf',
+              'Customize the worktree folder name. Use {repoName} and {name} placeholders. Leave empty to use the Nest Workspaces setting.'
+            )}
+          </p>
+        </div>
+      )}
     </SearchableSetting>
   )
 }

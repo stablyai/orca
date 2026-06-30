@@ -2443,6 +2443,11 @@ export type GlobalSettings = {
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
+  /** Custom format for worktree folder names. Supports `{repoName}` and `{name}`
+   *  placeholders. When set, overrides nestWorkspaces. Example: `{repoName}.{name}`
+   *  produces `/workspaces/my-project.fix-bug`. When undefined, nestWorkspaces
+   *  controls the layout as before. */
+  worktreeNameFormat?: string
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
@@ -2901,6 +2906,7 @@ export type GlobalSettings = {
 export type OrcaWorkspaceLayout = {
   path: string
   nestWorkspaces: boolean
+  worktreeNameFormat?: string
 }
 
 export type CommitMessageAiModelCapability = {

@@ -245,6 +245,65 @@ describe('computeWorktreePath', () => {
     ).toBe('C:\\Projects\\app\\worktrees\\feature')
   })
 
+  it('uses worktreeNameFormat with dot separator', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{repoName}.{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project.feature'))
+  })
+
+  it('uses worktreeNameFormat with nested separator', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{repoName}/{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
+  })
+
+  it('uses worktreeNameFormat with name only', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'feature'))
+  })
+
+  it('uses worktreeNameFormat with dash separator', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{repoName}-{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project-feature'))
+  })
+
+  it('ignores nestWorkspaces when worktreeNameFormat is set', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeNameFormat: '{name}'
+      })
+    ).toBe(posix.join('/workspaces', 'feature'))
+  })
+
+  it('falls back to nestWorkspaces when worktreeNameFormat is unset', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces'
+      })
+    ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
+  })
+
   it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
     expect(
       computeRemoteWorktreePath('feature', '/remote/repo', {

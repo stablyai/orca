@@ -439,22 +439,29 @@ function buildWorkspaceDirHistoryForUpdate(
   current: GlobalSettings,
   updates: Partial<GlobalSettings>
 ): OrcaWorkspaceLayout[] | null {
-  if (!('workspaceDir' in updates) && !('nestWorkspaces' in updates)) {
+  if (
+    !('workspaceDir' in updates) &&
+    !('nestWorkspaces' in updates) &&
+    !('worktreeNameFormat' in updates)
+  ) {
     return null
   }
   const nextPath = updates.workspaceDir ?? current.workspaceDir
   const nextNestWorkspaces = updates.nestWorkspaces ?? current.nestWorkspaces
+  const nextWorktreeNameFormat = updates.worktreeNameFormat ?? current.worktreeNameFormat
   if (
     normalizeRuntimePathForComparison(nextPath) ===
       normalizeRuntimePathForComparison(current.workspaceDir) &&
-    nextNestWorkspaces === current.nestWorkspaces
+    nextNestWorkspaces === current.nestWorkspaces &&
+    nextWorktreeNameFormat === current.worktreeNameFormat
   ) {
     return null
   }
 
-  const previousLayout = {
+  const previousLayout: OrcaWorkspaceLayout = {
     path: current.workspaceDir,
-    nestWorkspaces: current.nestWorkspaces
+    nestWorkspaces: current.nestWorkspaces,
+    worktreeNameFormat: current.worktreeNameFormat
   }
   const existing = current.workspaceDirHistory ?? []
   const next = [...existing]
@@ -506,7 +513,7 @@ function migrateTerminalScrollbackRows(settings: unknown): {
 }
 
 function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
-  return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
+  return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}:${layout.worktreeNameFormat ?? ''}`
 }
 
 function migrateAgentYoloDefaults(
