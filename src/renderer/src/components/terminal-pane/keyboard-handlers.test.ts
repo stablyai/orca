@@ -1,7 +1,11 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
-import { matchFileSearchShortcut, matchSearchNavigate } from './keyboard-handlers'
+import {
+  matchFileSearchShortcut,
+  matchSearchNavigate,
+  runTerminalSearchNavigation
+} from './keyboard-handlers'
 
 function makeKeyEvent(
   overrides: Partial<{
@@ -84,6 +88,46 @@ describe('matchSearchNavigate', () => {
   it('returns null for Ctrl+G on macOS (wrong modifier)', () => {
     const e = makeKeyEvent({ ctrlKey: true })
     expect(matchSearchNavigate(e, true, true, searchState)).toBeNull()
+  })
+})
+
+describe('runTerminalSearchNavigation', () => {
+  const searchState = { query: 'hello', caseSensitive: true, regex: false }
+
+  it('runs the next search through the guarded xterm path', () => {
+    const findNext = vi.fn(() => true)
+    const findPrevious = vi.fn(() => false)
+    const pane = { searchAddon: { findNext, findPrevious } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
+    expect(findNext).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findPrevious).not.toHaveBeenCalled()
+  })
+
+  it('runs the previous search through the guarded xterm path', () => {
+    const findNext = vi.fn(() => false)
+    const findPrevious = vi.fn(() => true)
+    const pane = { searchAddon: { findNext, findPrevious } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
+    expect(findPrevious).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findNext).not.toHaveBeenCalled()
+  })
+
+  it('contains the xterm decoration positive-integer crash from shortcut navigation', () => {
+    const findNext = vi.fn(() => {
+      throw new Error('This API only accepts positive integers')
+    })
+    const pane = { searchAddon: { findNext } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(() => runTerminalSearchNavigation(pane, 'next', searchState)).not.toThrow()
+    expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(false)
   })
 })
 
