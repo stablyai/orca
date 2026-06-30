@@ -56,7 +56,9 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
 
   for (let index = 0; index <= lines.length; index += 1) {
     const line = lines[index]
-    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?$/.test(line)
+    // Tolerate a trailing \r: split('\n') leaves CRLF endings intact, so a Windows
+    // config's "[features]\r" header must still match (cf. getProjectTrustLevel).
+    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?\r?$/.test(line)
     if (!isHeader) {
       continue
     }
@@ -65,7 +67,7 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
       featureSections.push({ start: featureStart, end: index })
       featureStart = null
     }
-    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?$/.test(line)) {
+    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?\r?$/.test(line)) {
       featureStart = index
     }
   }
