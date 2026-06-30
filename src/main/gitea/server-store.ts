@@ -44,6 +44,10 @@ export function deriveGiteaWebBaseUrl(apiBaseUrl: string): string {
   return apiBaseUrl.replace(/\/api\/v1$/i, '')
 }
 
+// Host key used to match a repo remote to its stored server. Uses URL.host, so
+// it keeps a non-default port (e.g. :3000) and collapses default ports. Must stay
+// consistent with the host parseGiteaRepoRef stores (#5493) — otherwise a Gitea on
+// a non-default port never matches its server and the token is dropped.
 export function giteaServerHost(server: Pick<GiteaServer, 'apiBaseUrl'>): string | null {
   try {
     return new URL(server.apiBaseUrl).host.toLowerCase()

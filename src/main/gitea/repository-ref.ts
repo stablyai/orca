@@ -131,11 +131,14 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
       return null
     }
 
-    const webOrigin =
-      protocol === 'http:' || protocol === 'https:'
-        ? `${protocol}//${url.host}`
-        : `https://${url.hostname.toLowerCase()}`
-    return makeRepoRef(url.hostname, url.pathname, webOrigin)
+    const isHttp = protocol === 'http:' || protocol === 'https:'
+    // Why: store the web host *with* its non-default port (url.host), since the
+    // stored server's host is derived from apiBaseUrl via URL.host
+    // (getServerForHost/sameHost). url.hostname dropped the port, so a Gitea on a
+    // non-default port (e.g. :3000) never matched its server. SSH keeps the bare
+    // hostname — its port is the SSH port, not the web port.
+    const webOrigin = isHttp ? `${protocol}//${url.host}` : `https://${url.hostname.toLowerCase()}`
+    return makeRepoRef(isHttp ? url.host : url.hostname, url.pathname, webOrigin)
   } catch {
     return null
   }

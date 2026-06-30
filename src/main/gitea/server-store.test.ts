@@ -33,6 +33,13 @@ describe('gitea server-store helpers', () => {
     expect(giteaServerHost({ apiBaseUrl: 'not a url' })).toBeNull()
   })
 
+  it('keeps a non-default port and collapses default ports in the host key (#5493)', () => {
+    expect(giteaServerHost({ apiBaseUrl: 'http://localhost:3000/api/v1' })).toBe('localhost:3000')
+    expect(giteaServerHost({ apiBaseUrl: 'https://git.example.com:443/api/v1' })).toBe(
+      'git.example.com'
+    )
+  })
+
   it('derives a stable, collision-resistant id per API base URL', () => {
     const id = getGiteaServerId('https://git.example.com/api/v1')
     expect(id).toHaveLength(24)
