@@ -41,12 +41,13 @@ function toViewer(raw: RawGiteaUser): GiteaViewer {
 }
 
 // Validates a token against a Gitea server by reading the authenticated user.
-async function fetchGiteaUser(
+export async function fetchGiteaUser(
   apiBaseUrl: string,
-  token: string
+  token: string,
+  options: { timeoutMs?: number } = {}
 ): Promise<{ ok: true; viewer: GiteaViewer } | { ok: false; error: string }> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), USER_REQUEST_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? USER_REQUEST_TIMEOUT_MS)
   try {
     const response = await fetch(`${apiBaseUrl}/user`, {
       headers: authHeaders(token),
@@ -55,11 +56,15 @@ async function fetchGiteaUser(
     if (response.status === 401) {
       return { ok: false, error: 'Gitea rejected the token. Check that it is valid.' }
     }
-    // Why: a 403 on /user means the token authenticated but lacks the read:user
-    // scope. The token is still valid and usable for issues, so accept the
-    // connection without an account label rather than forcing a broader scope.
+    // Why: a 403 on /user can mean the token authenticated but only lacks the
+    // read:user scope — still valid and usable for issues, so accept it without an
+    // account label. Any other 403 is a genuine rejection and must fail.
     if (response.status === 403) {
-      return { ok: true, viewer: { login: '', fullName: null } }
+      const body = await response.text().catch(() => '')
+      if (/required scope\(s\):\s*\[read:user\]/i.test(body)) {
+        return { ok: true, viewer: { login: '', fullName: null } }
+      }
+      return { ok: false, error: 'Gitea rejected the token. Check that it is valid.' }
     }
     if (!response.ok) {
       return { ok: false, error: `Gitea request failed (${response.status}).` }

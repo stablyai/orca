@@ -126,6 +126,20 @@ describe('gitea connect', () => {
     expect(store.file.servers[0]?.account).toBeNull()
   })
 
+  it('rejects a non-scope 403 instead of accepting it as a valid token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 }))
+    )
+    const result = await connect({ baseUrl: 'https://git.example.com', token: 'bad' })
+    expect(result).toEqual({
+      ok: false,
+      error: 'Gitea rejected the token. Check that it is valid.'
+    })
+    expect(store.file.servers).toHaveLength(0)
+    expect(store.tokens.size).toBe(0)
+  })
+
   it('reports connection status from stored servers', async () => {
     vi.stubGlobal(
       'fetch',

@@ -80,7 +80,9 @@ async function collectAssignedOrCreated(
 }
 
 function issueContext(repo: GiteaRepoRef): GiteaIssueContext {
-  const stored = getServerForHost(repo.host)
+  // Pass the repo's API base so multi-instance hosts resolve the right server
+  // for the serverId/serverName labels (matches resolveGiteaAuth scoping).
+  const stored = getServerForHost(repo.host, repo.apiBaseUrl)
   return {
     owner: repo.owner,
     repo: repo.repo,

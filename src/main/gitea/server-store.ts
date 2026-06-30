@@ -56,6 +56,19 @@ export function giteaServerHost(server: Pick<GiteaServer, 'apiBaseUrl'>): string
   }
 }
 
+// Host+path key used to disambiguate Gitea instances that share a host under
+// different subpaths (e.g. .../code/api/v1 vs .../ops/api/v1). Builds on
+// giteaServerHost (keeps a non-default port, #5493) and appends the normalized
+// API base path, so credentials can't leak to a sibling instance on the host.
+export function giteaServerKey(apiBaseUrl: string): string | null {
+  try {
+    const url = new URL(apiBaseUrl)
+    return `${url.host.toLowerCase()}${url.pathname.replace(/\/+$/, '')}`
+  } catch {
+    return null
+  }
+}
+
 export function getGiteaServerId(apiBaseUrl: string): string {
   return createHash('sha256').update(apiBaseUrl).digest('base64url').slice(0, 24)
 }
@@ -249,13 +262,22 @@ export function getCredentialError(serverIds: readonly string[]): string | undef
 
 // Returns the stored server + token for a repo remote host, or null when no
 // connected server matches. Used to authenticate repo-scoped Gitea requests.
-export function getServerForHost(host: string | null | undefined): GiteaServerToken | null {
+export function getServerForHost(
+  host: string | null | undefined,
+  apiBaseUrl?: string | null
+): GiteaServerToken | null {
   if (!host) {
     return null
   }
   const normalizedHost = host.toLowerCase()
   const file = getServerFile()
-  const server = file.servers.find((entry) => giteaServerHost(entry) === normalizedHost)
+  // Why: when the repo carries a subpath API base, require an exact host+path
+  // match so two instances on one host resolve to the right server (and token).
+  // Fall back to host-only matching when no API base is supplied (back-compat).
+  const targetKey = apiBaseUrl ? giteaServerKey(apiBaseUrl) : null
+  const server = targetKey
+    ? file.servers.find((entry) => giteaServerKey(entry.apiBaseUrl) === targetKey)
+    : file.servers.find((entry) => giteaServerHost(entry) === normalizedHost)
   if (!server) {
     return null
   }

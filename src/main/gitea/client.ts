@@ -11,6 +11,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { normalizeGiteaApiBaseUrl } from './server-store'
+import { fetchGiteaUser } from './connect'
 import { encodedRepoPath, getEnvGiteaAuth, giteaGetJsonAtBase, giteaRepoGet } from './request'
 
 // Re-exported so existing importers (and the client test) keep their path.
@@ -88,7 +89,7 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
     }
   }
 
-  if (!tokenConfigured) {
+  if (config.token === null) {
     const version = await giteaGetJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
       timeoutMs: 4000
     })
@@ -101,15 +102,14 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
     }
   }
 
-  const user = await giteaGetJsonAtBase<{
-    login?: string | null
-    username?: string | null
-    full_name?: string | null
-  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000, token: config.token })
+  // Why: reuse the connect flow's status-aware validator so an env token that
+  // authenticates but lacks read:user (a 403 the raw GET would report as null)
+  // is still treated as authenticated — consistent with how connect accepts it.
+  const result = await fetchGiteaUser(config.apiBaseUrl, config.token, { timeoutMs: 4000 })
   return {
     configured: true,
-    authenticated: user !== null,
-    account: user?.login ?? user?.username ?? user?.full_name ?? null,
+    authenticated: result.ok,
+    account: result.ok ? result.viewer.login || null : null,
     baseUrl: config.apiBaseUrl,
     tokenConfigured
   }

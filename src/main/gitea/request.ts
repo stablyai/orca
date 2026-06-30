@@ -1,4 +1,4 @@
-import { getServerForHost, normalizeGiteaApiBaseUrl } from './server-store'
+import { getServerForHost, giteaServerKey, normalizeGiteaApiBaseUrl } from './server-store'
 import type { GiteaRepoRef } from './repository-ref'
 
 // Shared Gitea REST plumbing used by both the pull-request client and the
@@ -38,29 +38,27 @@ export function getEnvGiteaAuth(): { apiBaseUrl: string | null; token: string | 
   }
 }
 
-function sameHost(apiBaseUrl: string, repoHost: string): boolean {
-  try {
-    return new URL(apiBaseUrl).host.toLowerCase() === repoHost.toLowerCase()
-  } catch {
-    return false
-  }
+function sameApiBase(envApiBaseUrl: string, repoApiBaseUrl: string): boolean {
+  const env = giteaServerKey(envApiBaseUrl)
+  return env !== null && env === giteaServerKey(repoApiBaseUrl)
 }
 
 export function resolveGiteaAuth(repo: GiteaRepoRef): GiteaResolvedAuth {
   const env = getEnvGiteaAuth()
   if (env.token) {
-    // With an explicit ORCA_GITEA_API_BASE_URL, scope the token to that host so a
-    // global token can't leak to a different server. Without one, fall back to the
-    // repo's own host — the documented env-var back-compat that hosted review uses.
+    // With an explicit ORCA_GITEA_API_BASE_URL, scope the token to that exact API
+    // base (host + subpath) so a global token can't leak to a different server or
+    // a sibling instance under another subpath on the same host. Without one, fall
+    // back to the repo's own base — the env-var back-compat hosted review uses.
     if (env.apiBaseUrl) {
-      if (sameHost(env.apiBaseUrl, repo.host)) {
+      if (sameApiBase(env.apiBaseUrl, repo.apiBaseUrl)) {
         return { apiBaseUrl: env.apiBaseUrl, token: env.token }
       }
     } else {
       return { apiBaseUrl: repo.apiBaseUrl, token: env.token }
     }
   }
-  const stored = getServerForHost(repo.host)
+  const stored = getServerForHost(repo.host, repo.apiBaseUrl)
   if (stored) {
     return { apiBaseUrl: stored.server.apiBaseUrl, token: stored.token }
   }
