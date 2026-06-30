@@ -60,4 +60,20 @@ describe('useTerminalErrorTable', () => {
     act(() => result.current.clear())
     expect(result.current.errors).toEqual([])
   })
+
+  it('does not grow past 5 entries under sustained identical errors', () => {
+    let t = 1000
+    const { result } = renderHook(() => useTerminalErrorTable(() => t))
+    act(() => {
+      for (let i = 0; i < 100; i++) {
+        result.current.push('Remote Orca runtime connection lost')
+      }
+      t = 5_000 // inside window
+      for (let i = 0; i < 100; i++) {
+        result.current.push('Remote Orca runtime connection lost')
+      }
+    })
+    expect(result.current.errors).toHaveLength(1)
+    expect(result.current.errors[0].count).toBe(200)
+  })
 })

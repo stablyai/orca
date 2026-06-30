@@ -532,9 +532,6 @@ export default function TerminalPane({
     pushTerminalError(message)
   })
   const onResetErrorRef = useRef<() => void>(clearTerminalError)
-  useLayoutEffect(() => {
-    onResetErrorRef.current = clearTerminalError
-  }, [clearTerminalError])
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
