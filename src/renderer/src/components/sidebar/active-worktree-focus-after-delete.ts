@@ -1,8 +1,35 @@
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
+import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo, Worktree } from '../../../../shared/types'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
+
+// Why: a per-workspace-env's runtime-owned SSH target is torn down when the workspace is deleted,
+// so re-focusing a sibling hosted on that same target would land on a dead runtime and auto-create
+// a terminal that can never spawn (a blank, stuck pane). Treat such siblings as not focus-eligible.
+function isHostedOnRuntimeOwnedSshTarget(
+  worktree: Pick<Worktree, 'hostId' | 'repoId'>,
+  repoById: Map<string, Repo>
+): boolean {
+  const hostIds = [
+    worktree.hostId,
+    repoById.get(worktree.repoId)?.executionHostId,
+    repoById.get(worktree.repoId)?.connectionId
+  ]
+  return hostIds.some((value) => {
+    if (!value) {
+      return false
+    }
+    // connectionId is a raw target id; executionHostId/hostId are `ssh:<targetId>`.
+    if (isRuntimeOwnedSshTargetId(value)) {
+      return true
+    }
+    const parsed = parseExecutionHostId(value)
+    return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
+  })
+}
 
 // Why: after deleting the workspace the user is currently viewing, leaving the
 // active workspace empty loses their place. Pick the next workspace to focus
@@ -15,8 +42,13 @@ function pickNextWorktreeIdAfterDelete(
   deletedWorktreeId: string
 ): string | null {
   const deleteState = state.deleteStateByWorktreeId
+  const repoById = getRepoMapFromState(state)
   const siblings = (state.worktreesByRepo[repoId] ?? []).filter(
-    (worktree) => worktree.id !== deletedWorktreeId && !deleteState[worktree.id]?.isDeleting
+    (worktree) =>
+      worktree.id !== deletedWorktreeId &&
+      !deleteState[worktree.id]?.isDeleting &&
+      // Skip siblings hosted on the now-destroyed runtime-owned SSH target (see helper).
+      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
   if (others.length > 0) {
