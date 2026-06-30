@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -32,7 +33,7 @@ function makeStore(existingAutomations: Automation[] = []) {
     deleteAutomation: vi.fn(),
     getSettings: vi.fn(() => ({
       workspaceDir: '/tmp',
-      worktreeNamingMode: 'flat' as const,
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       refreshLocalBaseRefOnWorktreeCreate: false,
       branchPrefix: '',
       branchPrefixCustom: ''

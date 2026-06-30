@@ -4,6 +4,7 @@ import type { Stats } from 'node:fs'
 import type { Store } from '../persistence'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
 import type { GlobalSettings, Repo } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
@@ -115,7 +116,7 @@ function getBaseWatchLayout(
 
   return {
     workspaceRoot: computeWorkspaceRoot(repo.path, pathSettings),
-    isNested: pathSettings.worktreeNamingMode === 'nested'
+    isNested: pathSettings.worktreeNamingMode === WorktreeNamingMode.Nested
   }
 }
 

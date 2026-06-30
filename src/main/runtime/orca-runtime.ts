@@ -115,6 +115,7 @@ import type {
   WorkspaceSessionState,
   DirEntry
 } from '../../shared/types'
+import type { WorktreeNamingMode } from '../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -765,7 +766,7 @@ type RuntimeStore = {
   saveSparsePreset?: Store['saveSparsePreset']
   getSettings(): {
     workspaceDir: string
-    worktreeNamingMode?: 'flat' | 'nested' | 'custom'
+    worktreeNamingMode?: WorktreeNamingMode
     worktreeNameFormat?: string
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean

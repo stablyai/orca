@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/types'
+import { WorktreeNamingMode } from '../shared/types'
 
 const { mkdirMock, authorizeExternalPathMock } = vi.hoisted(() => ({
   mkdirMock: vi.fn(),
@@ -35,7 +36,7 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     authorizeExternalPathMock.mockReset()
     store.getSettings.mockReset().mockReturnValue({
       workspaceDir: '/Users/alice/orca/workspaces',
-      worktreeNamingMode: 'flat'
+      worktreeNamingMode: WorktreeNamingMode.Flat
     })
   })
 

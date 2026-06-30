@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { GlobalSettings } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 
 const testState = {
   userDataDir: '',
@@ -47,7 +48,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
   const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
     workspaceDir: testState.fakeHomeDir,
-    worktreeNamingMode: 'flat' as const,
+    worktreeNamingMode: WorktreeNamingMode.Flat,
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: false,

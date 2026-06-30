@@ -19,6 +19,7 @@ import type {
   WorktreeMeta,
   WorktreeOwnership
 } from './types'
+import { WorktreeNamingMode } from './types'
 
 export const EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT = Date.UTC(2026, 4, 23)
 
@@ -143,9 +144,9 @@ function buildWslWorkspaceLayouts(
   }
   const root = `//wsl.localhost/${parsed.distro}${linuxHome}/orca/workspaces`
   const historicalModes = (settings.workspaceDirHistory ?? []).map(
-    (layout) => layout.worktreeNamingMode ?? 'nested'
+    (layout) => layout.worktreeNamingMode ?? WorktreeNamingMode.Nested
   )
-  const modes = [settings.worktreeNamingMode ?? 'nested', ...historicalModes]
+  const modes = [settings.worktreeNamingMode ?? WorktreeNamingMode.Nested, ...historicalModes]
   return [...new Set(modes)].map((mode) => ({ path: root, worktreeNamingMode: mode }))
 }
 
@@ -259,7 +260,7 @@ export function matchesStrongOrcaCreatePath(
     return false
   }
   for (const layout of knownOrcaLayouts) {
-    if (layout.worktreeNamingMode !== 'nested') {
+    if (layout.worktreeNamingMode !== WorktreeNamingMode.Nested) {
       continue
     }
     const relative = relativePathInsideRoot(layout.path, worktreePath)
@@ -290,7 +291,7 @@ function isUnderFlatOrUntrustedOrcaRoot(
     if (relative === null) {
       continue
     }
-    if (layout.worktreeNamingMode !== 'nested') {
+    if (layout.worktreeNamingMode !== WorktreeNamingMode.Nested) {
       return true
     }
   }
@@ -309,7 +310,7 @@ function canClassifyAsExternal(
     if (relative === null) {
       continue
     }
-    return layout.worktreeNamingMode === 'nested'
+    return layout.worktreeNamingMode === WorktreeNamingMode.Nested
   }
   return true
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join, sep } from 'node:path'
 import type { Event as WatcherEvent, SubscribeCallback } from '@parcel/watcher'
 import type { GlobalSettings, Repo } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 
 vi.mock('fs/promises', () => ({
   readFile: vi.fn(async () => ''),
@@ -41,7 +42,7 @@ const PROJECT_GIT_COMMON_DIR = join(PROJECT_ROOT, '.git')
 
 const settings = {
   workspaceDir: WORKTREE_ROOT,
-  worktreeNamingMode: 'nested'
+  worktreeNamingMode: WorktreeNamingMode.Nested
 } as GlobalSettings
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {

@@ -1,11 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { WorktreeNamingMode } from '../../../../shared/types'
 import { Input } from '../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SettingsRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-
-export type WorktreeNamingMode = 'flat' | 'nested' | 'custom'
 
 type WorktreeNamingControlProps = {
   settings: GlobalSettings
@@ -20,7 +19,7 @@ export function WorktreeNamingControl({
   updateSettings
 }: WorktreeNamingControlProps): React.JSX.Element {
   const inputId = useId()
-  const mode: WorktreeNamingMode = settings.worktreeNamingMode ?? 'nested'
+  const mode: WorktreeNamingMode = settings.worktreeNamingMode ?? WorktreeNamingMode.Nested
   const customFormat = settings.worktreeNameFormat ?? ''
 
   // Why: settings.ts triggers prepareLocalWorktreeRootsForRepos on every
@@ -42,16 +41,16 @@ export function WorktreeNamingControl({
   }
 
   const selectMode = (next: WorktreeNamingMode): void => {
-    if (next === 'flat') {
+    if (next === WorktreeNamingMode.Flat) {
       updateSettings({
-        worktreeNamingMode: 'flat',
+        worktreeNamingMode: WorktreeNamingMode.Flat,
         worktreeNameFormat: undefined
       })
       return
     }
-    if (next === 'nested') {
+    if (next === WorktreeNamingMode.Nested) {
       updateSettings({
-        worktreeNamingMode: 'nested',
+        worktreeNamingMode: WorktreeNamingMode.Nested,
         worktreeNameFormat: undefined
       })
       return
@@ -61,7 +60,7 @@ export function WorktreeNamingControl({
     const seed =
       customFormat && customFormat !== '{repoName}/{name}' ? customFormat : '{repoName}.{name}'
     updateSettings({
-      worktreeNamingMode: 'custom',
+      worktreeNamingMode: WorktreeNamingMode.Custom,
       worktreeNameFormat: seed
     })
   }
@@ -82,17 +81,17 @@ export function WorktreeNamingControl({
         description={
           <>
             <span>
-              {mode === 'flat' &&
+              {mode === WorktreeNamingMode.Flat &&
                 translate(
                   'auto.components.settings.WorkspaceDirectorySetting.c3d4e5f6ab',
                   'Worktrees are created directly under the workspace directory.'
                 )}
-              {mode === 'nested' &&
+              {mode === WorktreeNamingMode.Nested &&
                 translate(
                   'auto.components.settings.WorkspaceDirectorySetting.d4e5f6a7bc',
                   'Worktrees are grouped under a repo-named subfolder.'
                 )}
-              {mode === 'custom' &&
+              {mode === WorktreeNamingMode.Custom &&
                 translate(
                   'auto.components.settings.WorkspaceDirectorySetting.e5f6a7b8cd',
                   'Use {repoName} (or {repo}) and {name} (or {branch}) placeholders. A / in the format creates nested folders.'
@@ -132,7 +131,7 @@ export function WorktreeNamingControl({
           </Select>
         }
       />
-      {mode === 'custom' && (
+      {mode === WorktreeNamingMode.Custom && (
         <Input
           id={`${inputId}-format`}
           value={draftFormat}
@@ -174,9 +173,9 @@ function renderWorktreeNameExample(
   const repoName = 'my-project'
   const name = 'fix-bug'
   let relative: string
-  if (mode === 'flat') {
+  if (mode === WorktreeNamingMode.Flat) {
     relative = name
-  } else if (mode === 'nested') {
+  } else if (mode === WorktreeNamingMode.Nested) {
     relative = `${repoName}/${name}`
   } else {
     relative =

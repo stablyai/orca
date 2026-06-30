@@ -12,6 +12,7 @@ vi.mock('../wsl', () => ({
 }))
 
 import { computeWorktreePath } from './worktree-logic'
+import { WorktreeNamingMode } from '../../shared/types'
 
 describe('computeWorktreePath WSL layout', () => {
   beforeEach(() => {
@@ -28,7 +29,7 @@ describe('computeWorktreePath WSL layout', () => {
 
     expect(
       computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
-        worktreeNamingMode: 'nested',
+        worktreeNamingMode: WorktreeNamingMode.Nested,
         workspaceDir: 'C:\\workspaces'
       })
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\repo\\feature')
@@ -43,7 +44,7 @@ describe('computeWorktreePath WSL layout', () => {
 
     expect(
       computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
-        worktreeNamingMode: 'flat',
+        worktreeNamingMode: WorktreeNamingMode.Flat,
         workspaceDir: 'C:\\workspaces'
       })
     ).toBe(win32.join('C:\\workspaces', 'feature'))
@@ -58,7 +59,7 @@ describe('computeWorktreePath WSL layout', () => {
 
     expect(
       computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
-        worktreeNamingMode: 'flat',
+        worktreeNamingMode: WorktreeNamingMode.Flat,
         workspaceDir: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees'
       })
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees\\feature')

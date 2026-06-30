@@ -1,5 +1,6 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
 import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 import { resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -93,11 +94,11 @@ export function computeWorktreePath(
   const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
   const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
 
-  const mode = settings.worktreeNamingMode ?? 'nested'
+  const mode = settings.worktreeNamingMode ?? WorktreeNamingMode.Nested
 
   // Why: custom mode uses the user-supplied format string with placeholder
   // aliases. Only apply when the format is actually set.
-  if (mode === 'custom' && settings.worktreeNameFormat) {
+  if (mode === WorktreeNamingMode.Custom && settings.worktreeNameFormat) {
     const formatted = settings.worktreeNameFormat
       .replace(/\{repoName\}/g, repoName)
       .replace(/\{repo\}/g, repoName)
@@ -108,7 +109,7 @@ export function computeWorktreePath(
 
   // Why: nested mode groups worktrees under a repo-named subfolder; flat
   // mode places them directly under the workspace root.
-  if (mode === 'nested') {
+  if (mode === WorktreeNamingMode.Nested) {
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
   return pathOps.join(workspaceRoot, sanitizedName)

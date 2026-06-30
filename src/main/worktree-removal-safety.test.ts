@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
 import type { GitWorktreeInfo } from '../shared/types'
+import { WorktreeNamingMode } from '../shared/types'
 import {
   canCleanupUnregisteredOrcaLeftoverDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
@@ -376,7 +377,7 @@ describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
       canCleanupUnregisteredOrcaLeftoverDirectory({
         ...baseArgs,
         meta: undefined,
-        knownOrcaLayouts: [{ path: '/workspaces', worktreeNamingMode: 'flat' }],
+        knownOrcaLayouts: [{ path: '/workspaces', worktreeNamingMode: WorktreeNamingMode.Flat }],
         statPath: makeStatPath([], ['/workspaces/orca-owned']),
         isGitRepository
       })

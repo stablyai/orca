@@ -128,6 +128,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
 })
 
 import { registerWorktreeHandlers } from './worktrees'
+import { WorktreeNamingMode } from '../../shared/types'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -217,7 +218,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getProjectHostSetups.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      worktreeNamingMode: 'flat',
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: 'C:\\workspaces'
     })

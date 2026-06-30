@@ -4,6 +4,7 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { CreateWorktreeResult, GitWorktreeInfo, Worktree } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 
 const ORIGINAL_PLATFORM = process.platform
 
@@ -364,7 +365,7 @@ describe('registerWorktreeHandlers', () => {
     store.getSparsePresets.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      worktreeNamingMode: 'flat',
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: '/workspace'
     })
@@ -435,9 +436,9 @@ describe('registerWorktreeHandlers', () => {
       (
         sanitizedName: string,
         repoPath: string,
-        settings: { worktreeNamingMode: 'flat' | 'nested' | 'custom'; workspaceDir: string }
+        settings: { worktreeNamingMode: WorktreeNamingMode; workspaceDir: string }
       ) => {
-        if (settings.worktreeNamingMode === 'nested') {
+        if (settings.worktreeNamingMode === WorktreeNamingMode.Nested) {
           const repoName =
             repoPath
               .split(/[\\/]/)
@@ -700,7 +701,10 @@ describe('registerWorktreeHandlers', () => {
         isPinned: true,
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', worktreeNamingMode: 'flat' }
+        orcaCreationWorkspaceLayout: {
+          path: '/workspace',
+          worktreeNamingMode: WorktreeNamingMode.Flat
+        }
       }
     })
 
@@ -808,7 +812,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(computeWorktreePathMock).toHaveBeenCalledWith('feature', '/workspace/repo', {
-      worktreeNamingMode: 'flat',
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       workspaceDir: '../worktrees'
     })
     expect(addWorktreeMock).toHaveBeenCalledWith(
@@ -821,7 +825,10 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::../worktrees/feature',
       expect.objectContaining({
-        orcaCreationWorkspaceLayout: { path: '../worktrees', worktreeNamingMode: 'flat' }
+        orcaCreationWorkspaceLayout: {
+          path: '../worktrees',
+          worktreeNamingMode: WorktreeNamingMode.Flat
+        }
       })
     )
   })
@@ -2862,7 +2869,7 @@ describe('registerWorktreeHandlers', () => {
     }
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      worktreeNamingMode: 'flat',
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       refreshLocalBaseRefOnWorktreeCreate: true,
       workspaceDir: '/workspace'
     })
@@ -2959,7 +2966,7 @@ describe('registerWorktreeHandlers', () => {
     }
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      worktreeNamingMode: 'flat',
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       refreshLocalBaseRefOnWorktreeCreate: true,
       workspaceDir: '/workspace'
     })

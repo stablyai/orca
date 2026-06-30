@@ -67,6 +67,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import { WorktreeNamingMode } from '../shared/types'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeProjectRuntimePreference
@@ -522,20 +523,22 @@ function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
 // right state on first load after upgrade.
 function migrateWorktreeNamingMode(
   settings: Partial<GlobalSettings> | undefined
-): 'flat' | 'nested' | 'custom' {
+): WorktreeNamingMode {
   if (
-    settings?.worktreeNamingMode === 'flat' ||
-    settings?.worktreeNamingMode === 'nested' ||
-    settings?.worktreeNamingMode === 'custom'
+    settings?.worktreeNamingMode === WorktreeNamingMode.Flat ||
+    settings?.worktreeNamingMode === WorktreeNamingMode.Nested ||
+    settings?.worktreeNamingMode === WorktreeNamingMode.Custom
   ) {
     return settings.worktreeNamingMode
   }
   if (settings?.worktreeNameFormat) {
-    return 'custom'
+    return WorktreeNamingMode.Custom
   }
   // Why: read the legacy nestWorkspaces boolean from the raw parsed object;
   // it's no longer on the GlobalSettings type but still present in old saves.
-  return (settings as Record<string, unknown>)?.nestWorkspaces === true ? 'nested' : 'flat'
+  return (settings as Record<string, unknown>)?.nestWorkspaces === true
+    ? WorktreeNamingMode.Nested
+    : WorktreeNamingMode.Flat
 }
 
 // Why: worktreeNameFormat is only used in custom mode now. On load, keep it

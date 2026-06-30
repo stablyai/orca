@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings, Repo } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 import {
   renameWorktreeFolderOnFirstWork,
   type FirstWorkFolderRenameDeps
 } from './first-work-folder-rename'
 
 const REPO = { id: 'repo1', path: '/repos/orca', connectionId: null } as unknown as Repo
-const SETTINGS = { worktreeNamingMode: 'flat', workspaceDir: '/ws' } as unknown as GlobalSettings
+const SETTINGS = {
+  worktreeNamingMode: WorktreeNamingMode.Flat,
+  workspaceDir: '/ws'
+} as unknown as GlobalSettings
 const OLD_ID = 'repo1::/ws/cunner'
 
 function makeDeps(overrides: Partial<FirstWorkFolderRenameDeps> = {}): FirstWorkFolderRenameDeps {

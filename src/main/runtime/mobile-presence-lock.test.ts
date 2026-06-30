@@ -14,6 +14,7 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { WorktreeNamingMode } from '../../shared/types'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -57,7 +58,7 @@ const store = {
   removeWorktreeMeta: () => {},
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
-    worktreeNamingMode: 'flat' as const,
+    worktreeNamingMode: WorktreeNamingMode.Flat,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: '',

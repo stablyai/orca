@@ -17,6 +17,7 @@ import type {
   WorkspaceLineage,
   WorkspaceSessionState
 } from '../../shared/types'
+import { WorktreeNamingMode } from '../../shared/types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import { MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
 import {
@@ -1006,7 +1007,7 @@ const store = {
   getGitHubCache: () => undefined as never,
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
-    worktreeNamingMode: 'flat' as const,
+    worktreeNamingMode: WorktreeNamingMode.Flat,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: ''
@@ -1119,9 +1120,9 @@ computeWorktreePathMock.mockImplementation(
   (
     sanitizedName: string,
     repoPath: string,
-    settings: { worktreeNamingMode: 'flat' | 'nested' | 'custom'; workspaceDir: string }
+    settings: { worktreeNamingMode: WorktreeNamingMode; workspaceDir: string }
   ) => {
-    if (settings.worktreeNamingMode === 'nested') {
+    if (settings.worktreeNamingMode === WorktreeNamingMode.Nested) {
       const repoName =
         repoPath
           .split(/[\\/]/)
@@ -18385,7 +18386,7 @@ describe('OrcaRuntimeService', () => {
       comment: 'keep me',
       orcaCreatedAt: 123,
       orcaCreationSource: 'runtime',
-      orcaCreationWorkspaceLayout: { path: '/tmp', worktreeNamingMode: 'flat' as const }
+      orcaCreationWorkspaceLayout: { path: '/tmp', worktreeNamingMode: WorktreeNamingMode.Flat }
     })
 
     expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { comment: 'keep me' })
@@ -23990,7 +23991,7 @@ describe('OrcaRuntimeService', () => {
       getGitHubCache: () => undefined as never,
       getSettings: () => ({
         workspaceDir: 'C:\\workspaces',
-        worktreeNamingMode: 'flat' as const,
+        worktreeNamingMode: WorktreeNamingMode.Flat,
         refreshLocalBaseRefOnWorktreeCreate: false,
         branchPrefix: 'none',
         branchPrefixCustom: ''

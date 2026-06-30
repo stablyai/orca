@@ -2443,10 +2443,10 @@ export type GlobalSettings = {
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   /** UI-selected naming mode that drives how worktree folder names are
-   *  composed. `'flat'` → `{name}` under the workspace dir; `'nested'` →
-   *  `{repoName}/{name}`; `'custom'` → user-supplied `worktreeNameFormat`.
+   *  composed. `Flat` → `{name}` under the workspace dir; `Nested` →
+   *  `{repoName}/{name}`; `Custom` → user-supplied `worktreeNameFormat`.
    *  Migrated from the legacy `nestWorkspaces` boolean on load. */
-  worktreeNamingMode?: 'flat' | 'nested' | 'custom'
+  worktreeNamingMode?: WorktreeNamingMode
   /** Custom format for worktree folder names. Supports `{repoName}` (alias
    *  `{repo}`) and `{name}` (alias `{branch}`) placeholders. Only used when
    *  `worktreeNamingMode === 'custom'`. A `/` in the format creates nested
@@ -2908,9 +2908,15 @@ export type GlobalSettings = {
   voice?: VoiceSettings
 }
 
+export enum WorktreeNamingMode {
+  Flat = 'flat',
+  Nested = 'nested',
+  Custom = 'custom'
+}
+
 export type OrcaWorkspaceLayout = {
   path: string
-  worktreeNamingMode?: 'flat' | 'nested' | 'custom'
+  worktreeNamingMode?: WorktreeNamingMode
   worktreeNameFormat?: string
 }
 

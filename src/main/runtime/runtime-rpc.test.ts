@@ -13,6 +13,7 @@ import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
+import { WorktreeNamingMode } from '../../shared/types'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
 
@@ -305,7 +306,7 @@ describe('OrcaRuntimeRpcServer', () => {
     removeWorktreeMeta: () => {},
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
-      worktreeNamingMode: 'flat' as const,
+      worktreeNamingMode: WorktreeNamingMode.Flat,
       branchPrefix: 'none',
       branchPrefixCustom: ''
     })

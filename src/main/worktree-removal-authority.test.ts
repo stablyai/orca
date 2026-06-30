@@ -4,6 +4,7 @@ import {
   isWorktreePathMissing,
   stripOrcaProvenanceMetaUpdates
 } from './worktree-removal-safety'
+import { WorktreeNamingMode } from '../shared/types'
 
 describe('isWorktreePathMissing', () => {
   it('recognizes missing-path errors from local and remote stat providers', async () => {
@@ -69,7 +70,9 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
         meta: undefined,
         worktreePath: '/orca/workspaces/app/legacy-orphan',
         repo: { path: '/repos/app' },
-        knownOrcaLayouts: [{ path: '/orca/workspaces', worktreeNamingMode: 'nested' }]
+        knownOrcaLayouts: [
+          { path: '/orca/workspaces', worktreeNamingMode: WorktreeNamingMode.Nested }
+        ]
       })
     ).toBe(true)
   })
@@ -80,7 +83,9 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
         meta: undefined,
         worktreePath: '/orca/workspaces/legacy-orphan',
         repo: { path: '/repos/app' },
-        knownOrcaLayouts: [{ path: '/orca/workspaces', worktreeNamingMode: 'flat' }]
+        knownOrcaLayouts: [
+          { path: '/orca/workspaces', worktreeNamingMode: WorktreeNamingMode.Flat }
+        ]
       })
     ).toBe(false)
   })
@@ -93,7 +98,10 @@ describe('stripOrcaProvenanceMetaUpdates', () => {
         comment: 'keep me',
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', worktreeNamingMode: 'flat' },
+        orcaCreationWorkspaceLayout: {
+          path: '/workspace',
+          worktreeNamingMode: WorktreeNamingMode.Flat
+        },
         automationProvenance: {
           kind: 'created-by-automation',
           automationId: 'automation-1',

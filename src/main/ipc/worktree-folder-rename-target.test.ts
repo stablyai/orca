@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { planWorktreeFolderRename } from './worktree-folder-rename-target'
+import { WorktreeNamingMode } from '../../shared/types'
 
 describe('planWorktreeFolderRename', () => {
   const base = {
     repoId: 'repo1',
     repoPath: '/repos/orca',
-    settings: { worktreeNamingMode: 'flat' as const, workspaceDir: '/ws' },
+    settings: { worktreeNamingMode: WorktreeNamingMode.Flat, workspaceDir: '/ws' },
     platform: 'darwin' as NodeJS.Platform,
     isRemote: false
   }
