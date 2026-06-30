@@ -370,3 +370,26 @@ export function writeHooksJson(configPath: string, config: HooksConfig): void {
     }
   }
 }
+
+/**
+ * Remove managed hooks from multiple config files.
+ * Used to clean up hooks from both settings.local.json and settings.json.
+ */
+export function removeManagedHooksFromBoth(
+  configPaths: string[],
+  scriptFileName: string
+): { changed: boolean; paths: string[] } {
+  let changed = false
+  const modifiedPaths: string[] = []
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  for (const configPath of configPaths) {
+    const config = readHooksJson(configPath)
+    if (!config) continue
+    const result = removeManagedHooks(config, scriptFileName)
+    if (result.changed) {
+      changed = true
+      modifiedPaths.push(configPath)
+    }
+  }
+  return { changed, paths: modifiedPaths }
+}

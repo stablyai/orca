@@ -4,6 +4,8 @@ import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
+  hookDefinitionHasManagedCommand,
+  readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsHookCommand,
@@ -29,11 +31,7 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 export const CLAUDE_EVENTS = [
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
-  // StopFailure instead; without this hook Orca leaves the turn spinning.
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
-  // (name + input preview) before it completes.
   {
     eventName: 'PreToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
@@ -52,8 +50,31 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
-export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
+/**
+ * Primary config path for managed hooks. Uses settings.local.json (machine-specific
+ * overrides) so hooks are not synced across machines when users git-manage their
+ * .claude directory with a whitelist .gitignore. Claude Code treats settings.local.json
+ * as the machine-specific override file that should NOT be committed to version control.
+ */
+export function getLocalConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return join(homedir(), settings.configDirName, 'settings.local.json')
+}
+
+/**
+ * Legacy config path. Some existing installations may have hooks in settings.json
+ * (the shared/project file). We read from this for backward compat but write to
+ * settings.local.json for new installs.
+ */
+export function getLegacyConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return join(homedir(), settings.configDirName, 'settings.json')
+}
+
+/**
+ * Returns both config paths that Orca checks for managed hooks.
+ * Order: primary (local) first, then legacy.
+ */
+export function getConfigPaths(settings = CLAUDE_HOOK_SETTINGS): string[] {
+  return [getLocalConfigPath(settings), getLegacyConfigPath(settings)]
 }
 
 export function getManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -70,16 +91,16 @@ export function getManagedScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return getSharedManagedScriptPath(getManagedScriptFileName(settings))
 }
 
+/**
+ * Remote config path now uses settings.local.json for the same reason as local:
+ * machine-specific hooks should not be synced across machines.
+ */
 export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_SETTINGS): string {
-  return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
+  return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.local.json`
 }
 
 export function getManagedCommand(scriptPath: string): string {
   if (process.platform === 'win32') {
-    // Why: Claude Code runs hooks through Git Bash on Windows. Forward slashes
-    // alone don't survive a path with spaces — bash splits at the space and
-    // tries to execute `C:/Users/Jorge` as a command. Wrapping in
-    // `cmd.exe /d /c call "..."` keeps the path as one argument. #6078.
     return wrapWindowsHookCommand(scriptPath)
   }
   return wrapPosixHookCommand(scriptPath)
@@ -87,6 +108,46 @@ export function getManagedCommand(scriptPath: string): string {
 
 export function getRemoteManagedCommand(scriptPath: string): string {
   return wrapPosixHookCommand(scriptPath)
+}
+
+/**
+ * Find which config file currently contains managed hooks for this agent.
+ * Returns the path and config object, or undefined if hooks are not installed.
+ * Checks settings.local.json first (primary), then settings.json (legacy).
+ */
+export function findManagedConfigPath(
+  settings = CLAUDE_HOOK_SETTINGS,
+  scriptFileName = getManagedScriptFileName(settings)
+): { configPath: string; config: HooksConfig } | undefined {
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  for (const configPath of getConfigPaths(settings)) {
+    const config = readHooksJson(configPath)
+    if (!config) continue
+    for (const event of CLAUDE_EVENTS) {
+      const definitions = Array.isArray(config.hooks?.[event.eventName])
+        ? config.hooks![event.eventName]!
+        : []
+      if (definitions.some(def => hookDefinitionHasManagedCommand(def, isManagedCommand))) {
+        return { configPath, config }
+      }
+    }
+  }
+  return undefined
+}
+
+/**
+ * Read hooks config from whichever file has managed hooks, with fallback to
+ * settings.local.json for new installs.
+ */
+export function readHooksJsonWithFallback(
+  settings = CLAUDE_HOOK_SETTINGS,
+  scriptFileName = getManagedScriptFileName(settings)
+): { configPath: string; config: HooksConfig } {
+  const existing = findManagedConfigPath(settings, scriptFileName)
+  if (existing) return existing
+  const configPath = getLocalConfigPath(settings)
+  const config = readHooksJson(configPath) ?? {}
+  return { configPath, config }
 }
 
 export function applyManagedHooks(
