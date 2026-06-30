@@ -7,6 +7,12 @@ import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 
 function getUnreadBadgeContributorTitle(contributor: UnreadBadgeContributor): string {
+  if (!contributor.worktreeId) {
+    return translate(
+      'auto.components.settings.UnreadBadgeSection.145d7f0eb9',
+      'Detached terminal tab'
+    )
+  }
   return contributor.worktreeLabel
 }
 
@@ -110,7 +116,7 @@ export function UnreadBadgeSection(): React.JSX.Element {
                   <div className="min-w-0 space-y-1">
                     <h4 className="truncate text-sm font-medium">{title}</h4>
                     {contributor.repoLabel ? (
-                      <p className="text-[11px] text-muted-foreground">{contributor.repoLabel}</p>
+                      <p className="text-xs text-muted-foreground">{contributor.repoLabel}</p>
                     ) : null}
                     <p className="text-xs text-muted-foreground">
                       {getUnreadBadgeContributorSummary(contributor)}

@@ -2432,17 +2432,17 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
 }
 
 function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notifications']> {
-  const emptyInbox = {
+  const createEmptyInbox = () => ({
     supported: false,
     entries: [],
     unreadCount: 0
-  }
+  })
   return {
     dispatch: () => Promise.resolve({ delivered: false, reason: 'not-supported' }),
     dismiss: () => Promise.resolve({ dismissed: 0 }),
-    getInbox: () => Promise.resolve(emptyInbox),
-    markInboxRead: () => Promise.resolve(emptyInbox),
-    clearInbox: () => Promise.resolve(emptyInbox),
+    getInbox: () => Promise.resolve(createEmptyInbox()),
+    markInboxRead: () => Promise.resolve(createEmptyInbox()),
+    clearInbox: () => Promise.resolve(createEmptyInbox()),
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),

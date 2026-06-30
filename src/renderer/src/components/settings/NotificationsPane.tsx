@@ -366,7 +366,7 @@ export function NotificationsPane({
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <h4 className="truncate text-sm font-medium">{entry.title}</h4>
                       {entry.unread ? (
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                           {translate(
                             'auto.components.settings.NotificationsPane.bf95906231',
                             'Unread'
@@ -377,7 +377,7 @@ export function NotificationsPane({
                     {entry.body ? (
                       <p className="line-clamp-2 text-xs text-muted-foreground">{entry.body}</p>
                     ) : null}
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {getNotificationEntryContext(entry)} -{' '}
                       {formatNotificationInboxTime(entry.createdAt)}
                     </p>

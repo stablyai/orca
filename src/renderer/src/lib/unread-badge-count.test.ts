@@ -95,7 +95,7 @@ describe('getUnreadBadgeCount', () => {
           id: 'detached:tab-1',
           repoLabel: null,
           worktreeId: null,
-          worktreeLabel: 'Detached terminal tab',
+          worktreeLabel: '',
           unreadWorktree: false,
           unreadTabIds: ['tab-1'],
           unreadTabTitles: ['tab-1']
@@ -104,7 +104,7 @@ describe('getUnreadBadgeCount', () => {
           id: 'detached:tab-2',
           repoLabel: null,
           worktreeId: null,
-          worktreeLabel: 'Detached terminal tab',
+          worktreeLabel: '',
           unreadWorktree: false,
           unreadTabIds: ['tab-2'],
           unreadTabTitles: ['tab-2']

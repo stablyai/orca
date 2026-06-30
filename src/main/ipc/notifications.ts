@@ -357,6 +357,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       const notificationOptions = buildNotificationOptions(args)
 
       if (args.source !== 'test') {
+        // Why: keep an in-app record even when native delivery is unsupported or deduped later.
+        // delete+set also moves fresh and notificationId-replaced entries to the newest slot.
         const inboxId =
           args.notificationId ??
           `${args.source}:${args.worktreeId ?? 'global'}:${++generatedNotificationInboxId}`

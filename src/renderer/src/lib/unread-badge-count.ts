@@ -22,7 +22,7 @@ export type UnreadBadgeModel = {
 }
 
 function getUnreadTabTitle(tab: TerminalTab): string {
-  return tab.customTitle ?? tab.title ?? tab.generatedTitle ?? tab.defaultTitle ?? tab.id
+  return tab.customTitle || tab.title || tab.generatedTitle || tab.defaultTitle || tab.id
 }
 
 export function getUnreadBadgeModel({
@@ -88,7 +88,7 @@ export function getUnreadBadgeModel({
       id: `detached:${tabId}`,
       repoLabel: null,
       worktreeId: null,
-      worktreeLabel: 'Detached terminal tab',
+      worktreeLabel: '',
       unreadWorktree: false,
       unreadTabIds: [tabId],
       unreadTabTitles: [tabId]
