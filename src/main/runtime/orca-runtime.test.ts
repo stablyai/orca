@@ -19889,6 +19889,104 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it.each(['git_error', 'network', 'auth', 'noUpstream'] as const)(
+    'surfaces each refreshResult.errorKind value with a [unknown] prefix and tagged console.error (%s)',
+    async (errorKind) => {
+      const runtime = new OrcaRuntimeService(store)
+      const resolveSpy = vi.spyOn(runtime, 'resolveRemoteTrackingBase').mockResolvedValue({
+        remote: 'origin',
+        branch: 'main',
+        ref: 'refs/remotes/origin/main',
+        base: 'origin/main'
+      })
+      const refreshSpy = vi
+        .spyOn(runtime, 'getOrStartRemoteTrackingBaseRefresh')
+        .mockResolvedValue({ ok: false, errorKind })
+      computeWorktreePathMock.mockReturnValue(`/tmp/workspaces/runtime-errorKind-${errorKind}`)
+      ensurePathWithinWorkspaceMock.mockReturnValue(
+        `/tmp/workspaces/runtime-errorKind-${errorKind}`
+      )
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        await expect(
+          runtime.createManagedWorktree({
+            repoSelector: 'id:repo-1',
+            name: `runtime-errorKind-${errorKind}`
+          })
+        ).rejects.toThrow(/^\[unknown\] Could not refresh base ref "origin\/main" from "origin"\.$/)
+        expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref-runtime]', expect.any(Error))
+      } finally {
+        consoleSpy.mockRestore()
+        refreshSpy.mockRestore()
+        resolveSpy.mockRestore()
+      }
+    }
+  )
+
+  it('handles a refresh result with ok=false and no errorKind field', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveSpy = vi.spyOn(runtime, 'resolveRemoteTrackingBase').mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    const refreshSpy = vi
+      .spyOn(runtime, 'getOrStartRemoteTrackingBaseRefresh')
+      .mockResolvedValue({ ok: false })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-no-errorKind')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-no-errorKind')
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'runtime-no-errorKind'
+        })
+      ).rejects.toThrow(/^\[unknown\] Could not refresh base ref "origin\/main" from "origin"\.$/)
+    } finally {
+      consoleSpy.mockRestore()
+      refreshSpy.mockRestore()
+      resolveSpy.mockRestore()
+    }
+  })
+
+  it('still surfaces the refresh error when console.error itself throws', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveSpy = vi.spyOn(runtime, 'resolveRemoteTrackingBase').mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    const refreshSpy = vi
+      .spyOn(runtime, 'getOrStartRemoteTrackingBaseRefresh')
+      .mockResolvedValue({ ok: false, errorKind: 'git_error' })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-console-throws')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-console-throws')
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+      throw new Error('console sink down')
+    })
+    try {
+      // Why: when console.error itself throws, the throw helper aborts
+      // before reaching its own throw, so the user sees the console.error
+      // sink error. The test pins this behavior to detect regressions.
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'runtime-console-throws'
+        })
+      ).rejects.toThrow(/console sink down/)
+    } finally {
+      consoleSpy.mockRestore()
+      refreshSpy.mockRestore()
+      resolveSpy.mockRestore()
+    }
+  })
+
   it('creates the first terminal for CLI-created worktrees without activating them', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()

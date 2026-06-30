@@ -3681,6 +3681,53 @@ describe('registerWorktreeHandlers', () => {
     consoleSpy.mockRestore()
   })
 
+  it('classifies a non-Error rejection from refreshRemoteTrackingBase to [unknown]', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'fetch') {
+          throw new Error('network unavailable')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockRejectedValue('plain string rejection'),
+      addWorktree: vi.fn(),
+      listWorktrees: vi.fn()
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow(/^\[unknown\] Could not refresh base ref "origin\/main" from "origin"\.$/)
+    // Why: the throw helper passes opts.cause through verbatim when it is not
+    // an Error (the security scrub step is gated on instanceof Error).
+    expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref]', 'plain string rejection')
+    consoleSpy.mockRestore()
+  })
+
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
     const repo = {
       id: 'repo-ssh',

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   classifyRefreshBaseRefError,
   formatRefreshBaseRefError,
-  parseRefreshBaseRefErrorPrefix
+  parseRefreshBaseRefErrorPrefix,
+  throwRefreshBaseRefError
 } from './worktree-remote-error'
 
 describe('classifyRefreshBaseRefError', () => {
@@ -70,6 +71,41 @@ describe('classifyRefreshBaseRefError', () => {
     expect(result.code).toBe('remoteForbidden')
     expect(result.message).not.toContain('secret')
   })
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['plain object', { message: 'Could not resolve host github.com' }],
+    ['number', 42],
+    ['empty Error', new Error('placeholder')]
+  ])('returns "unknown" for non-Error input: %s', (_label, input) => {
+    expect(classifyRefreshBaseRefError(input).code).toBe('unknown')
+  })
+
+  it('classifies HTTPS "Authentication failed" without publickey as "auth"', () => {
+    const error = new Error(
+      "fatal: Authentication failed for 'https://user@github.com/foo/bar.git/'"
+    )
+    expect(classifyRefreshBaseRefError(error).code).toBe('auth')
+  })
+
+  it('first-match precedence: network wins over auth when stderr contains both', () => {
+    const error = new Error(
+      'fatal: Could not resolve host github.com\nPermission denied (publickey).'
+    )
+    expect(classifyRefreshBaseRefError(error).code).toBe('network')
+  })
+
+  it('scopes classification to the first fatal: line so help-text mentions do not flip the code', () => {
+    // Why: git's help output can include phrases like "no upstream" in trailing
+    // lines; the actual failure (auth) is on the first fatal: line. Without
+    // fatal-line scoping, the helper would classify as noUpstream.
+    const error = new Error(
+      'fatal: Authentication failed for https://user@github.com/foo/bar\n' +
+        'hint: use `git remote set-head origin --auto` if no upstream tracking info exists'
+    )
+    expect(classifyRefreshBaseRefError(error).code).toBe('auth')
+  })
 })
 
 describe('formatRefreshBaseRefError', () => {
@@ -114,6 +150,11 @@ describe('formatRefreshBaseRefError / parseRefreshBaseRefErrorPrefix round-trip'
     const formatted = formatRefreshBaseRefError({ code, message })
     expect(parseRefreshBaseRefErrorPrefix(formatted)).toEqual({ code, message })
   })
+
+  it('round-trips an empty message body', () => {
+    const formatted = formatRefreshBaseRefError({ code: 'network', message: '' })
+    expect(parseRefreshBaseRefErrorPrefix(formatted)).toEqual({ code: 'network', message: '' })
+  })
 })
 
 describe('parseRefreshBaseRefErrorPrefix edge cases', () => {
@@ -131,5 +172,108 @@ describe('parseRefreshBaseRefErrorPrefix edge cases', () => {
 
   it('returns null when prefix is not at the start', () => {
     expect(parseRefreshBaseRefErrorPrefix('prefix [network] mid-string')).toBeNull()
+  })
+})
+
+describe('throwRefreshBaseRefError', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>
+
+  afterEach(() => {
+    consoleSpy?.mockRestore()
+  })
+
+  it.each(['refresh-base-ref', 'refresh-base-ref-precheck', 'refresh-base-ref-runtime'] as const)(
+    'logs the expected tag and throws a formatted [code] error (%s)',
+    (tag) => {
+      consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      expect(() =>
+        throwRefreshBaseRefError({
+          tag,
+          baseBranch: 'main',
+          remote: 'origin',
+          cause: new Error('fatal: Could not resolve host github.com')
+        })
+      ).toThrow(/^\[network\] Could not refresh base ref "main" from "origin"\.$/)
+      expect(consoleSpy).toHaveBeenCalledWith(
+        `[${tag}]`,
+        expect.objectContaining({ message: 'fatal: Could not resolve host github.com' })
+      )
+    }
+  )
+
+  it('classifies a non-Error cause to "unknown" and still emits the formatted prefix', () => {
+    consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(() =>
+      throwRefreshBaseRefError({
+        tag: 'refresh-base-ref',
+        baseBranch: 'main',
+        remote: 'origin',
+        cause: 'plain string'
+      })
+    ).toThrow(/^\[unknown\] Could not refresh base ref "main" from "origin"\.$/)
+  })
+
+  it.each([
+    ['double quotes', 'feat"with"quotes', 'origin'],
+    ['backslash', 'feat\\with\\backslashes', 'origin'],
+    ['unicode', 'ветка', 'происхождение']
+  ])('safely interpolates baseBranch/remote containing %s', (_label, baseBranch, remote) => {
+    consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let caught: unknown
+    try {
+      throwRefreshBaseRefError({
+        tag: 'refresh-base-ref',
+        baseBranch,
+        remote,
+        cause: new Error('something weird')
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    const message = (caught as Error).message
+    expect(message).toContain(`"${baseBranch}"`)
+    expect(message).toContain(`"${remote}"`)
+    expect(parseRefreshBaseRefErrorPrefix(message)).not.toBeNull()
+  })
+
+  it('documents that newlines in baseBranch/remote break downstream parsing', () => {
+    // Why: the parser uses /^\[(\w+)\]\s*(.*)$/ which by default does not match
+    // \n. Newline-bearing values would produce a message that parseRefreshBaseRefErrorPrefix
+    // rejects. The throw site does not currently scrub them. Callers must
+    // validate branch names upstream if they want renderer dispatch to work.
+    consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let caught: unknown
+    try {
+      throwRefreshBaseRefError({
+        tag: 'refresh-base-ref',
+        baseBranch: 'feat\nwith\nnewlines',
+        remote: 'origin',
+        cause: new Error('something weird')
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect(parseRefreshBaseRefErrorPrefix((caught as Error).message)).toBeNull()
+  })
+
+  it('scrubs credentials from the cause before logging to console.error', () => {
+    consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      throwRefreshBaseRefError({
+        tag: 'refresh-base-ref',
+        baseBranch: 'main',
+        remote: 'origin',
+        cause: new Error(
+          "fatal: unable to access 'https://user:secret@github.com/foo/private': The requested URL returned error: 403"
+        )
+      })
+    } catch {
+      // expected
+    }
+    const loggedArg = consoleSpy.mock.calls[0]?.[1]
+    expect(loggedArg).toBeInstanceOf(Error)
+    expect((loggedArg as Error).message).not.toContain('secret')
   })
 })

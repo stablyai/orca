@@ -106,6 +106,27 @@ describe('WorktreeCreationPanel', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
+    // Why: reset mutable state so the next test sees the hoisted baseline,
+    // not whatever the previous test's setEntryToError left behind.
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      creationId: 'create-1',
+      phase: 'creating',
+      status: 'creating',
+      indeterminate: false,
+      loaderVisible: true,
+      request: {
+        repoId: 'repo-1',
+        name: 'new-workspace',
+        displayName: 'New workspace',
+        setupDecision: 'skip',
+        agent: null,
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      }
+    }
   })
 
   it('keeps the faux creation tab visible', async () => {
@@ -187,5 +208,23 @@ describe('WorktreeCreationPanel', () => {
 
     expect(container.textContent).toContain('Couldn’t create worktree')
     expect(container.textContent).toContain('Could not refresh base ref "main" from "origin".')
+  })
+
+  it('renders HTML-bearing raw errors as text (no script tag parsed)', async () => {
+    setEntryToError('<script>alert(1)</script>')
+    const container = await renderPanel(false)
+
+    // The literal string is present as text content, not as a parsed <script> tag.
+    expect(container.querySelector('script')).toBeNull()
+    expect(container.textContent).toContain('<script>alert(1)</script>')
+  })
+
+  it('handles a [code] prefix with trailing space and empty body', async () => {
+    setEntryToError('[network] ')
+    const container = await renderPanel(false)
+
+    // Parses to code:'network', message:''. The i18n key resolves; message is empty.
+    expect(container.textContent).toContain('Couldn’t create worktree')
+    expect(container.textContent).toContain('Network error. Check your connection and try again.')
   })
 })
