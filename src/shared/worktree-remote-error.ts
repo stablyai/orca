@@ -47,7 +47,11 @@ function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCo
   if (REFRESH_NETWORK_PATTERN.test(scoped)) {
     return 'network'
   }
-  if (REFRESH_AUTH_PATTERN.test(scoped)) {
+  // Why: SSH auth rejections like "Permission denied (publickey)." land
+  // BEFORE the appended "fatal: Could not read from remote repository."
+  // tail line. Match the auth pattern against the full stderr so that
+  // trailing fatal noise can't hide the real cause from the classify step.
+  if (REFRESH_AUTH_PATTERN.test(rawStderr)) {
     return 'auth'
   }
   if (REFRESH_NO_UPSTREAM_PATTERN.test(scoped)) {

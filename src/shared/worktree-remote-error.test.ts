@@ -25,6 +25,17 @@ describe('classifyRefreshBaseRefError', () => {
     })
   })
 
+  it('classifies SSH publickey failures before a generic fatal tail line as "auth"', () => {
+    // Why: ssh emits "Permission denied (publickey)." before git appends
+    // "fatal: Could not read from remote repository." — the first-fatal
+    // scoping would otherwise hide the real cause.
+    const error = new Error(
+      'git@github.com: Permission denied (publickey).\n' +
+        'fatal: Could not read from remote repository.'
+    )
+    expect(classifyRefreshBaseRefError(error).code).toBe('auth')
+  })
+
   it('classifies 401/403/404 from a remote URL as "remoteForbidden"', () => {
     const error = new Error(
       "fatal: unable to access 'https://github.com/foo/private': The requested URL returned error: 403"
