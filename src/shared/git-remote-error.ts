@@ -173,3 +173,87 @@ export function isNoUpstreamError(error: unknown): boolean {
   const message = error.message
   return FATAL_PREFIX_PATTERN.test(message) && NO_UPSTREAM_PHRASE_PATTERN.test(message)
 }
+
+export type RefreshBaseRefErrorCode =
+  | 'network'
+  | 'auth'
+  | 'noUpstream'
+  | 'remoteRefMissing'
+  | 'remoteForbidden'
+  | 'unknown'
+
+const REFRESH_BASE_REF_CODE_SET = new Set<RefreshBaseRefErrorCode>([
+  'network',
+  'auth',
+  'noUpstream',
+  'remoteRefMissing',
+  'remoteForbidden',
+  'unknown'
+])
+
+export type ClassifiedRefreshBaseRefError = {
+  code: RefreshBaseRefErrorCode
+  message: string
+  cause?: unknown
+}
+
+const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not exist/i
+const REMOTE_FORBIDDEN_PATTERN =
+  /repository .* not found|requested url returned error: (401|403|404)/i
+
+function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCode {
+  if (
+    /Could not resolve host|Network is unreachable|Connection (reset|timed out|refused)/i.test(
+      rawStderr
+    )
+  ) {
+    return 'network'
+  }
+  if (
+    /Authentication failed|Permission denied \(publickey\)|could not read Username/i.test(rawStderr)
+  ) {
+    return 'auth'
+  }
+  if (/no tracking information|no upstream/i.test(rawStderr)) {
+    return 'noUpstream'
+  }
+  if (REMOTE_REF_MISSING_PATTERN.test(rawStderr)) {
+    return 'remoteRefMissing'
+  }
+  if (REMOTE_FORBIDDEN_PATTERN.test(rawStderr)) {
+    return 'remoteForbidden'
+  }
+  return 'unknown'
+}
+
+function extractStderr(message: string): string {
+  return stripCredentialsFromMessage(message)
+}
+
+export function classifyRefreshBaseRefError(error: unknown): ClassifiedRefreshBaseRefError {
+  if (!(error instanceof Error)) {
+    return { code: 'unknown', message: 'Git remote operation failed.' }
+  }
+  const stderr = extractStderr(error.message)
+  const code = detectRefreshBaseRefErrorCode(stderr)
+  const humanMessage = normalizeGitErrorMessage(error, 'fetch')
+  return { code, message: humanMessage, cause: error }
+}
+
+export function formatRefreshBaseRefError(result: ClassifiedRefreshBaseRefError): string {
+  return `[${result.code}] ${result.message}`
+}
+
+export function parseRefreshBaseRefErrorPrefix(
+  message: string
+): { code: RefreshBaseRefErrorCode; message: string } | null {
+  const match = message.match(/^\[(\w+)\]\s*(.*)$/)
+  if (!match) {
+    return null
+  }
+  const code = match[1] as RefreshBaseRefErrorCode
+  if (!REFRESH_BASE_REF_CODE_SET.has(code)) {
+    return null
+  }
+  return { code, message: match[2] }
+}
