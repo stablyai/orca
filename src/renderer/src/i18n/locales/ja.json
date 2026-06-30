@@ -3835,7 +3835,10 @@
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
           "automation": "自動化",
-          "folderPathIdentity": "ブランチ / フォルダパス"
+          "folderPathIdentity": "ブランチ / フォルダパス",
+          "sortOrderLabel": "Order",
+          "sortAscending": "Ascending",
+          "sortDescending": "Descending"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",

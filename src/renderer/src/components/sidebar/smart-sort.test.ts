@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import {
+  applySortDirection,
   buildWorktreeComparator,
   CREATE_GRACE_MS,
   effectiveRecentActivity,
@@ -730,5 +731,28 @@ describe('buildWorktreeComparator — recent with createdAt grace window', () =>
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
 
     expect(worktrees.map((w) => w.id)).toEqual(['bravo', 'alpha'])
+  })
+})
+
+describe('applySortDirection', () => {
+  const repoMap = new Map<string, Repo>()
+  const makeNamed = (id: string): Worktree => ({ id, displayName: id }) as unknown as Worktree
+  const alpha = makeNamed('alpha')
+  const bravo = makeNamed('bravo')
+
+  it('keeps the natural comparator order for asc', () => {
+    const comparator = applySortDirection(
+      buildWorktreeComparator('name', repoMap, 0, new Map()),
+      'asc'
+    )
+    expect([bravo, alpha].sort(comparator).map((w) => w.id)).toEqual(['alpha', 'bravo'])
+  })
+
+  it('reverses the comparator order for desc', () => {
+    const comparator = applySortDirection(
+      buildWorktreeComparator('name', repoMap, 0, new Map()),
+      'desc'
+    )
+    expect([alpha, bravo].sort(comparator).map((w) => w.id)).toEqual(['bravo', 'alpha'])
   })
 })

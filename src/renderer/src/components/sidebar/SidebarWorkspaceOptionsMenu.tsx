@@ -45,6 +45,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
+  const sortDirection = useAppStore((s) => s.sortDirection)
+  const setSortDirection = useAppStore((s) => s.setSortDirection)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
@@ -217,6 +219,36 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
                 )
               })}
             </DropdownMenuRadioGroup>
+            {/* Why: 'manual' is a fixed drag order, so a direction toggle would
+                be meaningless there; only offer it for the comparator sorts. */}
+            {sortBy !== 'manual' && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.sortOrderLabel',
+                    'Order'
+                  )}
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={sortDirection}
+                  onValueChange={(v) => setSortDirection(v as typeof sortDirection)}
+                >
+                  <DropdownMenuRadioItem value="asc" onSelect={(e) => e.preventDefault()}>
+                    {translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.sortAscending',
+                      'Ascending'
+                    )}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="desc" onSelect={(e) => e.preventDefault()}>
+                    {translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.sortDescending',
+                      'Descending'
+                    )}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </>
+            )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

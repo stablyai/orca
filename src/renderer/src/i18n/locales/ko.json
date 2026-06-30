@@ -3835,7 +3835,10 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "브랜치 / 폴더 경로"
+          "folderPathIdentity": "브랜치 / 폴더 경로",
+          "sortOrderLabel": "Order",
+          "sortAscending": "Ascending",
+          "sortDescending": "Descending"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
