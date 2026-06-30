@@ -332,28 +332,33 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  it('records a redacted breadcrumb when fs:readDir throws on a WSL UNC path', async () => {
-    registerFilesystemHandlers(store as never)
-    const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\user\\repo'
-    // resolveAuthorizedPath authorizes the path, then readdir fails (distro stopped).
-    realpathMock.mockResolvedValue(wslPath)
-    registerWorktreeRootsForRepo(store as never, 'repo-1', [wslPath])
-    readdirMock.mockRejectedValue(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
+  // Why: handler-level WSL UNC authorization depends on native Windows path
+  // resolution; path-shape classification has separate cross-platform coverage.
+  it.runIf(process.platform === 'win32')(
+    'records a redacted breadcrumb when fs:readDir throws on a WSL UNC path',
+    async () => {
+      registerFilesystemHandlers(store as never)
+      const wslPath = path.win32.join('\\\\wsl.localhost\\Ubuntu', 'home', 'user', 'repo')
+      // resolveAuthorizedPath authorizes the path, then readdir fails (distro stopped).
+      realpathMock.mockResolvedValue(wslPath)
+      registerWorktreeRootsForRepo(store as never, 'repo-1', [wslPath])
+      readdirMock.mockRejectedValue(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
 
-    await expect(handlers.get('fs:readDir')!(null, { dirPath: wslPath })).rejects.toThrow(/EIO/)
+      await expect(handlers.get('fs:readDir')!(null, { dirPath: wslPath })).rejects.toThrow(/EIO/)
 
-    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith('fs_readdir_error', {
-      throwSite: 'readdir',
-      errorName: 'Error',
-      errorCode: 'EIO',
-      hasConnectionId: false,
-      isUNC: true,
-      isWsl: true
-    })
-    // The raw path must never appear in the breadcrumb payload.
-    const [, breadcrumbData] = recordCrashBreadcrumbMock.mock.calls[0]
-    expect(JSON.stringify(breadcrumbData)).not.toContain('user')
-  })
+      expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith('fs_readdir_error', {
+        throwSite: 'readdir',
+        errorName: 'Error',
+        errorCode: 'EIO',
+        hasConnectionId: false,
+        isUNC: true,
+        isWsl: true
+      })
+      // The raw path must never appear in the breadcrumb payload.
+      const [, breadcrumbData] = recordCrashBreadcrumbMock.mock.calls[0]
+      expect(JSON.stringify(breadcrumbData)).not.toContain('user')
+    }
+  )
 
   it('records a breadcrumb tagged ssh-provider when the SSH provider is gone', async () => {
     registerFilesystemHandlers(store as never)
