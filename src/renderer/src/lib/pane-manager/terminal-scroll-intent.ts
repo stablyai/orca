@@ -201,7 +201,8 @@ export function captureTerminalWriteScrollIntent(
 
 export function enforceTerminalWriteScrollIntent(
   terminal: TerminalScrollIntentTarget,
-  snapshot: TerminalScrollIntentWriteSnapshot | null
+  snapshot: TerminalScrollIntentWriteSnapshot | null,
+  options: { fromOutputWrite?: boolean } = {}
 ): void {
   if (!snapshot) {
     return
@@ -217,7 +218,16 @@ export function enforceTerminalWriteScrollIntent(
     return
   }
   const targetY = clampViewportY(snapshot.viewportY, current.baseY)
-  if (current.viewportY !== targetY) {
+  // Why: on the output-write path the snapshot's absolute viewportY is captured
+  // before the write. When the scrollback buffer is at its line cap, a prune
+  // renumbers ydisp downward so xterm already keeps the pinned content stable
+  // (current.viewportY < targetY). Re-applying the stale absolute targetY there
+  // would scroll the viewport back toward the live bottom on every batch, losing
+  // the user's reading position. Only correct a downward drift (xterm
+  // auto-followed to bottom: current.viewportY > targetY). Reset/replay/resume
+  // callers omit fromOutputWrite and still restore to the exact pinned line.
+  const shouldRepin = options.fromOutputWrite !== true || current.viewportY > targetY
+  if (current.viewportY !== targetY && shouldRepin) {
     safeScrollCall(() => terminal.scrollToLine?.(targetY))
   }
   writeIntent(terminal, 'pinnedViewport')

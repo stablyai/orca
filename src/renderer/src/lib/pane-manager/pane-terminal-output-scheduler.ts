@@ -618,11 +618,11 @@ function writeBackgroundTerminalChunk(terminal: TerminalOutputTarget, data: stri
   }
   if (terminal.write.length < 2) {
     terminal.write(data)
-    enforceTerminalWriteScrollIntent(terminal, scrollIntent)
+    enforceTerminalWriteScrollIntent(terminal, scrollIntent, { fromOutputWrite: true })
     return
   }
   terminal.write(data, () => {
-    enforceTerminalWriteScrollIntent(terminal, scrollIntent)
+    enforceTerminalWriteScrollIntent(terminal, scrollIntent, { fromOutputWrite: true })
   })
 }
 
@@ -638,7 +638,7 @@ function writeForegroundTerminalChunkWithIntent(
   writeForegroundTerminalChunk(terminal, data, {
     forceViewportRefresh: options.forceViewportRefresh,
     followupViewportRefresh: options.followupViewportRefresh,
-    onParsed: () => enforceTerminalWriteScrollIntent(terminal, scrollIntent)
+    onParsed: () => enforceTerminalWriteScrollIntent(terminal, scrollIntent, { fromOutputWrite: true })
   })
 }
 

@@ -110,6 +110,40 @@ describe('terminal scroll intent', () => {
     expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
   })
 
+  it('does not chase a stale absolute viewport down when scrollback trims at the cap on output writes', () => {
+    // Repro: user pinned mid-scrollback while streaming output keeps the buffer
+    // at its line cap. A top-of-scrollback prune renumbers ydisp downward so
+    // xterm already holds the pinned content stable (viewportY drops by the
+    // pruned count, baseY stays at the cap). The output-write enforce must not
+    // scroll the viewport back down toward the live bottom.
+    const terminal = createTerminal({ viewportY: 5000, baseY: 5000 })
+    terminal.buffer.active.viewportY = 4900
+    markTerminalPinnedViewport(terminal)
+    const snapshot = captureTerminalWriteScrollIntent(terminal)
+
+    // Buffer is full: prune renumbers content down by 3, baseY stays at cap.
+    terminal.buffer.active.viewportY = 4897
+    enforceTerminalWriteScrollIntent(terminal, snapshot, { fromOutputWrite: true })
+
+    expect(terminal.scrollToLine).not.toHaveBeenCalled()
+    expect(terminal.buffer.active.viewportY).toBe(4897)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+  })
+
+  it('still re-pins downward drift from output auto-follow on output writes', () => {
+    const terminal = createTerminal({ viewportY: 4900, baseY: 5000 })
+    markTerminalPinnedViewport(terminal)
+    const snapshot = captureTerminalWriteScrollIntent(terminal)
+
+    // xterm auto-followed to bottom after the write; viewportY drifted above
+    // the pinned line, so the pin must still be restored.
+    terminal.buffer.active.viewportY = 5000
+    enforceTerminalWriteScrollIntent(terminal, snapshot, { fromOutputWrite: true })
+
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(4900)
+    expect(terminal.buffer.active.viewportY).toBe(4900)
+  })
+
   it('follows output after output advances while following', () => {
     const terminal = createTerminal({ viewportY: 100, baseY: 100 })
     markTerminalFollowOutput(terminal)
