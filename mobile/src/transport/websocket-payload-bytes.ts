@@ -7,7 +7,11 @@ export async function websocketPayloadToUint8(value: unknown): Promise<Uint8Arra
   }
   if (value && typeof value === 'object' && 'arrayBuffer' in value) {
     const blob = value as { arrayBuffer: () => Promise<ArrayBuffer> }
-    return new Uint8Array(await blob.arrayBuffer())
+    try {
+      return new Uint8Array(await blob.arrayBuffer())
+    } catch {
+      return null
+    }
   }
   if (typeof FileReader !== 'undefined' && value instanceof Blob) {
     return new Promise((resolve) => {

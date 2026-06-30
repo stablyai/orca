@@ -531,9 +531,7 @@ export function connect(
         if (!plaintextBytes) {
           return
         }
-        if (handleBinaryFrame(plaintextBytes)) {
-          recordValidatedInboundTraffic()
-        }
+        handleBinaryFrame(plaintextBytes)
         return
       }
 
@@ -937,13 +935,14 @@ export function connect(
     inboundSequence++
   }
 
-  function handleBinaryFrame(bytes: Uint8Array): boolean {
+  function handleBinaryFrame(bytes: Uint8Array): void {
     const browserFrame = decodeBrowserScreencastFrame(bytes)
     if (browserFrame) {
+      recordValidatedInboundTraffic()
       handleBrowserBinaryFrame(browserFrame)
-      return true
+      return
     }
-    return handleTerminalBinaryFrame(bytes)
+    handleTerminalBinaryFrame(bytes)
   }
 
   function handleBrowserBinaryFrame(frame: BrowserScreencastFrame) {
@@ -957,43 +956,48 @@ export function connect(
     stream.onBinaryFrame?.(frame)
   }
 
-  function handleTerminalBinaryFrame(bytes: Uint8Array): boolean {
+  function handleTerminalBinaryFrame(bytes: Uint8Array): void {
     const frame = decodeTerminalStreamFrame(bytes)
     if (!frame) {
-      return false
+      return
     }
     const listener = terminalStreamListeners.get(frame.streamId)
     if (!listener) {
-      return true
+      recordValidatedInboundTraffic()
+      return
     }
     if (frame.opcode === TerminalStreamOpcode.Output) {
+      recordValidatedInboundTraffic()
       listener({
         type: 'data',
         streamId: frame.streamId,
         chunk: decodeTerminalStreamText(frame.payload)
       })
-      return true
+      return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
       const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
       if (!meta) {
-        return false
+        return
       }
+      recordValidatedInboundTraffic()
       terminalSnapshots.set(frame.streamId, { streamId: frame.streamId, meta, chunks: [] })
-      return true
+      return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
+      recordValidatedInboundTraffic()
       const snapshot = terminalSnapshots.get(frame.streamId)
       if (!snapshot) {
-        return true
+        return
       }
       snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
-      return true
+      return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
+      recordValidatedInboundTraffic()
       const snapshot = terminalSnapshots.get(frame.streamId)
       if (!snapshot) {
-        return true
+        return
       }
       terminalSnapshots.delete(frame.streamId)
       const kind = snapshot.meta.kind === 'resized' ? 'resized' : 'scrollback'
@@ -1003,29 +1007,29 @@ export function connect(
         streamId: frame.streamId,
         serialized: snapshot.chunks.join('')
       })
-      return true
+      return
     }
     if (frame.opcode === TerminalStreamOpcode.Resized) {
       const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
       if (!meta) {
-        return false
+        return
       }
+      recordValidatedInboundTraffic()
       listener({
         ...meta,
         type: 'resized',
         streamId: frame.streamId
       })
-      return true
+      return
     }
     if (frame.opcode === TerminalStreamOpcode.Error) {
+      recordValidatedInboundTraffic()
       listener({
         type: 'error',
         streamId: frame.streamId,
         message: decodeTerminalStreamText(frame.payload)
       })
-      return true
     }
-    return false
   }
 
   function sendEncrypted(request: unknown): boolean {

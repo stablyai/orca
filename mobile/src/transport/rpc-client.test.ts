@@ -804,6 +804,7 @@ describe('mobile rpc-client connection timeout', () => {
       client.notifyForeground()
       socket.receive('undecryptable')
       socket.receive('encrypted:{"unexpected":true}')
+      socket.receive('encrypted:{"id":"rpc-incomplete","ok":true}')
       socket.receive(new Uint8Array([0xff, 0x00, 0x01]))
 
       await vi.advanceTimersByTimeAsync(8_000)
