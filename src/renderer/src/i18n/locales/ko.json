@@ -2549,6 +2549,13 @@
             "dont_ask_again": "고정된 탭에 대해 다시 묻지 않기",
             "0b38ee2f86": "취소",
             "c337c9d75c": "닫기"
+          },
+          "TerminalDeadPaneOverlay": {
+            "failed": "Terminal exited",
+            "clean": "Terminal closed",
+            "detail": "The shell process ended (exit code {{code}}). The output above is preserved.",
+            "close": "Close",
+            "restart": "Restart"
           }
         }
       },

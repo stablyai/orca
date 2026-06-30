@@ -289,7 +289,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-stale')
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-stale', 1)
     expect(transport.getPtyId()).toBeNull()
   })
 
@@ -337,7 +337,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       result: { type: 'end', streamId: newStreamId }
     })
 
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-new')
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-new', 0)
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
   })

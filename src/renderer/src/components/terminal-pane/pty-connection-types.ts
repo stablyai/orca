@@ -41,6 +41,12 @@ export type PtyConnectionDeps = {
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  // Why: a sole pane's process died on its own (non-zero exit, crash, or a
+  // reaped/reattached-dead session) instead of a deliberate clean `exit`. The
+  // pane stays mounted; this lets the owner render an in-place recovery overlay
+  // (process exited · restart · close) rather than bouncing to the Landing
+  // screen. Absent for split panes, which keep a live sibling.
+  onPaneProcessDied?: (exitCode: number) => void
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void

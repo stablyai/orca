@@ -2549,6 +2549,13 @@
             "dont_ask_again": "固定标签页不再询问",
             "0b38ee2f86": "取消",
             "c337c9d75c": "关闭"
+          },
+          "TerminalDeadPaneOverlay": {
+            "failed": "Terminal exited",
+            "clean": "Terminal closed",
+            "detail": "The shell process ended (exit code {{code}}). The output above is preserved.",
+            "close": "Close",
+            "restart": "Restart"
           }
         }
       },

@@ -2549,6 +2549,13 @@
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
             "c337c9d75c": "Close"
+          },
+          "TerminalDeadPaneOverlay": {
+            "failed": "Terminal exited",
+            "clean": "Terminal closed",
+            "detail": "The shell process ended (exit code {{code}}). The output above is preserved.",
+            "close": "Close",
+            "restart": "Restart"
           }
         }
       },

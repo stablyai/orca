@@ -42,6 +42,7 @@ import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalDeadPaneOverlay } from './TerminalDeadPaneOverlay'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
@@ -315,6 +316,11 @@ export default function TerminalPane({
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  // Why: the sole terminal's process died on its own (failed startup, crash, or
+  // a reaped session) rather than a deliberate clean exit. The pane stays
+  // mounted and this drives the in-place recovery overlay (process exited ·
+  // restart · close) instead of bouncing the user to the Landing screen.
+  const [deadPaneExitCode, setDeadPaneExitCode] = useState<number | null>(null)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
@@ -1276,6 +1282,13 @@ export default function TerminalPane({
     setPendingCloseConfirmation(null)
   }, [])
 
+  // Why: connectPanePty calls this when a sole pane's process died on its own
+  // (non-zero exit / crash / reaped session) instead of a deliberate clean
+  // exit. Surface the recovery overlay rather than tearing down the worktree.
+  const handlePaneProcessDied = useCallback((exitCode: number) => {
+    setDeadPaneExitCode(exitCode)
+  }, [])
+
   useTerminalPaneLifecycle({
     tabId,
     worktreeId,
@@ -1306,6 +1319,7 @@ export default function TerminalPane({
     isVisibleRef,
     onPtyExitRef,
     onPtyErrorRef,
+    onPaneProcessDied: handlePaneProcessDied,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
@@ -1540,6 +1554,7 @@ export default function TerminalPane({
         clearTerminalTabUnread,
         clearTerminalPaneUnread,
         onShowSessionRestoredBanner: showRestoredSessionBanner,
+        onPaneProcessDied: handlePaneProcessDied,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding,
@@ -1550,6 +1565,7 @@ export default function TerminalPane({
     },
     [
       clearCodexRestartNotice,
+      handlePaneProcessDied,
       clearExitedPanePtyLayoutBinding,
       clearRuntimePaneTitle,
       clearTabPtyId,
@@ -1573,6 +1589,99 @@ export default function TerminalPane({
       worktreeId
     ]
   )
+
+  // Why: the dead-pane recovery overlay's "Restart" — the sole pane's process
+  // died, so its binding/transport are already cleared by onExit. Dispose the
+  // stale binding and spawn a fresh shell in place (no startup payload: the
+  // original startup may be exactly what failed, e.g. a broken .envrc, so a
+  // clean shell is the recoverable default), keeping the worktree selected.
+  const handleRelaunchDeadPane = useCallback(() => {
+    const manager = managerRef.current
+    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    if (!manager || !pane) {
+      return
+    }
+    const existingBinding = panePtyBindingsRef.current.get(pane.id)
+    existingBinding?.dispose()
+    panePtyBindingsRef.current.delete(pane.id)
+    const existingTransport = paneTransportsRef.current.get(pane.id)
+    existingTransport?.destroy?.()
+    paneTransportsRef.current.delete(pane.id)
+    syncPanePtyLayoutBinding(pane.id, null)
+    setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
+    setDeadPaneExitCode(null)
+
+    const newPaneBinding = connectPanePty(pane, manager, {
+      tabId,
+      worktreeId,
+      cwd,
+      startup: null,
+      paneTransportsRef,
+      paneMode2031Ref,
+      paneLastThemeModeRef,
+      replayingPanesRef,
+      isActiveRef,
+      isVisibleRef,
+      onPtyExitRef,
+      onPtyErrorRef,
+      onPaneProcessDied: handlePaneProcessDied,
+      clearTabPtyId,
+      consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
+      updateTabTitle,
+      setRuntimePaneTitle,
+      clearRuntimePaneTitle,
+      updateTabPtyId,
+      markWorktreeUnread,
+      markTerminalTabUnread,
+      markTerminalPaneUnread,
+      clearWorktreeUnread,
+      clearTerminalTabUnread,
+      clearTerminalPaneUnread,
+      onShowSessionRestoredBanner: showRestoredSessionBanner,
+      dispatchNotification,
+      setCacheTimerStartedAt,
+      syncPanePtyLayoutBinding,
+      clearExitedPanePtyLayoutBinding
+    })
+    panePtyBindingsRef.current.set(pane.id, newPaneBinding)
+    manager.setActivePane(pane.id, { focus: true })
+  }, [
+    clearExitedPanePtyLayoutBinding,
+    clearRuntimePaneTitle,
+    clearTabPtyId,
+    clearTerminalPaneUnread,
+    clearTerminalTabUnread,
+    clearWorktreeUnread,
+    cwd,
+    dispatchNotification,
+    handlePaneProcessDied,
+    markTerminalPaneUnread,
+    markTerminalTabUnread,
+    markWorktreeUnread,
+    onPtyErrorRef,
+    onPtyExitRef,
+    setCacheTimerStartedAt,
+    setRuntimePaneTitle,
+    showRestoredSessionBanner,
+    syncPanePtyLayoutBinding,
+    tabId,
+    updateTabPtyId,
+    updateTabTitle,
+    worktreeId
+  ])
+
+  // Why: the dead-pane overlay's "Close" is a DELIBERATE user action, so it
+  // routes through the normal pane-close path (which deactivates the worktree
+  // and returns to Landing only when this was the last surface) — the exact
+  // behavior a clean `exit` already has.
+  const handleCloseDeadPane = useCallback(() => {
+    const manager = managerRef.current
+    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    setDeadPaneExitCode(null)
+    if (pane) {
+      executeClosePane(pane.id)
+    }
+  }, [executeClosePane])
 
   useEffect(() => {
     const manager = managerRef.current
@@ -2806,6 +2915,13 @@ export default function TerminalPane({
           error={terminalError}
           onDismiss={() => setTerminalError(null)}
           onRestartDaemon={() => daemonActions.setPending('restart')}
+        />
+      )}
+      {deadPaneExitCode !== null && isActive && (
+        <TerminalDeadPaneOverlay
+          exitCode={deadPaneExitCode}
+          onRestart={handleRelaunchDeadPane}
+          onClose={handleCloseDeadPane}
         />
       )}
       <DaemonActionDialog api={daemonActions} />

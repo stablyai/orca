@@ -355,7 +355,9 @@ export function createRemoteRuntimePtyTransport(
     remotePtyId = null
     closeMultiplexedStream()
     if (stalePtyId) {
-      onPtyExit?.(stalePtyId)
+      // Why: a retired remote terminal is a gone/errored session, not a clean
+      // exit — pass a non-zero code so the exit handler treats it as a failure.
+      onPtyExit?.(stalePtyId, 1)
     }
   }
 
@@ -419,7 +421,8 @@ export function createRemoteRuntimePtyTransport(
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
-            onPtyExit?.(subscribedPtyId)
+            // Host reported a clean stream end (code 0).
+            onPtyExit?.(subscribedPtyId, 0)
           }
         },
         onError: (message) => {
@@ -590,7 +593,8 @@ export function createRemoteRuntimePtyTransport(
       remotePtyId = null
       storedCallbacks.onDisconnect?.()
       if (id) {
-        onPtyExit?.(id)
+        // Explicit transport disconnect/teardown, not a process failure.
+        onPtyExit?.(id, 0)
       }
     },
 
