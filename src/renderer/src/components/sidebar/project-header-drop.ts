@@ -22,8 +22,6 @@ export type ProjectHeaderDragRect = {
   headerBottom?: number
 }
 
-export const INDICATOR_GAP_PX = 4
-
 // Drag buckets are keyed `group:<id>` for grouped projects and a single
 // sentinel for ungrouped ones; keep the prefix/sentinel defined once.
 export const GROUP_BUCKET_PREFIX = 'group:'
@@ -265,14 +263,17 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   }
   const targetRects = (buckets.get(targetBucketKey) ?? []).slice().sort((a, b) => a.top - b.top)
   let dropIndex = targetRects.length
-  let indicatorY = (targetRects.at(-1)?.bottom ?? localY) + INDICATOR_GAP_PX
+  // The indicator sits exactly at the insertion boundary (a block edge). The
+  // gap-opening shift keys off this same Y, so any cosmetic offset here would
+  // pull the unit just past the boundary (e.g. the next group) into the shift.
+  let indicatorY = targetRects.at(-1)?.bottom ?? localY
   for (const rect of targetRects) {
     // Threshold on the header row, not the whole block: hovering a project's
     // body (worktrees) reads as "after it" instead of "before it".
     const mid = (rect.top + (rect.headerBottom ?? rect.bottom)) / 2
     if (localY < mid) {
       dropIndex = rect.headerIndex
-      indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
+      indicatorY = Math.max(0, rect.top)
       break
     }
   }
@@ -299,7 +300,7 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
     dropIndex === draggedRect.headerIndex + 1
   ) {
     dropIndex = draggedRect.headerIndex
-    indicatorY = Math.max(0, draggedRect.top - INDICATOR_GAP_PX)
+    indicatorY = Math.max(0, draggedRect.top)
   }
   return {
     targetBucketKey,

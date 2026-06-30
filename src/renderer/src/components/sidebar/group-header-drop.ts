@@ -1,9 +1,6 @@
 // group-header-drop.ts
 import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
-import {
-  INDICATOR_GAP_PX,
-  mapSidebarProjectHeaderDropIndexToSiblingInsertIndex
-} from './project-header-drop'
+import { mapSidebarProjectHeaderDropIndexToSiblingInsertIndex } from './project-header-drop'
 import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
 import { resolveVirtualRowTop } from './sidebar-virtual-row-offset'
 import type { Row } from './worktree-list-groups'
@@ -138,7 +135,10 @@ export function computeGroupHeaderDropPreview(args: {
   }
 
   let dropIndex = last.siblingIndex + 1
-  let indicatorY = last.bottom + INDICATOR_GAP_PX
+  // Indicator sits exactly at the block boundary so it matches the gap-opening
+  // shift's drop point (a cosmetic offset would pull the next sibling's unit
+  // into the shift).
+  let indicatorY = last.bottom
   if (boundaryDrop.kind === 'drop') {
     dropIndex = boundaryDrop.dropIndex
     indicatorY = boundaryDrop.indicatorY
@@ -147,7 +147,7 @@ export function computeGroupHeaderDropPreview(args: {
       const mid = (rect.top + rect.bottom) / 2
       if (localY < mid) {
         dropIndex = rect.siblingIndex
-        indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
+        indicatorY = Math.max(0, rect.top)
         break
       }
     }
@@ -159,7 +159,7 @@ export function computeGroupHeaderDropPreview(args: {
     : undefined
   if (draggedRect && dropIndex === draggedRect.siblingIndex + 1) {
     dropIndex = draggedRect.siblingIndex
-    indicatorY = Math.max(0, draggedRect.top - INDICATOR_GAP_PX)
+    indicatorY = Math.max(0, draggedRect.top)
   }
   return { dropIndex, dropIndicatorY: Math.max(args.scrollTop, indicatorY) }
 }
