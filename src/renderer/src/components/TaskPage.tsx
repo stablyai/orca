@@ -3281,7 +3281,9 @@ export default function TaskPage(): React.JSX.Element {
   )
   const taskSourceRepoContexts = useMemo(
     () =>
-      taskSource === 'github' || taskSource === 'gitlab'
+      // Gitea is repo-backed too, so build its contexts so the header summary
+      // reflects the selected projects instead of the zero-repo fallback.
+      taskSource === 'github' || taskSource === 'gitlab' || taskSource === 'gitea'
         ? selectedRepos
             .map((repo) => getTaskPageRepoSourceContext(repo, taskSource))
             .filter((context): context is TaskSourceContext => context !== null)
@@ -6617,14 +6619,18 @@ export default function TaskPage(): React.JSX.Element {
     []
   )
 
-  // Issues open the inline detail panel; PRs open the PR review drawer.
+  // Issues open the inline detail panel; PRs open the PR review drawer. Clear the
+  // opposite selection so the two drawers stay mutually exclusive (both render in
+  // the Gitea branch, so a stale selection could otherwise leave both mounted).
   const handleOpenGiteaItem = useCallback(
     (repo: Repo, item: GiteaWorkItem): void => {
       const selection = { repo, item, scope: makeGiteaScope(repo) }
       if (item.type === 'pull') {
+        setSelectedGiteaItem(null)
         setSelectedGiteaPr(selection)
         return
       }
+      setSelectedGiteaPr(null)
       setSelectedGiteaItem(selection)
     },
     [makeGiteaScope]

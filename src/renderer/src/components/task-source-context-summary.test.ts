@@ -30,6 +30,33 @@ describe('task source context summary', () => {
     expect(summary.title).toBe('GitHub · Host: devbox · Source: stablyai/orca')
   })
 
+  it('summarizes a repo-backed Gitea source from its provider identity', () => {
+    const summary = getTaskSourceContextSummary({
+      provider: 'gitea',
+      providerLabel: 'Gitea',
+      selectedRepoCount: 1,
+      repoContexts: [
+        {
+          kind: 'task-source',
+          provider: 'gitea',
+          projectId: 'gitea:acme/orca',
+          hostId: 'ssh:devbox',
+          projectHostSetupId: 'setup-1',
+          repoId: 'repo-1',
+          providerIdentity: {
+            provider: 'gitea',
+            owner: 'acme',
+            repo: 'orca',
+            baseUrl: 'https://git.example.com'
+          }
+        }
+      ]
+    })
+
+    expect(summary.label).toBe('Gitea · devbox · acme/orca')
+    expect(summary.title).toBe('Gitea · Host: devbox · Source: acme/orca')
+  })
+
   it('shows repo-backed provider account labels when accounts can differ by host', () => {
     const summary = getTaskSourceContextSummary({
       provider: 'github',

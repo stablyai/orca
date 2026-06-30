@@ -1223,7 +1223,9 @@ export default function ChecksPanel(): React.JSX.Element {
         linkedGiteaPR,
         staleWhileRevalidate: true
       })
-      if (activeWorktreeId && !isGitLabReviewContext) {
+      // Why: a Gitea (or GitLab) review doesn't have a GitHub PR to refresh, so
+      // skip scheduling that flow to avoid wasted work and GitHub-side noise.
+      if (activeWorktreeId && !isGitLabReviewContext && !isGiteaReviewContext) {
         enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
       }
     }
@@ -1235,6 +1237,7 @@ export default function ChecksPanel(): React.JSX.Element {
     fetchHostedReviewForBranch,
     isFolder,
     isGitLabReviewContext,
+    isGiteaReviewContext,
     isPanelVisible,
     activeWorktree?.head,
     linkedAzureDevOpsPR,
@@ -2441,6 +2444,31 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       return
     }
+    if (activeReview?.provider === 'gitea') {
+      // Why: don't fall through to the GitHub PR force-refresh for a Gitea review —
+      // that path would fail/stale the panel. Refresh hosted-review then Gitea data.
+      const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+        repoPath: repo.path,
+        repoId: repo.id,
+        branch,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
+      })
+      const refreshedGiteaReview =
+        refreshedReview?.provider === 'gitea' ? refreshedReview : activeGiteaReview
+      if (refreshedGiteaReview) {
+        await fetchGiteaDetails({
+          prNumberOverride: refreshedGiteaReview.number,
+          headShaOverride: refreshedGiteaReview.headSha,
+          commitAsCurrent: true
+        })
+      }
+      return
+    }
     const refreshedPR = await fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
@@ -2461,11 +2489,13 @@ export default function ChecksPanel(): React.JSX.Element {
     })
   }, [
     activeGitLabReview,
+    activeGiteaReview,
     activeReview?.provider,
     activeWorktreeId,
     branch,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
+    fetchGiteaDetails,
     fetchHostedReviewForBranch,
     fetchPRForBranch,
     linkedAzureDevOpsPR,
