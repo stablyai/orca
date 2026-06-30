@@ -481,6 +481,45 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(order).toEqual(['fanout', 'unbind'])
   })
 
+  it('fans exits for preserved degraded current-daemon sessions during restart', async () => {
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/degraded-socket',
+      tokenPath: '/fake/degraded-token',
+      mode: 'degraded-new-pty-fallback'
+    }))
+    await mod.initDaemonPtyProvider()
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    const degradedProvider = provider as InstanceType<typeof DegradedDaemonPtyProvider>
+
+    const originalAdapter = adapterInstances[0]
+    originalAdapter.listProcesses.mockResolvedValueOnce([
+      { id: 'preserved-current-session', cwd: '/repo', title: 'shell' }
+    ])
+    await degradedProvider.discoverDaemonSessions()
+
+    const order: string[] = []
+    degradedProvider.onExit((payload) => {
+      if (payload.id === 'preserved-current-session') {
+        order.push('degraded-fanout')
+      }
+    })
+    originalAdapter.fanoutSyntheticExits.mockImplementation(() => {
+      order.push('adapter-fanout')
+    })
+    unbindLocalProviderListenersMock.mockImplementation(() => {
+      order.push('unbind')
+    })
+
+    const result = await mod.restartDaemon()
+
+    expect(result.killedCount).toBe(1)
+    expect(order).toEqual(['adapter-fanout', 'degraded-fanout', 'unbind'])
+  })
+
   it('reuses the existing DaemonSpawner across restart (resetHandle + ensureRunning on same instance)', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()

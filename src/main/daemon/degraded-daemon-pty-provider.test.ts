@@ -5,11 +5,13 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 
 type ProviderMock = IPtyProvider & {
   emitData: (id: string, data: string) => void
+  emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
 }
 
 function createProvider(label: string, sessions: string[] = []): ProviderMock {
   const dataListeners: ((payload: { id: string; data: string }) => void)[] = []
+  const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   return {
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
@@ -48,7 +50,15 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
         }
       }
     }),
-    onReplay: vi.fn(() => () => {}),
+    onReplay: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
+      replayListeners.push(callback)
+      return () => {
+        const idx = replayListeners.indexOf(callback)
+        if (idx !== -1) {
+          replayListeners.splice(idx, 1)
+        }
+      }
+    }),
     onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
       exitListeners.push(callback)
       return () => {
@@ -60,6 +70,11 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
     }),
     emitData: (id: string, data: string) => {
       for (const listener of dataListeners) {
+        listener({ id, data })
+      }
+    },
+    emitReplay: (id: string, data: string) => {
+      for (const listener of replayListeners) {
         listener({ id, data })
       }
     },
@@ -124,6 +139,41 @@ describe('DegradedDaemonPtyProvider', () => {
     })
   })
 
+  it('caches a provider discovered by hasPty before routing later operations', () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    expect(provider.hasPty('daemon-session')).toBe(true)
+    provider.write('daemon-session', 'kept-on-daemon\n')
+
+    expect(current.write).toHaveBeenCalledWith('daemon-session', 'kept-on-daemon\n')
+    expect(fallback.write).not.toHaveBeenCalled()
+  })
+
+  it('forwards replay output from fallback and daemon providers', () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const replaySpy = vi.fn()
+
+    const unsubscribe = provider.onReplay(replaySpy)
+    current.emitReplay('daemon-session', 'daemon replay')
+    fallback.emitReplay('fallback-session', 'fallback replay')
+    unsubscribe()
+    current.emitReplay('daemon-session', 'after unsubscribe')
+
+    expect(replaySpy).toHaveBeenCalledTimes(2)
+    expect(replaySpy).toHaveBeenNthCalledWith(1, {
+      id: 'daemon-session',
+      data: 'daemon replay'
+    })
+    expect(replaySpy).toHaveBeenNthCalledWith(2, {
+      id: 'fallback-session',
+      data: 'fallback replay'
+    })
+  })
+
   it('detaches provider subscriptions without disposing the underlying providers', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
@@ -153,5 +203,36 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(killedCount).toBe(1)
     expect(fallback.shutdown).toHaveBeenCalledWith(fresh.id, { immediate: true })
     expect(provider.hasPty(fresh.id)).toBe(false)
+  })
+
+  it('throws instead of counting fallback sessions that fail to shut down', async () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const fresh = await provider.spawn({ cols: 80, rows: 24 })
+    vi.mocked(fallback.shutdown).mockRejectedValueOnce(new Error('still alive'))
+
+    await expect(provider.shutdownFallbackSessions()).rejects.toThrow(
+      'Failed to shut down 1 fallback PTY session(s)'
+    )
+
+    expect(provider.hasPty(fresh.id)).toBe(true)
+  })
+
+  it('fans synthetic exits for discovered current-daemon sessions only', async () => {
+    const current = createDaemonAdapter('daemon', ['current-session'])
+    const legacy = createDaemonAdapter('legacy', ['legacy-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    const exitSpy = vi.fn()
+    provider.onExit(exitSpy)
+
+    await provider.discoverDaemonSessions()
+    provider.fanoutCurrentDaemonSyntheticExits(-1)
+
+    expect(exitSpy).toHaveBeenCalledOnce()
+    expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
+    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(provider.hasPty('legacy-session')).toBe(true)
   })
 })

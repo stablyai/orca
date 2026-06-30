@@ -535,8 +535,17 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? await currentAdapter.shutdownFallbackSessions()
       : 0
-  const killedCount = currentOnly.getActiveSessionIds().length + fallbackKilledCount
+  const currentDaemonSessionIds =
+    currentAdapter instanceof DegradedDaemonPtyProvider
+      ? currentAdapter.getCurrentDaemonSessionIds()
+      : []
+  const killedCount =
+    new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
+    fallbackKilledCount
   currentOnly.fanoutSyntheticExits(-1)
+  if (currentAdapter instanceof DegradedDaemonPtyProvider) {
+    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
+  }
 
   // Step 2: detach renderer listeners from the current adapter. Must happen
   // AFTER step 1 so the synthesized exits actually reach the renderer, and

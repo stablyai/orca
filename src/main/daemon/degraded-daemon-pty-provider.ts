@@ -73,7 +73,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     if (mapped) {
       return mapped.hasPty?.(id) ?? true
     }
-    return this.allProviders().some((provider) => provider.hasPty?.(id) === true)
+    return this.findProviderForExistingSession(id) !== null
   }
 
   write(id: string, data: string): void {
@@ -157,7 +157,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
-    const unsubscribe = this.fallback.onReplay(callback)
+    const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
     let active = true
     const trackedUnsubscribe = (): void => {
       if (!active) {
@@ -168,7 +168,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       if (idx !== -1) {
         this.unsubscribers.splice(idx, 1)
       }
-      unsubscribe()
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
+      }
     }
     this.unsubscribers.push(trackedUnsubscribe)
     return trackedUnsubscribe
@@ -229,13 +231,33 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const ids = [...this.sessionProviders]
       .filter(([, provider]) => provider === this.fallback)
       .map(([id]) => id)
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       ids.map(async (id) => {
         await this.fallback.shutdown(id, { immediate: true })
         this.sessionProviders.delete(id)
       })
     )
+    const failedCount = results.filter((result) => result.status === 'rejected').length
+    if (failedCount > 0) {
+      throw new Error(`Failed to shut down ${failedCount} fallback PTY session(s)`)
+    }
     return ids.length
+  }
+
+  getCurrentDaemonSessionIds(): string[] {
+    return this.sessionIdsForProvider(this.current)
+  }
+
+  fanoutCurrentDaemonSyntheticExits(code: number): void {
+    for (const id of this.getCurrentDaemonSessionIds()) {
+      this.sessionProviders.delete(id)
+      // Why: sessions discovered from listProcesses may not exist in the
+      // adapter's active-session set, but restart still kills that daemon.
+      // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+      for (const listener of [...this.exitListeners]) {
+        listener({ id, code })
+      }
+    }
   }
 
   async disconnectOnly(): Promise<void> {
@@ -256,7 +278,27 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   private providerFor(sessionId: string): ManagedPtyProvider {
-    return this.sessionProviders.get(sessionId) ?? this.fallback
+    return (
+      this.sessionProviders.get(sessionId) ??
+      this.findProviderForExistingSession(sessionId) ??
+      this.fallback
+    )
+  }
+
+  private findProviderForExistingSession(sessionId: string): ManagedPtyProvider | null {
+    for (const provider of this.allProviders()) {
+      if (provider.hasPty?.(sessionId) === true) {
+        this.sessionProviders.set(sessionId, provider)
+        return provider
+      }
+    }
+    return null
+  }
+
+  private sessionIdsForProvider(provider: ManagedPtyProvider): string[] {
+    return [...this.sessionProviders]
+      .filter(([, mappedProvider]) => mappedProvider === provider)
+      .map(([id]) => id)
   }
 
   private daemonAdapterFor(sessionId: string): DaemonPtyAdapter | null {
