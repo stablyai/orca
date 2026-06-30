@@ -7,6 +7,7 @@ const {
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
+  upsertEnvironmentFromPairingCodeMock,
   listEnvironmentsMock,
   spawnMock
 } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const {
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
+  upsertEnvironmentFromPairingCodeMock: vi.fn(),
   listEnvironmentsMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -76,6 +78,7 @@ vi.mock('./runtime-client', () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
+  upsertEnvironmentFromPairingCode: upsertEnvironmentFromPairingCodeMock,
   listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
@@ -156,6 +159,9 @@ describe('orca root help', () => {
     )
     expect(logSpy.mock.calls[0][0]).toContain(
       'project setup-delete      Remove a project host setup'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'environment devcontainer-up Start Orca in a devcontainer and save the paired environment'
     )
     expect(logSpy.mock.calls[0][0]).toContain('Agent Sessions And Worktrees:')
     expect(logSpy.mock.calls[0][0]).toContain(
@@ -316,6 +322,7 @@ describe('orca cli worktree awareness', () => {
     serveOrcaAppMock.mockReset()
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
+    upsertEnvironmentFromPairingCodeMock.mockReset()
     listEnvironmentsMock.mockReset()
     spawnMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReturnValue({
@@ -1900,6 +1907,50 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
   })
 
+  it('advertises the devcontainer environment helper', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['environment', 'devcontainer-up', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('orca environment devcontainer-up')
+    expect(help).toContain('--host-port <port>')
+    expect(help).toContain('--bridge-name <name>')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects host port 0 for environment devcontainer-up', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'environment',
+        'devcontainer-up',
+        '--name',
+        'lac-devcontainer',
+        '--container',
+        'lac-devcontainer',
+        '--host-port',
+        '0',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: 'Invalid --host-port value: 0'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('resolves repo.add paths against the invoking cli cwd', async () => {
     queueFixtures(
       callMock,
@@ -2233,37 +2284,41 @@ describe('orca cli worktree awareness', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
 
-    await main(
-      [
-        'project',
-        'setup-devcontainer',
-        '--project',
-        'git:bitbucket.org/acme/app',
-        '--host',
-        'local',
-        '--path',
-        '/workspaces/lac/projects/app',
-        '--worktree-base-path',
-        '/workspaces/lac/projects/.worktrees/orca',
-        '--pairing-code',
-        'remote-runtime',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
+    try {
+      await main(
+        [
+          'project',
+          'setup-devcontainer',
+          '--project',
+          'git:bitbucket.org/acme/app',
+          '--host',
+          'local',
+          '--path',
+          '/workspaces/lac/projects/app',
+          '--worktree-base-path',
+          '/workspaces/lac/projects/.worktrees/orca',
+          '--pairing-code',
+          'remote-runtime',
+          '--json'
+        ],
+        '/tmp/repo'
+      )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'projectHostSetup.update', {
-      setupId: 'setup-devcontainer',
-      updates: {
-        worktreeBasePath: '/workspaces/lac/projects/.worktrees/orca'
-      }
-    })
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'orca project setup-update --setup setup-devcontainer --worktree-base-path /workspaces/lac/projects/.worktrees/orca'
-    )
-    expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
+      expect(callMock).toHaveBeenNthCalledWith(2, 'projectHostSetup.update', {
+        setupId: 'setup-devcontainer',
+        updates: {
+          worktreeBasePath: '/workspaces/lac/projects/.worktrees/orca'
+        }
+      })
+      expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+        'orca project setup-update --setup setup-devcontainer --worktree-base-path /workspaces/lac/projects/.worktrees/orca'
+      )
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = priorExitCode
+      logSpy.mockRestore()
+      errSpy.mockRestore()
+    }
   })
 
   it('rejects devcontainer setup without a paired remote runtime', async () => {

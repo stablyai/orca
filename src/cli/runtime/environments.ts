@@ -6,6 +6,7 @@ import {
   removeEnvironment as removeEnvironmentFromStore,
   resolveEnvironment as resolveEnvironmentFromStore,
   resolveEnvironmentPairingOffer as resolveEnvironmentPairingOfferFromStore,
+  upsertEnvironmentFromPairingCode as upsertEnvironmentFromPairingCodeInStore,
   RuntimeEnvironmentStoreError,
   type RuntimeEnvironmentStoreErrorCode
 } from '../../shared/runtime-environment-store'
@@ -32,9 +33,16 @@ export { getEnvironmentStorePath, listEnvironments }
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number }
+  args: { name: string; pairingCode: string; runtimeId?: string | null; now?: number }
 ): KnownRuntimeEnvironment {
   return translateStoreError(() => addEnvironmentFromPairingCodeInStore(userDataPath, args))
+}
+
+export function upsertEnvironmentFromPairingCode(
+  userDataPath: string,
+  args: { name: string; pairingCode: string; runtimeId?: string | null; now?: number }
+): KnownRuntimeEnvironment {
+  return translateStoreError(() => upsertEnvironmentFromPairingCodeInStore(userDataPath, args))
 }
 
 export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {

@@ -7,7 +7,8 @@ import {
   RuntimeEnvironmentStoreError,
   addEnvironmentFromPairingCode,
   listEnvironments,
-  markEnvironmentUsed
+  markEnvironmentUsed,
+  upsertEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
@@ -53,6 +54,32 @@ describe('runtime environment store', () => {
       })
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])
+  })
+
+  it('upserts duplicate names by replacing the saved pairing fields in place', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+
+    const first = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode('ws://127.0.0.1:6768'),
+      now: 100,
+      runtimeId: 'runtime-1'
+    })
+
+    const updated = upsertEnvironmentFromPairingCode(userDataPath, {
+      name: 'dev box',
+      pairingCode: pairingCode('ws://192.0.2.10:6768'),
+      now: 200,
+      runtimeId: 'runtime-2'
+    })
+
+    expect(updated.id).toBe(first.id)
+    expect(updated.createdAt).toBe(first.createdAt)
+    expect(updated.updatedAt).toBe(200)
+    expect(updated.runtimeId).toBe('runtime-2')
+    expect(updated.endpoints[0]?.endpoint).toBe('ws://192.0.2.10:6768')
+    expect(listEnvironments(userDataPath)).toEqual([updated])
   })
 
   it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {

@@ -6,20 +6,20 @@ This is useful when project tooling, credentials, or dependencies only exist ins
 
 ## 1. Start Orca inside the devcontainer
 
-Install the Linux Orca build in the devcontainer, then start a headless runtime:
+Install the Linux Orca build in the devcontainer, then start a headless runtime with the helper:
 
 ```sh
-orca serve --json --port 6768 --pairing-address 127.0.0.1:31682
+orca environment devcontainer-up \
+  --name lac-devcontainer \
+  --container lac-devcontainer \
+  --host-port 31682 \
+  --container-port 6768 \
+  --orca-bin orca
 ```
 
-Expose the container port to the host so desktop Orca can reach it. The `127.0.0.1:31682` example assumes the devcontainer port is forwarded or bridged to host loopback at that fixed port. If your container is reached through a different host address, pass that host-reachable address instead; do not use a container-only loopback address that the desktop cannot reach.
+The helper starts a temporary Docker/socat bridge, runs `orca serve --json --port 6768 --pairing-address 127.0.0.1:31682` inside the container, and saves the environment automatically from the readiness payload.
 
-Copy the `pairing.url` from the JSON output and save it on the desktop:
-
-```sh
-orca environment add --name lac-devcontainer --pairing-code 'orca://pair?code=...'
-orca status --environment lac-devcontainer --json
-```
+If you need to script the flow manually, keep the host loopback address reachable from the desktop and save the pairing URL from the readiness JSON with `orca environment add`.
 
 ## 2. Configure a persistent worktree base
 
@@ -76,4 +76,5 @@ Runtime scans are bounded and do not currently have the same streaming progress 
 - If the devcontainer does not include the libraries required by Electron, install the Linux desktop runtime dependencies before starting `orca serve`.
 - Some container environments require disabling Electron's sandbox or running under a virtual display, depending on the base image.
 - The CLI helper assumes the runtime environment already exists; it does not install Orca, start the container, or create the pairing.
+- `orca environment devcontainer-up` is the preferred way to seed the runtime record before running `project setup-devcontainer`.
 - The helper imports the checkout first, then updates the worktree base path. If the second step fails, rerun `setup-devcontainer` or run `project setup-update --setup <setup-id> --worktree-base-path <path>`.

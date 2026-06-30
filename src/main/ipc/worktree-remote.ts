@@ -1848,7 +1848,11 @@ export async function createRemoteWorktree(
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   if (fsProvider) {
-    await copyMissingWorktreeSourceFiles(repo.path, created.path, fsProvider)
+    try {
+      await copyMissingWorktreeSourceFiles(repo.path, created.path, fsProvider)
+    } catch (error) {
+      console.warn(`[hooks] Failed to copy source config files into ${created.path}:`, error)
+    }
     await timing.time('prepare_setup', async () => {
       const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
       const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
@@ -2437,7 +2441,11 @@ export async function createLocalWorktree(
     })
   }
 
-  await copyMissingWorktreeSourceFiles(repo.path, created.path)
+  try {
+    await copyMissingWorktreeSourceFiles(repo.path, created.path)
+  } catch (error) {
+    console.warn(`[hooks] Failed to copy source config files into ${created.path}:`, error)
+  }
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']

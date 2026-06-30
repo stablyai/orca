@@ -16,6 +16,7 @@ Diagnostics:
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
+  environment devcontainer-up Start Orca in a devcontainer and save the paired environment
   environment list          List saved remote Orca runtimes
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
@@ -191,6 +192,7 @@ Common Commands:
   orca status [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
+  orca environment devcontainer-up --name <env-name> --container <container> --host-port <port> [--container-port <port>] [--orca-bin <path>] [--bridge-name <name>] [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
