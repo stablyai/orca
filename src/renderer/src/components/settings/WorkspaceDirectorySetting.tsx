@@ -13,6 +13,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsRow } from './SettingsFormControls'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import {
   buildHostScopeChoices,
@@ -331,86 +332,85 @@ function WorktreeNamingControl({
     updateSettings({ worktreeNameFormat: value || undefined })
   }
 
-  const preview = renderWorktreeNamePreview(mode, customFormat, settings.workspaceDir)
+  const example = renderWorktreeNameExample(mode, customFormat, settings.workspaceDir)
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={`${inputId}-mode`}>
-        {translate(
+    <div className="space-y-2">
+      <SettingsRow
+        label={translate(
           'auto.components.settings.WorkspaceDirectorySetting.7a8b9c0dae',
           'Worktree Naming'
         )}
-      </Label>
-      <Select value={mode} onValueChange={(v) => selectMode(v as WorktreeNamingMode)}>
-        <SelectTrigger id={`${inputId}-mode`} size="sm" className="h-7 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="flat" className="text-xs">
-            {translate(
-              'auto.components.settings.WorkspaceDirectorySetting.9a0b1c2dbe',
-              'Flat — /workspaces/{name}'
-            )}
-          </SelectItem>
-          <SelectItem value="nested" className="text-xs">
-            {translate(
-              'auto.components.settings.WorkspaceDirectorySetting.a1b2c3d4ef',
-              'Nested by repo — /workspaces/{repoName}/{name}'
-            )}
-          </SelectItem>
-          <SelectItem value="custom" className="text-xs">
-            {translate(
-              'auto.components.settings.WorkspaceDirectorySetting.b2c3d4e5fa',
-              'Custom format…'
-            )}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">
-        {mode === 'flat' &&
-          translate(
-            'auto.components.settings.WorkspaceDirectorySetting.c3d4e5f6ab',
-            'Worktrees are created directly under the workspace directory.'
-          )}
-        {mode === 'nested' &&
-          translate(
-            'auto.components.settings.WorkspaceDirectorySetting.d4e5f6a7bc',
-            'Worktrees are grouped under a repo-named subfolder.'
-          )}
-        {mode === 'custom' &&
-          translate(
-            'auto.components.settings.WorkspaceDirectorySetting.e5f6a7b8cd',
-            'Use {repoName} (or {repo}) and {name} (or {branch}) placeholders. A / in the format creates nested folders.'
-          )}
-      </p>
-      {mode === 'custom' && (
-        <div className="space-y-1.5">
-          <Input
-            id={`${inputId}-format`}
-            value={customFormat}
-            placeholder="{repoName}.{name}"
-            onChange={(e) => setCustomFormat(e.target.value)}
-            className="text-xs"
-          />
-          {preview && (
-            <p className="text-xs text-muted-foreground">
+        description={
+          <>
+            <span>
+              {mode === 'flat' &&
+                translate(
+                  'auto.components.settings.WorkspaceDirectorySetting.c3d4e5f6ab',
+                  'Worktrees are created directly under the workspace directory.'
+                )}
+              {mode === 'nested' &&
+                translate(
+                  'auto.components.settings.WorkspaceDirectorySetting.d4e5f6a7bc',
+                  'Worktrees are grouped under a repo-named subfolder.'
+                )}
+              {mode === 'custom' &&
+                translate(
+                  'auto.components.settings.WorkspaceDirectorySetting.e5f6a7b8cd',
+                  'Use {repoName} (or {repo}) and {name} (or {branch}) placeholders. A / in the format creates nested folders.'
+                )}
+            </span>
+            <span className="block">
               {translate(
                 'auto.components.settings.WorkspaceDirectorySetting.f6a7b8c9de',
-                'Preview'
+                'Example'
               )}
-              : <code className="text-xs">{preview}</code>
-            </p>
-          )}
-        </div>
+              : <code className="text-xs">{example}</code>
+            </span>
+          </>
+        }
+        control={
+          <Select value={mode} onValueChange={(v) => selectMode(v as WorktreeNamingMode)}>
+            <SelectTrigger id={`${inputId}-mode`} className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="flat">
+                {translate('auto.components.settings.WorkspaceDirectorySetting.9a0b1c2dbe', 'Flat')}
+              </SelectItem>
+              <SelectItem value="nested">
+                {translate(
+                  'auto.components.settings.WorkspaceDirectorySetting.a1b2c3d4ef',
+                  'Nested by repo'
+                )}
+              </SelectItem>
+              <SelectItem value="custom">
+                {translate(
+                  'auto.components.settings.WorkspaceDirectorySetting.b2c3d4e5fa',
+                  'Custom format…'
+                )}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
+      {mode === 'custom' && (
+        <Input
+          id={`${inputId}-format`}
+          value={customFormat}
+          placeholder="{repoName}.{name}"
+          onChange={(e) => setCustomFormat(e.target.value)}
+          className="text-xs"
+        />
       )}
     </div>
   )
 }
 
-// Why: render an illustrative preview so users see how their format resolves
+// Why: render an illustrative example so users see how their format resolves
 // before creating a worktree. Uses a sample repo/worktree name; the real path
 // is computed at creation time by computeWorktreePath in the main process.
-function renderWorktreeNamePreview(
+function renderWorktreeNameExample(
   mode: WorktreeNamingMode,
   customFormat: string,
   workspaceDir: string
