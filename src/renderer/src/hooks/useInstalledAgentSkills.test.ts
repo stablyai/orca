@@ -115,6 +115,28 @@ describe('hasInstalledAgentSkill', () => {
     ).toBe(true)
   })
 
+  it('detects a project-scoped install that lands in the home dir (regression for #4642)', () => {
+    // Why: the setup terminal runs in the home dir, so a non-global install
+    // writes to ~/.agents/skills with sourceKind 'home' — the feature-setup
+    // surfaces' filter must still report it installed.
+    expect(
+      hasInstalledAgentSkill(
+        [
+          skill({
+            name: 'orchestration',
+            sourceKind: 'home',
+            sourceLabel: 'Agent skills home',
+            rootPath: '/Users/test/.agents/skills',
+            directoryPath: '/Users/test/.agents/skills/orchestration',
+            skillFilePath: '/Users/test/.agents/skills/orchestration/SKILL.md'
+          })
+        ],
+        'orchestration',
+        { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
+      )
+    ).toBe(true)
+  })
+
   it('matches installed skills by any accepted name', () => {
     expect(
       hasInstalledAgentSkillNamed(

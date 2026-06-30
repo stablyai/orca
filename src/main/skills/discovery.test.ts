@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSkillDiscoverySources, discoverSkills } from './discovery'
+import {
+  buildAgentFeatureSkillInstallCommand,
+  ORCHESTRATION_SKILL_NAME
+} from '../../shared/agent-feature-install-commands'
 import type { Repo } from '../../shared/types'
 
 function makeRepo(path: string, connectionId: string | null = null): Repo {
@@ -126,6 +130,36 @@ describe('skill discovery', () => {
         sourceLabel: 'Agent skills home',
         directoryPath: skillDir
       }
+    ])
+  })
+
+  it('classifies a project-scoped install run from home as a home source (regression for #4642)', async () => {
+    // Why: the in-app setup terminal runs in the home dir, so a non-global
+    // `npx skills add ... -y` install lands in ~/.agents/skills. That must be
+    // discovered as a 'home' source so the feature-setup surfaces (which filter
+    // on 'home') flip to "Installed". `--global` skipped this target silently.
+    const installCommand = buildAgentFeatureSkillInstallCommand([ORCHESTRATION_SKILL_NAME])
+    expect(installCommand).not.toContain('--global')
+
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillDir = join(home, '.agents', 'skills', ORCHESTRATION_SKILL_NAME)
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        `name: ${ORCHESTRATION_SKILL_NAME}`,
+        'description: Coordinate agents.',
+        '---',
+        ''
+      ].join('\n')
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd: home, repos: [] })
+
+    expect(result.skills).toMatchObject([
+      { name: ORCHESTRATION_SKILL_NAME, sourceKind: 'home', directoryPath: skillDir }
     ])
   })
 

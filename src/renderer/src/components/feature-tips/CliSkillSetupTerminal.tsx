@@ -4,12 +4,16 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { buildAgentFeatureSkillHomeCommandForPlatform } from '@/lib/agent-feature-skill-home-command'
 import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
+  const skillInstallCommand = buildAgentFeatureSkillHomeCommandForPlatform(
+    ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND
+  )
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND)
+      await window.api.ui.writeClipboardText(skillInstallCommand)
       toast.success(
         translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.b8ad063571',
@@ -32,7 +36,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/35 px-3 py-2">
         <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-          {ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          {skillInstallCommand}
         </code>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -58,7 +62,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         </Tooltip>
       </div>
       <OnboardingInlineCommandTerminal
-        command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+        command={skillInstallCommand}
         title={translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
           'Skill setup'

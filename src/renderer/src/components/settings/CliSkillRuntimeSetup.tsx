@@ -8,6 +8,10 @@ import {
   escapeWslShCommandForWindows
 } from '../../../../shared/wsl-login-shell-command'
 import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
+import {
+  buildAgentFeatureSkillHomeCommandForPlatform,
+  getAgentFeatureSkillCommandPlatform
+} from '@/lib/agent-feature-skill-home-command'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -71,7 +75,7 @@ export function getWslCliDistroRequest(
 export function buildSkillCommandForRuntime(
   command: string,
   runtime?: LocalAgentRuntime,
-  currentPlatform = getSkillCommandPlatform()
+  currentPlatform = getAgentFeatureSkillCommandPlatform()
 ): string {
   const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
   const normalizedCommand = normalizeWindowsSkillUpdateCommand(
@@ -79,14 +83,18 @@ export function buildSkillCommandForRuntime(
     resolvedRuntime,
     currentPlatform
   )
+  const homeScopedCommand = buildAgentFeatureSkillHomeCommandForPlatform(
+    normalizedCommand,
+    resolvedRuntime.runtime === 'wsl' ? 'linux' : currentPlatform
+  )
   if (resolvedRuntime.runtime !== 'wsl') {
-    return normalizedCommand
+    return homeScopedCommand
   }
 
   const distroArg = resolvedRuntime.wslDistro?.trim()
     ? ` -d ${quotePowerShellSingle(resolvedRuntime.wslDistro.trim())}`
     : ''
-  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(normalizedCommand))
+  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(homeScopedCommand))
   return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
 }
 
@@ -100,7 +108,7 @@ function normalizeWindowsSkillUpdateCommand(
   }
 
   const trimmedCommand = command.trim()
-  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
+  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)$/i.exec(trimmedCommand)
   if (!updateMatch) {
     return command
   }
@@ -109,23 +117,6 @@ function normalizeWindowsSkillUpdateCommand(
   // Windows, while reinstalling from the same repo source is idempotent and
   // keeps the setup affordance working.
   return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
-}
-
-function getSkillCommandPlatform(): NodeJS.Platform {
-  const platform =
-    typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
-  if (platform) {
-    return platform
-  }
-
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  if (userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  if (userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  return 'linux'
 }
 
 export function buildSkillInstallCommandForRuntime(

@@ -18,6 +18,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import { buildAgentFeatureSkillHomeCommandForPlatform } from '@/lib/agent-feature-skill-home-command'
 import type { EventProps } from '../../../../shared/telemetry-events'
 
 export type OnboardingFeatureSetupId =
@@ -104,13 +105,15 @@ export function selectedOnboardingFeatureSetupIds(
 }
 
 export function buildOnboardingFeatureSetupClipboardText(
-  selection: OnboardingFeatureSetupSelection
+  selection: OnboardingFeatureSetupSelection,
+  platform?: NodeJS.Platform
 ): string | null {
-  return buildOnboardingFeatureSetupSkillCommand(selection)
+  return buildOnboardingFeatureSetupSkillCommand(selection, platform)
 }
 
 export function buildOnboardingFeatureSetupSkillCommand(
-  selection: OnboardingFeatureSetupSelection
+  selection: OnboardingFeatureSetupSelection,
+  platform?: NodeJS.Platform
 ): string | null {
   const skillNames = selectedOnboardingFeatureSetupIds(selection).map(
     (id) => FEATURE_SKILL_NAMES[id]
@@ -118,7 +121,10 @@ export function buildOnboardingFeatureSetupSkillCommand(
   if (skillNames.length === 0) {
     return null
   }
-  return buildAgentFeatureSkillInstallCommand(skillNames)
+  return buildAgentFeatureSkillHomeCommandForPlatform(
+    buildAgentFeatureSkillInstallCommand(skillNames),
+    platform
+  )
 }
 
 export function onboardingFeatureSetupTelemetryFeature(

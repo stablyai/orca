@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { buildAgentFeatureSkillHomeCommandForPlatform } from '@/lib/agent-feature-skill-home-command'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
@@ -28,6 +29,9 @@ export function MobileEmulatorAgentSetupGuideSteps({
 }: MobileEmulatorAgentSetupGuideStepsProps): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const terminalWorktreeId = `mobile-emulator-${worktreeId}-orca-cli-skill-terminal`
+  const cliSkillInstallCommand = buildAgentFeatureSkillHomeCommandForPlatform(
+    ORCA_CLI_SKILL_INSTALL_COMMAND
+  )
   const showSkillPreInstallNotice = shouldShowMobileEmulatorSkillPreInstallNotice({
     cliEnabled: setup.cliEnabled,
     cliSkillInstalled: setup.cliSkillInstalled
@@ -149,7 +153,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.64fb057667',
               'Teaches agents the orca emulator commands for this worktree.'
             )}
-            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+            command={cliSkillInstallCommand}
             terminalTitle={translate(
               'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.5c59ea96ca',
               'Mobile emulator Orca CLI skill setup'

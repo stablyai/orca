@@ -1,4 +1,5 @@
 export {
+  buildAgentFeatureSkillHomeCommand,
   buildAgentFeatureSkillInstallCommand,
   buildAgentFeatureSkillUpdateCommand,
   COMPUTER_USE_SKILL_INSTALL_COMMAND,

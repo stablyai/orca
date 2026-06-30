@@ -5,6 +5,7 @@ import type {
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
 import {
+  buildAgentFeatureSkillHomeCommand,
   buildAgentFeatureSkillInstallCommand,
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
@@ -27,15 +28,23 @@ import {
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 
-const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+const ALL_SKILL_INSTALL_INNER_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
   COMPUTER_USE_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME
 ])
-const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillHomeCommand(
+  ALL_SKILL_INSTALL_INNER_COMMAND,
+  'posix'
+)
+const ORCHESTRATION_ONLY_SKILL_INSTALL_INNER_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
+const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillHomeCommand(
+  ORCHESTRATION_ONLY_SKILL_INSTALL_INNER_COMMAND,
+  'posix'
+)
 
 const INSTALLED_CLI_STATUS: CliInstallStatus = {
   platform: 'darwin',
@@ -119,7 +128,23 @@ describe('onboarding feature setup runner', () => {
 
     expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
     expect(text).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration orca-linear --global'
+      'cd "$HOME" && npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration orca-linear -y'
+    )
+  })
+
+  it('builds Windows onboarding skill commands that also target home', () => {
+    const text = buildOnboardingFeatureSetupClipboardText(
+      {
+        browserUse: false,
+        computerUse: false,
+        orchestration: true,
+        linearTickets: false
+      },
+      'win32'
+    )
+
+    expect(text).toBe(
+      'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location -Path ~ -ErrorAction Stop; npx skills add https://github.com/stablyai/orca --skill orchestration -y"'
     )
   })
 

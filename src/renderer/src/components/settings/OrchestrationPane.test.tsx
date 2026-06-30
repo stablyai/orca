@@ -8,7 +8,9 @@ import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-example
 import { OrchestrationPane } from './OrchestrationPane'
 
 const INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+  'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location -Path ~ -ErrorAction Stop; npx skills add https://github.com/stablyai/orca --skill orchestration -y"'
+// Why: on the win32 host this pane runs against, the update command is
+// normalized back into the install command, so both match the install form.
 const UPDATE_COMMAND = INSTALL_COMMAND
 
 const mocks = vi.hoisted(() => ({
