@@ -13,6 +13,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
+import { WorktreeNamingControl } from './WorktreeNamingControl'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import {
   buildHostScopeChoices,
@@ -266,6 +267,9 @@ export function WorkspaceDirectorySetting({
             'Use a relative path (e.g. .orca/worktrees) for a per-project location, or an absolute path for one shared folder.'
           )}
         </p>
+      )}
+      {!editingHost && (
+        <WorktreeNamingControl settings={settings} updateSettings={updateSettings} />
       )}
     </SearchableSetting>
   )

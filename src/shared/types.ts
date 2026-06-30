@@ -2443,6 +2443,19 @@ export type GlobalSettings = {
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
+  /** UI-selected naming mode that drives how worktree folder names are
+   *  composed. `'flat'` → `{name}` under the workspace dir; `'nested'` →
+   *  `{repoName}/{name}`; `'custom'` → user-supplied `worktreeNameFormat`.
+   *  Kept in sync with `nestWorkspaces` and `worktreeNameFormat` so legacy
+   *  code paths and persisted state continue to work. */
+  worktreeNamingMode?: 'flat' | 'nested' | 'custom'
+  /** Custom format for worktree folder names. Supports `{repoName}` (alias
+   *  `{repo}`) and `{name}` (alias `{branch}`) placeholders. Used when
+   *  `worktreeNamingMode === 'custom'`; also set to `{repoName}/{name}` when
+   *  mode is `'nested'` so the runtime uses a single format-driven code path.
+   *  A `/` in the format creates nested folders; any other separator stays
+   *  flat. Example: `{repoName}.{name}` → `/workspaces/my-project.fix-bug`. */
+  worktreeNameFormat?: string
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
@@ -2901,6 +2914,8 @@ export type GlobalSettings = {
 export type OrcaWorkspaceLayout = {
   path: string
   nestWorkspaces: boolean
+  worktreeNameFormat?: string
+  worktreeNamingMode?: 'flat' | 'nested' | 'custom'
 }
 
 export type CommitMessageAiModelCapability = {
