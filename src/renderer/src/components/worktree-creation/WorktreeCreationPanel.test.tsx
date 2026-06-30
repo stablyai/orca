@@ -139,4 +139,37 @@ describe('WorktreeCreationPanel', () => {
     // Constant height so the log box never grows before the scroll kicks in.
     expect(container.querySelector('pre')?.className).toContain('h-72')
   })
+
+  it('surfaces the captured recipe output when a VM recipe fails', async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      phase: 'provisioning-vm',
+      status: 'error',
+      error: 'Recipe exited with code 1.',
+      provisioningLog: 'pulling image…\nERROR: no space left on device\n'
+    }
+
+    const container = await renderPanel(false)
+
+    // The short status, the actionable log, and Retry/Dismiss are all present.
+    expect(container.textContent).toContain('Couldn’t create worktree')
+    expect(container.textContent).toContain('Recipe exited with code 1.')
+    expect(container.querySelector('pre')?.textContent).toBe(
+      'pulling image…\nERROR: no space left on device\n'
+    )
+    expect(container.textContent).toContain('Retry')
+  })
+
+  it('omits the recipe output panel for a non-VM creation failure', async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      status: 'error',
+      error: 'git worktree add failed'
+    }
+
+    const container = await renderPanel(false)
+
+    expect(container.textContent).toContain('git worktree add failed')
+    expect(container.querySelector('pre')).toBeNull()
+  })
 })

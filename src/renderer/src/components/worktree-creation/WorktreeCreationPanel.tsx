@@ -101,41 +101,48 @@ export default function WorktreeCreationPanel({
           reads as one frame filling in. */}
       <div className="min-h-0 flex-1 p-3">
         {isError ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <span className="font-medium text-destructive">
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
-                'Couldn’t create worktree'
-              )}
-            </span>
-            <span className="text-muted-foreground">
-              {entry.error ??
-                translate(
-                  'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                  'Something went wrong while creating the worktree.'
+          <div className="flex max-w-2xl flex-col gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-medium text-destructive">
+                {translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
+                  'Couldn’t create worktree'
                 )}
-            </span>
-            <button
-              type="button"
-              onClick={() => retryBackgroundWorktreeCreation(creationId)}
-              className="inline-flex items-center gap-1 text-foreground hover:underline"
-            >
-              <RotateCcw className="size-3" />
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                'Retry'
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={dismiss}
-              className="text-muted-foreground hover:text-foreground hover:underline"
-            >
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.dabd226118',
-                'Dismiss'
-              )}
-            </button>
+              </span>
+              <span className="text-muted-foreground">
+                {entry.error ??
+                  translate(
+                    'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
+                    'Something went wrong while creating the worktree.'
+                  )}
+              </span>
+              <button
+                type="button"
+                onClick={() => retryBackgroundWorktreeCreation(creationId)}
+                className="inline-flex items-center gap-1 text-foreground hover:underline"
+              >
+                <RotateCcw className="size-3" />
+                {translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
+                  'Retry'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={dismiss}
+                className="text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.dabd226118',
+                  'Dismiss'
+                )}
+              </button>
+            </div>
+            {/* Why: the short error (e.g. "Recipe exited with code 1") rarely says what went wrong —
+                surface the captured recipe output so the user can see and fix the real cause. */}
+            {entry.provisioningLog ? (
+              <RecipeOutputLog log={entry.provisioningLog} emptyLabel="" />
+            ) : null}
           </div>
         ) : entry.phase === 'provisioning-vm' ? (
           <VmProvisioningStatus
@@ -184,18 +191,32 @@ function VmProvisioningStatus({
             <div className="text-xs text-muted-foreground">{cleanupLabel}</div>
           ) : null}
         </div>
-        <pre className="scrollbar-sleek h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground">
-          {log || (
-            <span className="text-muted-foreground/60">
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningLogEmpty',
-                'Waiting for recipe output…'
-              )}
-            </span>
+        <RecipeOutputLog
+          log={log}
+          emptyLabel={translate(
+            'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningLogEmpty',
+            'Waiting for recipe output…'
           )}
-        </pre>
+        />
       </div>
     </div>
+  )
+}
+
+// Why: the recipe's stderr is the only thing that explains a failure or a slow
+// provision, so it gets the same fixed-height log surface whether provisioning is
+// in progress or has failed.
+function RecipeOutputLog({
+  log,
+  emptyLabel
+}: {
+  log: string
+  emptyLabel: string
+}): React.JSX.Element {
+  return (
+    <pre className="scrollbar-sleek h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground">
+      {log || <span className="text-muted-foreground/60">{emptyLabel}</span>}
+    </pre>
   )
 }
 
