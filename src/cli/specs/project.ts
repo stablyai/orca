@@ -34,6 +34,24 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['project', 'setup-devcontainer'],
+    summary: 'Configure a paired devcontainer runtime checkout with persistent worktrees',
+    usage:
+      'orca project setup-devcontainer --project <id> --host <host-id> --path <absolute-repo-path> --worktree-base-path <absolute-worktrees-path> [--kind git|folder] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'worktree-base-path', 'kind'],
+    notes: [
+      'Use after pairing an `orca serve` runtime running inside a devcontainer.',
+      'Requires --environment, --pairing-code, ORCA_ENVIRONMENT, or ORCA_PAIRING_CODE.',
+      'For a paired devcontainer runtime, --host is usually local because it is evaluated inside that runtime.',
+      '--path and --worktree-base-path must be absolute paths inside that devcontainer.',
+      'Choose a worktree base under a bind-mounted workspace path so worktrees survive container rebuilds.',
+      'If the worktree-base update fails after import, rerun the command or use project setup-update with the reported setup id.'
+    ],
+    examples: [
+      'orca project setup-devcontainer --environment lac --project git:bitbucket.org/acme/app --host local --path /workspaces/lac/projects/app --worktree-base-path /workspaces/lac/projects/.worktrees/orca --kind git --json'
+    ]
+  },
+  {
     path: ['project', 'setup-clone'],
     summary: 'Make a project available on a host by cloning a repository',
     usage:

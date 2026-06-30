@@ -14,7 +14,8 @@ export function resolveRepoPathArgument(
   inputPath: string,
   cwd: string,
   isRemote: boolean,
-  remotePathSubject = 'Remote repo path'
+  remotePathSubject = 'Remote repo path',
+  remoteFlagName = '--path'
 ): string {
   if (!isRemote) {
     return resolvePath(cwd, inputPath)
@@ -24,7 +25,7 @@ export function resolveRepoPathArgument(
   if (!isAbsoluteServerPath(inputPath)) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `${remotePathSubject} requires --path to be an absolute path on the remote server.`
+      `${remotePathSubject} requires ${remoteFlagName} to be an absolute path on the remote server.`
     )
   }
   return inputPath

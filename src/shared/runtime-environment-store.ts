@@ -36,7 +36,7 @@ export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number }
+  args: { name: string; pairingCode: string; runtimeId?: string | null; now?: number }
 ): KnownRuntimeEnvironment {
   const offer = parsePairingCode(args.pairingCode)
   if (!offer) {
@@ -59,12 +59,59 @@ export function addEnvironmentFromPairingCode(
     name: args.name,
     now,
     offer,
-    runtimeId: null
+    runtimeId: args.runtimeId ?? null
   })
   const next = {
     version: 1 as const,
     environments: [
       ...store.environments.filter((entry) => entry.id !== environment.id),
+      environment
+    ].sort((a, b) => a.name.localeCompare(b.name))
+  }
+  writeEnvironmentStore(userDataPath, next)
+  return environment
+}
+
+export function upsertEnvironmentFromPairingCode(
+  userDataPath: string,
+  args: { name: string; pairingCode: string; runtimeId?: string | null; now?: number }
+): KnownRuntimeEnvironment {
+  const offer = parsePairingCode(args.pairingCode)
+  if (!offer) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
+    )
+  }
+  const store = readEnvironmentStore(userDataPath)
+  const now = args.now ?? Date.now()
+  const existing = store.environments.find((entry) => entry.name === args.name)
+  const environment = existing
+    ? {
+        ...createEnvironmentFromPairingOffer({
+          id: existing.id,
+          name: args.name,
+          now,
+          offer,
+          runtimeId: args.runtimeId ?? existing.runtimeId ?? null
+        }),
+        createdAt: existing.createdAt,
+        lastUsedAt: existing.lastUsedAt,
+        runtimeId: args.runtimeId ?? existing.runtimeId ?? null
+      }
+    : createEnvironmentFromPairingOffer({
+        id: randomUUID(),
+        name: args.name,
+        now,
+        offer,
+        runtimeId: args.runtimeId ?? null
+      })
+  const next = {
+    version: 1 as const,
+    environments: [
+      ...store.environments.filter(
+        (entry) => entry.id !== environment.id && entry.name !== args.name
+      ),
       environment
     ].sort((a, b) => a.name.localeCompare(b.name))
   }

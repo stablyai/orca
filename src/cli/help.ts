@@ -16,6 +16,7 @@ Diagnostics:
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
+  environment devcontainer-up Start Orca in a devcontainer and save the paired environment
   environment list          List saved remote Orca runtimes
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
@@ -33,6 +34,7 @@ Projects:
   project list              List durable projects known to Orca
   project setups            List project host setups
   project setup-existing-folder Make a project available on a host by importing an existing folder
+  project setup-devcontainer Configure a paired devcontainer runtime checkout with persistent worktrees
   project setup-clone       Make a project available on a host by cloning a repository
   project setup-create      Create independent project host setup metadata
   project setup-update      Update project host setup metadata
@@ -190,6 +192,7 @@ Common Commands:
   orca status [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
+  orca environment devcontainer-up --name <env-name> --container <container> --host-port <port> [--container-port <port>] [--orca-bin <path>] [--bridge-name <name>] [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
@@ -216,6 +219,7 @@ Common Commands:
   orca project list [--json]
   orca project setups [--project <id>] [--host <host-id>] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
+  orca project setup-devcontainer --project <id> --host <host-id> --path <absolute-repo-path> --worktree-base-path <absolute-worktrees-path> [--kind git|folder] [--json]
   orca project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]
   orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
