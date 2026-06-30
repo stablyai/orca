@@ -815,7 +815,15 @@ export function connectPanePty(
   deps: PtyConnectionDeps
 ): PanePtyBinding {
   exposeE2eTerminalPtyOutputDebug()
+  // Why: StrictMode dev builds let the first mount's spawn resolve after the
+  // binding is torn down. Reading deps.onResetErrorRef.current at that point
+  // schedules a React state update on a dead fiber; production sets are no-ops
+  // but still allocate updater work. Guard on the local disposal flag so the
+  // post-disposal spawn promise cannot clear the table of the next pane.
   const resetError = (): void => {
+    if (disposed) {
+      return
+    }
     deps.onResetErrorRef?.current?.()
   }
   let disposed = false

@@ -2436,7 +2436,7 @@
             "df766809e0": "ペインを折りたたむ",
             "cff67afad1": "Copy Context"
           },
-          "TerminalErrorToast": {
+          "TerminalErrorBanner": {
             "e4aa243f8c": "デーモンを再起動します",
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",

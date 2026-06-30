@@ -1,15 +1,37 @@
 /**
  * @vitest-environment happy-dom
  */
+import { afterEach, beforeEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { useAppStore } from '@/store'
 import { useTerminalErrorTable } from './use-terminal-error-table'
 
+const TEST_WORKTREE_ID = 'wt-test'
+
 describe('useTerminalErrorTable', () => {
+  beforeEach(() => {
+    useAppStore.setState((state) => ({
+      ...state,
+      terminalErrorsByWorktreeId: {
+        ...state.terminalErrorsByWorktreeId,
+        [TEST_WORKTREE_ID]: []
+      }
+    }))
+  })
+
+  afterEach(() => {
+    useAppStore.setState((state) => {
+      const next = { ...state.terminalErrorsByWorktreeId }
+      delete next[TEST_WORKTREE_ID]
+      return { ...state, terminalErrorsByWorktreeId: next }
+    })
+  })
+
   it('appends a new entry on first sight', () => {
     let t = 1000
-    const { result } = renderHook(() => useTerminalErrorTable(() => t))
+    const { result } = renderHook(() => useTerminalErrorTable(TEST_WORKTREE_ID, { now: () => t }))
     act(() => result.current.push('SSH connection lost'))
     expect(result.current.errors).toEqual([
       { message: 'SSH connection lost', count: 1, lastSeenAt: 1000 }
@@ -18,7 +40,7 @@ describe('useTerminalErrorTable', () => {
 
   it('dedups identical entries within the window', () => {
     let t = 1000
-    const { result } = renderHook(() => useTerminalErrorTable(() => t))
+    const { result } = renderHook(() => useTerminalErrorTable(TEST_WORKTREE_ID, { now: () => t }))
     act(() => result.current.push('SSH connection lost'))
     t = 5_000
     act(() => result.current.push('SSH connection lost'))
@@ -29,7 +51,7 @@ describe('useTerminalErrorTable', () => {
 
   it('evicts expired entries before dedup', () => {
     let t = 1_000
-    const { result } = renderHook(() => useTerminalErrorTable(() => t))
+    const { result } = renderHook(() => useTerminalErrorTable(TEST_WORKTREE_ID, { now: () => t }))
     act(() => result.current.push('SSH connection lost'))
     t = 40_000
     act(() => result.current.push('SSH connection lost'))
@@ -39,7 +61,9 @@ describe('useTerminalErrorTable', () => {
 
   it('caps the table at 5 entries', () => {
     let t = 0
-    const { result } = renderHook(() => useTerminalErrorTable(() => (t += 100)))
+    const { result } = renderHook(() =>
+      useTerminalErrorTable(TEST_WORKTREE_ID, { now: () => (t += 100) })
+    )
     act(() => {
       for (let i = 0; i < 7; i++) {
         result.current.push(`msg-${i}`)
@@ -52,7 +76,7 @@ describe('useTerminalErrorTable', () => {
 
   it('clear() empties the table', () => {
     let t = 1000
-    const { result } = renderHook(() => useTerminalErrorTable(() => t))
+    const { result } = renderHook(() => useTerminalErrorTable(TEST_WORKTREE_ID, { now: () => t }))
     act(() => {
       result.current.push('msg-a')
       result.current.push('msg-b')
@@ -63,7 +87,7 @@ describe('useTerminalErrorTable', () => {
 
   it('does not grow past 5 entries under sustained identical errors', () => {
     let t = 1000
-    const { result } = renderHook(() => useTerminalErrorTable(() => t))
+    const { result } = renderHook(() => useTerminalErrorTable(TEST_WORKTREE_ID, { now: () => t }))
     act(() => {
       for (let i = 0; i < 100; i++) {
         result.current.push('Remote Orca runtime connection lost')

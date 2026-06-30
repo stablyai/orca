@@ -22,17 +22,17 @@ export function shouldOfferDaemonRestart(messages: string[]): boolean {
   )
 }
 
-export type TerminalErrorToastProps = {
+export type TerminalErrorBannerProps = {
   errors: TerminalErrorEntry[]
   onDismiss: () => void
   onRestartDaemon?: () => void
 }
 
-export function TerminalErrorToast({
+export function TerminalErrorBanner({
   errors,
   onDismiss,
   onRestartDaemon
-}: TerminalErrorToastProps): React.JSX.Element {
+}: TerminalErrorBannerProps): React.JSX.Element {
   const ssh = errors.some((e) => isSshMessage(e.message))
   const messages = errors.map((e) => e.message)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(messages)
@@ -69,7 +69,7 @@ export function TerminalErrorToast({
             <>
               {'\n'}
               {translate(
-                'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
+                'auto.components.terminal.pane.TerminalErrorBanner.cc6d997c65',
                 'Restart the terminal daemon from here to clear stale daemon state.'
               )}
             </>
@@ -77,7 +77,7 @@ export function TerminalErrorToast({
             <>
               {'\n'}
               {translate(
-                'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
+                'auto.components.terminal.pane.TerminalErrorBanner.5c8ce20be6',
                 'If this persists, please'
               )}{' '}
               <a
@@ -85,7 +85,7 @@ export function TerminalErrorToast({
                 style={{ color: '#fca5a5', textDecoration: 'underline' }}
               >
                 {translate(
-                  'auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699',
+                  'auto.components.terminal.pane.TerminalErrorBanner.a7e2fd2699',
                   'file an issue'
                 )}
               </a>
@@ -110,7 +110,7 @@ export function TerminalErrorToast({
             }}
           >
             {translate(
-              'auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c',
+              'auto.components.terminal.pane.TerminalErrorBanner.e4aa243f8c',
               'Restart daemon'
             )}
           </button>

@@ -41,7 +41,7 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalErrorBanner } from './TerminalErrorBanner'
 import { useTerminalErrorTable } from './use-terminal-error-table'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
@@ -318,7 +318,7 @@ export default function TerminalPane({
     errors: terminalErrors,
     push: pushTerminalError,
     clear: clearTerminalError
-  } = useTerminalErrorTable()
+  } = useTerminalErrorTable(worktreeId)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
@@ -1578,8 +1578,7 @@ export default function TerminalPane({
       tabId,
       updateTabPtyId,
       updateTabTitle,
-      worktreeId,
-      clearTerminalError
+      worktreeId
     ]
   )
 
@@ -2809,7 +2808,7 @@ export default function TerminalPane({
         }}
       />
       {terminalErrors.length > 0 && isActive && (
-        <TerminalErrorToast
+        <TerminalErrorBanner
           errors={terminalErrors}
           onDismiss={clearTerminalError}
           onRestartDaemon={() => daemonActions.setPending('restart')}
