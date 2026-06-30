@@ -334,9 +334,10 @@ describe('registerFilesystemHandlers', () => {
 
   it('records a redacted breadcrumb when fs:readDir throws on a WSL UNC path', async () => {
     registerFilesystemHandlers(store as never)
-    const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\user\\repo'
-    // resolveAuthorizedPath authorizes the path, then readdir fails (distro stopped).
-    realpathMock.mockResolvedValue(wslPath)
+    // Why: use a slash-style UNC root so POSIX CI still treats the fixture as
+    // absolute while the breadcrumb classifier sees the same WSL UNC shape.
+    const wslPath = '//wsl.localhost/Ubuntu/home/user/repo'
+    realpathMock.mockResolvedValue(path.resolve(wslPath))
     registerWorktreeRootsForRepo(store as never, 'repo-1', [wslPath])
     readdirMock.mockRejectedValue(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
 
