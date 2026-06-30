@@ -323,7 +323,11 @@ function createPane(paneId: number) {
         bracketedPasteMode: false
       },
       options: {
-        ignoreBracketedPasteMode: false
+        ignoreBracketedPasteMode: false,
+        theme: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
       },
       write: vi.fn(),
       resize: vi.fn(),
@@ -5158,7 +5162,8 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b]11;?\x1b\\startup frame\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       '\x1b]11;?\x1b\\startup frame\r\n',
       expect.any(Function)
@@ -5200,7 +5205,8 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b]11;?\x1b\\startup frame\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       '\x1b]11;?\x1b\\startup frame\r\n',
       expect.any(Function)
@@ -5235,7 +5241,8 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b]11;?\x1b\\startup frame\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       '\x1b]11;?\x1b\\startup frame\r\n',
       expect.any(Function)
@@ -5270,7 +5277,8 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b]11;?\x1b\\startup frame\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       '\x1b]11;?\x1b\\startup frame\r\n',
       expect.any(Function)
@@ -5534,7 +5542,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('keeps a Yazi-style hidden capability-query burst on the live xterm path', async () => {
+  it('answers hidden OSC color queries directly inside a mixed capability-query burst', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -5560,8 +5568,48 @@ describe('connectPanePty', () => {
     const coalescedChunk = `${queryBurst}\x1b[?2026h${'codex redraw '.repeat(8_000)}`
     capturedDataCallback.current?.(coalescedChunk)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith(queryBurst, expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      '\x1b[c\x1b[>q\x1b[14t\x1b[16t',
+      expect.any(Function)
+    )
     expect(pane.terminal.write).not.toHaveBeenCalledWith(coalescedChunk, expect.any(Function))
+
+    binding.dispose()
+  })
+
+  it('answers adjacent hidden Codex OSC color queries directly', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'codex' }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    const queries = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+    capturedDataCallback.current?.(`${queries}startup frame\r\n`)
+
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(queries, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      `${queries}startup frame\r\n`,
+      expect.any(Function)
+    )
 
     binding.dispose()
   })
@@ -5876,7 +5924,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('keeps split hidden Codex OSC color queries on the live xterm path', async () => {
+  it('answers split hidden Codex OSC color queries directly', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -5901,7 +5949,8 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('\x1b]11;?')
     capturedDataCallback.current?.(`\x1b\\\x1b[?2026h${'codex redraw '.repeat(8_000)}`)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       `\x1b\\\x1b[?2026h${'codex redraw '.repeat(8_000)}`,
       expect.any(Function)
@@ -5910,7 +5959,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('keeps hidden Codex OSC color queries split before the prefix on the live xterm path', async () => {
+  it('answers hidden Codex OSC color queries split before the prefix directly', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -5935,7 +5984,8 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('\x1b]')
     capturedDataCallback.current?.(`11;?\x1b\\\x1b[?2026h${'codex redraw '.repeat(8_000)}`)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b]11;?\x1b\\', expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       `11;?\x1b\\\x1b[?2026h${'codex redraw '.repeat(8_000)}`,
       expect.any(Function)

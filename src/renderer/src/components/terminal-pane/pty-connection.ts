@@ -11,6 +11,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
+import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -110,7 +111,8 @@ import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-lin
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
-  installTerminalCapabilityReplyHandlers
+  installTerminalCapabilityReplyHandlers,
+  sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
 import {
   cancelScheduledHiddenOutputRestore,
@@ -351,28 +353,20 @@ function containsHiddenStartupRendererQuery(data: string): boolean {
 }
 
 const HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS = 64
-const HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES = ['\x1b]10;?', '\x1b]11;?'] as const
-
-function findOscTerminatorIndex(data: string, offset: number): number {
-  for (let index = offset; index < data.length; index++) {
-    const code = data.charCodeAt(index)
-    if (code === 0x07) {
-      return index + 1
-    }
-    if (code === 0x1b && data[index + 1] === '\\') {
-      return index + 2
-    }
-  }
-  return -1
-}
 
 function extractHiddenStartupRendererQueryData(
   data: string,
   pending: string
-): { statelessQueryData: string; statefulQueryData: string; pending: string } {
+): {
+  statelessQueryData: string
+  statefulQueryData: string
+  oscColorQueryData: string
+  pending: string
+} {
   const input = pending + data
   let statelessQueryData = ''
   let statefulQueryData = ''
+  let oscColorQueryData = ''
   let offset = 0
 
   while (offset < input.length) {
@@ -381,7 +375,12 @@ function extractHiddenStartupRendererQueryData(
       break
     }
     if (candidateIndex + 1 >= input.length) {
-      return { statelessQueryData, statefulQueryData, pending: input.slice(candidateIndex) }
+      return {
+        statelessQueryData,
+        statefulQueryData,
+        oscColorQueryData,
+        pending: input.slice(candidateIndex)
+      }
     }
     if (input.startsWith('\x1b[', candidateIndex)) {
       const finalByteIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
@@ -389,6 +388,7 @@ function extractHiddenStartupRendererQueryData(
         return {
           statelessQueryData,
           statefulQueryData,
+          oscColorQueryData,
           pending: input.slice(
             candidateIndex,
             candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
@@ -406,42 +406,34 @@ function extractHiddenStartupRendererQueryData(
     }
 
     if (input.startsWith('\x1b]', candidateIndex)) {
-      const remaining = input.slice(candidateIndex)
-      const matchingPrefix = HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.find((prefix) =>
-        remaining.startsWith(prefix)
-      )
-      if (!matchingPrefix) {
-        if (
-          HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) => prefix.startsWith(remaining))
-        ) {
-          return { statelessQueryData, statefulQueryData, pending: remaining }
-        }
-        offset = candidateIndex + 2
-        continue
-      }
-
-      const terminatorIndex = findOscTerminatorIndex(input, candidateIndex + matchingPrefix.length)
-      if (terminatorIndex === -1) {
+      const query = parseTerminalOscColorQuery(input, candidateIndex)
+      if (query.kind === 'partial') {
         return {
           statelessQueryData,
           statefulQueryData,
+          oscColorQueryData,
           pending: input.slice(
             candidateIndex,
             candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
           )
         }
       }
-      statelessQueryData += input.slice(candidateIndex, terminatorIndex)
-      offset = terminatorIndex
+      if (query.kind === 'none') {
+        offset = candidateIndex + 2
+        continue
+      }
+      oscColorQueryData += input.slice(candidateIndex, query.endIndex)
+      offset = query.endIndex
       continue
     }
 
-    if (
-      HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) =>
-        prefix.startsWith(input.slice(candidateIndex))
-      )
-    ) {
-      return { statelessQueryData, statefulQueryData, pending: input.slice(candidateIndex) }
+    if (parseTerminalOscColorQuery(input, candidateIndex).kind === 'partial') {
+      return {
+        statelessQueryData,
+        statefulQueryData,
+        oscColorQueryData,
+        pending: input.slice(candidateIndex)
+      }
     }
 
     {
@@ -450,7 +442,7 @@ function extractHiddenStartupRendererQueryData(
     }
   }
 
-  return { statelessQueryData, statefulQueryData, pending: '' }
+  return { statelessQueryData, statefulQueryData, oscColorQueryData, pending: '' }
 }
 
 function containsCsiRendererQuery(data: string): boolean {
@@ -1947,6 +1939,10 @@ export function connectPanePty(
     markTerminalInputSent()
     recordAcceptedTerminalInputForHibernation()
   }
+  const terminalTheme = pane.terminal.options.theme
+  const terminalColorQueryReplies = terminalTheme
+    ? { foreground: terminalTheme.foreground, background: terminalTheme.background }
+    : undefined
   const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
@@ -1965,6 +1961,7 @@ export function connectPanePty(
     activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
+    ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...(paneStartup?.launchConfig ? { launchConfig: paneStartup.launchConfig } : {}),
     ...(launchToken ? { launchToken } : {}),
     ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
@@ -3198,6 +3195,13 @@ export function connectPanePty(
         hiddenStartupRendererQueryPending
       )
       hiddenStartupRendererQueryPending = extracted.pending
+      if (extracted.oscColorQueryData) {
+        // Why: Codex's startup palette probe has a 100 ms budget. Answer
+        // hidden color queries directly so renderer scheduling cannot miss it.
+        sendTerminalOscColorQueryReplies(extracted.oscColorQueryData, pane.terminal, (reply) =>
+          transport.sendInput(reply)
+        )
+      }
       if (extracted.statelessQueryData) {
         writePtyOutputToXterm(extracted.statelessQueryData, false, {
           hiddenStartupRendererQuery: true
@@ -3210,6 +3214,7 @@ export function connectPanePty(
     function takeHiddenStartupRendererQueryPendingForForeground(data: string): {
       statelessQueryData: string
       statefulQueryData: string
+      oscColorQueryData: string
       remainingData: string
       consumedCurrentChars: number
     } {
@@ -3219,6 +3224,7 @@ export function connectPanePty(
         return {
           statelessQueryData: '',
           statefulQueryData: '',
+          oscColorQueryData: '',
           remainingData: data,
           consumedCurrentChars: 0
         }
@@ -3227,6 +3233,7 @@ export function connectPanePty(
       const input = pending + data
       let statelessQueryData = ''
       let statefulQueryData = ''
+      let oscColorQueryData = ''
       let consumedInputChars = pending.length
       let nextPending = ''
       if (input.startsWith('\x1b[')) {
@@ -3244,24 +3251,15 @@ export function connectPanePty(
           consumedInputChars = finalByteIndex + 1
         }
       } else if (input.startsWith('\x1b]')) {
-        const matchingPrefix = HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.find((prefix) =>
-          input.startsWith(prefix)
-        )
-        const terminatorIndex = findOscTerminatorIndex(input, 2)
-        if (
-          !matchingPrefix &&
-          HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) => prefix.startsWith(input))
-        ) {
-          nextPending = input
-          consumedInputChars = input.length
-        } else if (terminatorIndex === -1) {
+        const query = parseTerminalOscColorQuery(input, 0)
+        if (query.kind === 'partial') {
           nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
           consumedInputChars = input.length
+        } else if (query.kind === 'match') {
+          oscColorQueryData = input.slice(0, query.endIndex)
+          consumedInputChars = query.endIndex
         } else {
-          if (matchingPrefix) {
-            statelessQueryData = input.slice(0, terminatorIndex)
-          }
-          consumedInputChars = terminatorIndex
+          consumedInputChars = pending.length
         }
       } else if (input.length === 1) {
         nextPending = input
@@ -3275,6 +3273,7 @@ export function connectPanePty(
       return {
         statelessQueryData,
         statefulQueryData,
+        oscColorQueryData,
         remainingData: data.slice(consumedCurrentChars),
         consumedCurrentChars
       }
@@ -3827,6 +3826,13 @@ export function connectPanePty(
         writePtyOutputToXterm(pendingForegroundQuery.statelessQueryData, true, {
           hiddenStartupRendererQuery: true
         })
+      }
+      if (pendingForegroundQuery?.oscColorQueryData) {
+        sendTerminalOscColorQueryReplies(
+          pendingForegroundQuery.oscColorQueryData,
+          pane.terminal,
+          (reply) => transport.sendInput(reply)
+        )
       }
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
