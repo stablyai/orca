@@ -2,7 +2,7 @@
 import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
 import { mapSidebarProjectHeaderDropIndexToSiblingInsertIndex } from './project-header-drop'
 import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
-import { resolveVirtualRowTop } from './sidebar-virtual-row-offset'
+import { resolveVirtualRowStart, resolveVirtualRowTop } from './sidebar-virtual-row-offset'
 import type { Row } from './worktree-list-groups'
 import type { ProjectGroup } from '../../../../shared/types'
 
@@ -60,6 +60,11 @@ export function measureGroupHeaderDragRects(
   parentGroupId?: string | null
 ): GroupHeaderDragRect[] {
   const containerRect = container.getBoundingClientRect()
+  // Measure from the virtual row's slot start so boundaries match the
+  // gap-opening shift's coordinate space (the shift keys off the same
+  // virtualizer starts; the header's intra-row spacing would offset them).
+  const rowTop = (element: HTMLElement): number =>
+    resolveVirtualRowStart(element) ?? resolveVirtualRowTop(element, container, containerRect)
   const rects: GroupHeaderDragRect[] = []
   container.querySelectorAll<HTMLElement>('[data-project-group-header-id]').forEach((element) => {
     const groupId = element.getAttribute('data-project-group-header-id')
@@ -73,7 +78,7 @@ export function measureGroupHeaderDragRects(
     if (parentGroupId !== undefined && elementParent !== parentGroupId) {
       return
     }
-    const top = resolveVirtualRowTop(element, container, containerRect)
+    const top = rowTop(element)
     rects.push({ groupId, siblingIndex, top, bottom: top })
   })
   rects.sort((left, right) => left.top - right.top)
@@ -85,10 +90,10 @@ export function measureGroupHeaderDragRects(
   // exceed the rendered content.)
   let contentBottom = rects.at(-1)?.top ?? 0
   container.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]').forEach((element) => {
-    const rowBottom =
-      resolveVirtualRowTop(element, container, containerRect) +
-      element.getBoundingClientRect().height
-    contentBottom = Math.max(contentBottom, rowBottom)
+    contentBottom = Math.max(
+      contentBottom,
+      rowTop(element) + element.getBoundingClientRect().height
+    )
   })
   for (let index = 0; index < rects.length; index++) {
     const next = rects[index + 1]

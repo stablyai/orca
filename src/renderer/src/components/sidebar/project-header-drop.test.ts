@@ -193,7 +193,7 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
     expect(result?.dropIndex).toBe(1) // appended after group:2's project
   })
 
-  it('drops after the last project at its block bottom, not its header bottom', () => {
+  it('appends after the last project at its block bottom', () => {
     // Block-extent rects (as measureProjectHeaderDragRects now produces): project
     // "a" spans its whole block 0..300 (header + worktrees), not a 28px header.
     // Dropping over its lower worktrees must land the line below the block.
