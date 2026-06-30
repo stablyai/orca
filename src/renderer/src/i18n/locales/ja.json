@@ -2206,7 +2206,15 @@
             "ed2a664f8b": "ワークツリーを作成できませんでした",
             "a3346fc6ed": "ワークツリーの作成をキャンセルする",
             "532aea14ce": "キャンセル",
-            "767951265d": "ワークツリーの作成中に問題が発生しました。"
+            "767951265d": "ワークツリーの作成中に問題が発生しました。",
+            "errors": {
+              "network": "Network error. Check your connection and try again.",
+              "auth": "Remote authentication failed. Check your credentials or SSH key.",
+              "noUpstream": "The selected base branch has no upstream. Choose a different base.",
+              "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
+              "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
+              "unknown": "{{stderr}}"
+            }
           }
         }
       },

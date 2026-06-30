@@ -2206,7 +2206,15 @@
             "ed2a664f8b": "작업 트리를 만들 수 없습니다.",
             "a3346fc6ed": "작업 트리 생성 취소",
             "532aea14ce": "취소",
-            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다."
+            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
+            "errors": {
+              "network": "Network error. Check your connection and try again.",
+              "auth": "Remote authentication failed. Check your credentials or SSH key.",
+              "noUpstream": "The selected base branch has no upstream. Choose a different base.",
+              "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
+              "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
+              "unknown": "{{stderr}}"
+            }
           }
         }
       },
