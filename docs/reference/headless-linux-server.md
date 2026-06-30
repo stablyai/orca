@@ -178,3 +178,6 @@ depend on an interactive shell profile.
   `orca` user and that `/opt/orca` is readable by that user.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
+- Diagnosing other missing libraries: extract the AppImage without launching it
+  with `./orca-linux.AppImage --appimage-extract`, then run
+  `ldd squashfs-root/orca` to list any shared libraries the host is missing.
