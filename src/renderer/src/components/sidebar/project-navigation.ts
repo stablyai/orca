@@ -1,39 +1,66 @@
 import type { Worktree } from '../../../../shared/types'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 
+/**
+ * Walk a project group to its outermost in-map ancestor (the top-level project).
+ * `parentGroupIdById` maps each known group id to its parent (null for roots).
+ * Returns the top-level group id, or null when the starting group is unknown.
+ * Mirrors getGroupKeysForWorktree's ancestor walk so a folder workspace and a
+ * worktree in the same top-level group collapse to the same cycle stop.
+ */
+export function resolveTopLevelProjectGroupId(
+  projectGroupId: string,
+  parentGroupIdById: ReadonlyMap<string, string | null>
+): string | null {
+  const seen = new Set<string>()
+  let id: string | null = projectGroupId
+  let topId: string | null = null
+  while (id !== null && !seen.has(id) && parentGroupIdById.has(id)) {
+    seen.add(id)
+    topId = id
+    id = parentGroupIdById.get(id) ?? null
+  }
+  return topId
+}
+
 export type ProjectNavigationDirection = 'up' | 'down'
+
+export type ProjectNavigationEntry = {
+  /**
+   * A navigable sidebar member. Folder workspaces are passed as their
+   * `folderWorkspaceToWorktree` form, so worktrees and folder workspaces share
+   * one recency/activation id (the value `activeWorktreeId` also holds).
+   */
+  worktree: Worktree
+  /** Top-level project key, or null to skip an ungroupable member. */
+  projectKey: string | null
+}
 
 export type ProjectNavigationOrder = {
   /** Top-level project identity keys in sidebar order, deduped. */
   orderedProjectKeys: string[]
-  /** Worktrees grouped by their top-level project key, in sidebar order. */
+  /** Members grouped by their top-level project key, in sidebar order. */
   worktreesByProjectKey: Map<string, Worktree[]>
-  /** Reverse lookup: which project a worktree belongs to. */
+  /** Reverse lookup: which project a member belongs to. */
   projectKeyByWorktreeId: Map<string, string>
 }
 
 /**
- * Collapse an ordered worktree list into its top-level projects. The caller
- * passes worktrees in sidebar order (pinned duplicates already removed so the
- * cycle order follows the visible section headers) and a projectKeyOf that maps
- * a worktree to its top-level project key (project group, or repo when
- * ungrouped). Order is first-appearance; worktrees with no project key are
- * skipped. Pure so the derivation stays unit-testable.
+ * Collapse ordered sidebar members into their top-level projects. The caller
+ * passes entries in sidebar order (pinned duplicates already removed so the
+ * cycle order follows the visible section headers) with each member's
+ * pre-resolved top-level project key. Order is first-appearance; members with
+ * no project key are skipped. Pure so the derivation stays unit-testable.
  */
 export function buildProjectNavigationOrder(
-  orderedWorktrees: readonly Worktree[],
-  projectKeyOf: (worktree: Worktree) => string | null
+  entries: readonly ProjectNavigationEntry[]
 ): ProjectNavigationOrder {
   const orderedProjectKeys: string[] = []
   const seenProjectKeys = new Set<string>()
   const worktreesByProjectKey = new Map<string, Worktree[]>()
   const projectKeyByWorktreeId = new Map<string, string>()
-  for (const worktree of orderedWorktrees) {
-    if (projectKeyByWorktreeId.has(worktree.id)) {
-      continue
-    }
-    const projectKey = projectKeyOf(worktree)
-    if (!projectKey) {
+  for (const { worktree, projectKey } of entries) {
+    if (!projectKey || projectKeyByWorktreeId.has(worktree.id)) {
       continue
     }
     projectKeyByWorktreeId.set(worktree.id, projectKey)

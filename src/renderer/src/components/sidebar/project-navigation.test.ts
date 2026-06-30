@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/types'
 import {
   buildProjectNavigationOrder,
+  resolveTopLevelProjectGroupId,
   selectProjectNavigationTarget,
   type ProjectNavigationInputs
 } from './project-navigation'
@@ -85,35 +86,74 @@ describe('selectProjectNavigationTarget', () => {
 })
 
 describe('buildProjectNavigationOrder', () => {
-  const projectKeyOf = (w: Worktree): string | null =>
-    w.id === 'x' ? null : w.id.charAt(0).toUpperCase()
+  // Entries carry a pre-resolved project key; null means "skip this member".
+  const entry = (id: string, projectKey: string | null) => ({ worktree: wt(id), projectKey })
 
-  it('orders projects by first appearance and groups their worktrees', () => {
-    const order = buildProjectNavigationOrder(
-      [wt('a1'), wt('b1'), wt('b2'), wt('c1')],
-      projectKeyOf
-    )
+  it('orders projects by first appearance and groups their members', () => {
+    const order = buildProjectNavigationOrder([
+      entry('a1', 'A'),
+      entry('b1', 'B'),
+      entry('b2', 'B'),
+      entry('c1', 'C')
+    ])
     expect(order.orderedProjectKeys).toEqual(['A', 'B', 'C'])
     expect(order.worktreesByProjectKey.get('B')?.map((w) => w.id)).toEqual(['b1', 'b2'])
     expect(order.projectKeyByWorktreeId.get('b2')).toBe('B')
   })
 
-  it('dedupes a worktree by id without reordering or double-counting', () => {
+  it('groups worktrees and folder-workspace members under one project key', () => {
+    // Folder workspaces arrive as their folderWorkspaceToWorktree id ("folder:*").
+    const order = buildProjectNavigationOrder([entry('a1', 'A'), entry('folder:f1', 'A')])
+    expect(order.orderedProjectKeys).toEqual(['A'])
+    expect(order.worktreesByProjectKey.get('A')?.map((w) => w.id)).toEqual(['a1', 'folder:f1'])
+  })
+
+  it('dedupes a member by id without reordering or double-counting', () => {
     // A late duplicate must not re-append its project or duplicate membership.
-    const order = buildProjectNavigationOrder([wt('a1'), wt('b1'), wt('a1')], projectKeyOf)
+    const order = buildProjectNavigationOrder([entry('a1', 'A'), entry('b1', 'B'), entry('a1', 'A')])
     expect(order.orderedProjectKeys).toEqual(['A', 'B'])
     expect(order.worktreesByProjectKey.get('A')?.map((w) => w.id)).toEqual(['a1'])
   })
 
-  it('skips worktrees with no project key', () => {
-    const order = buildProjectNavigationOrder([wt('x'), wt('a1')], projectKeyOf)
+  it('skips members with no project key', () => {
+    const order = buildProjectNavigationOrder([entry('x', null), entry('a1', 'A')])
     expect(order.orderedProjectKeys).toEqual(['A'])
     expect(order.projectKeyByWorktreeId.has('x')).toBe(false)
   })
 
   it('follows the input order, so a de-pinned list yields section order', () => {
     // Caller drops pinned rows before calling, so pin order never skews this.
-    const order = buildProjectNavigationOrder([wt('c1'), wt('a1'), wt('b1')], projectKeyOf)
+    const order = buildProjectNavigationOrder([entry('c1', 'C'), entry('a1', 'A'), entry('b1', 'B')])
     expect(order.orderedProjectKeys).toEqual(['C', 'A', 'B'])
+  })
+})
+
+describe('resolveTopLevelProjectGroupId', () => {
+  it('walks a nested chain to its outermost ancestor', () => {
+    const parents = new Map<string, string | null>([
+      ['c1', 'b1'],
+      ['b1', 'a1'],
+      ['a1', null]
+    ])
+    expect(resolveTopLevelProjectGroupId('c1', parents)).toBe('a1')
+    expect(resolveTopLevelProjectGroupId('a1', parents)).toBe('a1')
+  })
+
+  it('returns null for an unknown group', () => {
+    expect(resolveTopLevelProjectGroupId('z', new Map())).toBeNull()
+  })
+
+  it('stops at the outermost in-map group when the parent is missing', () => {
+    // Orphan metadata: the parent id is not present, so the current group is top.
+    const parents = new Map<string, string | null>([['c1', 'gone']])
+    expect(resolveTopLevelProjectGroupId('c1', parents)).toBe('c1')
+  })
+
+  it('terminates on a cyclic parent chain', () => {
+    const parents = new Map<string, string | null>([
+      ['a', 'b'],
+      ['b', 'a']
+    ])
+    expect(resolveTopLevelProjectGroupId('a', parents)).toBe('b')
   })
 })
