@@ -36,20 +36,27 @@ const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not
 const REMOTE_FORBIDDEN_PATTERN =
   /repository .* not found|requested url returned error: (401|403|404)/i
 
+// Why: scan only the first 'fatal:' line (falling back to the full stderr
+// if no fatal: line exists) so a benign help-text mention of "no upstream"
+// in later lines doesn't override the actual failure cause.
 function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCode {
-  if (REFRESH_NETWORK_PATTERN.test(rawStderr)) {
+  const scoped = (() => {
+    const fatalLine = rawStderr.split(/\r?\n/).find((line) => /^fatal:\s/.test(line))
+    return fatalLine ?? rawStderr
+  })()
+  if (REFRESH_NETWORK_PATTERN.test(scoped)) {
     return 'network'
   }
-  if (REFRESH_AUTH_PATTERN.test(rawStderr)) {
+  if (REFRESH_AUTH_PATTERN.test(scoped)) {
     return 'auth'
   }
-  if (REFRESH_NO_UPSTREAM_PATTERN.test(rawStderr)) {
+  if (REFRESH_NO_UPSTREAM_PATTERN.test(scoped)) {
     return 'noUpstream'
   }
-  if (REMOTE_REF_MISSING_PATTERN.test(rawStderr)) {
+  if (REMOTE_REF_MISSING_PATTERN.test(scoped)) {
     return 'remoteRefMissing'
   }
-  if (REMOTE_FORBIDDEN_PATTERN.test(rawStderr)) {
+  if (REMOTE_FORBIDDEN_PATTERN.test(scoped)) {
     return 'remoteForbidden'
   }
   return 'unknown'
@@ -96,9 +103,25 @@ export function throwRefreshBaseRefError(opts: {
   remote: string
   cause: unknown
 }): never {
-  // Why: tags differ by call site so log filters can isolate the
-  // precheck / create / runtime paths; original stderr lives in cause.
-  console.error(`[${opts.tag}]`, opts.cause)
+  // Why: scrub before logging so credentials embedded in the original
+  // stderr never reach console (which can be piped to log files / bug reports).
+  // Both Error and non-Error rejections get scrubbed — a thrown string/object
+  // can still carry credentials in serialized form.
+  const safeCause = (() => {
+    if (opts.cause instanceof Error) {
+      return new Error(stripCredentialsFromMessage(opts.cause.message))
+    }
+    if (typeof opts.cause === 'string') {
+      return stripCredentialsFromMessage(opts.cause)
+    }
+    if (opts.cause === null || opts.cause === undefined) {
+      return opts.cause
+    }
+    // Why: unknown shape — stringify then scrub so any embedded credentials in
+    // a serialized object literal don't leak to log sinks.
+    return stripCredentialsFromMessage(String(opts.cause))
+  })()
+  console.error(`[${opts.tag}]`, safeCause)
   const classified = classifyRefreshBaseRefError(opts.cause)
   throw new Error(
     formatRefreshBaseRefError({
