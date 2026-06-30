@@ -434,6 +434,8 @@ document.addEventListener(
   true
 )
 
+const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
+
 // Custom APIs for renderer
 const api = {
   app: {
@@ -456,6 +458,10 @@ const api = {
     reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
+      startupDiagnosticsEnabled
+        ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
+        : Promise.resolve(),
     // Why: on macOS this returns the active input mode, or the layout ID when
     // no IME mode is selected, so renderer keyboard workarounds can distinguish
     // CJK IMEs and compose layouts from plain US QWERTY (see issue #1205).
