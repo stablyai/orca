@@ -1,3 +1,30 @@
+import {
+  createSidebarBlockDragPreview,
+  createSidebarDragPreview
+} from './worktree-sidebar-pointer-drag-dom'
+
+/** Build the floating drag preview: the whole block (header + children) when
+ *  block rows are available, otherwise just the header clone. */
+export function createHeaderDragPreview(args: {
+  rows: readonly HTMLElement[]
+  handleEl: HTMLElement
+  pointerX: number
+  pointerY: number
+}): { preview: HTMLElement; offsetX: number; offsetY: number } {
+  return args.rows.length > 1
+    ? createSidebarBlockDragPreview({
+        rows: args.rows,
+        pointerX: args.pointerX,
+        pointerY: args.pointerY
+      })
+    : createSidebarDragPreview({
+        sourceRow: args.handleEl,
+        pointerX: args.pointerX,
+        pointerY: args.pointerY,
+        draggedCount: 1
+      })
+}
+
 /** Collect the virtual-row elements that make up a dragged header's block, so
  *  the drag preview can show the children (worktrees / nested groups), not just
  *  the header. Walks forward from the header's virtual row until the block

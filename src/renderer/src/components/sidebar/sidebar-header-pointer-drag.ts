@@ -2,11 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
-import {
-  createSidebarBlockDragPreview,
-  createSidebarDragPreview,
-  updateSidebarDragPreviewPosition
-} from './worktree-sidebar-pointer-drag-dom'
+import { updateSidebarDragPreviewPosition } from './worktree-sidebar-pointer-drag-dom'
+import { createHeaderDragPreview } from './header-drag-preview-rows'
 
 /** Common fields the lifecycle reads/writes on any header drag session. */
 export type SidebarHeaderDragSessionBase = {
@@ -223,22 +220,13 @@ export function useSidebarHeaderPointerDrag<
         refreshHeaderRects()
         // Clone the dragged block into a floating preview that follows the
         // cursor (same primitive the worktree drag uses); the source then hides.
-        // Prefer the whole block (header + children); fall back to the header.
         try {
-          const previewRows = configRef.current.getDragPreviewRows?.(session) ?? []
-          previewRef.current =
-            previewRows.length > 1
-              ? createSidebarBlockDragPreview({
-                  rows: previewRows,
-                  pointerX: e.clientX,
-                  pointerY: e.clientY
-                })
-              : createSidebarDragPreview({
-                  sourceRow: session.handleEl,
-                  pointerX: e.clientX,
-                  pointerY: e.clientY,
-                  draggedCount: 1
-                })
+          previewRef.current = createHeaderDragPreview({
+            rows: configRef.current.getDragPreviewRows?.(session) ?? [],
+            handleEl: session.handleEl,
+            pointerX: e.clientX,
+            pointerY: e.clientY
+          })
         } catch {
           previewRef.current = null
         }
