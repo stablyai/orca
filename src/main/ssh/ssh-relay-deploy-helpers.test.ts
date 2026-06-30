@@ -192,6 +192,26 @@ describe('execCommand', () => {
     expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
+  it('surfaces stdout alongside stderr on nonzero exit instead of masking it', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'npm install 2>&1')
+
+    await Promise.resolve()
+    // Why: the system-ssh transport routes the local OpenSSH client's own
+    // diagnostics to channel.stderr while the remote command's merged output
+    // arrives on stdout. stderr must not mask the real failure.
+    channel.stderr.emit('data', Buffer.from("Warning: Permanently added 'host' (ED25519)\n"))
+    channel.emit('data', Buffer.from("npm error g++: unrecognized '-std=gnu++20'\n"))
+    channel.emit('close', 1)
+
+    const error = await commandPromise.catch((err: Error) => err)
+    expect(error.message).toContain('Permanently added')
+    expect(error.message).toContain('gnu++20')
+  })
+
   it('cleans command channel listeners when a command times out', async () => {
     vi.useFakeTimers()
     try {
