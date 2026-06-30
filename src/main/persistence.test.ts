@@ -77,15 +77,15 @@ const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
 ]
 const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
-  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
-  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
   {
     id: 'in-progress',
     label: 'In progress',
     color: 'conductor-progress',
     icon: 'conductor-progress'
   },
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' }
 ]
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -4982,12 +4982,12 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(ui.workspaceStatuses?.[0]?.label).toBe('Done')
+    expect(ui.workspaceStatuses?.at(-1)?.label).toBe('Done')
     expect(ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
     expect(ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
 
@@ -5004,12 +5004,12 @@ describe('Store', () => {
     expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
     expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(persisted.ui?.workspaceStatuses?.[0]?.label).toBe('Done')
+    expect(persisted.ui?.workspaceStatuses?.at(-1)?.label).toBe('Done')
   })
 
   it('migrates legacy default workspace status visuals and workflow once on load', async () => {

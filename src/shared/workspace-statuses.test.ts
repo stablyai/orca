@@ -12,12 +12,13 @@ import {
 describe('workspace status visuals', () => {
   it('keeps the default workflow order', () => {
     expect(cloneDefaultWorkspaceStatuses().map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(cloneDefaultWorkspaceStatuses()[0]).toMatchObject({ id: 'completed', label: 'Done' })
+    expect(cloneDefaultWorkspaceStatuses()[0]).toMatchObject({ id: 'todo', label: 'Todo' })
+    expect(cloneDefaultWorkspaceStatuses().at(-1)).toMatchObject({ id: 'completed', label: 'Done' })
   })
 
   it('migrates legacy default statuses to the default workflow order', () => {
