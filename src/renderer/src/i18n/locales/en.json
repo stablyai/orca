@@ -2206,7 +2206,15 @@
             "ed2a664f8b": "Couldn’t create worktree",
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
-            "767951265d": "Something went wrong while creating the worktree."
+            "767951265d": "Something went wrong while creating the worktree.",
+            "errors": {
+              "network": "Network error. Check your connection and try again.",
+              "auth": "Remote authentication failed. Check your credentials or SSH key.",
+              "noUpstream": "The selected base branch has no upstream. Choose a different base.",
+              "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
+              "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
+              "unknown": "{{stderr}}"
+            }
           }
         }
       },
