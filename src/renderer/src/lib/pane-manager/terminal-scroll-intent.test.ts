@@ -223,6 +223,42 @@ describe('terminal scroll intent', () => {
     disposable.dispose()
   })
 
+  it('ignores a stale unguarded resync from an earlier jitter tick once a newer tick supersedes it', () => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+    vi.useFakeTimers()
+    vi.stubGlobal('Element', TestElement)
+    const terminal = createTerminal({ viewportY: 40, baseY: 100 })
+    const host = new TestElement() as unknown as HTMLElement
+    const disposable = attachTerminalScrollIntentTracking(terminal, host)
+
+    // A trackpad reports a near-zero jitter tick mid-gesture. deltaY is not
+    // negative, so it skips the preservePinnedAtBottom guard and schedules an
+    // unguarded resync chase.
+    const jitter = new Event('wheel') as WheelEvent
+    Object.defineProperty(jitter, 'deltaY', { value: 0.1 })
+    host.dispatchEvent(jitter)
+
+    // 16ms later the gesture continues with a normal upward tick, which
+    // synchronously (re)pins the viewport.
+    vi.advanceTimersByTime(16)
+    const wheelUp = new Event('wheel') as WheelEvent
+    Object.defineProperty(wheelUp, 'deltaY', { value: -10 })
+    host.dispatchEvent(wheelUp)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+
+    // At t=80 the jitter tick's stale 80ms timeout fires. Simulate a
+    // transient bounce toward the bottom right at that instant — without
+    // coalescing this used to be read as "settled at the bottom" and flip
+    // the intent back to followOutput even though the user is still
+    // actively scrolling away.
+    terminal.buffer.active.viewportY = 100
+    vi.advanceTimersByTime(64) // virtual t = 80
+
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+
+    disposable.dispose()
+  })
+
   it('keeps a pane-keyed pinned viewport across a remounted empty terminal', () => {
     vi.stubGlobal('Element', TestElement)
     const firstTerminal = createTerminal({ viewportY: 76, baseY: 100 })

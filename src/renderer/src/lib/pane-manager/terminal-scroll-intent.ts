@@ -41,6 +41,32 @@ const terminalScrollIntentKeyByTerminal = new WeakMap<
 >()
 const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
 
+// Why: a continuous trackpad gesture fires many wheel events per second, and
+// each one used to schedule its own independent microtask + double-rAF +
+// 80ms-timeout resync chase with no coalescing. Most of those chases are
+// redundant (they all converge on the same answer), but a stale one left
+// over from an earlier tick can fire late — after a newer tick already wrote
+// the correct intent — and clobber it with a transient reading (e.g. a
+// momentary near-bottom viewportY mid-gesture), flipping intent back to
+// followOutput right before a live PTY write forces scrollToBottom(). That
+// produces the rubberband snap. Tagging each tick's chase with a generation
+// lets a newer tick supersede an older one's still-pending callbacks instead
+// of racing them.
+const terminalScrollIntentGenerationByTerminal = new WeakMap<TerminalScrollIntentTarget, number>()
+
+function nextScrollIntentGeneration(terminal: TerminalScrollIntentTarget): number {
+  const next = (terminalScrollIntentGenerationByTerminal.get(terminal) ?? 0) + 1
+  terminalScrollIntentGenerationByTerminal.set(terminal, next)
+  return next
+}
+
+function isCurrentScrollIntentGeneration(
+  terminal: TerminalScrollIntentTarget,
+  generation: number
+): boolean {
+  return terminalScrollIntentGenerationByTerminal.get(terminal) === generation
+}
+
 const BOTTOM_TOLERANCE_ROWS = 1
 
 function readBufferSnapshot(
@@ -160,7 +186,13 @@ export function syncTerminalScrollIntentSoon(
   terminal: TerminalScrollIntentTarget,
   options: { preservePinnedAtBottom?: boolean } = {}
 ): void {
-  const sync = (): void => syncTerminalScrollIntentFromViewport(terminal, options)
+  const generation = nextScrollIntentGeneration(terminal)
+  const sync = (): void => {
+    if (!isCurrentScrollIntentGeneration(terminal, generation)) {
+      return
+    }
+    syncTerminalScrollIntentFromViewport(terminal, options)
+  }
   queueMicrotask(sync)
   requestAnimationFrame(sync)
   requestAnimationFrame(() => requestAnimationFrame(sync))
