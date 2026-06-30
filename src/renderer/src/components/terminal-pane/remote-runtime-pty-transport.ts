@@ -431,18 +431,17 @@ export function createRemoteRuntimePtyTransport(
           if (destroyed || !connected || !handle || resubscribing) {
             return
           }
-          resubscribing = true
-          const resubscribeHandle = handle
-          const resubscribePtyId = remotePtyId
-          void subscribeToHandle()
-            .catch((error) => {
-              if (isCurrentRemoteTerminal(resubscribeHandle, resubscribePtyId)) {
-                handleRemoteTerminalError(error)
-              }
-            })
-            .finally(() => {
-              resubscribing = false
-            })
+          // Why: when the WS-paired multiplex drops (paired runtime
+          // disconnected), do NOT kick off another resubscribe round — that
+          // path was spamming the red error toast on every reconnect attempt.
+          // The pane becomes interactive again the next time the multiplex
+          // re-opens via web-runtime-client setState('connected'). The message
+          // is deduped by TerminalErrorTable so repeated onClose firings stay
+          // a single row.
+          storedCallbacks.onDisconnect?.()
+          storedCallbacks.onError?.(
+            'Remote Orca runtime connection lost — waiting for runtime to come back.'
+          )
         }
       }
     })
