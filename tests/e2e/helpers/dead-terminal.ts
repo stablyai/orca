@@ -6,9 +6,9 @@
  */
 
 import { expect } from '@playwright/test'
-import { execFileSync } from 'child_process'
-import { writeFileSync } from 'fs'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import type { getActiveWorktreeId } from './store'
 
 type TestPage = Parameters<typeof getActiveWorktreeId>[0]

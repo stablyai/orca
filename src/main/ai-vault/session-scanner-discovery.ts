@@ -1,5 +1,5 @@
-import { readdir, stat } from 'fs/promises'
-import { basename, delimiter, extname, join } from 'path'
+import { readdir, stat } from 'node:fs/promises'
+import { basename, delimiter, extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'

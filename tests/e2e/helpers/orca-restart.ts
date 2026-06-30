@@ -15,10 +15,10 @@ import {
   type Page,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { execSync } from 'child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import os from 'os'
-import path from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'

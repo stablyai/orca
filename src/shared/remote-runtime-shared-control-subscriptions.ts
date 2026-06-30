@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import { getCleanupRequest, getSubscriptionId } from './remote-runtime-shared-control-protocol'
 import {

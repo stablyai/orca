@@ -55,7 +55,7 @@ export function MobileDiffReviewHeader({
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.title} numberOfLines={1}>
-            Review Changes
+            Changes
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
             {worktreeLabel}

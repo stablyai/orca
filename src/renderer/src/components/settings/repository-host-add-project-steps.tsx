@@ -1,4 +1,4 @@
-import { type ComponentType } from 'react'
+import type { ComponentType } from 'react'
 import { ArrowLeft, Download, FolderOpen, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'

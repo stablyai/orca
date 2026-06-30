@@ -89,10 +89,118 @@ describe('agent completion coordinator', () => {
     expect(vi.getTimerCount()).toBe(0)
 
     coordinator.observeTitle('Codex working')
-    vi.advanceTimersByTime(2_000)
+    // Why: hidden panes poll the backstop at the throttled 3s cadence, not the
+    // 2s idle / 750ms active cadence reserved for visible panes.
+    vi.advanceTimersByTime(3_000)
     await flushAsyncTicks()
 
     expect(inspectProcess).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: regression guard for the hidden-pane throttle (follow-up to #6288 /
+  // PR #6667). A hidden pane with a live agent kept polling the OS process
+  // table at full 750ms cadence purely as a backstop, wasting idle CPU on
+  // shared SSH relays. It now polls at the 3s hidden cadence. Pre-fix this
+  // counted ~78 inspections over 60s; post-fix ~20. The assertion fails on the
+  // pre-fix code (>25) and passes after, so it locks in the reduction.
+  it('throttles a hidden agent pane to the 3s backstop cadence over a 60s window', async () => {
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => false
+    })
+
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    const hiddenCalls = inspectProcess.mock.calls.length
+    // ~60_000 / 3_000 = 20 (jitter pinned to 1.0 via the Math.random spy).
+    expect(hiddenCalls).toBeGreaterThanOrEqual(15)
+    expect(hiddenCalls).toBeLessThanOrEqual(25)
+  })
+
+  it('keeps a visible agent pane at full 750ms cadence over a 60s window', async () => {
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    // ~60_000 / 750 ≈ 78; the hidden throttle must not regress visible panes.
+    expect(inspectProcess.mock.calls.length).toBeGreaterThanOrEqual(70)
+  })
+
+  it('re-arms full cadence immediately when a throttled hidden pane becomes visible', async () => {
+    let visible = false
+    const inspectProcess = vi.fn(async () => processResult('codex'))
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      shouldPollProcessCadence: () => visible
+    })
+
+    coordinator.observeTitle('Codex working')
+    // First hidden poll runs and arms the next 3s backstop timer.
+    await vi.advanceTimersByTimeAsync(3_000)
+    const callsBeforeFlip = inspectProcess.mock.calls.length
+    expect(callsBeforeFlip).toBeGreaterThanOrEqual(1)
+
+    // 600ms into the 3s hidden interval: no new inspection yet.
+    await vi.advanceTimersByTimeAsync(600)
+    expect(inspectProcess.mock.calls.length).toBe(callsBeforeFlip)
+
+    // Becoming visible (lifecycle calls startProcessTracking) must drop the slow
+    // pending timer and re-arm at full cadence rather than wait out the ~2.4s left.
+    visible = true
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(900)
+
+    expect(inspectProcess.mock.calls.length).toBeGreaterThan(callsBeforeFlip)
+  })
+
+  it('still detects an unannounced process exit while hidden, at the slower cadence', async () => {
+    let foregroundProcess: string | null = 'codex'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      isLive: () => true,
+      shouldPollProcessCadence: () => false
+    })
+
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    // Agent exits with no completion title/hook — only the poll can notice.
+    foregroundProcess = null
+    // First idle sample requires a repeat before announcing (no dispatch yet).
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    // Second idle sample confirms the exit ~2 hidden polls (~6s) after it happened.
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
   })
 
   it('clears process evidence after agent exit so later non-agent spinner titles do not notify', async () => {

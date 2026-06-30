@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: Hermes run history has to reconcile
  * markdown output files with SQLite session transcripts from separate stores. */
-import { existsSync } from 'fs'
-import { open, readdir, readFile, realpath, stat } from 'fs/promises'
-import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve, sep } from 'path'
+import { existsSync } from 'node:fs'
+import { open, readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import Database from '../sqlite/sync-database'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')

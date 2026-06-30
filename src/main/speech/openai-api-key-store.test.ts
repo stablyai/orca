@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import type * as Os from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import type * as Os from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const safeStorageMock = vi.hoisted(() => ({

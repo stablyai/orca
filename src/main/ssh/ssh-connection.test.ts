@@ -1,10 +1,10 @@
 /* eslint-disable max-lines -- Why: SSH connection lifecycle tests share one ssh2 mock so auth, reconnect, and system-transport behavior stay consistent. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { Socket } from 'net'
-import { EventEmitter } from 'events'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { Socket } from 'node:net'
+import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let connectBehavior: 'ready' | 'error' = 'ready'

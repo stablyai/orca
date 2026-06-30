@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { type PickerOption } from '@/components/github/PRFilterPickers'
+import type { PickerOption } from '@/components/github/PRFilterPickers'
 import {
   SectionDetail,
   SectionMenu,

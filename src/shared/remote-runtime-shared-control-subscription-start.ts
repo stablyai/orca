@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { createSharedControlSubscription } from './remote-runtime-shared-control-subscriptions'
 import { finishSharedControlSubscription } from './remote-runtime-shared-control-state'

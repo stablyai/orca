@@ -1,5 +1,5 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { gitExecFileAsync, ghExecFileAsync, extractExecError } from '../git/runner'
 
 // Why: legacy generic execFile wrapper - only used by callers that don't need

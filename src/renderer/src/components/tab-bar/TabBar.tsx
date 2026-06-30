@@ -78,6 +78,7 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
 import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -455,16 +456,6 @@ function TabBarInner({
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
-  const tabIdsWithLiveAgent = useMemo(() => {
-    const ids = new Set<string>()
-    for (const paneKey of Object.keys(agentStatusByPaneKey ?? {})) {
-      const separator = paneKey.indexOf(':')
-      if (separator > 0) {
-        ids.add(paneKey.slice(0, separator))
-      }
-    }
-    return ids
-  }, [agentStatusByPaneKey])
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.
@@ -586,8 +577,7 @@ function TabBarInner({
         hasNewBrowser: !terminalOnly,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
-        hasSimulator:
-          !terminalOnly && isMacOs && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
+        hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
         simulatorIsGoTo: workspaceHasSimulatorTab
       }),
     [
@@ -745,7 +735,7 @@ function TabBarInner({
     </DropdownMenuItem>
   ) : null
   const newSimulatorMenuItem =
-    !terminalOnly && isMacOs && mobileEmulatorEnabled && onNewSimulatorTab ? (
+    !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1110,17 +1100,24 @@ function TabBarInner({
                   )
                 }
                 const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
-                const hasResolvedAgent =
-                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') !== null ||
-                  resolveTabAgentFromTitle(terminalTab.title) !== null
+                // Carry the agent *identity* (not just "an agent exists") so the
+                // native-chat gate can reject unsupported agents like Grok.
+                const resolvedAgent =
+                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') ??
+                  resolveTabAgentFromTitle(terminalTab.title)
+                // Key the live-agent lookup by the backing terminal tab id —
+                // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
+                // the unified tab id can differ from it.
+                const detectedAgent =
+                  findTabAgentEntry(agentStatusByPaneKey ?? {}, terminalTab.id)?.agentType ?? null
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
                     experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
                     launchAgent: terminalTab.launchAgent,
-                    hasDetectedAgent: tabIdsWithLiveAgent.has(unifiedTabForItem.id),
-                    hasResolvedAgent,
+                    detectedAgent,
+                    resolvedAgent,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (

@@ -3,9 +3,8 @@ import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = import.meta.dirname
 const ROOT = path.join(__dirname, '..', '..')
 const DEFAULT_MARKETING_REPO = path.join(
   homedir(),

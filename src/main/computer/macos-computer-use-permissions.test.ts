@@ -1,6 +1,6 @@
-import { execFileSync, spawn, spawnSync } from 'child_process'
-import { mkdtemp, readFile, rm, stat } from 'fs/promises'
-import { join } from 'path'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   openComputerUsePermissions,

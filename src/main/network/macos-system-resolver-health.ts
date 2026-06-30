@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn } from 'node:child_process'
 import type { SystemResolverHealth } from '../daemon/types'
 
 const MAC_RESOLVER_CHECK_TIMEOUT_MS = 1_500

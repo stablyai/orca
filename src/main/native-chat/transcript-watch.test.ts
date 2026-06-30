@@ -1,6 +1,6 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { getActiveNativeChatWatcherCount, subscribeNativeChatTranscript } from './transcript-watch'
@@ -109,7 +109,7 @@ describe('subscribeNativeChatTranscript', () => {
     // try/catch must break and reset `reading` in finally so a later append
     // still tails once permissions are restored.
     await waitFor(() => seen.some((m) => m.id === 'u-1'))
-    const { chmod } = await import('fs/promises')
+    const { chmod } = await import('node:fs/promises')
     await chmod(filePath, 0o000)
     await appendFile(filePath, claudeLine('a-1', 'assistant', 'reply')).catch(() => {})
     // Give the watcher a chance to attempt (and fail) a drain.

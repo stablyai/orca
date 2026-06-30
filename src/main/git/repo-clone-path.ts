@@ -1,6 +1,6 @@
-import { isAbsolute, join, posix, relative, resolve, sep, win32 } from 'path'
-import type { Stats } from 'fs'
-import { lstat, mkdir, rm } from 'fs/promises'
+import { isAbsolute, join, posix, relative, resolve, sep, win32 } from 'node:path'
+import type { Stats } from 'node:fs'
+import { lstat, mkdir, rm } from 'node:fs/promises'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as childProcess from 'child_process'
+import type * as childProcess from 'node:child_process'
 
 const { execFileSyncMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn()

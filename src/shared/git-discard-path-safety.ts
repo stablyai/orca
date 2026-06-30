@@ -1,5 +1,5 @@
-import { lstat, realpath } from 'fs/promises'
-import * as path from 'path'
+import { lstat, realpath } from 'node:fs/promises'
+import * as path from 'node:path'
 
 function isENOENT(error: unknown): boolean {
   return (

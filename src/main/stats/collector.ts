@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'fs'
-import { join, dirname } from 'path'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import type { StatsSummary } from '../../shared/types'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 

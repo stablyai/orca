@@ -48,7 +48,7 @@ export function useEmulatorPaneShutdown({
       } catch (e: unknown) {
         const msg = emulatorPaneErrorMessage(
           e,
-          'Could not shut down the emulator. Try again from Xcode Simulator.'
+          'Could not shut down the emulator. Try again, or stop it from your emulator manager.'
         )
         setError(msg)
       } finally {

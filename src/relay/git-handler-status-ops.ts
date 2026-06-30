@@ -4,9 +4,9 @@
  * Why: oxlint max-lines (300) requires splitting large files.
  * These functions are pure data operations on git state — no class coupling.
  */
-import * as path from 'path'
-import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
+import * as path from 'node:path'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
 import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'

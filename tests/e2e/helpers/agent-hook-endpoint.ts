@@ -1,6 +1,6 @@
 import { expect, type ElectronApplication } from '@stablyai/playwright-test'
-import { existsSync, readdirSync, readFileSync } from 'fs'
-import path from 'path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import {
   isAgentHookEndpointFileName,
   parseAgentHookEndpointFile,

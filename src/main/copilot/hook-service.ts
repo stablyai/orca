@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: local status/install/remove and SSH remote
    install must share the same Copilot event list, script body, and
    managed-command matching so local and remote hook behavior cannot drift. */
-import { existsSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {

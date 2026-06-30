@@ -253,7 +253,8 @@ function registerRuntimeWindowLifecycle(
         worktreeId,
         command: opts.command,
         ...(opts.env ? { env: opts.env } : {}),
-        title: opts.title
+        title: opts.title,
+        ...(opts.presentation ? { presentation: opts.presentation } : {})
       }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
@@ -287,6 +288,7 @@ function registerRuntimeWindowLifecycle(
           ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           activate: opts.activate !== false,
+          ...(opts.presentation ? { presentation: opts.presentation } : {}),
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
           // events route to the right slot.

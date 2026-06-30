@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const ONBOARDING_FLOW_PATH = join(dirname(fileURLToPath(import.meta.url)), 'use-onboarding-flow.ts')
+const ONBOARDING_FLOW_PATH = join(import.meta.dirname, 'use-onboarding-flow.ts')
 
 describe('useOnboardingFlow project-added handoff', () => {
   it('routes Git repo completion through the shared default-checkout opener', () => {

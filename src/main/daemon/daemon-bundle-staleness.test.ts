@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { spawn } from 'child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import { getProcessStartedAtMs, isDaemonStaleForCurrentBundle } from './daemon-health'
 

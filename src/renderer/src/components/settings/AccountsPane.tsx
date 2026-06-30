@@ -15,7 +15,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { AlertTriangle, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { toast } from 'sonner'
@@ -181,6 +181,10 @@ function getClaudeAccountErrorDescription(error: unknown): string {
       .replace(/^Error:\s*/i, '')
       .trim() || 'Claude sign-in failed. Please try again.'
   )
+}
+
+function isClaudeAccountCancellation(error: unknown): boolean {
+  return getClaudeAccountErrorDescription(error).toLowerCase() === 'claude sign-in was cancelled.'
 }
 
 type LocalAccountRuntime = {
@@ -550,6 +554,9 @@ export function AccountsPane({
         )
       }
     } catch (error) {
+      if (isClaudeAccountCancellation(error)) {
+        return
+      }
       toast.error(
         translate(
           'auto.components.settings.AccountsPane.2743cdc0af',
@@ -608,29 +615,42 @@ export function AccountsPane({
                 )}
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() =>
-                void runClaudeAccountAction('adding', () =>
-                  window.api.claudeAccounts.add({
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
-              }
-              disabled={
-                claudeAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
-              }
-              className="gap-1.5"
-            >
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  void runClaudeAccountAction('adding', () =>
+                    window.api.claudeAccounts.add({
+                      runtime: accountRuntime.runtime,
+                      wslDistro: accountRuntime.wslDistro
+                    })
+                  )
+                }
+                disabled={
+                  claudeAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {claudeAction === 'adding' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+              </Button>
               {claudeAction === 'adding' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Plus className="size-3" />
-              )}
-              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-            </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => void window.api.claudeAccounts.cancelPendingLogin()}
+                  className="gap-1.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3" />
+                  {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="space-y-2">

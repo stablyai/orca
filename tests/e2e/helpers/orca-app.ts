@@ -21,11 +21,19 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { execSync } from 'child_process'
-import { randomUUID } from 'crypto'
-import os from 'os'
-import path from 'path'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
@@ -133,7 +141,10 @@ function isValidGitRepo(repoPath: string): boolean {
 }
 
 function createSeededTestRepo(): string {
-  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
+  // Why: realpathSync so the seeded path matches the store's repo.path on
+  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
+  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })

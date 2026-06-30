@@ -1,8 +1,8 @@
-import { execFile, spawn, type ChildProcess } from 'child_process'
-import { access, mkdtemp } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { promisify } from 'util'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { access, mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const RUNTIME_METADATA_FILE = 'orca-runtime.json'

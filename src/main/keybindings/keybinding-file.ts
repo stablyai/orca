@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: parsing, sanitizing, migrating, and writing the keybindings file must stay together so file-format edge cases share one validation path. */
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
   findKeybindingConflicts,
   formatKeybindingList,

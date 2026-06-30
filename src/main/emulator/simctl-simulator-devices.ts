@@ -1,6 +1,6 @@
-import { execFile } from 'child_process'
-import type { ExecFileException } from 'child_process'
-import { platform } from 'os'
+import { execFile } from 'node:child_process'
+import type { ExecFileException } from 'node:child_process'
+import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import { execServeSimCommand, type ServeSimExecutable } from './serve-sim-execution'
 

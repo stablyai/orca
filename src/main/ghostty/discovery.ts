@@ -1,6 +1,6 @@
-import { homedir, platform } from 'os'
-import path from 'path'
-import { stat } from 'fs/promises'
+import { homedir, platform } from 'node:os'
+import path from 'node:path'
+import { stat } from 'node:fs/promises'
 
 // Why: Ghostty honors XDG before native macOS paths; we replicate that precedence.
 function xdgConfigDirs(home: string): string[] {

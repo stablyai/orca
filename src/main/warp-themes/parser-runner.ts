@@ -1,6 +1,6 @@
-import { Worker } from 'worker_threads'
+import { Worker } from 'node:worker_threads'
 import { app } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import type { ParsedWarpThemeResult, ParseWarpThemeOptions } from './parser'
 
 export const WARP_THEME_PARSE_TIMEOUT_MS = 1_000

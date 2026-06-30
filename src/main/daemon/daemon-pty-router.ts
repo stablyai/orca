@@ -96,6 +96,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getInitialCwd(id)
   }
 
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    return (await this.adapterFor(id).getAppliedSize?.(id)) ?? null
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
   }

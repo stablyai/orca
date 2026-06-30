@@ -1,8 +1,8 @@
-import { execFile } from 'child_process'
-import { randomUUID } from 'crypto'
-import { symlink, mkdir, stat, lstat, unlink, rm, link, rmdir, chmod } from 'fs/promises'
-import { dirname, isAbsolute, resolve } from 'path'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { symlink, mkdir, stat, lstat, unlink, rm, link, rmdir, chmod } from 'node:fs/promises'
+import { dirname, isAbsolute, resolve } from 'node:path'
+import { promisify } from 'node:util'
 
 type ExecFileAsync = (
   file: string,

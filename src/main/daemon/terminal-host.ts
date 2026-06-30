@@ -260,6 +260,17 @@ export class TerminalHost {
     return session.getSnapshot()
   }
 
+  // Why: read-only readback of the size the PTY actually applied (null-not-throw
+  // like getSnapshot). The renderer compares this against xterm to detect a
+  // resize that was dropped/coerced daemon-side and re-assert it.
+  getAppliedSize(sessionId: string): { cols: number; rows: number } | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getAppliedSize()
+  }
+
   // Why: same null-not-throw semantics as getSnapshot — incremental
   // checkpoints are best-effort against sessions that may have just exited.
   takePendingOutput(

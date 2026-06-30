@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: model download, checksum, extraction, and cleanup share one state machine so progress/error transitions stay coupled. */
 import { app, net } from 'electron'
-import { join, resolve, relative } from 'path'
-import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'fs'
-import { readdir, rm } from 'fs/promises'
-import { createHash } from 'crypto'
-import { pipeline } from 'stream/promises'
-import { spawn } from 'child_process'
+import { join, resolve, relative } from 'node:path'
+import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'node:fs'
+import { readdir, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { pipeline } from 'node:stream/promises'
+import { spawn } from 'node:child_process'
 import type {
   SpeechModelManifest,
   SpeechModelState,
@@ -595,7 +595,7 @@ export class ModelManager {
         const nestedFiles = await readdir(nestedDir)
         const hasExpected = manifest.files.some((f) => nestedFiles.includes(f))
         if (hasExpected) {
-          const { rename: fsRename } = await import('fs/promises')
+          const { rename: fsRename } = await import('node:fs/promises')
           for (const file of nestedFiles) {
             await fsRename(join(nestedDir, file), join(modelDir, file))
           }

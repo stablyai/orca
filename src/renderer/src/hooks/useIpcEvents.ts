@@ -32,6 +32,7 @@ import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeTerminalPresentation,
   RuntimeTerminalDriverState
 } from '../../../shared/runtime-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
@@ -133,6 +134,19 @@ function getShortcutPlatform(): NodeJS.Platform {
 const BROWSER_AUTOMATION_BOOTSTRAP_LEASE_MS = 10_000
 const RUNTIME_PROJECT_REFRESH_CONCURRENCY = 5
 const browserAutomationBootstrapLeaseByPageId = new Map<string, { token: string; timer: number }>()
+
+function resolveTerminalPresentation(data: {
+  presentation?: RuntimeTerminalPresentation
+  activate?: boolean
+}): RuntimeTerminalPresentation | undefined {
+  if (data.presentation) {
+    return data.presentation
+  }
+  if (data.activate === true) {
+    return 'focused'
+  }
+  return undefined
+}
 
 function isPinnedSessionTab(store: AppState, worktreeId: string, visibleId: string): boolean {
   return (store.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
@@ -1337,6 +1351,7 @@ export function useIpcEvents(): void {
           title,
           ptyId,
           activate,
+          presentation,
           tabId,
           leafId,
           splitFromLeafId,
@@ -1357,7 +1372,9 @@ export function useIpcEvents(): void {
               return
             }
             const store = useAppStore.getState()
-            const shouldActivate = activate !== false
+            const terminalPresentation = resolveTerminalPresentation({ presentation, activate })
+            const shouldActivate = terminalPresentation === 'focused'
+            const shouldSurfaceOwner = terminalPresentation !== 'background'
             if (shouldActivate) {
               activateTerminalInitiatedWorktree(store, worktreeId)
             }
@@ -1407,7 +1424,12 @@ export function useIpcEvents(): void {
                     // the same id keeps hook-event attribution working.
                     ...(tabId !== undefined ? { id: tabId } : {})
                   })
-                : store.createTab(worktreeId))
+                : store.createTab(
+                    worktreeId,
+                    undefined,
+                    undefined,
+                    shouldActivate ? undefined : { activate: false, recordInteraction: false }
+                  ))
             // Why: when an existing tab already owns this ptyId, we reuse it instead of
             // minting a new one — but the PTY env already carries a paneKey from main.
             // If the existing tab id doesn't match the hint, hook attribution degrades
@@ -1420,6 +1442,8 @@ export function useIpcEvents(): void {
             if (shouldActivate) {
               store.setActiveTabType('terminal')
               store.setActiveTab(tab.id)
+            }
+            if (shouldSurfaceOwner) {
               store.revealWorktreeInSidebar(worktreeId)
               focusTerminalInitiatedTab(tab.id, leafId)
             }
@@ -1551,7 +1575,9 @@ export function useIpcEvents(): void {
             })
             return
           }
-          const shouldActivate = data.activate !== false
+          const terminalPresentation = resolveTerminalPresentation(data)
+          const shouldActivate = terminalPresentation === 'focused'
+          const shouldSurfaceOwner = terminalPresentation !== 'background'
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           } else {
@@ -1603,6 +1629,8 @@ export function useIpcEvents(): void {
           if (shouldActivate) {
             store.setActiveTabType('terminal')
             store.setActiveTab(tab.id)
+          }
+          if (shouldSurfaceOwner) {
             store.revealWorktreeInSidebar(worktreeId)
             focusTerminalInitiatedTab(tab.id)
           }

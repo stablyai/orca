@@ -178,7 +178,7 @@ function renderPreview(settings = makeSettings()): void {
 }
 
 function runCleanups(): void {
-  for (const cleanup of [...mockReactRuntime.cleanups].reverse()) {
+  for (const cleanup of [...mockReactRuntime.cleanups].toReversed()) {
     cleanup()
   }
   mockReactRuntime.cleanups.length = 0

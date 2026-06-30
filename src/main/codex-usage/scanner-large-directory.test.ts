@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Dirent, Stats } from 'node:fs'
-import type * as FsPromises from 'fs/promises'
-import { join } from 'path'
+import type * as FsPromises from 'node:fs/promises'
+import { join } from 'node:path'
 
 const { getLegacyCopiedCodexSessionBridgeScanPreferenceMock, readdirMock, statMock } = vi.hoisted(
   () => ({

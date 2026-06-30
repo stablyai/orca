@@ -22,7 +22,10 @@ import {
   getRemoteRuntimeTerminalMultiplexer,
   type RemoteRuntimeMultiplexedTerminal
 } from '../../runtime/remote-runtime-terminal-multiplexer'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import {
+  toRuntimeTerminalWorktreeSelector,
+  toRuntimeWorktreeSelector
+} from '../../runtime/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
@@ -45,6 +48,11 @@ function isRemoteTerminalGoneMessage(message: string): boolean {
   )
 }
 
+/**
+ * PTY transport backing a renderer terminal pane with a terminal on a remote Orca
+ * runtime, over runtime RPC plus the multiplexed stream (create, subscribe, input,
+ * resize, close, reattach).
+ */
 export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
   opts: IpcPtyTransportOptions = {}
@@ -459,17 +467,29 @@ export function createRemoteRuntimePtyTransport(
           return await attachHostSessionMirror(options)
         }
 
+        const commandToSend = options.command ?? command
+        const startupCommandDeliveryToSend =
+          options.startupCommandDelivery ?? startupCommandDelivery
+        const envToSend = options.env ?? env
+        const launchConfigToSend = options.launchConfig ?? launchConfig
+        const launchTokenToSend = options.launchToken ?? launchToken
+        const launchAgentToSend = options.launchAgent ?? launchAgent
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-          worktree: toRuntimeWorktreeSelector(worktreeId),
-          command: options.command ?? command,
-          startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery,
-          env: options.env ?? env,
-          launchConfig: options.launchConfig ?? launchConfig,
-          launchToken: options.launchToken ?? launchToken,
-          launchAgent: options.launchAgent ?? launchAgent,
+          worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+          ...(commandToSend !== undefined ? { command: commandToSend } : {}),
+          ...(startupCommandDeliveryToSend !== undefined
+            ? { startupCommandDelivery: startupCommandDeliveryToSend }
+            : {}),
+          ...(envToSend !== undefined ? { env: envToSend } : {}),
+          ...(launchConfigToSend !== undefined ? { launchConfig: launchConfigToSend } : {}),
+          ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
+          ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
           tabId,
           leafId,
           focus: false,
+          // Why: this transport is backing an already-mounted renderer pane;
+          // activation here is local state, not permission for remote UI reveal.
+          presentation: 'background',
           ...(activate === true ? { activate: true } : {})
         })
         handle = created.terminal.handle

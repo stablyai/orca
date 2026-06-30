@@ -1,7 +1,7 @@
-import { execFileSync } from 'child_process'
-import { mkdtemp, realpath, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import * as path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { listWorktrees, removeWorktree } from './worktree'
 

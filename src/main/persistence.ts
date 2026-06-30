@@ -12,10 +12,10 @@ import {
   copyFileSync,
   statSync,
   realpathSync
-} from 'fs'
-import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
-import { join, dirname, isAbsolute, resolve, sep } from 'path'
-import { homedir } from 'os'
+} from 'node:fs'
+import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
+import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
+import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import type {
   Automation,
@@ -78,6 +78,8 @@ import {
   buildWorkspaceRunContext
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
+import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { hardenExistingSecureFile } from '../shared/secure-file'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
@@ -207,6 +209,7 @@ import {
 } from './terminal-scrollback-snapshots'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -300,17 +303,74 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
 // Solution: index.ts calls initDataPath() right after configureDevUserDataPath()
 // but before app.setName(), capturing the correct path at the right moment.
 let _dataFile: string | null = null
+let _userDataDir: string | null = null
 
 export function initDataPath(): void {
-  _dataFile = join(app.getPath('userData'), 'orca-data.json')
+  const userDataDir = app.getPath('userData')
+  _userDataDir = userDataDir
+  _dataFile = join(userDataDir, 'orca-data.json')
 }
 
 function getDataFile(): string {
   if (!_dataFile) {
     // Safety fallback — should not be hit in normal startup.
-    _dataFile = join(app.getPath('userData'), 'orca-data.json')
+    const userDataDir = app.getPath('userData')
+    _userDataDir = userDataDir
+    _dataFile = join(userDataDir, 'orca-data.json')
   }
   return _dataFile
+}
+
+/**
+ * Return the userData directory captured at initDataPath() time, before
+ * app.setName() can change how app.getPath('userData') resolves.
+ *
+ * Subsystems that must share storage with orca-data.json (mobile pairing's
+ * DeviceRegistry, E2EE keypair, runtime metadata) read this instead of
+ * resolving the path late, which on case-sensitive filesystems can land in a
+ * different directory and lose paired devices across restarts/updates.
+ */
+export function getCanonicalUserDataPath(): string {
+  if (!_userDataDir) {
+    // Safety fallback — should not be hit in normal startup.
+    _userDataDir = app.getPath('userData')
+  }
+  return _userDataDir
+}
+
+/**
+ * Copy legacy mobile pairing credentials into the canonical userData directory.
+ *
+ * Existing installs may already have credentials in the late app.getPath('userData')
+ * directory. Before switching the runtime server to the canonical path, copy the
+ * registry and E2EE keypair forward as a pair so an update does not force one
+ * last re-pair or mix devices with the wrong key.
+ */
+export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
+  const targetUserDataDir = getCanonicalUserDataPath()
+  if (resolve(sourceUserDataDir) === resolve(targetUserDataDir)) {
+    return
+  }
+
+  const migrations = MOBILE_PAIRING_USERDATA_FILES.map((fileName) => ({
+    sourcePath: join(sourceUserDataDir, fileName),
+    targetPath: join(targetUserDataDir, fileName)
+  }))
+  if (migrations.some(({ sourcePath }) => !existsSync(sourcePath))) {
+    return
+  }
+  if (migrations.some(({ targetPath }) => existsSync(targetPath))) {
+    return
+  }
+
+  mkdirSync(targetUserDataDir, { recursive: true })
+  for (const { sourcePath, targetPath } of migrations) {
+    copyFileSync(sourcePath, targetPath)
+    // Why: these are credential files (device tokens, E2EE secret key). copyFileSync
+    // does not carry Windows ACLs, so re-assert the current-user-only restriction on
+    // the copy instead of relying on the runtime's later lazy re-harden on read.
+    hardenExistingSecureFile(targetPath)
+  }
 }
 
 // Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
@@ -322,6 +382,15 @@ const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceS
   'tabsByWorktree',
   'terminalLayoutsByTabId'
 ])
+
+function logPersistenceStartupMilestone(
+  event: string,
+  details: Record<string, unknown> = {}
+): void {
+  if (isStartupDiagnosticsEnabled()) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
+}
 
 function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
   return Object.keys(patch).some((key) =>
@@ -2558,12 +2627,22 @@ export class Store {
     // social contract we installed them under.
     const dataFile = getDataFile()
     const fileExistedOnLoad = existsSync(dataFile)
+    logPersistenceStartupMilestone('persistence-load-start', {
+      fileExists: fileExistedOnLoad
+    })
 
     let result: PersistedState | null = null
     try {
       if (fileExistedOnLoad) {
+        const readStartedAt = performance.now()
         const raw = readFileSync(dataFile, 'utf-8')
+        logPersistenceStartupMilestone('persistence-read-done', {
+          bytes: Buffer.byteLength(raw),
+          durationMs: Math.round(performance.now() - readStartedAt)
+        })
+        logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secret settings are stored encrypted on disk via safeStorage.
         // Decrypt at the load boundary so the rest of the app sees plaintext.
@@ -3156,7 +3235,12 @@ export class Store {
     }
     result = folderScopeConnectionMigration.state
 
-    return this.migrateTelemetry(result, fileExistedOnLoad)
+    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+    logPersistenceStartupMilestone('persistence-load-done', {
+      repos: migrated.repos.length,
+      workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
+    })
+    return migrated
   }
 
   // One-shot telemetry cohort migration. Runs on every `load()` but is a

@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import { join, basename } from 'path'
+import { createHash } from 'node:crypto'
+import { join, basename } from 'node:path'
 import {
   mkdirSync,
   existsSync,
@@ -8,7 +8,7 @@ import {
   readdirSync,
   rmSync,
   statSync
-} from 'fs'
+} from 'node:fs'
 import { app } from 'electron'
 import { parseWslPath, toLinuxPath } from './wsl'
 

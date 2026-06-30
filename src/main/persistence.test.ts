@@ -11,9 +11,9 @@ import {
   existsSync,
   realpathSync,
   symlinkSync
-} from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+} from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type {
   PersistedState,
   Project,

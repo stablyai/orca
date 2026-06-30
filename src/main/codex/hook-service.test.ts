@@ -9,13 +9,13 @@ import {
   rmSync,
   symlinkSync,
   writeFileSync
-} from 'fs'
-import { homedir, tmpdir } from 'os'
-import type * as Os from 'os'
-import { join } from 'path'
-import { spawn } from 'child_process'
-import { createServer } from 'http'
-import type { AddressInfo } from 'net'
+} from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import type * as Os from 'node:os'
+import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import { computeTrustedHash, upsertHookTrustEntriesInContent } from './config-toml-trust'
 

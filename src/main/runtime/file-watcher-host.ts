@@ -3,8 +3,8 @@
 // once the recursive crawl is live). Running @parcel/watcher in the worker
 // keeps its blocking initial crawl off the main process's libuv pool so a huge
 // non-git tree can't wedge the `serve` runtime (issue #5308).
-import { Worker } from 'worker_threads'
-import { join } from 'path'
+import { Worker } from 'node:worker_threads'
+import { join } from 'node:path'
 import { app } from 'electron'
 import type { FsChangeEvent } from '../../shared/types'
 import type { FileWatcherHostMessage, FileWatcherWorkerMessage } from './file-watcher-worker'

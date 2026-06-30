@@ -6,8 +6,8 @@
  */
 
 import { test, expect } from './helpers/orca-app'
-import { createServer, type Server } from 'http'
-import type { AddressInfo } from 'net'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import {
   waitForSessionReady,
   waitForActiveWorktree,

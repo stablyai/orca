@@ -2,13 +2,13 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, delimiter } from 'path'
-import { win32 as pathWin32 } from 'path'
+import { basename, delimiter } from 'node:path'
+import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
 import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
-import { existsSync } from 'fs'
+import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -815,6 +815,19 @@ export class LocalPtyProvider implements IPtyProvider {
   }
   resize(id: string, cols: number, rows: number): void {
     ptyProcesses.get(id)?.resize(cols, rows)
+  }
+
+  // Why: node-pty caches the last winsize it applied on the IPty handle, so its
+  // cols/rows are the authoritative applied size (node-pty clamps invalid dims
+  // and a resize on a dead handle is a no-op, neither of which the requested
+  // size in ptySizes would reflect). The renderer's resume drift-check compares
+  // against this to re-assert a resize the PTY never actually took.
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    const proc = ptyProcesses.get(id)
+    if (!proc || proc.cols <= 0 || proc.rows <= 0) {
+      return null
+    }
+    return { cols: proc.cols, rows: proc.rows }
   }
 
   async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {

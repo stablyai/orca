@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: local/remote generation, cancellation, and
    env propagation share subprocess mocks; splitting would obscure the
    cross-path invariants these tests protect. */
-import { exec, spawn } from 'child_process'
-import type * as ChildProcess from 'child_process'
-import { EventEmitter } from 'events'
+import { exec, spawn } from 'node:child_process'
+import type * as ChildProcess from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'

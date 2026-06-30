@@ -19,10 +19,10 @@
 // can reconnect by running relay.js --connect, which bridges the new
 // SSH channel's stdin/stdout to the existing relay's socket.
 
-import { createServer, createConnection, type Socket, type Server } from 'net'
-import { homedir } from 'os'
-import { resolve, join } from 'path'
-import { unlinkSync, existsSync, statSync } from 'fs'
+import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { homedir } from 'node:os'
+import { resolve, join } from 'node:path'
+import { unlinkSync, existsSync, statSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,

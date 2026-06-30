@@ -3,8 +3,8 @@ routing, clone lifecycle, and store persistence stay behind a single audited
 boundary. Splitting by line count would scatter tightly coupled repo behavior. */
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { dialog, ipcMain } from 'electron'
-import { randomUUID } from 'crypto'
-import { homedir } from 'os'
+import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
@@ -40,10 +40,10 @@ import {
 } from '../../shared/cross-platform-path'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
-import type { ChildProcess } from 'child_process'
-import { access, mkdir, readdir, rm } from 'fs/promises'
+import type { ChildProcess } from 'node:child_process'
+import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
-import { isAbsolute, join, posix } from 'path'
+import { isAbsolute, join, posix } from 'node:path'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -1615,7 +1615,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
       const failedCount = results.filter((entry) => entry.status === 'failed').length
       if (importedCount + alreadyKnownCount === 0) {
-        for (const group of groupResolver.getCreatedGroups().reverse()) {
+        for (const group of groupResolver.getCreatedGroups().toReversed()) {
           store.deleteProjectGroup(group.id)
         }
       }

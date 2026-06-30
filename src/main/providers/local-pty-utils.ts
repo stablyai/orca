@@ -1,5 +1,5 @@
-import { basename, join } from 'path'
-import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
+import { basename, join } from 'node:path'
+import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'

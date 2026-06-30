@@ -1,4 +1,4 @@
-import type { FileHandle } from 'fs/promises'
+import type { FileHandle } from 'node:fs/promises'
 import { MAX_CONCURRENT_STREAMS, RelayErrorCode } from './protocol'
 
 type StreamEntry = {

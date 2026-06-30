@@ -1,4 +1,4 @@
-import { posix, win32 } from 'path'
+import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 
 export function joinWorktreeRelativePath(rootPath: string, relativePath: string): string {

@@ -3,9 +3,8 @@
 import { spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const scriptPath = realpathSync(fileURLToPath(import.meta.url))
+const scriptPath = realpathSync(import.meta.filename)
 const scriptDir = path.dirname(scriptPath)
 const repoRoot = path.resolve(scriptDir, '..', '..')
 const cliEntry =

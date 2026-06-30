@@ -7,12 +7,12 @@
  * relay decode → handler → response → framing → client decode → result.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, writeFileSync } from 'fs'
-import { rm, readFile, stat } from 'fs/promises'
-import * as path from 'path'
-import { tmpdir } from 'os'
-import { execFileSync } from 'child_process'
-import { randomBytes } from 'crypto'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { rm, readFile, stat } from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 
 import {
   SshChannelMultiplexer,

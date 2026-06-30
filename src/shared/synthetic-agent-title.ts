@@ -4,6 +4,7 @@ export type SyntheticAgentTitleProfile = {
   workingLabel: string
   permissionLabel: string
   idleLabel: string
+  titleIdentityGroup?: string
   synthesizeWorkingTitle?: boolean
 }
 
@@ -29,12 +30,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   pi: {
     workingLabel: 'Pi',
     permissionLabel: 'Pi - action required',
-    idleLabel: 'Pi ready'
+    idleLabel: 'Pi ready',
+    titleIdentityGroup: 'pi-compatible'
   },
   omp: {
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
-    idleLabel: 'OMP ready'
+    idleLabel: 'OMP ready',
+    titleIdentityGroup: 'pi-compatible'
   },
   droid: {
     workingLabel: 'Droid',

@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: these tests cover one reconciliation boundary
  * across ready, pending, split, and batched session snapshots. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { posix as pathPosix } from 'path'
+import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -1507,6 +1507,49 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.agentStatusByPaneKey?.[hostPaneKey]).toBeUndefined()
     expect(patch.agentStatusEpoch).toBe(1)
     expect(patch.sortEpoch).toBe(1)
+  })
+
+  it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Pi ready',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1',
+          launchAgent: 'omp',
+          agentStatus: {
+            state: 'done',
+            prompt: '',
+            updatedAt: NOW - 100,
+            stateStartedAt: NOW - 1_000,
+            agentType: 'pi',
+            paneKey: hostPaneKey,
+            terminalTitle: 'Pi ready',
+            stateHistory: []
+          }
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      title: 'OMP ready',
+      launchAgent: 'omp'
+    })
+    expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
+      agentType: 'omp',
+      terminalTitle: 'OMP ready'
+    })
   })
 
   it('hydrates multiple initial host snapshots in one merged patch', () => {

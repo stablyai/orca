@@ -85,6 +85,7 @@ export type KeybindingActionId =
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
   | 'editor.find'
+  | 'editor.replace'
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
@@ -102,6 +103,8 @@ export type KeybindingActionId =
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
+  | 'terminal.setTitle'
+  | 'terminal.clearPaneTitle'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
@@ -774,6 +777,20 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
+    id: 'editor.replace',
+    title: 'Replace in editor',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'replace', 'find', 'search'],
+    // Why: match the source editor's native replace shortcut — Cmd+Alt+F on
+    // macOS, Ctrl+H on Linux/Windows.
+    defaultBindings: {
+      darwin: ['Mod+Alt+F'],
+      linux: ['Mod+H'],
+      win32: ['Mod+H']
+    }
+  },
+  {
     id: 'editor.save',
     title: 'Save File',
     group: 'Editors',
@@ -925,6 +942,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.clearPaneTitle',
+    title: 'Clear Pane Title',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.closePane',

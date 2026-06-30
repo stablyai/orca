@@ -2,7 +2,7 @@
  * chunk upload, completion, and cancellation in one hook so native audio state
  * cannot drift from the runtime RPC lifecycle. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Buffer } from 'buffer'
+import { Buffer } from 'node:buffer'
 import {
   addExpoTwoWayAudioEventListener,
   initialize,

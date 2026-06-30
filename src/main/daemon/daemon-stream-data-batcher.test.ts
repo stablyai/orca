@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Socket } from 'net'
+import type { Socket } from 'node:net'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser } from './ndjson'
 

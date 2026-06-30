@@ -2,22 +2,13 @@
 // If Orca only mirrors files that already exist, /login writes land in a
 // disposable overlay instead of the user's ~/.omp/agent store.
 
-import { closeSync, existsSync, mkdirSync, openSync } from 'fs'
-import { join } from 'path'
+import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs'
+import { join } from 'node:path'
 import { mirrorWritableFileEntry, safeRemoveTree } from './overlay-mirror'
 
 export const OMP_PERSISTENT_SQLITE_FILES = ['agent.db'] as const
 
 const SQLITE_SIDECAR_SUFFIXES = ['-wal', '-shm'] as const
-
-export function isOmpPersistentSqliteEntry(entryName: string): boolean {
-  return OMP_PERSISTENT_SQLITE_FILES.some(
-    (databaseName) =>
-      entryName === databaseName ||
-      entryName === `${databaseName}-wal` ||
-      entryName === `${databaseName}-shm`
-  )
-}
 
 function ensureEmptyFile(path: string): void {
   closeSync(openSync(path, 'a'))

@@ -42,6 +42,11 @@ function getCheckStatusLabel(check: CheckStatusLike): string {
       return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
     case 'timed_out':
       return translate('auto.components.editor.CheckRunDetailsPanel.2f6d8a1c45', 'Timed out')
+    case 'action_required':
+      return translate(
+        'auto.components.editor.CheckRunDetailsPanel.actionRequired',
+        'Action required'
+      )
     case 'skipped':
       return translate('auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12', 'Skipped')
     case 'neutral':

@@ -1,10 +1,10 @@
 /* eslint-disable max-lines -- Why: external automation discovery, pagination,
  * and lifecycle routing share provider/target validation and remote relay fallbacks. */
-import { execFile } from 'child_process'
-import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
-import { homedir } from 'os'
-import { join } from 'path'
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type {
   ExternalAutomationAction,
   ExternalAutomationActionInput,

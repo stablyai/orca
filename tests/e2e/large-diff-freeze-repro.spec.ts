@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from 'fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'

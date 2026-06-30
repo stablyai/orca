@@ -23,6 +23,7 @@ import {
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
+  GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
@@ -110,6 +111,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
+  }),
+  defineMethod({
+    name: 'git.submoduleStatus',
+    params: GitSubmoduleStatus,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
     name: 'git.history',

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { AddressInfo } from 'net'
+import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
 import {

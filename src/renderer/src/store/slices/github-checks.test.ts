@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { syncPRChecksStatus, normalizeBranchName } from './github-checks'
+import {
+  deriveCheckStatusFromChecks,
+  syncPRChecksStatus,
+  normalizeBranchName
+} from './github-checks'
 import type { AppState } from '../types'
+import type { PRCheckDetail } from '../../../../shared/types'
+
+describe('deriveCheckStatusFromChecks', () => {
+  it('treats an action_required check as failure so it is not a silent pass', () => {
+    const checks: PRCheckDetail[] = [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null },
+      { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
+    ]
+    expect(deriveCheckStatusFromChecks(checks)).toBe('failure')
+  })
+})
 
 describe('normalizeBranchName', () => {
   it('strips refs/heads/ prefix', () => {

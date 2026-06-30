@@ -43,6 +43,7 @@ export function VaultSessionRow({
   resumeDisabled,
   onToggleDetails,
   onJumpToOriginalPane,
+  showJumpToWorktree,
   onJumpToWorktree,
   onResume,
   resumeLabel,
@@ -63,6 +64,7 @@ export function VaultSessionRow({
   resumeDisabled: boolean
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
   resumeLabel: string
@@ -146,6 +148,7 @@ export function VaultSessionRow({
               worktreeInfo={worktreeInfo}
               onToggleDetails={onToggleDetails}
               onJumpToOriginalPane={onJumpToOriginalPane}
+              showJumpToWorktree={showJumpToWorktree}
               onJumpToWorktree={onJumpToWorktree}
               onResume={onResume}
               onCopyResume={onCopyResume}
@@ -204,6 +207,7 @@ export function VaultSessionRow({
           resumeDisabled={resumeDisabled}
           resumeLabel={resumeLabel}
           onJumpToOriginalPane={onJumpToOriginalPane}
+          showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={onJumpToWorktree}
           onResume={onResume}
           onCopyResume={onCopyResume}
@@ -224,6 +228,7 @@ export function SessionActionMenuItems({
   resumeLabel,
   onResume,
   onJumpToOriginalPane,
+  showJumpToWorktree,
   onJumpToWorktree,
   onCopyResume,
   onCopyId,
@@ -237,6 +242,7 @@ export function SessionActionMenuItems({
   resumeLabel: string
   onResume: () => void
   onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onCopyResume: () => void
   onCopyId: () => void
@@ -259,13 +265,15 @@ export function SessionActionMenuItems({
           )}
         </Item>
       ) : null}
-      <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
-        <PanelTopOpen className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
-          'Jump to Worktree'
-        )}
-      </Item>
+      {showJumpToWorktree ? (
+        <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
+          <PanelTopOpen className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
+            'Jump to Worktree'
+          )}
+        </Item>
+      ) : null}
       <Item disabled={resumeDisabled} onSelect={onResume}>
         <Play className="size-3.5" />
         {resumeLabel}

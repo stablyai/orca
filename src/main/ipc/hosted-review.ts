@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { posix, resolve } from 'path'
+import { posix, resolve } from 'node:path'
 import type {
   CreateHostedReviewArgs,
   HostedReviewCreationEligibilityArgs,

@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines -- Why: history error-logging .catch() chains add ~10 lines of
 safety wiring spread across spawn/event-routing; splitting would scatter tightly coupled
 adapter ↔ history lifecycle logic. */
-import { basename } from 'path'
-import { existsSync } from 'fs'
+import { basename } from 'node:path'
+import { existsSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { HistoryManager } from './history-manager'
@@ -360,6 +360,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async getInitialCwd(id: string): Promise<string> {
     return this.initialCwds.get(id) ?? ''
+  }
+
+  // Why: resize() is a fire-and-forget notify, so a resize can be dropped
+  // daemon-side (session not yet alive, exited, invalid dims, cold-restore
+  // snapshot-col coercion) without the renderer knowing. This reads the size
+  // the daemon actually applied so the renderer can detect that drift on resume
+  // and re-assert. Null (RPC failure / unknown session) means "cannot confirm",
+  // which the renderer treats as a cue to re-forward once.
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    try {
+      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
+        'getSize',
+        { sessionId: id }
+      )
+      return result.size ?? null
+    } catch {
+      return null
+    }
   }
 
   async clearBuffer(id: string): Promise<void> {

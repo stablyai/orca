@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: Codex discovery, incremental parsing, attribution, and aggregation all depend on the same event-normalization rules. Keeping them together makes the duplicate-snapshot logic easier to audit when usage totals look wrong. */
-import { basename, join, win32, posix } from 'path'
-import { createReadStream, existsSync } from 'fs'
-import { realpath, readdir, stat } from 'fs/promises'
-import { createInterface } from 'readline'
+import { basename, join, win32, posix } from 'node:path'
+import { createReadStream, existsSync } from 'node:fs'
+import { realpath, readdir, stat } from 'node:fs/promises'
+import { createInterface } from 'node:readline'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'

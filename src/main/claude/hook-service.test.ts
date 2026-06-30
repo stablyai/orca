@@ -3,9 +3,9 @@
 // or the script body that lands on the remote box. Local install behavior
 // is exercised through `installer-utils.test.ts` and the per-CLI status
 // audit; this file covers ONLY the SFTP-backed path added in commit #8.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
 
 vi.mock('electron', () => ({

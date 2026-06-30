@@ -133,7 +133,8 @@
         "7a566540de": "配对 URL 或代码",
         "cb4d287238": "服务器名称",
         "3affe7de3a": "粘贴来自该浏览器可以访问的 Orca 服务器的配对 URL。",
-        "e3bcd082ac": "连接到 Orca"
+        "e3bcd082ac": "连接到 Orca",
+        "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
       },
       "web": {
         "preload": {
@@ -228,7 +229,9 @@
           "2e17f825d4": "工作树已删除，分支已保留",
           "78e08cd877": "Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "3b57982bf6": "删除工作区\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
-          "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。"
+          "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
+          "runtimeScopeForbiddenTitle": "此连接具有受限（移动端）访问权限",
+          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -394,6 +397,13 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            }
+          }
+        },
+        "mobile": {
+          "emulator": {
+            "tab": {
+              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
         }
@@ -631,7 +641,17 @@
         "b1c2f8b0ac": "Claude、Codex、Gemini 和 OpenCode Go 的可选账户切换。",
         "f70ac54d38": "AI 提供商账户",
         "4121f7a0a2": "管理 AI 智能体、设置默认值并自定义命令。",
-        "b49abbd2f7": "智能体"
+        "b49abbd2f7": "智能体",
+        "dev": "Dev Tools",
+        "devDescription": "Dev-only tools for exercising UI states.",
+        "devBadge": "Dev",
+        "devSearchNotificationPlayground": "Notification playground",
+        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchKeywordDev": "dev",
+        "devSearchKeywordToast": "toast",
+        "devSearchKeywordSonner": "sonner",
+        "devSearchKeywordError": "error",
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -703,6 +723,7 @@
         "d23bbb6416": "{{value0}} 已跳过",
         "18f80e1329": "{{value0}} 待处理",
         "b1ac991806": "{{value0}} 失败",
+        "checksNeedActionChip": "{{value0}} 个需要操作",
         "311d0cee55": "{{value0}} 通过",
         "e52bed9264": "尚未报告任何检查",
         "90020cc1f3": "此PR尚未报告检查。",
@@ -851,7 +872,8 @@
           "to": "to",
           "activity": "Activity",
           "noActivity": "No activity yet."
-        }
+        },
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -1176,6 +1198,7 @@
         "e6ad0a8d06": "{{value0}} 已跳过",
         "88267924d5": "{{value0}} 待处理",
         "ae2a34c7b8": "{{value0}} 失败",
+        "checksNeedActionChip": "{{value0}} 个需要操作",
         "7c5035931a": "{{value0}} 通过",
         "a18d01cda3": "尚未报告任何检查",
         "3912daf310": "此PR尚未报告检查。",
@@ -1310,7 +1333,8 @@
         "commentTooLarge": "评论过长，无法安全提交。",
         "8ff5ae8866": "负责人",
         "82c87eceb9": "编辑负责人",
-        "1ff5d979df": "未分配任何人"
+        "1ff5d979df": "未分配任何人",
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "QuickOpen": {
         "1dbd3f59ff": "手机",
@@ -2396,6 +2420,7 @@
             "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
+            "clearPaneTitle": "清除窗格标题",
             "06c2b0f043": "均衡窗格大小",
             "98bccf4fa2": "向下拆分终端",
             "20e565d865": "向右拆分终端",
@@ -2530,7 +2555,9 @@
             "couldNotReadPayload": "无法读取会话拖拽数据。",
             "localWorkspacesOnly": "从历史恢复仅支持本地工作区。",
             "openLocalWorkspace": "恢复会话前请先打开一个本地工作区。",
-            "sessionQueued": "会话已排队"
+            "sessionQueued": "会话已排队",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新建拆分"
@@ -3972,7 +3999,9 @@
           "250de158fd": "移除工作区",
           "changeParentWorkspace": "更改父工作树...",
           "setParentWorkspace": "设置父工作树...",
-          "workspaceSection": "工作区"
+          "workspaceSection": "工作区",
+          "primaryDeleteDisabled": "主要工作树无法删除，请改为删除项目。",
+          "deleteWorktree": "删除工作树"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -5225,7 +5254,11 @@
           "sourceControlGroupOrderDescription": "选择在源代码管理中优先显示“更改”、“已暂存更改”还是“未跟踪文件”。",
           "changesFirst": "更改优先",
           "stagedFirst": "已暂存优先",
-          "untrackedFirst": "未跟踪优先"
+          "untrackedFirst": "未跟踪优先",
+          "compareAgainstUpstreamTitle": "默认对比基准",
+          "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
+          "compareBaseRepositoryDefault": "仓库默认",
+          "compareBaseBranchUpstream": "分支上游"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "占位符切换",
@@ -5422,7 +5455,12 @@
           "a4f1c82d90": "已禁用",
           "b5e2d93e01": "检查中...",
           "c6f3ea4f12": "就绪",
-          "d704fb5023": "需要设置"
+          "d704fb5023": "需要设置",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "重新生成二维码并从 Orca 手机应用程序扫描。",
@@ -5977,7 +6015,14 @@
           "2752126f3e": "运行时配对不可用。",
           "95b8be4cea": "刷新网络接口失败。",
           "1b4e0bbcc5": "无法加载共享访问授权。",
-          "b91e36a986": "网络"
+          "b91e36a986": "网络",
+          "custom-option": "{{address}}（自定义）",
+          "add-custom": "添加自定义地址…",
+          "custom-title": "自定义连接地址",
+          "custom-description": "公布其他设备可以访问的地址：LAN 或 Tailscale 主机，或完整的 ws(s):// URL。",
+          "custom-hint": "请输入主机、host:port 或 ws(s):// URL。",
+          "custom-cancel": "取消",
+          "custom-use": "使用地址"
         },
         "Settings": {
           "3bf149e873": "项目设置 > {{value0}}",
@@ -6050,7 +6095,9 @@
           "9abb9be3bc": "初始设置",
           "23c6874fdf": "AI 能力",
           "2309068a6f": "destructive",
-          "65358016ea": "放弃"
+          "65358016ea": "放弃",
+          "dev": "Dev Tools",
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -6941,7 +6988,9 @@
             "0dbb1eaf4e": "主页",
             "291f480a5e": "家",
             "a942905148": "创建新浏览器选项卡时打开的 URL。留空以打开空白选项卡。",
-            "c3903322d2": "默认主页"
+            "c3903322d2": "默认主页",
+            "19ea5607cf": "Localhost Worktree Labels",
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
           },
           "use": {
             "search": {
@@ -7360,7 +7409,19 @@
             "stagedFirst": "已暂存优先",
             "untrackedFirst": "未跟踪优先",
             "sourceControl": "源代码管理",
-            "gitChanges": "git 更改"
+            "gitChanges": "git 更改",
+            "compareAgainstUpstreamTitle": "默认对比基准",
+            "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
+            "compareBase": "对比基准",
+            "currentBranch": "当前分支",
+            "upstream": "上游",
+            "localChanges": "本地变更",
+            "originMaster": "origin/master",
+            "committedChanges": "已提交的更改",
+            "defaultCompareBase": "默认对比基准",
+            "defaultBranch": "默认分支",
+            "repositoryDefault": "仓库默认",
+            "branchUpstream": "分支上游"
           }
         },
         "input": {
@@ -8485,6 +8546,10 @@
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "移除此绑定"
         },
+        "BrowserLocalhostWorktreeLabelsSetting": {
+          "8ac8c3ad19": "Localhost Worktree Labels",
+          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+        },
         "AgentRuntimeSetting": {
           "label": "Agent runtime",
           "wsl": "WSL",
@@ -8495,8 +8560,53 @@
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
         },
+        "MobileEmulatorSdkStatus": {
+          "536026130e": "Emulator SDKs",
+          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "027cbf668a": "Android SDK",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
+          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
+          "b94ff260e6": "Download Android Studio",
+          "18925b082d": "Locate SDK folder",
+          "8c52684db8": "Clear",
+          "76eb88b88e": "iOS Simulator (Xcode)",
+          "c6f3ea4f12": "Ready",
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
+        },
         "AppearanceAdvancedDisclosure": {
           "advanced": "高级"
+        },
+        "DevToolsPane": {
+          "nativeActionLayoutCheck": "Native action layout check",
+          "secondary": "Secondary",
+          "secondaryActionClicked": "Secondary action clicked",
+          "primaryAction": "Primary action",
+          "primaryActionClicked": "Primary action clicked",
+          "branchHasChanges": "branch has changes",
+          "viewChangesClicked": "View Changes clicked",
+          "forceDeleteClicked": "Force Delete clicked",
+          "devOnlyCallback": "Dev-only callback.",
+          "infoToast": "Info toast",
+          "infoToastDescription": "Long informational copy with no explicit action.",
+          "localCanaryBehind": "Local canary is behind origin/canary",
+          "successToast": "Success toast",
+          "successToastDescription": "Short confirmation state.",
+          "settingsSaved": "Settings saved",
+          "shortSuccessCopy": "Short success copy.",
+          "errorToast": "Error toast",
+          "errorToastDescription": "Long error copy without recovery actions.",
+          "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
+          "nativeActionToast": "Native action toast",
+          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "deleteFailureToast": "Delete failure toast",
+          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "behindBaseRefToast": "Behind base ref toast",
+          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "notificationPlayground": "Notification playground",
+          "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
+          "devOnly": "Dev only"
         }
       },
       "right": {
@@ -9110,7 +9220,8 @@
                 "8a621a2c4f": "已分组",
                 "b13f85d75c": "时间线",
                 "f5cf324efa": "评论显示选项",
-                "5e6e5a13fa": "查看"
+                "5e6e5a13fa": "查看",
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
               },
               "empty": {
                 "state": {
@@ -9165,7 +9276,7 @@
             "83a10e3c44": "检查项",
             "0314901467": "源代码控制",
             "06219e4cb1": "搜索",
-            "8bc2bbc3a0": "探险家",
+            "8bc2bbc3a0": "资源管理器",
             "45b78f03bc": "边",
             "34af8aadf5": "顶部",
             "9fffaf17c1": "切换右侧边栏 ({{value0}})",
@@ -9173,7 +9284,7 @@
             "9f83375839": "检查",
             "6306b48afd": "源代码控制",
             "ef182dcb12": "搜索",
-            "fc3095d2ed": "探险家",
+            "fc3095d2ed": "资源管理器",
             "aiVaultSessionHistory": "智能体",
             "folderWorkspaces": "已附加的工作树",
             "parentPrChecks": "PR 检查"
@@ -9358,7 +9469,10 @@
             "agents": "智能体",
             "sessionsShownCompact": "已显示 {{value0}} 个",
             "originalPaneUnavailable": "Original pane is no longer available.",
-            "worktreeUnavailable": "Worktree is no longer available."
+            "worktreeUnavailable": "Worktree is no longer available.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -9995,6 +10109,20 @@
             "cefd048225": "返回",
             "c5ad56786d": "旋转器"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "自定义网络地址",
+          "description": "指定当手机不在同一 Wi-Fi 时可以访问的地址，例如 Tailscale 主机名或静态 IP。",
+          "label": "地址",
+          "placeholder": "my-mac.ts.net 或 192.168.1.50",
+          "hint": "请输入 IP 地址或 Tailscale 主机名（以 .ts.net 结尾）。",
+          "cancel": "取消",
+          "use": "使用地址"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "要公布的网络地址",
+          "custom-option": "{{address}}（自定义）",
+          "add-custom": "添加自定义地址…"
         }
       },
       "gitlab": {
@@ -10261,7 +10389,7 @@
             "2f37142229": "压缩合并",
             "0aab7ab84a": "添加本地诊断错误跟踪",
             "dfe313e0c9": "打开",
-            "6e3f5223c5": "探险家",
+            "6e3f5223c5": "资源管理器",
             "ab2901bce6": "检查项",
             "d7f80060ca": "源代码控制",
             "8e715588e4": "搜索",
@@ -11010,7 +11138,14 @@
           "32ae8d7d57": "上一个结果",
           "158c645829": "在 Markdown 编辑器中查找",
           "98b89276f3": "在编辑器中查找",
-          "a86958d508": "没有结果"
+          "a86958d508": "没有结果",
+          "e8c147435f": "隐藏替换",
+          "9cdc38be33": "显示替换",
+          "482b637099": "区分大小写",
+          "68d090241d": "匹配整个单词",
+          "fd97c7e585": "替换",
+          "44682b4159": "在 Markdown 编辑器中替换",
+          "c2884f5e95": "全部替换"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "没有找到块",
@@ -11180,7 +11315,8 @@
           "d5a8c2f1b9": "启动默认 AI 智能体来修复此检查",
           "e2b4d7c8a1": "为此检查选择智能体",
           "f1c9e3a6d4": "选择智能体修复检查",
-          "5e2a9c3f88": "Open file at this line"
+          "5e2a9c3f88": "Open file at this line",
+          "actionRequired": "Action required"
         },
         "check": {
           "run": {
@@ -12088,7 +12224,8 @@
         "stopDictation": "Stop dictation",
         "noSkills": "No matching skills",
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
-        "removeAttachment": "Remove attachment"
+        "removeAttachment": "Remove attachment",
+        "pastedImageLabel": "Pasted image"
       },
       "tool": {
         "running": "Running…",

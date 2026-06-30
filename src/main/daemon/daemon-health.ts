@@ -1,9 +1,9 @@
 /* oxlint-disable max-lines -- Why: pid validation shares process-identity
 helpers with kill escalation so the SIGKILL safety checks stay co-located. */
-import { execFile, execFileSync } from 'child_process'
-import { existsSync, readFileSync, unlinkSync } from 'fs'
-import { connect, type Socket } from 'net'
-import { promisify } from 'util'
+import { execFile, execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { connect, type Socket } from 'node:net'
+import { promisify } from 'node:util'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
@@ -24,6 +24,8 @@ const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 const KILL_WAIT_MS = 3_000
 const KILL_POLL_MS = 100
 const START_TIME_TOLERANCE_MS = 1_500
+
+export type DaemonHealth = 'healthy' | 'unreachable' | 'pty-spawn-unhealthy'
 
 type ParsedDaemonPid = {
   pid: number
@@ -69,10 +71,10 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
   })
 }
 
-export function healthCheckDaemon(socketPath: string, tokenPath: string): Promise<boolean> {
+export function checkDaemonHealth(socketPath: string, tokenPath: string): Promise<DaemonHealth> {
   return new Promise((resolve) => {
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve(false)
+      resolve('unreachable')
       return
     }
 
@@ -80,13 +82,13 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
     try {
       token = readFileSync(tokenPath, 'utf8').trim()
     } catch {
-      resolve(false)
+      resolve('unreachable')
       return
     }
 
     let settled = false
     let sock: Socket | null = null
-    const settle = (result: boolean): void => {
+    const settle = (result: DaemonHealth): void => {
       if (settled) {
         return
       }
@@ -101,7 +103,7 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
       sock?.off('connect', onConnect)
       sock?.off('data', onData)
     }
-    const onError = (): void => settle(false)
+    const onError = (): void => settle('unreachable')
     const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
@@ -132,13 +134,13 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         try {
           message = JSON.parse(line) as Record<string, unknown>
         } catch {
-          settle(false)
+          settle('unreachable')
           return
         }
 
         if (message.type === 'hello') {
           if (!(message as HelloResponse).ok) {
-            settle(false)
+            settle('unreachable')
             return
           }
           // Why: a protocol-live daemon with a stale cwd or node-pty helper
@@ -149,12 +151,12 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         }
 
         if (message.id === 'health-1') {
-          settle(message.ok === true)
+          settle(message.ok === true ? 'healthy' : 'pty-spawn-unhealthy')
           return
         }
       }
     }
-    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
+    const timer = setTimeout(() => settle('unreachable'), HEALTH_CHECK_TIMEOUT_MS)
 
     sock = connect({ path: socketPath })
     sock.on('error', onError)
@@ -163,6 +165,10 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
     let buffer = ''
     sock.on('data', onData)
   })
+}
+
+export async function healthCheckDaemon(socketPath: string, tokenPath: string): Promise<boolean> {
+  return (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
 }
 
 function isSystemResolverHealth(value: unknown): value is SystemResolverHealth {

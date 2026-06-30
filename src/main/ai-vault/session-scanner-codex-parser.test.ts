@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
 

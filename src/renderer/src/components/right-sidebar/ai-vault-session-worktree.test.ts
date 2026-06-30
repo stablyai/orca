@@ -5,6 +5,7 @@ import {
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeJumpTooltip,
   canJumpToAiVaultSessionWorktree,
+  isAiVaultSessionInCurrentWorktree,
   extractWorktreePathFromSessionTitle,
   resolveAiVaultSessionWorktreeDisplay,
   resolveAiVaultSessionWorktreeInfo,
@@ -146,6 +147,16 @@ describe('canJumpToAiVaultSessionWorktree', () => {
     expect(canJumpToAiVaultSessionWorktree(makeWorktreeInfo('archived'))).toBe(false)
     expect(canJumpToAiVaultSessionWorktree(makeWorktreeInfo('unavailable'))).toBe(false)
     expect(canJumpToAiVaultSessionWorktree(null)).toBe(false)
+  })
+})
+
+describe('isAiVaultSessionInCurrentWorktree', () => {
+  it('flags only the worktree the user is already viewing', () => {
+    expect(isAiVaultSessionInCurrentWorktree(makeWorktreeInfo('current'))).toBe(true)
+    expect(isAiVaultSessionInCurrentWorktree(makeWorktreeInfo('active'))).toBe(false)
+    expect(isAiVaultSessionInCurrentWorktree(makeWorktreeInfo('archived'))).toBe(false)
+    expect(isAiVaultSessionInCurrentWorktree(makeWorktreeInfo('unavailable'))).toBe(false)
+    expect(isAiVaultSessionInCurrentWorktree(null)).toBe(false)
   })
 })
 

@@ -30,6 +30,7 @@ import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shar
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
@@ -1112,6 +1113,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.
     get().dropAgentStatusByTabPrefix(tabId)
+    // Why: closing a tab permanently retires every pane under it (a reopen mints
+    // a fresh leafId at epoch 0), so drop the panes' hibernation output epochs to
+    // keep that module-level map from growing for the renderer's whole lifetime.
+    forgetAgentHibernationTabOutput(tabId)
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
       const workspaceItem = tabs.find(
         (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
@@ -2882,7 +2887,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       pendingReconnectTabByWorktree,
       pendingReconnectPtyIdByTabId,
       terminalLayoutsByTabId,
-      tabsByWorktree
+      tabsByWorktree,
+      ptyIdsByTabId
     } = get()
     const ids = pendingReconnectWorktreeIds ?? []
 
@@ -2906,6 +2912,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // The layout's ptyIdsByLeafId (preserved from shutdown) already has per-leaf
     // mappings. For single-pane tabs without leaf mappings, store the tab-level
     // ptyId as a sentinel so connectPanePty knows to reattach.
+    let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
+    let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
     for (const worktreeId of ids) {
       const tabs = tabsByWorktree[worktreeId] ?? []
       const worktree = Object.values(get().worktreesByRepo)
@@ -2956,33 +2964,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
         if (tabLevelPtyId) {
-          set((s) => {
-            const next = { ...s.tabsByWorktree }
-            if (!next[worktreeId]) {
-              return {}
-            }
+          reconnectedTabsByWorktree ??= { ...tabsByWorktree }
+          const nextTabs = reconnectedTabsByWorktree[worktreeId]
+          if (!nextTabs) {
+            continue
+          }
 
-            // Why: populate ptyIdsByTabId so the sessions status segment
-            // can map daemon session IDs back to tabs (for bound/orphan
-            // detection and click-to-navigate). Without this, all sessions
-            // appear as orphans until the terminal pane mounts.
-            const allPtyIds = hasLeafMappings
-              ? (Object.values(leafPtyMap).filter(Boolean) as string[])
-              : [tabLevelPtyId!]
-            next[worktreeId] = next[worktreeId].map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
-            )
-            return {
-              tabsByWorktree: next,
-              // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
-              // Restored daemon sessions are still running even before their
-              // pane remounts, so background workspaces must advertise them.
-              ptyIdsByTabId: {
-                ...s.ptyIdsByTabId,
-                [tabId]: allPtyIds
-              }
-            }
-          })
+          // Why: populate ptyIdsByTabId so the sessions status segment
+          // can map daemon session IDs back to tabs (for bound/orphan
+          // detection and click-to-navigate). Without this, all sessions
+          // appear as orphans until the terminal pane mounts.
+          const allPtyIds = hasLeafMappings
+            ? (Object.values(leafPtyMap).filter(Boolean) as string[])
+            : [tabLevelPtyId]
+          reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
+            t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+          )
+          // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
+          // Restored daemon sessions are still running even before their
+          // pane remounts, so background workspaces must advertise them.
+          reconnectedPtyIdsByTabId ??= { ...ptyIdsByTabId }
+          reconnectedPtyIdsByTabId[tabId] = allPtyIds
         }
       }
     }
@@ -3014,6 +3016,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
 
     set({
+      ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
+      ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
       workspaceSessionReady: true,
       pendingReconnectWorktreeIds: [],
       pendingReconnectTabByWorktree: {},

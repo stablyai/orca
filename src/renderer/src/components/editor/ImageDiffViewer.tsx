@@ -1,4 +1,4 @@
-import { type JSX } from 'react'
+import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import ImageViewer from './ImageViewer'
 import { translate } from '@/i18n/i18n'

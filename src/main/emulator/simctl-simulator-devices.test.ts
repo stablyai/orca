@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as Os from 'os'
+import type * as Os from 'node:os'
 
 const { execFileMock, platformMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),

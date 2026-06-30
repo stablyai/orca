@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { execFileSync } from 'child_process'
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
 import {
   buildSearchBaseRefsArgv,

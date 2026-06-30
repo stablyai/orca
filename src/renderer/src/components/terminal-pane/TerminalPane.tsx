@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: terminal pane component co-locates title state, layout serialization, and portal rendering to keep pane lifecycle consistent. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
@@ -79,6 +80,7 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
@@ -458,6 +460,65 @@ export default function TerminalPane({
   const renameFocusFrameRef = useRef<number | null>(null)
   const renameEnableBlurFrameRef = useRef<number | null>(null)
   const renameRefocusFrameRef = useRef<number | null>(null)
+  /**
+   * Cancels deferred focus/blur work from inline title editing.
+   * Rename sessions schedule multiple frames because xterm and Radix can both
+   * move focus after the menu closes.
+   */
+  const cancelPendingRenameFrames = useCallback(() => {
+    const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
+    for (const frameRef of frameRefs) {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
+      }
+    }
+  }, [])
+
+  /**
+   * Invalidates the active inline title edit session before unmount or cancel.
+   * Session IDs keep stale animation-frame callbacks from committing old titles.
+   */
+  const closeRenameSession = useCallback(() => {
+    renameSessionIdRef.current += 1
+    renameBlurCommitEnabledRef.current = true
+    renameUserRequestedBlurCommitRef.current = false
+    cancelPendingRenameFrames()
+  }, [cancelPendingRenameFrames])
+
+  /**
+   * Owns the terminal container ref and closes rename work when that owner
+   * detaches, preventing delayed focus callbacks from targeting stale DOM.
+   */
+  const setContainerRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      containerRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: inline title rename focus/blur frames are owned by the terminal
+      // container; invalidate them when that DOM owner detaches.
+      closeRenameSession()
+    },
+    [closeRenameSession]
+  )
+
+  /**
+   * Starts inline title editing from either the context menu or keyboard
+   * shortcut while resetting stale blur-submit state from prior sessions.
+   */
+  const handleStartRename = useCallback(
+    (paneId: number) => {
+      cancelPendingRenameFrames()
+      renameSessionIdRef.current += 1
+      renameBlurCommitEnabledRef.current = false
+      renameUserRequestedBlurCommitRef.current = false
+      renameSubmittedRef.current = false
+      setRenameValue(paneTitlesRef.current[paneId] ?? '')
+      setRenamingPaneId(paneId)
+    },
+    [cancelPendingRenameFrames]
+  )
   const onPtyErrorRef = useRef((_paneId: number, message: string) => {
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
@@ -500,12 +561,21 @@ export default function TerminalPane({
       )?.label
   )
   // The native-chat toggle joins the pane header's split/close cluster. Eligible
-  // when Orca launched an agent here or one was detected live (any pane of this
-  // tab has an agent-status entry, keyed `${tabId}:…`).
-  const hasDetectedAgent = useAppStore((store) =>
-    Object.keys(store.agentStatusByPaneKey).some((paneKey) => {
-      const sep = paneKey.indexOf(':')
-      return sep > 0 && paneKey.slice(0, sep) === tabId
+  // when Orca launched a *supported* agent here or one was detected live for the
+  // leaf, keyed `${tabId}:${leafId}`. Carry the agent identity, not just "an
+  // agent exists", so the gate can reject Grok et al.
+  // Scoped to this tab's panes (leafId → agentType) and shallow-compared so an
+  // unrelated tab's agent status tick doesn't re-render this pane.
+  const tabAgentTypeByLeaf = useAppStore(
+    useShallow((store) => {
+      const prefix = `${tabId}:`
+      const byLeaf: Record<string, AgentType> = {}
+      for (const [paneKey, entry] of Object.entries(store.agentStatusByPaneKey)) {
+        if (paneKey.startsWith(prefix) && entry.agentType) {
+          byLeaf[paneKey.slice(prefix.length)] = entry.agentType
+        }
+      }
+      return byLeaf
     })
   )
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
@@ -518,14 +588,36 @@ export default function TerminalPane({
   const titleResolvedAgent =
     resolveTabAgentFromTitle(unifiedTabLabel ?? '') ??
     (terminalTab ? resolveTabAgentFromTitle(terminalTab.title) : null)
-  const canToggleChat = canToggleNativeChat({
-    experimentalNativeChatEnabled: nativeChatEnabled,
-    contentType: 'terminal',
-    launchAgent: terminalTab?.launchAgent,
-    hasDetectedAgent,
-    hasResolvedAgent: titleResolvedAgent !== null,
-    isChatViewMode
-  })
+  // Per-leaf eligibility: a split can mix a supported agent in one leaf with an
+  // unsupported one in another, so the toggle is gated by the specific leaf.
+  // A leaf's own live agent is authoritative; the tab-wide launch/title hints
+  // only fill in before hooks arrive (or for the single-pane case) so they
+  // can't enable the toggle on a sibling actually running an unsupported agent.
+  const canToggleChatForLeaf = useCallback(
+    (leafId: string | null): boolean => {
+      const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+      // Scope the "always allow toggling back" rule to the leaf actually showing
+      // chat — passing the tab-wide flag would re-enable the toggle on an
+      // unsupported sibling whenever any leaf in the split is in chat view.
+      const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
+      return canToggleNativeChat({
+        experimentalNativeChatEnabled: nativeChatEnabled,
+        contentType: 'terminal',
+        launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
+        detectedAgent,
+        resolvedAgent: detectedAgent ? null : titleResolvedAgent,
+        isChatViewMode: isChatViewForLeaf
+      })
+    },
+    [
+      tabAgentTypeByLeaf,
+      effectiveChatViewMode,
+      chatLeafId,
+      nativeChatEnabled,
+      terminalTab?.launchAgent,
+      titleResolvedAgent
+    ]
+  )
   const toggleNativeChatForLeaf = useCallback(
     (leafId: string) => {
       if (!unifiedTabId) {
@@ -886,6 +978,49 @@ export default function TerminalPane({
       persistLayoutSnapshot()
     },
     [paneTransportsRef, persistLayoutSnapshot]
+  )
+
+  /**
+   * Removes a custom pane title from React state, the fresh persistence ref,
+   * and the leaf-id tombstone set so the next layout snapshot stays cleared.
+   */
+  const removePaneTitle = useCallback(
+    (paneId: number) => {
+      setPaneTitles((prev) => {
+        if (!(paneId in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[paneId]
+        return next
+      })
+      // Eagerly remove from the ref so persistLayoutSnapshot sees the change.
+      if (paneId in paneTitlesRef.current) {
+        const next = { ...paneTitlesRef.current }
+        delete next[paneId]
+        paneTitlesRef.current = next
+      }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.add(leafId)
+      }
+      persistLayoutSnapshot()
+    },
+    [persistLayoutSnapshot]
+  )
+
+  /**
+   * Ignores clear-title shortcuts for panes already using their automatic
+   * title, keeping the command idempotent and avoiding unnecessary snapshots.
+   */
+  const handleClearPaneTitleShortcut = useCallback(
+    (paneId: number) => {
+      if (!paneTitlesRef.current[paneId]) {
+        return
+      }
+      removePaneTitle(paneId)
+    },
+    [removePaneTitle]
   )
 
   useEffect(() => {
@@ -1479,6 +1614,8 @@ export default function TerminalPane({
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
+    onSetTitle: handleStartRename,
+    onClearPaneTitle: handleClearPaneTitleShortcut,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
@@ -2143,49 +2280,6 @@ export default function TerminalPane({
     }
   }, [tabId, worktreeId, setTabLayout])
 
-  const cancelPendingRenameFrames = useCallback(() => {
-    const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
-    for (const frameRef of frameRefs) {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current)
-        frameRef.current = null
-      }
-    }
-  }, [])
-
-  const closeRenameSession = useCallback(() => {
-    renameSessionIdRef.current += 1
-    renameBlurCommitEnabledRef.current = true
-    renameUserRequestedBlurCommitRef.current = false
-    cancelPendingRenameFrames()
-  }, [cancelPendingRenameFrames])
-
-  const setContainerRef = useCallback(
-    (node: HTMLDivElement | null): void => {
-      containerRef.current = node
-      if (node !== null) {
-        return
-      }
-      // Why: inline title rename focus/blur frames are owned by the terminal
-      // container; invalidate them when that DOM owner detaches.
-      closeRenameSession()
-    },
-    [closeRenameSession]
-  )
-
-  const handleStartRename = useCallback(
-    (paneId: number) => {
-      cancelPendingRenameFrames()
-      renameSessionIdRef.current += 1
-      renameBlurCommitEnabledRef.current = false
-      renameUserRequestedBlurCommitRef.current = false
-      renameSubmittedRef.current = false
-      setRenameValue(paneTitlesRef.current[paneId] ?? '')
-      setRenamingPaneId(paneId)
-    },
-    [cancelPendingRenameFrames]
-  )
-
   useEffect(() => {
     if (renamingPaneId === null) {
       return
@@ -2211,31 +2305,6 @@ export default function TerminalPane({
       document.removeEventListener('keydown', markKeyboardBlurIntent, true)
     }
   }, [renamingPaneId])
-
-  const removePaneTitle = useCallback(
-    (paneId: number) => {
-      setPaneTitles((prev) => {
-        if (!(paneId in prev)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[paneId]
-        return next
-      })
-      // Eagerly remove from the ref so persistLayoutSnapshot sees the change.
-      if (paneId in paneTitlesRef.current) {
-        const next = { ...paneTitlesRef.current }
-        delete next[paneId]
-        paneTitlesRef.current = next
-      }
-      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
-      if (leafId) {
-        removedTitleLeafIdsRef.current.add(leafId)
-      }
-      persistLayoutSnapshot()
-    },
-    [persistLayoutSnapshot]
-  )
 
   const handleRenameSubmit = useCallback(() => {
     if (renamingPaneId === null || renameSubmittedRef.current) {
@@ -2360,6 +2429,7 @@ export default function TerminalPane({
     onRequestClosePane: handleRequestClosePane,
     onClearPaneScrollback: clearPaneScrollback,
     onSetTitle: handleStartRename,
+    onClearPaneTitle: handleClearPaneTitleShortcut,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
     forceBracketedMultilineTextPaste,
@@ -2638,6 +2708,8 @@ export default function TerminalPane({
 
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
+  const menuPaneHasCustomTitle =
+    contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   const chatLeafStillMounted = chatLeafId
     ? managedPanes.some((pane) => pane.leafId === chatLeafId)
     : false
@@ -2669,6 +2741,11 @@ export default function TerminalPane({
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
+  // Header toggle gates on the active leaf; the context-menu toggle gates on the
+  // leaf the menu was opened over — so a split mixing supported/unsupported
+  // agents shows the toggle only on the leaf that can actually render chat.
+  const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
     <>
       <div
@@ -2799,7 +2876,7 @@ export default function TerminalPane({
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
-        canToggleNativeChat={canToggleChat}
+        canToggleNativeChat={contextMenuCanToggleChat}
         isNativeChatView={contextMenuIsChatView}
         onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
@@ -2814,6 +2891,8 @@ export default function TerminalPane({
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+        onClearPaneTitle={contextMenu.onClearPaneTitle}
+        canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
@@ -2853,7 +2932,7 @@ export default function TerminalPane({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
-        canToggleNativeChat={canToggleChat}
+        canToggleNativeChat={activePaneCanToggleChat}
         isChatViewMode={activePaneIsChatLeaf}
         onToggleNativeChat={handleToggleNativeChat}
         onSplitPane={splitTerminalPaneFromHeader}

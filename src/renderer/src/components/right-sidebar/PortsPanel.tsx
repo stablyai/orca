@@ -36,6 +36,7 @@ import {
   advertisedBrowserUrlForForwardedRow,
   browserUrlForPortForwardEntry
 } from '@/lib/workspace-port-urls'
+import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   Dialog,
@@ -293,7 +294,8 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
           settings,
           event,
           isMac: navigator.userAgent.includes('Mac')
-        })
+        }),
+        localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port)
       })
       if (!result.ok) {
         toast.error(

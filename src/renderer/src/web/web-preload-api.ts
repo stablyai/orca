@@ -464,6 +464,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
@@ -488,7 +489,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     platform: {
       get: () => ({
         platform: getBrowserPlatform(),
-        osRelease: ''
+        osRelease: '',
+        displayServer: null
       })
     },
     e2e: {
@@ -1483,6 +1485,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         includeIgnored
       })
     },
+    submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.submoduleStatus', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        submodulePath,
+        area
+      })
+    },
     checkIgnored: async ({ worktreePath, paths }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.checkIgnored', {
@@ -1811,6 +1821,7 @@ function createGitHubApi(): WebGitHubApi {
       }),
     workItemDetails: (args) =>
       route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    notifyWorkItemMutated: () => Promise.resolve(false),
     prFileContents: (args) =>
       route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
     listIssues: (args) =>
@@ -2469,6 +2480,7 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
@@ -2531,6 +2543,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
+    getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>

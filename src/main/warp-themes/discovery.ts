@@ -1,7 +1,7 @@
-import { readdirSync } from 'fs'
-import type { Dirent } from 'fs'
-import { homedir, platform } from 'os'
-import path from 'path'
+import { readdirSync } from 'node:fs'
+import type { Dirent } from 'node:fs'
+import { homedir, platform } from 'node:os'
+import path from 'node:path'
 
 const WARP_CHANNELS = [
   { macName: '.warp', linuxName: 'warp-terminal', windowsName: 'Warp' },

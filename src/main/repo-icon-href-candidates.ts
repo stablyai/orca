@@ -1,4 +1,4 @@
-import { posix } from 'path'
+import { posix } from 'node:path'
 
 function normalizeIconHrefPath(href: string): { path: string; rootRelative: boolean } | null {
   const trimmed = href.trim()

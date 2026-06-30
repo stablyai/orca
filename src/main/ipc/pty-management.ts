@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
+import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import { getDaemonProvider, restartDaemon } from '../daemon/daemon-init'
 import type { DaemonSessionInfo } from '../daemon/types'
@@ -25,7 +26,7 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
   if (!provider) {
     return []
   }
-  if (provider instanceof DaemonPtyRouter) {
+  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
     return [...provider.getAllAdapters()]
   }
   return [provider]

@@ -25,7 +25,7 @@
  *   - Crash/SIGKILL recovery — that is covered by daemon history checkpoints.
  */
 
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, existsSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'

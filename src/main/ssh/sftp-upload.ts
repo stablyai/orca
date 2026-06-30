@@ -1,7 +1,7 @@
-import { constants } from 'fs'
-import type { ReadStream } from 'fs'
-import { lstat, open, readdir, realpath } from 'fs/promises'
-import { isAbsolute, join as pathJoin, relative, sep } from 'path'
+import { constants } from 'node:fs'
+import type { ReadStream } from 'node:fs'
+import { lstat, open, readdir, realpath } from 'node:fs/promises'
+import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
 export function mkdirSftp(

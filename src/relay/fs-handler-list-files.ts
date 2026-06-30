@@ -15,7 +15,7 @@
  *   - treats rg exit code 2 with parseable stdout as success (permission
  *     denied on a single subdir is expected on home-dir roots)
  */
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import {
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,

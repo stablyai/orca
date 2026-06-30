@@ -1,5 +1,5 @@
-import { randomUUID } from 'crypto'
-import { isAbsolute, join, relative, resolve, sep } from 'path'
+import { randomUUID } from 'node:crypto'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 
 // Why: re-exported here so main-side callers can keep importing

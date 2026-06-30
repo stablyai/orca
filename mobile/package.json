@@ -63,7 +63,7 @@
     "@types/ws": "^8.18.1",
     "expo-module-scripts": "^55.0.2",
     "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0",
+    "oxlint": "^1.71.0",
     "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^8.0.16",

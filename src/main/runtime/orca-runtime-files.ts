@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: filesystem, editor-file, and search commands share the same local/SSH path authorization rules. Keeping that IO adapter together prevents separate command paths from drifting on safety checks. */
-import type { ChildProcess } from 'child_process'
-import { watch as watchFs } from 'fs'
+import type { ChildProcess } from 'node:child_process'
+import { watch as watchFs } from 'node:fs'
 import {
   constants,
   copyFile,
@@ -13,9 +13,9 @@ import {
   rm,
   stat,
   writeFile
-} from 'fs/promises'
-import { homedir } from 'os'
-import { basename, dirname, extname, join } from 'path'
+} from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { basename, dirname, extname, join } from 'node:path'
 import type {
   DirEntry,
   FsChangeEvent,
@@ -143,11 +143,16 @@ export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
 }
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
+export type ResolvedRuntimeFileTarget = {
+  worktree: ResolvedRuntimeFileWorktree
+  connectionId?: string
+}
 
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
   requireStore(): Store
   resolveWorktreeSelector(selector: string): Promise<ResolvedRuntimeFileWorktree>
+  resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
@@ -173,9 +178,8 @@ export class RuntimeFileCommands {
 
   async listMobileFiles(worktreeSelector: string): Promise<RuntimeFileListResult> {
     const store = this.host.requireStore()
-    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
-    const repo = store.getRepo(worktree.repoId)
-    const connectionId = repo?.connectionId ?? undefined
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
     const files = connectionId
       ? await this.listRemoteMobileFiles(worktree.path, connectionId)
       : await listQuickOpenFiles(worktree.path, store)
@@ -202,7 +206,7 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string
   ): Promise<RuntimeFileOpenResult> {
-    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
+    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -234,7 +238,7 @@ export class RuntimeFileCommands {
     relativePath: string,
     staged: boolean
   ): Promise<RuntimeFileOpenResult> {
-    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
+    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -254,7 +258,8 @@ export class RuntimeFileCommands {
     relativePath: string
   ): Promise<RuntimeFileReadResult> {
     const store = this.host.requireStore()
-    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -262,10 +267,9 @@ export class RuntimeFileCommands {
       throw new Error('binary_file')
     }
 
-    const repo = store.getRepo(worktree.repoId)
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = repo?.connectionId
-      ? await this.readRemoteMobileFile(filePath, repo.connectionId)
+    const content = connectionId
+      ? await this.readRemoteMobileFile(filePath, connectionId)
       : await readLocalMobileFile(filePath, store)
     const truncated = truncateMobileFilePreview(content)
 
@@ -291,9 +295,8 @@ export class RuntimeFileCommands {
     cwd?: string | null
   ): Promise<RuntimeTerminalPathResolution> {
     const store = this.host.requireStore()
-    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
-    const repo = store.getRepo(worktree.repoId)
-    const connectionId = repo?.connectionId ?? undefined
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
     const base = cwd && cwd.trim().length > 0 ? cwd : worktree.path
 
     const empty: RuntimeTerminalPathResolution = {
@@ -764,7 +767,7 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     options: Omit<SearchOptions, 'rootPath'>
   ): Promise<SearchResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     const rootPath = target.worktree.path
     const searchOptions = { ...options, rootPath }
@@ -781,7 +784,7 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     options: { excludePaths?: string[] } = {}
   ): Promise<string[]> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -793,7 +796,7 @@ export class RuntimeFileCommands {
   }
 
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -943,14 +946,12 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }> {
-    const store = this.host.requireStore()
-    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const normalizedRelativePath = normalizeRuntimeRelativePath(relativePath)
-    const repo = store.getRepo(worktree.repoId)
     return {
-      worktree,
-      path: joinWorktreeRelativePath(worktree.path, normalizedRelativePath),
-      connectionId: repo?.connectionId ?? undefined
+      worktree: target.worktree,
+      path: joinWorktreeRelativePath(target.worktree.path, normalizedRelativePath),
+      connectionId: target.connectionId
     }
   }
 

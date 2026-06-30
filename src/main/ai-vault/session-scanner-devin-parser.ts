@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readFile } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime } from './session-scanner-types'
 import {

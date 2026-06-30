@@ -1,5 +1,5 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 export function resolveSshConfigHomePath(filepath: string): string {
   if (filepath === '~') {

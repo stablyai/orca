@@ -126,6 +126,14 @@ export class HeadlessEmulator {
     this.terminal.resize(cols, rows)
   }
 
+  // Why: Session.resize applies this emulator and the node-pty subprocess
+  // together behind the same dead/invalid-size gate, so the emulator's dims are
+  // an accurate proxy for the size the child actually took — and stay stale
+  // when a resize is dropped, which is exactly the drop the renderer must detect.
+  getAppliedSize(): { cols: number; rows: number } {
+    return { cols: this.terminal.cols, rows: this.terminal.rows }
+  }
+
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
     const modes = this.getModes()
     const snapshotAnsi = this.normalizeSnapshotAnsiForModes(

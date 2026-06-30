@@ -1,5 +1,5 @@
-import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 

@@ -443,6 +443,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     leafId,
     shellOverride,
     projectRuntime,
+    terminalColorQueryReplies,
     telemetry,
     onPtyExit,
     onTitleChange,
@@ -705,6 +706,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(leafId ? { leafId } : {}),
           ...(shellOverride ? { shellOverride } : {}),
           ...(projectRuntime ? { projectRuntime } : {}),
+          ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
           ...(telemetry ? { telemetry } : {})
         })
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }

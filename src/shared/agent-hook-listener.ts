@@ -10,9 +10,9 @@
 // module uses only Node builtins (http/fs/crypto/net/path/url/os) — none of
 // which pull `electron` — so it is safe to import from `src/relay/`. See
 // docs/design/agent-status-over-ssh.md §3 ("relay normalizes; Orca routes").
-import type { IncomingMessage } from 'http'
-import { createHash, randomUUID } from 'crypto'
-import { homedir } from 'os'
+import type { IncomingMessage } from 'node:http'
+import { createHash, randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import {
   chmodSync,
   closeSync,
@@ -24,8 +24,8 @@ import {
   statSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { join } from 'path'
+} from 'node:fs'
+import { join } from 'node:path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'

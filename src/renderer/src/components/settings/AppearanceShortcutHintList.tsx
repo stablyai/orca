@@ -1,6 +1,6 @@
 import type React from 'react'
 
-import { type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 

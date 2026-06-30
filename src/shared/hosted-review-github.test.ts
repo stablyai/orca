@@ -91,6 +91,17 @@ describe('hostedReviewSummaryFromGitHubPRInfo', () => {
     expect(summary.checksStatus).toBe('failure')
   })
 
+  it('treats action_required checks as failed so auto-merge sees the block', () => {
+    const summary = hostedReviewSummaryFromGitHubPRInfo({
+      pr: { ...pr, checksStatus: 'success' },
+      owner: 'acme',
+      repo: 'orca',
+      checks: [{ name: 'approval', status: 'completed', conclusion: 'action_required', url: null }]
+    })
+
+    expect(summary.checksStatus).toBe('failure')
+  })
+
   it('distinguishes loaded empty comments from unknown comments', () => {
     expect(
       hostedReviewSummaryFromGitHubPRInfo({

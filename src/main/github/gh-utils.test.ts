@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({

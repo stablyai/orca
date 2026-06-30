@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
 const {

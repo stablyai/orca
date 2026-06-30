@@ -3,7 +3,7 @@
    file; splitting the plugin source across TS modules would obscure the
    runtime artifact and scatter tightly coupled string-template logic. */
 import { app } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import {
   existsSync,
   mkdirSync,
@@ -13,8 +13,8 @@ import {
   statSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { createHash } from 'crypto'
+} from 'node:fs'
+import { createHash } from 'node:crypto'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'

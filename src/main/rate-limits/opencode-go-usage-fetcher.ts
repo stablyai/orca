@@ -1,5 +1,5 @@
 import { net } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
 

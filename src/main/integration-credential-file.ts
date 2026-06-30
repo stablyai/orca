@@ -1,4 +1,4 @@
-import { statSync } from 'fs'
+import { statSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import {
   credentialDecryptionMessage,

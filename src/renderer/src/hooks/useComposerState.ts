@@ -37,6 +37,7 @@ import {
 } from '../../../shared/task-source-context'
 import type {
   GitHubWorkItem,
+  GitHubPrStartPoint,
   GitPushTarget,
   GitLabWorkItem,
   LinearIssue,
@@ -189,6 +190,12 @@ type PendingSmartGitHubSubmitResolution =
       pushTarget?: GitPushTarget
       branchNameOverride?: string
     })
+
+type SmartGitHubPrStartPointSelection = {
+  repoId: string
+  item: GitHubWorkItem
+  resolved?: GitHubPrStartPoint
+}
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -433,6 +440,27 @@ export function isExplicitWorkspaceNameInput({
 }): boolean {
   // Why: a user-authored name must win over linked-item and first-message AI naming.
   return Boolean(name.trim()) && name !== lastAutoName && !isWorkItemLookupText(name)
+}
+
+export function resolveSmartGitHubCreateNames({
+  resolutionKind,
+  smartWorkspaceName,
+  smartDisplayName,
+  fallbackWorkspaceName,
+  nameIsAutoManaged
+}: {
+  resolutionKind: Exclude<PendingSmartGitHubSubmitResolution['kind'], 'none'>
+  smartWorkspaceName: string
+  smartDisplayName: string
+  fallbackWorkspaceName: string
+  nameIsAutoManaged: boolean
+}): { workspaceName: string; displayName: string | undefined } {
+  if (resolutionKind === 'pr-start-point' && !nameIsAutoManaged && fallbackWorkspaceName) {
+    // Why: submit-time PR start-point resolution augments an already-linked PR;
+    // it must not reclaim a workspace name the user edited after selection.
+    return { workspaceName: fallbackWorkspaceName, displayName: undefined }
+  }
+  return { workspaceName: smartWorkspaceName, displayName: smartDisplayName }
 }
 
 function getLinkedWorkItemSeedName(item: LinkedWorkItemSummary | null | undefined): string {
@@ -1110,6 +1138,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // `note` to its deps (which would rebuild the callback on every keystroke).
   const noteRef = useRef<string>(note)
   noteRef.current = note
+  // Why: PR selections in the Create From field resolve their checkout ref
+  // asynchronously. Submit must still know that the linked PR is a checkout
+  // source if Create is clicked before that resolver settles.
+  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(null)
   useEffect(() => {
     const clearAutoManagedName = (): void => {
       if (nameRef.current === lastAutoNameRef.current) {
@@ -1958,6 +1990,64 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const resolvePendingSmartGitHubSubmit =
     useCallback(async (): Promise<PendingSmartGitHubSubmitResolution> => {
       if (linkedWorkItem) {
+        const startPointSelection = smartGitHubPrStartPointSelectionRef.current
+        if (
+          !isProjectGroupTarget &&
+          linkedWorkItem.type === 'pr' &&
+          getLinkedWorkItemProvider(linkedWorkItem) === 'github' &&
+          selectedRepo &&
+          selectedRepoIsGit &&
+          startPointSelection?.repoId === selectedRepo.id &&
+          startPointSelection.item.number === linkedWorkItem.number
+        ) {
+          const selectedPrStartPoint =
+            startPointSelection.resolved ??
+            (await resolveGitHubPrStartPointForRepo({
+              repoId: selectedRepo.id,
+              prNumber: startPointSelection.item.number,
+              settings: getSettingsForRepoRuntimeOwner(
+                { repos: [selectedRepo], settings },
+                selectedRepo.id
+              ),
+              ...(startPointSelection.item.branchName
+                ? { headRefName: startPointSelection.item.branchName }
+                : {}),
+              ...(startPointSelection.item.baseRefName
+                ? { baseRefName: startPointSelection.item.baseRefName }
+                : {}),
+              ...(startPointSelection.item.isCrossRepository !== undefined
+                ? { isCrossRepository: startPointSelection.item.isCrossRepository }
+                : {})
+            }))
+          startPointSelection.resolved = selectedPrStartPoint
+          const smartGitHubMetadata = getSmartGitHubSubmitResolution(startPointSelection.item)
+          const resolution: Exclude<PendingSmartGitHubSubmitResolution, { kind: 'none' }> = {
+            ...smartGitHubMetadata,
+            kind: 'pr-start-point',
+            baseBranch: selectedPrStartPoint.baseBranch,
+            ...(selectedPrStartPoint.compareBaseRef
+              ? { compareBaseRef: selectedPrStartPoint.compareBaseRef }
+              : {}),
+            ...(selectedPrStartPoint.pushTarget
+              ? { pushTarget: selectedPrStartPoint.pushTarget }
+              : {}),
+            ...(selectedPrStartPoint.branchNameOverride
+              ? { branchNameOverride: selectedPrStartPoint.branchNameOverride }
+              : {})
+          }
+          setBaseBranch(selectedPrStartPoint.baseBranch)
+          setCompareBaseRef(selectedPrStartPoint.compareBaseRef)
+          setPushTarget(selectedPrStartPoint.pushTarget)
+          if (selectedPrStartPoint.branchNameOverride) {
+            setBranchNameOverride(selectedPrStartPoint.branchNameOverride)
+            setBranchNameOverridePreservesNameEdits(true)
+          } else {
+            setBranchNameOverride(undefined)
+            setBranchNameOverridePreservesNameEdits(false)
+          }
+          setForkPushWarning(getForkPushWarning(selectedPrStartPoint))
+          return resolution
+        }
         return { kind: 'none' }
       }
 
@@ -2079,6 +2169,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // the opposite provider slots so stale hidden fields cannot win later.
   const applyLinkedGitLabWorkItem = useCallback(
     (item: GitLabWorkItem): void => {
+      smartGitHubPrStartPointSelectionRef.current = null
       if (item.type === 'issue') {
         setLinkedGitLabIssue(item.number)
         setLinkedGitLabMR(null)
@@ -2125,6 +2216,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSelectLinkedItem = useCallback(
     (item: GitHubWorkItem): void => {
+      smartGitHubPrStartPointSelectionRef.current = null
       applyLinkedWorkItem(item)
       setLinkPopoverOpen(false)
       setLinkQuery('')
@@ -2144,6 +2236,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [])
 
   const handleRemoveLinkedWorkItem = useCallback((): void => {
+    smartGitHubPrStartPointSelectionRef.current = null
     setLinkedWorkItem(null)
     setLinkedIssue('')
     setLinkedPR(null)
@@ -2427,6 +2520,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
       setRepoId(value)
       if (!options.preserveStartFrom) {
+        smartGitHubPrStartPointSelectionRef.current = null
         setLinkedIssue('')
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
@@ -2468,6 +2562,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       setRepoId(value)
+      smartGitHubPrStartPointSelectionRef.current = null
       setLinkedWorkItem((current) => {
         const provider = current ? getLinkedWorkItemProvider(current) : null
         return provider === 'github' || provider === 'gitlab' ? null : current
@@ -2595,6 +2690,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [])
 
   const handleBaseBranchChange = useCallback((next: string | undefined): void => {
+    smartGitHubPrStartPointSelectionRef.current = null
     setBaseBranch(next)
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
@@ -2697,18 +2793,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBranchNameOverride(undefined)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
+      smartGitHubPrStartPointSelectionRef.current = null
       // Why: provider items can come from a different source host than the
       // selected run host. Resolve git refs against the run repo; keep item
       // metadata/source context separate for provider identity.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(item)
       if (item.type !== 'pr' || !runRepo) {
+        setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
         return
       }
+      setBaseBranch(undefined)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
+      const startPointSelection: SmartGitHubPrStartPointSelection = {
+        repoId: runRepo.id,
+        item
+      }
+      smartGitHubPrStartPointSelectionRef.current = startPointSelection
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },
         runRepo.id
@@ -2725,6 +2829,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       })
       void resolvePrBase
         .then((result) => {
+          if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
+            return
+          }
+          startPointSelection.resolved = result
           handleBaseBranchPrSelect(
             result.baseBranch,
             item,
@@ -2737,6 +2845,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {
+          if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
+            return
+          }
           setBaseBranch(undefined)
           setCompareBaseRef(undefined)
           setPushTarget(undefined)
@@ -2871,6 +2982,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
+      smartGitHubPrStartPointSelectionRef.current = null
       const selection = resolveComposerBranchSelection({
         refName,
         localBranchName,
@@ -2993,6 +3105,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
+    smartGitHubPrStartPointSelectionRef.current = null
     setLinkedIssue('')
     setLinkedPR(null)
     setLinkedGitLabIssue(null)
@@ -3220,12 +3333,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         name,
         lastAutoName: lastAutoNameRef.current
       })
+      const smartGitHubCreateNames =
+        smartGitHubResolution.kind === 'none'
+          ? { workspaceName: workspaceSeedName, displayName: undefined }
+          : resolveSmartGitHubCreateNames({
+              resolutionKind: smartGitHubResolution.kind,
+              smartWorkspaceName: smartGitHubResolution.workspaceName,
+              smartDisplayName: smartGitHubResolution.displayName,
+              fallbackWorkspaceName: workspaceSeedName,
+              nameIsAutoManaged
+            })
       const workspaceName =
         smartGitHubResolution.kind === 'none'
           ? nameIsAutoManaged && submitTitleName
             ? submitTitleName.seedName
             : workspaceSeedName
-          : smartGitHubResolution.workspaceName
+          : smartGitHubCreateNames.workspaceName
       if (!workspaceName) {
         return
       }
@@ -3335,7 +3458,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? nameIsAutoManaged
             ? submitTitleName?.displayName
             : undefined
-          : smartGitHubResolution.displayName
+          : smartGitHubCreateNames.displayName
       // Why: the first-work hook only renames blank, auto-generated git workspaces
       // that actually launch an agent. Persist that known-pending state for the card.
       const pendingFirstAgentMessageRename =
@@ -3627,12 +3750,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           name,
           lastAutoName: lastAutoNameRef.current
         })
+        const smartGitHubCreateNames =
+          smartGitHubResolution.kind === 'none'
+            ? { workspaceName: workspaceNameSeed, displayName: undefined }
+            : resolveSmartGitHubCreateNames({
+                resolutionKind: smartGitHubResolution.kind,
+                smartWorkspaceName: smartGitHubResolution.workspaceName,
+                smartDisplayName: smartGitHubResolution.displayName,
+                fallbackWorkspaceName: workspaceNameSeed,
+                nameIsAutoManaged
+              })
         const workspaceName =
           smartGitHubResolution.kind === 'none'
             ? nameIsAutoManaged && submitTitleName
               ? submitTitleName.seedName
               : workspaceNameSeed
-            : smartGitHubResolution.workspaceName
+            : smartGitHubCreateNames.workspaceName
         if (!workspaceName) {
           return
         }
@@ -3732,7 +3865,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? nameIsAutoManaged
               ? submitTitleName?.displayName
               : undefined
-            : smartGitHubResolution.displayName
+            : smartGitHubCreateNames.displayName
         // Why: quick create uses the same blank-name creature branch flow; the card
         // needs an explicit marker rather than guessing from the generated title.
         const pendingFirstAgentMessageRename =

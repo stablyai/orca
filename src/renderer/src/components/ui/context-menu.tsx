@@ -210,7 +210,10 @@ function ContextMenuShortcut({ className, ...props }: React.ComponentProps<'span
   return (
     <span
       data-slot="context-menu-shortcut"
-      className={cn('ml-auto text-[11px] tracking-normal text-muted-foreground/85', className)}
+      className={cn(
+        'ml-auto shrink-0 whitespace-nowrap text-[11px] tracking-normal text-muted-foreground/85',
+        className
+      )}
       {...props}
     />
   )

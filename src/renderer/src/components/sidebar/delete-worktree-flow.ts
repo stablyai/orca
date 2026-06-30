@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
-import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import {
   isPathInsideOrEqual,
@@ -145,73 +145,62 @@ export function runWorktreeDeleteWithToast(
       }
       const state = useAppStore.getState().deleteStateByWorktreeId[worktreeId]
       const canForceDelete = state?.canForceDelete ?? false
-      const toastCopy = getDeleteWorktreeToastCopy(worktreeName, canForceDelete, result.error)
-      const showToast = toastCopy.isDestructive ? toast.error : toast.info
-      showToast(toastCopy.title, {
-        description: toastCopy.description,
-        duration: 10000,
-        cancel: {
-          label: translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View'),
-          onClick: () => viewWorktreeDiff(worktreeId)
-        },
-        action: canForceDelete
-          ? {
-              label: translate(
-                'auto.components.sidebar.delete.worktree.flow.2b20ce87b3',
-                'Force Delete'
-              ),
-              onClick: () => {
-                // Why: recapture at click time — the user may have navigated away
-                // while the failed-delete toast was open, so focus only hands off
-                // when this is still the workspace they are viewing.
-                const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-                useAppStore
-                  .getState()
-                  .removeWorktree(worktreeId, true)
-                  .then((forceResult) => {
-                    if (!forceResult.ok) {
-                      toast.error(
-                        translate(
-                          'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
-                          'Force delete failed'
-                        ),
-                        {
-                          description: forceResult.error,
-                          action: {
-                            label: translate(
-                              'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                              'View'
-                            ),
-                            onClick: () => viewWorktreeDiff(worktreeId)
-                          }
-                        }
-                      )
-                      return
-                    }
-                    commitForceFocus()
-                    options.onForceDeleted?.(worktreeId)
-                  })
-                  .catch((err: unknown) => {
-                    toast.error(
-                      translate(
-                        'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
-                        'Failed to delete workspace'
+      showDeleteWorktreeFailureToast({
+        error: result.error,
+        canForceDelete,
+        onViewChanges: () => viewWorktreeDiff(worktreeId),
+        onForceDelete: () => {
+          // Why: recapture at click time — the user may have navigated away
+          // while the failed-delete toast was open, so focus only hands off
+          // when this is still the workspace they are viewing.
+          const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+          useAppStore
+            .getState()
+            .removeWorktree(worktreeId, true)
+            .then((forceResult) => {
+              if (!forceResult.ok) {
+                toast.error(
+                  translate(
+                    'auto.components.sidebar.delete.worktree.flow.4f3876c0f5',
+                    'Force delete failed'
+                  ),
+                  {
+                    description: forceResult.error,
+                    action: {
+                      label: translate(
+                        'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                        'View'
                       ),
-                      {
-                        description: err instanceof Error ? err.message : String(err),
-                        action: {
-                          label: translate(
-                            'auto.components.sidebar.delete.worktree.flow.7488ed8711',
-                            'View'
-                          ),
-                          onClick: () => viewWorktreeDiff(worktreeId)
-                        }
-                      }
-                    )
-                  })
+                      onClick: () => viewWorktreeDiff(worktreeId)
+                    }
+                  }
+                )
+                return
               }
-            }
-          : undefined
+              commitForceFocus()
+              options.onForceDeleted?.(worktreeId)
+            })
+            .catch((err: unknown) => {
+              toast.error(
+                translate(
+                  'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                  'Failed to delete workspace'
+                ),
+                {
+                  description: err instanceof Error ? err.message : String(err),
+                  action: {
+                    label: translate(
+                      'auto.components.sidebar.delete.worktree.flow.7488ed8711',
+                      'View'
+                    ),
+                    onClick: () => viewWorktreeDiff(worktreeId)
+                  }
+                }
+              )
+            })
+        },
+        worktreeId,
+        worktreeName
       })
       return false
     })

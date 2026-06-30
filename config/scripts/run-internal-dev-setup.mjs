@@ -2,7 +2,6 @@
 import { accessSync, constants, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 function isExecutable(filePath, platform, access = accessSync) {
   if (platform === 'win32') {
@@ -59,6 +58,6 @@ export function runInternalDevSetup({
   return 0
 }
 
-if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {
+if (process.argv[1] && resolve(import.meta.filename) === resolve(process.argv[1])) {
   process.exit(runInternalDevSetup())
 }

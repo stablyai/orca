@@ -1,5 +1,5 @@
-import { existsSync } from 'fs'
-import { join, resolve } from 'path'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 export function resolveMacOSComputerUseAppPath(): string | null {
   const override = process.env.ORCA_COMPUTER_MACOS_HELPER_APP_PATH

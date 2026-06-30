@@ -10,6 +10,7 @@ import {
   inspectSetupScriptPromptState,
   isSetupScriptPromptDismissed
 } from './setup-script-prompt'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -84,6 +85,28 @@ describe('setup script prompt inspection', () => {
       })
     ).resolves.toEqual({ status: 'error', repoId: 'repo-1' })
 
+    warn.mockRestore()
+  })
+
+  it('returns forbidden status (not retry-able error) when the runtime scope denies the check', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(
+      inspectSetupScriptPromptState({
+        repo: makeRepo(),
+        checkHooks: vi.fn().mockRejectedValue(
+          new RuntimeRpcCallError({
+            id: 'req',
+            ok: false,
+            error: { code: 'forbidden', message: "Method 'repo.hooksCheck' is not available" }
+          })
+        ),
+        inspectImports: vi.fn()
+      })
+    ).resolves.toEqual({ status: 'forbidden', repoId: 'repo-1' })
+
+    // Why: a permanent scope failure must not log as a transient inspection warning.
+    expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 

@@ -31,7 +31,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
-import { stat } from 'fs/promises'
+import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>

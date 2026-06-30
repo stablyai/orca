@@ -1954,6 +1954,7 @@ describe('web GitHub preload API', () => {
         'listProjectViews',
         'listWorkItems',
         'mergePR',
+        'notifyWorkItemMutated',
         'onPRRefreshEvent',
         'onWorkItemMutated',
         'prCheckDetails',

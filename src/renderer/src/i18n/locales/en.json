@@ -133,7 +133,8 @@
         "7a566540de": "Pairing URL or code",
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
-        "e3bcd082ac": "Connect to Orca"
+        "e3bcd082ac": "Connect to Orca",
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
       },
       "web": {
         "preload": {
@@ -228,7 +229,9 @@
           "2e17f825d4": "Worktree deleted, branch kept",
           "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
           "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
+          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -394,6 +397,13 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            }
+          }
+        },
+        "mobile": {
+          "emulator": {
+            "tab": {
+              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
         }
@@ -631,7 +641,17 @@
         "b1c2f8b0ac": "Optional account switching for Claude, Codex, Gemini, and OpenCode Go.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
-        "b49abbd2f7": "Agents"
+        "b49abbd2f7": "Agents",
+        "dev": "Dev Tools",
+        "devDescription": "Dev-only tools for exercising UI states.",
+        "devBadge": "Dev",
+        "devSearchNotificationPlayground": "Notification playground",
+        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchKeywordDev": "dev",
+        "devSearchKeywordToast": "toast",
+        "devSearchKeywordSonner": "sonner",
+        "devSearchKeywordError": "error",
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -703,6 +723,7 @@
         "d23bbb6416": "{{value0}} skipped",
         "18f80e1329": "{{value0}} pending",
         "b1ac991806": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
         "311d0cee55": "{{value0}} passing",
         "e52bed9264": "No checks reported yet",
         "90020cc1f3": "This pull request has no reported checks yet.",
@@ -851,7 +872,8 @@
           "to": "to",
           "activity": "Activity",
           "noActivity": "No activity yet."
-        }
+        },
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1176,6 +1198,7 @@
         "e6ad0a8d06": "{{value0}} skipped",
         "88267924d5": "{{value0}} pending",
         "ae2a34c7b8": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
         "7c5035931a": "{{value0}} passing",
         "a18d01cda3": "No checks reported yet",
         "3912daf310": "This pull request has no reported checks yet.",
@@ -1310,7 +1333,8 @@
         "commentTooLarge": "Comment is too large to submit safely.",
         "8ff5ae8866": "Assignees",
         "82c87eceb9": "Edit assignees",
-        "1ff5d979df": "No one assigned"
+        "1ff5d979df": "No one assigned",
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -2396,6 +2420,7 @@
             "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "Copy Pane ID",
             "39809d152f": "Set Title…",
+            "clearPaneTitle": "Clear Pane Title",
             "06c2b0f043": "Equalize Pane Sizes",
             "98bccf4fa2": "Split Terminal Down",
             "20e565d865": "Split Terminal Right",
@@ -2530,7 +2555,9 @@
             "couldNotReadPayload": "Could not read the session drag payload.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
-            "sessionQueued": "Session queued"
+            "sessionQueued": "Session queued",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
@@ -4014,7 +4041,9 @@
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
-          "workspaceSection": "Workspace"
+          "workspaceSection": "Workspace",
+          "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
+          "deleteWorktree": "Delete Worktree"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -5277,7 +5306,11 @@
           "sourceControlGroupOrderDescription": "Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.",
           "changesFirst": "Changes first",
           "stagedFirst": "Staged first",
-          "untrackedFirst": "Untracked first"
+          "untrackedFirst": "Untracked first",
+          "compareAgainstUpstreamTitle": "Default Compare Base",
+          "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
+          "compareBaseRepositoryDefault": "Repository default",
+          "compareBaseBranchUpstream": "Branch upstream"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Placeholder toggle",
@@ -5474,7 +5507,12 @@
           "a4f1c82d90": "Disabled",
           "b5e2d93e01": "Checking...",
           "c6f3ea4f12": "Ready",
-          "d704fb5023": "Needs setup"
+          "d704fb5023": "Needs setup",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Regenerate the QR code and scan it from the Orca mobile app.",
@@ -6029,7 +6067,14 @@
           "2752126f3e": "Runtime pairing is unavailable.",
           "95b8be4cea": "Failed to refresh network interfaces.",
           "1b4e0bbcc5": "Failed to load shared access grants.",
-          "b91e36a986": "web"
+          "b91e36a986": "web",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…",
+          "custom-title": "Custom connection address",
+          "custom-description": "Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.",
+          "custom-hint": "Enter a host, host:port, or a ws(s):// URL.",
+          "custom-cancel": "Cancel",
+          "custom-use": "Use address"
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",
@@ -6102,7 +6147,9 @@
           "9abb9be3bc": "Set Up",
           "23c6874fdf": "AI Capabilities",
           "2309068a6f": "destructive",
-          "65358016ea": "Discard"
+          "65358016ea": "Discard",
+          "dev": "Dev Tools",
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -6993,7 +7040,9 @@
             "0dbb1eaf4e": "homepage",
             "291f480a5e": "home",
             "a942905148": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
-            "c3903322d2": "Default Home Page"
+            "c3903322d2": "Default Home Page",
+            "19ea5607cf": "Localhost Worktree Labels",
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
           },
           "use": {
             "search": {
@@ -7412,7 +7461,19 @@
             "stagedFirst": "staged first",
             "untrackedFirst": "untracked first",
             "sourceControl": "source control",
-            "gitChanges": "git changes"
+            "gitChanges": "git changes",
+            "compareAgainstUpstreamTitle": "Default Compare Base",
+            "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
+            "compareBase": "compare base",
+            "defaultCompareBase": "default compare base",
+            "defaultBranch": "default branch",
+            "repositoryDefault": "repository default",
+            "branchUpstream": "branch upstream",
+            "currentBranch": "current branch",
+            "upstream": "upstream",
+            "localChanges": "local changes",
+            "originMaster": "origin/master",
+            "committedChanges": "committed changes"
           }
         },
         "input": {
@@ -8485,6 +8546,10 @@
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
         },
+        "BrowserLocalhostWorktreeLabelsSetting": {
+          "8ac8c3ad19": "Localhost Worktree Labels",
+          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+        },
         "AgentRuntimeSetting": {
           "label": "Agent runtime",
           "wsl": "WSL",
@@ -8495,8 +8560,53 @@
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
         },
+        "MobileEmulatorSdkStatus": {
+          "536026130e": "Emulator SDKs",
+          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "027cbf668a": "Android SDK",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
+          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
+          "b94ff260e6": "Download Android Studio",
+          "18925b082d": "Locate SDK folder",
+          "8c52684db8": "Clear",
+          "76eb88b88e": "iOS Simulator (Xcode)",
+          "c6f3ea4f12": "Ready",
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
+        },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Advanced"
+        },
+        "DevToolsPane": {
+          "nativeActionLayoutCheck": "Native action layout check",
+          "secondary": "Secondary",
+          "secondaryActionClicked": "Secondary action clicked",
+          "primaryAction": "Primary action",
+          "primaryActionClicked": "Primary action clicked",
+          "branchHasChanges": "branch has changes",
+          "viewChangesClicked": "View Changes clicked",
+          "forceDeleteClicked": "Force Delete clicked",
+          "devOnlyCallback": "Dev-only callback.",
+          "infoToast": "Info toast",
+          "infoToastDescription": "Long informational copy with no explicit action.",
+          "localCanaryBehind": "Local canary is behind origin/canary",
+          "successToast": "Success toast",
+          "successToastDescription": "Short confirmation state.",
+          "settingsSaved": "Settings saved",
+          "shortSuccessCopy": "Short success copy.",
+          "errorToast": "Error toast",
+          "errorToastDescription": "Long error copy without recovery actions.",
+          "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
+          "nativeActionToast": "Native action toast",
+          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "deleteFailureToast": "Delete failure toast",
+          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "behindBaseRefToast": "Behind base ref toast",
+          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "notificationPlayground": "Notification playground",
+          "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
+          "devOnly": "Dev only"
         }
       },
       "right": {
@@ -9110,7 +9220,8 @@
                 "8a621a2c4f": "Grouped",
                 "b13f85d75c": "Timeline",
                 "f5cf324efa": "Comment display options",
-                "5e6e5a13fa": "View"
+                "5e6e5a13fa": "View",
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
               },
               "empty": {
                 "state": {
@@ -9358,7 +9469,10 @@
             "sessionId": "Session ID",
             "logPath": "Log path",
             "originalPaneUnavailable": "Original pane is no longer available.",
-            "worktreeUnavailable": "Worktree is no longer available."
+            "worktreeUnavailable": "Worktree is no longer available.",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9995,6 +10109,20 @@
             "cefd048225": "Back",
             "c5ad56786d": "spinner"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "Custom network address",
+          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "label": "Address",
+          "placeholder": "my-mac.ts.net or 192.168.1.50",
+          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "cancel": "Cancel",
+          "use": "Use address"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "Network address to advertise",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…"
         }
       },
       "gitlab": {
@@ -11010,7 +11138,14 @@
           "32ae8d7d57": "Previous match",
           "158c645829": "Find in rich markdown editor",
           "98b89276f3": "Find in rich editor",
-          "a86958d508": "No results"
+          "a86958d508": "No results",
+          "e8c147435f": "Hide replace",
+          "9cdc38be33": "Toggle replace",
+          "482b637099": "Match case",
+          "68d090241d": "Match whole word",
+          "fd97c7e585": "Replace",
+          "44682b4159": "Replace in rich markdown editor",
+          "c2884f5e95": "Replace all"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No blocks found",
@@ -11180,7 +11315,8 @@
           "b3e7f9a1c2": "Check fix context unavailable",
           "d5a8c2f1b9": "Start the default AI agent to fix this check",
           "e2b4d7c8a1": "Choose an agent for this check",
-          "f1c9e3a6d4": "Choose agent to fix check"
+          "f1c9e3a6d4": "Choose agent to fix check",
+          "actionRequired": "Action required"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "succeeded",
@@ -12088,7 +12224,8 @@
         "stopDictation": "Stop dictation",
         "noSkills": "No matching skills",
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
-        "removeAttachment": "Remove attachment"
+        "removeAttachment": "Remove attachment",
+        "pastedImageLabel": "Pasted image"
       },
       "tool": {
         "running": "Running…",

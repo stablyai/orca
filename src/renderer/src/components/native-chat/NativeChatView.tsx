@@ -37,14 +37,13 @@ import {
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat-streaming'
 import {
+  shouldFocusNativeChatComposerFromEditingKey,
   shouldFocusNativeChatPaneFromPointerTarget,
   shouldRedirectNativeChatTyping
 } from './native-chat-typing-redirect'
 import { useNativeChatContextMenu } from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
-import { isMacPlatform } from './native-chat-shortcut'
 
-const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
 const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
   onSplitRight: () => {},
   onSplitDown: () => {},
@@ -165,16 +164,11 @@ function NativeChatResolvedView({
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
-  const isMac = useMemo(() => isMacPlatform(), [])
+  // Delegate to the composer so a pane-level Cmd/Ctrl+V (or context-menu /
+  // app-menu paste) attaches a clipboard image when present, falling back to
+  // text — matching the textarea's own paste behavior and the hosted TUI.
   const pasteClipboardIntoComposer = useCallback(() => {
-    void window.api.ui
-      .readClipboardText({ maxBytes: NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES })
-      .then((text) => {
-        if (text.length > 0) {
-          composerRef.current?.insertTypedText(text)
-        }
-      })
-      .catch(() => {})
+    composerRef.current?.pasteFromClipboard()
   }, [])
   const contextMenu = useNativeChatContextMenu({
     rootRef,
@@ -185,39 +179,38 @@ function NativeChatResolvedView({
     }
   })
 
+  // Handle Cmd/Ctrl+V at the pane root rather than relying on the composer
+  // textarea's own onPaste: the React-bound onPaste proved unreliable here (the
+  // composer can mount more than once, and the live `paste` event does not
+  // consistently dispatch to the textarea's React handler). A root capture
+  // listener catches the paste for the focused pane in every case.
   useEffect(() => {
     const root = rootRef.current
     if (!root) {
       return
     }
-    const onKeyPaste = (event: KeyboardEvent): void => {
-      if (
-        !matchesNativeChatPasteShortcut(event, isMac) ||
-        !shouldFocusNativeChatPaneFromPointerTarget(event.target)
-      ) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      pasteClipboardIntoComposer()
+    const onPaste = (event: ClipboardEvent): void => {
+      composerRef.current?.handlePasteEvent(event)
     }
-
-    root.addEventListener('keydown', onKeyPaste, { capture: true })
+    // Capture phase so the image is intercepted before the textarea's own
+    // bubble-phase onPaste fires (which would otherwise attach it twice).
+    root.addEventListener('paste', onPaste, { capture: true })
     return () => {
-      root.removeEventListener('keydown', onKeyPaste, { capture: true })
+      root.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isMac, pasteClipboardIntoComposer])
+  }, [])
 
+  // Real Cmd/Ctrl+V is claimed by the Edit > Paste menu accelerator, which
+  // sends this app-menu paste event instead of producing a DOM `paste` event on
+  // the composer. Route it into the composer whenever focus is anywhere inside
+  // this chat pane — including the composer textarea itself (the previous
+  // non-interactive-target guard skipped exactly the focused-textarea case,
+  // which is why Cmd+V appeared to do nothing).
   useEffect(() => {
     const onAppMenuPaste = (event: Event): void => {
       const root = rootRef.current
       const activeElement = document.activeElement
-      if (
-        !root ||
-        !(activeElement instanceof Element) ||
-        !root.contains(activeElement) ||
-        !shouldFocusNativeChatPaneFromPointerTarget(activeElement)
-      ) {
+      if (!root || !(activeElement instanceof Element) || !root.contains(activeElement)) {
         return
       }
       event.preventDefault()
@@ -367,6 +360,12 @@ function NativeChatResolvedView({
         }
       }}
       onKeyDownCapture={(event) => {
+        // Backspace/Delete outside an input focuses the composer (like typing)
+        // but inserts nothing — let the now-focused field handle the keystroke.
+        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
+          composerRef.current?.focus()
+          return
+        }
         if (!shouldRedirectNativeChatTyping(event)) {
           return
         }
@@ -417,14 +416,4 @@ function NativeChatResolvedView({
       {contextMenu.menu}
     </div>
   )
-}
-
-function matchesNativeChatPasteShortcut(
-  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
-  isMac: boolean
-): boolean {
-  if (event.altKey || event.shiftKey || event.key.toLowerCase() !== 'v') {
-    return false
-  }
-  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
 }

@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning centralizes platform launch setup,
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
-import { statSync } from 'fs'
-import { delimiter, win32 as pathWin32 } from 'path'
+import { statSync } from 'node:fs'
+import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -244,8 +244,6 @@ function preflightMacNodePtySpawnEnvironment(): void {
     return
   }
 
-  preflightDaemonCwd()
-
   let candidates: string[]
   try {
     candidates = getNodePtySpawnHelperCandidates()
@@ -264,6 +262,20 @@ function preflightMacNodePtySpawnEnvironment(): void {
   }
 
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+}
+
+/**
+ * Ensures POSIX daemon-owned native PTY spawn prerequisites are still valid.
+ */
+function preflightUnixPtySpawnEnvironment(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: detached daemons can outlive their launch cwd; repair before every
+  // PTY spawn so Linux/macOS do not wait for startup health recovery.
+  preflightDaemonCwd()
+  preflightMacNodePtySpawnEnvironment()
 }
 
 /**
@@ -309,12 +321,17 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
  * Runs a short native PTY spawn probe for daemon health checks.
  */
 export async function checkPtySpawnHealth(): Promise<void> {
-  if (process.platform !== 'darwin') {
+  if (process.platform === 'win32') {
     return
   }
 
-  ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
+  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
+  // stale native PTY path. A real short-lived spawn catches that before the
+  // main process routes fresh panes to a daemon that cannot create terminals.
+  if (process.platform === 'darwin') {
+    ensureNodePtySpawnHelperExecutable()
+  }
+  preflightUnixPtySpawnEnvironment()
 
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
@@ -708,7 +725,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
+  preflightUnixPtySpawnEnvironment()
   preflightWindowsPtySpawnEnvironment({
     validationCwd,
     cwdWasExplicit: opts.cwd !== undefined

@@ -1,5 +1,5 @@
-import { existsSync, statSync } from 'fs'
-import { win32 as pathWin32 } from 'path'
+import { existsSync, statSync } from 'node:fs'
+import { win32 as pathWin32 } from 'node:path'
 
 /** Dependency seams so the resolver can be unit-tested without a real Windows
  *  filesystem. Production callers omit these and get process.env / fs. */

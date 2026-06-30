@@ -1,4 +1,4 @@
-import { type posix, win32 } from 'path'
+import { type posix, win32 } from 'node:path'
 
 type PathOps = typeof posix
 export type StatPath = (path: string) => Promise<unknown>

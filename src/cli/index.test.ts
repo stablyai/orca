@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: CLI parser tests share one mocked runtime client and fixture queue; splitting this file would duplicate setup and make command coverage harder to audit. */
-import path from 'path'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
-import { tmpdir } from 'os'
+import path from 'node:path'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -84,7 +84,7 @@ vi.mock('./runtime/environments', () => ({
 }))
 
 vi.mock('child_process', async () => {
-  const { EventEmitter } = await import('events')
+  const { EventEmitter } = await import('node:events')
   return {
     spawn: spawnMock.mockImplementation(() => {
       const child = Object.assign(new EventEmitter(), {
@@ -1985,7 +1985,7 @@ describe('orca cli worktree awareness', () => {
           `    destroy: ${JSON.stringify(`${process.execPath} ./scripts/orca-vm/cleanup.js`)}`
         ].join('\n')
       )
-      const { EventEmitter } = await import('events')
+      const { EventEmitter } = await import('node:events')
       const startChild = Object.assign(new EventEmitter(), {
         stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
@@ -2084,7 +2084,7 @@ describe('orca cli worktree awareness', () => {
           '    destroy: none'
         ].join('\n')
       )
-      const { EventEmitter } = await import('events')
+      const { EventEmitter } = await import('node:events')
       const startChild = Object.assign(new EventEmitter(), {
         stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
@@ -2793,7 +2793,8 @@ describe('orca cli worktree awareness', () => {
       worktree: 'path:/tmp/repo/feature',
       command: undefined,
       title: 'RUNNER',
-      focus: true
+      focus: true,
+      presentation: 'focused'
     })
   })
 
@@ -2905,6 +2906,7 @@ describe('orca cli worktree awareness', () => {
       command: 'codex',
       title: 'Codex',
       focus: true,
+      presentation: 'focused',
       rendererBacked: true,
       activate: true
     })

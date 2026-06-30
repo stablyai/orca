@@ -12,6 +12,7 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
+import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { browserUrlForPort } from './workspace-port-urls'
 
 export { addressForPort } from './workspace-port-urls'
@@ -93,8 +94,17 @@ export async function openWorkspacePortInBrowser(args: {
   createBrowserTab: BrowserTabCreator
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
+  localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const url = browserUrlForPort(args.port)
+  const rawUrl = browserUrlForPort(args.port)
+  let url = rawUrl
+  if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
+    try {
+      url = (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
+    } catch {
+      url = rawUrl
+    }
+  }
   if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)

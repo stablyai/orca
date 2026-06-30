@@ -1,4 +1,4 @@
-import { basename } from 'path'
+import { basename } from 'node:path'
 
 // Why: keep the synthetic candidate-path helpers separate from the SQLite
 // discovery/parser so both the scanner and the agent-parser dispatcher can

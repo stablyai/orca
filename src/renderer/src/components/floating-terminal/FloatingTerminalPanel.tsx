@@ -6,7 +6,6 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
-import BrowserPane from '@/components/browser-pane/BrowserPane'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
@@ -75,6 +74,7 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { FloatingBrowserSlot } from './FloatingBrowserSlot'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
@@ -1624,7 +1624,7 @@ export function FloatingTerminalPanel({
                 className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
                 aria-hidden={!isActive}
               >
-                <BrowserPane browserTab={tab} isActive={open && isActive} />
+                <FloatingBrowserSlot browserTab={tab} isActive={open && isActive} />
               </div>
             )
           })}

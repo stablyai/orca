@@ -1,5 +1,5 @@
-import { open, readFile, stat } from 'fs/promises'
-import { extname } from 'path'
+import { open, readFile, stat } from 'node:fs/promises'
+import { extname } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { STREAM_CHUNK_SIZE, RelayErrorCode } from './protocol'
 import type { RelayStreamRegistry, TooManyStreamsError } from './fs-stream-registry'

@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: daemon handshake, RPC, stream events, and reconnect cleanup share one socket lifecycle. */
-import { connect, type Socket } from 'net'
-import { readFileSync } from 'fs'
-import { randomUUID } from 'crypto'
-import { StringDecoder } from 'string_decoder'
+import { connect, type Socket } from 'node:net'
+import { readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { StringDecoder } from 'node:string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
 import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './types'

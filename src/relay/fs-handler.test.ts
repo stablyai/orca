@@ -4,10 +4,10 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'fs'
-import { tmpdir } from 'os'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 const { mockSubscribe } = vi.hoisted(() => ({
   mockSubscribe: vi.fn()

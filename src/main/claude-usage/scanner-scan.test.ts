@@ -1,9 +1,9 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as Os from 'os'
-import type * as FsPromises from 'fs/promises'
+import type * as Os from 'node:os'
+import type * as FsPromises from 'node:fs/promises'
 
 const tempRoots: string[] = []
 

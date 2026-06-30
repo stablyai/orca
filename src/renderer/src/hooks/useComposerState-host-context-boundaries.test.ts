@@ -5,6 +5,7 @@ import {
   canResolveFolderSmartGitHubSubmit,
   getInitialAutoManagedWorkspaceName,
   isExplicitWorkspaceNameInput,
+  resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
 } from './useComposerState'
 
@@ -45,6 +46,30 @@ describe('useComposerState host-context boundaries', () => {
     ).toBe('')
   })
 
+  it('preserves explicit names when a linked PR start point resolves at submit time', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'edited workspace',
+        nameIsAutoManaged: false
+      })
+    ).toEqual({ workspaceName: 'edited workspace', displayName: undefined })
+  })
+
+  it('keeps smart GitHub names for auto-managed PR start-point submissions', () => {
+    expect(
+      resolveSmartGitHubCreateNames({
+        resolutionKind: 'pr-start-point',
+        smartWorkspaceName: 'title-derived-name',
+        smartDisplayName: 'Title derived name',
+        fallbackWorkspaceName: 'https://github.com/stablyai/orca/pull/6772',
+        nameIsAutoManaged: true
+      })
+    ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
+  })
+
   it('auto-owns linked-item generated prefilled names', () => {
     expect(
       getInitialAutoManagedWorkspaceName({
@@ -71,6 +96,10 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('resolveGitHubPrStartPointForRepo')
     expect(section).toContain('repoId: runRepo.id')
     expect(section).toContain('settings: itemRepoSettings')
+    expect(section).toContain('smartGitHubPrStartPointSelectionRef.current = startPointSelection')
+    expect(section).toContain(
+      'if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection)'
+    )
     expect(section).not.toContain('repoId: repoForItem.id')
     expect(section).not.toContain('repo: repoForItem.id')
   })
@@ -201,6 +230,17 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitLookup).toContain("kind: 'metadata-only'")
     expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
     expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
+    const selectedPrSubmitLookup = sourceBetween(
+      submitLookup,
+      'if (linkedWorkItem) {',
+      'const intent = getSmartGitHubSubmitIntent(name)'
+    )
+    expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
+    expect(selectedPrSubmitLookup).toContain("linkedWorkItem.type === 'pr'")
+    expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
+    expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
+      selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
+    )
 
     const fullSubmit = sourceBetween(
       HOOK_SOURCE,

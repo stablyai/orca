@@ -144,10 +144,36 @@ describe('loadLazyWithRetry', () => {
     expect(isLazyChunkLoadError(caught)).toBe(false)
   })
 
-  it('preserves bare parse errors so lazy module evaluation bugs still report', async () => {
+  it('recovers a parse error after the reload guard is set (corrupt chunk = recoverable)', async () => {
+    // A native SyntaxError reaching loadLazyWithRetry's catch comes from the
+    // chunk's parse phase — a stale/truncated/corrupt chunk — so after the one
+    // guarded reload it must be wrapped as a recoverable LazyChunkLoadError
+    // rather than re-thrown raw to the boundary (where Retry just re-runs the
+    // same dead import). Regression guard for crash report e08749bb (right
+    // sidebar, "Unexpected token ')'").
     const reload = spyOnReload()
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
     const error = chunkParseError()
+    const factory = vi.fn(() => Promise.reject(error))
+
+    const loaded = loadLazyWithRetry(factory, { retries: 1, baseDelayMs: 100 })
+    const settled = loaded.then(
+      () => null,
+      (rejection: unknown) => rejection
+    )
+    await vi.advanceTimersByTimeAsync(5000)
+    const caught = await settled
+
+    expect(reload).not.toHaveBeenCalled()
+    expect(isLazyChunkLoadError(caught)).toBe(true)
+  })
+
+  it('preserves ordinary (non-parse) module evaluation errors so real bugs still report', async () => {
+    // An ordinary Error from a lazy module is a genuine evaluation bug, not a
+    // corrupt chunk; it must still surface raw after the guard is set.
+    const reload = spyOnReload()
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
+    const error = new Error('render bug from lazy module evaluation')
     const factory = vi.fn(() => Promise.reject(error))
 
     const loaded = loadLazyWithRetry(factory, { retries: 1, baseDelayMs: 100 })

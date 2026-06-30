@@ -1,4 +1,4 @@
-import { mkdir } from 'fs/promises'
+import { mkdir } from 'node:fs/promises'
 import type { GlobalSettings, Repo } from '../shared/types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { isFolderRepo } from '../shared/repo-kind'

@@ -1,4 +1,4 @@
-import { basename } from 'path'
+import { basename } from 'node:path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'

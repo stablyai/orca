@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
+import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import type { SectionListRenderItem } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_GIT_STATUS_LABELS, type MobileSourceControlSection } from './mobile-git-status'
@@ -128,6 +128,9 @@ export function makeRenderFileRow(
             ) : null}
           </View>
         ) : null}
+        {!rowBusy && item.canOpen ? (
+          <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
+        ) : null}
       </Pressable>
     )
   }
@@ -235,7 +238,11 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
                   </Text>
                 ) : null}
               </View>
-              {rowBusy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
+              {rowBusy ? (
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              ) : entry.canOpen ? (
+                <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.1} />
+              ) : null}
             </Pressable>
           )
         })

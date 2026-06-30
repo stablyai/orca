@@ -1,5 +1,5 @@
-import { existsSync } from 'fs'
-import { win32 as pathWin32 } from 'path'
+import { existsSync } from 'node:fs'
+import { win32 as pathWin32 } from 'node:path'
 
 export function resolveTarExecutable(
   options: {

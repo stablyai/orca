@@ -14,10 +14,9 @@ import {
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { platform as osPlatform, tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 
-const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const projectDir = resolve(import.meta.dirname, '../..')
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
 const electronRequire = createRequire(resolve(electronPackageDir, 'package.json'))
 const { version: electronVersion } = electronRequire('./package.json')

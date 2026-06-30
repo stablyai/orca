@@ -1910,7 +1910,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ) : (
         <WorktreeContextMenu
           worktree={worktree}
-          newCardStyle={newCardStyle}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
         >

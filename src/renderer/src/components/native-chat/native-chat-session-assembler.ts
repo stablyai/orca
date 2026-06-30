@@ -118,7 +118,9 @@ export function assembleNativeChatSession(
   const ordered: NativeChatMessage[] = [
     ...normalizeImageTranscriptMessages(sources.transcript ?? []),
     ...(sources.hook ?? []),
-    ...(sources.scrape ?? [])
+    // Scrape segments carry the same raw `[Image: source: …]` markers (e.g. from
+    // scrollback before the transcript loads), so normalize them too.
+    ...normalizeImageTranscriptMessages(sources.scrape ?? [])
   ]
 
   const byId = new Map<string, NativeChatMessage>()

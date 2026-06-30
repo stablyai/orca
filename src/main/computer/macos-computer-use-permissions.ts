@@ -1,5 +1,5 @@
-import { execFileSync, spawn, spawnSync } from 'child_process'
-import { join } from 'path'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { join } from 'node:path'
 import { RuntimeClientError } from './runtime-client-error'
 import { resolveMacOSComputerUseAppPath } from './macos-native-provider-paths'
 import { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'

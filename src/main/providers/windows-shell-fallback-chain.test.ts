@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { win32 as pathWin32 } from 'path'
+import { win32 as pathWin32 } from 'node:path'
 import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 
 const WIN_ENV: NodeJS.ProcessEnv = {

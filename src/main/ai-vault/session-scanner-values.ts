@@ -1,6 +1,6 @@
-import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
-import { readFile } from 'fs/promises'
+import { homedir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 
 export function timestampMs(value: unknown): number {
   if (typeof value === 'string') {

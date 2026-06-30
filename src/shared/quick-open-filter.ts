@@ -11,7 +11,7 @@
  * Quick Open showed "No matching files" even though the scan was incomplete.
  * Centralizing the policy prevents future drift.
  */
-import { posix, win32 } from 'path'
+import { posix, win32 } from 'node:path'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 
@@ -377,9 +377,16 @@ export function buildGitLsFilesArgsForQuickOpen(
   }
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
 
-  // Why: newline output C-quotes tabs/newlines, which makes Quick Open return
-  // fake paths when rg is unavailable. NUL output preserves real Git paths.
-  const primary = ['-z', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
-  const ignoredPass = ['-z', '--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
+  // Why: NUL preserves real Git paths; stage mode identifies gitlinks without
+  // lstat probes for ordinary tracked files.
+  const primary = ['-z', '-s', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
+  const ignoredPass = [
+    '-z',
+    '-s',
+    '--others',
+    '--ignored',
+    '--exclude-standard',
+    ...trailingPathspecs
+  ]
   return { primary, ignoredPass }
 }

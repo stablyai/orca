@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: path discovery and legacy bridge scan preference cases need shared mocked homes to keep filesystem behavior realistic. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { linkSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
+import { linkSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
-import { join } from 'path'
+import { join } from 'node:path'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),

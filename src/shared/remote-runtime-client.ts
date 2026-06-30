@@ -2,7 +2,7 @@
  * same E2EE handshake and response validation state; keep them together until
  * the terminal transport is fully migrated and a stable shared connection
  * abstraction emerges. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
 import {

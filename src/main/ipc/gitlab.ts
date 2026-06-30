@@ -2,7 +2,7 @@
 GitLab IPC handlers co-located keeps the repo-path validation pattern
 reviewable as one surface. */
 import { ipcMain } from 'electron'
-import { resolve } from 'path'
+import { resolve } from 'node:path'
 import type {
   GitLabIssueUpdate,
   GitLabMRInlineCommentInput,

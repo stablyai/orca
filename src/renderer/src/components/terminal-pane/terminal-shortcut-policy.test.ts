@@ -262,6 +262,42 @@ describe('resolveTerminalShortcutAction', () => {
     ).toEqual({ type: 'equalizePaneSizes' })
   })
 
+  it('resolves terminal title actions only when users assign them', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: 't', code: 'KeyT', metaKey: true }), true)
+    ).toBeNull()
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 't', code: 'KeyT', metaKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.setTitle': ['Mod+T'] }
+      )
+    ).toEqual({ type: 'setTitle' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 't', code: 'KeyT', metaKey: true, altKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
+      )
+    ).toEqual({ type: 'clearPaneTitle' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 't', code: 'KeyT', metaKey: true, altKey: true, repeat: true }),
+        true,
+        'false',
+        0,
+        false,
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
+      )
+    ).toBeNull()
+  })
+
   it('lets Ctrl+D pass through as EOF on non-Mac, requires Shift for split (#586)', () => {
     // Ctrl+D without Shift on Windows/Linux must NOT trigger split — it's EOF
     expect(

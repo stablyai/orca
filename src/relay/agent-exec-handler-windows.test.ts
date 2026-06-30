@@ -1,9 +1,9 @@
-import { exec, spawn } from 'child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { exec, spawn } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ChildProcess from 'child_process'
+import type * as ChildProcess from 'node:child_process'
 import {
   createFakeChild,
   createHandlers,

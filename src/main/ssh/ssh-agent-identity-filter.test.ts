@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   createAgent: vi.fn(),

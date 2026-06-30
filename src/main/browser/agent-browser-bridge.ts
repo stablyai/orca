@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
-import { execFile, type ChildProcess } from 'child_process'
-import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'fs'
-import { join } from 'path'
-import { platform, arch } from 'os'
+import { execFile, type ChildProcess } from 'node:child_process'
+import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'node:fs'
+import { join } from 'node:path'
+import { platform, arch } from 'node:os'
 import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'

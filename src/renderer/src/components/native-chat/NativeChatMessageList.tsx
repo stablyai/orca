@@ -14,6 +14,7 @@ import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
+import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
@@ -43,7 +44,12 @@ function ImageAttachmentRefs({ blocks }: { blocks: NativeChatBlock[] }): React.J
     <div className="mb-2 flex flex-wrap gap-1.5">
       {images.map((image, index) => {
         const label = image.alt ?? image.path ?? image.url ?? 'Image'
-        const name = image.path ? basename(image.path) : label
+        const name =
+          image.path && isNativeChatPastedImagePath(image.path)
+            ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+            : image.path
+              ? basename(image.path)
+              : label
         return (
           <div
             key={`${label}-${index}`}

@@ -1,4 +1,4 @@
-import type { AddressInfo } from 'net'
+import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'

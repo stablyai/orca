@@ -6,16 +6,15 @@ describe('renderer startup runtime routing', () => {
   it('loads settings before repo and worktree hydration', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
     const startupBlockStart = source.indexOf('void (async () => {')
-    const startupBlockEnd = source.indexOf('const persistedUI = await window.api.ui.get()')
+    const startupBlockEnd = source.indexOf(
+      "const persistedUI = await timeRendererStartupStep('ui-get'"
+    )
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeGreaterThanOrEqual(0)
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchReposForAllHosts()')
-    )
-    expect(startupBlock.indexOf('await actions.fetchSettings()')).toBeLessThan(
-      startupBlock.indexOf('await actions.fetchAllWorktrees()')
-    )
+    const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
+    expect(settingsIndex).toBeGreaterThanOrEqual(0)
+    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchReposForAllHosts()'))
+    expect(settingsIndex).toBeLessThan(startupBlock.indexOf('actions.fetchAllWorktrees()'))
   })
 
   it('waits for first-window startup services before terminal reconnect', () => {

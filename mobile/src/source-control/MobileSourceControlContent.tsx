@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, SectionList, Text, TextInput, View } from 'react-native'
 import { GitBranch, Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
-import { MobileSourceControlReviewEntry } from './mobile-source-control-review-entry'
+import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
@@ -10,17 +10,12 @@ import { styles } from './mobile-source-control-styles'
 
 type Props = {
   state: MobileSourceControlState
-  hostId: string
-  worktreeId: string
-  name: string
 }
 
 // The ready-state body: summary card, changed-files list, and commit bar.
-export function MobileSourceControlContent({ state, hostId, worktreeId, name }: Props) {
+export function MobileSourceControlContent({ state }: Props) {
   const {
-    connState,
     insets,
-    screenState,
     busyAction,
     commitMessage,
     setCommitMessage,
@@ -37,7 +32,6 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
     sections,
     branchEntries,
     hasVisibleChanges,
-    reviewableCount,
     stageablePaths,
     unstageablePaths,
     stagedCount,
@@ -45,6 +39,7 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
     branchLabel,
     syncLabel,
     primaryAction,
+    createPrAction,
     stageAll,
     unstageAll,
     generateCommitMessage,
@@ -56,6 +51,7 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
+  const createPrHeroActive = createPrAction.visible && !createPrAction.disabled
 
   return (
     <>
@@ -106,13 +102,7 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
             </Text>
           </View>
         ) : null}
-        <MobileSourceControlReviewEntry
-          count={reviewableCount}
-          disabled={screenState.kind !== 'ready' || connState !== 'connected' || ioBusy}
-          hostId={hostId}
-          worktreeId={worktreeId}
-          worktreeName={name}
-        />
+        <MobileSourceControlCreatePrEntry action={createPrAction} />
         <View style={styles.bulkRow}>
           <Pressable
             style={({ pressed }) => [
@@ -265,6 +255,7 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
           <Pressable
             style={({ pressed }) => [
               styles.commitButton,
+              createPrHeroActive && styles.commitButtonSecondary,
               primaryAction.disabled && styles.commitButtonDisabled,
               pressed && styles.commitButtonPressed
             ]}
@@ -274,9 +265,19 @@ export function MobileSourceControlContent({ state, hostId, worktreeId, name }: 
             accessibilityHint={primaryAction.accessibilityHint}
           >
             {primaryAction.loading ? (
-              <ActivityIndicator size="small" color={colors.bgBase} />
+              <ActivityIndicator
+                size="small"
+                color={createPrHeroActive ? colors.textPrimary : colors.bgBase}
+              />
             ) : (
-              <Text style={styles.commitButtonText}>{primaryAction.label}</Text>
+              <Text
+                style={[
+                  styles.commitButtonText,
+                  createPrHeroActive && styles.commitButtonSecondaryText
+                ]}
+              >
+                {primaryAction.label}
+              </Text>
             )}
           </Pressable>
         </View>

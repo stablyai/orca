@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: these tests exercise one stateful transport
    boundary across connection lifecycle, heartbeat, pre-auth timeout, and
    shutdown behavior; splitting the setup would obscure the shared invariants. */
-import { mkdtempSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'

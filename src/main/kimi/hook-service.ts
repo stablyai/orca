@@ -6,10 +6,10 @@ import {
   renameSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { homedir } from 'os'
-import { dirname, join, posix as pathPosix } from 'path'
-import { randomUUID } from 'crypto'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, posix as pathPosix } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {

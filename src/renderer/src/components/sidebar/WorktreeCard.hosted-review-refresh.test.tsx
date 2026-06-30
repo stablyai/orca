@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

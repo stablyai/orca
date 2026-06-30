@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { MjpegFrameStream } from '../emulator/mjpeg-frame-stream'
 
 type FrameStreamSession = {

@@ -139,7 +139,7 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
-  it('keeps title fallback for real Gemini and Pi titles', () => {
+  it('keeps title fallback for real Gemini, MiMo, and Pi titles', () => {
     expect(
       resolveTabAgentFromSignals({
         foreground: undefined,
@@ -152,6 +152,19 @@ describe('resolveTabAgentFromSignals', () => {
         launchAgent: undefined
       })
     ).toBe('gemini')
+
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: 'MiMo Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: undefined
+      })
+    ).toBe('mimo-code')
 
     expect(
       resolveTabAgentFromSignals({
@@ -288,6 +301,36 @@ describe('resolveTabAgentFromSignals', () => {
         launchAgent: 'openclaude'
       })
     ).toBe('openclaude')
+  })
+
+  it('lets an explicit title override stale launch identity after the pane shows newer activity', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ Claude Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'codex'
+      })
+    ).toBe('claude')
+  })
+
+  it('does not let an explicit title override launch identity before any activity is observed', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ Claude Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
   })
 
   it('lets shell foreground clear the icon after an agent was observed running', () => {

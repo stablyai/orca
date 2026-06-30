@@ -1,5 +1,5 @@
-import { EventEmitter } from 'events'
-import { PassThrough } from 'stream'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({

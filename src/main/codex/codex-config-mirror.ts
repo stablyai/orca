@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 
@@ -70,7 +70,7 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
     }
   }
 
-  for (const section of featureSections.reverse()) {
+  for (const section of featureSections.toReversed()) {
     normalizeFeatureSectionLines(lines, section.start + 1, section.end)
   }
   return lines.join('\n')
@@ -104,7 +104,7 @@ function normalizeFeatureSectionLines(lines: string[], start: number, end: numbe
     }
   }
 
-  for (const index of deprecatedIndexes.reverse()) {
+  for (const index of deprecatedIndexes.toReversed()) {
     lines.splice(index, 1)
   }
 }

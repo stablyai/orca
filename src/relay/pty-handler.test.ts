@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import * as gitBash from '../main/git-bash'
 import * as ptyShellUtils from './pty-shell-utils'

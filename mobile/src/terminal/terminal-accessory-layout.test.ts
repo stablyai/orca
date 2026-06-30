@@ -84,7 +84,7 @@ describe('terminal accessory layout', () => {
   })
 
   it('preserves a custom v2 order and its visible subset', () => {
-    const reversed = [...getDefaultTerminalAccessoryBuiltInIds()].reverse()
+    const reversed = [...getDefaultTerminalAccessoryBuiltInIds()].toReversed()
 
     expect(
       normalizeTerminalAccessoryLayoutPreference({

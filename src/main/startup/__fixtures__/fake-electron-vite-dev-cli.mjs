@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = import.meta.dirname
 const grandchildPath = path.join(__dirname, 'electron-vite-dev-grandchild.mjs')
 const pidFile = process.env.ORCA_DEV_WRAPPER_TEST_PID_FILE
 const envFile = process.env.ORCA_DEV_WRAPPER_TEST_ENV_FILE

@@ -305,8 +305,17 @@ describe('registerPtyHandlers', () => {
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
+    // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel
+    // unless removeHandler cleared it first. This catches a re-registration
+    // (macOS re-activate / new window) that forgets to remove a handle channel.
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      if (handlers.has(channel)) {
+        throw new Error(`Attempted to register a second handler for '${channel}'`)
+      }
       handlers.set(channel, handler)
+    })
+    removeHandlerMock.mockImplementation((channel: string) => {
+      handlers.delete(channel)
     })
     getPathMock.mockReturnValue('/tmp/orca-user-data')
     existsSyncMock.mockReturnValue(true)
@@ -3382,6 +3391,107 @@ describe('registerPtyHandlers', () => {
     expect(provider.getForegroundProcess).not.toHaveBeenCalled()
   })
 
+  // Why: regression for the Claude-Code split-pane garbled-render desync. resize
+  // is fire-and-forget for daemon-backed PTYs, so a corrective narrow resize can
+  // be dropped while the renderer believes it landed. pty:getSize must report the
+  // size the PTY ACTUALLY applied (so the renderer's resume drift-check re-asserts
+  // the dropped resize) rather than the size last requested. This models a daemon
+  // provider whose resize is dropped but whose getAppliedSize stays at the wide
+  // spawn size; pty:getSize must surface the wide (applied) size, not the narrow
+  // (requested) one.
+  describe('pty:getSize reports applied size, not requested size', () => {
+    function setupProviderWithAppliedSize(args: {
+      applied: { cols: number; rows: number } | null
+      resize?: (cols: number, rows: number) => void
+      getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
+    }): void {
+      setLocalPtyProvider({
+        spawn: vi.fn(async (opts: { sessionId?: string }) => ({
+          id: opts.sessionId ?? 'daemon-pty'
+        })),
+        write: vi.fn(),
+        resize: vi.fn(args.resize ?? (() => {})),
+        getAppliedSize: vi.fn(args.getAppliedSize ?? (async () => args.applied)),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+    }
+
+    const resizeListener = (): ((event: unknown, args: unknown) => void) => {
+      const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:resize')
+      if (!call) {
+        throw new Error('missing pty:resize listener')
+      }
+      return call[1] as (event: unknown, args: unknown) => void
+    }
+
+    it('returns the applied (wide) size after a dropped narrow resize', async () => {
+      // The daemon keeps the PTY at its wide spawn size; the narrow resize is
+      // silently dropped (provider.resize is a no-op fire-and-forget).
+      setupProviderWithAppliedSize({ applied: { cols: 200, rows: 50 } })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 200, rows: 50, env: {} })
+      const id = (spawn as { id: string }).id
+
+      // Renderer forwards a corrective narrow resize; it is dropped daemon-side.
+      resizeListener()(mainWindowIpcEvent, { id, cols: 80, rows: 24 })
+
+      // pty:getSize must surface the applied wide size so the renderer detects
+      // drift (xterm=80 vs PTY=200) and re-asserts — NOT the requested 80.
+      const reported = await handlers.get('pty:getSize')!(null, { id })
+      expect(reported).toEqual({ cols: 200, rows: 50 })
+    })
+
+    it('falls back to the requested size when the provider cannot report applied size', async () => {
+      // No getAppliedSize (e.g. SSH relay): the requested-size cache is the only
+      // signal, so getSize returns it — preserving prior behavior, not a regression.
+      setupProviderWithAppliedSize({ applied: null, getAppliedSize: undefined })
+      setLocalPtyProvider({
+        spawn: vi.fn(async (opts: { sessionId?: string }) => ({
+          id: opts.sessionId ?? 'daemon-pty'
+        })),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 200, rows: 50, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeListener()(mainWindowIpcEvent, { id, cols: 80, rows: 24 })
+
+      const reported = await handlers.get('pty:getSize')!(null, { id })
+      expect(reported).toEqual({ cols: 80, rows: 24 })
+    })
+
+    it('falls back to the requested size when getAppliedSize throws', async () => {
+      // A dead daemon/relay must never throw across the IPC boundary or block.
+      setupProviderWithAppliedSize({
+        applied: null,
+        getAppliedSize: async () => {
+          throw new Error('daemon unreachable')
+        }
+      })
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 100, rows: 30, env: {} })
+      const id = (spawn as { id: string }).id
+
+      const reported = await handlers.get('pty:getSize')!(null, { id })
+      expect(reported).toEqual({ cols: 100, rows: 30 })
+    })
+  })
+
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
     const spawn = vi.fn(async () => ({ id: 'remote-pty' }))
     registerSshPtyProvider('ssh-1', {
@@ -5706,6 +5816,279 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers agent startup OSC color queries before renderer batching', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mockProc.proc.write.mockClear()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready')
+
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers combined agent startup OSC foreground and background color queries', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mockProc.proc.write.mockClear()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('\x1b]10;?;?\x1b\\ready')
+
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not answer ordinary terminal OSC color queries in main', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      mockProc.emitData(`${query}ready`)
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${query}ready`
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not answer agent OSC color commands that only start like startup queries', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mockProc.proc.write.mockClear()
+      mainWindow.webContents.send.mockClear()
+
+      const command = '\x1b]10;?not-a-query\x1b\\'
+      mockProc.emitData(`${command}ready`)
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${command}ready`
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers daemon agent startup OSC color queries before spawn resolves', async () => {
+    vi.useFakeTimers()
+    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    const write = vi.fn()
+    const spawn = vi.fn(async (options: { sessionId?: string }) => {
+      const id = options.sessionId ?? 'daemon-pty'
+      dataHandler?.({ id, data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\daemon-ready' })
+      return { id }
+    })
+    setLocalPtyProvider({
+      spawn,
+      write,
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        dataHandler = handler
+        return () => {}
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'daemon-ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops renderer sequence metadata when an answered OSC query is batched', async () => {
+    vi.useFakeTimers()
+    const providerEvents: {
+      dataHandler?: (payload: { id: string; data: string }) => void
+    } = {}
+    const write = vi.fn()
+    const spawn = vi.fn(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    setLocalPtyProvider({
+      spawn,
+      write,
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        providerEvents.dataHandler = handler
+        return () => {}
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    let seq = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      onPtyData: vi.fn((_id: string, data: string) => {
+        seq += data.length
+        return seq
+      }),
+      registerPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      providerEvents.dataHandler?.({ id: spawnResult.id, data: 'prefix' })
+      providerEvents.dataHandler?.({
+        id: spawnResult.id,
+        data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
+      })
+      vi.advanceTimersByTime(8)
+
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'prefixready'
       })
     } finally {
       vi.useRealTimers()

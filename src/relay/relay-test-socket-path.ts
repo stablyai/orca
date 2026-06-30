@@ -1,5 +1,5 @@
-import { createHash } from 'crypto'
-import { join } from 'path'
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
 
 export function relayTestSocketPath(dir: string, name = 'relay.sock'): string {
   if (process.platform !== 'win32') {

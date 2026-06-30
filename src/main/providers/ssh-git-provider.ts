@@ -13,6 +13,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
   RemoveWorktreeResult
@@ -111,6 +112,33 @@ export class SshGitProvider implements IGitProvider {
     return (await (options?.signal
       ? this.mux.request('git.status', request, { signal: options.signal })
       : this.mux.request('git.status', request))) as GitStatusResult
+  }
+
+  async getSubmoduleStatus(
+    worktreePath: string,
+    submodulePath: string,
+    area: GitStagingArea = 'unstaged'
+  ): Promise<GitStatusResult> {
+    // Why: mirror getStatus() — refreshing submodule state must invalidate
+    // in-flight diff reads so a later diff can't reuse a stale pending RPC.
+    this.gitDiffReadDedupe.clear()
+    try {
+      return (await this.mux.request('git.submoduleStatus', {
+        worktreePath,
+        submodulePath,
+        area
+      })) as GitStatusResult
+    } catch (error) {
+      // Why: a newer desktop client may talk to an older relay that predates
+      // git.submoduleStatus; surface an actionable reconnect hint instead of a
+      // raw JSON-RPC method-not-found error in Source Control.
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH submodule diff support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    }
   }
 
   async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
@@ -698,6 +726,31 @@ export class SshGitProvider implements IGitProvider {
     await this.runWithDiffDedupeClear(async () => {
       await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
     })
+  }
+
+  async forceDeletePreservedBranch(
+    repoPath: string,
+    branchName: string,
+    expectedHead: string
+  ): Promise<void> {
+    try {
+      await this.runWithDiffDedupeClear(async () => {
+        await this.mux.request('git.forceDeletePreservedBranch', {
+          repoPath,
+          branchName,
+          expectedHead
+        })
+      })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        // Why: older SSH relays predate git.forceDeletePreservedBranch; surface
+        // a reconnect prompt instead of a raw JSON-RPC method-not-found error.
+        throw new Error(
+          'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
   }
 
   async exec(

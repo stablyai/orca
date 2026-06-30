@@ -1,7 +1,7 @@
-import path from 'path'
-import { constants } from 'fs'
-import { EventEmitter } from 'events'
-import { Readable, Writable } from 'stream'
+import path from 'node:path'
+import { constants } from 'node:fs'
+import { EventEmitter } from 'node:events'
+import { Readable, Writable } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()

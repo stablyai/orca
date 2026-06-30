@@ -34,6 +34,10 @@ export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
+// Why: the access scope a paired device token grants. Lives in shared so
+// pairing offers, status.get, and the device registry use one vocabulary.
+export type DeviceScope = 'mobile' | 'runtime'
+
 // Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
 // checked source so future variants cannot drift silently across layers.
 export type RuntimeTerminalDriverState =
@@ -57,6 +61,9 @@ export type RuntimeStatus = {
   capabilities?: RuntimeCapability[]
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
+  // the server stamps the authenticated token scope here for status.get only.
+  deviceScope?: DeviceScope
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -447,6 +454,8 @@ export type RuntimeTerminalAgentStatus = {
   status: RuntimeTerminalAgentStatusState
 }
 
+export type RuntimeTerminalPresentation = 'background' | 'focused'
+
 export type RuntimeTerminalCreate = {
   handle: string
   tabId?: string
@@ -455,6 +464,7 @@ export type RuntimeTerminalCreate = {
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'
+  warning?: string
 }
 
 export type RuntimeTerminalSplit = {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CryptoModule from 'crypto'
+import type * as CryptoModule from 'node:crypto'
 import type { SparsePreset } from '../../shared/types'
 
 const { handleMock, randomUUIDMock, mockStore } = vi.hoisted(() => ({

@@ -1,4 +1,4 @@
-import { fork, type ChildProcess } from 'child_process'
+import { fork, type ChildProcess } from 'node:child_process'
 import type { DaemonLauncher, DaemonProcessHandle } from './daemon-spawner'
 
 const READY_TIMEOUT_MS = 10_000

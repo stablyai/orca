@@ -2,13 +2,18 @@
    it owns app lifecycle, service wiring, window creation, and hook/daemon
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
-import { existsSync, statSync } from 'fs'
-import { isAbsolute, join } from 'path'
+import { existsSync, statSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
-import { Store, initDataPath } from './persistence'
+import {
+  Store,
+  initDataPath,
+  getCanonicalUserDataPath,
+  migrateMobilePairingDataToCanonicalUserDataPath
+} from './persistence'
 import { applyAppIcon } from './app-icon'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
@@ -519,23 +524,41 @@ ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
   await firstWindowStartupServicesReady
 })
 
+ipcMain.handle(
+  'app:startupDiagnostic',
+  (_event, event: string, details?: Record<string, unknown>) => {
+    if (!startupDiagnosticsEnabled || !event.startsWith('renderer-')) {
+      return
+    }
+    logStartupMilestone(event, details && typeof details === 'object' ? details : {})
+  }
+)
+
 function startDesktopFirstWindowStartupServices(): Promise<void> {
+  logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({
     // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
     // registers its PTY runtime separately and must not spawn the desktop daemon
     // or hook loopback listener.
-    startDaemonPtyProvider: (signal) => initDaemonPtyProvider(signal),
+    startDaemonPtyProvider: async (signal) => {
+      logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
+      await initDaemonPtyProvider(signal)
+      logStartupMilestone('startup-service-done', { service: 'daemon-pty-provider' })
+    },
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state, so
     // the renderer awaits this barrier before restored terminals reconnect.
-    startAgentHookServer: () =>
-      agentHookServer.start({
+    startAgentHookServer: async () => {
+      logStartupMilestone('startup-service-start', { service: 'agent-hook-server' })
+      await agentHookServer.start({
         env: app.isPackaged ? 'production' : 'development',
         // Why: hooks source this endpoint file at invocation time, so old PTY
         // env still reaches the current Orca process after an app restart.
         // Dev uses a namespace because all worktrees share `orca-dev`.
         userDataPath: app.getPath('userData'),
         endpointNamespace: devAgentHookEndpointNamespace
-      }),
+      })
+      logStartupMilestone('startup-service-done', { service: 'agent-hook-server' })
+    },
     onDaemonError: (error) => {
       console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
     },
@@ -547,6 +570,12 @@ function startDesktopFirstWindowStartupServices(): Promise<void> {
   })
   firstWindowStartupServicesReady = startupServices.firstWindowReady
   localPtyStartupReady = startupServices.localPtyReady
+  void firstWindowStartupServicesReady.then(() => {
+    logStartupMilestone('first-window-startup-services-ready')
+  })
+  void localPtyStartupReady.then(() => {
+    logStartupMilestone('local-pty-startup-ready')
+  })
   return firstWindowStartupServicesReady
 }
 
@@ -1742,9 +1771,17 @@ app.whenReady().then(async () => {
     app.exit(1)
     return
   }
+  // Why: existing installs may have already written mobile pairing credentials
+  // under the late app.getPath('userData') directory. Copy any missing files
+  // forward before the runtime switches exclusively to the canonical path.
+  migrateMobilePairingDataToCanonicalUserDataPath(app.getPath('userData'))
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
-    userDataPath: app.getPath('userData'),
+    // Why: mobile pairing (DeviceRegistry + E2EE keypair + runtime metadata)
+    // must share the stable path captured before app.setName(), not a late
+    // app.getPath('userData') that resolves elsewhere and drops paired devices
+    // across restarts/updates. See persistence.ts:getCanonicalUserDataPath.
+    userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
     ...(isE2E ? { wsPort: 0 } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
@@ -1891,7 +1928,9 @@ app.on('will-quit', (e) => {
           .then(() => awaitRuntimeFileWatcherUnsubscribes())
           .then(() => {
             if (ownedRuntimeId) {
-              clearRuntimeMetadataIfOwned(app.getPath('userData'), ownedPid, ownedRuntimeId)
+              // Why: must match the path the runtime server wrote metadata to
+              // (getCanonicalUserDataPath), not late app.getPath('userData').
+              clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
             }
           })
           .catch((error) => {

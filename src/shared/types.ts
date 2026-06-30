@@ -939,7 +939,16 @@ export type BrowserTab = BrowserWorkspace
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
 export type BrowserSessionProfileSource = {
-  browserFamily: 'chrome' | 'chromium' | 'arc' | 'edge' | 'firefox' | 'safari' | 'comet' | 'manual'
+  browserFamily:
+    | 'chrome'
+    | 'chromium'
+    | 'arc'
+    | 'edge'
+    | 'firefox'
+    | 'safari'
+    | 'comet'
+    | 'helium'
+    | 'manual'
   profileName?: string
   importedAt: number
 }
@@ -1232,6 +1241,10 @@ export type PRCheckDetail = {
     | 'neutral'
     | 'skipped'
     | 'pending'
+    // Why: a check suite needing manual action (e.g. a workflow awaiting "Approve
+    // and run") has no check run and is absent from statusCheckRollup, yet blocks
+    // auto-merge (GitHub returns "unstable status"). Surface it as its own state.
+    | 'action_required'
     | null
   url: string | null
   checkRunId?: number
@@ -2578,6 +2591,10 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  /** Why: worktree-scoped localhost hostnames make same-app tabs distinguishable
+   *  in external browsers. Opt-in (default off): serving the app under a different
+   *  host can break dev apps that bind cookies/sessions to localhost. */
+  localhostWorktreeLabelsEnabled?: boolean
   /** Why: terminal link routing asks once at first use instead of silently
    *  changing where links open for new users. */
   openLinksInAppPreferencePrompted: boolean
@@ -2597,6 +2614,11 @@ export type GlobalSettings = {
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */
   sourceControlGroupOrder: SourceControlGroupOrder
+  /** When enabled, the Source Control compare base defaults to the current
+   *  branch's upstream (prioritizing local changes) instead of the repo
+   *  default branch. Only affects the compare/diff view, not the PR/rebase
+   *  merge target. Per-user, not per-workspace. */
+  sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
@@ -2775,6 +2797,9 @@ export type GlobalSettings = {
   mobileEmulatorEnabled?: boolean
   /** Preferred iOS Simulator UDID for UI auto-attach and agent CLI attach. */
   mobileEmulatorDefaultDeviceUdid?: string | null
+  /** Explicit Android SDK root, used when auto-discovery (ANDROID_HOME / the
+   *  default install path) does not find it. `null` (default) auto-discovers. */
+  androidSdkPath?: string | null
   /** Auto-restore window for a phone-fit PTY after the last mobile
    *  subscriber leaves. `null` (default) holds the PTY at phone size
    *  indefinitely; the desktop "Restore" banner remains the explicit

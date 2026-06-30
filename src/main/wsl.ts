@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { parseWslUncPath } from '../shared/wsl-paths'
 
 export type WslPathInfo = {

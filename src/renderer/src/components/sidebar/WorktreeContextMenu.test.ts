@@ -7,11 +7,39 @@ import {
   shouldRemoveProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldContinueDeleteSiblingPositionRestore,
-  shouldShowReadToggleContextMenuItem,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
-  isWorktreeParentPickerDisabled
+  isWorktreeParentPickerDisabled,
+  selectMenuScopedMap
 } from './WorktreeContextMenu'
+
+describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
+  // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
+  // set()s. The guard is referential stability — when closed, the selector must
+  // return the SAME `empty` reference even as the live map identity changes each
+  // teardown set(), so Zustand's Object.is equality short-circuits the subscription
+  // and the (common) closed wrapper does not re-render. These assertions pin that
+  // contract; if they regress, every visible card re-renders on every teardown set()
+  // and worktree-card hover popovers stall during a delete.
+  it('returns the stable empty sentinel when the menu is closed', () => {
+    const empty = Object.freeze({})
+    const liveA = { 'wt-1': ['pty-1'] }
+    const liveB = { 'wt-2': ['pty-2'] }
+    // Live map identity churns across teardown set()s, yet a closed wrapper keeps
+    // the same reference — no subscription wakeup.
+    expect(selectMenuScopedMap(false, liveA, empty)).toBe(empty)
+    expect(selectMenuScopedMap(false, liveB, empty)).toBe(empty)
+    expect(selectMenuScopedMap(false, liveA, empty)).toBe(selectMenuScopedMap(false, liveB, empty))
+  })
+
+  it('returns the live map synchronously once the menu is open', () => {
+    const empty = Object.freeze({})
+    const live = { 'wt-1': ['pty-1'] }
+    // The render where menuOpen flips true must read real data so menu items
+    // (sleep/delete/lineage) reflect live tabs/ptys/delete state.
+    expect(selectMenuScopedMap(true, live, empty)).toBe(live)
+  })
+})
 
 describe('shouldUseNativeContextMenu', () => {
   it('uses the browser context menu for marked hovercard content', () => {
@@ -96,16 +124,6 @@ describe('shouldSuppressContextMenuFollowUpClick', () => {
 
   it('does not suppress clicks that predate the context menu timestamp', () => {
     expect(shouldSuppressContextMenuFollowUpClick(1_000, 999)).toBe(false)
-  })
-})
-
-describe('shouldShowReadToggleContextMenuItem', () => {
-  it('keeps the read toggle in legacy card menus', () => {
-    expect(shouldShowReadToggleContextMenuItem({ newCardStyle: false })).toBe(true)
-  })
-
-  it('hides the read toggle in experimental card menus', () => {
-    expect(shouldShowReadToggleContextMenuItem({ newCardStyle: true })).toBe(false)
   })
 })
 

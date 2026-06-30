@@ -1,10 +1,10 @@
 /* eslint-disable max-lines -- Why: Jira credential storage and authenticated
 request plumbing share one boundary so encrypted token lifecycle and
 multi-site selection cannot drift between task operations. */
-import { createHash } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { net, safeStorage, session } from 'electron'
 import {
   CredentialDecryptionError,

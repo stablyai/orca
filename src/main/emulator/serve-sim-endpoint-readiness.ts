@@ -1,5 +1,5 @@
-import { connect } from 'net'
-import { setTimeout as delay } from 'timers/promises'
+import { connect } from 'node:net'
+import { setTimeout as delay } from 'node:timers/promises'
 
 const DEFAULT_READY_TIMEOUT_MS = 5_000
 const CONNECT_TIMEOUT_MS = 500

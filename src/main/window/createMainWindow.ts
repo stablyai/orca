@@ -9,7 +9,7 @@ import {
   screen,
   shell
 } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'

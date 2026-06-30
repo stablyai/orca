@@ -1,4 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
+import path from 'node:path'
 import { z } from 'zod'
 
 // Minimal schemas for emulator commands (loose for initial testing; can be tightened like browser-schemas).
@@ -56,6 +57,81 @@ const RotateParams = z.object({
 
 const ExecParams = z.object({
   command: z.string(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const InstallParams = z.object({
+  path: z.string().refine((value) => path.isAbsolute(value), {
+    message: 'path must be absolute'
+  }),
+  reinstall: z.boolean().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const LaunchParams = z.object({
+  package: z.string(),
+  activity: z.string().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const PermissionsParams = z
+  .object({
+    op: z.enum(['grant', 'revoke', 'reset']),
+    package: z.string().optional(),
+    permission: z.string().optional(),
+    device: z.string().optional(),
+    emulator: z.string().optional(),
+    worktree: z.string().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.op === 'reset') {
+      if (value.package) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['package'],
+          message: 'package is not allowed for reset'
+        })
+      }
+      if (value.permission) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['permission'],
+          message: 'permission is not allowed for reset'
+        })
+      }
+      return
+    }
+    if (!value.package) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['package'],
+        message: 'package is required for grant/revoke'
+      })
+    }
+    if (!value.permission) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['permission'],
+        message: 'permission is required for grant/revoke'
+      })
+    }
+  })
+
+const AxParams = z.object({
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const LogcatParams = z.object({
+  lines: z.number().int().positive().optional(),
+  filters: z.array(z.string()).optional(),
   device: z.string().optional(),
   emulator: z.string().optional(),
   worktree: z.string().optional()
@@ -139,6 +215,36 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     name: 'emulator.availability',
     params: z.object({ worktree: z.string().optional() }).partial(),
     handler: async (params, { runtime }) => runtime.emulatorAvailability(params)
+  }),
+  defineMethod({
+    name: 'emulator.listDevices',
+    params: z.object({ worktree: z.string().optional() }).partial(),
+    handler: async (params, { runtime }) => runtime.emulatorListDevices(params)
+  }),
+  defineMethod({
+    name: 'emulator.install',
+    params: InstallParams,
+    handler: async (params, { runtime }) => runtime.emulatorInstall(params)
+  }),
+  defineMethod({
+    name: 'emulator.launch',
+    params: LaunchParams,
+    handler: async (params, { runtime }) => runtime.emulatorLaunch(params)
+  }),
+  defineMethod({
+    name: 'emulator.permissions',
+    params: PermissionsParams,
+    handler: async (params, { runtime }) => runtime.emulatorPermissions(params)
+  }),
+  defineMethod({
+    name: 'emulator.ax',
+    params: AxParams,
+    handler: async (params, { runtime }) => runtime.emulatorAx(params)
+  }),
+  defineMethod({
+    name: 'emulator.logcat',
+    params: LogcatParams,
+    handler: async (params, { runtime }) => runtime.emulatorLogcat(params)
   }),
   defineMethod({
     name: 'emulator.unregisterActive',

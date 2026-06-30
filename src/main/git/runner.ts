@@ -16,8 +16,8 @@ import {
   type ChildProcess,
   type ExecFileOptions,
   type SpawnOptions
-} from 'child_process'
-import { StringDecoder } from 'string_decoder'
+} from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'

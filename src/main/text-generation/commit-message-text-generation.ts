@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: local and SSH generation share cancellation,
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
-import { exec, spawn, type ChildProcess } from 'child_process'
+import { exec, spawn, type ChildProcess } from 'node:child_process'
 import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
 import {
   buildCommitMessagePrompt,

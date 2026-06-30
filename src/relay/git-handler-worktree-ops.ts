@@ -1,4 +1,4 @@
-import * as path from 'path'
+import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'

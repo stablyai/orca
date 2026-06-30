@@ -22,6 +22,13 @@ export class RuntimeRpcCallError extends Error {
   }
 }
 
+// Why: mobile-scope device tokens are denied non-allowlisted runtime methods
+// with code 'forbidden'. Callers use this to surface one scope-mismatch banner
+// instead of silently swallowing the failure into empty/retry-looping UI.
+export function isRuntimeScopeForbiddenError(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
+}
+
 export function getActiveRuntimeTarget(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): RuntimeClientTarget {

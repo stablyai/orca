@@ -8,8 +8,8 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { EventEmitter } from 'events'
-import type { ChildProcess } from 'child_process'
+import { EventEmitter } from 'node:events'
+import type { ChildProcess } from 'node:child_process'
 import { searchWithGitGrep } from './fs-handler-git-fallback'
 
 function createMockProcess(): ChildProcess {

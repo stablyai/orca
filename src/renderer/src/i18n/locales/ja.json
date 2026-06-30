@@ -133,7 +133,8 @@
         "7a566540de": "ペアリング URL またはコード",
         "cb4d287238": "サーバー名",
         "3affe7de3a": "このブラウザが到達できる Orca サーバーからペアリング URL を貼り付けます。",
-        "e3bcd082ac": "Orca に接続"
+        "e3bcd082ac": "Orca に接続",
+        "mobileScopeRejected": "この QR コードは制限付き（モバイル）アクセスを許可します。完全な Web アプリを使うには、設定 → リモート Orca サーバー → この Orca サーバーを共有する → 新規リンク からブラウザー用アクセスリンクを開いてください。"
       },
       "web": {
         "preload": {
@@ -228,7 +229,9 @@
           "2e17f825d4": "ワークツリーを削除しました、ブランチは保持されました",
           "78e08cd877": "Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
-          "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。"
+          "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
+          "runtimeScopeForbiddenTitle": "この接続は制限付き（モバイル）アクセスです",
+          "runtimeScopeForbiddenDescription": "モバイル範囲のペアリングではワークスペースを使用できません。設定 → リモート Orca サーバー → この Orca サーバーを共有する からブラウザー用リンクで再接続してください。"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -394,6 +397,13 @@
               "f8b8ca2711": "Zed",
               "d62b12e98a": "Cursor",
               "173553f73a": "VS Code"
+            }
+          }
+        },
+        "mobile": {
+          "emulator": {
+            "tab": {
+              "bf4f2a8a72": "Could not start the emulator. Check iOS or Android emulator setup and try another device."
             }
           }
         }
@@ -631,7 +641,17 @@
         "b1c2f8b0ac": "Claude、Codex、Gemini、OpenCode Go のオプションのアカウント切り替え。",
         "f70ac54d38": "AI プロバイダー アカウント",
         "4121f7a0a2": "AI agents を管理し、デフォルトを設定し、コマンドをカスタマイズします。",
-        "b49abbd2f7": "エージェント"
+        "b49abbd2f7": "エージェント",
+        "dev": "Dev Tools",
+        "devDescription": "Dev-only tools for exercising UI states.",
+        "devBadge": "Dev",
+        "devSearchNotificationPlayground": "Notification playground",
+        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchKeywordDev": "dev",
+        "devSearchKeywordToast": "toast",
+        "devSearchKeywordSonner": "sonner",
+        "devSearchKeywordError": "error",
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -703,6 +723,7 @@
         "d23bbb6416": "{{value0}} はスキップされました",
         "18f80e1329": "{{value0}} 保留中",
         "b1ac991806": "{{value0}} は失敗しました",
+        "checksNeedActionChip": "{{value0}} 件の対応が必要",
         "311d0cee55": "{{value0}} 通過",
         "e52bed9264": "まだチェックは報告されていません",
         "90020cc1f3": "この PR にはまだチェックが報告されていません。",
@@ -851,7 +872,8 @@
           "to": "to",
           "activity": "Activity",
           "noActivity": "No activity yet."
-        }
+        },
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -1176,6 +1198,7 @@
         "e6ad0a8d06": "{{value0}} はスキップされました",
         "88267924d5": "{{value0}} 保留中",
         "ae2a34c7b8": "{{value0}} は失敗しました",
+        "checksNeedActionChip": "{{value0}} 件の対応が必要",
         "7c5035931a": "{{value0}} 通過",
         "a18d01cda3": "まだチェックは報告されていません",
         "3912daf310": "この PR にはまだチェックが報告されていません。",
@@ -1310,7 +1333,8 @@
         "commentTooLarge": "コメントが大きすぎるため安全に送信できません。",
         "8ff5ae8866": "担当者",
         "82c87eceb9": "担当者を編集",
-        "1ff5d979df": "担当者なし"
+        "1ff5d979df": "担当者なし",
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2396,6 +2420,7 @@
             "copyTerminalId": "ターミナル ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
+            "clearPaneTitle": "ペインタイトルをクリア",
             "06c2b0f043": "ペインのサイズを均等化する",
             "98bccf4fa2": "スプリット Terminal ダウン",
             "20e565d865": "分割 Terminal 右",
@@ -2530,7 +2555,9 @@
             "couldNotReadPayload": "セッションのドラッグデータを読み取れませんでした。",
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "openLocalWorkspace": "セッションを再開する前にローカルワークスペースを開いてください。",
-            "sessionQueued": "セッションをキューに追加しました"
+            "sessionQueued": "セッションをキューに追加しました",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "新しい分割"
@@ -3972,7 +3999,9 @@
           "250de158fd": "ワークスペースを削除",
           "changeParentWorkspace": "親ワークツリーを変更...",
           "setParentWorkspace": "親ワークツリーを設定...",
-          "workspaceSection": "ワークスペース"
+          "workspaceSection": "ワークスペース",
+          "primaryDeleteDisabled": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
+          "deleteWorktree": "ワークツリーを削除"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -5262,7 +5291,11 @@
           "sourceControlGroupOrderDescription": "ソース管理で「変更」「ステージ済みの変更」「未追跡ファイル」のどれを先に表示するかを選択します。",
           "changesFirst": "変更を先頭",
           "stagedFirst": "ステージ済みを先頭",
-          "untrackedFirst": "未追跡を先頭"
+          "untrackedFirst": "未追跡を先頭",
+          "compareAgainstUpstreamTitle": "既定の比較ベース",
+          "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
+          "compareBaseRepositoryDefault": "リポジトリ既定",
+          "compareBaseBranchUpstream": "ブランチの上流"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "プレースホルダーの切り替え",
@@ -5459,7 +5492,12 @@
           "a4f1c82d90": "無効",
           "b5e2d93e01": "確認中...",
           "c6f3ea4f12": "準備完了",
-          "d704fb5023": "設定が必要"
+          "d704fb5023": "設定が必要",
+          "06b06429c6": "Checking Android SDK and iOS Simulator support.",
+          "6d1483d4a0": "1 emulator device detected.",
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
+          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "QR コードを再生成し、Orca モバイル アプリからスキャンします。",
@@ -6014,7 +6052,14 @@
           "2752126f3e": "ランタイムペアリングは利用できません。",
           "95b8be4cea": "ネットワークインターフェースの更新に失敗しました。",
           "1b4e0bbcc5": "共有アクセス許可のロードに失敗しました。",
-          "b91e36a986": "ウェブ"
+          "b91e36a986": "ウェブ",
+          "custom-option": "{{address}}（カスタム）",
+          "add-custom": "カスタムアドレスを追加…",
+          "custom-title": "カスタム接続アドレス",
+          "custom-description": "他のデバイスから到達できるアドレスを指定します。LAN や Tailscale のホスト、または完全な ws(s):// URL です。",
+          "custom-hint": "ホスト、host:port、または ws(s):// URL を入力してください。",
+          "custom-cancel": "キャンセル",
+          "custom-use": "アドレスを使用"
         },
         "Settings": {
           "3bf149e873": "プロジェクト設定 > {{value0}}",
@@ -6087,7 +6132,9 @@
           "9abb9be3bc": "セットアップ",
           "23c6874fdf": "AI 機能",
           "2309068a6f": "破壊的な",
-          "65358016ea": "破棄"
+          "65358016ea": "破棄",
+          "dev": "Dev Tools",
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -6978,7 +7025,9 @@
             "0dbb1eaf4e": "ホームページ",
             "291f480a5e": "家",
             "a942905148": "新規ブラウザ タブを作成するときに開かれる URL。空白のタブを開くには、空白のままにします。",
-            "c3903322d2": "デフォルトのホームページ"
+            "c3903322d2": "デフォルトのホームページ",
+            "19ea5607cf": "Localhost Worktree Labels",
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
           },
           "use": {
             "search": {
@@ -7397,7 +7446,19 @@
             "stagedFirst": "ステージ済みを先頭",
             "untrackedFirst": "未追跡を先頭",
             "sourceControl": "ソース管理",
-            "gitChanges": "git の変更"
+            "gitChanges": "git の変更",
+            "compareAgainstUpstreamTitle": "既定の比較ベース",
+            "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの上流は現在のブランチに自動的に追従し、上流がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各 worktree の Git パネルから worktree ごとに変更できます。Pull Request やリベースの対象は変更されません。",
+            "compareBase": "比較基準",
+            "currentBranch": "現在のブランチ",
+            "upstream": "上流",
+            "localChanges": "ローカルの変更",
+            "originMaster": "origin/master",
+            "committedChanges": "コミット済みの変更",
+            "defaultCompareBase": "既定の比較ベース",
+            "defaultBranch": "既定ブランチ",
+            "repositoryDefault": "リポジトリ既定",
+            "branchUpstream": "ブランチ上流"
           }
         },
         "input": {
@@ -8485,6 +8546,10 @@
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
         },
+        "BrowserLocalhostWorktreeLabelsSetting": {
+          "8ac8c3ad19": "Localhost Worktree Labels",
+          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+        },
         "AgentRuntimeSetting": {
           "label": "Agent runtime",
           "wsl": "WSL",
@@ -8495,8 +8560,53 @@
           "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
           "wslDescription": "Detect and launch agents in {{value0}} via WSL for projects that do not override their runtime."
         },
+        "MobileEmulatorSdkStatus": {
+          "536026130e": "Emulator SDKs",
+          "dde0ec1cd8": "Toolchains Orca uses to run emulators. Android works on any OS via the Android SDK; iOS Simulators need Xcode on macOS.",
+          "027cbf668a": "Android SDK",
+          "f6d080d128": "Using configured path",
+          "7fe4bd5907": "Detected at",
+          "2784f0b22d": "Not found. Install Android Studio, then create a Virtual Device.",
+          "b94ff260e6": "Download Android Studio",
+          "18925b082d": "Locate SDK folder",
+          "8c52684db8": "Clear",
+          "76eb88b88e": "iOS Simulator (Xcode)",
+          "c6f3ea4f12": "Ready",
+          "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
+          "63fe73a1ea": "Could not update Android SDK folder."
+        },
         "AppearanceAdvancedDisclosure": {
           "advanced": "詳細設定"
+        },
+        "DevToolsPane": {
+          "nativeActionLayoutCheck": "Native action layout check",
+          "secondary": "Secondary",
+          "secondaryActionClicked": "Secondary action clicked",
+          "primaryAction": "Primary action",
+          "primaryActionClicked": "Primary action clicked",
+          "branchHasChanges": "branch has changes",
+          "viewChangesClicked": "View Changes clicked",
+          "forceDeleteClicked": "Force Delete clicked",
+          "devOnlyCallback": "Dev-only callback.",
+          "infoToast": "Info toast",
+          "infoToastDescription": "Long informational copy with no explicit action.",
+          "localCanaryBehind": "Local canary is behind origin/canary",
+          "successToast": "Success toast",
+          "successToastDescription": "Short confirmation state.",
+          "settingsSaved": "Settings saved",
+          "shortSuccessCopy": "Short success copy.",
+          "errorToast": "Error toast",
+          "errorToastDescription": "Long error copy without recovery actions.",
+          "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
+          "nativeActionToast": "Native action toast",
+          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "deleteFailureToast": "Delete failure toast",
+          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "behindBaseRefToast": "Behind base ref toast",
+          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "notificationPlayground": "Notification playground",
+          "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
+          "devOnly": "Dev only"
         }
       },
       "right": {
@@ -9110,7 +9220,8 @@
                 "8a621a2c4f": "Grouped",
                 "b13f85d75c": "Timeline",
                 "f5cf324efa": "Comment display options",
-                "5e6e5a13fa": "View"
+                "5e6e5a13fa": "View",
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
               },
               "empty": {
                 "state": {
@@ -9358,7 +9469,10 @@
             "agents": "エージェント",
             "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
-            "worktreeUnavailable": "ワークツリーは利用できなくなりました。"
+            "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
+            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
+            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -9995,6 +10109,20 @@
             "cefd048225": "戻る",
             "c5ad56786d": "スピナー"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "カスタムネットワークアドレス",
+          "description": "同じ Wi-Fi に接続していないときにスマートフォンから到達できるアドレスを指定します。たとえば Tailscale のホスト名や静的 IP です。",
+          "label": "アドレス",
+          "placeholder": "my-mac.ts.net または 192.168.1.50",
+          "hint": "IP アドレスまたは Tailscale のホスト名（.ts.net で終わる）を入力してください。",
+          "cancel": "キャンセル",
+          "use": "アドレスを使用"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "通知するネットワークアドレス",
+          "custom-option": "{{address}}（カスタム）",
+          "add-custom": "カスタムアドレスを追加…"
         }
       },
       "gitlab": {
@@ -11010,7 +11138,14 @@
           "32ae8d7d57": "前の一致",
           "158c645829": "リッチ markdown エディタで検索",
           "98b89276f3": "リッチエディターで検索",
-          "a86958d508": "結果はありません"
+          "a86958d508": "結果はありません",
+          "e8c147435f": "置換を非表示",
+          "9cdc38be33": "置換を表示",
+          "482b637099": "大文字と小文字を区別",
+          "68d090241d": "単語全体に一致",
+          "fd97c7e585": "置換",
+          "44682b4159": "リッチ markdown エディタで置換",
+          "c2884f5e95": "すべて置換"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "ブロックが見つかりませんでした",
@@ -11180,7 +11315,8 @@
           "d5a8c2f1b9": "既定の AI エージェントでこのチェックを修正",
           "e2b4d7c8a1": "このチェックのエージェントを選択",
           "f1c9e3a6d4": "チェックを修正するエージェントを選択",
-          "5e2a9c3f88": "Open file at this line"
+          "5e2a9c3f88": "Open file at this line",
+          "actionRequired": "Action required"
         },
         "check": {
           "run": {
@@ -12088,7 +12224,8 @@
         "stopDictation": "Stop dictation",
         "noSkills": "No matching skills",
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
-        "removeAttachment": "Remove attachment"
+        "removeAttachment": "Remove attachment",
+        "pastedImageLabel": "Pasted image"
       },
       "tool": {
         "running": "Running…",

@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFile } from 'node:child_process'
 import {
   accessSync,
   chmodSync,
@@ -7,10 +7,10 @@ import {
   mkdirSync,
   readFileSync,
   writeFileSync
-} from 'fs'
+} from 'node:fs'
 import { app } from 'electron'
-import { platform, tmpdir } from 'os'
-import { delimiter, dirname, join } from 'path'
+import { platform, tmpdir } from 'node:os'
+import { delimiter, dirname, join } from 'node:path'
 import { EmulatorError } from './emulator-errors'
 
 const EXEC_TIMEOUT_MS = 90_000

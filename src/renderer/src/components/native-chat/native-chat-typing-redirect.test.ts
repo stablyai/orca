@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  shouldFocusNativeChatComposerFromEditingKey,
   shouldFocusNativeChatPaneFromPointerTarget,
   shouldRedirectNativeChatTyping
 } from './native-chat-typing-redirect'
@@ -43,6 +44,46 @@ describe('shouldRedirectNativeChatTyping', () => {
 
   it('leaves interactive targets alone', () => {
     expect(shouldRedirectNativeChatTyping(keyEvent({ target: interactiveTarget() }))).toBe(false)
+  })
+})
+
+describe('shouldFocusNativeChatComposerFromEditingKey', () => {
+  it('focuses the composer on Backspace/Delete from the pane', () => {
+    expect(shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace' }))).toBe(true)
+    expect(shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Delete' }))).toBe(true)
+  })
+
+  it('ignores other keys, shortcut/editing modifiers, IME composition, and handled events', () => {
+    expect(shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'a' }))).toBe(false)
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(
+        keyEvent({ key: 'Backspace', defaultPrevented: true })
+      )
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace', metaKey: true }))
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace', ctrlKey: true }))
+    ).toBe(false)
+    // Shift/Alt chords (cut, delete-word) belong to the focused target.
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Delete', shiftKey: true }))
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace', altKey: true }))
+    ).toBe(false)
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(keyEvent({ key: 'Backspace', isComposing: true }))
+    ).toBe(false)
+  })
+
+  it('leaves interactive targets (the textarea itself) alone', () => {
+    expect(
+      shouldFocusNativeChatComposerFromEditingKey(
+        keyEvent({ key: 'Backspace', target: interactiveTarget() })
+      )
+    ).toBe(false)
   })
 })
 

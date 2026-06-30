@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
 protocol surface so local and SSH git behavior stay in one dispatch table. */
-import { execFile, spawn, type ExecFileOptions } from 'child_process'
-import { promisify } from 'util'
-import * as path from 'path'
+import { execFile, spawn, type ExecFileOptions } from 'node:child_process'
+import { promisify } from 'node:util'
+import * as path from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
@@ -18,6 +18,17 @@ import {
   branchDiffEntries,
   validateGitExecArgs
 } from './git-handler-ops'
+import {
+  buildSubmoduleInnerCommitRangeDiff,
+  computeSubmodulePointerDiff,
+  computeSubmoduleRangeEntries,
+  createSubmodulePathsCache,
+  findContainingSubmodule,
+  listSubmodulePathsCached,
+  resolveSubmoduleWorktreePath,
+  resolveSubmoduleCommitRange,
+  type SubmodulePathsCache
+} from './git-handler-submodule-ops'
 import { commitCompare as commitCompareOp, commitDiffEntry } from './git-handler-commit-diff-ops'
 import {
   areRelayWorktreePathsEqual,
@@ -26,6 +37,7 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
@@ -52,6 +64,15 @@ import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-pr
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+
+function resolveSubmoduleStatusArea(
+  params: Record<string, unknown>
+): 'staged' | 'unstaged' | 'untracked' {
+  if (params.area === 'staged' || params.area === 'unstaged' || params.area === 'untracked') {
+    return params.area
+  }
+  return 'unstaged'
+}
 
 function getErrorText(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
@@ -150,6 +171,11 @@ export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
 
+  // Why: configured submodule paths change rarely; an instance-level TTL cache
+  // avoids re-reading `.gitmodules` on every diff click over SSH, and being
+  // per-instance it stays bound to the connection lifecycle (no cross-test leak).
+  private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
+
   // Why: RelayContext is accepted for protocol back-compat (see
   // docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
   constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
@@ -159,6 +185,7 @@ export class GitHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p) => this.getStatus(p))
+    this.dispatcher.onRequest('git.submoduleStatus', (p) => this.getSubmoduleStatus(p))
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
@@ -197,6 +224,9 @@ export class GitHandler {
       this.refreshLocalBaseRefForWorktreeCreate(p)
     )
     this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
+    this.dispatcher.onRequest('git.forceDeletePreservedBranch', (p) =>
+      this.forceDeletePreservedBranch(p)
+    )
     this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
     this.dispatcher.onRequest('git.clone', (p, context) => this.clone(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
@@ -263,6 +293,52 @@ export class GitHandler {
     return getStatusOp(this.git.bind(this), params)
   }
 
+  // Why: the parent status only lists a single gitlink row per submodule. The
+  // renderer fetches inner per-file changes on demand by running a plain status
+  // inside the submodule's own worktree. Reject paths escaping the worktree to
+  // match the diff handler's traversal guard.
+  private async getSubmoduleStatus(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const submodulePath = params.submodulePath as string
+    const area = resolveSubmoduleStatusArea(params)
+    const staged = area === 'staged'
+    const resolved = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
+    const workingResult = await getStatusOp(this.git.bind(this), {
+      ...params,
+      worktreePath: resolved
+    })
+    // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface the
+    // files changed between the recorded and checked-out commits so the expanded
+    // submodule isn't empty. Mirrors getSubmoduleStatus in the local handler.
+    const { fromOid, toOid } = await resolveSubmoduleCommitRange(
+      this.git.bind(this),
+      worktreePath,
+      submodulePath,
+      staged
+    )
+    if (fromOid && toOid && fromOid !== toOid) {
+      const rangeEntries = await computeSubmoduleRangeEntries(
+        this.git.bind(this),
+        resolved,
+        fromOid,
+        toOid
+      )
+      if (staged) {
+        return { ...workingResult, entries: rangeEntries }
+      }
+      const rangePaths = new Set(rangeEntries.map((entry) => entry.path))
+      const entries = [
+        ...rangeEntries,
+        ...workingResult.entries.filter((entry) => !rangePaths.has(entry.path))
+      ]
+      return { ...workingResult, entries }
+    }
+    if (staged) {
+      return { ...workingResult, entries: [] }
+    }
+    return workingResult
+  }
+
   private async checkIgnored(params: Record<string, unknown>) {
     return checkIgnoredPathsOp(this.git.bind(this), params)
   }
@@ -285,22 +361,74 @@ export class GitHandler {
     if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
+    const staged = params.staged as boolean
+    const compareAgainstHead = params.compareAgainstHead as boolean | undefined
+    // Why: register the in-flight dedupe synchronously (before any await) so
+    // concurrent identical reads coalesce; submodule routing happens inside.
     return this.gitDiffReadDedupe.run(
-      stableInFlightKey([
-        'diff',
-        worktreePath,
-        filePath,
-        params.staged as boolean,
-        params.compareAgainstHead as boolean | undefined
-      ]),
-      () =>
-        computeDiff(
+      stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
+      async () => {
+        // Why: gitlink paths can't be read as blobs and submodule working dirs
+        // read as empty, so route the gitlink root → pointer diff and inner
+        // files → recurse into the submodule's own worktree (mirrors local).
+        const submodulePaths = await listSubmodulePathsCached(
+          this.git.bind(this),
+          worktreePath,
+          this.submodulePathsCache
+        )
+        if (submodulePaths.length > 0) {
+          const matchedSubmodule = findContainingSubmodule(submodulePaths, filePath)
+          if (matchedSubmodule) {
+            const normalizedFilePath = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+            if (normalizedFilePath === matchedSubmodule) {
+              return computeSubmodulePointerDiff(
+                this.git.bind(this),
+                worktreePath,
+                matchedSubmodule,
+                staged,
+                compareAgainstHead
+              )
+            }
+            const submoduleWorktreePath = resolveSubmoduleWorktreePath(
+              worktreePath,
+              matchedSubmodule
+            )
+            const innerPath = normalizedFilePath.slice(matchedSubmodule.length + 1)
+            const { fromOid, toOid } = await resolveSubmoduleCommitRange(
+              this.git.bind(this),
+              worktreePath,
+              matchedSubmodule,
+              staged
+            )
+            // Why: a moved gitlink (clean worktree) keeps inner changes in
+            // committed history, so diff the two commits; otherwise read the
+            // working-tree blob.
+            if (fromOid && toOid && fromOid !== toOid) {
+              return buildSubmoduleInnerCommitRangeDiff(
+                this.gitBuffer.bind(this),
+                submoduleWorktreePath,
+                innerPath,
+                fromOid,
+                toOid
+              )
+            }
+            return computeDiff(
+              this.gitBuffer.bind(this),
+              submoduleWorktreePath,
+              innerPath,
+              staged,
+              compareAgainstHead
+            )
+          }
+        }
+        return computeDiff(
           this.gitBuffer.bind(this),
           worktreePath,
           filePath,
-          params.staged as boolean,
-          params.compareAgainstHead as boolean | undefined
+          staged,
+          compareAgainstHead
         )
+      }
     )
   }
 
@@ -1045,6 +1173,28 @@ export class GitHandler {
         throw new Error(normalizeGitErrorMessage(error))
       }
     })
+  }
+
+  private async forceDeletePreservedBranch(params: Record<string, unknown>) {
+    const repoPath = params.repoPath
+    const branchName = params.branchName
+    const expectedHead = params.expectedHead
+    if (
+      typeof repoPath !== 'string' ||
+      typeof branchName !== 'string' ||
+      typeof expectedHead !== 'string'
+    ) {
+      throw new Error('Invalid preserved branch force-delete request.')
+    }
+    // Why: an empty repoPath would resolve `cwd` to the relay's own process
+    // directory, running the destructive update-ref against the wrong repo. NUL
+    // bytes cannot reach git safely either; reject both at the boundary.
+    if (!repoPath || repoPath.includes('\0') || expectedHead.includes('\0')) {
+      throw new Error('Invalid preserved branch force-delete request.')
+    }
+    return this.runWithDiffDedupeClear(() =>
+      forceDeletePreservedRelayBranch(this.git.bind(this), repoPath, branchName, expectedHead)
+    )
   }
 
   private async isGitRepo(params: Record<string, unknown>) {

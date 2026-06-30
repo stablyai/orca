@@ -62,7 +62,7 @@ export function useEmulatorControlStream(
 
   const releasePressedKeyboardUsages = useCallback(
     (resetAfterRelease = false): void => {
-      const usages = Array.from(pressedKeyboardUsagesRef.current).reverse()
+      const usages = Array.from(pressedKeyboardUsagesRef.current).toReversed()
       for (const usage of usages) {
         sendKeyboardFrameNow({ type: 'up', usage })
       }

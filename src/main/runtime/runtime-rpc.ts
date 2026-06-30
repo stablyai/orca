@@ -4,9 +4,9 @@
 // orchestration so a running runtime is always discoverable via exactly
 // one on-disk file. Method handling lives in `rpc/` and transport specifics
 // live in `rpc/unix-socket-transport.ts` and `rpc/ws-transport.ts`.
-import { randomBytes } from 'crypto'
-import { readdirSync, rmSync } from 'fs'
-import { join } from 'path'
+import { randomBytes } from 'node:crypto'
+import { readdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'
@@ -365,6 +365,23 @@ function isLongPollRequest(request: RpcRequest): boolean {
   return false
 }
 
+// Why: stamp the authenticated connection's scope onto the status.get success
+// envelope. status.get has no per-connection context inside the dispatcher, so
+// the scope is added here at the transport boundary where the device is known.
+// Failures fall back to the untouched reply rather than dropping the response.
+function injectDeviceScope(response: string, scope: DeviceScope): string {
+  try {
+    const parsed = JSON.parse(response) as RpcResponse
+    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
+      return response
+    }
+    ;(parsed.result as Record<string, unknown>).deviceScope = scope
+    return JSON.stringify(parsed)
+  } catch {
+    return response
+  }
+}
+
 export class OrcaRuntimeRpcServer {
   private readonly runtime: OrcaRuntimeService
   private readonly dispatcher: RpcDispatcher
@@ -495,7 +512,8 @@ export class OrcaRuntimeRpcServer {
       v: PAIRING_OFFER_VERSION,
       endpoint,
       deviceToken: device.token,
-      publicKeyB64
+      publicKeyB64,
+      scope
     })
     return {
       available: true,
@@ -969,9 +987,16 @@ export class OrcaRuntimeRpcServer {
       this.activeLongPolls += 1
     }
 
+    // Why: older/saved WebSocket pairings may not carry scope metadata, so
+    // stamp the authenticated scope onto the one method that probes the runtime.
+    const replyForRequest =
+      request.method === 'status.get'
+        ? (response: string): void => reply(injectDeviceScope(response, device.scope))
+        : reply
+
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
     try {
-      await this.dispatcher.dispatchStreaming(request, reply, {
+      await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
         clientId: token,
         // Why: gates the mobile-only payload diet (native-chat char clipping) so

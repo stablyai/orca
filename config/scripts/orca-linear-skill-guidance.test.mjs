@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const projectDir = resolve(import.meta.dirname, '../..')
 const canonicalSkillPath = join(projectDir, 'skills', 'orca-linear', 'SKILL.md')
 const legacySkillPath = join(projectDir, 'skills', 'linear-tickets', 'SKILL.md')
 const legacyIntro =

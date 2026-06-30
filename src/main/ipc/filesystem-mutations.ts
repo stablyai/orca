@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: filesystem mutation IPC handlers stay centralized so
 authorization, SSH routing, and external import behavior remain audited together. */
 import { ipcMain } from 'electron'
-import { constants } from 'fs'
+import { constants } from 'node:fs'
 import {
   copyFile,
   lstat,
@@ -13,9 +13,9 @@ import {
   rm,
   unlink,
   writeFile
-} from 'fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
-import { pipeline } from 'stream/promises'
+} from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'

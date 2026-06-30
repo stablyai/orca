@@ -658,6 +658,7 @@ export type EditorSlice = {
     requestKey: string,
     result: { summary: GitBranchCompareSummary; entries: GitBranchChangeEntry[] }
   ) => void
+  clearGitBranchCompare: (worktreeId: string) => void
 
   // File search state
   fileSearchStateByWorktree: Record<
@@ -2243,7 +2244,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
-      for (const f of [...closingFiles].reverse()) {
+      for (const f of [...closingFiles].toReversed()) {
         // Why: untitled non-dirty files are deleted from disk after close —
         // skip them so the reopen stack doesn't reference vanished paths.
         // Preview tabs are ephemeral views that shouldn't pollute the stack.
@@ -3868,6 +3869,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitBranchCompareSummaryByWorktree: summaryUnchanged
           ? s.gitBranchCompareSummaryByWorktree
           : { ...s.gitBranchCompareSummaryByWorktree, [worktreeId]: result.summary }
+      }
+    }),
+  // Why: when the compare base resolves to "no base" (e.g. the prefer-upstream
+  // setting is on and the branch has no upstream), drop any stale summary so the
+  // committed-changes section and "vs" row disappear instead of lingering.
+  clearGitBranchCompare: (worktreeId) =>
+    set((s) => {
+      if (
+        s.gitBranchCompareSummaryByWorktree[worktreeId] === undefined &&
+        s.gitBranchChangesByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestKeyByWorktree[worktreeId] === undefined &&
+        s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId] === undefined
+      ) {
+        return s
+      }
+      const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
+      const nextChanges = { ...s.gitBranchChangesByWorktree }
+      const nextRequestKey = { ...s.gitBranchCompareRequestKeyByWorktree }
+      const nextRequestHead = { ...s.gitBranchCompareRequestStatusHeadByWorktree }
+      delete nextSummary[worktreeId]
+      delete nextChanges[worktreeId]
+      delete nextRequestKey[worktreeId]
+      delete nextRequestHead[worktreeId]
+      return {
+        gitBranchCompareSummaryByWorktree: nextSummary,
+        gitBranchChangesByWorktree: nextChanges,
+        gitBranchCompareRequestKeyByWorktree: nextRequestKey,
+        gitBranchCompareRequestStatusHeadByWorktree: nextRequestHead
       }
     }),
 

@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
-import { execSync } from 'child_process'
-import { existsSync, statSync } from 'fs'
-import { basename } from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, statSync } from 'node:fs'
+import { basename } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'

@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const OFFSCREEN_BACKEND_SOURCE = resolve(__dirname, 'offscreen-browser-backend.ts')

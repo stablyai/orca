@@ -6,8 +6,8 @@
 // to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device
 // tokens (validated by the message handler in OrcaRuntimeRpcServer) provide auth
 // regardless of transport encryption.
-import { createServer as createHttpsServer, type Server as HttpsServer } from 'https'
-import { createServer as createHttpServer, type Server as HttpServer } from 'http'
+import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'

@@ -4,11 +4,11 @@
  * Why: split from git-handler.test.ts to stay under the oxlint max-lines (300) limit.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import * as path from 'path'
-import * as fs from 'fs/promises'
-import { mkdtempSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { execFileSync } from 'child_process'
+import * as path from 'node:path'
+import * as fs from 'node:fs/promises'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
 import {

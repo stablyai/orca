@@ -66,9 +66,12 @@ const {
     addForward: vi.fn(),
     updateForward: vi.fn(),
     removeForward: vi.fn(),
+    removeForwardAndWait: vi.fn(),
     listForwards: vi.fn().mockReturnValue([]),
     removeAllForwards: vi.fn(),
-    dispose: vi.fn()
+    dispose: vi.fn(),
+    setCallbacks: vi.fn(),
+    callbacksRef: { current: null as unknown }
   },
   mockPortScannerCallbacks: new Map<string, unknown>(),
   mockNextConnectionManagers: [] as unknown[],
@@ -152,6 +155,7 @@ vi.mock('./pty', () => ({
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
+  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data),
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
   isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
@@ -179,7 +183,12 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 vi.mock('../ssh/ssh-port-forward', () => ({
   SshPortForwardManager: class MockPortForwardManager {
     constructor() {
-      return mockNextPortForwardManagers.shift() ?? mockPortForwardManager
+      const manager = (mockNextPortForwardManagers.shift() ??
+        mockPortForwardManager) as typeof mockPortForwardManager
+      manager.setCallbacks.mockImplementation((callbacks: unknown) => {
+        manager.callbacksRef.current = callbacks
+      })
+      return manager
     }
   }
 }))
@@ -240,7 +249,9 @@ describe('SSH IPC handlers', () => {
     removeForward: vi.fn(),
     listForwards: vi.fn().mockReturnValue([]),
     removeAllForwards: vi.fn(),
-    dispose: vi.fn()
+    dispose: vi.fn(),
+    setCallbacks: vi.fn(),
+    callbacksRef: { current: null as unknown }
   })
 
   beforeEach(async () => {
@@ -260,6 +271,7 @@ describe('SSH IPC handlers', () => {
     mockSshStore.updateTarget.mockReset()
     mockSshStore.removeTarget.mockReset()
     mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
+    mockWindow.webContents.send.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
     mockStore.markSshRemotePtyLease.mockReset()
     mockStore.markSshRemotePtyLeases.mockReset()
@@ -291,9 +303,12 @@ describe('SSH IPC handlers', () => {
     mockPortForwardManager.addForward.mockReset()
     mockPortForwardManager.updateForward.mockReset()
     mockPortForwardManager.removeForward.mockReset()
+    mockPortForwardManager.removeForwardAndWait.mockReset()
     mockPortForwardManager.listForwards.mockReset().mockReturnValue([])
     mockPortForwardManager.removeAllForwards.mockReset()
     mockPortForwardManager.dispose.mockReset()
+    mockPortForwardManager.setCallbacks.mockReset()
+    mockPortForwardManager.callbacksRef.current = null
     powerMonitorOnMock.mockReset()
     powerMonitorOffMock.mockReset()
     vi.mocked(getSshPtyProvider).mockReset()
@@ -676,7 +691,7 @@ describe('SSH IPC handlers', () => {
       .mockResolvedValueOnce(forward)
       .mockResolvedValueOnce(newForward)
     mockPortForwardManager.updateForward.mockResolvedValue(updatedForward)
-    mockPortForwardManager.removeForward.mockReturnValue(updatedForward)
+    mockPortForwardManager.removeForwardAndWait.mockResolvedValue(updatedForward)
     mockPortForwardManager.listForwards.mockReturnValue([forward])
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
@@ -747,6 +762,54 @@ describe('SSH IPC handlers', () => {
     )
     expect(replacementConnectionManager.getConnection).not.toHaveBeenCalled()
     expect(replacementPortForwardManager.listForwards).not.toHaveBeenCalled()
+  })
+
+  it('persists desired forwards and broadcasts when an active forward closes unexpectedly', () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy',
+      portForwards: [
+        {
+          localPort: 4100,
+          remoteHost: '127.0.0.1',
+          remotePort: 3000,
+          label: 'app'
+        }
+      ]
+    }
+    const forward = {
+      id: 'pf-1',
+      connectionId: 'ssh-1',
+      localPort: 4100,
+      remoteHost: '127.0.0.1',
+      remotePort: 3000,
+      label: 'app'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockPortForwardManager.listForwards.mockReturnValue([])
+
+    const callbacks = mockPortForwardManager.callbacksRef.current as {
+      onForwardClosed: (entry: typeof forward, reason: { kind: 'unexpected-exit' }) => void
+    }
+    callbacks.onForwardClosed(forward, { kind: 'unexpected-exit' })
+
+    expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', {
+      portForwards: [
+        {
+          localPort: 4100,
+          remoteHost: '127.0.0.1',
+          remotePort: 3000,
+          label: 'app'
+        }
+      ]
+    })
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:port-forwards-changed', {
+      targetId: 'ssh-1',
+      forwards: []
+    })
   })
 
   it('disconnects the original session and releases original forwards after re-registration', async () => {

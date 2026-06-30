@@ -37,6 +37,12 @@ const lastCompletionIdentityByPaneKey = new Map<string, LastCompletionIdentity>(
 
 const IDLE_POLL_INTERVAL_MS = 2_000
 const ACTIVE_POLL_INTERVAL_MS = 750
+// Why: a hidden pane only keeps the process-exit backstop alive — hook and title
+// completion signals are push-driven and fire regardless of poll cadence or
+// visibility — so it polls the OS process table far less often to cut idle CPU on
+// shared SSH relays. Follow-up to #6288 / PR #6667, which deduped scans within a
+// tick; this throttles the number of ticks. Visible panes keep full cadence.
+const HIDDEN_POLL_INTERVAL_MS = 3_000
 const INSPECTION_TIMEOUT_MS = 15_000
 const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
@@ -93,6 +99,10 @@ export function createAgentCompletionCoordinator(
   let inspectionInFlight = false
   let inspectionGeneration = 0
   let consecutiveInspectionErrors = 0
+  // Why: tracks whether the armed poll timer is the slow hidden-backstop cadence,
+  // so a hidden→visible flip can re-arm it promptly instead of waiting out the
+  // long delay (scheduleNextPoll otherwise no-ops while a timer is pending).
+  let pollTimerIsHiddenBackstop = false
 
   function clearPollTimer(): void {
     if (pollTimer === null) {
@@ -100,6 +110,7 @@ export function createAgentCompletionCoordinator(
     }
     clearTimeout(pollTimer)
     pollTimer = null
+    pollTimerIsHiddenBackstop = false
   }
 
   function clearPendingTitleTimer(): void {
@@ -542,8 +553,21 @@ export function createAgentCompletionCoordinator(
     )
   }
 
+  function isHiddenBackstop(): boolean {
+    // Why: cadence runs as a hidden-pane backstop only when visibility is known
+    // to be false. An undefined option (coordinators with no visibility source)
+    // keeps full cadence, matching pre-throttle behavior.
+    return options.shouldPollProcessCadence?.() === false
+  }
+
   function nextPollInterval(): number {
-    const base = lastForegroundAgent ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS
+    // Why: a hidden pane polls slowly (backstop only); a visible pane keeps full
+    // cadence so the foreground experience is unchanged.
+    const base = isHiddenBackstop()
+      ? HIDDEN_POLL_INTERVAL_MS
+      : lastForegroundAgent
+        ? ACTIVE_POLL_INTERVAL_MS
+        : IDLE_POLL_INTERVAL_MS
     const backoff =
       consecutiveInspectionErrors > 0
         ? Math.min(10_000, base * 2 ** consecutiveInspectionErrors)
@@ -553,8 +577,18 @@ export function createAgentCompletionCoordinator(
   }
 
   function scheduleNextPoll(): void {
-    if (disposed || !options.isLive() || pollTimer !== null || pendingTitle) {
+    if (disposed || !options.isLive() || pendingTitle) {
       return
+    }
+    if (pollTimer !== null) {
+      // Why: a hidden pane that became visible has a slow backstop timer armed;
+      // re-arm it at full cadence now instead of waiting out the long delay.
+      // scheduleNextPoll runs on every visibility flip via startProcessTracking.
+      if (pollTimerIsHiddenBackstop && !isHiddenBackstop()) {
+        clearPollTimer()
+      } else {
+        return
+      }
     }
     if (!shouldRunCadenceInspection()) {
       return
@@ -563,8 +597,10 @@ export function createAgentCompletionCoordinator(
     if (!ptyId) {
       return
     }
+    pollTimerIsHiddenBackstop = isHiddenBackstop()
     pollTimer = setTimeout(() => {
       pollTimer = null
+      pollTimerIsHiddenBackstop = false
       requestInspection('cadence')
     }, nextPollInterval())
   }

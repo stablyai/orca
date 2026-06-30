@@ -1,6 +1,6 @@
-import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'fs'
-import { homedir, hostname, userInfo } from 'os'
-import { posix, win32 } from 'path'
+import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { homedir, hostname, userInfo } from 'node:os'
+import { posix, win32 } from 'node:path'
 
 type PathApi = typeof posix | typeof win32
 

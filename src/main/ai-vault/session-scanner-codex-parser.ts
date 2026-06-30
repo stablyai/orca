@@ -1,7 +1,7 @@
-import { createReadStream } from 'fs'
-import { stat } from 'fs/promises'
-import { basename, dirname, join } from 'path'
-import { createInterface } from 'readline'
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
   addPreviewContent,

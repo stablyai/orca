@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join } from 'node:path'
 import {
   mkdirSync,
   writeFileSync,
@@ -11,7 +11,7 @@ import {
   readSync,
   fstatSync,
   promises as fsPromises
-} from 'fs'
+} from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
 import {
   decodeLogHeader,

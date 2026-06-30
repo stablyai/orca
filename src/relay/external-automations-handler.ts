@@ -1,12 +1,12 @@
 /* eslint-disable max-lines -- Why: relay external automation listing, paginated
  * run history, and actions must stay co-located behind one relay request handler. */
-import { execFile } from 'child_process'
-import { existsSync } from 'fs'
-import { open, readdir, readFile, realpath, stat } from 'fs/promises'
-import { createRequire } from 'module'
-import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve, sep } from 'path'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { open, readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { homedir } from 'node:os'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { promisify } from 'node:util'
 import type { RelayDispatcher } from './dispatcher'
 
 const execFileAsync = promisify(execFile)

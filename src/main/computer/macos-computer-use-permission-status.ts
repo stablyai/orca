@@ -1,8 +1,8 @@
-import { spawn } from 'child_process'
-import { mkdtemp, readFile, rm, stat } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { setTimeout as delay } from 'timers/promises'
+import { spawn } from 'node:child_process'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionStatus,

@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: filesystem authorization keeps root
 discovery, canonicalization, and registered-worktree cache checks together so
 the security boundary is auditable end to end. */
-import { resolve, relative, dirname, basename, isAbsolute, sep } from 'path'
-import { realpathSync } from 'fs'
-import { realpath } from 'fs/promises'
+import { resolve, relative, dirname, basename, isAbsolute, sep } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'

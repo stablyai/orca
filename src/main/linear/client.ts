@@ -3,9 +3,9 @@
    stay in one consistency boundary. */
 import { safeStorage } from 'electron'
 import { LinearClient, AuthenticationLinearError } from '@linear/sdk'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,

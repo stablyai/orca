@@ -1,6 +1,6 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import path from 'path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import path from 'node:path'
 import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows

@@ -2,13 +2,13 @@
 // managed agent (config entries, wrapper curl flags, and a real dead-endpoint
 // shell run) so the cross-agent coverage lives together rather than fragmenting.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawn, spawnSync } from 'child_process'
-import { createServer, type Server, type Socket } from 'net'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { spawn, spawnSync } from 'node:child_process'
+import { createServer, type Server, type Socket } from 'node:net'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
-import type * as osModule from 'os'
+import type * as osModule from 'node:os'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
