@@ -187,6 +187,7 @@ __orca_normalize_prompt_command() {
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  PROMPT_COMMAND="\${PROMPT_COMMAND%%[[:space:]]}"
 }
 __orca_prepend_prompt_command() {
   __orca_normalize_prompt_command
