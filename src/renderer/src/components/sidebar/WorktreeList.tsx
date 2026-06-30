@@ -1406,6 +1406,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const suppressWorktreeClickUntilRef = useRef(0)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
+  // Group order (tabOrder) is independent of how projects are sorted, so groups
+  // can be reordered in the project-grouped view regardless of project order;
+  // only project drag requires manual order.
+  const canReorderGroups = groupBy === 'repo'
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const lastVisibleRefreshKeyRef = useRef('')
   const reportVisibleGitHubPRRefreshCandidates = useAppStore(
@@ -1661,15 +1665,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   })
   // Project and group drag are mutually exclusive, so one shared drop indicator
   // (the worktree pill) renders for whichever header drag is active.
-  const headerDropIndicatorY = !canReorderRepoHeaders
-    ? null
-    : repoDrag.state.draggingRepoId !== null
-      ? // Dropping into a collapsed/empty group highlights the group instead of
-        // drawing a line, so suppress the pill in that case.
+  const headerDropIndicatorY =
+    canReorderRepoHeaders && repoDrag.state.draggingRepoId !== null
+      ? // Dropping into a group highlights the group instead of drawing a line,
+        // so suppress the pill in that case.
         repoDrag.state.dropIntoGroupId !== null
         ? null
         : repoDrag.state.dropIndicatorY
-      : groupDrag.state.draggingGroupId !== null
+      : canReorderGroups && groupDrag.state.draggingGroupId !== null
         ? groupDrag.state.dropIndicatorY
         : null
   const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] = useState<{
@@ -2319,7 +2322,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   // without overlap.
   const headerDragShift = computeHeaderDragRowOffsets({
     draggingRepoId: canReorderRepoHeaders ? repoDrag.state.draggingRepoId : null,
-    draggingGroupId: canReorderRepoHeaders ? groupDrag.state.draggingGroupId : null,
+    draggingGroupId: canReorderGroups ? groupDrag.state.draggingGroupId : null,
     dropY: headerDropIndicatorY,
     renderRows,
     virtualItems
@@ -4076,12 +4079,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   ? groupSiblingIndexByGroupId.get(groupIdForHeader)
                   : undefined
               const isDraggableGroupHeader = Boolean(
-                canReorderRepoHeaders &&
+                canReorderGroups &&
                 groupIdForHeader &&
                 (siblingGroupIdsByParent.get(groupHeaderParent)?.length ?? 0) > 1
               )
               const isDraggingThisGroup =
-                canReorderRepoHeaders &&
+                canReorderGroups &&
                 groupDrag.state.draggingGroupId !== null &&
                 groupDrag.state.draggingGroupId === groupIdForHeader
               const isDropIntoGroupTarget =
