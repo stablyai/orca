@@ -97,6 +97,9 @@ function areAgentRowsEqual(
       a.state !== b.state ||
       a.agentType !== b.agentType ||
       a.prompt !== b.prompt ||
+      // Why: a CLI `agent label set/clear` between two worktree.ps polls leaves
+      // every other field identical; without this the stale row never re-renders.
+      a.customAgentLabel !== b.customAgentLabel ||
       a.lastAssistantMessage !== b.lastAssistantMessage ||
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||

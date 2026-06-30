@@ -30,6 +30,7 @@ export {
   formatProjectHostSetupUpdateResult,
   formatProjectList
 } from './project-format'
+export { formatAgentLabel } from './agent-format'
 export {
   formatTerminalClose,
   formatTerminalCreate,

@@ -50,10 +50,14 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
-// Primary row text: prefer the agent's last message, then the user prompt, then
-// a human-readable state label so a row is never blank. Matches the desktop
-// DashboardAgentRow displayLabel fallback chain.
+// Primary row text: an explicit user-set CLI label wins (matching desktop's
+// getAgentRowPrimaryText), then the agent's last message, then the user prompt,
+// then a human-readable state label so a row is never blank.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
+  const label = row.customAgentLabel?.trim()
+  if (label) {
+    return label
+  }
   const message = row.lastAssistantMessage?.trim()
   if (message) {
     return message

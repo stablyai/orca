@@ -6848,3 +6848,270 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     expect(server.getStatusSnapshot()).toEqual([])
   })
 })
+
+describe('AgentHookServer per-agent custom labels', () => {
+  function emitWorkingStatus(server: AgentHookServer, paneKey = PANE): void {
+    server.ingestTerminalStatus({
+      paneKey,
+      // Why: ingest requires tabId to match the paneKey's tab segment.
+      tabId: paneKey.slice(0, paneKey.indexOf(':')),
+      worktreeId: 'wt-1',
+      payload: { state: 'working', prompt: 'do work', agentType: 'claude' }
+    })
+  }
+
+  it('set/get/clear a label for a pane', () => {
+    const server = new AgentHookServer()
+    expect(server.getCustomAgentLabel(PANE)).toBeNull()
+    expect(server.setCustomAgentLabel(PANE, 'Reset AI')).toBe('Reset AI')
+    expect(server.getCustomAgentLabel(PANE)).toBe('Reset AI')
+    expect(server.setCustomAgentLabel(PANE, null)).toBeNull()
+    expect(server.getCustomAgentLabel(PANE)).toBeNull()
+  })
+
+  it('treats empty/whitespace label as a clear', () => {
+    const server = new AgentHookServer()
+    server.setCustomAgentLabel(PANE, 'Keep')
+    expect(server.setCustomAgentLabel(PANE, '   ')).toBeNull()
+    expect(server.getCustomAgentLabel(PANE)).toBeNull()
+  })
+
+  it('normalizes the label to a single bounded line', () => {
+    const server = new AgentHookServer()
+    expect(server.setCustomAgentLabel(PANE, '  multi   line\nlabel  ')).toBe('multi line label')
+    const long = 'x'.repeat(500)
+    const normalized = server.setCustomAgentLabel(PANE, long)
+    expect(normalized).not.toBeNull()
+    expect(normalized!.length).toBe(160)
+  })
+
+  it('stamps the label onto the status snapshot (set after a status arrives)', () => {
+    const server = new AgentHookServer()
+    emitWorkingStatus(server)
+    expect(server.getStatusSnapshot()[0].customAgentLabel).toBeUndefined()
+    server.setCustomAgentLabel(PANE, 'Frontend')
+    expect(server.getStatusSnapshot()[0].customAgentLabel).toBe('Frontend')
+  })
+
+  it('stamps the label onto the live set push for local and ingested-remote events', () => {
+    const server = new AgentHookServer()
+    server.setCustomAgentLabel(PANE, 'Labeled')
+    const seen: (string | undefined)[] = []
+    // Why: the index.ts listener re-stamps from the map; here assert the map is
+    // authoritative regardless of push origin by reading it on each emission.
+    server.setListener((enriched) => {
+      seen.push(server.getCustomAgentLabel(enriched.paneKey) ?? undefined)
+    })
+    emitWorkingStatus(server)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'remote turn', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(seen).toContain('Labeled')
+    expect(seen.every((label) => label === 'Labeled')).toBe(true)
+  })
+})
+
+describe('AgentHookServer custom-label persistence and cleanup', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-label-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function lastStatusPath(): string {
+    return join(userDataPath, 'agent-hooks', 'last-status.json')
+  }
+
+  function recentTs(offsetMs = 0): number {
+    return Date.now() - 60 * 60 * 1000 + offsetMs
+  }
+
+  it('persists labels under an additive customLabels key without bumping version', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.setCustomAgentLabel(PANE, 'Persisted')
+      server.flushStatusPersistSync()
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      // Version stays 2 — a bump would hard-reject the whole file on older readers.
+      expect(file.version).toBe(2)
+      expect(file.customLabels[PANE]).toMatchObject({
+        label: 'Persisted',
+        updatedAt: expect.any(Number)
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('omits the customLabels key entirely when no labels are set', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'no label', agentType: 'claude' }
+      })
+      server.flushStatusPersistSync()
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect('customLabels' in file).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('round-trips a label across restart via the customLabels key', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {},
+        customLabels: { [PANE]: { label: 'Reloaded', updatedAt: recentTs() } }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getCustomAgentLabel(PANE)).toBe('Reloaded')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('still hydrates status entries when the file carries labels (no version gate tripped)', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [GOOD_PANE]: {
+            paneKey: GOOD_PANE,
+            tabId: 'tab-good',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'survived with labels', agentType: 'claude' }
+          }
+        },
+        customLabels: { [PANE]: { label: 'sibling', updatedAt: recentTs() } }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot.map((entry) => entry.paneKey)).toContain(GOOD_PANE)
+      expect(server.getCustomAgentLabel(PANE)).toBe('sibling')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('prunes labels older than the 7-day TTL on hydrate', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {},
+        customLabels: {
+          [PANE]: { label: 'fresh', updatedAt: recentTs() },
+          [GOOD_PANE]: { label: 'stale', updatedAt: eightDaysAgo }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getCustomAgentLabel(PANE)).toBe('fresh')
+      expect(server.getCustomAgentLabel(GOOD_PANE)).toBeNull()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clears a label-only pane on clearPaneState (PTY teardown) even with no status row', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.setCustomAgentLabel(PANE, 'Doomed')
+      server.clearPaneState(PANE)
+      expect(server.getCustomAgentLabel(PANE)).toBeNull()
+      server.flushStatusPersistSync()
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect('customLabels' in file).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clears a label-only pane on dropStatusEntriesByTabPrefix (tab close)', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      // Label set, tab closed before any hook fired — must be evicted.
+      server.setCustomAgentLabel(PANE, 'Doomed')
+      server.dropStatusEntriesByTabPrefix('tab-1')
+      expect(server.getCustomAgentLabel(PANE)).toBeNull()
+      server.flushStatusPersistSync()
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect('customLabels' in file).toBe(false)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('retains the label on dropStatusEntry (live-pane dismiss)', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'alive', agentType: 'claude' }
+      })
+      server.setCustomAgentLabel(PANE, 'Keep me')
+      server.dropStatusEntry(PANE)
+      // The pane's agent is still alive; only its status row was dismissed.
+      expect(server.getCustomAgentLabel(PANE)).toBe('Keep me')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clears the in-memory label map on stop() and does not merge it on re-hydrate', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    server.setCustomAgentLabel(PANE, 'Session A')
+    server.flushStatusPersistSync()
+    server.stop()
+    expect(server.getCustomAgentLabel(PANE)).toBeNull()
+
+    // Disk has Session A's label; re-hydrate must reflect only the disk set.
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getCustomAgentLabel(PANE)).toBe('Session A')
+      expect(server._getCustomLabelsForTests().size).toBe(1)
+    } finally {
+      server.stop()
+    }
+  })
+})

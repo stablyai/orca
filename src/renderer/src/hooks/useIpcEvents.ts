@@ -1685,6 +1685,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onSetAgentLabel?.(({ paneKey, label }) => {
+        useAppStore.getState().setCustomAgentLabel(paneKey, label)
+      }) ?? (() => {})
+    )
+
+    unsubs.push(
       window.api.ui.onFocusTerminal(
         ({
           tabId,
@@ -2896,9 +2902,14 @@ export function useIpcEvents(): void {
         return 'dropped'
       }
       const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
-      const statusPayload = data.orchestration
+      const statusPayloadWithOrchestration = data.orchestration
         ? { ...resolvedPayload, orchestration: data.orchestration }
         : resolvedPayload
+      // Why: main re-stamps the per-agent label on every push from its map, so
+      // carry it through so the entry rebuild reflects the authoritative value.
+      const statusPayload = data.customAgentLabel
+        ? { ...statusPayloadWithOrchestration, customAgentLabel: data.customAgentLabel }
+        : statusPayloadWithOrchestration
       const existingStatus = store.agentStatusByPaneKey[data.paneKey]
       const identity = resolveAgentStatusIdentity({
         existing: existingStatus

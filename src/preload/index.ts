@@ -3283,6 +3283,16 @@ const api = {
       ipcRenderer.on('ui:renameTerminal', listener)
       return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
     },
+    onSetAgentLabel: (
+      callback: (data: { paneKey: string; label: string | null }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { paneKey: string; label: string | null }
+      ) => callback(data)
+      ipcRenderer.on('ui:setAgentLabel', listener)
+      return () => ipcRenderer.removeListener('ui:setAgentLabel', listener)
+    },
     onFocusTerminal: (
       callback: (data: {
         tabId: string

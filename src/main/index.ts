@@ -899,6 +899,10 @@ function openMainWindow(): BrowserWindow {
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      // Why: re-stamp the label from the local map on every push (local-origin
+      // and ingestRemote both flow through this listener) so a remote payload
+      // that lacks the field never erases a locally-set label.
+      const customAgentLabel = agentHookServer.getCustomAgentLabel(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
         paneKey,
@@ -910,7 +914,8 @@ function openMainWindow(): BrowserWindow {
         receivedAt,
         stateStartedAt,
         ...(providerSession ? { providerSession } : {}),
-        ...(orchestration ? { orchestration } : {})
+        ...(orchestration ? { orchestration } : {}),
+        ...(customAgentLabel ? { customAgentLabel } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: some native OSC titles miss terminal idle/permission frames.
@@ -1611,7 +1616,11 @@ app.whenReady().then(async () => {
     },
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
-    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
+    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+    // Why: the per-agent custom label rides the same hook-server cache, so set
+    // and read it there too (keeps both worktree.ps consumers on one source).
+    setCustomAgentLabel: (paneKey, label) => agentHookServer.setCustomAgentLabel(paneKey, label),
+    getCustomAgentLabel: (paneKey) => agentHookServer.getCustomAgentLabel(paneKey)
   })
   runtime = runtimeService
   automations = new AutomationService(store, {

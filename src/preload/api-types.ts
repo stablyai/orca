@@ -2556,6 +2556,9 @@ export type PreloadApi = {
     onRenameTerminal: (
       callback: (data: { tabId: string; title: string | null }) => void
     ) => () => void
+    onSetAgentLabel: (
+      callback: (data: { paneKey: string; label: string | null }) => void
+    ) => () => void
     onFocusTerminal: (
       callback: (data: {
         tabId: string

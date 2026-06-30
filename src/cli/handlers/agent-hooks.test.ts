@@ -45,9 +45,19 @@ vi.mock('../runtime-client', () => {
     }
   }
 
+  class RuntimeRpcFailureError extends Error {
+    readonly response: unknown
+
+    constructor(response: unknown) {
+      super('rpc failure')
+      this.response = response
+    }
+  }
+
   return {
     RuntimeClient,
     RuntimeClientError,
+    RuntimeRpcFailureError,
     getDefaultUserDataPath: getDefaultUserDataPathMock
   }
 })
@@ -119,5 +129,83 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(readDataFile(userDataPath).settings.experimentalNewWorktreeCardStyle).toBe(false)
+  })
+})
+
+describe('agent label CLI handler', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-label-cli-'))
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    callMock.mockReset()
+    process.exitCode = undefined
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('calls agent.label.set with the explicit terminal handle and label', async () => {
+    callMock.mockResolvedValue({
+      id: 'set',
+      ok: true,
+      result: { label: { terminalHandle: 'term_abc', paneKey: 'tab-1:leaf', label: 'Reset AI' } },
+      _meta: { runtimeId: 'test' }
+    })
+
+    await main(
+      ['agent', 'label', 'set', '--terminal', 'term_abc', '--label', 'Reset AI', '--json'],
+      userDataPath
+    )
+
+    expect(callMock).toHaveBeenCalledWith('agent.label.set', {
+      terminal: 'term_abc',
+      label: 'Reset AI'
+    })
+  })
+
+  it('calls agent.label.clear with the explicit terminal handle', async () => {
+    callMock.mockResolvedValue({
+      id: 'clear',
+      ok: true,
+      result: { label: { terminalHandle: 'term_abc', paneKey: 'tab-1:leaf', label: null } },
+      _meta: { runtimeId: 'test' }
+    })
+
+    await main(['agent', 'label', 'clear', '--terminal', 'term_abc'], userDataPath)
+
+    expect(callMock).toHaveBeenCalledWith('agent.label.clear', { terminal: 'term_abc' })
+  })
+
+  it('echoes the resolved pane and handle in human output so a mis-target is visible', async () => {
+    const logSpy = vi.spyOn(console, 'log')
+    callMock.mockResolvedValue({
+      id: 'set',
+      ok: true,
+      result: { label: { terminalHandle: 'term_abc', paneKey: 'tab-1:leaf', label: 'Reset AI' } },
+      _meta: { runtimeId: 'test' }
+    })
+
+    await main(
+      ['agent', 'label', 'set', '--terminal', 'term_abc', '--label', 'Reset AI'],
+      userDataPath
+    )
+
+    const output = logSpy.mock.calls.map((args) => String(args[0])).join('\n')
+    expect(output).toContain('term_abc')
+    expect(output).toContain('tab-1:leaf')
+    expect(output).toContain('Reset AI')
+  })
+
+  it('rejects agent label set without a --label flag', async () => {
+    await main(['agent', 'label', 'set', '--terminal', 'term_abc'], userDataPath)
+
+    // Missing required flag short-circuits before any RPC call.
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
   })
 })

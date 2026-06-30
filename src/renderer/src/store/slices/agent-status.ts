@@ -122,7 +122,10 @@ export type AgentStatusSlice = {
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
-    payload: ParsedAgentStatusPayload & { orchestration?: AgentStatusOrchestrationContext },
+    payload: ParsedAgentStatusPayload & {
+      orchestration?: AgentStatusOrchestrationContext
+      customAgentLabel?: string
+    },
     terminalTitle?: string,
     timing?: { updatedAt?: number; stateStartedAt?: number },
     routing?: { tabId?: string; worktreeId?: string; terminalHandle?: string },
@@ -149,6 +152,12 @@ export type AgentStatusSlice = {
   setRuntimeAgentOrchestrationByPaneKey: (
     entries: Record<string, AgentStatusOrchestrationContext>
   ) => void
+
+  /** Set or clear the per-agent custom label (from the `ui:setAgentLabel` push).
+   *  Updates the live entry and any retained snapshot for the pane so the
+   *  sidebar/dashboard reflect it immediately without waiting for the next
+   *  status push. */
+  setCustomAgentLabel: (paneKey: string, label: string | null) => void
 
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
   clearMigrationUnsupportedPty: (ptyId: string) => void
@@ -881,6 +890,46 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
 
+    setCustomAgentLabel: (paneKey, label) => {
+      // Why: normalize empty/whitespace to undefined so the field is absent
+      // (matches main, where a cleared label is no field at all) and clearing
+      // reverts the row to its auto-derived text.
+      const nextLabel = label && label.trim().length > 0 ? label : undefined
+      set((s) => {
+        let nextLive = s.agentStatusByPaneKey
+        let liveChanged = false
+        let nextRetained = s.retainedAgentsByPaneKey
+        let retainedChanged = false
+
+        const liveEntry = nextLive[paneKey]
+        if (liveEntry && liveEntry.customAgentLabel !== nextLabel) {
+          nextLive = { ...nextLive, [paneKey]: { ...liveEntry, customAgentLabel: nextLabel } }
+          liveChanged = true
+        }
+
+        const retainedEntry = nextRetained[paneKey]
+        if (retainedEntry && retainedEntry.entry.customAgentLabel !== nextLabel) {
+          nextRetained = {
+            ...nextRetained,
+            [paneKey]: {
+              ...retainedEntry,
+              entry: { ...retainedEntry.entry, customAgentLabel: nextLabel }
+            }
+          }
+          retainedChanged = true
+        }
+
+        if (!liveChanged && !retainedChanged) {
+          return s
+        }
+        return {
+          ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
+          ...(retainedChanged ? { retainedAgentsByPaneKey: nextRetained } : {}),
+          ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
+        }
+      })
+    },
+
     registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
       set((s) => {
         const copiedLaunchConfig = copyLaunchConfig(launchConfig)
@@ -1152,7 +1201,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // already clamps it to `undefined` for non-done states, so writing
           // the field through directly preserves truth for done and resets
           // it when a new turn starts (working → Stop reprices it).
-          interrupted: payload.interrupted
+          interrupted: payload.interrupted,
+          // Why: main re-stamps the label from its map on every push, so write
+          // it through directly (no existing fallback). A push that lacks the
+          // field genuinely means "no label", and setCustomAgentLabel handles
+          // immediate local updates between status pushes.
+          customAgentLabel: payload.customAgentLabel
         }
         if (
           isAgentCompletionState(entry.state) &&

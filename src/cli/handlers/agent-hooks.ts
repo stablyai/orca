@@ -3,8 +3,11 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { formatAgentLabel, printResult } from '../format'
 import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
+import { getRequiredStringFlag } from '../flags'
+import { getTerminalHandle } from '../selectors'
+import type { RuntimeAgentLabel } from '../../shared/runtime-types'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/types'
@@ -173,5 +176,18 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks on': async ({ client, json }) => {
     const result = await setAgentHooksEnabled(client, true)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
+  },
+  'agent label set': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ label: RuntimeAgentLabel }>('agent.label.set', {
+      terminal: await getTerminalHandle(flags, cwd, client),
+      label: getRequiredStringFlag(flags, 'label')
+    })
+    printResult(result, json, formatAgentLabel)
+  },
+  'agent label clear': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ label: RuntimeAgentLabel }>('agent.label.clear', {
+      terminal: await getTerminalHandle(flags, cwd, client)
+    })
+    printResult(result, json, formatAgentLabel)
   }
 }

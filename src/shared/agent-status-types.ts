@@ -129,6 +129,10 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** Explicit per-agent sidebar label set via `orca agent label set`. Wins over
+   *  orchestration display name / task title / prompt at the row-label read site.
+   *  Independent of orchestration metadata so it works for non-orchestrated agents. */
+  customAgentLabel?: string
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -193,6 +197,10 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** Explicit per-agent label, re-stamped from main's `customLabelByPaneKey` map
+   *  on every emission (snapshot pull and live push) so a remote-ingested push
+   *  that lacks the field never erases a locally-set label. */
+  customAgentLabel?: string
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */

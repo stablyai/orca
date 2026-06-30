@@ -29,7 +29,9 @@ function deriveTaskTitleFromSpec(spec: string): string {
   return normalizeSingleLine(spec, ORCHESTRATION_TASK_TITLE_MAX_LENGTH)
 }
 
-function normalizeSingleLine(value: string | null | undefined, maxLength: number): string {
+/** Collapse whitespace to single spaces, trim, and cap to `maxLength` (with an
+ *  ellipsis). Shared so per-agent labels normalize identically to task titles. */
+export function normalizeSingleLine(value: string | null | undefined, maxLength: number): string {
   if (!value) {
     return ''
   }

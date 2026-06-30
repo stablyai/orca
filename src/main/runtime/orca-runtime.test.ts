@@ -24230,3 +24230,155 @@ describe('OrcaRuntimeService', () => {
     })
   })
 })
+
+describe('OrcaRuntimeService per-agent custom labels', () => {
+  function makeLabelStore(): {
+    deps: {
+      getAgentStatusSnapshot: () => never[]
+      setCustomAgentLabel: (paneKey: string, label: string | null) => string | null
+      getCustomAgentLabel: (paneKey: string) => string | null
+    }
+    labels: Map<string, string>
+  } {
+    const labels = new Map<string, string>()
+    return {
+      labels,
+      deps: {
+        getAgentStatusSnapshot: () => [],
+        setCustomAgentLabel: (paneKey, label) => {
+          if (!label || label.trim().length === 0) {
+            labels.delete(paneKey)
+            return null
+          }
+          labels.set(paneKey, label)
+          return label
+        },
+        getCustomAgentLabel: (paneKey) => labels.get(paneKey) ?? null
+      }
+    }
+  }
+
+  function syncSingleTerminalGraph(
+    runtime: OrcaRuntimeService,
+    leafId: string,
+    getSnapshot: () => unknown[]
+  ): void {
+    void getSnapshot
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'agent',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+  }
+
+  it('resolves a terminal handle to a paneKey, sets the label, and echoes the target', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const { deps, labels } = makeLabelStore()
+    const runtime = new OrcaRuntimeService(store, undefined, deps)
+    syncSingleTerminalGraph(runtime, leafId, () => [])
+    const setAgentLabel = vi.fn()
+    runtime.setNotifier({ renameTerminal: vi.fn(), setAgentLabel } as never)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const result = await runtime.setCustomAgentLabel(terminal.handle, 'Reset AI')
+
+    expect(result).toEqual({ terminalHandle: terminal.handle, paneKey, label: 'Reset AI' })
+    expect(labels.get(paneKey)).toBe('Reset AI')
+    // When attached, the notifier pushes the live update keyed by paneKey.
+    expect(setAgentLabel).toHaveBeenCalledWith(paneKey, 'Reset AI')
+  })
+
+  it('clears the label and reports a null result', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const { deps, labels } = makeLabelStore()
+    labels.set(paneKey, 'Existing')
+    const runtime = new OrcaRuntimeService(store, undefined, deps)
+    syncSingleTerminalGraph(runtime, leafId, () => [])
+    runtime.setNotifier({ renameTerminal: vi.fn(), setAgentLabel: vi.fn() } as never)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const result = await runtime.setCustomAgentLabel(terminal.handle, null)
+
+    expect(result).toEqual({ terminalHandle: terminal.handle, paneKey, label: null })
+    expect(labels.has(paneKey)).toBe(false)
+  })
+
+  it('throws agent_pane_not_found for an unknown terminal handle', async () => {
+    const { deps } = makeLabelStore()
+    const runtime = new OrcaRuntimeService(store, undefined, deps)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    await expect(runtime.setCustomAgentLabel('term_does_not_exist', 'X')).rejects.toThrow(
+      'agent_pane_not_found'
+    )
+  })
+
+  it('surfaces the label in the worktree ps row dedicated customAgentLabel field', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const now = Date.now()
+    const labels = new Map<string, string>([[paneKey, 'Reset AI']])
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      // Mirror getStatusSnapshot's stamping: the entry carries customAgentLabel.
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          state: 'working',
+          prompt: 'auto-derived prompt',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now,
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          customAgentLabel: labels.get(paneKey)
+        }
+      ],
+      setCustomAgentLabel: (key, label) => {
+        if (!label) {
+          labels.delete(key)
+          return null
+        }
+        labels.set(key, label)
+        return label
+      },
+      getCustomAgentLabel: (key) => labels.get(key) ?? null
+    })
+    syncSingleTerminalGraph(runtime, leafId, () => [])
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    const row = summary?.agents.find((agent) => agent.paneKey === paneKey)
+    expect(row).toBeDefined()
+    // Dedicated field — distinct from displayName/taskTitle which stay null.
+    expect(row?.customAgentLabel).toBe('Reset AI')
+    expect(row?.displayName).toBeNull()
+    expect(row?.taskTitle).toBeNull()
+    expect(row?.prompt).toBe('auto-derived prompt')
+  })
+})

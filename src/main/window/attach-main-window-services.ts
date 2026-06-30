@@ -311,6 +311,7 @@ function registerRuntimeWindowLifecycle(
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
+    setAgentLabel: (paneKey, label) => send('ui:setAgentLabel', { paneKey, label }),
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),

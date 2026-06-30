@@ -1130,3 +1130,82 @@ describe('agent status retention + prefix sweep', () => {
     expect(retained['tab-b:0']).toBeUndefined()
   })
 })
+
+describe('agent status custom labels', () => {
+  const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
+
+  it('flows the customAgentLabel payload field into the live entry', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(PANE, {
+      state: 'working',
+      prompt: 'do work',
+      agentType: 'claude',
+      customAgentLabel: 'Reset AI'
+    })
+    expect(store.getState().agentStatusByPaneKey[PANE].customAgentLabel).toBe('Reset AI')
+  })
+
+  it('setCustomAgentLabel updates the live entry', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(PANE, {
+      state: 'working',
+      prompt: 'do work',
+      agentType: 'claude'
+    })
+    expect(store.getState().agentStatusByPaneKey[PANE].customAgentLabel).toBeUndefined()
+    store.getState().setCustomAgentLabel(PANE, 'Frontend')
+    expect(store.getState().agentStatusByPaneKey[PANE].customAgentLabel).toBe('Frontend')
+    // Clearing reverts the field to absent.
+    store.getState().setCustomAgentLabel(PANE, null)
+    expect(store.getState().agentStatusByPaneKey[PANE].customAgentLabel).toBeUndefined()
+  })
+
+  it('setCustomAgentLabel updates a retained entry', () => {
+    const store = createTestStore()
+    const now = Date.now()
+    const entry: AgentStatusEntry = {
+      state: 'done',
+      prompt: 'finished',
+      updatedAt: now,
+      stateStartedAt: now,
+      paneKey: PANE,
+      stateHistory: []
+    }
+    const retained: RetainedAgentEntry = {
+      entry,
+      worktreeId: 'wt-1',
+      tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1', title: 'claude' }),
+      agentType: 'claude',
+      startedAt: now
+    }
+    store.getState().retainAgents([retained])
+    store.getState().setCustomAgentLabel(PANE, 'Retained label')
+    expect(store.getState().retainedAgentsByPaneKey[PANE].entry.customAgentLabel).toBe(
+      'Retained label'
+    )
+  })
+
+  it('does not clobber a re-stamped label when a later set push arrives', () => {
+    const store = createTestStore()
+    // Main re-stamps the label from its map on every push, so a follow-up push
+    // carries the same label rather than dropping it.
+    store.getState().setAgentStatus(PANE, {
+      state: 'working',
+      prompt: 'turn 1',
+      agentType: 'claude',
+      customAgentLabel: 'Sticky'
+    })
+    store.getState().setAgentStatus(
+      PANE,
+      {
+        state: 'done',
+        prompt: 'turn 1',
+        agentType: 'claude',
+        customAgentLabel: 'Sticky'
+      },
+      undefined,
+      { updatedAt: Date.now() + 10 }
+    )
+    expect(store.getState().agentStatusByPaneKey[PANE].customAgentLabel).toBe('Sticky')
+  })
+})

@@ -57,6 +57,21 @@ describe('agentDotState', () => {
 })
 
 describe('agentDisplayLabel', () => {
+  it('prefers an explicit custom label over message and prompt', () => {
+    expect(
+      agentDisplayLabel(
+        row({ customAgentLabel: 'Riset AI', lastAssistantMessage: 'hello there', prompt: 'do it' }),
+        0
+      )
+    ).toBe('Riset AI')
+  })
+
+  it('ignores a blank custom label and falls through to the message/prompt chain', () => {
+    expect(
+      agentDisplayLabel(row({ customAgentLabel: '   ', lastAssistantMessage: 'hello there' }), 0)
+    ).toBe('hello there')
+  })
+
   it('prefers last message, then prompt, then state label', () => {
     expect(agentDisplayLabel(row({ lastAssistantMessage: 'hello there' }), 0)).toBe('hello there')
     expect(agentDisplayLabel(row({ lastAssistantMessage: '   ', prompt: 'do the thing' }), 0)).toBe(

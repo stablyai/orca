@@ -56,6 +56,10 @@ import {
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import {
+  ORCHESTRATION_DISPLAY_NAME_MAX_LENGTH,
+  normalizeSingleLine
+} from '../../shared/orchestration-task-display'
 
 export type { AgentHookSource }
 
@@ -119,9 +123,21 @@ const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 // not resurrect on hydrate.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
+// Why: a custom label has its own lifecycle distinct from the status row — a
+// user can label a pane that has not emitted a hook yet, and the label must
+// survive a TTL-aged / dropped status entry. So it carries its own timestamp.
+type CustomLabelEntry = {
+  label: string
+  updatedAt: number
+}
+
 type LastStatusFile = {
   version: number
   entries: Record<string, EnrichedAgentHookEventPayload>
+  // Why: additive optional sibling key. NOT version-gated — older readers
+  // ignore it and newer readers tolerate its absence, so existing status rows
+  // never get wiped by a version bump on upgrade/downgrade.
+  customLabels?: Record<string, CustomLabelEntry>
 }
 
 type AgentPromptSentDedupeEntry = {
@@ -232,7 +248,34 @@ function sanitizeHydratedEntry(
   }
 }
 
-function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentStatusIpcPayload {
+function sanitizeHydratedCustomLabel(paneKey: string, rawEntry: unknown): CustomLabelEntry | null {
+  if (!parsePaneKey(paneKey)) {
+    return null
+  }
+  if (typeof rawEntry !== 'object' || rawEntry === null) {
+    return null
+  }
+  const record = rawEntry as Record<string, unknown>
+  const updatedAt = record.updatedAt
+  if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return null
+  }
+  if (typeof record.label !== 'string') {
+    return null
+  }
+  // Why: re-normalize on hydrate so a hand-edited / older-format file can't
+  // reintroduce an oversized or multi-line label into the cache.
+  const label = normalizeSingleLine(record.label, ORCHESTRATION_DISPLAY_NAME_MAX_LENGTH)
+  if (label.length === 0) {
+    return null
+  }
+  return { label, updatedAt }
+}
+
+function toAgentStatusIpcPayload(
+  entry: EnrichedAgentHookEventPayload,
+  customAgentLabel?: string
+): AgentStatusIpcPayload {
   return {
     paneKey: entry.paneKey,
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
@@ -242,7 +285,10 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
-    ...entry.payload
+    ...entry.payload,
+    // Why: stamp the label AFTER spreading the payload so a payload field can
+    // never shadow it; omit when unset so older peers see no new field.
+    ...(customAgentLabel ? { customAgentLabel } : {})
   }
 }
 
@@ -462,6 +508,11 @@ export class AgentHookServer {
   // exactly match the last successful disk write. Cheap protection against
   // re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
+  // Why: per-pane user-set sidebar label, keyed by paneKey alongside the status
+  // cache so it rides the existing single source of truth to both consumers
+  // (renderer store + worktree ps). First-class with its own timestamp because
+  // its lifecycle is independent of the status entry it decorates.
+  private customLabelByPaneKey = new Map<string, CustomLabelEntry>()
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
@@ -500,9 +551,43 @@ export class AgentHookServer {
    *  workspace tabs have hydrated, so the dashboard catches up on any
    *  hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
-    return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
-      toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
-    )
+    return Array.from(this.state.lastStatusByPaneKey.values(), (entry) => {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      return toAgentStatusIpcPayload(
+        enriched,
+        this.customLabelByPaneKey.get(enriched.paneKey)?.label
+      )
+    })
+  }
+
+  /** Read the current per-pane label. Used by the runtime to surface the label
+   *  on `worktree ps` rows and by tests. */
+  getCustomAgentLabel(paneKey: string): string | null {
+    return this.customLabelByPaneKey.get(this.resolvePaneKeyAlias(paneKey))?.label ?? null
+  }
+
+  /** Set or clear the per-pane custom label. Empty/whitespace/null clears.
+   *  Normalizes to a single bounded line (reuses the orchestration display-name
+   *  cap) so an oversized value cannot bloat the cache or wire payload. */
+  setCustomAgentLabel(paneKey: string, label: string | null): string | null {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const normalized =
+      label === null ? '' : normalizeSingleLine(label, ORCHESTRATION_DISPLAY_NAME_MAX_LENGTH)
+    const existing = this.customLabelByPaneKey.get(resolvedPaneKey)
+    if (normalized.length === 0) {
+      if (!existing) {
+        return null
+      }
+      this.customLabelByPaneKey.delete(resolvedPaneKey)
+      this.scheduleStatusPersist()
+      return null
+    }
+    if (existing?.label === normalized) {
+      return normalized
+    }
+    this.customLabelByPaneKey.set(resolvedPaneKey, { label: normalized, updatedAt: Date.now() })
+    this.scheduleStatusPersist()
+    return normalized
   }
 
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
@@ -1280,6 +1365,7 @@ export class AgentHookServer {
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.legacyPaneKeyAliases.clear()
+    this.customLabelByPaneKey.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
   }
@@ -1359,6 +1445,16 @@ export class AgentHookServer {
       }
     }
 
+    // Why: a label-only pane (labeled, never emitted a hook) is in none of the
+    // status/prompt/tool caches scanned above, so it would be missed. Scan the
+    // label map directly by tab prefix so closing a tab also evicts its labels.
+    let labelChanged = false
+    for (const paneKey of this.customLabelByPaneKey.keys()) {
+      if (paneCacheKeyMatchesTab(paneKey, tabId)) {
+        paneKeysToClear.add(paneKey)
+      }
+    }
+
     let statusChanged = false
     for (const paneKey of paneKeysToClear) {
       if (this.state.lastStatusByPaneKey.has(paneKey)) {
@@ -1368,6 +1464,9 @@ export class AgentHookServer {
       clearPaneCacheState(this.state, paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
+      if (this.customLabelByPaneKey.delete(paneKey)) {
+        labelChanged = true
+      }
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
@@ -1375,6 +1474,10 @@ export class AgentHookServer {
     if (statusChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+    } else if (labelChanged) {
+      // Why: force a persist when only the label section changed so a label-only
+      // pane's removal on tab close reaches disk.
+      this.scheduleStatusPersist()
     }
   }
 
@@ -1388,12 +1491,19 @@ export class AgentHookServer {
     this.clearAssistantMessageRetry(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
+    // Why: a label-only pane (labeled, then PTY died before any hook) has no
+    // status entry, so deleting the label must be independent of hadStatus —
+    // otherwise a reused paneKey could inherit the stale label.
+    let clearedLabel = this.customLabelByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {
       if (stablePaneKey.stablePaneKey === resolvedPaneKey) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
+        if (this.customLabelByPaneKey.delete(legacyPaneKey)) {
+          clearedLabel = true
+        }
         clearedAlias = true
       }
     }
@@ -1405,6 +1515,10 @@ export class AgentHookServer {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       this.onPaneStatusCleared?.(resolvedPaneKey)
+    } else if (clearedLabel) {
+      // Why: no status entry changed, but the on-disk label section did — force
+      // a persist so a label-only pane's removal reaches disk.
+      this.scheduleStatusPersist()
     }
   }
 
@@ -1459,6 +1573,9 @@ export class AgentHookServer {
     // calls; production callers always have an empty map here, but a future
     // re-start path must not silently merge prior-session state.
     this.state.lastStatusByPaneKey.clear()
+    // Why: same idempotency guarantee for the sibling label map — a re-hydrate
+    // must not merge a prior session's in-memory labels with the disk set.
+    this.customLabelByPaneKey.clear()
     let raw: string
     try {
       raw = readFileSync(this.lastStatusFilePath, 'utf8')
@@ -1522,15 +1639,37 @@ export class AgentHookServer {
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (hydrated > 0 && dropped === 0) {
+    // Why: the sibling label map has no `receivedAt`, so the status TTL cannot
+    // govern it. Prune label entries whose own `updatedAt` is older than the
+    // same 7-day cutoff. Absent key (older file / no labels) is a no-op.
+    let labelDropped = 0
+    let labelHydrated = 0
+    if (typeof file.customLabels === 'object' && file.customLabels !== null) {
+      for (const [paneKey, rawEntry] of Object.entries(file.customLabels)) {
+        const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+        const label = sanitizeHydratedCustomLabel(resolvedPaneKey, rawEntry)
+        if (label && label.updatedAt >= ttlCutoff) {
+          this.customLabelByPaneKey.set(resolvedPaneKey, label)
+          labelHydrated += 1
+        } else {
+          labelDropped += 1
+        }
+      }
+    }
+    if (labelDropped > 0) {
+      console.warn(
+        `[agent-hooks] last-status hydrate dropped ${labelDropped} labels (kept ${labelHydrated})`
+      )
+    }
+    if (dropped === 0 && labelDropped === 0 && (hydrated > 0 || labelHydrated > 0)) {
       // Why: prime from the raw on-disk bytes (not a re-serialization) so the
       // dedup is robust against future shape drift in serializeStatusFile.
-      // Only prime when hydration was lossless — if entries were dropped
-      // during sanitize, the in-memory map diverges from the on-disk bytes.
+      // Only prime when hydration was lossless — if entries OR labels were
+      // dropped, the in-memory state diverges from the on-disk bytes.
       this.lastWrittenJson = raw
-    } else if (dropped > 0) {
+    } else if (dropped > 0 || labelDropped > 0) {
       // Why: clean the stale on-disk file now so a user who has not run an
-      // agent in 8+ days does not re-drop the same entries on every cold
+      // agent in 8+ days does not re-drop the same entries/labels on every cold
       // boot. Synchronous variant is safe at start time and avoids
       // unref'd-timer-during-quit edge cases.
       this.runStatusPersist()
@@ -1549,7 +1688,19 @@ export class AgentHookServer {
       const { promptInteractionKey: _promptInteractionKey, ...persistedPayload } = payload
       entries[paneKey] = persistedPayload as EnrichedAgentHookEventPayload
     }
+    const customLabels: Record<string, CustomLabelEntry> = {}
+    for (const [paneKey, entry] of this.customLabelByPaneKey) {
+      if (!isValidPaneKey(paneKey)) {
+        continue
+      }
+      customLabels[paneKey] = entry
+    }
     const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }
+    // Why: omit the key entirely when empty so the common no-label file shape
+    // (and its dedup bytes) is identical to before this feature.
+    if (Object.keys(customLabels).length > 0) {
+      file.customLabels = customLabels
+    }
     return JSON.stringify(file)
   }
 
@@ -1630,6 +1781,11 @@ export class AgentHookServer {
 
   _resetPromptSentDedupeForTests(): void {
     this.promptSentDedupeByPaneKey.clear()
+  }
+
+  /** Test/diagnostic accessor for the in-memory custom-label map. */
+  _getCustomLabelsForTests(): ReadonlyMap<string, CustomLabelEntry> {
+    return this.customLabelByPaneKey
   }
 }
 

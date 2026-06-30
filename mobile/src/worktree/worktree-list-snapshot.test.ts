@@ -116,6 +116,13 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a custom agent label change so a CLI label set re-renders', () => {
+    const first = [worktree({ agents: [agent({ customAgentLabel: null })] })]
+    const second = [worktree({ agents: [agent({ customAgentLabel: 'Riset AI' })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
   it('treats missing and empty agent arrays as equivalent for rendering', () => {
     const first = [worktree({ agents: undefined })]
     const second = [worktree({ agents: [] })]

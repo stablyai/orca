@@ -239,6 +239,7 @@ import type {
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeAgentLabel,
   RuntimeTerminalAgentStatus,
   RuntimeTerminalSend,
   RuntimeTerminalCreate,
@@ -1157,6 +1158,9 @@ type RuntimeNotifier = {
     }
   ): void
   renameTerminal(tabId: string, title: string | null): void
+  /** Push a per-agent custom label change to the renderer store. Keyed by
+   *  paneKey (per-pane), not tabId, since labels are per-agent. */
+  setAgentLabel?(paneKey: string, label: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void
@@ -2171,6 +2175,14 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  // Why: the per-agent custom label lives in the agent hook server (next to the
+  // status cache). The runtime reaches it through these injected fns, mirroring
+  // how getAgentStatusSnapshot is injected, so the runtime keeps no direct
+  // dependency on the hook-server singleton (stays mockable in tests).
+  private readonly setCustomAgentLabelFn:
+    | ((paneKey: string, label: string | null) => string | null)
+    | null
+  private readonly getCustomAgentLabelFn: ((paneKey: string) => string | null) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2197,6 +2209,9 @@ export class OrcaRuntimeService {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      // Why: set/read the per-agent custom label in the hook server's map.
+      setCustomAgentLabel?: (paneKey: string, label: string | null) => string | null
+      getCustomAgentLabel?: (paneKey: string) => string | null
     }
   ) {
     this.store = store
@@ -2205,6 +2220,8 @@ export class OrcaRuntimeService {
       this.agentDetector = new AgentDetector(stats)
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.setCustomAgentLabelFn = deps?.setCustomAgentLabel ?? null
+    this.getCustomAgentLabelFn = deps?.getCustomAgentLabel ?? null
     // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
     // attachMainWindowServices, AFTER this service is constructed. Capturing
     // `getLocalPtyProvider()` at construction time would freeze a reference to
@@ -9121,6 +9138,7 @@ export class OrcaRuntimeService {
         toolName: string | null
         toolInput: string | null
         interrupted: boolean
+        customAgentLabel: string | null
         stateStartedAt: number
         updatedAt: number
       }
@@ -9137,6 +9155,9 @@ export class OrcaRuntimeService {
         toolName: payload.toolName ?? null,
         toolInput: payload.toolInput ?? null,
         interrupted: payload.interrupted ?? false,
+        // Why: OSC-only panes never pass through getStatusSnapshot's stamping,
+        // so read the label directly from the hook server's map here.
+        customAgentLabel: this.getCustomAgentLabelFn?.(snapshot.paneKey) ?? null,
         stateStartedAt: snapshot.stateStartedAt,
         updatedAt: snapshot.updatedAt
       })
@@ -9152,6 +9173,9 @@ export class OrcaRuntimeService {
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interrupted: entry.interrupted ?? false,
+        // Why: getStatusSnapshot already stamps the label from the hook server's
+        // map onto the entry, so carry it straight through.
+        customAgentLabel: entry.customAgentLabel ?? null,
         stateStartedAt: entry.stateStartedAt,
         updatedAt: entry.receivedAt
       })
@@ -9176,6 +9200,7 @@ export class OrcaRuntimeService {
         prompt: src.prompt,
         taskTitle,
         displayName,
+        customAgentLabel: src.customAgentLabel,
         lastAssistantMessage: src.lastAssistantMessage,
         toolName: src.toolName,
         toolInput: src.toolInput,
@@ -15123,6 +15148,28 @@ export class OrcaRuntimeService {
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
+  }
+
+  /** Set or clear the per-agent custom sidebar label for the pane behind a
+   *  terminal handle. Resolves handle→paneKey on the runtime that owns the pane;
+   *  a handle owned by a different runtime resolves to null and fails closed. */
+  async setCustomAgentLabel(handle: string, label: string | null): Promise<RuntimeAgentLabel> {
+    const paneKey = this.getPaneKeyForTerminalHandle(handle)
+    if (!paneKey) {
+      // Why: handle resolution fails closed across runtimes (a remote-owned
+      // pane returns null here), so a CLI cannot write into the wrong map.
+      throw new Error('agent_pane_not_found')
+    }
+    if (!this.setCustomAgentLabelFn) {
+      throw new Error('agent_label_unavailable')
+    }
+    const normalized = this.setCustomAgentLabelFn(paneKey, label)
+    // Why: when attached, push to the live store so the sidebar reflects the
+    // label immediately (mirrors renameTerminal's notifier path); headless runs
+    // have no notifier — subsequent worktree.ps reads pull the label directly
+    // from the hook server's map via getCustomAgentLabelFn.
+    this.notifier?.setAgentLabel?.(paneKey, normalized)
+    return { terminalHandle: handle, paneKey, label: normalized }
   }
 
   async createTerminal(
