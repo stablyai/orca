@@ -83,4 +83,63 @@ describe('refreshFileExplorerExpandedDirs', () => {
     })
     expect(readDirectory).toHaveBeenCalledTimes(2)
   })
+
+  it('drops a superseded directory result so a newer concurrent load is not clobbered', async () => {
+    const tracker = createFileExplorerDirLoadTracker()
+    let cache: Record<string, DirCache> = {
+      '/repo/src': { children: [], loading: false },
+      '/repo/docs': { children: [], loading: false }
+    }
+    const setDirCache = vi.fn((update: CacheUpdate) => {
+      cache = typeof update === 'function' ? update(cache) : update
+    })
+    const newerSrcCache: DirCache = {
+      loading: true,
+      children: [
+        {
+          name: 'fresh.ts',
+          path: '/repo/src/fresh.ts',
+          relativePath: 'src/fresh.ts',
+          isDirectory: false,
+          depth: 1
+        }
+      ]
+    }
+    const readDirectory = vi.fn(async (dirPath: string) => {
+      if (dirPath === '/repo/src') {
+        // Simulate a concurrent newer load (e.g. a watcher-driven refreshDir)
+        // superseding this directory while its refresh read is still in flight:
+        // bump the load token and commit fresher children.
+        tracker.begin('/repo/src')
+        setDirCache((prev) => ({
+          ...prev,
+          '/repo/src': newerSrcCache
+        }))
+        return [entry('stale.ts')]
+      }
+      return [entry('guide.md')]
+    })
+
+    const refreshed = await refreshFileExplorerExpandedDirs({
+      dirs: [
+        { dirPath: '/repo/src', depth: 0 },
+        { dirPath: '/repo/docs', depth: 0 }
+      ],
+      worktreePath: '/repo',
+      dirLoadTracker: tracker,
+      setDirCache,
+      readDirectory
+    })
+
+    // Not every dir was still current, so the refresh reports partial completion.
+    expect(refreshed).toBe(false)
+    // The superseded dir keeps the newer load state; the stale read is
+    // dropped from the batched commit instead of clobbering fresher data.
+    expect(cache['/repo/src']).toEqual(newerSrcCache)
+    // The still-current dir is committed normally.
+    expect(cache['/repo/docs']).toMatchObject({
+      loading: false,
+      children: [{ name: 'guide.md' }]
+    })
+  })
 })
