@@ -501,7 +501,11 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     act(() => current?.root.unmount())
     current?.container.remove()
 
-    current = renderCard({ advancedOpen: true, selectedRepoIsGit: false })
+    current = renderCard({
+      advancedOpen: true,
+      branchesEnabled: true,
+      selectedRepoIsGit: false
+    })
     expect(current.container.textContent).not.toContain('Base branch')
   })
 

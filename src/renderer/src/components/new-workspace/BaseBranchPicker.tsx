@@ -102,15 +102,26 @@ export default function BaseBranchPicker({
     })
   }, [cancelFocusFrame])
 
+  const clearSearchState = React.useCallback((): void => {
+    setQuery('')
+    setSearchResults([])
+    setIsSearching(false)
+  }, [])
+
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean): void => {
       setOpen(nextOpen)
       if (!nextOpen) {
         cancelFocusFrame()
+        clearSearchState()
       }
     },
-    [cancelFocusFrame]
+    [cancelFocusFrame, clearSearchState]
   )
+
+  React.useEffect(() => {
+    clearSearchState()
+  }, [activeRuntimeEnvironmentId, clearSearchState, repoId])
 
   React.useEffect(() => {
     if (!repoId || disabled) {
@@ -150,6 +161,7 @@ export default function BaseBranchPicker({
     }
 
     let stale = false
+    setSearchResults([])
     setIsSearching(true)
     const timer = window.setTimeout(() => {
       void searchRuntimeRepoBaseRefs({ activeRuntimeEnvironmentId }, repoId, trimmedQuery, 30)
