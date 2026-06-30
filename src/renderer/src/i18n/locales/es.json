@@ -2208,11 +2208,11 @@
             "532aea14ce": "Cancelar",
             "767951265d": "Algo salió mal al crear el árbol de trabajo.",
             "errors": {
-              "network": "Network error. Check your connection and try again.",
-              "auth": "Remote authentication failed. Check your credentials or SSH key.",
-              "noUpstream": "The selected base branch has no upstream. Choose a different base.",
-              "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
-              "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
+              "network": "Error de red. Verifica tu conexión e inténtalo de nuevo.",
+              "auth": "Falló la autenticación remota. Verifica tus credenciales o clave SSH.",
+              "noUpstream": "La rama base seleccionada no tiene upstream. Elige otra base.",
+              "remoteRefMissing": "La rama base no existe en el remoto. Verifica el nombre o elige otra base.",
+              "remoteForbidden": "El repositorio remoto es inaccesible o está prohibido. Verifica la URL y tus permisos.",
               "unknown": "{{message}}"
             }
           }

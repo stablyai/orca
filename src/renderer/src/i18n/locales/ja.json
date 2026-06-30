@@ -2208,11 +2208,11 @@
             "532aea14ce": "キャンセル",
             "767951265d": "ワークツリーの作成中に問題が発生しました。",
             "errors": {
-              "network": "Network error. Check your connection and try again.",
-              "auth": "Remote authentication failed. Check your credentials or SSH key.",
-              "noUpstream": "The selected base branch has no upstream. Choose a different base.",
-              "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
-              "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
+              "network": "ネットワークエラー。接続を確認して再試行してください。",
+              "auth": "リモート認証に失敗しました。認証情報または SSH キーを確認してください。",
+              "noUpstream": "選択したベースブランチに upstream がありません。別のベースを選択してください。",
+              "remoteRefMissing": "ベースブランチがリモートに存在しません。名前を確認するか、別のベースを選択してください。",
+              "remoteForbidden": "リモートリポジトリにアクセスできないか、禁止されています。URL と権限を確認してください。",
               "unknown": "{{message}}"
             }
           }

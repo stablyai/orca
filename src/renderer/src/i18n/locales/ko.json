@@ -2208,11 +2208,11 @@
             "532aea14ce": "취소",
             "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
             "errors": {
-              "network": "Network error. Check your connection and try again.",
-              "auth": "Remote authentication failed. Check your credentials or SSH key.",
-              "noUpstream": "The selected base branch has no upstream. Choose a different base.",
-              "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
-              "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
+              "network": "네트워크 오류. 연결을 확인한 후 다시 시도해 주세요.",
+              "auth": "원격 인증에 실패했습니다. 자격 증명 또는 SSH 키를 확인해 주세요.",
+              "noUpstream": "선택한 기본 브랜치에 업스트림이 없습니다. 다른 기본을 선택해 주세요.",
+              "remoteRefMissing": "기본 브랜치가 원격에 존재하지 않습니다. 이름을 확인하거나 다른 기본을 선택해 주세요.",
+              "remoteForbidden": "원격 저장소에 액세스할 수 없거나 금지되었습니다. URL과 권한을 확인해 주세요.",
               "unknown": "{{message}}"
             }
           }
