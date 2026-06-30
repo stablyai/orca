@@ -69,9 +69,14 @@ describe('TerminalErrorBanner render', () => {
       />
     )
     const root = container.firstChild as HTMLElement
-    expect(root.style.background).toContain('rgba(234, 179, 8, 0.12)')
-    expect(root.style.border).toContain('rgba(234, 179, 8, 0.35)')
-    expect(root.style.color).toBe('#fde68a')
+    // Why: happy-dom does not resolve CSS variables at runtime, so we assert
+    // against the token reference (see src/renderer/src/assets/main.css :root
+    // for the actual color values). For the border shorthand we read the raw
+    // style attribute because happy-dom's CSSOM strips the color sub-value
+    // when parsing `border: 1px solid var(--token)`.
+    expect(root.style.background).toBe('var(--color-warning-soft)')
+    expect(root.getAttribute('style')).toContain('var(--color-warning-border)')
+    expect(root.style.color).toBe('var(--color-warning-fg)')
   })
 
   it('uses red palette for non-SSH errors', () => {
@@ -79,8 +84,12 @@ describe('TerminalErrorBanner render', () => {
       <TerminalErrorBanner errors={[entry({ message: 'Daemon gone' })]} onDismiss={() => {}} />
     )
     const root = container.firstChild as HTMLElement
-    expect(root.style.background).toContain('rgba(220, 38, 38, 0.15)')
-    expect(root.style.color).toBe('#fca5a5')
+    // Why: happy-dom does not resolve CSS variables at runtime; assert the
+    // token reference, not the computed rgba() value. Border uses
+    // getAttribute('style') for the same CSSOM limitation as above.
+    expect(root.style.background).toBe('var(--destructive-soft)')
+    expect(root.getAttribute('style')).toContain('var(--destructive-border)')
+    expect(root.style.color).toBe('var(--destructive-fg)')
   })
 
   it('hides the daemon restart button for SSH errors', () => {
@@ -127,5 +136,31 @@ describe('TerminalErrorBanner render', () => {
     )
     expect(screen.getByText(/^first$/)).toBeTruthy()
     expect(screen.getByText(/second\s*\(×3\)/)).toBeTruthy()
+  })
+})
+
+describe('TerminalErrorBanner memo', () => {
+  const baseProps = () => ({
+    errors: [{ message: 'x', count: 1, lastSeenAt: 0 }],
+    onDismiss: vi.fn()
+  })
+
+  it('skips re-render when the errors array reference is stable', () => {
+    const props = baseProps()
+    const { rerender, container } = render(<TerminalErrorBanner {...props} />)
+    const firstNode = container.firstChild
+    rerender(<TerminalErrorBanner {...props} />)
+    // memo's default shallow comparator returns true for equal props; the fiber
+    // (and thus the DOM node identity) is reused.
+    expect(container.firstChild).toBe(firstNode)
+  })
+
+  it('re-renders when the errors array reference changes (count incremented)', () => {
+    const props = baseProps()
+    const { rerender, container } = render(<TerminalErrorBanner {...props} />)
+    rerender(
+      <TerminalErrorBanner {...props} errors={[{ message: 'x', count: 2, lastSeenAt: 0 }]} />
+    )
+    expect(container.textContent).toMatch(/×2/)
   })
 })
