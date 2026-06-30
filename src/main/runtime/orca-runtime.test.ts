@@ -2312,7 +2312,7 @@ describe('OrcaRuntimeService', () => {
           name: 'cli-refresh-fails'
         })
       ).rejects.toThrow(
-        'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+        /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref /
       )
 
       expect(addWorktree).not.toHaveBeenCalled()

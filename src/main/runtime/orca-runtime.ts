@@ -39,6 +39,10 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import {
+  classifyRefreshBaseRefError,
+  formatRefreshBaseRefError
+} from '../../shared/git-remote-error'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -12784,8 +12788,19 @@ export class OrcaRuntimeService {
         ...localWorktreeGitOptionArgs
       )
       if (!refreshResult.ok) {
+        // Why: legacy runtime path mirrors worktree-remote's classification so
+        // both surfaces emit identical [code] messages and renderer i18n keys
+        // apply uniformly. RemoteFetchResult carries no stderr, so synthesize
+        // a placeholder cause for the classifier.
+        const fallbackError = new Error('refresh failed')
+        console.error('[refresh-base-ref-runtime]', fallbackError)
+        const classified = classifyRefreshBaseRefError(fallbackError)
         throw new Error(
-          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+          formatRefreshBaseRefError({
+            code: classified.code,
+            message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}".`,
+            cause: classified.cause
+          })
         )
       }
       if (
