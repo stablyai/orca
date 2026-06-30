@@ -2253,6 +2253,12 @@ export function connectPanePty(
     }
 
     const reportError = (message: string): void => {
+      // Why: the transport connect can reject asynchronously after the pane has been
+      // disposed (e.g. its workspace was deleted) — dropping a late error avoids a toast
+      // racing the unmount. Mirrors the connect scheduler's disposed guard above.
+      if (disposed) {
+        return
+      }
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
 

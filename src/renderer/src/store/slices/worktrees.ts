@@ -479,9 +479,7 @@ function mergeDetectedWorktreesForHost(
   const refreshedForHost = sanitizeHostedReviewLinksForBranchClears(
     refreshed.worktrees,
     current?.worktrees
-  ).map((worktree) =>
-    withRepoHostOwnership(worktree, hostId, setup)
-  )
+  ).map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
   return {
     ...refreshed,
     worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
@@ -2928,7 +2926,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             { worktree: toRuntimeWorktreeSelector(worktreeId), force, runHooks: !skipArchive },
             { timeoutMs: 60_000 }
           ))
-      await cleanupEphemeralVmRuntimesForDeletedWorkspace(worktreeId)
 
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
@@ -2957,6 +2954,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // can intercept them.
       await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
+      // Why: dispose the runtime-owned SSH relay AFTER tearing down this workspace's terminals,
+      // so a still-mounted SSH terminal pane can't connect to an already-gone relay and surface a
+      // spurious "SSH connection is not active" toast during delete.
+      await cleanupEphemeralVmRuntimesForDeletedWorkspace(worktreeId)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
