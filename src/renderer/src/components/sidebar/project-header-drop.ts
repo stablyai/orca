@@ -19,10 +19,21 @@ export type ProjectHeaderDragRect = {
 
 export const INDICATOR_GAP_PX = 4
 
+// Drag buckets are keyed `group:<id>` for grouped projects and a single
+// sentinel for ungrouped ones; keep the prefix/sentinel defined once.
+export const GROUP_BUCKET_PREFIX = 'group:'
+export const UNGROUPED_BUCKET_KEY = 'ungrouped'
+
 export function getProjectHeaderDragBucketKey(
   repo: Pick<Repo, 'projectGroupId'>
 ): ProjectHeaderDragBucketKey {
-  return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
+  return repo.projectGroupId ? `${GROUP_BUCKET_PREFIX}${repo.projectGroupId}` : UNGROUPED_BUCKET_KEY
+}
+
+// Inverse of getProjectHeaderDragBucketKey: the ungrouped sentinel → null,
+// `group:<id>` → `<id>`.
+export function bucketKeyToProjectGroupId(bucketKey: ProjectHeaderDragBucketKey): string | null {
+  return bucketKey === UNGROUPED_BUCKET_KEY ? null : bucketKey.slice(GROUP_BUCKET_PREFIX.length)
 }
 
 export function getSidebarOrderedRepoHeaderIds(rows: readonly Row[]): string[] {
@@ -164,7 +175,7 @@ export function measureProjectGroupHeaderDropZones(container: HTMLElement): Proj
     const rawCount = element.getAttribute('data-project-group-project-count')
     const projectCount = rawCount === null ? 0 : Number(rawCount)
     zones.push({
-      bucketKey: `group:${groupId}`,
+      bucketKey: `${GROUP_BUCKET_PREFIX}${groupId}`,
       top,
       bottom: top + rect.height,
       projectCount: Number.isFinite(projectCount) ? projectCount : 0
@@ -192,10 +203,8 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
         targetBucketKey: zone.bucketKey,
         dropIndex: zone.projectCount,
         dropIndicatorY: Math.max(args.scrollTop, zone.top),
-        // group zones are keyed `group:<id>`; highlight that group as the target.
-        intoGroupId: zone.bucketKey.startsWith('group:')
-          ? zone.bucketKey.slice('group:'.length)
-          : null
+        // highlight the group under the pointer as the target.
+        intoGroupId: bucketKeyToProjectGroupId(zone.bucketKey)
       }
     }
   }
@@ -243,16 +252,13 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   // Moving a project into a different group reads as "join this group", so
   // highlight the target group and append (no positional line) — matching the
   // collapsed-group and context-menu "Move to group" behavior.
-  if (
-    draggedRect &&
-    draggedRect.bucketKey !== targetBucketKey &&
-    targetBucketKey.startsWith('group:')
-  ) {
+  const targetGroupId = bucketKeyToProjectGroupId(targetBucketKey)
+  if (draggedRect && draggedRect.bucketKey !== targetBucketKey && targetGroupId !== null) {
     return {
       targetBucketKey,
       dropIndex: targetRects.length,
       dropIndicatorY: Math.max(args.scrollTop, indicatorY),
-      intoGroupId: targetBucketKey.slice('group:'.length)
+      intoGroupId: targetGroupId
     }
   }
   // Within its own bucket, the slot right below the dragged project is a no-op

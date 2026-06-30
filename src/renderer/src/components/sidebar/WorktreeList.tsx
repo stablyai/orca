@@ -137,7 +137,10 @@ import { useRepoHeaderDrag } from './project-header-drag'
 import { isHeaderActionTarget } from './header-drag-target-predicates'
 import { computeHeaderDragRowShifts } from './header-drag-row-shifts'
 import { resolveHeaderDragBlockUnits } from './header-drag-block-units'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import {
+  getProjectHeaderDragBucketKey,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from './project-header-drop'
 import { useGroupHeaderDrag } from './group-header-drag'
 import { getSiblingGroupIdsByParent } from './group-header-drop'
 import {
@@ -4186,8 +4189,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-project-group-sibling-index={groupSiblingIndex}
                     data-project-group-project-count={
                       groupIdForHeader !== undefined
-                        ? (sidebarRepoHeaderIdsByBucket.get(`group:${groupIdForHeader}`)?.length ??
-                          0)
+                        ? (sidebarRepoHeaderIdsByBucket.get(
+                            getProjectHeaderDragBucketKey({ projectGroupId: groupIdForHeader })
+                          )?.length ?? 0)
                         : undefined
                     }
                     data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}

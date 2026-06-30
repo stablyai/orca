@@ -1,16 +1,13 @@
 import {
   applyAllRepoInsertAt,
+  bucketKeyToProjectGroupId,
   getProjectGroupOrderForSidebarDrop,
+  getProjectHeaderDragBucketKey,
   mapSidebarProjectHeaderDropIndexToSiblingInsertIndex,
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../shared/types'
-
-// Converts a bucket key back to a project group id: 'ungrouped' → null, 'group:<id>' → '<id>'.
-function bucketKeyToGroupId(bucketKey: string): string | null {
-  return bucketKey === 'ungrouped' ? null : bucketKey.slice('group:'.length)
-}
 
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
@@ -30,16 +27,14 @@ export function commitProjectHeaderDragDrop(args: {
 
   // Cross-bucket move: when the target bucket differs from the source, place the
   // dragged repo into the new group without touching same-bucket ordering logic.
-  const sourceBucketKey = draggedRepo.projectGroupId
-    ? `group:${draggedRepo.projectGroupId}`
-    : 'ungrouped'
+  const sourceBucketKey = getProjectHeaderDragBucketKey(draggedRepo)
 
   if (
     args.usesProjectGroupOrdering &&
     args.targetBucketKey &&
     args.targetBucketKey !== sourceBucketKey
   ) {
-    const targetGroupId = bucketKeyToGroupId(args.targetBucketKey)
+    const targetGroupId = bucketKeyToProjectGroupId(args.targetBucketKey)
     const targetSiblings = (args.sidebarRepoHeaderIdsByBucketAll?.get(args.targetBucketKey) ?? [])
       .filter((repoId) => repoId !== args.session.repoId)
       .map((repoId) => args.repoById.get(repoId))
