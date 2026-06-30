@@ -107,12 +107,12 @@ export default function WorktreeCreationPanel({
                 }
                 if (parsed.code === 'unknown') {
                   // Why: only the `unknown` bucket has no dedicated key — its
-                  // template interpolates {{stderr}} so the user still sees the
-                  // tail git stderr line in the user's locale.
+                  // template interpolates {{message}} so the user still sees the
+                  // friendly prefix (e.g. "Could not refresh base ref ...").
                   return translate(
                     'auto.components.worktree.creation.WorktreeCreationPanel.errors.unknown',
                     parsed.message,
-                    { stderr: parsed.message }
+                    { message: parsed.message }
                   )
                 }
                 return translate(

@@ -2213,7 +2213,7 @@
               "noUpstream": "The selected base branch has no upstream. Choose a different base.",
               "remoteRefMissing": "The base branch does not exist on the remote. Verify the name or choose a different base.",
               "remoteForbidden": "The remote repository is inaccessible or forbidden. Check the URL and your permissions.",
-              "unknown": "{{stderr}}"
+              "unknown": "{{message}}"
             }
           }
         }

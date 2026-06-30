@@ -2213,7 +2213,7 @@
               "noUpstream": "所选 base 分支没有远程跟踪。请改用其他 base。",
               "remoteRefMissing": "远程仓库不存在该 base 分支。请确认分支名或换一个 base。",
               "remoteForbidden": "远程仓库不可访问或无权限。请检查仓库 URL 与权限。",
-              "unknown": "{{stderr}}"
+              "unknown": "{{message}}"
             }
           }
         }
