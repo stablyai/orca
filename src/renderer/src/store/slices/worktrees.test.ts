@@ -3008,38 +3008,51 @@ describe('createWorktree base status merge', () => {
     )
   })
 
-  it('does not suffix branchNameOverride when local IPC reports a branch conflict', async () => {
+  it('retries a suffixed branchNameOverride when local IPC reports a branch conflict', async () => {
     const store = createTestStore()
     const error = new Error(
       'Branch "feature/something" already exists. Pick a different worktree name.'
     )
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature-something-2',
+      repoId: 'repo1',
+      path: '/path/feature-something-2',
+      branch: 'feature/something-2'
+    })
     mockApi.worktrees.create.mockRejectedValueOnce(error)
+    mockApi.worktrees.create.mockResolvedValueOnce({ worktree: wt })
 
-    await expect(
-      store
-        .getState()
-        .createWorktree(
-          'repo1',
-          'feature/something',
-          'origin/main',
-          'inherit',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          'feature/something'
-        )
-    ).rejects.toThrow(error.message)
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature/something',
+        'origin/main',
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'feature/something'
+      )
 
-    expect(mockApi.worktrees.create).toHaveBeenCalledTimes(1)
-    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+    expect(mockApi.worktrees.create).toHaveBeenCalledTimes(2)
+    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         name: 'feature/something',
         branchNameOverride: 'feature/something'
+      })
+    )
+    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        name: 'feature/something-2',
+        branchNameOverride: 'feature/something-2'
       })
     )
   })
@@ -3755,40 +3768,60 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
-  it('does not suffix branchNameOverride when runtime create reports a branch conflict', async () => {
+  it('retries a suffixed branchNameOverride when runtime create reports a branch conflict', async () => {
     const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature-something-2',
+      repoId: 'repo1',
+      path: '/path/feature-something-2',
+      branch: 'feature/something-2'
+    })
     runtimeEnvironmentCall.mockRejectedValueOnce(new Error('Branch already exists on a remote'))
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
 
-    await expect(
-      store
-        .getState()
-        .createWorktree(
-          'repo1',
-          'feature/something',
-          'origin/main',
-          'skip',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          'feature/something'
-        )
-    ).rejects.toThrow('Branch already exists on a remote')
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature/something',
+        'origin/main',
+        'skip',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'feature/something'
+      )
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         params: expect.objectContaining({
           name: 'feature/something',
           branchNameOverride: 'feature/something'
+        })
+      })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        params: expect.objectContaining({
+          name: 'feature/something-2',
+          branchNameOverride: 'feature/something-2'
         })
       })
     )

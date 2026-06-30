@@ -614,6 +614,11 @@ import {
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
 } from '../ipc/worktree-remote'
+import {
+  getBranchNameOverrideCandidate,
+  getWorktreeCreateCandidate,
+  WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
+} from '../worktree-create-candidates'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -12625,14 +12630,6 @@ export class OrcaRuntimeService {
     const sanitizedName = sanitizeWorktreeName(args.name)
     let effectiveSanitizedName = sanitizedName
     const username = getGitUsername(repo.path)
-    const branchName = await resolveCreateBranchName(
-      repo.path,
-      args.branchNameOverride,
-      sanitizedName,
-      settings,
-      username,
-      localWorktreeGitOptions
-    )
 
     const baseBranch =
       args.baseBranch ||
@@ -12650,32 +12647,93 @@ export class OrcaRuntimeService {
       )
     }
 
-    const checkoutExistingBranch = await canCheckoutExistingLocalBranch(
-      repo.path,
-      branchName,
-      baseBranch,
-      ...localWorktreeGitOptionArgs
-    )
-    let branchConflictKind = checkoutExistingBranch
-      ? null
-      : await getBranchConflictKind(
-          repo.path,
-          branchName,
-          baseBranch,
-          ...localWorktreeGitOptionArgs
-        )
-    const allowedPushTargetRemoteConflict =
-      branchConflictKind && isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args)
-    if (branchConflictKind && !allowedPushTargetRemoteConflict) {
-      throw new Error(
-        `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
+    const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
+    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
+    // distro filesystem through computeWorkspaceRoot. If home lookup fails,
+    // still validate against the effective workspace dir.
+    let branchName = ''
+    let checkoutExistingBranch = false
+    let selectedExistingLocalBranchName: string | null = null
+    let branchConflictKind: 'local' | 'remote' | null = null
+    let worktreePath = ''
+    let worktreePathResolved = false
+    // Why: runtime/mobile create-from-review callers should get a new workspace
+    // even when the PR branch or review branch name is already in use.
+    for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
+      effectiveSanitizedName = getWorktreeCreateCandidate(sanitizedName, suffix)
+      effectiveRequestedName = args.name.trim()
+        ? getWorktreeCreateCandidate(args.name, suffix)
+        : effectiveSanitizedName
+      branchName = await resolveCreateBranchName(
+        repo.path,
+        selectedExistingLocalBranchName ??
+          getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
+        effectiveSanitizedName,
+        settings,
+        username,
+        localWorktreeGitOptions
       )
-    }
+      checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+        repo.path,
+        branchName,
+        baseBranch,
+        ...localWorktreeGitOptionArgs
+      )
+      if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+        // Why: once a user-selected branch is safe to reuse, path retries should
+        // keep that branch exact instead of creating a sibling branch.
+        selectedExistingLocalBranchName = branchName
+      }
+      branchConflictKind = checkoutExistingBranch
+        ? null
+        : await getBranchConflictKind(
+            repo.path,
+            branchName,
+            baseBranch,
+            ...localWorktreeGitOptionArgs
+          )
+      const allowedPushTargetRemoteConflict =
+        branchConflictKind &&
+        isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args)
+      let selectedReviewConflictMatched = false
+      if (branchConflictKind) {
+        if (allowedPushTargetRemoteConflict) {
+          let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
+          const selectedReview = getSelectedReviewBranch(args)
+          if (selectedReview?.provider === 'github') {
+            try {
+              existingPR = await getLocalGitHubPrForBranch(
+                repo.path,
+                branchName,
+                localWorktreeGitOptions
+              )
+            } catch {
+              // Retry with a suffixed branch when selected review verification is unavailable.
+            }
+            if (isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+              branchConflictKind = null
+              selectedReviewConflictMatched = true
+            }
+          } else if (selectedReview) {
+            const hostedReview = await getSelectedHostedReviewForBranch(
+              repo,
+              branchName,
+              args,
+              hostedReviewExecutionContext
+            ).catch(() => null)
+            if (hostedReview?.matchesSelected) {
+              branchConflictKind = null
+              selectedReviewConflictMatched = true
+            }
+          }
+        }
+        if (branchConflictKind) {
+          continue
+        }
+      }
 
-    if (!checkoutExistingBranch) {
-      let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
-      const selectedReview = getSelectedReviewBranch(args)
-      if (selectedReview?.provider === 'github' || !allowedPushTargetRemoteConflict) {
+      if (!checkoutExistingBranch && !selectedReviewConflictMatched) {
+        let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
         try {
           existingPR = await getLocalGitHubPrForBranch(
             repo.path,
@@ -12683,66 +12741,28 @@ export class OrcaRuntimeService {
             localWorktreeGitOptions
           )
         } catch {
-          if (allowedPushTargetRemoteConflict) {
-            throw new Error(`Could not verify selected PR branch "${branchName}". Try again.`)
-          }
-          // Why: worktree creation should not hard-fail on transient GitHub reachability
-          // issues because git state is still the source of truth for whether the
-          // worktree can be created locally.
+          // Why: GitHub reachability should not block creating a suffixed
+          // workspace; git conflicts still decide whether this candidate works.
+        }
+        if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+          continue
         }
       }
-      if (allowedPushTargetRemoteConflict) {
-        if (selectedReview?.provider === 'github') {
-          if (!isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
-            if (existingPR) {
-              throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
-            }
-            throw new Error(`Branch "${branchName}" already exists on a remote.`)
-          }
-        } else if (selectedReview) {
-          const hostedReview = await getSelectedHostedReviewForBranch(
-            repo,
-            branchName,
-            args,
-            hostedReviewExecutionContext
-          ).catch(() => null)
-          if (!hostedReview?.matchesSelected) {
-            if (hostedReview) {
-              throw new Error(`Branch "${branchName}" already has PR #${hostedReview.number}.`)
-            }
-            throw new Error(`Branch "${branchName}" already exists on a remote.`)
-          }
-        }
-      }
-      if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
-        throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
-      }
-    }
-
-    const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
-    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem through computeWorkspaceRoot. If home lookup fails,
-    // still validate against the effective workspace dir.
-    let worktreePath = ''
-    let worktreePathResolved = !args.branchNameOverride
-    for (let suffix = 1; suffix < 100; suffix += 1) {
-      effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
-      effectiveRequestedName =
-        suffix === 1
-          ? args.name
-          : args.name.trim()
-            ? `${args.name}-${suffix}`
-            : effectiveSanitizedName
       worktreePath = ensurePathWithinWorkspace(
         computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
         workspaceRoot
       )
-      if (!args.branchNameOverride || !(await pathExists(worktreePath))) {
+      if (!(await pathExists(worktreePath))) {
         worktreePathResolved = true
         break
       }
     }
     if (!worktreePathResolved) {
+      if (branchConflictKind) {
+        throw new Error(
+          `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
+        )
+      }
       throw new Error(
         `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`
       )
