@@ -31,7 +31,6 @@ export type SettingsNavTarget =
   | 'agents'
   | 'orchestration'
   | 'servers'
-  | 'ephemeral-vms'
   | 'mobile'
   | 'mobile-emulator'
   | 'repo'

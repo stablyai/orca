@@ -567,4 +567,31 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
     expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
   })
+
+  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
+    const recipeLoadSection = sourceBetween(
+      HOOK_SOURCE,
+      'const ephemeralVmsEnabled',
+      'const selectedRepoConnectionId'
+    )
+    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
+    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
+    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
+
+    const submitSection = sourceBetween(
+      HOOK_SOURCE,
+      'let ephemeralVmRecipe',
+      'const request: WorktreeCreationRequest'
+    )
+    expect(submitSection).toContain(
+      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
+    )
+    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
+
+    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
+    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
+    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
+    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
+    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
+  })
 })

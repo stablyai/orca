@@ -14,6 +14,12 @@ vi.mock('../../store', () => ({
     selector({ settingsSearchQuery: '' })
 }))
 
+vi.mock('./EphemeralVmsPane', () => ({
+  EphemeralVmsPane: () => (
+    <div data-testid="ephemeral-vms-pane">Per-Workspace Environments pane</div>
+  )
+}))
+
 vi.mock('../ui/select', async () => {
   const React = await import('react')
 
@@ -126,6 +132,53 @@ describe('ExperimentalPane', () => {
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
       'New card style'
     )
+  })
+
+  it('renders per-workspace environments as an off-by-default experimental subsection', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+    const entry = getExperimentalPaneSearchEntries().find(
+      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+    )
+
+    expect(settings.experimentalEphemeralVms).toBe(false)
+    expect(markup).toContain('Per-Workspace Environments')
+    expect(markup).toContain('aria-checked="false"')
+    expect(markup).not.toContain('Per-Workspace Environments pane')
+    expect(entry?.targetSectionId).toBe('ephemeral-vms')
+  })
+
+  it('enables per-workspace environments through the experimental switch', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings })
+
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#ephemeral-vms button[role="switch"]'
+    )
+    if (!switchButton) {
+      throw new Error('Per-workspace environments switch was not rendered')
+    }
+
+    await act(async () => {
+      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalEphemeralVms: true })
+    root.unmount()
+  })
+
+  it('shows per-workspace environment setup controls when enabled', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane
+        settings={{ ...getDefaultSettings('/tmp'), experimentalEphemeralVms: true }}
+        updateSettings={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('Per-Workspace Environments pane')
+    expect(markup).toContain('aria-checked="true"')
   })
 
   it('shows native chat default-mode as a child setting only when native chat is enabled', async () => {

@@ -14,6 +14,10 @@ export const getEphemeralVmsSearchEntry = createLocalizedCatalog(
       'Learn how repo-owned recipes give each workspace its own on-demand, disposable environment.'
     ),
     keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.0d24759f14',
+        'experimental'
+      ),
       ...translateSearchKeyword('auto.components.settings.ephemeralVms.search.keywordVm', 'vm'),
       ...translateSearchKeyword(
         'auto.components.settings.ephemeralVms.search.keywordSandbox',
@@ -31,6 +35,7 @@ export const getEphemeralVmsSearchEntry = createLocalizedCatalog(
         'auto.components.settings.ephemeralVms.search.keywordEphemeral',
         'ephemeral'
       )
-    ]
+    ],
+    targetSectionId: 'ephemeral-vms'
   })
 )

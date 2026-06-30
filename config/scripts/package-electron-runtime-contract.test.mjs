@@ -66,16 +66,19 @@ describe('Electron runtime package contract', () => {
         release_command
       ])
     )
+    const macReleaseCommand = parsedWorkflow.jobs['build-mac'].steps.find(
+      (step) => step.name === 'Publish release artifacts (macOS)'
+    ).with.command
 
-    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'mac', 'win'])
-    for (const command of releaseCommands.values()) {
+    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'win'])
+    for (const command of [...releaseCommands.values(), macReleaseCommand]) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
       expect(command).toContain('electron-builder')
       expect(command.indexOf('ensure-native-runtime')).toBeLessThan(
         command.indexOf('electron-builder')
       )
     }
-    expect(releaseCommands.get('mac')).toContain(' && ORCA_MAC_RELEASE=1 ')
+    expect(macReleaseCommand).toContain(' && ORCA_MAC_RELEASE=1 ')
     expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
     expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
     expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
@@ -83,6 +86,36 @@ describe('Electron runtime package contract', () => {
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
     )
+  })
+
+  it('pins the Windows release builder to the VS 2022 runner image', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const windowsReleaseEntry = releaseWorkflow.jobs.build.strategy.matrix.include.find(
+      ({ platform }) => platform === 'win'
+    )
+
+    expect(windowsReleaseEntry.os).toBe('windows-2022')
+  })
+
+  it('keeps release-cut signing provenance on GitHub-hosted runners', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const buildMatrixRunners = releaseWorkflow.jobs.build.strategy.matrix.include.map(
+      ({ os }) => os
+    )
+    const releaseWorkflowText = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+
+    expect(releaseWorkflowText).not.toContain('blacksmith-')
+    expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('macos-15')
+    expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
+    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build')
+    expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
   })
 
   it('preflights SignPath module install before Windows signing side effects', () => {
