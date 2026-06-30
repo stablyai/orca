@@ -1,14 +1,16 @@
 import { ipcMain } from 'electron'
 import type { GiteaMergeMethod, GiteaPRFileStatus } from '../../shared/types'
 import {
-  addGiteaPullRequestReviewComment,
   getGiteaPullRequestChecks,
   getGiteaPullRequestDetail,
   getGiteaPullRequestFileContents,
   listGiteaPullRequestFiles,
-  listGiteaPullRequestReviewComments,
   mergeGiteaPullRequest
 } from '../gitea/pull-requests'
+import {
+  addGiteaPullRequestReviewComment,
+  listGiteaPullRequestReviewComments
+} from '../gitea/pull-request-reviews'
 import type { Store } from '../persistence'
 import {
   assertRegisteredRepo,

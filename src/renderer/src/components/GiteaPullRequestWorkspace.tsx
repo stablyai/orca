@@ -23,13 +23,11 @@ import type {
 } from '../../../shared/types'
 import type { GiteaWorkspaceSelection } from './GiteaIssueWorkspace'
 import { scoped } from './gitea-pr-request-scope'
+import { getGiteaPrTabs, type GiteaPrTab } from './gitea-pr-tabs'
+import { isWindows } from './gitea-workspace-chrome'
 import { translate } from '@/i18n/i18n'
 
-// On Windows the custom window controls (minimize/close) float over the
-// top-right corner, so the header action buttons must clear that strip.
-const isWindows = !navigator.userAgent.includes('Mac') && navigator.userAgent.includes('Windows')
-
-type Tab = 'conversation' | 'files' | 'checks'
+type Tab = GiteaPrTab
 
 type GiteaPullRequestWorkspaceProps = {
   selection: GiteaWorkspaceSelection | null
@@ -244,22 +242,7 @@ export function GiteaPullRequestWorkspace({
 
   const state = detail?.state ?? (item?.state === 'merged' ? 'merged' : item?.state) ?? 'open'
   const body = detail?.body?.trim()
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    {
-      id: 'conversation',
-      label: translate('auto.components.GiteaPullRequestWorkspace.f51240a59a', 'Conversation')
-    },
-    {
-      id: 'files',
-      label: translate('auto.components.GiteaPullRequestWorkspace.4f4abe43ab', 'Files'),
-      count: files.length
-    },
-    {
-      id: 'checks',
-      label: translate('auto.components.GiteaPullRequestWorkspace.95a6c97ba6', 'Checks'),
-      count: checks.length
-    }
-  ]
+  const tabs = getGiteaPrTabs(files.length, checks.length)
 
   return (
     <Sheet open={selection !== null} onOpenChange={(open) => !open && onClose()}>

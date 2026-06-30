@@ -29,6 +29,7 @@ import type {
 import type { GiteaIssueScope } from '@/store/slices/gitea'
 import { GiteaIssueMetaControls } from './gitea-issue-meta-controls'
 import { GiteaIssueComments } from './gitea-issue-comments'
+import { copyGiteaText, isWindows } from './gitea-workspace-chrome'
 import { translate } from '@/i18n/i18n'
 
 export type GiteaWorkspaceSelection = { repo: Repo; item: GiteaWorkItem; scope: GiteaIssueScope }
@@ -38,23 +39,6 @@ type GiteaIssueWorkspaceProps = {
   onUse: (repo: Repo, item: GiteaWorkItem) => void
   onClose: () => void
 }
-
-async function copyText(text: string, label: string): Promise<void> {
-  try {
-    await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.GiteaIssueWorkspace.47b064c003', '{{value0}} copied', {
-        value0: label
-      })
-    )
-  } catch {
-    toast.error(translate('auto.components.GiteaIssueWorkspace.927222e135', 'Failed to copy.'))
-  }
-}
-
-// On Windows the custom window controls float over the top-right corner, so the
-// header action buttons must clear that strip.
-const isWindows = !navigator.userAgent.includes('Mac') && navigator.userAgent.includes('Windows')
 
 export function GiteaIssueWorkspace({
   selection,
@@ -357,7 +341,7 @@ export function GiteaIssueWorkspace({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => void copyText(item.url, 'URL')}
+                    onClick={() => void copyGiteaText(item.url, 'URL')}
                     aria-label={translate(
                       'auto.components.GiteaIssueWorkspace.c29b657be3',
                       'Copy URL'

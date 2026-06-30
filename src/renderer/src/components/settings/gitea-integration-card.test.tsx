@@ -179,7 +179,7 @@ describe('GiteaTaskIntegrationCard', () => {
     // Both Test/Testing buttons, in server (A, B) DOM order.
     const testButtons = (): HTMLButtonElement[] =>
       Array.from(rendered.querySelectorAll('button')).filter((button) =>
-        /^Test/.test(button.textContent?.trim() ?? '')
+        (button.textContent?.trim() ?? '').startsWith('Test')
       )
 
     await act(async () => {
