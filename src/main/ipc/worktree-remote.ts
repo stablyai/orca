@@ -52,10 +52,7 @@ import {
 } from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import {
-  classifyRefreshBaseRefError,
-  formatRefreshBaseRefError
-} from '../../shared/worktree-remote-error'
+import { throwRefreshBaseRefError } from '../../shared/worktree-remote-error'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
@@ -1583,14 +1580,12 @@ export async function createRemoteWorktree(
       // Why: the underlying git fetch failure carries the real cause (DNS,
       // SSH, missing ref, repo forbidden). Surface it through the shared
       // classifier so the renderer can show a localized, actionable message.
-      console.error('[refresh-base-ref]', err)
-      const classified = classifyRefreshBaseRefError(err)
-      throw new Error(
-        formatRefreshBaseRefError({
-          code: classified.code,
-          message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}".`
-        })
-      )
+      throwRefreshBaseRefError({
+        tag: 'refresh-base-ref',
+        baseBranch,
+        remote: remoteTrackingBase.remote,
+        cause: err
+      })
     }
   } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {
     // Why: local or otherwise non-remote-tracking bases preserve legacy
@@ -2155,15 +2150,12 @@ export async function createLocalWorktree(
         // renderer renders a single localized message regardless of which path
         // surfaced the failure. The upstream `result` only carries errorKind,
         // so synthesize an Error with the kind and let the classifier map it.
-        const fallbackError = new Error(`refresh failed: ${result.errorKind}`)
-        console.error('[refresh-base-ref-precheck]', fallbackError)
-        const classified = classifyRefreshBaseRefError(fallbackError)
-        throw new Error(
-          formatRefreshBaseRefError({
-            code: classified.code,
-            message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}".`
-          })
-        )
+        throwRefreshBaseRefError({
+          tag: 'refresh-base-ref-precheck',
+          baseBranch,
+          remote: remoteTrackingRefresh.base.remote,
+          cause: new Error(`refresh failed: ${result.errorKind}`)
+        })
       }
       if (
         !remoteTrackingRefresh.hadLocalBaseRef &&

@@ -89,3 +89,21 @@ export function parseRefreshBaseRefErrorPrefix(
   }
   return { code, message: match[2] }
 }
+
+export function throwRefreshBaseRefError(opts: {
+  tag: 'refresh-base-ref' | 'refresh-base-ref-precheck' | 'refresh-base-ref-runtime'
+  baseBranch: string
+  remote: string
+  cause: unknown
+}): never {
+  // Why: tags differ by call site so log filters can isolate the
+  // precheck / create / runtime paths; original stderr lives in cause.
+  console.error(`[${opts.tag}]`, opts.cause)
+  const classified = classifyRefreshBaseRefError(opts.cause)
+  throw new Error(
+    formatRefreshBaseRefError({
+      code: classified.code,
+      message: `Could not refresh base ref "${opts.baseBranch}" from "${opts.remote}".`
+    })
+  )
+}
