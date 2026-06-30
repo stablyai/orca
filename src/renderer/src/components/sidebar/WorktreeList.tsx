@@ -4198,11 +4198,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     className={cn(
                       'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
                       'cursor-pointer',
-                      // Why: the whole header row is the drag handle (like the
-                      // worktree cards), so show the grab affordance across the
-                      // row; action buttons opt out via data-repo-header-action.
-                      (isDraggableRepoHeader || isDraggableGroupHeader) &&
-                        'select-none hover:cursor-grab active:cursor-grabbing',
+                      // Why: keep the plain pointer cursor on hover (like the
+                      // worktree cards) — the grab cursor only appears once a
+                      // drag actually starts, applied document-wide by the drag
+                      // hook. select-none avoids a text-selection flash mid-drag.
+                      (isDraggableRepoHeader || isDraggableGroupHeader) && 'select-none',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       // Why: while dragging, the floating clone is the visible
