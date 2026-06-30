@@ -1194,6 +1194,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // toggle, while the experimental card keeps the status glyph passive.
   const showCombinedStatusSlot = showStatus
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
+  // Why: in header-less views the primary worktree drops its status lane entirely so
+  // its content sits flush-left and the branch-glyph worktrees read as a nested level.
+  const primaryRowOmitsStatusLane = worktree.isMainWorktree && !isFolder && !hideRepoBadge
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
   const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
   // Why: detailed cards need a stable metadata lane only when it has content.
@@ -1369,7 +1372,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       }
       data-worktree-card-parent-content=""
     >
-      {showCombinedStatusSlot ? (
+      {showCombinedStatusSlot && !primaryRowOmitsStatusLane ? (
         <div
           className={cn(
             'flex shrink-0 justify-center',
@@ -1388,7 +1391,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
             onToggleUnread={handleToggleUnreadQuick}
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
-            hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            // Why: the branch glyph marks additional worktrees; the primary worktree
+            // is the project's main checkout, so it keeps the status dot instead so
+            // the two read apart at a glance.
+            hasBranchIdentity={Boolean(branchIdentityDisplay) && !worktree.isMainWorktree}
           />
         </div>
       ) : null}
@@ -1480,6 +1486,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </RepoIdentityChip>
             )}
 
+            {/* Why: in header-less views (groupBy !== 'repo', so no project header
+                sits above the row) the row title is just a branch/worktree name and
+                gives no project context. Prefix the project name (bold) so every row
+                is identifiable; grouped views already name the project in their header. */}
+            {!hideRepoBadge && !isFolder && repo ? (
+              <span
+                data-worktree-card-project-prefix=""
+                className="flex shrink-0 items-baseline text-[13px] leading-5"
+              >
+                <span className="font-semibold text-foreground">{repo.displayName}</span>
+                <span className="px-1 text-muted-foreground/60">·</span>
+              </span>
+            ) : null}
+
             {/* Why: unread alert lives in the left status lane; weight plus dimmed
                  read titles carry scan contrast in the title row. */}
             <WorktreeTitleInlineRename
@@ -1487,7 +1507,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
               disabled={isDeleting || affiliateListMode}
               showUnreadEmphasis={showUnreadEmphasis}
               dimReadTitle={newCardStyle}
-              className="text-[13px] leading-5"
+              // Why: with the bold project prefix present, the branch/worktree name
+              // is the secondary half of "project · branch", so render it lighter.
+              className={cn(
+                'text-[13px] leading-5',
+                !hideRepoBadge && !isFolder && repo && 'text-muted-foreground'
+              )}
               editingClassName="flex-1"
               titleWrapper={titleWrapper}
               onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
@@ -1532,7 +1557,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            {!compactCards && worktree.isMainWorktree && !isFolder && (
+            {/* Why: the "primary" badge only earns its place in the grouped
+                Project view; in header-less views the project-name prefix already
+                marks the row, so the badge would be redundant noise. */}
+            {!compactCards && worktree.isMainWorktree && !isFolder && hideRepoBadge && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge
