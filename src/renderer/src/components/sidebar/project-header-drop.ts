@@ -228,10 +228,22 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   draggingRepoId?: string
 }): ProjectHeaderCrossBucketDropPreview | null {
   const localY = args.pointerY - args.containerTop + args.scrollTop
-  // 1) A group header directly under the pointer = append into that group.
+  const draggedRect = args.draggingRepoId
+    ? args.repoRects.find((rect) => rect.repoId === args.draggingRepoId)
+    : undefined
+  // 1) A group header under the pointer targets that group. For a cross-bucket
+  //    drag, hovering any OTHER group's header — collapsed, empty, or expanded —
+  //    targets it; a same-bucket drag only matches collapsed/empty group headers
+  //    (an expanded same-bucket group is handled by its repo block below).
   for (const zone of args.groupZones) {
     const bucketRepoRects = args.repoRects.filter((rect) => rect.bucketKey === zone.bucketKey)
-    if (bucketRepoRects.length === 0 && localY >= zone.top && localY <= zone.bottom) {
+    const isCrossBucketHeaderTarget =
+      draggedRect !== undefined && draggedRect.bucketKey !== zone.bucketKey
+    if (
+      (bucketRepoRects.length === 0 || isCrossBucketHeaderTarget) &&
+      localY >= zone.top &&
+      localY <= zone.bottom
+    ) {
       return {
         targetBucketKey: zone.bucketKey,
         dropIndex: zone.projectCount,
@@ -268,11 +280,15 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
     return null
   }
   const targetRects = (buckets.get(targetBucketKey) ?? []).slice().sort((a, b) => a.top - b.top)
-  let dropIndex = targetRects.length
+  const lastTargetRect = targetRects.at(-1)
+  // Append after the last sibling's FULL index, not the mounted-rect count:
+  // virtualization unmounts off-screen siblings, so targetRects.length undercounts.
+  const appendIndex = lastTargetRect ? lastTargetRect.headerIndex + 1 : 0
+  let dropIndex = appendIndex
   // The indicator sits exactly at the insertion boundary (a block edge). The
   // gap-opening shift keys off this same Y, so any cosmetic offset here would
   // pull the unit just past the boundary (e.g. the next group) into the shift.
-  let indicatorY = targetRects.at(-1)?.bottom ?? localY
+  let indicatorY = lastTargetRect?.bottom ?? localY
   for (const rect of targetRects) {
     // Threshold on the header row, not the whole block: hovering a project's
     // body (worktrees) reads as "after it" instead of "before it".
@@ -283,9 +299,6 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
       break
     }
   }
-  const draggedRect = args.draggingRepoId
-    ? args.repoRects.find((rect) => rect.repoId === args.draggingRepoId)
-    : undefined
   // Moving a project into a different group reads as "join this group", so
   // highlight the target group and append (no positional line) — matching the
   // collapsed-group and context-menu "Move to group" behavior.
@@ -293,7 +306,7 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   if (draggedRect && draggedRect.bucketKey !== targetBucketKey && targetGroupId !== null) {
     return {
       targetBucketKey,
-      dropIndex: targetRects.length,
+      dropIndex: appendIndex,
       dropIndicatorY: Math.max(args.scrollTop, indicatorY),
       intoGroupId: targetGroupId
     }
@@ -310,7 +323,7 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   }
   return {
     targetBucketKey,
-    dropIndex: targetRects.length === 0 ? 0 : dropIndex,
+    dropIndex,
     dropIndicatorY: Math.max(args.scrollTop, indicatorY)
   }
 }

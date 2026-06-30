@@ -46,6 +46,13 @@ export function resolveHeaderDragBlockUnits(args: {
   }
   const headerRow = args.renderRows[headerIndex]!
   const draggedDepth = headerRow.type === 'header' ? (headerRow.projectGroupDepth ?? 0) : 0
+  // Same-depth groups can sit under different parents, so scope group units to
+  // the dragged group's own siblings; otherwise an unrelated branch at the same
+  // depth would shift during the gap-opening preview.
+  const draggedParentId =
+    headerRow.type === 'header' && headerRow.projectGroup && headerRow.projectGroup.id !== null
+      ? (headerRow.projectGroup.parentGroupId ?? null)
+      : null
   // A project block ends at the next header; a group block extends through its
   // nested rows until a header at the same or shallower group depth.
   let endIndex = args.renderRows.length
@@ -91,7 +98,8 @@ export function resolveHeaderDragBlockUnits(args: {
     (isGroup
       ? row.projectGroup != null &&
         row.projectGroup.id !== null &&
-        (row.projectGroupDepth ?? 0) === draggedDepth
+        (row.projectGroupDepth ?? 0) === draggedDepth &&
+        (row.projectGroup.parentGroupId ?? null) === draggedParentId
       : true)
   const continuesUnit = (row: RenderRow): boolean =>
     isGroup && row.type === 'header' && (row.projectGroupDepth ?? 0) > draggedDepth

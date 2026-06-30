@@ -50,6 +50,7 @@ export type ProjectHeaderDragSession = {
   handleEl: HTMLElement
   startX: number
   startY: number
+  latestPointerX: number
   latestPointerY: number
   promoted: boolean
 }

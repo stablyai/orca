@@ -63,6 +63,7 @@ export function createProjectHeaderDragSession(args: {
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,
+    latestPointerX: args.event.clientX,
     latestPointerY: args.event.clientY,
     promoted: false
   }

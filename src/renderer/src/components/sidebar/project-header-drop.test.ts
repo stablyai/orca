@@ -224,6 +224,22 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
     expect(result?.dropIndex).toBe(1)
     expect(result?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(300)
   })
+
+  it('appends using the full sibling headerIndex, not the mounted-rect count', () => {
+    // Only one mounted rect, but it sits at sibling index 50 (the rest are
+    // virtualized off-screen). Dropping below it must append at 51, not at
+    // targetRects.length (1).
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 100,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'z', bucketKey: 'group:1', headerIndex: 50, top: 0, headerBottom: 28, bottom: 60 }
+      ],
+      groupZones: []
+    })
+    expect(result?.dropIndex).toBe(51)
+  })
 })
 
 describe('getProjectGroupOrderForSidebarDrop', () => {

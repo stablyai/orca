@@ -99,7 +99,7 @@ describe('commitProjectHeaderDragDrop', () => {
       onCommitProjectGroupOrder
     })
 
-    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-2', expect.any(Number))
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-2', 1)
   })
 
   it('ungroups a project when the target bucket is ungrouped', () => {
@@ -125,6 +125,6 @@ describe('commitProjectHeaderDragDrop', () => {
       onCommitProjectGroupOrder
     })
 
-    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('a', null, expect.any(Number))
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('a', null, 1)
   })
 })

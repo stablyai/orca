@@ -28,6 +28,7 @@ export type GroupHeaderDragSession = {
   handleEl: HTMLElement
   startX: number
   startY: number
+  latestPointerX: number
   latestPointerY: number
   promoted: boolean
 }

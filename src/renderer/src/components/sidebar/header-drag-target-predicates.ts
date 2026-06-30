@@ -3,6 +3,9 @@
 // action-selector string and structurally identical predicate bodies — only the
 // drag-handle attribute selector differs between them.
 
+// Both predicates guard with `instanceof Element` (not HTMLElement): a click can
+// land on an SVG icon inside a handle or action button, and SVGElement is an
+// Element but not an HTMLElement, so HTMLElement would drop those hits.
 export const HEADER_DRAG_ACTION_SELECTOR =
   '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
 
@@ -15,7 +18,7 @@ export function isHeaderDragHandleTarget(
   currentTarget: HTMLElement,
   handleSelector: string
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof Element)) {
     return false
   }
   const dragHandle = target.closest(handleSelector)
@@ -31,7 +34,7 @@ export function isHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
+  if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
   return currentTarget.contains(target) && target.closest(HEADER_DRAG_ACTION_SELECTOR) !== null

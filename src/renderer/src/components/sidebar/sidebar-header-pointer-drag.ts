@@ -11,6 +11,7 @@ export type SidebarHeaderDragSessionBase = {
   handleEl: HTMLElement
   startX: number
   startY: number
+  latestPointerX: number
   latestPointerY: number
   promoted: boolean
 }
@@ -157,7 +158,7 @@ export function useSidebarHeaderPointerDrag<
       const previousFrameTime = autoscrollLastFrameTimeRef.current ?? frameTime
       autoscrollLastFrameTimeRef.current = frameTime
       const autoscroll = getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 0, clientY: session.latestPointerY },
+        point: { clientX: session.latestPointerX, clientY: session.latestPointerY },
         containerRect: container.getBoundingClientRect(),
         scrollTop: container.scrollTop,
         scrollHeight: container.scrollHeight,
@@ -196,6 +197,7 @@ export function useSidebarHeaderPointerDrag<
       if (!session || e.pointerId !== session.pointerId) {
         return
       }
+      session.latestPointerX = e.clientX
       session.latestPointerY = e.clientY
       const container = configRef.current.getScrollContainer()
       if (!container) {

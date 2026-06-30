@@ -5,7 +5,8 @@ function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
     return null
   }
   const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
-  if (rawStart === null) {
+  // Reject empty too: Number('') is 0, which would snap hit-testing to the top.
+  if (rawStart === null || rawStart.trim() === '') {
     return null
   }
   const start = Number(rawStart)
