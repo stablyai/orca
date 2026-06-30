@@ -138,6 +138,11 @@ describe('WorktreeCreationPanel', () => {
     )
     // Constant height so the log box never grows before the scroll kicks in.
     expect(container.querySelector('pre')?.className).toContain('h-72')
+    // A visible Cancel control, not just the tiny tab X, since the hint says Cancel stops provisioning.
+    const cancel = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Cancel'
+    )
+    expect(cancel).toBeTruthy()
   })
 
   it('surfaces the captured recipe output when a VM recipe fails', async () => {

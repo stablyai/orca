@@ -119,6 +119,7 @@ export default function WorktreeCreationPanel({
                   ))
                 : null
             }
+            onCancel={dismiss}
             onRetry={() => retryBackgroundWorktreeCreation(creationId)}
             onDismiss={dismiss}
           />
@@ -178,6 +179,7 @@ function VmProvisioningStatus({
   log,
   cleanupLabel,
   error,
+  onCancel,
   onRetry,
   onDismiss
 }: {
@@ -187,6 +189,7 @@ function VmProvisioningStatus({
   // When set, the recipe failed: keep the same centered layout + log, but swap the
   // spinner header for the error and Retry/Dismiss so nothing shifts on failure.
   error?: string | null
+  onCancel?: () => void
   onRetry?: () => void
   onDismiss?: () => void
 }): React.JSX.Element {
@@ -243,8 +246,18 @@ function VmProvisioningStatus({
                 </span>
                 <span className="text-xs font-normal text-muted-foreground">{elapsedLabel}</span>
               </div>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.cancelProvisioning',
+                  'Cancel'
+                )}
+              </button>
               {cleanupLabel ? (
-                <div className="text-xs text-muted-foreground">{cleanupLabel}</div>
+                <div className="text-[11px] text-muted-foreground/80">{cleanupLabel}</div>
               ) : null}
             </>
           )}
@@ -271,8 +284,29 @@ function RecipeOutputLog({
   log: string
   emptyLabel: string
 }): React.JSX.Element {
+  const ref = React.useRef<HTMLPreElement>(null)
+  // Why: follow the tail as output streams in, but stop following the moment the user scrolls up so
+  // they can read earlier output. Resume following once they scroll back to the bottom.
+  const pinnedToBottomRef = React.useRef(true)
+  const handleScroll = React.useCallback((): void => {
+    const el = ref.current
+    if (!el) {
+      return
+    }
+    pinnedToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8
+  }, [])
+  React.useEffect(() => {
+    const el = ref.current
+    if (el && pinnedToBottomRef.current) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [log])
   return (
-    <pre className="scrollbar-sleek h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground">
+    <pre
+      ref={ref}
+      onScroll={handleScroll}
+      className="scrollbar-sleek h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground"
+    >
       {log || <span className="text-muted-foreground/60">{emptyLabel}</span>}
     </pre>
   )
