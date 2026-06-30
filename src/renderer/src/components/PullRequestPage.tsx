@@ -2762,6 +2762,21 @@ function PRFilesCombinedDiffViewer({
     [fileByPath, onViewedChange, pendingViewedPaths]
   )
 
+  // Why: the file-tree row toggle shares one viewed-state source with the
+  // in-diff checkbox — GitHub's native PR "viewed" state — so both controls
+  // stay in sync. The section key is `combined-commit:<path>`; recover the
+  // path to drive the same mutation the in-diff checkbox uses.
+  const handleTreeToggleViewed = useCallback(
+    (sectionKey: string) => {
+      const file = fileByPath.get(sectionKey.replace(/^combined-commit:/, ''))
+      if (!file || pendingViewedPaths.has(file.path)) {
+        return
+      }
+      void onViewedChange(file.path, !isPRFileViewed(file))
+    },
+    [fileByPath, onViewedChange, pendingViewedPaths]
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-3 py-1.5">
@@ -2821,9 +2836,12 @@ function PRFilesCombinedDiffViewer({
           sectionIndexByKey={sectionIndexByKey}
           activeSectionKey={activeTreeSectionKey}
           viewedSectionKeys={viewedSectionKeys}
+          viewedCount={files.filter(isPRFileViewed).length}
+          totalCount={files.length}
           collapsed={fileTreeCollapsed}
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
+          onToggleViewed={handleTreeToggleViewed}
         />
         <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>

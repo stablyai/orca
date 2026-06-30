@@ -1,11 +1,12 @@
 import type React from 'react'
-import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
+import { Check, ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
 import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { translate } from '@/i18n/i18n'
 import type {
   GitBranchChangeEntry,
   GitFileStatus,
@@ -36,7 +37,9 @@ export function CombinedDiffFileTreeRow({
   sectionIndexByKey,
   isCollapsed,
   onToggleDirectory,
-  onNavigate
+  onNavigate,
+  viewedSectionKeys,
+  onToggleViewed
 }: {
   node: CombinedDiffTreeNode
   mode: CombinedDiffFileTreeMode
@@ -46,6 +49,8 @@ export function CombinedDiffFileTreeRow({
   isCollapsed: boolean
   onToggleDirectory: (key: string) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
+  viewedSectionKeys: ReadonlySet<string>
+  onToggleViewed: (sectionKey: string) => void
 }): React.JSX.Element {
   if (node.type === 'directory') {
     return (
@@ -90,18 +95,19 @@ export function CombinedDiffFileTreeRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const status = node.entry.status as GitFileStatus
   const disabled = !sectionIndexByKey.has(sectionKey)
+  const viewed = viewedSectionKeys.has(sectionKey)
 
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        'group flex w-full min-w-0 cursor-pointer items-center gap-1 py-1 pr-3 text-left text-xs transition-colors hover:bg-accent/40 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent',
-        activeSectionKey === sectionKey && 'bg-accent/60'
+        'group flex w-full min-w-0 items-center text-xs transition-colors hover:bg-accent/40',
+        activeSectionKey === sectionKey && 'bg-accent/60',
+        viewed && 'text-muted-foreground opacity-60',
+        disabled && 'opacity-50 hover:bg-transparent'
       )}
       style={{
         paddingLeft: `${node.depth * COMBINED_DIFF_TREE_INDENT_PX + COMBINED_DIFF_TREE_FILE_PADDING_PX}px`
       }}
-      disabled={disabled}
       draggable={!disabled}
       onDragStart={(event) => {
         if (disabled) {
@@ -114,19 +120,53 @@ export function CombinedDiffFileTreeRow({
         )
         event.dataTransfer.effectAllowed = 'copy'
       }}
-      onClick={() => onNavigate(node.entry)}
     >
-      <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
-      </span>
-      <span
-        className="w-4 shrink-0 text-center text-[10px] font-bold"
-        style={{ color: STATUS_COLORS[status] }}
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 py-1 text-left disabled:cursor-default"
+        disabled={disabled}
+        onClick={() => onNavigate(node.entry)}
       >
-        {STATUS_LABELS[status]}
-      </span>
-    </button>
+        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
+        <span className="min-w-0 flex-1 truncate">
+          <span className={viewed ? 'text-muted-foreground' : 'text-foreground'}>{fileName}</span>
+          {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+        </span>
+        <span
+          className="w-4 shrink-0 text-center text-[10px] font-bold"
+          style={{ color: STATUS_COLORS[status] }}
+        >
+          {STATUS_LABELS[status]}
+        </span>
+      </button>
+      <button
+        type="button"
+        className={cn(
+          'mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border border-border transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-50',
+          viewed ? 'bg-accent text-foreground' : 'text-muted-foreground'
+        )}
+        disabled={disabled}
+        aria-pressed={viewed}
+        aria-label={
+          viewed
+            ? translate(
+                'auto.components.editor.CombinedDiffFileTreeRow.9bb84ca103',
+                'Mark {{value0}} unviewed',
+                { value0: fileName }
+              )
+            : translate(
+                'auto.components.editor.CombinedDiffFileTreeRow.88a36dd41f',
+                'Mark {{value0}} viewed',
+                { value0: fileName }
+              )
+        }
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggleViewed(sectionKey)
+        }}
+      >
+        <Check className={cn('size-3', viewed ? 'opacity-100' : 'opacity-0')} />
+      </button>
+    </div>
   )
 }

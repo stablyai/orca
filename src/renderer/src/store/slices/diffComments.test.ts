@@ -132,6 +132,7 @@ import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createAgentStatusSlice } from './agent-status'
 import { createDiffCommentsSlice } from './diffComments'
+import { createCombinedDiffReviewSlice } from './combined-diff-review'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
@@ -168,6 +169,7 @@ function createTestStore() {
     ...createSshSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createDiffCommentsSlice(...a),
+    ...createCombinedDiffReviewSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),

@@ -117,4 +117,28 @@ describe('CombinedDiffFileTree navigation mapping', () => {
       })
     ).toEqual([])
   })
+
+  it('hides viewed entries when the viewed filter is disabled', () => {
+    const viewed: GitStatusEntry = {
+      path: 'src/viewed.ts',
+      status: 'modified',
+      area: 'unstaged'
+    }
+    const unviewed: GitStatusEntry = {
+      path: 'src/unviewed.ts',
+      status: 'modified',
+      area: 'unstaged'
+    }
+
+    expect(
+      getFilteredCombinedDiffFileTreeEntries({
+        entries: [viewed, unviewed],
+        mode: 'uncommitted',
+        query: '',
+        excludedExtensions: new Set(),
+        includeViewed: false,
+        viewedSectionKeys: new Set(['unstaged:src/viewed.ts'])
+      })
+    ).toEqual([unviewed])
+  })
 })

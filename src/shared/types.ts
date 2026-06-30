@@ -509,6 +509,7 @@ export type Worktree = {
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
+  combinedDiffReview?: CombinedDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
 } & GitWorktreeInfo
 
@@ -619,6 +620,7 @@ export type WorktreeMeta = {
    *  them. Self-prunes when the worktree is deleted. */
   priorWorktreeIds?: string[]
   mobileDiffReview?: MobileDiffReviewState
+  combinedDiffReview?: CombinedDiffReviewState
   /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
   automationProvenance?: AutomationWorkspaceProvenance
 }
@@ -719,6 +721,18 @@ export type MobileDiffReviewState = {
   updatedAt?: number
   completedAt?: number
   files: Record<string, MobileDiffReviewFileState>
+}
+
+export type CombinedDiffReviewFileState = {
+  key: string
+  reviewedAt: number
+  diffIdentity: string
+}
+
+export type CombinedDiffReviewState = {
+  version: 1
+  updatedAt?: number
+  files: Record<string, CombinedDiffReviewFileState>
 }
 
 export type DiffComment = {

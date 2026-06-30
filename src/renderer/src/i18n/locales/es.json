@@ -10874,7 +10874,8 @@
           "21783df79f": "Contraer árbol de archivos",
           "481e63ca52": "Archivos",
           "d5ac717d65": "no comprometido",
-          "39b6b9e4e4": "Committed on Branch"
+          "39b6b9e4e4": "Committed on Branch",
+          "5c914b4f36": "{{value0}} / {{value1}} viewed"
         },
         "CombinedDiffViewer": {
           "35cc27aeb2": "en control de fuente",
@@ -10908,7 +10909,10 @@
           "724a13568d": "en {{value0}}",
           "6094135eec": "frente a {{value0}}",
           "a4420ca1f7": "Wrap On",
-          "dde325ddfe": "Wrap Off"
+          "dde325ddfe": "Wrap Off",
+          "22f6ebfe75": "Mark file unviewed",
+          "b216a43809": "Mark file viewed",
+          "a25c3d20b1": "Viewed"
         },
         "ConflictComponents": {
           "f338288514": "Cargando contenidos conflictivos...",
@@ -11415,6 +11419,10 @@
           "3e6c9a2b71": "pending",
           "4f7d0c3e88": "steps failed",
           "5a8e1d4f23": " · "
+        },
+        "CombinedDiffFileTreeRow": {
+          "9bb84ca103": "Mark {{value0}} unviewed",
+          "88a36dd41f": "Mark {{value0}} viewed"
         }
       },
       "diff": {

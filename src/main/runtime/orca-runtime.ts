@@ -1369,7 +1369,8 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
+    mobileDiffReview: meta.mobileDiffReview,
+    combinedDiffReview: meta.combinedDiffReview
   }
 }
 

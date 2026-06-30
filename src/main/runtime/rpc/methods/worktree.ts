@@ -180,6 +180,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         mobileDiffReview: params.mobileDiffReview,
+        combinedDiffReview: params.combinedDiffReview,
         lineage:
           params.parentWorktree || params.noParent === true
             ? {

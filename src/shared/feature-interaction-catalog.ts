@@ -44,6 +44,7 @@ export type FeatureInteractionId =
   | 'quick-commands'
   | 'resource-manager'
   | 'review-notes'
+  | 'review-viewed-files'
   | 'ssh'
   | 'terminal-pane-split'
   | 'terminal-panes'
@@ -137,6 +138,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'quick-commands', interaction: 'terminal quick command created or edited' },
   { id: 'resource-manager', interaction: 'Resource Manager opened or configured' },
   { id: 'review-notes', interaction: 'review note added or sent to an agent' },
+  { id: 'review-viewed-files', interaction: 'review file marked viewed or unviewed' },
   {
     id: 'ssh',
     interaction: 'SSH target added, imported, tested, connected, disconnected, or configured'

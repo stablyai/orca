@@ -80,9 +80,12 @@ export function CombinedDiffFileTree({
   sectionIndexByKey,
   activeSectionKey,
   viewedSectionKeys,
+  viewedCount,
+  totalCount,
   collapsed,
   onCollapsedChange,
-  onNavigate
+  onNavigate,
+  onToggleViewed
 }: {
   mode: CombinedDiffFileTreeMode
   worktreePath: string
@@ -90,9 +93,12 @@ export function CombinedDiffFileTree({
   sectionIndexByKey: ReadonlyMap<string, number>
   activeSectionKey: string | null
   viewedSectionKeys: ReadonlySet<string>
+  viewedCount: number
+  totalCount: number
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
+  onToggleViewed: (sectionKey: string) => void
 }): React.JSX.Element | null {
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
@@ -172,8 +178,17 @@ export function CombinedDiffFileTree({
     <aside className="flex min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background">
       <div className="sticky top-0 z-20 shrink-0 bg-background">
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {translate('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
+          <div className="flex min-w-0 items-baseline gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              {translate('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
+            </div>
+            <div className="text-[11px] tabular-nums text-muted-foreground">
+              {translate(
+                'auto.components.editor.CombinedDiffFileTree.5c914b4f36',
+                '{{value0}} / {{value1}} viewed',
+                { value0: viewedCount, value1: totalCount }
+              )}
+            </div>
           </div>
           <Button
             type="button"
@@ -300,6 +315,8 @@ export function CombinedDiffFileTree({
                     isCollapsed={collapsedDirectoryKeys.has(node.key)}
                     onToggleDirectory={toggleDirectory}
                     onNavigate={onNavigate}
+                    viewedSectionKeys={viewedSectionKeys}
+                    onToggleViewed={onToggleViewed}
                   />
                 ))}
               </div>
@@ -323,6 +340,8 @@ export function CombinedDiffFileTree({
                     isCollapsed={collapsedDirectoryKeys.has(node.key)}
                     onToggleDirectory={toggleDirectory}
                     onNavigate={onNavigate}
+                    viewedSectionKeys={viewedSectionKeys}
+                    onToggleViewed={onToggleViewed}
                   />
                 ))}
               </div>
@@ -340,6 +359,8 @@ export function CombinedDiffFileTree({
               isCollapsed={collapsedDirectoryKeys.has(node.key)}
               onToggleDirectory={toggleDirectory}
               onNavigate={onNavigate}
+              viewedSectionKeys={viewedSectionKeys}
+              onToggleViewed={onToggleViewed}
             />
           ))
         )}

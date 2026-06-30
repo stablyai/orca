@@ -211,6 +211,7 @@ export const WorktreeSet = WorktreeSelector.extend({
     .optional(),
   diffComments: z.array(z.unknown()).optional(),
   mobileDiffReview: z.unknown().optional(),
+  combinedDiffReview: z.unknown().optional(),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {

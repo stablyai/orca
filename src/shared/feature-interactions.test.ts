@@ -76,6 +76,7 @@ describe('feature interactions', () => {
       'quick-commands',
       'resource-manager',
       'review-notes',
+      'review-viewed-files',
       'ssh',
       'terminal-pane-split',
       'terminal-panes',

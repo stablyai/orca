@@ -56,6 +56,12 @@ import {
   handleCombinedDiffFileTreeNavigation
 } from './CombinedDiffFileTree'
 import { getCombinedDiffFileTreeSectionKey } from './combined-diff-file-tree-model'
+import { buildCombinedDiffEntryIdentity } from './combined-diff-review-identity'
+import {
+  getViewedSectionKeys,
+  isCombinedDiffFileReviewed,
+  type CombinedDiffReviewPresentFile
+} from './combined-diff-review-state'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
@@ -232,6 +238,9 @@ export default function CombinedDiffViewer({
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   const diffCommentsForWorktree = useAppStore((s) => s.getDiffComments(file.worktreeId))
+  const combinedDiffReview = useAppStore((s) => s.getCombinedDiffReview(file.worktreeId))
+  const setCombinedDiffFileViewed = useAppStore((s) => s.setCombinedDiffFileViewed)
+  const reconcileCombinedDiffReview = useAppStore((s) => s.reconcileCombinedDiffReview)
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const isDark =
     settings?.theme === 'dark' ||
@@ -466,6 +475,10 @@ export default function CombinedDiffViewer({
     mode: treeMode,
     hasUncommittedEntriesSnapshot
   })
+  const uncommittedStatusSignature = React.useMemo(
+    () => buildCombinedGitStatusSignature(sections, gitStatusEntries),
+    [gitStatusEntries, sections]
+  )
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -508,6 +521,43 @@ export default function CombinedDiffViewer({
       isBranchMode,
       isCommitMode
     ]
+  )
+  const presentReviewFiles = React.useMemo<CombinedDiffReviewPresentFile[]>(() => {
+    const liveStatusByKey = new Map(
+      gitStatusEntries.map((entry) => [`${entry.area}:${entry.path}`, entry])
+    )
+    return entries.map((entry) => {
+      const key = getCombinedDiffFileTreeSectionKey(treeMode, entry)
+      const identityEntry =
+        'area' in entry ? (liveStatusByKey.get(`${entry.area}:${entry.path}`) ?? entry) : entry
+      return {
+        key,
+        diffIdentity: buildCombinedDiffEntryIdentity({
+          mode: treeMode,
+          entry: identityEntry,
+          mergeBase: branchCompare?.mergeBase,
+          headOid: branchCompare?.headOid,
+          commitOid: commitCompare?.commitOid,
+          parentOid: commitCompare?.parentOid
+        })
+      }
+    })
+    // Why: `gitStatusEntries` keeps a stable reference until git status
+    // actually changes (setGitStatus's statusUnchanged guard), so it is a
+    // precise dep on its own — `uncommittedStatusSignature` derives from it
+    // and would be a redundant dep here.
+  }, [
+    branchCompare?.headOid,
+    branchCompare?.mergeBase,
+    commitCompare?.commitOid,
+    commitCompare?.parentOid,
+    entries,
+    gitStatusEntries,
+    treeMode
+  ])
+  const presentReviewIdentityByKey = React.useMemo(
+    () => new Map(presentReviewFiles.map((file) => [file.key, file.diffIdentity])),
+    [presentReviewFiles]
   )
 
   // Why: switching tabs or worktrees unmounts this viewer through the shared
@@ -985,8 +1035,21 @@ export default function CombinedDiffViewer({
     setActiveTreeSectionState({ entrySignature, key: null })
   }
   const viewedSectionKeys = React.useMemo(
-    () => new Set(sections.filter((section) => !section.loading).map((section) => section.key)),
-    [sections]
+    () => getViewedSectionKeys(combinedDiffReview, presentReviewFiles),
+    [combinedDiffReview, presentReviewFiles]
+  )
+  const viewedCount = viewedSectionKeys.size
+  const totalCount = presentReviewFiles.length
+  const handleToggleViewed = useCallback(
+    (sectionKey: string) => {
+      const diffIdentity = presentReviewIdentityByKey.get(sectionKey)
+      if (!diffIdentity) {
+        return
+      }
+      const viewed = isCombinedDiffFileReviewed(combinedDiffReview.files[sectionKey], diffIdentity)
+      void setCombinedDiffFileViewed(file.worktreeId, sectionKey, diffIdentity, !viewed)
+    },
+    [combinedDiffReview, file.worktreeId, presentReviewIdentityByKey, setCombinedDiffFileViewed]
   )
   const handleTreeNavigate = useCallback(
     (entry: GitStatusEntry | GitBranchChangeEntry) => {
@@ -1050,6 +1113,16 @@ export default function CombinedDiffViewer({
       requestCombinedDiffSectionReload(index)
     }
   }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, shouldAutoReloadFromGitStatus])
+
+  useEffect(() => {
+    void reconcileCombinedDiffReview(file.worktreeId, presentReviewFiles)
+  }, [
+    entrySignature,
+    file.worktreeId,
+    presentReviewFiles,
+    reconcileCombinedDiffReview,
+    uncommittedStatusSignature
+  ])
 
   useEffect(() => {
     if (treeMode !== 'all' && treeMode !== 'uncommitted') {
@@ -1847,9 +1920,12 @@ export default function CombinedDiffViewer({
             sectionIndexByKey={sectionIndexByKey}
             activeSectionKey={activeTreeSectionKey}
             viewedSectionKeys={viewedSectionKeys}
+            viewedCount={viewedCount}
+            totalCount={totalCount}
             collapsed={fileTreeCollapsed}
             onCollapsedChange={setFileTreeCollapsed}
             onNavigate={handleTreeNavigate}
+            onToggleViewed={handleToggleViewed}
           />
           <div className="relative min-w-0 flex-1">
             <div
@@ -1903,16 +1979,61 @@ export default function CombinedDiffViewer({
                           const fileNotes = diffCommentsForWorktree.filter(
                             (comment) => comment.filePath === section.path
                           )
-                          return fileNotes.length > 0 ? (
-                            <DiffNotesSendMenu
-                              worktreeId={file.worktreeId}
-                              groupId={activeGroupId ?? file.worktreeId}
-                              comments={diffCommentsForWorktree}
-                              filePath={section.path}
-                              showFileScope
-                              triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
-                            />
-                          ) : null
+                          const diffIdentity = presentReviewIdentityByKey.get(section.key)
+                          const isViewed =
+                            diffIdentity !== undefined &&
+                            isCombinedDiffFileReviewed(
+                              combinedDiffReview.files[section.key],
+                              diffIdentity
+                            )
+                          return (
+                            <>
+                              {diffIdentity !== undefined ? (
+                                <button
+                                  type="button"
+                                  className={`inline-flex h-6 items-center gap-1 rounded border border-border px-1.5 text-[11px] transition-colors hover:text-foreground ${
+                                    isViewed ? 'bg-accent text-foreground' : 'text-muted-foreground'
+                                  }`}
+                                  aria-pressed={isViewed}
+                                  aria-label={
+                                    isViewed
+                                      ? translate(
+                                          'auto.components.editor.CombinedDiffViewer.22f6ebfe75',
+                                          'Mark file unviewed'
+                                        )
+                                      : translate(
+                                          'auto.components.editor.CombinedDiffViewer.b216a43809',
+                                          'Mark file viewed'
+                                        )
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleToggleViewed(section.key)
+                                  }}
+                                >
+                                  <span className="flex size-3.5 items-center justify-center rounded-sm border border-border">
+                                    <Check
+                                      className={`size-3 ${isViewed ? 'opacity-100' : 'opacity-0'}`}
+                                    />
+                                  </span>
+                                  {translate(
+                                    'auto.components.editor.CombinedDiffViewer.a25c3d20b1',
+                                    'Viewed'
+                                  )}
+                                </button>
+                              ) : null}
+                              {fileNotes.length > 0 ? (
+                                <DiffNotesSendMenu
+                                  worktreeId={file.worktreeId}
+                                  groupId={activeGroupId ?? file.worktreeId}
+                                  comments={diffCommentsForWorktree}
+                                  filePath={section.path}
+                                  showFileScope
+                                  triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
+                                />
+                              ) : null}
+                            </>
+                          )
                         }}
                       />
                     </div>
