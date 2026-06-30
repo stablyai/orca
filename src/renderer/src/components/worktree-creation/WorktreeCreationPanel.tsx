@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import { getCreationProgressLabel } from '@/lib/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
+import { parseRefreshBaseRefErrorPrefix } from '../../../../shared/git-remote-error'
 
 /**
  * In-frame creation state, shown in the workspace content area while a worktree
@@ -89,11 +90,36 @@ export default function WorktreeCreationPanel({
               )}
             </span>
             <span className="text-muted-foreground">
-              {entry.error ??
-                translate(
-                  'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                  'Something went wrong while creating the worktree.'
-                )}
+              {(() => {
+                const raw = entry.error
+                if (!raw) {
+                  return translate(
+                    'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
+                    'Something went wrong while creating the worktree.'
+                  )
+                }
+                // Why: errors thrown from the worktree-creation flow are tagged
+                // with a `[code]` prefix so the panel can render a localized,
+                // code-specific message instead of leaking raw git stderr.
+                const parsed = parseRefreshBaseRefErrorPrefix(raw)
+                if (!parsed) {
+                  return raw
+                }
+                if (parsed.code === 'unknown') {
+                  // Why: only the `unknown` bucket has no dedicated key — its
+                  // template interpolates {{stderr}} so the user still sees the
+                  // tail git stderr line in the user's locale.
+                  return translate(
+                    'auto.components.worktree.creation.WorktreeCreationPanel.errors.unknown',
+                    parsed.message,
+                    { stderr: parsed.message }
+                  )
+                }
+                return translate(
+                  `auto.components.worktree.creation.WorktreeCreationPanel.errors.${parsed.code}`,
+                  parsed.message
+                )
+              })()}
             </span>
             <button
               type="button"
