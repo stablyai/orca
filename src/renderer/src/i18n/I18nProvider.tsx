@@ -12,6 +12,9 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
 
   useEffect(() => {
     if (i18n.language !== locale) {
+      // Why: changeLanguage triggers the lazy locale backend, which fetches the
+      // non-English catalog before activating it — so the switch resolves real
+      // translations without bundling every locale at startup.
       void i18n.changeLanguage(locale)
     }
   }, [locale])
