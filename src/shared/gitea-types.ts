@@ -129,7 +129,9 @@ export type GiteaCreateIssueResult =
   | { ok: true; id: number; number: number; url: string }
   | { ok: false; error: string }
 
-export type GiteaMutationResult = { ok: true } | { ok: false; error: string }
+// `warning` flags a partial success (e.g. issue fields saved but a follow-up
+// label write failed) so callers still refresh while surfacing the problem.
+export type GiteaMutationResult = { ok: true; warning?: string } | { ok: false; error: string }
 
 // ─── Pull request review ───────────────────────────────────────────────
 

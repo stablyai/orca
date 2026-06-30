@@ -56,7 +56,10 @@ async function collectAssignedOrCreated(
         [filter]: 'true',
         state: 'open',
         owner: repo.owner,
-        limit: max,
+        // Why: scan a full page of owner-wide hits regardless of the requested
+        // result cap, so small `max` values don't under-scan before repo filtering
+        // and miss a matching issue that sits past the first few global hits.
+        limit: MAX_LIMIT,
         page
       }
     })
@@ -72,7 +75,7 @@ async function collectAssignedOrCreated(
       }
     }
     // A short page means there are no further results to page through.
-    if (raw.length < max) {
+    if (raw.length < MAX_LIMIT) {
       break
     }
   }
@@ -265,11 +268,13 @@ export async function updateGiteaIssue(
   const path = `/repos/${encodedRepoPath(repo)}/issues/${encodeURIComponent(String(issueNumber))}`
   // Why: skip the issue PATCH when only labels changed — labels use a dedicated
   // endpoint, so an empty PATCH is a wasted call and avoidable failure point.
+  let patched = false
   if (Object.keys(body).length > 0) {
     const result = await giteaRepoWrite<RawGiteaIssue>(repo, path, { method: 'PATCH', body })
     if (!result.ok) {
       return { ok: false, error: result.error }
     }
+    patched = true
   }
   // Label edits use a dedicated endpoint in the Gitea API.
   if (updates.labelIds !== undefined) {
@@ -278,7 +283,15 @@ export async function updateGiteaIssue(
       body: { labels: updates.labelIds }
     })
     if (!labelResult.ok) {
-      return { ok: false, error: labelResult.error }
+      // Why: the field PATCH already committed, so reporting a clean failure would
+      // leave the UI stale (it only re-syncs on ok). Surface a partial success so
+      // the caller refreshes the now-changed issue while still flagging the labels.
+      return patched
+        ? {
+            ok: true,
+            warning: `The issue was updated, but its labels could not be saved: ${labelResult.error}`
+          }
+        : { ok: false, error: labelResult.error }
     }
   }
   return { ok: true }

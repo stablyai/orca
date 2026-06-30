@@ -46,6 +46,11 @@ type RawGiteaCombinedStatusDetail = {
   statuses?: RawGiteaStatusEntry[] | null
 }
 
+const PR_FILES_PAGE_LIMIT = 100
+// Cap paging on pathological PRs (100 files/page → up to 5000) so a huge or
+// runaway diff can't loop unbounded while still covering realistic reviews.
+const MAX_PR_FILES_PAGES = 50
+
 function mapFileStatus(status: string | null | undefined): GiteaPRFileStatus {
   switch (status) {
     case 'added':
@@ -137,23 +142,35 @@ export async function listGiteaPullRequestFiles(
   if (!repo) {
     return []
   }
-  const raw = await giteaRepoGet<RawGiteaPullFile[]>(
-    repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}/files`,
-    { searchParams: { limit: 100, page: 1 } }
-  )
-  if (!Array.isArray(raw)) {
-    return []
+  // Why: page through the file list instead of stopping at the first 100, so
+  // large pull requests don't silently drop changed files from the diff/review UI.
+  const files: GiteaPRFile[] = []
+  for (let page = 1; page <= MAX_PR_FILES_PAGES; page += 1) {
+    const raw = await giteaRepoGet<RawGiteaPullFile[]>(
+      repo,
+      `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}/files`,
+      { searchParams: { limit: PR_FILES_PAGE_LIMIT, page } }
+    )
+    if (!Array.isArray(raw) || raw.length === 0) {
+      break
+    }
+    for (const entry of raw) {
+      if (!entry.filename) {
+        continue
+      }
+      files.push({
+        path: entry.filename,
+        oldPath: entry.previous_filename?.trim() || undefined,
+        status: mapFileStatus(entry.status),
+        additions: typeof entry.additions === 'number' ? entry.additions : 0,
+        deletions: typeof entry.deletions === 'number' ? entry.deletions : 0
+      })
+    }
+    if (raw.length < PR_FILES_PAGE_LIMIT) {
+      break
+    }
   }
-  return raw
-    .filter((entry): entry is RawGiteaPullFile & { filename: string } => Boolean(entry.filename))
-    .map((entry) => ({
-      path: entry.filename,
-      oldPath: entry.previous_filename?.trim() || undefined,
-      status: mapFileStatus(entry.status),
-      additions: typeof entry.additions === 'number' ? entry.additions : 0,
-      deletions: typeof entry.deletions === 'number' ? entry.deletions : 0
-    }))
+  return files
 }
 
 // Fetches the file's content at the base and head commits so the renderer can

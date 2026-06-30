@@ -87,6 +87,23 @@ describe('gitea pull requests', () => {
     expect(getMock.mock.calls[0][1]).toBe('/repos/team/app/pulls/7/files')
   })
 
+  it('pages through the file list until a short page and merges all files', async () => {
+    const fullPage = Array.from({ length: 100 }, (_, i) => ({
+      filename: `page1-${i}.ts`,
+      status: 'modified'
+    }))
+    const shortPage = [{ filename: 'page2-0.ts', status: 'added' }]
+    getMock.mockResolvedValueOnce(fullPage).mockResolvedValueOnce(shortPage)
+
+    const files = await listGiteaPullRequestFiles('/repo', 7, null)
+
+    expect(files).toHaveLength(101)
+    expect(getMock).toHaveBeenCalledTimes(2)
+    expect(getMock.mock.calls[0][2]?.searchParams).toMatchObject({ limit: 100, page: 1 })
+    expect(getMock.mock.calls[1][2]?.searchParams).toMatchObject({ limit: 100, page: 2 })
+    expect(files.at(-1)).toMatchObject({ path: 'page2-0.ts', status: 'added' })
+  })
+
   it('fetches base and head content for a modified file', async () => {
     textMock.mockResolvedValueOnce('old contents').mockResolvedValueOnce('new contents')
 

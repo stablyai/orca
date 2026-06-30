@@ -90,7 +90,9 @@ describe('gitea issues', () => {
       assigned: 'true',
       state: 'open',
       owner: 'team',
-      limit: 10
+      // Page size is decoupled from the requested cap so a small limit still
+      // scans a full page of owner-wide hits before repo filtering.
+      limit: 100
     })
   })
 
@@ -152,6 +154,23 @@ describe('gitea issues', () => {
     expect(writeMock.mock.calls[0][2]).toMatchObject({ method: 'PATCH' })
     expect(writeMock.mock.calls[1][1]).toBe('/repos/team/app/issues/5/labels')
     expect(writeMock.mock.calls[1][2]).toMatchObject({ method: 'PUT', body: { labels: [1, 2] } })
+  })
+
+  it('reports partial success when the PATCH commits but the labels write fails', async () => {
+    writeMock
+      .mockResolvedValueOnce({ ok: true, data: {} })
+      .mockResolvedValueOnce({ ok: false, error: 'no perms', status: 403 })
+    const result = await updateGiteaIssue('/repo', 5, { title: 'Renamed', labelIds: [1, 2] }, null)
+    expect(result).toEqual({ ok: true, warning: expect.stringContaining('labels') })
+    expect(writeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails cleanly when a labels-only update fails (nothing committed)', async () => {
+    writeMock.mockResolvedValue({ ok: false, error: 'no perms', status: 403 })
+    const result = await updateGiteaIssue('/repo', 5, { labelIds: [1] }, null)
+    expect(result).toEqual({ ok: false, error: 'no perms' })
+    expect(writeMock).toHaveBeenCalledTimes(1)
+    expect(writeMock.mock.calls[0][1]).toBe('/repos/team/app/issues/5/labels')
   })
 
   it('adds an issue comment', async () => {

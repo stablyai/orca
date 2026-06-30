@@ -112,7 +112,10 @@ export function mapGiteaIssue(raw: RawGiteaIssue, context: GiteaIssueContext): G
     repoOwner: context.owner,
     repoName: context.repo,
     title: raw.title?.trim() ?? '',
-    body: raw.body?.trim() || undefined,
+    // Why: GiteaIssue.body is the raw Markdown payload — trimming it would rewrite
+    // the issue's content on read, so an open-then-save round-trip could silently
+    // drop meaningful whitespace.
+    body: raw.body ?? undefined,
     state: raw.state === 'closed' ? 'closed' : 'open',
     url: raw.html_url ?? '',
     labels: mapLabelNames(raw.labels),

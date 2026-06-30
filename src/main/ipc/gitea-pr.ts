@@ -55,14 +55,24 @@ export function registerGiteaPullRequestHandlers(store: Store): void {
       if (typeof args.path !== 'string' || !args.path) {
         return { original: '', modified: '', originalIsBinary: false, modifiedIsBinary: false }
       }
+      // Why: empty/malformed base or head SHAs would make the raw-content endpoint
+      // fall back to the default branch, rendering a diff against an unintended ref.
+      if (
+        typeof args.baseSha !== 'string' ||
+        !args.baseSha ||
+        typeof args.headSha !== 'string' ||
+        !args.headSha
+      ) {
+        return { original: '', modified: '', originalIsBinary: false, modifiedIsBinary: false }
+      }
       return getGiteaPullRequestFileContents(
         repo.path,
         {
           path: args.path,
           oldPath: typeof args.oldPath === 'string' ? args.oldPath : undefined,
           status: args.status,
-          baseSha: typeof args.baseSha === 'string' ? args.baseSha : '',
-          headSha: typeof args.headSha === 'string' ? args.headSha : ''
+          baseSha: args.baseSha,
+          headSha: args.headSha
         },
         repoConnectionId(repo)
       )

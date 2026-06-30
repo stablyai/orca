@@ -55,10 +55,21 @@ function normalizeNumberArray(value: unknown): number[] | undefined {
 }
 
 function normalizeIssueUpdate(value: unknown): GiteaIssueUpdate | null {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
   const input = value as GiteaIssueUpdate
+  // Why: reject payloads with no recognized field so a no-op update can't skip
+  // every write and still report success to the renderer.
+  const hasKnownUpdate =
+    input.title !== undefined ||
+    input.body !== undefined ||
+    input.state !== undefined ||
+    input.assignees !== undefined ||
+    input.labelIds !== undefined
+  if (!hasKnownUpdate) {
+    return null
+  }
   if (input.title !== undefined && typeof input.title !== 'string') {
     return null
   }
