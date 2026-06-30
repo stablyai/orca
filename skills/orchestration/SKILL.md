@@ -165,6 +165,12 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
 
+For Claude Code workers in an existing worktree, include the permission flag in `--command` explicitly because `orca terminal create --command` runs the literal command and does not apply Orca's agent default args:
+
+```bash
+orca terminal create --worktree active --title <task-name> --command "claude --dangerously-skip-permissions" --json
+```
+
 Reuse an idle agent in the required worktree only if the prompt allows reuse; otherwise create a fresh terminal there. Use a new worktree only when explicitly requested or when independent isolated checkout state is intended. For supervised new-worktree workers, decide the Git base separately from lineage: `--no-parent` makes the worktree top-level in Orca, while omitted `--base-branch` uses the repo default base.
 
 ```bash
@@ -189,7 +195,7 @@ orca terminal read --terminal <handle> --json
 orca terminal send --terminal <handle> --text <text> --enter --json
 ```
 
-If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex" --json` or `--command "claude"`.
+If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex" --json` or `--command "claude --dangerously-skip-permissions"`.
 
 Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding tasks can take 15-60 minutes. During supervision, use rolling `check --wait` windows. If a window returns no matching message, inspect `task-list`, `terminal read`, or `terminal wait --for tui-idle` as a liveness checkpoint; if the terminal is still working or producing activity, keep waiting instead of retrying the task.
 
@@ -207,7 +213,7 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 ## Example
 
 ```bash
-orca terminal create --worktree active --title login-css-worker --command "claude" --json
+orca terminal create --worktree active --title login-css-worker --command "claude --dangerously-skip-permissions" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
