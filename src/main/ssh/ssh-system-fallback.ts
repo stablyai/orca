@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: system-ssh process wrapping and fallback file operations share cleanup contracts. */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { constants } from 'node:fs'
-import { existsSync, mkdirSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync } from 'node:fs'
 import { lstat, open, readdir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -22,16 +22,29 @@ function getControlSocketPath(target: SshTarget): string | null {
   if (process.platform === 'win32') {
     return null
   }
-  // Why: target.id is already unique per target; include host/port/user so
-  // sockets remain stable if a target is removed and re-added with the same id.
-  const key = `${target.id}:${target.configHost || target.host}:${target.port || 22}:${target.username || ''}`
+  // Why: the socket identity must match the *effective* connection. target.id
+  // keeps distinct targets apart; the routing fields ensure that editing a
+  // target's proxy/identity config invalidates a still-alive master (ControlPersist)
+  // built on the old route instead of silently reusing it.
+  const key = JSON.stringify({
+    id: target.id,
+    host: target.configHost || target.host,
+    port: target.port || 22,
+    user: target.username || '',
+    proxyCommand: target.proxyCommand || '',
+    jumpHost: target.jumpHost || '',
+    identityFile: target.identityFile || '',
+    identityAgent: target.identityAgent || '',
+    identitiesOnly: target.identitiesOnly || false
+  })
   const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
   const dir = pathJoin(tmpdir(), 'orca-ssh-ctl')
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
-    // Why: verify dir is a real directory owned by us with tight permissions.
-    // mkdirSync mode is ignored on pre-existing dirs, so stat after to confirm.
-    const st = statSync(dir)
+    // Why: lstat (not stat) so a planted symlink fails isDirectory(); confirm
+    // we own it with tight perms, since mkdirSync's mode is ignored on a
+    // pre-existing dir. Disable multiplexing rather than repair a dir we didn't make.
+    const st = lstatSync(dir)
     if (!st.isDirectory() || st.uid !== process.getuid!() || (st.mode & 0o77) !== 0) {
       return null
     }
