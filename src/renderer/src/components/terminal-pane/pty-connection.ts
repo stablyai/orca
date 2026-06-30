@@ -101,6 +101,10 @@ import {
   observeTerminalBracketedPasteModeOutput
 } from './terminal-bracketed-paste'
 import { executeTerminalStartupCommandPaste } from './terminal-startup-command-paste'
+import {
+  waitForStableStartupGrid,
+  type TerminalStartupGridSettleHandle
+} from './terminal-startup-grid-settle'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
@@ -824,6 +828,8 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let connectFallbackTimer: ReturnType<typeof setTimeout> | null = null
+  let startupGridSettleHandle: TerminalStartupGridSettleHandle | null = null
+  let startupGridSettledForConnect = false
   let connectStarted = false
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
@@ -2403,8 +2409,55 @@ export function connectPanePty(
       connectFrame = null
     }
   }
+  const measureStartupGrid = (): { cols: number; rows: number } | null => {
+    safeFit(pane)
+    const cols = pane.terminal.cols
+    const rows = pane.terminal.rows
+    return cols > 0 && rows > 0 ? { cols, rows } : null
+  }
+  const shouldSettleStartupGridBeforeConnect = (): boolean =>
+    Boolean(paneStartup?.command) &&
+    deps.isVisibleRef.current &&
+    !connectionId &&
+    runtimeEnvironmentId === null
+  const settleStartupGridBeforeConnect = (connect: () => void): void => {
+    startupGridSettleHandle?.cancel()
+    let settledSynchronously = false
+    // Why: local startup commands can launch a TUI before the split-pane grid
+    // has settled; spawn from a briefly stable grid so the TUI paints cleanly.
+    const handle = waitForStableStartupGrid({
+      isAlive: () => !disposed,
+      measure: measureStartupGrid,
+      onSettled: () => {
+        settledSynchronously = true
+        startupGridSettleHandle = null
+        connect()
+      },
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => {
+        if (typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(handle)
+        }
+      }
+    })
+    if (!settledSynchronously) {
+      startupGridSettleHandle = handle
+    }
+  }
   const runDeferredConnect = (): void => {
     if (connectStarted) {
+      return
+    }
+    if (!startupGridSettledForConnect && shouldSettleStartupGridBeforeConnect()) {
+      cancelScheduledConnectFrame()
+      if (connectFallbackTimer !== null) {
+        clearTimeout(connectFallbackTimer)
+        connectFallbackTimer = null
+      }
+      settleStartupGridBeforeConnect(() => {
+        startupGridSettledForConnect = true
+        runDeferredConnect()
+      })
       return
     }
     connectStarted = true
@@ -4705,6 +4758,8 @@ export function connectPanePty(
       // rAF so a torn-down pane cannot keep fitting/resizing after disposal.
       ptySizeReconcileHandle?.cancel()
       ptySizeReconcileHandle = null
+      startupGridSettleHandle?.cancel()
+      startupGridSettleHandle = null
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }
