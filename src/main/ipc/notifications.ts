@@ -26,7 +26,6 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
@@ -228,10 +227,6 @@ function getNotificationInboxSnapshot(
   }
 }
 
-function syncNotificationInboxBadge(notificationInbox: Map<string, NotificationInboxEntry>): void {
-  setUnreadDockBadgeCount(getUnreadNotificationInboxCount(notificationInbox))
-}
-
 function pruneNotificationInbox(notificationInbox: Map<string, NotificationInboxEntry>): void {
   while (notificationInbox.size > MAX_NOTIFICATION_INBOX_ENTRIES) {
     const oldest = notificationInbox.keys().next()
@@ -284,13 +279,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     for (const entry of notificationInbox.values()) {
       entry.unread = false
     }
-    syncNotificationInboxBadge(notificationInbox)
     return getNotificationInboxSnapshot(notificationInbox)
   })
 
   ipcMain.handle('notifications:clearInbox', (): NotificationInboxResult => {
     notificationInbox.clear()
-    syncNotificationInboxBadge(notificationInbox)
     return getNotificationInboxSnapshot(notificationInbox)
   })
 
@@ -382,7 +375,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           ...(args.worktreeLabel ? { worktreeLabel: args.worktreeLabel } : {})
         })
         pruneNotificationInbox(notificationInbox)
-        syncNotificationInboxBadge(notificationInbox)
       }
 
       // Why: paired mobile clients should follow the same user-facing

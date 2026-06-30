@@ -10,6 +10,7 @@ import { BellRing, Bot, Inbox, MailCheck, Siren, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { NotificationSoundSection } from './NotificationSoundSection'
+import { UnreadBadgeSection } from './UnreadBadgeSection'
 import {
   createNotificationVolumeDraftState,
   resolveNotificationVolumeDraftState,
@@ -287,6 +288,10 @@ export function NotificationsPane({
           )}
         </Button>
       </div>
+
+      <Separator />
+
+      <UnreadBadgeSection />
 
       <Separator />
 

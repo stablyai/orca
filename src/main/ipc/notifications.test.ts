@@ -479,7 +479,7 @@ describe('registerNotificationHandlers', () => {
     })
   })
 
-  it('marks inbox entries read and clears the macOS badge without closing native notifications', () => {
+  it('marks inbox entries read without touching the macOS badge or closing native notifications', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     try {
@@ -500,22 +500,22 @@ describe('registerNotificationHandlers', () => {
       expect(
         dispatchHandler({}, { source: 'agent-task-complete', worktreeId: 'repo::wt1' })
       ).toEqual({ delivered: true })
-      expect(setBadgeMock).toHaveBeenLastCalledWith('1')
+      expect(setBadgeMock).not.toHaveBeenCalled()
 
       expect(markReadHandler({})).toMatchObject({
         unreadCount: 0,
         entries: [expect.objectContaining({ unread: false })]
       })
-      expect(setBadgeMock).toHaveBeenLastCalledWith('')
+      expect(setBadgeMock).not.toHaveBeenCalled()
       expect(notificationCloseMock).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(5001)
       expect(dispatchHandler({}, { source: 'terminal-bell', worktreeId: 'repo::wt2' })).toEqual({
         delivered: true
       })
-      expect(setBadgeMock).toHaveBeenLastCalledWith('1')
+      expect(setBadgeMock).not.toHaveBeenCalled()
       expect(clearHandler({})).toEqual({ supported: true, entries: [], unreadCount: 0 })
-      expect(setBadgeMock).toHaveBeenLastCalledWith('')
+      expect(setBadgeMock).not.toHaveBeenCalled()
       expect(notificationCloseMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })

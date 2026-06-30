@@ -9,9 +9,12 @@ import userEvent from '@testing-library/user-event'
 import type {
   GlobalSettings,
   NotificationDispatchRequest,
-  NotificationInboxResult
+  NotificationInboxResult,
+  TerminalTab,
+  Worktree
 } from '../../../../shared/types'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { useAppStore } from '@/store'
 import {
   createNotificationVolumeDraftState,
   NotificationsPane,
@@ -115,10 +118,12 @@ describe('NotificationsPane', () => {
     toastError.mockClear()
     toastMessage.mockClear()
     toastSuccess.mockClear()
+    useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
   afterEach(() => {
     cleanup()
+    useAppStore.setState(useAppStore.getInitialState(), true)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: undefined
@@ -158,6 +163,95 @@ describe('NotificationsPane', () => {
     expect(screen.getByText('3 unread')).toBeInTheDocument()
     expect(screen.getByText('Unread')).toBeInTheDocument()
     expect(screen.getByText(/Agent task - orca \/ feat\/notis -/)).toBeInTheDocument()
+  })
+
+  it('renders unread app badge contributors separately from the notification inbox', async () => {
+    stubNotificationsApi()
+    useAppStore.setState({
+      worktreesByRepo: {
+        orca: [
+          {
+            id: 'orca::wt-1',
+            repoId: 'orca',
+            displayName: 'feat/notis',
+            isUnread: true
+          } as Worktree,
+          {
+            id: 'orca::wt-2',
+            repoId: 'orca',
+            displayName: 'feat/tests',
+            isUnread: false
+          } as Worktree
+        ]
+      },
+      tabsByWorktree: {
+        'orca::wt-1': [{ id: 'tab-1', title: 'Terminal 1' } as TerminalTab],
+        'orca::wt-2': [{ id: 'tab-2', title: 'Tests' } as TerminalTab]
+      },
+      unreadTerminalTabs: {
+        'tab-1': true,
+        'tab-2': true
+      }
+    })
+
+    render(<NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />)
+
+    expect(await screen.findByText('App Badge')).toBeInTheDocument()
+    expect(
+      screen.getByText('2 worktrees or tabs currently contribute to the app badge.')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Recent notifications below are separate from the app badge.')
+    ).toBeInTheDocument()
+    expect(screen.getByText('feat/notis')).toBeInTheDocument()
+    expect(screen.getByText('Unread workspace; Unread tab: Terminal 1')).toBeInTheDocument()
+    expect(screen.getByText('feat/tests')).toBeInTheDocument()
+    expect(screen.getByText('Unread tab: Tests')).toBeInTheDocument()
+  })
+
+  it('opens and clears app badge contributors through existing store actions', async () => {
+    const setActiveWorktree = vi.fn()
+    const revealWorktreeInSidebar = vi.fn()
+    const setActiveTab = vi.fn()
+    const clearWorktreeUnread = vi.fn()
+    const clearTerminalTabUnread = vi.fn()
+    stubNotificationsApi()
+    useAppStore.setState({
+      worktreesByRepo: {
+        orca: [
+          {
+            id: 'orca::wt-1',
+            repoId: 'orca',
+            displayName: 'feat/notis',
+            isUnread: true
+          } as Worktree
+        ]
+      },
+      tabsByWorktree: {
+        'orca::wt-1': [{ id: 'tab-1', title: 'Terminal 1' } as TerminalTab]
+      },
+      unreadTerminalTabs: {
+        'tab-1': true
+      },
+      setActiveWorktree,
+      revealWorktreeInSidebar,
+      setActiveTab,
+      clearWorktreeUnread,
+      clearTerminalTabUnread
+    })
+    const user = userEvent.setup()
+
+    render(<NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />)
+
+    await screen.findByText('feat/notis')
+    await user.click(screen.getByRole('button', { name: 'Open feat/notis' }))
+    await user.click(screen.getByRole('button', { name: 'Mark feat/notis read' }))
+
+    expect(setActiveWorktree).toHaveBeenCalledWith('orca::wt-1')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('orca::wt-1')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-1')
+    expect(clearWorktreeUnread).toHaveBeenCalledWith('orca::wt-1')
+    expect(clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
   })
 
   it('marks the owner-backed inbox read and updates visible unread state', async () => {
