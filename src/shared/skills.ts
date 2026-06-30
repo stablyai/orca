@@ -51,6 +51,9 @@ export type SkillDiscoveryTarget = {
    *  when the caller (e.g. a remote client) cannot supply `projectRuntime`. */
   worktreeId?: string | null
   projectRuntime?: ProjectExecutionRuntimeResolution
+  // Why: when connected to a remote Orca runtime, discovery must scan the
+  // server's filesystem via the remote RPC rather than the local host.
+  environmentId?: string | null
 }
 
 const ResolvedProjectRuntimeSchema = z.object({

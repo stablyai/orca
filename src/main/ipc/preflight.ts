@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
+import type { Store } from '../persistence'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
@@ -273,13 +275,29 @@ export async function runPreflightCheck(
   return result
 }
 
-export function registerPreflightHandlers(): void {
+export function registerPreflightHandlers(store: Store): void {
   ipcMain.handle(
     'preflight:check',
     async (
       _event,
       args?: PreflightRuntimeContext & { force?: boolean }
     ): Promise<PreflightStatus> => {
+      // Why: when connected to a remote Orca runtime, git/gh/glab are installed
+      // on the server, not the local client. Proxy to the server's preflight RPC
+      // so the check runs against the correct filesystem and shell.
+      const environmentId = store.getSettings().activeRuntimeEnvironmentId?.trim()
+      if (environmentId) {
+        const response = await callRuntimeEnvironment(
+          app.getPath('userData'),
+          environmentId,
+          'preflight.check',
+          { force: args?.force },
+          15_000
+        )
+        if (response.ok) {
+          return response.result as PreflightStatus
+        }
+      }
       return runPreflightCheck(args?.force, args)
     }
   )
