@@ -60,6 +60,29 @@ vi.mock('./runtime-environment-request-connections', () => ({
 }))
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { setTrustedRendererWebContentsId } from './trusted-renderer-ipc'
+
+const TRUSTED_WEB_CONTENTS_ID = 1
+
+function trustedEvent(): {
+  sender: {
+    id: number
+    isDestroyed: () => boolean
+    send: ReturnType<typeof vi.fn>
+    once: ReturnType<typeof vi.fn>
+    removeListener: ReturnType<typeof vi.fn>
+  }
+} {
+  return {
+    sender: {
+      id: TRUSTED_WEB_CONTENTS_ID,
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      removeListener: vi.fn()
+    }
+  }
+}
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
   return encodePairingOffer({
@@ -75,7 +98,9 @@ function handler<TArgs, TResult>(
 ): (_event: unknown, args: TArgs) => TResult | Promise<TResult> {
   const match = handleMock.mock.calls.find((call) => call[0] === channel)
   expect(match).toBeTruthy()
-  return match![1] as (_event: unknown, args: TArgs) => TResult | Promise<TResult>
+  const registered = match![1] as (_event: unknown, args: TArgs) => TResult | Promise<TResult>
+  return (event: unknown, args: TArgs): TResult | Promise<TResult> =>
+    registered(event ?? trustedEvent(), args)
 }
 
 describe('registerRuntimeEnvironmentHandlers', () => {
@@ -97,6 +122,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReset()
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
     closeRemoteRuntimeRequestConnectionMock.mockReset()
+    setTrustedRendererWebContentsId(TRUSTED_WEB_CONTENTS_ID)
   })
 
   afterEach(() => {
@@ -120,6 +146,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(onMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:subscriptionBinary'
     ])
+  })
+
+  it('rejects runtime environment calls from untrusted senders', async () => {
+    registerRuntimeEnvironmentHandlers()
+
+    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
+
+    expect(() => list({ sender: { id: 999, isDestroyed: () => false } }, undefined)).toThrow(
+      'runtimeEnvironments:list must originate from the trusted Orca renderer'
+    )
   })
 
   it('clears stale IPC registrations before registering runtime environment handlers', () => {
@@ -1404,11 +1440,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
-    expect(
-      await unsubscribe({ sender: { id: 2 } }, { subscriptionId: result.subscriptionId })
-    ).toEqual({
-      unsubscribed: false
-    })
+    expect(() =>
+      unsubscribe({ sender: { id: 2 } }, { subscriptionId: result.subscriptionId })
+    ).toThrow('runtimeEnvironments:unsubscribe must originate from the trusted Orca renderer')
     expect(close).not.toHaveBeenCalled()
 
     expect(
