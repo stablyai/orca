@@ -60,13 +60,16 @@ describe('Electron runtime package contract', () => {
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
     const releaseCommands = new Map(
       parsedWorkflow.jobs.build.strategy.matrix.include.map(({ platform, release_command }) => [
         platform,
         release_command
       ])
     )
-    const macReleaseCommand = parsedWorkflow.jobs['build-mac'].steps.find(
+    const macReleaseCommand = macWorkflow.jobs['build-mac'].steps.find(
       (step) => step.name === 'Publish release artifacts (macOS)'
     ).with.command
 
@@ -110,12 +113,45 @@ describe('Electron runtime package contract', () => {
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
     )
+    const macDispatchStep = releaseWorkflow.jobs['build-mac'].steps.find(
+      (step) => step.name === 'Run isolated macOS release build'
+    )
 
     expect(releaseWorkflowText).not.toContain('blacksmith-')
-    expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('macos-15')
+    expect(releaseWorkflow.jobs['build-mac']['runs-on']).toBe('ubuntu-latest')
+    expect(releaseWorkflow.jobs['build-mac'].permissions.actions).toBe('write')
+    expect(macDispatchStep.run).toBe('node config/scripts/run-release-mac-build-workflow.mjs')
+    expect(macDispatchStep.env.RELEASE_MAC_BUILD_WORKFLOW).toBe('release-mac-build.yml')
+    expect(macDispatchStep.env.RELEASE_MAC_BUILD_TAG).toBe('${{ needs.cut.outputs.tag }}')
     expect(buildMatrixRunners).not.toContain('blacksmith-6vcpu-macos-15')
     expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build')
     expect(releaseWorkflow.jobs['publish-release'].needs).toContain('build-mac')
+  })
+
+  it('runs the macOS release build in an isolated Blacksmith workflow', () => {
+    const releaseMacWorkflowText = readFileSync(
+      join(projectDir, '.github/workflows/release-mac-build.yml'),
+      'utf8'
+    )
+    const releaseMacWorkflow = parse(releaseMacWorkflowText)
+    const buildMacJob = releaseMacWorkflow.jobs['build-mac']
+    const checkoutStep = buildMacJob.steps.find((step) => step.name === 'Checkout')
+    const publishStep = buildMacJob.steps.find(
+      (step) => step.name === 'Publish release artifacts (macOS)'
+    )
+
+    expect(releaseMacWorkflow['run-name']).toBe(
+      'Mac release build ${{ inputs.tag }} (${{ inputs.release_run_id }})'
+    )
+    expect(releaseMacWorkflow.on.workflow_dispatch.inputs.tag.required).toBe(true)
+    expect(releaseMacWorkflow.on.workflow_dispatch.inputs.release_run_id.required).toBe(true)
+    expect(buildMacJob['runs-on']).toBe('blacksmith-6vcpu-macos-15')
+    expect(checkoutStep.with.ref).toBe('refs/tags/${{ inputs.tag }}')
+    expect(publishStep.with.command).toContain('ORCA_MAC_RELEASE=1')
+    expect(publishStep.with.command).toContain('electron-builder')
+    expect(publishStep.with.command).toContain('--mac --publish always')
+    expect(releaseMacWorkflowText).not.toContain('signpath/')
+    expect(releaseMacWorkflowText).not.toContain('SIGNPATH_')
   })
 
   it('preflights SignPath module install before Windows signing side effects', () => {
