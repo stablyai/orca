@@ -6,6 +6,11 @@ import { getCreationProgressLabel } from '@/lib/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 import { parseRefreshBaseRefErrorPrefix } from '../../../../shared/git-remote-error'
 
+// Why: single source of truth for the i18n path so a panel rename
+// doesn't require hunting through 5 locale files.
+const WORKTREE_PANEL_ERROR_KEY_PREFIX =
+  'auto.components.worktree.creation.WorktreeCreationPanel.errors' as const
+
 /**
  * In-frame creation state, shown in the workspace content area while a worktree
  * is being created. Presented as a faux tab: a tab strip carrying the new
@@ -109,14 +114,12 @@ export default function WorktreeCreationPanel({
                   // Why: only the `unknown` bucket has no dedicated key — its
                   // template interpolates {{message}} so the user still sees the
                   // friendly prefix (e.g. "Could not refresh base ref ...").
-                  return translate(
-                    'auto.components.worktree.creation.WorktreeCreationPanel.errors.unknown',
-                    parsed.message,
-                    { message: parsed.message }
-                  )
+                  return translate(`${WORKTREE_PANEL_ERROR_KEY_PREFIX}.unknown`, parsed.message, {
+                    message: parsed.message
+                  })
                 }
                 return translate(
-                  `auto.components.worktree.creation.WorktreeCreationPanel.errors.${parsed.code}`,
+                  `${WORKTREE_PANEL_ERROR_KEY_PREFIX}.${parsed.code}`,
                   parsed.message
                 )
               })()}
