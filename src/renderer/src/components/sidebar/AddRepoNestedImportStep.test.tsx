@@ -92,6 +92,58 @@ describe('AddRepoNestedImportStep', () => {
     expect(html).not.toContain('Project group')
   })
 
+  it('omits the open-as-folder action when no handler is provided', () => {
+    const html = renderStepMarkup()
+
+    expect(html).not.toContain('Open as folder')
+  })
+
+  it('invokes the open-as-folder handler without importing repos', () => {
+    const onImport = vi.fn()
+    const onOpenAsFolder = vi.fn()
+    const host = document.createElement('div')
+    container = host
+    document.body.appendChild(host)
+    root = createRoot(host)
+
+    act(() => {
+      root?.render(
+        <TooltipProvider>
+          <Dialog open>
+            <AddRepoNestedImportStep
+              scan={scan}
+              groupName=""
+              selectedPaths={new Set(scan.repos.map((repo) => repo.path))}
+              isAdding={false}
+              scanInProgress={false}
+              onGroupNameChange={vi.fn()}
+              onSelectedPathsChange={vi.fn()}
+              onImport={onImport}
+              onOpenAsFolder={onOpenAsFolder}
+              onStopScan={vi.fn()}
+            />
+          </Dialog>
+        </TooltipProvider>
+      )
+    })
+
+    act(() => {
+      findButton(host, 'Open as folder').click()
+    })
+
+    expect(onOpenAsFolder).toHaveBeenCalledTimes(1)
+    expect(onImport).not.toHaveBeenCalled()
+  })
+
+  it('keeps the open-as-folder action enabled even when no repos are selected', () => {
+    const html = renderStepMarkup({ selectedPaths: new Set(), onOpenAsFolder: vi.fn() })
+
+    // Why: the folder shortcut ignores the per-repo selection, so it must stay
+    // usable when the separate/group buttons are disabled by an empty selection.
+    expect(html).toMatch(/<button[^>]*>[^<]*Open as folder<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
+  })
+
   it('disables both import actions while scanning', () => {
     const html = renderStepMarkup({ scanInProgress: true })
 

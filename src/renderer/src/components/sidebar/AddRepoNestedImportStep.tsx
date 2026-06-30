@@ -20,6 +20,9 @@ type AddRepoNestedImportStepProps = {
   onGroupNameChange: (value: string) => void
   onSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   onImport: (mode: 'group' | 'separate') => void
+  // Why: optional escape hatch (local scans only) — add the scanned parent as a
+  // single non-git folder project instead of importing the repos found inside it.
+  onOpenAsFolder?: () => void
   onStopScan: () => void
 }
 
@@ -32,23 +35,30 @@ export function AddRepoNestedImportStep({
   onGroupNameChange,
   onSelectedPathsChange,
   onImport,
+  onOpenAsFolder,
   onStopScan
 }: AddRepoNestedImportStepProps): React.JSX.Element {
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
   const groupNameInputId = useId()
-  const [pendingImportMode, setPendingImportMode] = useState<'group' | 'separate' | null>(null)
-  const showSeparateSpinner = isAdding && pendingImportMode === 'separate'
-  const showGroupSpinner = isAdding && pendingImportMode === 'group'
+  const [pendingAction, setPendingAction] = useState<'group' | 'separate' | 'folder' | null>(null)
+  const showSeparateSpinner = isAdding && pendingAction === 'separate'
+  const showGroupSpinner = isAdding && pendingAction === 'group'
+  const showFolderSpinner = isAdding && pendingAction === 'folder'
 
   useEffect(() => {
     if (!isAdding) {
-      setPendingImportMode(null)
+      setPendingAction(null)
     }
   }, [isAdding])
 
   const handleImport = (mode: 'group' | 'separate'): void => {
-    setPendingImportMode(mode)
+    setPendingAction(mode)
     onImport(mode)
+  }
+
+  const handleOpenAsFolder = (): void => {
+    setPendingAction('folder')
+    onOpenAsFolder?.()
   }
   const repoCountLabel =
     scan.repos.length === 1
@@ -137,7 +147,32 @@ export function AddRepoNestedImportStep({
             placeholder={folderName}
           />
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {onOpenAsFolder ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleOpenAsFolder}
+                  disabled={isAdding || scanInProgress}
+                  variant="outline"
+                  className="mr-auto"
+                >
+                  {showFolderSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  {translate(
+                    'auto.components.sidebar.AddRepoNestedImportStep.e41565e2bb',
+                    'Open as folder'
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+                {translate(
+                  'auto.components.sidebar.AddRepoNestedImportStep.b42b7b062c',
+                  'Add {{value0}} as a single folder project without importing the repositories inside it.',
+                  { value0: folderName }
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           <Button
             onClick={() => handleImport('separate')}
             disabled={isAdding || scanInProgress || selectedPaths.size === 0}

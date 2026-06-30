@@ -50,10 +50,13 @@ export function useAddRepoNestedImportFlow({
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
+  handleOpenNestedAsFolder: () => Promise<void>
   resetNestedImportFlow: () => void
   trackNestedBackAction: () => void
 } {
   const nestedImportGenRef = useRef(0)
+  const addNonGitFolder = useAppStore((s) => s.addNonGitFolder)
+  const closeModal = useAppStore((s) => s.closeModal)
 
   const resetNestedImportFlow = useCallback((): void => {
     nestedImportGenRef.current++
@@ -236,5 +239,31 @@ export function useAddRepoNestedImportFlow({
     ]
   )
 
-  return { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction }
+  // Why: escape hatch from the nested-repo review — add the scanned parent as a
+  // single non-git folder project instead of importing each repo found inside.
+  // Gated by the caller to local scans; addNonGitFolder routes local-only.
+  const handleOpenNestedAsFolder = useCallback(async (): Promise<void> => {
+    if (!nestedScan) {
+      return
+    }
+    const gen = ++nestedImportGenRef.current
+    setIsAdding(true)
+    try {
+      const repo = await addNonGitFolder(nestedScan.selectedPath)
+      if (repo) {
+        closeModal()
+      }
+    } finally {
+      if (gen === nestedImportGenRef.current) {
+        setIsAdding(false)
+      }
+    }
+  }, [addNonGitFolder, closeModal, nestedScan, setIsAdding])
+
+  return {
+    handleImportNestedRepos,
+    handleOpenNestedAsFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  }
 }

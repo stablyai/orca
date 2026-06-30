@@ -3458,7 +3458,9 @@
           "8401a7a0d0": "repos 1개",
           "d4f1df62ef": "repos {{value0}}개",
           "b4263a2ac4": "{{value1}}에서 {{value0}}을(를) 찾았습니다.",
-          "24eda6c8b2": "스캔 중... {{value0}}"
+          "24eda6c8b2": "스캔 중... {{value0}}",
+          "e41565e2bb": "Open as folder",
+          "b42b7b062c": "Add {{value0}} as a single folder project without importing the repositories inside it."
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "스캔 중지",
