@@ -101,6 +101,25 @@ export function measureProjectHeaderDragRects(
   bucketKey?: ProjectHeaderDragBucketKey
 ): ProjectHeaderDragRect[] {
   const containerRect = container.getBoundingClientRect()
+  // Every header (project OR group) bounds the block of the project above it —
+  // a project's worktrees end where the next header begins — so collect all
+  // header tops as block boundaries.
+  const boundaryTops: number[] = []
+  container
+    .querySelectorAll<HTMLElement>('[data-repo-header-id], [data-project-group-header-id]')
+    .forEach((element) => {
+      boundaryTops.push(resolveVirtualRowTop(element, container, containerRect))
+    })
+  boundaryTops.sort((left, right) => left - right)
+  // The last project's block runs to the bottom of the last rendered row (not
+  // scrollHeight, which can exceed rendered content).
+  let contentBottom = boundaryTops.at(-1) ?? 0
+  container.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]').forEach((element) => {
+    const rowBottom =
+      resolveVirtualRowTop(element, container, containerRect) +
+      element.getBoundingClientRect().height
+    contentBottom = Math.max(contentBottom, rowBottom)
+  })
   const rects: ProjectHeaderDragRect[] = []
   container.querySelectorAll<HTMLElement>('[data-repo-header-id]').forEach((element) => {
     const repoId = element.getAttribute('data-repo-header-id')
@@ -113,14 +132,17 @@ export function measureProjectHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
-    const rect = element.getBoundingClientRect()
     const top = resolveVirtualRowTop(element, container, containerRect)
+    // Why: a project's drop footprint is its whole block (header + worktrees),
+    // not just the header row, so the drop line lands below its worktrees
+    // instead of inside them. Extend to the next header's top (project or group).
+    const next = boundaryTops.find((boundaryTop) => boundaryTop > top)
     rects.push({
       repoId,
       bucketKey: elementBucketKey,
       headerIndex,
       top,
-      bottom: top + rect.height
+      bottom: next ?? contentBottom
     })
   })
   rects.sort((left, right) => left.top - right.top)

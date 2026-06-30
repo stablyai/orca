@@ -192,6 +192,21 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
     expect(result?.intoGroupId).toBe('2')
     expect(result?.dropIndex).toBe(1) // appended after group:2's project
   })
+
+  it('drops after the last project at its block bottom, not its header bottom', () => {
+    // Block-extent rects (as measureProjectHeaderDragRects now produces): project
+    // "a" spans its whole block 0..300 (header + worktrees), not a 28px header.
+    // Dropping over its lower worktrees must land the line below the block.
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 280,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [{ repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 300 }],
+      groupZones: []
+    })
+    expect(result?.dropIndex).toBe(1)
+    expect(result?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(300)
+  })
 })
 
 describe('getProjectGroupOrderForSidebarDrop', () => {
