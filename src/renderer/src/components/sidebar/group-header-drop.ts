@@ -1,8 +1,11 @@
 // group-header-drop.ts
 import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
-import { mapSidebarProjectHeaderDropIndexToSiblingInsertIndex } from './project-header-drop'
+import {
+  INDICATOR_GAP_PX,
+  mapSidebarProjectHeaderDropIndexToSiblingInsertIndex
+} from './project-header-drop'
 import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
-import { getVirtualRowStart } from './sidebar-virtual-row-offset'
+import { resolveVirtualRowTop } from './sidebar-virtual-row-offset'
 import type { Row } from './worktree-list-groups'
 import type { ProjectGroup } from '../../../../shared/types'
 
@@ -19,8 +22,6 @@ export type GroupHeaderDropPreview = {
   dropIndex: number
   dropIndicatorY: number
 }
-
-const INDICATOR_GAP_PX = 4
 
 export { mapSidebarProjectHeaderDropIndexToSiblingInsertIndex as mapSidebarGroupDropIndexToSiblingInsertIndex }
 
@@ -76,12 +77,7 @@ export function measureGroupHeaderDragRects(
       return
     }
     const rect = element.getBoundingClientRect()
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
+    const top = resolveVirtualRowTop(element, container, containerRect)
     rects.push({ groupId, siblingIndex, top, bottom: top + rect.height })
   })
   rects.sort((left, right) => left.top - right.top)

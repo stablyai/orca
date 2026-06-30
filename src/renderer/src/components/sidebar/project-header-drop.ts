@@ -1,6 +1,6 @@
 import { getEffectiveProjectGroupManualRank } from '../../../../shared/project-groups'
 import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
-import { getVirtualRowStart } from './sidebar-virtual-row-offset'
+import { resolveVirtualRowTop } from './sidebar-virtual-row-offset'
 import type { Row } from './worktree-list-groups'
 import type { Repo } from '../../../../shared/types'
 
@@ -17,7 +17,7 @@ export type ProjectHeaderDragRect = {
   bottom: number
 }
 
-const INDICATOR_GAP_PX = 4
+export const INDICATOR_GAP_PX = 4
 
 export function getProjectHeaderDragBucketKey(
   repo: Pick<Repo, 'projectGroupId'>
@@ -103,12 +103,7 @@ export function measureProjectHeaderDragRects(
       return
     }
     const rect = element.getBoundingClientRect()
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
+    const top = resolveVirtualRowTop(element, container, containerRect)
     rects.push({
       repoId,
       bucketKey: elementBucketKey,
@@ -165,14 +160,7 @@ export function measureProjectGroupHeaderDropZones(container: HTMLElement): Proj
       return
     }
     const rect = element.getBoundingClientRect()
-    // Why: mirrors measureProjectHeaderDragRects / measureGroupHeaderDragRects so
-    // sticky-pinned virtual rows don't skew the coordinate space.
-    const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
-    const virtualRowStart = getVirtualRowStart(virtualRow)
-    const top =
-      virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
+    const top = resolveVirtualRowTop(element, container, containerRect)
     const rawCount = element.getAttribute('data-project-group-project-count')
     const projectCount = rawCount === null ? 0 : Number(rawCount)
     zones.push({

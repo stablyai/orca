@@ -2,6 +2,7 @@ import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
 import type { Repo } from '../../../../shared/types'
+import { isHeaderDragHandleTarget, isHeaderActionTarget } from './header-drag-target-predicates'
 
 export type RepoDragState = {
   draggingRepoId: string | null
@@ -54,26 +55,16 @@ export const PROJECT_HEADER_DRAG_THRESHOLD_PX = 4
 
 const REPO_HEADER_DRAG_HANDLE_SELECTOR = '[data-repo-header-drag-handle]'
 
-const REPO_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-
 export function isProjectHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-  const dragHandle = target.closest(REPO_HEADER_DRAG_HANDLE_SELECTOR)
-  return dragHandle !== null && currentTarget.contains(dragHandle)
+  return isHeaderDragHandleTarget(target, currentTarget, REPO_HEADER_DRAG_HANDLE_SELECTOR)
 }
 
 export function isRepoHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
-    return false
-  }
-  return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
+  return isHeaderActionTarget(target, currentTarget)
 }

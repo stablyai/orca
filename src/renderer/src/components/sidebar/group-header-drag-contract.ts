@@ -3,6 +3,7 @@ import type { PointerEvent } from 'react'
 
 import type { GroupHeaderDragRect } from './group-header-drop'
 import type { ProjectGroup } from '../../../../shared/types'
+import { isHeaderDragHandleTarget, isHeaderActionTarget } from './header-drag-target-predicates'
 
 export type GroupDragState = {
   draggingGroupId: string | null
@@ -45,26 +46,16 @@ export type GroupHeaderDragController = {
 
 const GROUP_HEADER_DRAG_HANDLE_SELECTOR = '[data-group-header-drag-handle]'
 
-const GROUP_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-
 export function isGroupHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-  const dragHandle = target.closest(GROUP_HEADER_DRAG_HANDLE_SELECTOR)
-  return dragHandle !== null && currentTarget.contains(dragHandle)
+  return isHeaderDragHandleTarget(target, currentTarget, GROUP_HEADER_DRAG_HANDLE_SELECTOR)
 }
 
 export function isGroupHeaderActionTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
-    return false
-  }
-  return currentTarget.contains(target) && target.closest(GROUP_HEADER_ACTION_SELECTOR) !== null
+  return isHeaderActionTarget(target, currentTarget)
 }
