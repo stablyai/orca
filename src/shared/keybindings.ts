@@ -31,6 +31,8 @@ export type KeybindingActionId =
   | 'worktree.palette'
   | 'worktree.navigateUp'
   | 'worktree.navigateDown'
+  | 'project.navigateNext'
+  | 'project.navigatePrevious'
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
@@ -255,6 +257,25 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+  },
+  {
+    id: 'project.navigateNext',
+    title: 'Next project',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'project', 'repo', 'project group', 'next', 'switch'],
+    // Why: ship unbound — every natural chord is already taken (Cmd+1-9,
+    // Cmd+Shift+Up/Down, Cmd/Ctrl+Shift+Left/Right), so users bind it in Settings.
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'project.navigatePrevious',
+    title: 'Previous project',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'project', 'repo', 'project group', 'previous', 'switch'],
+    // Why: ship unbound for the same reason as project.navigateNext.
+    defaultBindings: platformBindings([])
   },
   {
     id: 'workspace.create',
