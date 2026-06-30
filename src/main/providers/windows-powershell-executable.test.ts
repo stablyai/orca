@@ -14,6 +14,7 @@ const WIN_ENV: NodeJS.ProcessEnv = {
 }
 
 const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+const PATH_PWSH7 = 'D:\\Tools\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 // The Microsoft Store App Execution Alias stub for pwsh — a zero-byte reparse
 // point under WindowsApps that ConPTY's CreateProcessW rejects with error 5.
@@ -38,6 +39,23 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
         isRealExecutable: (p) => p === PWSH7
       })
     ).toBe(PWSH7)
+  })
+
+  it('repro: resolves pwsh.exe from a real PATH entry when standard roots miss', () => {
+    expect(
+      resolveWindowsPowerShellExecutablePath('pwsh.exe', {
+        platform: 'win32',
+        env: {
+          ...WIN_ENV,
+          Path: [
+            'relative-tools',
+            'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps',
+            'D:\\Tools\\PowerShell\\7'
+          ].join(';')
+        },
+        isRealExecutable: (p) => p === PATH_PWSH7
+      })
+    ).toBe(PATH_PWSH7)
   })
 
   it('resolves powershell.exe to inbox System32 WindowsPowerShell', () => {
@@ -92,6 +110,18 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
     })
     expect(chain).toEqual([WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
     expect(chain).not.toContain(PWSH_STORE_ALIAS)
+  })
+
+  it('orders PATH-resolved pwsh before Windows PowerShell when standard roots miss', () => {
+    const chain = resolveWindowsPowerShellSpawnChain('pwsh.exe', {
+      platform: 'win32',
+      env: {
+        ...WIN_ENV,
+        Path: 'D:\\Tools\\PowerShell\\7'
+      },
+      isRealExecutable: (p) => p === PATH_PWSH7 || p === WINDOWS_POWERSHELL
+    })
+    expect(chain).toEqual([PATH_PWSH7, WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
   })
 
   it('always ends with cmd.exe even when no PowerShell resolves', () => {

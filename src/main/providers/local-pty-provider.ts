@@ -5,7 +5,11 @@ files without a cleaner ownership seam. */
 import { basename, delimiter } from 'node:path'
 import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from './windows-powershell'
 import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
@@ -389,6 +393,16 @@ export class LocalPtyProvider implements IPtyProvider {
       // the shared resolver can still fall back to inbox powershell.exe when
       // pwsh.exe was requested but is unavailable.
       const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+      const resolvedShellFamily: WindowsPowerShellShellFamily =
+        normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+          ? normalizedShellFamily
+          : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+            ? normalizedShellFamily
+            : undefined
+      const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+        shellFamily: resolvedShellFamily,
+        implementation: powerShellImplementation
+      })
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
       if (resolvedGitBashPath) {
@@ -398,14 +412,9 @@ export class LocalPtyProvider implements IPtyProvider {
       } else {
         shellPath = shouldResolvePowerShellFamily
           ? (resolveEffectiveWindowsPowerShell({
-              shellFamily:
-                normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                  ? 'powershell.exe'
-                  : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                    ? normalizedShellFamily
-                    : undefined,
+              shellFamily: resolvedShellFamily,
               implementation: powerShellImplementation,
-              pwshAvailable: this.opts.pwshAvailable?.() ?? false
+              pwshAvailable: shouldProbePwsh ? (this.opts.pwshAvailable?.() ?? false) : false
             }) ?? shellFamily)
           : shellFamily
       }

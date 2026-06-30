@@ -17,7 +17,11 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from '../providers/windows-powershell'
 import {
   buildWindowsPowerShellSpawnAttempts,
   type WindowsShellSpawnAttempt
@@ -589,6 +593,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // one-off override. Normalize both forms back to the PowerShell family so
     // the shared resolver can still fall back to inbox powershell.exe when
     // pwsh.exe was requested but is unavailable.
+    const resolvedShellFamily: WindowsPowerShellShellFamily =
+      normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+        ? normalizedShellFamily
+        : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+          ? normalizedShellFamily
+          : undefined
+    const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+      shellFamily: resolvedShellFamily,
+      implementation: opts.terminalWindowsPowerShellImplementation
+    })
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
@@ -599,14 +613,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     } else {
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
-            shellFamily:
-              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                ? 'powershell.exe'
-                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                  ? normalizedShellFamily
-                  : undefined,
+            shellFamily: resolvedShellFamily,
             implementation: opts.terminalWindowsPowerShellImplementation,
-            pwshAvailable: isPwshAvailable()
+            pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
           }) ?? shellPath)
         : shellPath
     }

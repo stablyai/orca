@@ -1374,7 +1374,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('falls back to powershell.exe when PowerShell 7 is selected but unavailable on Windows', () => {
+  it('keeps PowerShell 7 selected when the pwsh availability probe is cold-false on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1397,13 +1397,14 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      WINDOWS_POWERSHELL_ABS,
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
+    expect(isPwshAvailableMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable on Windows', () => {
+  it('keeps a pwsh.exe shellOverride when the pwsh availability probe is cold-false on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1426,10 +1427,11 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      WINDOWS_POWERSHELL_ABS,
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
+    expect(isPwshAvailableMock).not.toHaveBeenCalled()
   })
 
   it('ignores the PowerShell implementation setting for cmd.exe on Windows', () => {
@@ -2215,25 +2217,28 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
   // Why: a busy machine right after an upgrade can make one probe fail; the
   // retry must keep a genuinely healthy daemon out of degraded mode. Windows
   // short-circuits checkPtySpawnHealth, so this is a POSIX-only behavior.
-  itOnPosixHost('retries once and resolves when the first probe fails but the second succeeds', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    spawnMock
-      .mockImplementationOnce(() => {
-        const proc = mockPtyProcess()
-        queueMicrotask(() => proc._simulateExit(1))
-        return proc
-      })
-      .mockImplementationOnce(() => {
-        const proc = mockPtyProcess()
-        queueMicrotask(() => proc._simulateExit(0))
-        return proc
-      })
+  itOnPosixHost(
+    'retries once and resolves when the first probe fails but the second succeeds',
+    async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      spawnMock
+        .mockImplementationOnce(() => {
+          const proc = mockPtyProcess()
+          queueMicrotask(() => proc._simulateExit(1))
+          return proc
+        })
+        .mockImplementationOnce(() => {
+          const proc = mockPtyProcess()
+          queueMicrotask(() => proc._simulateExit(0))
+          return proc
+        })
 
-    await expect(checkPtySpawnHealth()).resolves.toBeUndefined()
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
-  })
+      await expect(checkPtySpawnHealth()).resolves.toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
+    }
+  )
 
   itOnPosixHost('rejects after exhausting retries when every probe fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

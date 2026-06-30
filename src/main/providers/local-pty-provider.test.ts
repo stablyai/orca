@@ -526,6 +526,27 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const pwshAvailable = vi.fn(() => false)
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'pwsh.exe',
+        pwshAvailable
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe(PWSH7_ABS)
+      expect(spawnCall[1]).toContain('-EncodedCommand')
+      expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const savedCodexHome = process.env.CODEX_HOME

@@ -47,6 +47,26 @@ function readEnv(env: NodeJS.ProcessEnv, names: string[]): string | undefined {
   return undefined
 }
 
+function getPathExecutableCandidates(env: NodeJS.ProcessEnv, executable: string): string[] {
+  const pathValue = readEnv(env, ['PATH', 'Path', 'path'])
+  if (!pathValue) {
+    return []
+  }
+
+  const candidates: string[] = []
+  const seen = new Set<string>()
+  for (const rawPart of pathValue.split(pathWin32.delimiter)) {
+    const dir = rawPart.trim().replace(/^"|"$/g, '')
+    // Why: Windows' implicit current-directory search can pick up repo-local
+    // shims. Only absolute PATH entries become ConPTY launch candidates.
+    if (!pathWin32.isAbsolute(dir)) {
+      continue
+    }
+    pushUniqueCandidate(candidates, seen, pathWin32.join(dir, executable))
+  }
+  return candidates
+}
+
 function pushUniqueCandidate(
   candidates: string[],
   seen: Set<string>,
@@ -94,6 +114,9 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
       )
     }
   }
+  for (const candidate of getPathExecutableCandidates(env, 'pwsh.exe')) {
+    pushUniqueCandidate(candidates, seen, candidate)
+  }
   return candidates
 }
 
@@ -138,7 +161,7 @@ export function resolveWindowsPowerShellExecutablePath(
   }
 
   for (const candidate of getPwshCandidatePaths(env)) {
-    if (isRealExecutable(candidate)) {
+    if (!isWindowsAppExecutionAliasPath(candidate) && isRealExecutable(candidate)) {
       return candidate
     }
   }
