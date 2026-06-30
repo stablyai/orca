@@ -245,7 +245,7 @@ export type ComposerCardProps = {
   projectHostSetupOptions: ProjectHostSetupOption[]
   selectedProjectHostSetupId: string | null
   onProjectHostSetupChange: (setupId: string) => void
-  ephemeralVmRecipes: NonNullable<OrcaHooks['vmRecipes']>
+  ephemeralVmRecipes: NonNullable<OrcaHooks['environmentRecipes']>
   selectedEphemeralVmRecipeId: string | null
   onEphemeralVmRecipeChange: (recipeId: string | null) => void
   ephemeralVmRecipeError: string | null
@@ -710,7 +710,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
-  const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<NonNullable<OrcaHooks['vmRecipes']>>(
+  const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<NonNullable<OrcaHooks['environmentRecipes']>>(
     []
   )
   const [selectedEphemeralVmRecipeId, setSelectedEphemeralVmRecipeId] = useState<string | null>(
@@ -836,7 +836,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : null
         )
         const diagnosticMessages = (result.diagnostics ?? []).map((diagnostic) => {
-          const recipeLabel = `vmRecipes[${diagnostic.index}]`
+          const recipeLabel = `environmentRecipes[${diagnostic.index}]`
           const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
           return `${recipeLabel}${fieldLabel}: ${diagnostic.message}`
         })

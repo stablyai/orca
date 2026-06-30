@@ -143,17 +143,17 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
   const issueCommand = asTrimmedString(record.issueCommand)
   const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
-  const vmRecipeParse = normalizeVmRecipes(record.vmRecipes)
-  const vmRecipes = vmRecipeParse.recipes
-  const vmRecipeDiagnostics = vmRecipeParse.diagnostics
+  const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
+  const environmentRecipes = environmentRecipeParse.recipes
+  const environmentRecipeDiagnostics = environmentRecipeParse.diagnostics
 
   if (
     !setup &&
     !archive &&
     !issueCommand &&
     defaultTabs.length === 0 &&
-    vmRecipes.length === 0 &&
-    vmRecipeDiagnostics.length === 0
+    environmentRecipes.length === 0 &&
+    environmentRecipeDiagnostics.length === 0
   ) {
     return null
   }
@@ -165,7 +165,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     },
     ...(issueCommand ? { issueCommand } : {}),
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
-    ...(vmRecipes.length > 0 ? { vmRecipes } : {}),
-    ...(vmRecipeDiagnostics.length > 0 ? { vmRecipeDiagnostics } : {})
+    ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
+    ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {})
   }
 }

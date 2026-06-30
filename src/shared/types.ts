@@ -1936,8 +1936,8 @@ export type OrcaHooks = {
   }
   issueCommand?: string // Shared default command for linked GitHub issues
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
-  vmRecipes?: OrcaVmRecipe[] // Project-scoped ephemeral VM recipes
-  vmRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from vmRecipes
+  environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
+  environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
 }
 
 export type OrcaDefaultTabTemplate = {

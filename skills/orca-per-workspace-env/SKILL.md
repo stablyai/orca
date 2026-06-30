@@ -6,7 +6,7 @@ description: >-
   for each workspace. Covers first-time setup (provider prerequisites, the
   reusable base snapshot, the coding-agent auth snapshot, credentials, and
   state), not just the per-workspace lifecycle scripts. Use to stand up
-  per-workspace environments, fix a `vmRecipes` entry in `orca.yaml`, scaffold
+  per-workspace environments, fix a `environmentRecipes` entry in `orca.yaml`, scaffold
   provider lifecycle scripts, or resolve an `orca vm recipe doctor` failure.
 ---
 
@@ -38,7 +38,7 @@ Then the **per-workspace contract** (create/suspend/resume/destroy) runs fast (�
 **Quick-start (happy path):** interview the user (connection mode Orca-server vs SSH, provider, agent CLI,
 git auth — §1.2) + read the provider's CLI docs → scaffold `scripts/orca-vm/` from §7 → run the
 base-snapshot script, then the auth script (you invoke these by hand; not via `orca.yaml`) → wire
-`vmRecipes` in `orca.yaml` → `orca vm recipe doctor <id> --json` (free) → then the `--provision`
+`environmentRecipes` in `orca.yaml` → `orca vm recipe doctor <id> --json` (free) → then the `--provision`
 self-test loop (§9) until it passes.
 
 ---
@@ -48,7 +48,7 @@ self-test loop (§9) until it passes.
 Drive these with the user. **[CHECKPOINT]** steps need explicit confirmation — they spend money, take
 a long time, or need the user at the keyboard. Never create an Orca workspace or commit unless asked.
 
-1. **Inspect the repo** for an existing `vmRecipes` entry, `scripts/orca-vm/`, a state file, or setup
+1. **Inspect the repo** for an existing `environmentRecipes` entry, `scripts/orca-vm/`, a state file, or setup
    notes. If a working recipe exists, jump to Doctor (§9) instead of rebuilding.
 2. **Interview the user up front** — gather these choices and confirm them back before scaffolding
    anything. Don't pick for them (§11); don't guess.
@@ -72,7 +72,7 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
 6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code.
 7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8). The
-   workspace composer reads `vmRecipes` from the project's primary checkout of `orca.yaml`, **not** from
+   workspace composer reads `environmentRecipes` from the project's primary checkout of `orca.yaml`, **not** from
    a feature branch or worktree. So a recipe added only on a branch won't appear as a "Run on" option
    until that `orca.yaml` change is committed and merged to the project's primary branch. Tell the user
    this up front: `doctor`/`--provision` validate the scripts from the working copy on any branch, but
@@ -535,7 +535,7 @@ Once the authenticated snapshot exists, this runs on every workspace create. Def
 `orca.yaml`:
 
 ```yaml
-vmRecipes:
+environmentRecipes:
   - id: cloud-sandbox
     name: Cloud Sandbox
     create: ./scripts/orca-vm/cloud-sandbox-create.sh

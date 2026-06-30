@@ -82,7 +82,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           cleanupLastError: repo.message
         })
       }
-      const recipe = (loadHooks(repo.repo.path)?.vmRecipes ?? []).find(
+      const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
         (entry) => entry.id === runtime.recipeId
       )
       if (!recipe) {

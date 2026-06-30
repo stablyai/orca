@@ -121,7 +121,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         '    create: ./scripts/start.sh',
@@ -155,7 +155,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         '    create: ./scripts/start.sh',
@@ -204,7 +204,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
@@ -283,7 +283,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
@@ -369,7 +369,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
@@ -442,7 +442,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
@@ -511,7 +511,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
@@ -559,7 +559,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,
@@ -610,7 +610,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         `    create: ${JSON.stringify(nodeCommand(startPath))}`,

@@ -53,7 +53,7 @@ function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
           id: 'orca_yaml.exists',
           status: 'fail',
           message: `No orca.yaml found at ${yamlPath}`,
-          remediation: 'Add vmRecipes to the repo orca.yaml.'
+          remediation: 'Add environmentRecipes to the repo orca.yaml.'
         }
       ]
     }
@@ -64,12 +64,12 @@ function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
     id: 'orca_yaml.parse',
     status: hooks ? 'pass' : 'fail',
     message: hooks ? 'orca.yaml parsed successfully.' : 'orca.yaml has no supported Orca config.',
-    ...(hooks ? {} : { remediation: 'Add a vmRecipes entry to orca.yaml.' })
+    ...(hooks ? {} : { remediation: 'Add an environmentRecipes entry to orca.yaml.' })
   }
   const result = doctorEphemeralVmRecipe({
     repoPath,
     recipeId,
-    recipes: hooks?.vmRecipes ?? [],
+    recipes: hooks?.environmentRecipes ?? [],
     localExecutionSupported: true
   })
   return {
@@ -260,7 +260,7 @@ function buildProvisionFailureRemediation(stderr: string, stdout: string): strin
 
 function loadRecipe(repoPath: string, recipeId: string): OrcaVmRecipe | null {
   const hooks = parseOrcaYaml(readTextFile(join(repoPath, 'orca.yaml')))
-  return hooks?.vmRecipes?.find((entry) => entry.id === recipeId) ?? null
+  return hooks?.environmentRecipes?.find((entry) => entry.id === recipeId) ?? null
 }
 
 function formatDoctorResult(result: DoctorResult): string {

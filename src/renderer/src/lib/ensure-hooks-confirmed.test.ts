@@ -144,7 +144,7 @@ describe('ensureHooksConfirmed', () => {
     hooksCheckMock.mockResolvedValue({
       hasHooks: true,
       hooks: {
-        vmRecipes: [
+        environmentRecipes: [
           {
             id: 'cloud-sandbox',
             name: 'Cloud Sandbox',
@@ -163,7 +163,7 @@ describe('ensureHooksConfirmed', () => {
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptKind).toBe('vmRecipe')
-    expect(pending[0].data.scriptContent).toContain('# vmRecipes.cloud-sandbox')
+    expect(pending[0].data.scriptContent).toContain('# environmentRecipes.cloud-sandbox')
     expect(pending[0].data.scriptContent).toContain('create: ./scripts/start-vm.sh')
     expect(pending[0].data.scriptContent).toContain('suspend: ./scripts/suspend-vm.sh')
     expect(pending[0].data.scriptContent).toContain('resume: ./scripts/resume-vm.sh')

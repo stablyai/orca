@@ -71,7 +71,7 @@ vercel sandbox remove "$resource_id"
 The repo-local recipe entry is:
 
 ```yaml
-vmRecipes:
+environmentRecipes:
   - id: vercel-sandbox
     name: Vercel Sandbox
     command: ./scripts/orca-vm/vercel-sandbox-start.sh

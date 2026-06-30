@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
 >[number]
-type Recipe = NonNullable<OrcaHooks['vmRecipes']>[number]
+type Recipe = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 export function EphemeralVmRecipeRow({
   entry,

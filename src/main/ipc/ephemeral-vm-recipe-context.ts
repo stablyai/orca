@@ -10,7 +10,7 @@ export type EphemeralVmRecipeListResult = {
   status: 'ok' | 'error'
   repoPath: string | null
   recipes: OrcaVmRecipe[]
-  diagnostics: NonNullable<ReturnType<typeof loadHooks>>['vmRecipeDiagnostics']
+  diagnostics: NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
   message?: string
 }
 
@@ -19,7 +19,7 @@ export type EphemeralVmRecipeCatalogEntry = {
   repoName: string
   repoPath: string
   recipes: OrcaVmRecipe[]
-  diagnostics: NonNullable<ReturnType<typeof loadHooks>>['vmRecipeDiagnostics']
+  diagnostics: NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
 }
 
 export type RecipeRepoResult =
@@ -50,8 +50,8 @@ export function listRecipes(store: Store, repoId: string): EphemeralVmRecipeList
   return {
     status: 'ok',
     repoPath: repo.path,
-    recipes: hooks?.vmRecipes ?? [],
-    diagnostics: hooks?.vmRecipeDiagnostics ?? []
+    recipes: hooks?.environmentRecipes ?? [],
+    diagnostics: hooks?.environmentRecipeDiagnostics ?? []
   }
 }
 
@@ -65,8 +65,8 @@ export function listRecipeCatalog(store: Store): EphemeralVmRecipeCatalogEntry[]
         repoId: repo.id,
         repoName: repo.displayName,
         repoPath: repo.path,
-        recipes: hooks?.vmRecipes ?? [],
-        diagnostics: hooks?.vmRecipeDiagnostics ?? []
+        recipes: hooks?.environmentRecipes ?? [],
+        diagnostics: hooks?.environmentRecipeDiagnostics ?? []
       }
     })
     .filter((entry) => entry.recipes.length > 0 || entry.diagnostics.length > 0)
@@ -103,7 +103,7 @@ export function getRuntimeRecipeContext(
   if (!repo.ok) {
     throw new Error(repo.message)
   }
-  const recipe = (loadHooks(repo.repo.path)?.vmRecipes ?? []).find(
+  const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
     (entry) => entry.id === runtime.recipeId
   )
   if (!recipe) {

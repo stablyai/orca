@@ -35,10 +35,10 @@ function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
 }
 
 function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
-  return (yamlHooks?.vmRecipes ?? [])
+  return (yamlHooks?.environmentRecipes ?? [])
     .map((recipe) =>
       [
-        `# vmRecipes.${recipe.id}`,
+        `# environmentRecipes.${recipe.id}`,
         `name: ${recipe.name}`,
         recipe.description ? `description: ${recipe.description}` : null,
         `create: ${recipe.create}`,

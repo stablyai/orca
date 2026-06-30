@@ -20,8 +20,8 @@ Environments:
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
 
-VM Recipes:
-  vm recipe doctor          Validate an ephemeral VM recipe
+Environment Recipes:
+  vm recipe doctor          Validate a per-workspace environment recipe
 
 Automations:
   automations list          List scheduled Orca automations

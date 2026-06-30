@@ -34,7 +34,7 @@ import {
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
 >[number]
-type Recipe = NonNullable<OrcaHooks['vmRecipes']>[number]
+type Recipe = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 // Why: the pane leans on the skill, so the nudge is one line — the skill carries
 // provider choice, prerequisites, the snapshot build, agent auth, and validation.

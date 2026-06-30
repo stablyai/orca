@@ -83,7 +83,7 @@ export function registerEphemeralVmHandlers(store: Store): void {
       return doctorEphemeralVmRecipe({
         repoPath: repo.repo.path,
         recipeId: args.recipeId,
-        recipes: loadHooks(repo.repo.path)?.vmRecipes ?? [],
+        recipes: loadHooks(repo.repo.path)?.environmentRecipes ?? [],
         localExecutionSupported: true
       })
     }
@@ -106,7 +106,7 @@ export function registerEphemeralVmHandlers(store: Store): void {
       if (!repo.ok) {
         return { ok: false, error: repo.message, stdout: '', stderr: '' }
       }
-      const recipe = (loadHooks(repo.repo.path)?.vmRecipes ?? []).find(
+      const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
         (entry) => entry.id === args.recipeId
       )
       if (!recipe) {

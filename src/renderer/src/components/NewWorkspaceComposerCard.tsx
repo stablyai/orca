@@ -64,7 +64,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
-type EphemeralVmRecipeOption = NonNullable<OrcaHooks['vmRecipes']>[number]
+type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []

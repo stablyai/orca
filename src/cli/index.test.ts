@@ -1875,7 +1875,7 @@ describe('orca cli worktree awareness', () => {
       writeFileSync(
         path.join(repoPath, 'orca.yaml'),
         [
-          'vmRecipes:',
+          'environmentRecipes:',
           '  - id: cloud-sandbox',
           '    name: Cloud Sandbox',
           '    create: ./scripts/orca-vm/start.sh',
@@ -1916,7 +1916,7 @@ describe('orca cli worktree awareness', () => {
       writeFileSync(
         path.join(repoPath, 'orca.yaml'),
         [
-          'vmRecipes:',
+          'environmentRecipes:',
           '  - id: manual-sandbox',
           '    name: Manual Sandbox',
           '    create: ./scripts/orca-vm/start.sh'
@@ -1978,7 +1978,7 @@ describe('orca cli worktree awareness', () => {
       writeFileSync(
         path.join(repoPath, 'orca.yaml'),
         [
-          'vmRecipes:',
+          'environmentRecipes:',
           '  - id: cloud-sandbox',
           '    name: Cloud Sandbox',
           `    create: ${JSON.stringify(`${process.execPath} ./scripts/orca-vm/start.js`)}`,
@@ -2077,7 +2077,7 @@ describe('orca cli worktree awareness', () => {
       writeFileSync(
         path.join(repoPath, 'orca.yaml'),
         [
-          'vmRecipes:',
+          'environmentRecipes:',
           '  - id: cloud-sandbox',
           '    name: Cloud Sandbox',
           `    create: ${JSON.stringify(`${process.execPath} ./scripts/orca-vm/start.js`)}`,

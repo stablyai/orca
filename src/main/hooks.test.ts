@@ -194,9 +194,9 @@ describe('parseOrcaYaml', () => {
     })
   })
 
-  it('parses vmRecipes from orca.yaml', () => {
+  it('parses environmentRecipes from orca.yaml', () => {
     const yaml = [
-      'vmRecipes:',
+      'environmentRecipes:',
       '  - id: cloud-sandbox',
       '    name: Cloud Sandbox',
       '    description: Starts a per-workspace VM.',
@@ -208,7 +208,7 @@ describe('parseOrcaYaml', () => {
 
     expect(parseOrcaYaml(yaml)).toEqual({
       scripts: {},
-      vmRecipes: [
+      environmentRecipes: [
         {
           id: 'cloud-sandbox',
           name: 'Cloud Sandbox',
@@ -222,9 +222,9 @@ describe('parseOrcaYaml', () => {
     })
   })
 
-  it('parses legacy vmRecipes command and cleanup aliases', () => {
+  it('parses legacy environmentRecipes command and cleanup aliases', () => {
     const yaml = [
-      'vmRecipes:',
+      'environmentRecipes:',
       '  - id: manual-sandbox',
       '    name: Manual Sandbox',
       '    command: ./scripts/orca-vm/start-manual-sandbox.sh',
@@ -233,7 +233,7 @@ describe('parseOrcaYaml', () => {
 
     expect(parseOrcaYaml(yaml)).toEqual({
       scripts: {},
-      vmRecipes: [
+      environmentRecipes: [
         {
           id: 'manual-sandbox',
           name: 'Manual Sandbox',
@@ -244,9 +244,9 @@ describe('parseOrcaYaml', () => {
     })
   })
 
-  it('drops invalid and duplicate vmRecipes', () => {
+  it('drops invalid and duplicate environmentRecipes', () => {
     const yaml = [
-      'vmRecipes:',
+      'environmentRecipes:',
       '  - id: cloud-sandbox',
       '    name: Cloud Sandbox',
       '    create: ./scripts/orca-vm/start-cloud-sandbox.sh',
@@ -265,14 +265,14 @@ describe('parseOrcaYaml', () => {
 
     expect(parseOrcaYaml(yaml)).toEqual({
       scripts: {},
-      vmRecipes: [
+      environmentRecipes: [
         {
           id: 'cloud-sandbox',
           name: 'Cloud Sandbox',
           create: './scripts/orca-vm/start-cloud-sandbox.sh'
         }
       ],
-      vmRecipeDiagnostics: [
+      environmentRecipeDiagnostics: [
         {
           index: 1,
           field: 'id',
@@ -330,7 +330,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
         '  claude -p "test"',
         'defaultTabs:',
         '  - title: Claude',
-        'vmRecipes:',
+        'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',
         '    create: ./scripts/orca-vm/start-cloud-sandbox.sh'

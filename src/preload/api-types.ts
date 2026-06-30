@@ -2048,8 +2048,8 @@ export type PreloadApi = {
     listRecipes: (args: { repoId: string }) => Promise<{
       status: 'ok' | 'error'
       repoPath: string | null
-      recipes: OrcaHooks['vmRecipes']
-      diagnostics: NonNullable<OrcaHooks['vmRecipeDiagnostics']>
+      recipes: OrcaHooks['environmentRecipes']
+      diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
       message?: string
     }>
     listRecipeCatalog: () => Promise<
@@ -2057,8 +2057,8 @@ export type PreloadApi = {
         repoId: string
         repoName: string
         repoPath: string
-        recipes: NonNullable<OrcaHooks['vmRecipes']>
-        diagnostics: NonNullable<OrcaHooks['vmRecipeDiagnostics']>
+        recipes: NonNullable<OrcaHooks['environmentRecipes']>
+        diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
       }[]
     >
     doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>

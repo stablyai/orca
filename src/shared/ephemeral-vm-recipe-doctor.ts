@@ -38,8 +38,8 @@ export function doctorEphemeralVmRecipe(args: {
     status: recipe ? 'pass' : 'fail',
     message: recipe
       ? `Found recipe "${recipe.name}".`
-      : `Recipe "${args.recipeId}" was not found in vmRecipes.`,
-    ...(recipe ? {} : { remediation: 'Check the recipe id or add it to vmRecipes.' })
+      : `Recipe "${args.recipeId}" was not found in environmentRecipes.`,
+    ...(recipe ? {} : { remediation: 'Check the recipe id or add it to environmentRecipes.' })
   })
   if (!recipe) {
     return buildDoctorResult(args.recipeId, args.repoPath, checks)
