@@ -128,7 +128,18 @@ describe('classifyRefreshBaseRefError', () => {
     const error = new Error(
       'Command failed: git fetch\ngit@github.com: Permission denied (publickey).'
     )
-    expect(classifyRefreshBaseRefError(error).code).toBe('auth')
+    expect(classifyRefreshBaseRefError(error)).toEqual({
+      code: 'auth',
+      message: 'git@github.com: Permission denied (publickey).',
+      cause: error
+    })
+  })
+
+  it('classifies 401/403/404 from a remote URL as "remoteForbidden"', () => {
+    const error = new Error(
+      "fatal: unable to access 'https://github.com/foo/private': The requested URL returned error: 403"
+    )
+    expect(classifyRefreshBaseRefError(error).code).toBe('remoteForbidden')
   })
 
   it('classifies no-upstream stderr as "noUpstream"', () => {

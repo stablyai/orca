@@ -200,21 +200,20 @@ export type ClassifiedRefreshBaseRefError = {
 const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not exist/i
 const REMOTE_FORBIDDEN_PATTERN =
   /repository .* not found|requested url returned error: (401|403|404)/i
+const REFRESH_NETWORK_PATTERN =
+  /Could not resolve host|Network is unreachable|Connection (reset|timed out|refused)/i
+const REFRESH_AUTH_PATTERN =
+  /Authentication failed|Permission denied \(publickey\)|could not read Username/i
+const REFRESH_NO_UPSTREAM_PATTERN = /no tracking information|no upstream/i
 
 function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCode {
-  if (
-    /Could not resolve host|Network is unreachable|Connection (reset|timed out|refused)/i.test(
-      rawStderr
-    )
-  ) {
+  if (REFRESH_NETWORK_PATTERN.test(rawStderr)) {
     return 'network'
   }
-  if (
-    /Authentication failed|Permission denied \(publickey\)|could not read Username/i.test(rawStderr)
-  ) {
+  if (REFRESH_AUTH_PATTERN.test(rawStderr)) {
     return 'auth'
   }
-  if (/no tracking information|no upstream/i.test(rawStderr)) {
+  if (REFRESH_NO_UPSTREAM_PATTERN.test(rawStderr)) {
     return 'noUpstream'
   }
   if (REMOTE_REF_MISSING_PATTERN.test(rawStderr)) {
@@ -226,15 +225,11 @@ function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCo
   return 'unknown'
 }
 
-function extractStderr(message: string): string {
-  return stripCredentialsFromMessage(message)
-}
-
 export function classifyRefreshBaseRefError(error: unknown): ClassifiedRefreshBaseRefError {
   if (!(error instanceof Error)) {
     return { code: 'unknown', message: 'Git remote operation failed.' }
   }
-  const stderr = extractStderr(error.message)
+  const stderr = stripCredentialsFromMessage(error.message)
   const code = detectRefreshBaseRefErrorCode(stderr)
   const humanMessage = normalizeGitErrorMessage(error, 'fetch')
   return { code, message: humanMessage, cause: error }
