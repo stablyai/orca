@@ -69,6 +69,7 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
+import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import type { SshConnection } from './ssh-connection'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -159,6 +160,41 @@ describe('deployAndLaunchRelay', () => {
     await deployAndLaunchRelay(conn)
 
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves node concurrently with the install-state check, not after it', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand.mockResolvedValueOnce('Linux x86_64') // uname -sm
+    mockExecCommand.mockResolvedValueOnce('/home/user') // echo $HOME
+
+    // Hold the install-state check open. In the sequential implementation node
+    // resolution runs only after this resolves; in the parallel one both branches
+    // start together, so node resolution must already have fired while this hangs.
+    let releaseInstallCheck: (installed: boolean) => void = () => {}
+    vi.mocked(isRelayAlreadyInstalled).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseInstallCheck = resolve
+        })
+    )
+
+    const deployPromise = deployAndLaunchRelay(conn)
+    // Flush microtasks so platform detect completes, both Promise.all branches
+    // start, $HOME resolves, and the install-state check is invoked (then hangs).
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve()
+    }
+
+    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(1)
+    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
+
+    // Drain the rest of the happy path so the deploy promise settles cleanly.
+    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
+    mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
+    mockExecCommand.mockResolvedValueOnce('READY') // socket poll
+    releaseInstallCheck(true)
+    await deployPromise
   })
 
   it('defaults fresh relays to keep-alive-until-reset', async () => {

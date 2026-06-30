@@ -122,6 +122,32 @@ export async function deployAndLaunchRelay(
   }
 }
 
+// Why: resolve the remote home, derive the versioned relay dir, and check
+// whether the relay is already installed. Extracted so the deploy can run this
+// chain concurrently with node resolution (the two are independent). Home and
+// install-check stay sequential here because install-check needs the resolved dir.
+async function resolveRemoteInstallState(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  fullVersion: string
+): Promise<{ remoteHome: string; remoteRelayDir: string; alreadyInstalled: boolean }> {
+  // Why: SFTP does not expand `~`, so we must resolve the remote home
+  // explicitly with the host's native shell and normalize it before use.
+  const remoteHome = normalizeRemoteHome(
+    await execHostCommand(conn, hostPlatform, readRemoteHomeCommand(hostPlatform)),
+    hostPlatform
+  )
+  // Why: we only interpolate $HOME into single-quoted shell strings later, so
+  // this validation only needs to reject obviously unsafe control characters.
+  // Allow spaces and non-ASCII so valid home directories are not rejected.
+  if (!validateRemoteHome(remoteHome, hostPlatform)) {
+    throw new Error(`Remote home is not a valid path: ${remoteHome.slice(0, 100)}`)
+  }
+  const remoteRelayDir = computeRemoteRelayDir(remoteHome, fullVersion, hostPlatform.pathFlavor)
+  const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform)
+  return { remoteHome, remoteRelayDir, alreadyInstalled }
+}
+
 async function deployAndLaunchRelayInner(
   conn: SshConnection,
   onProgress?: (status: string) => void,
@@ -152,25 +178,19 @@ async function deployAndLaunchRelayInner(
   // docs/ssh-relay-versioned-install-dirs.md "Data Flow: Upstream Error".
   const fullVersion = readLocalFullVersion(localRelayDir)
 
-  // Why: SFTP does not expand `~`, so we must resolve the remote home
-  // explicitly with the host's native shell and normalize it before use.
-  const remoteHome = normalizeRemoteHome(
-    await execHostCommand(conn, hostPlatform, readRemoteHomeCommand(hostPlatform)),
-    hostPlatform
-  )
-  // Why: we only interpolate $HOME into single-quoted shell strings later, so
-  // this validation only needs to reject obviously unsafe control characters.
-  // Allow spaces and non-ASCII so valid home directories are not rejected.
-  if (!validateRemoteHome(remoteHome, hostPlatform)) {
-    throw new Error(`Remote home is not a valid path: ${remoteHome.slice(0, 100)}`)
-  }
-  const remoteRelayDir = computeRemoteRelayDir(remoteHome, fullVersion, hostPlatform.pathFlavor)
-  console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
-
   onProgress?.('Checking existing relay...')
-  const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform)
+  // Why: the remote-home -> install-check chain and node resolution are
+  // independent (both only need hostPlatform, not each other's results), yet
+  // each is a separate SSH exec round trip. Run them concurrently so the deploy
+  // pays one round trip instead of two for this phase. Promise.all fails fast if
+  // either rejects; a lingering channel from the other branch is torn down by
+  // closeTransportsForReconnect on the failed attempt.
+  const [{ remoteHome, remoteRelayDir, alreadyInstalled }, nodePath] = await Promise.all([
+    resolveRemoteInstallState(conn, hostPlatform, fullVersion),
+    resolveRemoteNodePath(conn, hostPlatform)
+  ])
+  console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
-  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
 
   if (alreadyInstalled) {
     await repairInstalledNativeDeps(conn, remoteRelayDir, platform, hostPlatform, nodePath)
