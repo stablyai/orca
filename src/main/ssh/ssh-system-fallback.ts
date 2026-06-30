@@ -1,9 +1,11 @@
 /* eslint-disable max-lines -- Why: system-ssh process wrapping and fallback file operations share cleanup contracts. */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { constants } from 'node:fs'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { lstat, open, readdir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
+import { createHash } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { Duplex } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ClientChannel } from 'ssh2'
@@ -12,6 +14,27 @@ import { wrapRemoteCommandForPosixShell, shellEscape } from './ssh-connection-ut
 import type { SshExecOptions } from './ssh-connection-utils'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+
+// Why: system SSH transport spawns a new process per exec command, each
+// requiring a full 9s SSH handshake. ControlMaster reuses a single connection
+// for all commands, reducing per-command overhead from ~9s to ~100ms.
+function getControlSocketPath(target: SshTarget): string | null {
+  if (process.platform === 'win32') {
+    return null
+  }
+  const key = `${target.configHost || target.host}:${target.port || 22}:${target.username || ''}`
+  const hash = createHash('sha1').update(key).digest('hex').slice(0, 12)
+  // macOS socket path limit is ~104 chars. Keep path short.
+  const dir = pathJoin(tmpdir(), 'orca-ssh-ctl')
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+  } catch {
+    return null
+  }
+  const sockPath = pathJoin(dir, `${hash}.sock`)
+  // Socket path must be < 104 chars on macOS
+  return sockPath.length < 100 ? sockPath : null
+}
 
 const SYSTEM_SSH_PATHS =
   process.platform === 'win32'
@@ -346,6 +369,20 @@ export function buildSshArgs(target: SshTarget): string[] {
   args.push('-o', 'BatchMode=no')
   // Forward stdin/stdout for relay communication
   args.push('-T')
+
+  // Why: ControlMaster multiplexes all SSH exec commands over a single connection,
+  // eliminating the ~9s handshake overhead per command. Without this, each
+  // spawnSystemSshCommand call (platform detect, relay check, node find, relay
+  // launch) opens a new TCP connection. With ControlMaster, only the first
+  // command pays the connection cost; subsequent ones reuse the master socket.
+  const controlPath = getControlSocketPath(target)
+  if (controlPath) {
+    args.push('-o', 'ControlMaster=auto')
+    args.push('-o', `ControlPath=${controlPath}`)
+    // Why: keep master alive 300s after last command so rapid reconnects
+    // (e.g. on tab focus) skip re-handshake without holding a process open.
+    args.push('-o', 'ControlPersist=300')
+  }
 
   // Why: configHost preserves OpenSSH-only directives such as ProxyUseFdpass.
   // Passing resolved host/port/proxy flags would bypass the user's Host block.
