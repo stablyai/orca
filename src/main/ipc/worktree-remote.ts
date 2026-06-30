@@ -55,7 +55,7 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   classifyRefreshBaseRefError,
   formatRefreshBaseRefError
-} from '../../shared/git-remote-error'
+} from '../../shared/worktree-remote-error'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'

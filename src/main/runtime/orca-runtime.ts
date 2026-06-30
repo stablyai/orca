@@ -42,7 +42,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import {
   classifyRefreshBaseRefError,
   formatRefreshBaseRefError
-} from '../../shared/git-remote-error'
+} from '../../shared/worktree-remote-error'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'

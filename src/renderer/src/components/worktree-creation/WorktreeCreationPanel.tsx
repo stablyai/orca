@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import { getCreationProgressLabel } from '@/lib/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
-import { parseRefreshBaseRefErrorPrefix } from '../../../../shared/git-remote-error'
+import { parseRefreshBaseRefErrorPrefix } from '../../../../shared/worktree-remote-error'
 
 // Why: single source of truth for the i18n path so a panel rename
 // doesn't require hunting through 5 locale files.
