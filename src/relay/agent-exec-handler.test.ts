@@ -1,13 +1,41 @@
 import { exec, spawn } from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'child_process'
-import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
+import type * as Os from 'os'
+
+const { execFileAsyncMock, userInfoMock } = vi.hoisted(() => ({
+  execFileAsyncMock: vi.fn(),
+  userInfoMock: vi.fn<() => { shell: string | null }>(() => ({ shell: null }))
+}))
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof Os>()
+  return {
+    ...actual,
+    userInfo: userInfoMock
+  }
+})
+
+import {
+  createFakeChild,
+  createHandlers,
+  requestContext,
+  withPlatform
+} from './agent-exec-handler-test-harness'
+import {
+  _resetRelayCommandPathCacheForTests,
+  resolveCommandLaunchForRelay
+} from './relay-command-path-lookup'
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+  const execFileWithPromisify = Object.assign(vi.fn(), {
+    [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
+  })
   return {
     ...actual,
     exec: vi.fn(),
+    execFile: execFileWithPromisify,
     spawn: vi.fn()
   }
 })
@@ -17,10 +45,32 @@ const execMock = vi.mocked(exec)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
+async function withShell<T>(shell: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const originalShell = process.env.SHELL
+  if (shell === undefined) {
+    delete process.env.SHELL
+  } else {
+    process.env.SHELL = shell
+  }
+  try {
+    return await fn()
+  } finally {
+    if (originalShell === undefined) {
+      delete process.env.SHELL
+    } else {
+      process.env.SHELL = originalShell
+    }
+  }
+}
+
 describe('AgentExecHandler', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     execMock.mockReset()
+    execFileAsyncMock.mockReset()
+    _resetRelayCommandPathCacheForTests()
+    userInfoMock.mockReset()
+    userInfoMock.mockReturnValue({ shell: null })
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {
@@ -94,6 +144,345 @@ describe('AgentExecHandler', () => {
       }),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
+    })
+  })
+
+  it('tries the inherited PATH before shell fallback when shell PATH resolution is requested', async () => {
+    await withShell('/bin/bash', async () => {
+      await withPlatform('linux', async () => {
+        const child = createFakeChild()
+        spawnMock.mockReturnValue(child as never)
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run'],
+            cwd: '/repo',
+            stdin: 'PROMPT',
+            timeoutMs: 5_000,
+            shell: true
+          },
+          requestContext()
+        )
+
+        child.emit('close', 0)
+
+        await expect(pending).resolves.toMatchObject({
+          exitCode: 0,
+          timedOut: false
+        })
+        expect(spawnMock).toHaveBeenCalledWith('opencode', ['run'], {
+          cwd: '/repo',
+          env: process.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+        expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
+      })
+    })
+  })
+
+  it('resolves through the explicit POSIX shell when inherited PATH misses the agent', async () => {
+    await withShell('/bin/bash', async () => {
+      await withPlatform('linux', async () => {
+        const directChild = createFakeChild()
+        const resolvedChild = createFakeChild()
+        spawnMock
+          .mockReturnValueOnce(directChild as never)
+          .mockReturnValueOnce(resolvedChild as never)
+        execFileAsyncMock.mockResolvedValueOnce({
+          stdout:
+            '__ORCA_AGENT_PATH__/home/test/.nvm/versions/node/v22/bin/opencode\n' +
+            '__ORCA_AGENT_ENV_PATH__/home/test/.nvm/versions/node/v22/bin:/usr/bin\n'
+        })
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run', '--model', 'opencode/deepseek-v4-flash-free'],
+            cwd: '/repo',
+            stdin: 'PROMPT',
+            timeoutMs: 5_000,
+            shell: true
+          },
+          requestContext()
+        )
+
+        directChild.emit(
+          'error',
+          Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' })
+        )
+        await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+        resolvedChild.emit('close', 0)
+
+        await expect(pending).resolves.toMatchObject({
+          exitCode: 0,
+          timedOut: false
+        })
+        expect(spawnMock).toHaveBeenNthCalledWith(
+          1,
+          'opencode',
+          ['run', '--model', 'opencode/deepseek-v4-flash-free'],
+          {
+            cwd: '/repo',
+            env: process.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          }
+        )
+        expect(spawnMock).toHaveBeenNthCalledWith(
+          2,
+          '/home/test/.nvm/versions/node/v22/bin/opencode',
+          ['run', '--model', 'opencode/deepseek-v4-flash-free'],
+          {
+            cwd: '/repo',
+            env: expect.objectContaining({
+              ...process.env,
+              PATH: '/home/test/.nvm/versions/node/v22/bin:/usr/bin'
+            }),
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          }
+        )
+        expect(execFileAsyncMock).toHaveBeenCalledWith(
+          '/bin/bash',
+          [
+            '-ilc',
+            [
+              "if resolved=$(command -v 'opencode' 2>/dev/null); then",
+              'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
+              'printf \'__ORCA_AGENT_ENV_PATH__%s\\n\' "$PATH"',
+              'fi'
+            ].join('\n')
+          ],
+          {
+            encoding: 'utf-8',
+            env: expect.objectContaining({ SHELL: '/bin/bash' }),
+            timeout: 5000
+          }
+        )
+        expect(directChild.stdin.end).toHaveBeenCalledWith('PROMPT')
+        expect(resolvedChild.stdin.end).toHaveBeenCalledWith('PROMPT')
+      })
+    })
+  })
+
+  it('resolves through the account login shell when SHELL is unset', async () => {
+    userInfoMock.mockReturnValue({ shell: '/bin/zsh' })
+    await withShell(undefined, async () => {
+      await withPlatform('linux', async () => {
+        const directChild = createFakeChild()
+        const resolvedChild = createFakeChild()
+        spawnMock
+          .mockReturnValueOnce(directChild as never)
+          .mockReturnValueOnce(resolvedChild as never)
+        execFileAsyncMock.mockResolvedValueOnce({
+          stdout:
+            '__ORCA_AGENT_PATH__/Users/test/.local/bin/opencode\n' +
+            '__ORCA_AGENT_ENV_PATH__/Users/test/.local/bin:/usr/bin\n'
+        })
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run'],
+            cwd: '/repo',
+            stdin: null,
+            timeoutMs: 5_000,
+            shell: true
+          },
+          requestContext()
+        )
+
+        directChild.emit(
+          'error',
+          Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' })
+        )
+        await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+        resolvedChild.emit('close', 0)
+
+        await expect(pending).resolves.toMatchObject({
+          exitCode: 0,
+          timedOut: false
+        })
+        expect(execFileAsyncMock).toHaveBeenCalledWith(
+          '/bin/zsh',
+          expect.arrayContaining(['-ilc']),
+          expect.objectContaining({
+            encoding: 'utf-8',
+            timeout: 5000
+          })
+        )
+        expect(spawnMock).toHaveBeenNthCalledWith(2, '/Users/test/.local/bin/opencode', ['run'], {
+          cwd: '/repo',
+          env: expect.objectContaining({
+            ...process.env,
+            PATH: '/Users/test/.local/bin:/usr/bin'
+          }),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+      })
+    })
+  })
+
+  it('does not run shell fallback when the configured shell is missing or unsupported', async () => {
+    for (const shell of [undefined, '/usr/bin/fish']) {
+      await withShell(shell, async () => {
+        await withPlatform('linux', async () => {
+          const child = createFakeChild()
+          spawnMock.mockReturnValue(child as never)
+          const handlers = createHandlers()
+
+          const pending = handlers.get('agent.execNonInteractive')!(
+            {
+              binary: 'opencode',
+              args: ['run'],
+              cwd: '/repo',
+              stdin: null,
+              timeoutMs: 5_000,
+              shell: true
+            },
+            requestContext()
+          )
+
+          child.emit('error', Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' }))
+
+          await expect(pending).resolves.toMatchObject({
+            exitCode: null,
+            timedOut: false,
+            spawnError: 'spawn opencode ENOENT'
+          })
+          expect(spawnMock).toHaveBeenCalledWith('opencode', ['run'], {
+            cwd: '/repo',
+            env: process.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true
+          })
+          expect(spawnMock).toHaveBeenCalledTimes(1)
+          expect(execFileAsyncMock).not.toHaveBeenCalled()
+        })
+      })
+      spawnMock.mockReset()
+      execFileAsyncMock.mockReset()
+    }
+  })
+
+  it('uses a preflight-cached path without a generation-time shell lookup', async () => {
+    await withShell('/usr/bin/fish', async () => {
+      await withPlatform('linux', async () => {
+        const env = { SHELL: '/usr/bin/fish', PATH: '/usr/bin' }
+        execFileAsyncMock.mockResolvedValueOnce({
+          stdout:
+            '__ORCA_AGENT_PATH__/home/test/.local/bin/opencode\n' +
+            '__ORCA_AGENT_ENV_PATH__/home/test/.local/bin:/usr/bin\n'
+        })
+
+        await resolveCommandLaunchForRelay('opencode', {
+          platform: 'linux',
+          env,
+          accountLoginShell: null
+        })
+        execFileAsyncMock.mockClear()
+
+        const directChild = createFakeChild()
+        const resolvedChild = createFakeChild()
+        spawnMock
+          .mockReturnValueOnce(directChild as never)
+          .mockReturnValueOnce(resolvedChild as never)
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run'],
+            cwd: '/repo',
+            stdin: 'PROMPT',
+            timeoutMs: 5_000,
+            env,
+            shell: true
+          },
+          requestContext()
+        )
+
+        directChild.emit(
+          'error',
+          Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' })
+        )
+        await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+        resolvedChild.emit('close', 0)
+
+        await expect(pending).resolves.toMatchObject({
+          exitCode: 0,
+          timedOut: false
+        })
+        expect(execFileAsyncMock).not.toHaveBeenCalled()
+        expect(spawnMock).toHaveBeenNthCalledWith(2, '/home/test/.local/bin/opencode', ['run'], {
+          cwd: '/repo',
+          env: expect.objectContaining({
+            ...process.env,
+            PATH: '/home/test/.local/bin:/usr/bin',
+            SHELL: '/usr/bin/fish'
+          }),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+      })
+    })
+  })
+
+  it('cancels while resolving the fallback path without spawning the resolved agent', async () => {
+    await withShell('/bin/bash', async () => {
+      await withPlatform('linux', async () => {
+        let resolveLookup!: (value: { stdout: string }) => void
+        execFileAsyncMock.mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveLookup = resolve
+          })
+        )
+        const directChild = createFakeChild()
+        spawnMock.mockReturnValueOnce(directChild as never)
+        const handlers = createHandlers()
+
+        const pending = handlers.get('agent.execNonInteractive')!(
+          {
+            binary: 'opencode',
+            args: ['run'],
+            cwd: '/repo',
+            stdin: null,
+            timeoutMs: 5_000,
+            shell: true
+          },
+          requestContext()
+        )
+
+        directChild.emit(
+          'error',
+          Object.assign(new Error('spawn opencode ENOENT'), { code: 'ENOENT' })
+        )
+        await vi.waitFor(() => expect(execFileAsyncMock).toHaveBeenCalledTimes(1))
+
+        await expect(
+          handlers.get('agent.cancelExec')!({ cwd: '/repo' }, requestContext())
+        ).resolves.toEqual({ canceled: true })
+        await expect(pending).resolves.toMatchObject({
+          exitCode: null,
+          timedOut: false,
+          canceled: true
+        })
+
+        resolveLookup({
+          stdout:
+            '__ORCA_AGENT_PATH__/home/test/.local/bin/opencode\n' +
+            '__ORCA_AGENT_ENV_PATH__/home/test/.local/bin:/usr/bin\n'
+        })
+        await Promise.resolve()
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+      })
     })
   })
 

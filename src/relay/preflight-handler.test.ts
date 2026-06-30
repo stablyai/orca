@@ -27,12 +27,14 @@ vi.mock('../main/wsl', () => ({
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
 
 import {
+  _resetRelayCommandPathCacheForTests,
   buildCommandLookupSpec,
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
-  PreflightHandler
-} from './preflight-handler'
+  resolveCommandLaunchForRelay
+} from './relay-command-path-lookup'
+import { PreflightHandler } from './preflight-handler'
 
 function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
   return [
@@ -40,6 +42,7 @@ function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
     [
       `if resolved=$(command -v ${command} 2>/dev/null); then`,
       'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
+      'printf \'__ORCA_AGENT_ENV_PATH__%s\\n\' "$PATH"',
       'fi'
     ].join('\n')
   ]
@@ -52,6 +55,7 @@ function fishLookupArgs(command: string): string[] {
       `set -l resolved (command -v ${command} 2>/dev/null)`,
       'if test -n "$resolved"',
       'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
+      'printf \'__ORCA_AGENT_ENV_PATH__%s\\n\' "$PATH"',
       'end'
     ].join('\n')
   ]
@@ -59,6 +63,7 @@ function fishLookupArgs(command: string): string[] {
 
 beforeEach(() => {
   execFileAsyncMock.mockReset()
+  _resetRelayCommandPathCacheForTests()
   isPwshAvailableMock.mockReset()
   isWslAvailableMock.mockReset()
   listWslDistrosMock.mockReset()
@@ -127,6 +132,22 @@ describe('buildCommandLookupSpecs', () => {
     })
   })
 
+  it('uses the account login shell when SHELL is unset', () => {
+    expect(buildCommandLookupSpecs('codex', 'linux', {}, '/bin/zsh')[0]).toEqual({
+      file: '/bin/zsh',
+      args: lookupArgs("'codex'", '-ilc')
+    })
+  })
+
+  it('can disable inherited PATH lookup after a direct spawn ENOENT', () => {
+    expect(
+      buildCommandLookupSpecs('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh', {
+        allowedShellNames: ['bash', 'zsh'],
+        includeInheritedPathFallback: false
+      })
+    ).toEqual([{ file: '/bin/zsh', args: lookupArgs("'codex'", '-ilc') }])
+  })
+
   it('uses fish syntax for trusted fish shells', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/usr/bin/fish' }, null)[0]).toEqual({
       file: '/usr/bin/fish',
@@ -144,6 +165,63 @@ describe('buildCommandLookupSpecs', () => {
     expect(
       buildCommandLookupSpecs('codex', 'linux', { SHELL: '/home/test/bin/bash' }, '/bin/bash')
     ).toEqual([{ file: '/bin/sh', args: lookupArgs("'codex'") }])
+  })
+})
+
+describe('resolveCommandLaunchForRelay', () => {
+  it('returns the resolved absolute command path and shell-initialized PATH', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '__ORCA_AGENT_PATH__/home/test/.nvm/versions/node/v22/bin/opencode\n' +
+        '__ORCA_AGENT_ENV_PATH__/home/test/.nvm/versions/node/v22/bin:/usr/bin\n'
+    })
+
+    await expect(
+      resolveCommandLaunchForRelay('opencode', {
+        platform: 'linux',
+        env: { SHELL: '/bin/bash', PATH: '/usr/bin' },
+        accountLoginShell: '/bin/bash',
+        includeInheritedPathFallback: false
+      })
+    ).resolves.toEqual({
+      commandPath: '/home/test/.nvm/versions/node/v22/bin/opencode',
+      pathEnv: '/home/test/.nvm/versions/node/v22/bin:/usr/bin'
+    })
+  })
+
+  it('reuses a preflighted path across stricter generation lookup options', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '__ORCA_AGENT_PATH__/home/test/.local/bin/opencode\n' +
+        '__ORCA_AGENT_ENV_PATH__/home/test/.local/bin:/usr/bin\n'
+    })
+    const env = { SHELL: '/usr/bin/fish', PATH: '/usr/bin' }
+
+    await expect(
+      resolveCommandLaunchForRelay('opencode', {
+        platform: 'linux',
+        env,
+        accountLoginShell: null
+      })
+    ).resolves.toEqual({
+      commandPath: '/home/test/.local/bin/opencode',
+      pathEnv: '/home/test/.local/bin:/usr/bin'
+    })
+    execFileAsyncMock.mockClear()
+
+    await expect(
+      resolveCommandLaunchForRelay('opencode', {
+        platform: 'linux',
+        env,
+        accountLoginShell: null,
+        allowedShellNames: ['bash', 'zsh'],
+        includeInheritedPathFallback: false
+      })
+    ).resolves.toEqual({
+      commandPath: '/home/test/.local/bin/opencode',
+      pathEnv: '/home/test/.local/bin:/usr/bin'
+    })
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 })
 

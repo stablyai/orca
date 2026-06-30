@@ -3,13 +3,34 @@ import { vi } from 'vitest'
 import type { MethodHandler, RequestContext } from './dispatcher'
 import { AgentExecHandler } from './agent-exec-handler'
 
+function hasFinally(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'finally' in value &&
+    typeof value.finally === 'function'
+  )
+}
+
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-  try {
-    return fn()
-  } finally {
+  let restoreImmediately = true
+  const restore = (): void => {
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
+  }
+  try {
+    const result = fn()
+    if (hasFinally(result)) {
+      restoreImmediately = false
+      return result.finally(restore) as T
+    }
+    restore()
+    return result
+  } finally {
+    if (restoreImmediately && process.platform === platform) {
+      restore()
+    }
   }
 }
 
