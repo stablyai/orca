@@ -58,14 +58,17 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
    - **Provider:** Vercel Sandbox, Fly, Modal, an existing SSH host, … For non-obvious providers, also
      ask scope/project/region and plan limits (§2). Then **read that provider's CLI/SDK docs** (or
      `<cli> --help`) before scaffolding — you need its exact create/exec/snapshot/remove verbs.
+     If a provider advertises `ssh`, verify whether it exposes a real dialable SSH target
+     (host/port/user/key or proxy command) or only a provider-mediated interactive shell; Orca SSH mode
+     needs the former.
    - **Coding-agent CLI + account:** which agent runs in the VM (`codex`, `claude`, …) and that the user
      has an account for it — it gets logged in during the Phase-3 auth snapshot (§4).
    - **Git auth:** the token source for cloning a private repo (`GH_TOKEN`/`GITHUB_TOKEN` or `gh auth
      token`; §5).
 3. **Check prerequisites (§2)** — detect the provider CLI + auth and confirm the items above are in
    place before any paid step.
-4. **Scaffold scripts + state file** from §7 (worked Vercel example: §7f; SSH host: §7g; Windows: §7h),
-   filling in the provider's real commands. Make them executable.
+4. **Scaffold scripts + state file** from §7 (worked Vercel example: §7f; SSH host: §7g; Docker SSH:
+   §7h; Windows: §7i), filling in the provider's real commands. Make them executable.
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
 6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code.
 7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8).
@@ -126,6 +129,11 @@ ephemeral — so authenticate once and bake it into a second snapshot layer. Scr
    (recording `authSourceSnapshotId`). Remove the auth sandbox.
 
 If the agent's credentials are short-lived, warn that the snapshot may need periodic re-auth (§10).
+
+For disposable runtimes, do **not** treat a host agent config directory (for example `~/.codex`) as the
+auth snapshot by bind-mounting or copying it wholesale. Agent homes often contain sqlite state, hook
+approval state, caches, logs, and host-specific env/config. Instead, authenticate/configure the agent
+inside the disposable runtime and snapshot/commit that runtime layer.
 
 ---
 
@@ -461,7 +469,40 @@ If the SSH host is instead an **ephemeral/snapshot-capable VM** (your hypervisor
 image support), keep the §7f Phase-2/3 base-image model for provisioning, but still emit the
 `connection.type:"ssh"` block above instead of starting `orca serve`.
 
-### 7h. Windows local-side scripts
+### 7h. Worked example — local Docker SSH (SSH connection mode)
+
+Local Docker can model an ephemeral SSH VM without cloud cost: build a base image with `sshd`, tools,
+repo prerequisites, and the agent CLI; run an **interactive auth container** once; then `docker commit`
+that container as the authenticated image used by per-workspace `create`.
+
+Key points:
+
+- Publish container SSH to a random localhost port (`-p 127.0.0.1::22`) and emit
+  `connection.type:"ssh"` with `host:"127.0.0.1"`, that port, `username`, `identityFile`, and
+  `identitiesOnly:true`.
+- Generate a repo-local SSH key if needed, but gitignore the private/public key files.
+- The auth image is the Docker equivalent of Phase 3: let the user run `codex login`, configure proxy
+  env/config, approve hooks, and verify the agent **inside** the container, then commit it.
+- Do not bind-mount or copy the host's full agent home into the image. Let each container have writable
+  agent state; only the committed auth image should carry reusable authenticated state.
+- If committing from an interactive shell, force the runtime entrypoint back to `sshd`:
+  `docker commit --change='ENTRYPOINT ["/usr/local/bin/orca-docker-ssh-entrypoint"]' …`.
+- `destroy` should read `recipeResult.userData.resourceId` and run `docker rm -f "$resource_id"`.
+
+Validation before wiring/live use:
+
+```bash
+docker image inspect "$auth_image" --format '{{json .Config.Entrypoint}}'
+docker run -d --name "$name" -p 127.0.0.1::22 -e "ORCA_SSH_PUBLIC_KEY=$pubkey" "$auth_image"
+docker ps -a --filter "name=$name"
+docker logs "$name"
+ssh -i "$key" -p "$port" -o IdentitiesOnly=yes user@127.0.0.1 'codex --version'
+```
+
+If the container exits immediately, inspect logs before the cleanup trap removes it; a committed
+interactive image with `ENTRYPOINT ["bash"]` is a common cause.
+
+### 7i. Windows local-side scripts
 
 The local-side scripts run on the user's desktop. On **Windows**, a bare `.sh` won't execute. Either
 require WSL/Git-Bash (and point `orca.yaml` at e.g. `bash ./scripts/orca-vm/<name>.sh` via a `.cmd`
@@ -474,7 +515,7 @@ $ErrorActionPreference = 'Stop'
 # capture provider output; build the result object for the chosen mode and write ONE line of JSON to stdout.
 # Orca-server mode: @{ schemaVersion=1; pairingCode=$pairingCode; projectRoot=$projectRoot; userData=@{...} }
 # SSH mode:        @{ schemaVersion=1; connection=@{ type="ssh"; projectRoot=$projectRoot;
-#                     target=@{ label=$label; host=$host; port=$port; username=$user } } }  (see §7g)
+#                     target=@{ label=$label; host=$host; port=$port; username=$user } } }  (see §7g/§7h)
 ($result | ConvertTo-Json -Compress -Depth 6)
 # progress/errors → Write-Error / the error stream, never stdout.
 ```
@@ -580,6 +621,11 @@ The self-test cannot see provider-side truth beyond what the scripts print, so s
 populated **authenticated** `snapshotId` (Phases 2–3 done), and `destroy` is implemented/tested (or
 explicitly `none` — in which case the self-test won't tear down, so clean up manually).
 
+For SSH recipes, also smoke-test the exact emitted target before declaring success: dial the host/port
+with the identity/proxy settings, run `pwd`, verify the repo path, check the agent binary, and confirm
+`destroy` removes the provider resource/container. For Docker, inspect the auth image entrypoint and do a
+startup-only `docker run` before the full clone/install path.
+
 ---
 
 ## 10. Failure modes
@@ -593,6 +639,12 @@ explicitly `none` — in which case the self-test won't tear down, so clean up m
   `snapshotId`.
 - **Agent auth didn't persist.** Confirm `snapshotId` points at the **authenticated** snapshot; re-run
   Phase 3. Warn that short-lived tokens may need periodic re-auth.
+- **Agent auth copied from the host breaks.** Do not bind-mount/copy a full host agent home; sqlite
+  files can be unwritable or host-specific, hooks may need approval again, and config may reference
+  local-only env vars. Authenticate inside the runtime and snapshot/commit that layer.
+- **Docker auth image exits immediately.** Inspect `docker image inspect … .Config.Entrypoint` and
+  `docker logs`. If the image was committed from an interactive shell, reset the entrypoint to the SSH
+  entrypoint during `docker commit`.
 - **Leaked paid resource.** Every long script must trap errors and remove the sandbox it created.
 - **`create` emits non-JSON on stdout.** A stray `echo` corrupts the result — stdout is for the final
   JSON only; everything else to stderr. The `--provision` self-test surfaces this as `exitCode 0` + a
