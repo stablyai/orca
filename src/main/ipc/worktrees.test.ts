@@ -3659,6 +3659,8 @@ describe('registerWorktreeHandlers', () => {
     getSshGitProviderMock.mockReturnValue(provider)
     getActiveMultiplexerMock.mockReturnValue(mux)
 
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     await expect(
       handlers['worktrees:create'](null, {
         repoId: 'repo-ssh',
@@ -3675,6 +3677,8 @@ describe('registerWorktreeHandlers', () => {
       'main',
       'refs/remotes/origin/main'
     )
+    expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref]', expect.any(Error))
+    consoleSpy.mockRestore()
   })
 
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
@@ -4177,6 +4181,8 @@ describe('registerWorktreeHandlers', () => {
       errorKind: 'git_error'
     })
 
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     await expect(
       handlers['worktrees:create'](null, {
         repoId: 'repo-1',
@@ -4187,6 +4193,8 @@ describe('registerWorktreeHandlers', () => {
     )
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref-precheck]', expect.any(Error))
+    consoleSpy.mockRestore()
   })
 
   it('delegates remote-tracking base freshness to the runtime before create', async () => {

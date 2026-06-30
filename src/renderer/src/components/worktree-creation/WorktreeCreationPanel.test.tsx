@@ -162,6 +162,25 @@ describe('WorktreeCreationPanel', () => {
     expect(container.textContent).toContain('Network error. Check your connection and try again.')
   })
 
+  it.each([
+    ['[auth] Could not refresh base ref "main" from "origin".', 'Remote authentication failed'],
+    ['[noUpstream] Could not refresh base ref "main" from "origin".', 'no upstream'],
+    [
+      '[remoteRefMissing] Could not refresh base ref "main" from "origin".',
+      'does not exist on the remote'
+    ],
+    [
+      '[remoteForbidden] Could not refresh base ref "main" from "origin".',
+      'inaccessible or forbidden'
+    ]
+  ])('resolves the dedicated i18n key for prefix %s', async (rawError, expectedFragment) => {
+    setEntryToError(rawError)
+    const container = await renderPanel(false)
+
+    expect(container.textContent).toContain('Couldn’t create worktree')
+    expect(container.textContent).toContain(expectedFragment)
+  })
+
   it('interpolates the friendly prefix into the unknown template', async () => {
     setEntryToError('[unknown] Could not refresh base ref "main" from "origin".')
     const container = await renderPanel(false)

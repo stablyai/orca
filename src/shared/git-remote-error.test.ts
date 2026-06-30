@@ -170,6 +170,15 @@ describe('classifyRefreshBaseRefError', () => {
     const result = classifyRefreshBaseRefError('plain string')
     expect(result).toEqual({ code: 'unknown', message: 'Git remote operation failed.' })
   })
+
+  it('scrubs credentials before classifying 403 forbidden', () => {
+    const error = new Error(
+      "fatal: unable to access 'https://user:secret@github.com/foo/private': The requested URL returned error: 403"
+    )
+    const result = classifyRefreshBaseRefError(error)
+    expect(result.code).toBe('remoteForbidden')
+    expect(result.message).not.toContain('secret')
+  })
 })
 
 describe('formatRefreshBaseRefError', () => {
@@ -198,5 +207,38 @@ describe('parseRefreshBaseRefErrorPrefix', () => {
 
   it('returns null on an unknown code', () => {
     expect(parseRefreshBaseRefErrorPrefix('[bogus] something')).toBeNull()
+  })
+})
+
+describe('formatRefreshBaseRefError / parseRefreshBaseRefErrorPrefix round-trip', () => {
+  it.each([
+    'network',
+    'auth',
+    'noUpstream',
+    'remoteRefMissing',
+    'remoteForbidden',
+    'unknown'
+  ] as const)('round-trips %s', (code) => {
+    const message = `sample ${code} message`
+    const formatted = formatRefreshBaseRefError({ code, message })
+    expect(parseRefreshBaseRefErrorPrefix(formatted)).toEqual({ code, message })
+  })
+})
+
+describe('parseRefreshBaseRefErrorPrefix edge cases', () => {
+  it('parses a prefix with an empty body', () => {
+    expect(parseRefreshBaseRefErrorPrefix('[network]')).toEqual({ code: 'network', message: '' })
+  })
+
+  it('returns null for an empty prefix `[]`', () => {
+    expect(parseRefreshBaseRefErrorPrefix('[] hello')).toBeNull()
+  })
+
+  it('returns null for a code with internal whitespace', () => {
+    expect(parseRefreshBaseRefErrorPrefix('[ net work ] x')).toBeNull()
+  })
+
+  it('returns null when prefix is not at the start', () => {
+    expect(parseRefreshBaseRefErrorPrefix('prefix [network] mid-string')).toBeNull()
   })
 })

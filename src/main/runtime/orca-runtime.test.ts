@@ -19856,6 +19856,39 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('logs a tagged diagnostic when the runtime refresh throws a [refresh-base-ref-runtime] error', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveSpy = vi.spyOn(runtime, 'resolveRemoteTrackingBase').mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    const refreshSpy = vi
+      .spyOn(runtime, 'getOrStartRemoteTrackingBaseRefresh')
+      .mockResolvedValue({ ok: false, errorKind: 'git_error' })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-refresh-fail')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-refresh-fail')
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'runtime-refresh-fail'
+        })
+      ).rejects.toThrow(
+        /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref "origin\/main" from "origin"\./
+      )
+
+      expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref-runtime]', expect.any(Error))
+    } finally {
+      consoleSpy.mockRestore()
+      refreshSpy.mockRestore()
+      resolveSpy.mockRestore()
+    }
+  })
+
   it('creates the first terminal for CLI-created worktrees without activating them', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
