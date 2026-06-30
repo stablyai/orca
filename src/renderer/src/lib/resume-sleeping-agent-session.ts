@@ -275,9 +275,8 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
       continue
     }
     if (activeOrQueuedResumeClaimsProviderSession(record, currentState)) {
-      // Why: main can replay the old wake record after we have already queued
-      // the same provider session in a fresh tab. Clear the stale replay so
-      // workspace activation cannot fork the same agent every time.
+      // Why: main can replay the old wake record after the same provider
+      // session was already queued in a fresh tab; clear the stale replay.
       state.clearSleepingAgentSession(record.paneKey)
       continue
     }
