@@ -16,6 +16,8 @@ import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationDismissResult,
+  NotificationInboxEntry,
+  NotificationInboxResult,
   NotificationPermissionStatusResult,
   NotificationSettings,
   NotificationSoundDataResult
@@ -24,9 +26,11 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
+const MAX_NOTIFICATION_INBOX_ENTRIES = 20
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
@@ -201,12 +205,54 @@ function pruneRecentNotifications(recentNotifications: Map<string, number>, now:
   }
 }
 
+function getUnreadNotificationInboxCount(
+  notificationInbox: Map<string, NotificationInboxEntry>
+): number {
+  let unreadCount = 0
+  for (const entry of notificationInbox.values()) {
+    if (entry.unread) {
+      unreadCount += 1
+    }
+  }
+  return unreadCount
+}
+
+function getNotificationInboxSnapshot(
+  notificationInbox: Map<string, NotificationInboxEntry>
+): NotificationInboxResult {
+  const entries = Array.from(notificationInbox.values()).toReversed()
+  return {
+    supported: true,
+    entries,
+    unreadCount: getUnreadNotificationInboxCount(notificationInbox)
+  }
+}
+
+function syncNotificationInboxBadge(notificationInbox: Map<string, NotificationInboxEntry>): void {
+  setUnreadDockBadgeCount(getUnreadNotificationInboxCount(notificationInbox))
+}
+
+function pruneNotificationInbox(notificationInbox: Map<string, NotificationInboxEntry>): void {
+  while (notificationInbox.size > MAX_NOTIFICATION_INBOX_ENTRIES) {
+    const oldest = notificationInbox.keys().next()
+    if (oldest.done) {
+      return
+    }
+    notificationInbox.delete(oldest.value)
+  }
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
+  const notificationInbox = new Map<string, NotificationInboxEntry>()
+  let generatedNotificationInboxId = 0
 
   ipcMain.removeHandler('notifications:openSystemSettings')
   ipcMain.removeHandler('notifications:getPermissionStatus')
   ipcMain.removeHandler('notifications:requestPermission')
+  ipcMain.removeHandler('notifications:getInbox')
+  ipcMain.removeHandler('notifications:markInboxRead')
+  ipcMain.removeHandler('notifications:clearInbox')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
     openNotificationSystemSettings()
   })
@@ -228,6 +274,24 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.handle('notifications:requestPermission', (): NotificationPermissionStatusResult => {
     triggerStartupNotificationRegistration(store)
     return getPermissionStatus()
+  })
+
+  ipcMain.handle('notifications:getInbox', (): NotificationInboxResult => {
+    return getNotificationInboxSnapshot(notificationInbox)
+  })
+
+  ipcMain.handle('notifications:markInboxRead', (): NotificationInboxResult => {
+    for (const entry of notificationInbox.values()) {
+      entry.unread = false
+    }
+    syncNotificationInboxBadge(notificationInbox)
+    return getNotificationInboxSnapshot(notificationInbox)
+  })
+
+  ipcMain.handle('notifications:clearInbox', (): NotificationInboxResult => {
+    notificationInbox.clear()
+    syncNotificationInboxBadge(notificationInbox)
+    return getNotificationInboxSnapshot(notificationInbox)
   })
 
   ipcMain.removeHandler('notifications:dismiss')
@@ -298,6 +362,28 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
 
       const notificationOptions = buildNotificationOptions(args)
+
+      if (args.source !== 'test') {
+        const inboxId =
+          args.notificationId ??
+          `${args.source}:${args.worktreeId ?? 'global'}:${++generatedNotificationInboxId}`
+        notificationInbox.delete(inboxId)
+        notificationInbox.set(inboxId, {
+          id: inboxId,
+          source: args.source,
+          title: notificationOptions.title,
+          body: notificationOptions.body ?? '',
+          createdAt: Date.now(),
+          unread: true,
+          ...(args.notificationId ? { notificationId: args.notificationId } : {}),
+          ...(args.worktreeId ? { worktreeId: args.worktreeId } : {}),
+          ...(args.paneKey ? { paneKey: args.paneKey } : {}),
+          ...(args.repoLabel ? { repoLabel: args.repoLabel } : {}),
+          ...(args.worktreeLabel ? { worktreeLabel: args.worktreeLabel } : {})
+        })
+        pruneNotificationInbox(notificationInbox)
+        syncNotificationInboxBadge(notificationInbox)
+      }
 
       // Why: paired mobile clients should follow the same user-facing
       // notification gates as desktop delivery, while still working on hosts

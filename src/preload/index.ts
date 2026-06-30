@@ -36,6 +36,7 @@ import type {
   MemorySnapshot,
   NotificationDismissResult,
   NotificationDispatchResult,
+  NotificationInboxResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
   NotificationSoundPathResult,
@@ -1843,6 +1844,11 @@ const api = {
       ipcRenderer.invoke('notifications:dispatch', args),
     dismiss: (ids: string[]): Promise<NotificationDismissResult> =>
       ipcRenderer.invoke('notifications:dismiss', ids),
+    getInbox: (): Promise<NotificationInboxResult> => ipcRenderer.invoke('notifications:getInbox'),
+    markInboxRead: (): Promise<NotificationInboxResult> =>
+      ipcRenderer.invoke('notifications:markInboxRead'),
+    clearInbox: (): Promise<NotificationInboxResult> =>
+      ipcRenderer.invoke('notifications:clearInbox'),
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
     getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
       ipcRenderer.invoke('notifications:getPermissionStatus'),

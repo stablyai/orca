@@ -1,6 +1,16 @@
+// @vitest-environment happy-dom
+
+import '@testing-library/jest-dom/vitest'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { GlobalSettings, NotificationDispatchRequest } from '../../../../shared/types'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type {
+  GlobalSettings,
+  NotificationDispatchRequest,
+  NotificationInboxResult
+} from '../../../../shared/types'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import {
   createNotificationVolumeDraftState,
@@ -37,6 +47,69 @@ function createSettings(): GlobalSettings {
   } as GlobalSettings
 }
 
+function createNotificationsApi(inbox: NotificationInboxResult) {
+  return {
+    getPermissionStatus: vi.fn(async () => ({
+      supported: true,
+      platform: 'darwin' as NodeJS.Platform,
+      requested: true
+    })),
+    dispatch: vi.fn(async (_args: NotificationDispatchRequest) => ({ delivered: true })),
+    playSound: vi.fn(),
+    openSystemSettings: vi.fn(),
+    requestPermission: vi.fn(),
+    getInbox: vi.fn(async () => inbox),
+    markInboxRead: vi.fn(async () => ({
+      ...inbox,
+      unreadCount: 0,
+      entries: inbox.entries.map((entry) => ({ ...entry, unread: false }))
+    })),
+    clearInbox: vi.fn(async () => ({ supported: inbox.supported, entries: [], unreadCount: 0 }))
+  }
+}
+
+function stubNotificationsApi(notifications = createNotificationsApi(createEmptyInbox())) {
+  vi.stubGlobal('Notification', { permission: 'granted' })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      notifications,
+      shell: { pickAudio: vi.fn() }
+    }
+  })
+  return notifications
+}
+
+function createEmptyInbox(): NotificationInboxResult {
+  return {
+    supported: true,
+    entries: [],
+    unreadCount: 0
+  }
+}
+
+function createInbox(): NotificationInboxResult {
+  return {
+    supported: true,
+    unreadCount: 3,
+    entries: [
+      {
+        id: 'agent:one',
+        notificationId: 'agent:one',
+        source: 'agent-task-complete',
+        title: 'feat/notis - Codex finished',
+        body: 'Updated the notification inbox.',
+        createdAt: Date.parse('2026-03-28T16:00:00Z'),
+        unread: true,
+        worktreeId: 'repo::wt1',
+        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+        repoLabel: 'orca',
+        worktreeLabel: 'feat/notis'
+      }
+    ]
+  }
+}
+
 describe('NotificationsPane', () => {
   beforeEach(() => {
     toastError.mockClear()
@@ -45,6 +118,11 @@ describe('NotificationsPane', () => {
   })
 
   afterEach(() => {
+    cleanup()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: undefined
+    })
     vi.unstubAllGlobals()
   })
 
@@ -57,6 +135,56 @@ describe('NotificationsPane', () => {
     expect(getNotificationSoundOptions(null).map((option) => option.title)).toEqual(
       expect.arrayContaining(['System Default', 'Two Tone', 'Bong', 'Ding'])
     )
+  })
+
+  it('loads and renders the empty notification inbox state', async () => {
+    const notifications = stubNotificationsApi()
+
+    render(<NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />)
+
+    expect(await screen.findByText('Notification Inbox')).toBeInTheDocument()
+    expect(await screen.findByText('No recent notifications')).toBeInTheDocument()
+    expect(screen.getByText('No unread notifications')).toBeInTheDocument()
+    expect(notifications.getInbox).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders owner-provided inbox entries and unread count', async () => {
+    stubNotificationsApi(createNotificationsApi(createInbox()))
+
+    render(<NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />)
+
+    expect(await screen.findByText('feat/notis - Codex finished')).toBeInTheDocument()
+    expect(screen.getByText('Updated the notification inbox.')).toBeInTheDocument()
+    expect(screen.getByText('3 unread')).toBeInTheDocument()
+    expect(screen.getByText('Unread')).toBeInTheDocument()
+    expect(screen.getByText(/Agent task - orca \/ feat\/notis -/)).toBeInTheDocument()
+  })
+
+  it('marks the owner-backed inbox read and updates visible unread state', async () => {
+    const notifications = stubNotificationsApi(createNotificationsApi(createInbox()))
+    const user = userEvent.setup()
+
+    render(<NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />)
+
+    expect(await screen.findByText('3 unread')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /mark read/i }))
+
+    await waitFor(() => expect(notifications.markInboxRead).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('No unread notifications')).toBeInTheDocument()
+    expect(screen.queryByText('Unread')).not.toBeInTheDocument()
+  })
+
+  it('clears the owner-backed inbox and renders the empty state', async () => {
+    const notifications = stubNotificationsApi(createNotificationsApi(createInbox()))
+    const user = userEvent.setup()
+
+    render(<NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />)
+
+    expect(await screen.findByText('feat/notis - Codex finished')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /clear/i }))
+
+    await waitFor(() => expect(notifications.clearInbox).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('No recent notifications')).toBeInTheDocument()
   })
 
   it('resets the volume draft only when the persisted volume changes', () => {

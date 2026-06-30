@@ -127,6 +127,7 @@ import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationDismissResult,
+  NotificationInboxResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult,
   OnboardingState,
@@ -1970,6 +1971,9 @@ export type PreloadApi = {
   notifications: {
     dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
     dismiss: (ids: string[]) => Promise<NotificationDismissResult>
+    getInbox: () => Promise<NotificationInboxResult>
+    markInboxRead: () => Promise<NotificationInboxResult>
+    clearInbox: () => Promise<NotificationInboxResult>
     openSystemSettings: () => Promise<void>
     getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
     requestPermission: () => Promise<NotificationPermissionStatusResult>
