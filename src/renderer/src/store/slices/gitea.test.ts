@@ -172,7 +172,7 @@ describe('createGiteaSlice createGiteaIssue', () => {
     })
 
     const keys = Object.keys(store.getState().giteaWorkItems)
-    expect(keys).toEqual(['repo-2@selected:all:all:default'])
+    expect(keys).toEqual(['repo-2@active:all:all:default'])
   })
 
   it('surfaces the error and preserves caches on failure', async () => {
@@ -195,12 +195,12 @@ describe('createGiteaSlice updateGiteaIssue', () => {
     const store = createTestStore()
     mockApi.gitea.issue.mockResolvedValue(issue(7))
     await store.getState().fetchGiteaIssue(scope, 7)
-    expect(store.getState().giteaIssueDetail['repo-1@selected:all#7']).toBeDefined()
+    expect(store.getState().giteaIssueDetail['repo-1@active:all#7']).toBeDefined()
 
     mockApi.gitea.updateIssue.mockResolvedValue({ ok: true })
     await store.getState().updateGiteaIssue(scope, 7, { state: 'closed' })
 
-    expect(store.getState().giteaIssueDetail['repo-1@selected:all#7']).toBeUndefined()
+    expect(store.getState().giteaIssueDetail['repo-1@active:all#7']).toBeUndefined()
   })
 
   it('keeps the cached issue detail on failure', async () => {
@@ -211,7 +211,45 @@ describe('createGiteaSlice updateGiteaIssue', () => {
     mockApi.gitea.updateIssue.mockResolvedValue({ ok: false, error: 'nope' })
     await store.getState().updateGiteaIssue(scope, 7, { state: 'closed' })
 
-    expect(store.getState().giteaIssueDetail['repo-1@selected:all#7']).toBeDefined()
+    expect(store.getState().giteaIssueDetail['repo-1@active:all#7']).toBeDefined()
+  })
+
+  it('invalidates the cached work-item list for the scope on success', async () => {
+    const store = createTestStore()
+    mockApi.gitea.listWorkItems.mockResolvedValue([workItem(7)])
+    mockApi.gitea.issue.mockResolvedValue(issue(7))
+    await store.getState().fetchGiteaWorkItems(scope, 'all')
+    await store.getState().fetchGiteaIssue(scope, 7)
+    expect(store.getState().giteaWorkItems['repo-1@active:all:all:default']).toBeDefined()
+
+    mockApi.gitea.updateIssue.mockResolvedValue({ ok: true })
+    await store.getState().updateGiteaIssue(scope, 7, { state: 'closed' })
+
+    expect(store.getState().giteaWorkItems['repo-1@active:all:all:default']).toBeUndefined()
+    expect(store.getState().giteaIssueDetail['repo-1@active:all#7']).toBeUndefined()
+  })
+})
+
+describe('createGiteaSlice cache keying by active server', () => {
+  it('keys unpinned entries by the active server so different hosts do not collide', async () => {
+    const store = createTestStore()
+    store.setState({
+      giteaStatus: { connected: true, activeServerId: 'srv-a', selectedServerId: null }
+    })
+    mockApi.gitea.listWorkItems.mockResolvedValue([workItem(1)])
+    await store.getState().fetchGiteaWorkItems(scope, 'all')
+
+    // Reconnect to a different host (only activeServerId differs).
+    store.setState({
+      giteaStatus: { connected: true, activeServerId: 'srv-b', selectedServerId: null }
+    })
+    await store.getState().fetchGiteaWorkItems(scope, 'all')
+
+    expect(mockApi.gitea.listWorkItems).toHaveBeenCalledTimes(2)
+    expect(Object.keys(store.getState().giteaWorkItems)).toEqual([
+      'repo-1@active:srv-a:all:default',
+      'repo-1@active:srv-b:all:default'
+    ])
   })
 })
 
