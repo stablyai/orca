@@ -50,6 +50,7 @@ import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
+  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -1148,17 +1149,51 @@ async function persistWorktreeMeta(
   )
 }
 
-async function cleanupEphemeralVmRuntimesForDeletedWorkspace(workspaceId: string): Promise<void> {
+// Returns the runtime-owned SSH target ids destroyed by this cleanup, so the caller can purge the
+// now-orphaned project that pointed at them (its host no longer exists).
+async function cleanupEphemeralVmRuntimesForDeletedWorkspace(
+  workspaceId: string
+): Promise<string[]> {
+  const destroyedSshTargetIds: string[] = []
   try {
     const runtimes = await window.api.ephemeralVm.listRuntimes()
     const matchingRuntimes = runtimes.filter(
       (runtime) => runtime.workspaceId === workspaceId && runtime.cleanupStatus !== 'succeeded'
     )
     for (const runtime of matchingRuntimes) {
+      if (runtime.sshTargetId) {
+        destroyedSshTargetIds.push(runtime.sshTargetId)
+      }
       await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
     }
   } catch (error) {
     console.error('Failed to clean up ephemeral VM runtime for deleted workspace:', error)
+  }
+  return destroyedSshTargetIds
+}
+
+// Why: an SSH-mode per-workspace-env registers a project whose host is the runtime-owned SSH
+// target. Once that runtime is destroyed the project points at a host that no longer exists, so it
+// must be removed — otherwise it lingers as a dead, never-connectable project in the composer.
+async function purgeOrphanedRuntimeSshProjects(
+  get: () => AppState,
+  destroyedSshTargetIds: string[]
+): Promise<void> {
+  if (destroyedSshTargetIds.length === 0) {
+    return
+  }
+  const destroyedHostIds = new Set<ExecutionHostId>(
+    destroyedSshTargetIds.map((id) => toSshExecutionHostId(id))
+  )
+  const orphanedSetupIds = get()
+    .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
+    .map((setup) => setup.id)
+  for (const setupId of orphanedSetupIds) {
+    try {
+      await get().deleteProjectHostSetup({ setupId })
+    } catch (error) {
+      console.error('Failed to purge orphaned per-workspace-env project:', error)
+    }
   }
 }
 
@@ -2957,7 +2992,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Why: dispose the runtime-owned SSH relay AFTER tearing down this workspace's terminals,
       // so a still-mounted SSH terminal pane can't connect to an already-gone relay and surface a
       // spurious "SSH connection is not active" toast during delete.
-      await cleanupEphemeralVmRuntimesForDeletedWorkspace(worktreeId)
+      const destroyedRuntimeSshTargetIds =
+        await cleanupEphemeralVmRuntimesForDeletedWorkspace(worktreeId)
+      // Remove the now-orphaned project that pointed at the destroyed runtime-owned SSH target so it
+      // can't surface as a dead, never-connectable project in the composer.
+      await purgeOrphanedRuntimeSshProjects(get, destroyedRuntimeSshTargetIds)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
