@@ -2152,8 +2152,19 @@ export async function createLocalWorktree(
     await timing.time('refresh_base_ref', async () => {
       const result = await remoteTrackingRefresh.promise
       if (!result.ok) {
+        // Why: precheck and create share the same diagnostic format so the
+        // renderer renders a single localized message regardless of which path
+        // surfaced the failure. The upstream `result` only carries errorKind,
+        // so synthesize an Error with the kind and let the classifier map it.
+        const fallbackError = new Error(`refresh failed: ${result.errorKind}`)
+        console.error('[refresh-base-ref-precheck]', fallbackError)
+        const classified = classifyRefreshBaseRefError(fallbackError)
         throw new Error(
-          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
+          formatRefreshBaseRefError({
+            code: classified.code,
+            message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}".`,
+            cause: classified.cause
+          })
         )
       }
       if (
