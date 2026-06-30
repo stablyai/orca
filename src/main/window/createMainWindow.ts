@@ -23,6 +23,11 @@ import {
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
+  DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
+  DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
+  RendererRecoveryCircuitBreaker
+} from '../crash-reporting/renderer-recovery-circuit-breaker'
+import {
   getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
@@ -150,6 +155,14 @@ type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => boolean
+  /** Called when consecutive auto-recoveries hit the circuit-breaker limit, so
+   *  the host can record diagnostics and surface a recovery prompt instead of
+   *  letting Orca crash-loop. */
+  onRendererRecoveryExhausted?: (info: {
+    details: Electron.RenderProcessGoneDetails
+    webContentsId: number
+    recentRecoveryCount: number
+  }) => void
   /** Why: main-process startup must register IPC handlers before the renderer
    *  begins booting, or eager renderer calls can race into missing channels. */
   deferLoad?: boolean
@@ -648,6 +661,14 @@ export function createMainWindow(
   }
   let rendererProcessGone = false
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: stop a deterministic per-load renderer fault (bad GPU driver, corrupt
+  // chunk, AV interference) from auto-reloading every ~0.25-1.3s forever
+  // (Windows crash-loop clusters). The breaker opens after too many recoveries
+  // inside a rolling window and hands off to the host's recovery surface.
+  const rendererRecoveryCircuitBreaker = new RendererRecoveryCircuitBreaker({
+    windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
+    maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES
+  })
   const clearRendererRecoveryTimer = (): void => {
     if (rendererRecoveryTimer) {
       clearTimeout(rendererRecoveryTimer)
@@ -674,6 +695,17 @@ export function createMainWindow(
         opts?.shouldRecoverRenderer?.(details, rendererWebContentsId) === false ||
         mainWindow.isDestroyed()
       ) {
+        return
+      }
+      const recovery = rendererRecoveryCircuitBreaker.registerRecoveryAttempt(Date.now())
+      if (!recovery.allowed) {
+        // Why: too many reloads in the window means reloading again will just
+        // crash again. Stop the loop and let the host surface a recovery prompt.
+        opts?.onRendererRecoveryExhausted?.({
+          details,
+          webContentsId: rendererWebContentsId,
+          recentRecoveryCount: recovery.recentRecoveryCount
+        })
         return
       }
       // Why: a transient Network Service / renderer loss can leave Chromium

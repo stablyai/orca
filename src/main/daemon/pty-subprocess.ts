@@ -58,7 +58,12 @@ const PANE_IDENTITY_ENV_KEYS = [
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+// Why: a busy machine right after an upgrade can make one short-lived shell
+// spawn slow. Retry once before declaring the daemon unable to spawn PTYs, so
+// a transient stall does not silently route every fresh terminal to the local
+// fallback (losing daemon persistence) until a manual restart.
+const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 export type PtySubprocessOptions = {
@@ -318,21 +323,9 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
 }
 
 /**
- * Runs a short native PTY spawn probe for daemon health checks.
+ * Runs one short native PTY spawn probe (spawn `/bin/sh -c 'exit 0'`).
  */
-export async function checkPtySpawnHealth(): Promise<void> {
-  if (process.platform === 'win32') {
-    return
-  }
-
-  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
-  // stale native PTY path. A real short-lived spawn catches that before the
-  // main process routes fresh panes to a daemon that cannot create terminals.
-  if (process.platform === 'darwin') {
-    ensureNodePtySpawnHelperExecutable()
-  }
-  preflightUnixPtySpawnEnvironment()
-
+function runSinglePtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : getDefaultCwd()
@@ -353,7 +346,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
     throw formatPtySpawnError(err, '/bin/sh', cwd)
   }
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     let settled = false
     let exitDisposable: { dispose(): void } | undefined
     const finish = (error?: Error, opts?: { kill?: boolean }): void => {
@@ -392,6 +385,42 @@ export async function checkPtySpawnHealth(): Promise<void> {
       finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
     })
   })
+}
+
+/**
+ * Runs a short native PTY spawn probe for daemon health checks, retrying once
+ * so a transient stall (e.g. a busy machine right after an upgrade) does not
+ * mis-classify a healthy daemon as unable to spawn PTYs.
+ */
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
+  // stale native PTY path. A real short-lived spawn catches that before the
+  // main process routes fresh panes to a daemon that cannot create terminals.
+  if (process.platform === 'darwin') {
+    ensureNodePtySpawnHelperExecutable()
+  }
+  preflightUnixPtySpawnEnvironment()
+
+  let lastError: unknown
+  for (let attempt = 1; attempt <= PTY_SPAWN_HEALTH_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await runSinglePtySpawnHealthProbe()
+      return
+    } catch (err) {
+      lastError = err
+      if (attempt < PTY_SPAWN_HEALTH_RETRY_ATTEMPTS) {
+        console.warn(
+          `[daemon] PTY spawn health probe attempt ${attempt} failed; retrying`,
+          err instanceof Error ? err.message : err
+        )
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 /**

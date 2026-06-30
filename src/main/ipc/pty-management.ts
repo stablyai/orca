@@ -32,6 +32,13 @@ function getDaemonAdapters(): DaemonPtyAdapter[] {
   return [provider]
 }
 
+// Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the
+// session-management UI can warn that new terminals lack daemon persistence
+// until the daemon is restarted, instead of it being a silent console.warn.
+function isDaemonDegraded(): boolean {
+  return getDaemonProvider() instanceof DegradedDaemonPtyProvider
+}
+
 async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
@@ -53,9 +60,9 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:listSessions',
-    async (): Promise<{ sessions: DaemonSessionInfo[] }> => {
+    async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
       const sessions = await collectSessions(getDaemonAdapters())
-      return { sessions }
+      return { sessions, degraded: isDaemonDegraded() }
     }
   )
 

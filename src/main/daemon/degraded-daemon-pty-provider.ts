@@ -8,6 +8,10 @@ type ManagedPtyProvider = IPtyProvider & {
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly routesFreshSpawnsToLocalProvider = true
+  // Why: the preserved daemon answers protocol but cannot spawn fresh PTYs.
+  // Surfaced (e.g. via pty:management:listSessions) so the UI can warn that
+  // new terminals are running without daemon persistence until a restart.
+  readonly isDegraded = true
 
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
@@ -237,11 +241,19 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
         this.sessionProviders.delete(id)
       })
     )
-    const failedCount = results.filter((result) => result.status === 'rejected').length
-    if (failedCount > 0) {
-      throw new Error(`Failed to shut down ${failedCount} fallback PTY session(s)`)
+    // Why: this runs first in the daemon-restart sequence. A throw here would
+    // abort the whole restart and leave "Restart daemon" — the user's recovery
+    // path for a wedged terminal — unusable, recreating the original lockup. So
+    // it is best-effort: log failures, keep restarting, and only count the
+    // sessions that actually shut down.
+    const failed = results.filter((result) => result.status === 'rejected')
+    if (failed.length > 0) {
+      console.warn(
+        `[daemon] ${failed.length} local fallback PTY session(s) failed to shut down during daemon restart; continuing restart`,
+        ...failed.map((result) => (result as PromiseRejectedResult).reason)
+      )
     }
-    return ids.length
+    return results.length - failed.length
   }
 
   getCurrentDaemonSessionIds(): string[] {

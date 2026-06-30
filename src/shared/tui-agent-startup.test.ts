@@ -5,6 +5,7 @@ import {
   buildAgentStartupPlan,
   buildShellCommandFromArgv
 } from './tui-agent-startup'
+import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 
 describe('tui agent startup plans', () => {
@@ -334,6 +335,37 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
+  })
+
+  it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
+    expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG.opencode.draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG.opencode.draftPromptEnvVar).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['mimo-code'].draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptEnvVar).toBeUndefined()
+    // Why: no native draft launch plan means both agents fall through to the
+    // cursor-gated paste-after-ready route, where the new signal applies.
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'opencode',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'mimo-code',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
   })
 
   it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {

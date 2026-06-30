@@ -10,7 +10,8 @@
     "prefer-template": "off",
     "no-useless-return": "off",
     "unicorn/prefer-at": "off",
-    "unicorn/prefer-ternary": "off"
+    "unicorn/prefer-ternary": "off",
+    "unicorn/prefer-node-protocol": "off"
   },
   "overrides": [
     {

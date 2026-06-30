@@ -3,6 +3,7 @@
 // pure so the truncation/serialization rules are unit-testable. Ported from the
 // mobile summarizeToolInput/summarizeToolRun (desktop parity).
 
+import { basename } from '../../lib/path'
 import { isToolCallBlock, type NativeChatBlock } from '../../../../shared/native-chat-types'
 
 const MAX_PREVIEW_LENGTH = 80
@@ -27,7 +28,7 @@ export function briefToolArg(input: unknown): string {
     const obj = input as Record<string, unknown>
     const path = obj.file_path ?? obj.path ?? obj.notebook_path
     if (typeof path === 'string' && path.length > 0) {
-      return path.split('/').pop() ?? path
+      return basename(path)
     }
     const cmd = obj.command ?? obj.cmd ?? obj.query ?? obj.pattern
     if (typeof cmd === 'string') {

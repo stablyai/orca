@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/types'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
   WORKTREE_OWNER_UNREACHABLE_ERROR
@@ -37,6 +38,7 @@ const PATH_ACCESS_DENIED_MESSAGE =
 
 const REMOTE_REPO_ROOT = '/home/user/project'
 const REMOTE_FILE_PATH = '/home/user/project/src/index.ts'
+const FLOATING_FILE_PATH = '/tmp/orca/floating-workspace/notes.md'
 const SSH_TARGET_ID = 'ssh-target-1'
 const SSH_REPO_ID = 'repo-ssh'
 const REMOTE_WORKTREE_ID = `${SSH_REPO_ID}::${REMOTE_REPO_ROOT}`
@@ -55,6 +57,9 @@ const fsReadFile = vi.fn()
 function mainProcessReadFile(args: { filePath: string; connectionId?: string }) {
   if (args.connectionId) {
     return Promise.resolve({ content: 'export const remote = true\n', isBinary: false })
+  }
+  if (args.filePath === FLOATING_FILE_PATH) {
+    return Promise.resolve({ content: '# floating workspace\n', isBinary: false })
   }
   // Local resolver: the remote POSIX path is not under any local allowed root.
   return Promise.reject(new Error(PATH_ACCESS_DENIED_MESSAGE))
@@ -107,6 +112,31 @@ async function openRemoteFileInEditor() {
     filePath: REMOTE_FILE_PATH,
     relativePath: 'src/index.ts',
     worktreeId: REMOTE_WORKTREE_ID,
+    connectionId
+  })
+}
+
+async function openFloatingWorkspaceFileInEditor() {
+  const resolvedConnectionId = getConnectionIdForFile(
+    FLOATING_TERMINAL_WORKTREE_ID,
+    FLOATING_FILE_PATH
+  )
+  const connectionId = resolvedConnectionId ?? undefined
+  const readSettings: { activeRuntimeEnvironmentId: string | null } = {
+    activeRuntimeEnvironmentId: null
+  }
+  if (
+    resolvedConnectionId === undefined &&
+    !readSettings.activeRuntimeEnvironmentId?.trim() &&
+    !isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)
+  ) {
+    throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
+  }
+  return readRuntimeFileContent({
+    settings: readSettings,
+    filePath: FLOATING_FILE_PATH,
+    relativePath: 'notes.md',
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
     connectionId
   })
 }
@@ -170,5 +200,26 @@ describe('issue #6648: opening a remote-host file in the editor', () => {
     // are NOT auto-retried (the terminal one only restarts via the Retry button).
     expect(shouldRetryFileLoadError(PATH_ACCESS_DENIED_MESSAGE)).toBe(false)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
+  })
+})
+
+describe('issue #6831: opening a floating-workspace file in the editor', () => {
+  it('FIXED: treats the floating workspace as local instead of waiting for repo hydration', async () => {
+    // The floating workspace is a synthetic local workspace, not a repo-backed
+    // SSH worktree. Before this guard, the owner check reproduced #6831 by
+    // throwing WORKTREE_OWNER_NOT_READY_ERROR forever when repos were empty.
+    useAppStore.setState({ repos: [], worktreesByRepo: {} })
+
+    expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, FLOATING_FILE_PATH)).toBeNull()
+    expect(isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)
+
+    await expect(openFloatingWorkspaceFileInEditor()).resolves.toEqual({
+      content: '# floating workspace\n',
+      isBinary: false
+    })
+    expect(fsReadFile).toHaveBeenCalledWith({
+      filePath: FLOATING_FILE_PATH,
+      connectionId: undefined
+    })
   })
 })

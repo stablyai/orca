@@ -52,6 +52,7 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 }))
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+const SHOW_CURSOR = '\x1b[?25h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
@@ -146,7 +147,7 @@ describe('pasteDraftWhenAgentReady', () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
-      agent: 'opencode'
+      agent: 'gemini'
     })
     await flushMicrotasks()
 
@@ -158,6 +159,156 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
+  it('pastes into opencode as soon as show-cursor renders after bracketed paste is enabled', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await flushMicrotasks()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
+    testState.ptyObserver?.(SHOW_CURSOR)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('detects opencode show-cursor inside a large first render chunk', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${SHOW_CURSOR}${'x'.repeat(900)}`)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
+  it('detects opencode show-cursor split across a later chunk', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await flushMicrotasks()
+    testState.ptyObserver?.('render noise \x1b[?')
+    await flushMicrotasks()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
+    testState.ptyObserver?.('25h')
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+  })
+
+  it('rescues opencode delivery under never-settling output churn', async () => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await flushMicrotasks()
+    for (let index = 0; index < 5; index += 1) {
+      await vi.advanceTimersByTimeAsync(1499)
+      testState.ptyObserver?.(`setup output ${index}`)
+      await flushMicrotasks()
+      expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    }
+
+    testState.ptyObserver?.(SHOW_CURSOR)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not paste on the quiet window for opencode (it never arms one)', async () => {
+    // Why: opencode is silent for ~1.5-2s between enabling bracketed paste and
+    // mounting its composer. A quiet window would fire during that gap and paste
+    // before the composer exists (the original bug), so the cursor signal must
+    // not arm one. With process inspection failing, delivery times out instead.
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue(null)
+    const onTimeout = vi.fn()
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode',
+      onTimeout
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await flushMicrotasks()
+
+    // Quiet-window duration elapses with no show-cursor: must NOT paste.
+    await vi.advanceTimersByTimeAsync(1500)
+    await flushMicrotasks()
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+
+    // Only the hard timeout (and failed process check) resolves it — to false.
+    await vi.advanceTimersByTimeAsync(8000)
+    await flushMicrotasks(5)
+    await vi.advanceTimersByTimeAsync(1000)
+    await expect(promise).resolves.toBe(false)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+  })
+
+  it('best-effort pastes for opencode at the hard timeout when its process is running', async () => {
+    // Why: with no quiet window, the hard-timeout process-ownership check is the
+    // backstop if show-cursor is somehow missed — same model as Codex.
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'opencode',
+      hasChildProcesses: false
+    })
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'opencode'
+    })
+    await flushMicrotasks()
+
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
+    await vi.advanceTimersByTimeAsync(8000)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(

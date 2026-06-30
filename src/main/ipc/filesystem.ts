@@ -115,6 +115,8 @@ import {
   type CommitMessageAgentEnvironmentResolvers
 } from '../text-generation/commit-message-agent-environment'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -483,27 +485,48 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'fs:readDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.readDir(args.dirPath)
-      }
-      const dirPath = await resolveAuthorizedPath(args.dirPath, store)
-      const entries = await readdir(dirPath, { withFileTypes: true })
-      const mapped = await Promise.all(
-        entries.map(async (entry) => ({
-          name: entry.name,
-          isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-            resolveAuthorizedPath(entryPath, store)
-          ),
-          isSymlink: entry.isSymbolicLink()
-        }))
-      )
-      return mapped.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
+      // Why: a thrown fs:readDir reaches the renderer as the opaque "Error
+      // invoking remote method 'fs:readDir'" (Windows WSL/UNC realpath/readdir
+      // failures, dropped SSH providers). Record which throw site fired plus a
+      // redacted path shape so these are diagnosable without the raw path.
+      let throwSite: ReadDirThrowSite = 'authorize'
+      try {
+        if (args.connectionId) {
+          throwSite = 'ssh-provider'
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          return await provider.readDir(args.dirPath)
         }
-        return a.name.localeCompare(b.name)
-      })
+        throwSite = 'authorize'
+        const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+        throwSite = 'readdir'
+        const entries = await readdir(dirPath, { withFileTypes: true })
+        const mapped = await Promise.all(
+          entries.map(async (entry) => ({
+            name: entry.name,
+            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
+              resolveAuthorizedPath(entryPath, store)
+            ),
+            isSymlink: entry.isSymbolicLink()
+          }))
+        )
+        return mapped.sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) {
+            return a.isDirectory ? -1 : 1
+          }
+          return a.name.localeCompare(b.name)
+        })
+      } catch (error: unknown) {
+        recordCrashBreadcrumb(
+          'fs_readdir_error',
+          buildReadDirErrorBreadcrumb({
+            dirPath: args.dirPath,
+            connectionId: args.connectionId,
+            throwSite,
+            error
+          })
+        )
+        throw error
+      }
     }
   )
 

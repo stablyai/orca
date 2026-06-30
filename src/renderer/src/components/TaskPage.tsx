@@ -466,9 +466,10 @@ function getTaskPageRepoCacheInput(repo: Repo): {
   }
 }
 
-// Why: the row's px-3 left padding leaves a 12px gap between the scroll-viewport
-// edge and the sticky ID column; without a covering ::before, scrolled cell text
-// bleeds through that strip. Same trick as the title column for its 8px gap.
+// Why: the sticky header's bg must be opaque (GITHUB_TASK_ROW_SURFACE_CLASS, not
+// bg-muted/50) or vertically-scrolled rows bleed through it. These left-sticky
+// cells additionally need a ::before gap-cover so horizontally-scrolled header
+// columns don't show through the row's px-3 padding strip.
 const GITHUB_TASK_STICKY_ID_HEADER_CLASS = cn(
   'sticky left-3 z-30 before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
   GITHUB_TASK_ROW_SURFACE_CLASS
@@ -7823,12 +7824,12 @@ export default function TaskPage(): React.JSX.Element {
             icon). Matching that here needs 6px top padding above the 32px
             cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
             too low, breaking the visual band across the top chrome. */}
-        <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-5 md:px-8 md:pt-1.5 md:pb-7">
+        <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-4 md:px-8 md:pt-1.5 md:pb-5">
           <div
-            className={cn('flex-none flex flex-col gap-3', taskPageListChromeHidden && 'hidden')}
+            className={cn('flex-none flex flex-col gap-2', taskPageListChromeHidden && 'hidden')}
           >
-            <section className="flex flex-col gap-3">
-              <div className="flex flex-col gap-3">
+            <section className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <div
                     className="flex min-w-0 flex-wrap items-center gap-2"
@@ -8142,10 +8143,10 @@ export default function TaskPage(): React.JSX.Element {
 
                 {taskSource === 'github' && githubMode === 'items' ? (
                   <div
-                    className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm"
+                    className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"
                     data-contextual-tour-target="tasks-search-presets"
                   >
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="mb-2 flex flex-wrap gap-2">
                       {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
                         const active = activeTaskPreset === option.id
                         return (
@@ -8371,7 +8372,7 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : taskSource === 'linear' && linearConnected ? (
                   <div
-                    className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm"
+                    className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"
                     data-contextual-tour-target="tasks-search-presets"
                   >
                     <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -8598,7 +8599,7 @@ export default function TaskPage(): React.JSX.Element {
                     ) : null}
                   </div>
                 ) : taskSource === 'jira' && jiraConnected ? (
-                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
                         {jiraPresets.map((preset) => {
@@ -8806,7 +8807,7 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
                     <div
-                      className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm"
+                      className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"
                       data-contextual-tour-target="tasks-search-presets"
                     >
                       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -8935,8 +8936,12 @@ export default function TaskPage(): React.JSX.Element {
                 style={{ scrollbarGutter: 'stable' }}
               >
                 <div
+                  // Why: z-40 must beat the data rows' sticky left cells (z-20);
+                  // this container is a stacking context, so its z sets the whole
+                  // header's level — at z-10 the rows' sticky cells painted over it.
                   className={cn(
-                    'sticky top-0 z-10 grid gap-2 border-b border-border/50 bg-muted/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground',
+                    'sticky top-0 z-40 grid gap-2 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground',
+                    GITHUB_TASK_ROW_SURFACE_CLASS,
                     githubTaskGridClass
                   )}
                 >
@@ -9157,7 +9162,10 @@ export default function TaskPage(): React.JSX.Element {
                             }
                           }}
                           className={cn(
-                            'group/github-task-row grid cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                            // Why: hover uses the same opaque muted-70% mix as the sticky
+                            // ID/Title cells (GITHUB_TASK_ROW_HOVER_SURFACE_CLASS) so the
+                            // left columns don't show a different shade than the rest of the row.
+                            'group/github-task-row grid cursor-pointer gap-2 px-3 py-2 text-left transition-colors hover:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                             githubTaskGridClass
                           )}
                         >
@@ -9198,7 +9206,7 @@ export default function TaskPage(): React.JSX.Element {
                                 />
                               ) : null}
                             </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                               <span>
                                 {item.author ??
                                   translate(

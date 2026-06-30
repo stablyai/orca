@@ -1715,8 +1715,12 @@ export default function TerminalPane({
       return
     }
     let ownsRegularTerminalFocus = false
+    let releasedHelperOnWindowBlur: HTMLElement | null = null
     const syncFocused = (focused: boolean): void => {
       ownsRegularTerminalFocus = focused
+      if (focused) {
+        releasedHelperOnWindowBlur = null
+      }
       setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
     }
@@ -1745,7 +1749,7 @@ export default function TerminalPane({
     const onWindowBlur = (): void => {
       // Why: webview/browser handoff leaves the helper textarea as DOM focus,
       // so clear only the main-process mirror and let guest focus proceed.
-      releaseTerminalFocusForWindowBlur({
+      releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
         container,
         activeElement: document.activeElement,
         syncFocused
@@ -1753,12 +1757,17 @@ export default function TerminalPane({
     }
     const onWindowFocus = (): void => {
       // Why: app reactivation can preserve DOM focus on xterm after blur
-      // cleared the process-wide shortcut mirror.
-      resyncTerminalFocusForWindowFocus({
-        container,
-        activeElement: document.activeElement,
-        syncFocused
-      })
+      // cleared the process-wide shortcut mirror, or move focus to body/null.
+      if (
+        resyncTerminalFocusForWindowFocus({
+          container,
+          activeElement: document.activeElement,
+          syncFocused,
+          releasedHelper: releasedHelperOnWindowBlur
+        })
+      ) {
+        releasedHelperOnWindowBlur = null
+      }
     }
 
     if (

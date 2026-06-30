@@ -2551,6 +2551,39 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('stops auto-reloading after a rapid renderer crash loop trips the breaker', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+
+    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    // Each cycle: renderer dies, breaker allows the first 3 reloads, then opens.
+    const driveCrashCycle = (): void => {
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+    }
+    driveCrashCycle()
+    driveCrashCycle()
+    driveCrashCycle()
+    // 1 initial load + 3 recoveries.
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    // 4th crash within the window: breaker is open, no further reload.
+    driveCrashCycle()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({ recentRecoveryCount: 3 })
+    )
+
+    consoleError.mockRestore()
+  })
+
   function createStartupRevealWindowFixture() {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

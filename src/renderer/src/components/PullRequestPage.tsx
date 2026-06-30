@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   Braces,
@@ -30,6 +31,7 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
+  GitPullRequestDraft,
   ListChecks,
   LoaderCircle,
   MessageSquare,
@@ -6759,7 +6761,18 @@ export default function PullRequestPage({
     refetchTick
   ])
 
-  const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
+  // Why: the state pill's icon must track the resolved state so a merged PR
+  // reads as merged (purple GitMerge) rather than wearing the open-PR glyph.
+  const Icon =
+    workItem?.type === 'pr'
+      ? localState === 'merged'
+        ? GitMerge
+        : localState === 'closed'
+          ? GitPullRequestClosed
+          : localState === 'draft'
+            ? GitPullRequestDraft
+            : GitPullRequest
+      : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {
       return null
@@ -6984,15 +6997,15 @@ export default function PullRequestPage({
             <ChevronLeft className="size-4" />
             {backLabel}
           </Button>
-          <span className="text-border">·</span>
+          <span className="text-muted-foreground/40">·</span>
           {ownerRepo ? (
             <>
               <span className="truncate">
                 <span className="text-muted-foreground">{ownerRepo.owner}</span>
-                <span className="mx-1 text-muted-foreground/60">/</span>
+                <span className="mx-1 text-muted-foreground/40">/</span>
                 <span className="font-medium text-foreground">{ownerRepo.repo}</span>
               </span>
-              <span className="text-muted-foreground/60">·</span>
+              <span className="text-muted-foreground/40">·</span>
             </>
           ) : null}
           <span className="font-mono text-muted-foreground">#{workItem.number}</span>
@@ -7046,11 +7059,13 @@ export default function PullRequestPage({
       </div>
 
       {/* Row 2: PR title block — large weight-400 title + state row, mirrors Primer pr-title-block */}
-      <div className="flex-none border-b border-border/60 px-6 py-4">
+      <div className="flex-none border-b border-border/60 px-6 py-5">
         <div className="flex items-start gap-4">
-          <h1 className="min-w-0 flex-1 text-[28px] font-medium leading-tight text-foreground">
+          <h1 className="min-w-0 flex-1 text-[26px] font-medium leading-snug text-foreground">
             <span className="break-words">{workItem.title}</span>
-            <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
+            <span className="ml-2 align-baseline text-[20px] font-normal text-muted-foreground/70">
+              #{workItem.number}
+            </span>
           </h1>
           <div className="flex shrink-0 items-center gap-2">
             {/* Why: Orca's signature affordance — keep this primary so it stands out
@@ -7059,9 +7074,8 @@ export default function PullRequestPage({
               <ButtonGroup>
                 <Button
                   type="button"
-                  size="sm"
                   onClick={handleOpenOrUsePR}
-                  className="gap-1.5 whitespace-nowrap font-semibold"
+                  className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
                   aria-label={
                     attachedWorkspace
                       ? translate(
@@ -7076,22 +7090,19 @@ export default function PullRequestPage({
                 >
                   {attachedWorkspace
                     ? translate('auto.components.PullRequestPage.c9e7094a7b', 'Resume workspace')
-                    : translate(
-                        'auto.components.PullRequestPage.25690a3855',
-                        'Start workspace from PR'
-                      )}
-                  <ArrowRight className="size-3.5" />
+                    : translate('auto.components.PullRequestPage.71a3c0f9d2', 'Start workspace')}
+                  <ArrowRight className="size-4" />
                 </Button>
                 <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
-                    size="icon-sm"
+                    size="icon"
                     aria-label={translate(
                       'auto.components.PullRequestPage.57c13a5aa4',
                       'More PR workspace actions'
                     )}
                   >
-                    <ChevronDown className="size-3.5" />
+                    <ChevronDown className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
               </ButtonGroup>
@@ -7110,7 +7121,7 @@ export default function PullRequestPage({
             </DropdownMenu>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+        <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[13px] text-muted-foreground">
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium',
@@ -7120,16 +7131,26 @@ export default function PullRequestPage({
             <Icon className="size-3.5" />
             {stateBadgeLabel}
           </span>
-          <span className="flex flex-wrap items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {workItem.author ? (
+              <img
+                src={githubAvatarUrl(workItem.author)}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="size-5 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+              />
+            ) : null}
             <span className="font-semibold text-foreground">
               {workItem.author ??
                 translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')}
             </span>
-            <span>
-              {translate('auto.components.PullRequestPage.b0e80f083d', 'wants to merge into')}
-            </span>
+          </span>
+          {/* Why: the scannable base ← head idiom reads faster than a prose
+              sentence and matches how reviewers think about merge direction. */}
+          <span className="flex flex-wrap items-center gap-1.5">
             {baseBranch ? (
-              <span className="rounded-md bg-accent/40 px-1.5 py-0.5 font-mono text-[12px] text-accent-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
                 {baseBranch}
               </span>
             ) : (
@@ -7137,9 +7158,9 @@ export default function PullRequestPage({
                 {translate('auto.components.PullRequestPage.c44b70352b', 'base branch')}
               </span>
             )}
-            <span>{translate('auto.components.PullRequestPage.e1f3641bfd', 'from')}</span>
+            <ArrowLeft className="size-3.5 shrink-0 text-muted-foreground/70" />
             {headBranch ? (
-              <span className="rounded-md bg-accent/40 px-1.5 py-0.5 font-mono text-[12px] text-accent-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
                 {headBranch}
               </span>
             ) : (
@@ -7147,16 +7168,21 @@ export default function PullRequestPage({
                 {translate('auto.components.PullRequestPage.00b7b82329', 'head branch')}
               </span>
             )}
-            <span className="text-muted-foreground/80">
-              {translate('auto.components.PullRequestPage.e6996f4024', '· updated')}
-              {formatRelativeTime(workItem.updatedAt)}
-            </span>
+          </span>
+          <span className="text-muted-foreground/40">·</span>
+          <span className="text-muted-foreground/80">
+            {translate('auto.components.PullRequestPage.dd5d9a4f17', 'updated {{value0}}', {
+              value0: formatRelativeTime(workItem.updatedAt)
+            })}
           </span>
           {attachedWorkspaceLabel ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <FolderKanban className="size-3.5 shrink-0" />
-              <span className="truncate">{attachedWorkspaceLabel}</span>
-            </span>
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <FolderKanban className="size-3.5 shrink-0" />
+                <span className="truncate">{attachedWorkspaceLabel}</span>
+              </span>
+            </>
           ) : null}
         </div>
       </div>

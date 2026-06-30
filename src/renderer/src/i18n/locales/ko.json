@@ -1334,7 +1334,9 @@
         "8ff5ae8866": "담당자",
         "82c87eceb9": "담당자 편집",
         "1ff5d979df": "할당된 사람이 없음",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "이 검사는 병합 차단을 해제하기 전에 GitHub에서 수동 작업(예: 워크플로 실행 승인)이 필요합니다.",
+        "dd5d9a4f17": "{{value0}}에 업데이트됨",
+        "71a3c0f9d2": "워크스페이스 시작"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",

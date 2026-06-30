@@ -205,18 +205,29 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.hasPty(fresh.id)).toBe(false)
   })
 
-  it('throws instead of counting fallback sessions that fail to shut down', async () => {
+  it('is best-effort: counts only successful shutdowns and never throws (keeps restart alive)', async () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-    const fresh = await provider.spawn({ cols: 80, rows: 24 })
-    vi.mocked(fallback.shutdown).mockRejectedValueOnce(new Error('still alive'))
+    const stuck = await provider.spawn({ sessionId: 'stuck', cols: 80, rows: 24 })
+    await provider.spawn({ sessionId: 'ok', cols: 80, rows: 24 })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(fallback.shutdown).mockImplementation(async (id: string) => {
+      if (id === stuck.id) {
+        throw new Error('still alive')
+      }
+    })
 
-    await expect(provider.shutdownFallbackSessions()).rejects.toThrow(
-      'Failed to shut down 1 fallback PTY session(s)'
-    )
+    // Why: a single un-killable local PTY must not abort the daemon restart.
+    const killedCount = await provider.shutdownFallbackSessions()
 
-    expect(provider.hasPty(fresh.id)).toBe(true)
+    // Best-effort: the one that shut down is counted, the stuck one is not, and
+    // crucially it does not throw — so the daemon restart sequence proceeds.
+    expect(killedCount).toBe(1)
+    expect(warn).toHaveBeenCalled()
+    expect(fallback.shutdown).toHaveBeenCalledWith('stuck', { immediate: true })
+    expect(fallback.shutdown).toHaveBeenCalledWith('ok', { immediate: true })
+    warn.mockRestore()
   })
 
   it('fans synthetic exits for discovered current-daemon sessions only', async () => {

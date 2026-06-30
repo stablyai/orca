@@ -1334,7 +1334,9 @@
         "8ff5ae8866": "Responsables",
         "82c87eceb9": "Editar responsables",
         "1ff5d979df": "Nadie asignado",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "Esta comprobación requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del flujo de trabajo) antes de poder desbloquear la fusión.",
+        "dd5d9a4f17": "actualizado {{value0}}",
+        "71a3c0f9d2": "Iniciar espacio de trabajo"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
