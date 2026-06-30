@@ -540,7 +540,7 @@
         "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
       },
       "ephemeralVmWorkspaceTarget": {
-        "registerProjectRootFailed": "Failed to register the recipe-created project root on the runtime."
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
       }
     },
     "hooks": {
@@ -657,9 +657,7 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification",
-        "ephemeralVms": "Per-Workspace Environments",
-        "ephemeralVmsDescription": "Give each workspace its own on-demand, disposable environment on any provider, connected over an Orca server or SSH."
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -6154,9 +6152,7 @@
           "2309068a6f": "破壊的な",
           "65358016ea": "破棄",
           "dev": "Dev Tools",
-          "devDescription": "Dev-only tools for exercising UI states.",
-          "ephemeralVms": "Per-Workspace Environments",
-          "ephemeralVmsDescription": "Give each workspace its own disposable environment on any provider, over an Orca server or SSH."
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -8655,6 +8651,12 @@
           "retry": "Retry cleanup",
           "cleanup": "Cleanup"
         },
+        "ephemeralVms": {
+          "search": {
+            "title": "Per-Workspace Environments",
+            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment."
+          }
+        },
         "EphemeralVmsPane": {
           "loadError": "Could not load recipes.",
           "copyError": "Could not copy the prompt.",
@@ -8673,11 +8675,9 @@
           "checking": "Checking recipes...",
           "none": "No recipes found yet."
         },
-        "ephemeralVms": {
-          "search": {
-            "title": "Per-Workspace Environments",
-            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment."
-          }
+        "ephemeralVmsExperimentalSetting": {
+          "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
+          "toggleLabel": "Toggle per-workspace environments"
         }
       },
       "right": {

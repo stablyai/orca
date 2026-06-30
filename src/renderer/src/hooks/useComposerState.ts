@@ -710,9 +710,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const selectedRepoIsGit = selectedRepo ? isGitRepoKind(selectedRepo) : false
-  const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<NonNullable<OrcaHooks['environmentRecipes']>>(
-    []
-  )
+  const [ephemeralVmRecipes, setEphemeralVmRecipes] = useState<
+    NonNullable<OrcaHooks['environmentRecipes']>
+  >([])
   const [selectedEphemeralVmRecipeId, setSelectedEphemeralVmRecipeId] = useState<string | null>(
     null
   )
@@ -807,12 +807,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // reset the user's manually-chosen recipe via setSelectedEphemeralVmRecipeId(null).
   const selectedRecipeRepoId = selectedRepo?.id ?? null
   const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
+  // Why: the experimental toggle must hide the composer target and avoid probing
+  // repo recipes, since recipe discovery can surface setup errors for a hidden feature.
+  const ephemeralVmsEnabled = settings?.experimentalEphemeralVms === true
   useEffect(() => {
     let cancelled = false
     setEphemeralVmRecipes([])
     setSelectedEphemeralVmRecipeId(null)
     setEphemeralVmRecipeError(null)
     if (
+      !ephemeralVmsEnabled ||
       !selectedRecipeRepoId ||
       !selectedRepoIsGit ||
       selectedRecipeRepoConnectionId ||
@@ -857,6 +861,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       cancelled = true
     }
   }, [
+    ephemeralVmsEnabled,
     initialEphemeralVmRecipeId,
     isProjectGroupTarget,
     selectedRecipeRepoConnectionId,
@@ -3966,7 +3971,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             : null
         let ephemeralVmRecipe: WorktreeCreationRequest['ephemeralVmRecipe']
-        if (selectedEphemeralVmRecipeId && selectedWorkspaceTarget.status === 'ready') {
+        const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null
+        if (activeEphemeralVmRecipeId && selectedWorkspaceTarget.status === 'ready') {
           const vmRecipeTrustDecision = await ensureHooksConfirmed(
             useAppStore.getState(),
             repoId,
@@ -3977,7 +3983,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           }
           ephemeralVmRecipe = {
             sourceRepoId: repoId,
-            recipeId: selectedEphemeralVmRecipeId,
+            recipeId: activeEphemeralVmRecipeId,
             projectId: selectedWorkspaceTarget.target.projectId
           }
         }
@@ -3986,7 +3992,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           repoId,
           ...(ephemeralVmRecipe ? { ephemeralVmRecipe } : {}),
           worktreeCreateProgressMode:
-            selectedEphemeralVmRecipeId ||
+            activeEphemeralVmRecipeId ||
             getActiveRuntimeTarget(selectedRepoSettings).kind !== 'local'
               ? 'indeterminate'
               : 'stepped',
@@ -4095,6 +4101,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoRequiresConnection,
       selectedWorkspaceTarget,
       selectedEphemeralVmRecipeId,
+      ephemeralVmsEnabled,
       showProjectRequiredError,
       settings?.agentCmdOverrides,
       settings?.agentDefaultArgs,
@@ -4146,10 +4153,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     projectHostSetupOptions: isProjectGroupTarget ? [] : projectHostSetupOptions,
     selectedProjectHostSetupId: isProjectGroupTarget ? null : selectedProjectHostSetupId,
     onProjectHostSetupChange: handleProjectHostSetupChange,
-    ephemeralVmRecipes: isProjectGroupTarget ? [] : ephemeralVmRecipes,
-    selectedEphemeralVmRecipeId: isProjectGroupTarget ? null : selectedEphemeralVmRecipeId,
+    ephemeralVmRecipes: isProjectGroupTarget || !ephemeralVmsEnabled ? [] : ephemeralVmRecipes,
+    selectedEphemeralVmRecipeId:
+      isProjectGroupTarget || !ephemeralVmsEnabled ? null : selectedEphemeralVmRecipeId,
     onEphemeralVmRecipeChange: setSelectedEphemeralVmRecipeId,
-    ephemeralVmRecipeError: isProjectGroupTarget ? null : ephemeralVmRecipeError,
+    ephemeralVmRecipeError:
+      isProjectGroupTarget || !ephemeralVmsEnabled ? null : ephemeralVmRecipeError,
     repoBackedSearchRepos: isProjectGroupTarget ? folderSourceRepos : undefined,
     repoBackedSourcesDisabled: isProjectGroupTarget ? folderSourceRepos.length === 0 : false,
     allowSmartNameAddProject: !isProjectGroupTarget,

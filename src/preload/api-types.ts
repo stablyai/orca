@@ -268,6 +268,7 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
+  RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../shared/runtime-types'
@@ -2591,21 +2592,7 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
-      callback: (data: {
-        requestId: string
-        worktreeId?: string
-        afterTabId?: string
-        targetGroupId?: string
-        command?: string
-        env?: Record<string, string>
-        launchConfig?: SleepingAgentLaunchConfig
-        launchToken?: string
-        launchAgent?: TuiAgent
-        startupCommandDelivery?: StartupCommandDelivery
-        title?: string
-        activate?: boolean
-        presentation?: RuntimeTerminalPresentation
-      }) => void
+      callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string

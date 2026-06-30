@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IDisposable } from '@xterm/xterm'
 import {
   detectAgentStatusFromTitle,
@@ -25,9 +26,11 @@ import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import { shouldReconcileDeadSession } from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
+import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
@@ -2205,6 +2208,9 @@ export function connectPanePty(
     if (shouldSuppressDesktopPtyResize()) {
       return
     }
+    if (queuePanePtyResizeIfHeld(pane.container, cols, rows)) {
+      return
+    }
     transport.resize(cols, rows)
   }
 
@@ -2221,38 +2227,43 @@ export function connectPanePty(
     if (suppressSnapshotReplayPtyResize) {
       return
     }
-    if (!isRendererPtyResizeAuthoritative()) {
-      return
-    }
-    if (shouldSuppressDesktopPtyResize()) {
-      return
-    }
-    if (queuePanePtyResizeIfHeld(pane.container, cols, rows)) {
-      return
-    }
-    transport.resize(cols, rows)
+    forwardPtyResize(cols, rows)
   })
 
-  // Why: while a mobile-fit override is active, the onResize listener above
-  // and the matching server-side gate both correctly drop pty:resize so the
-  // PTY stays parked at phone dims. But the server still needs to learn the
-  // real desktop pane geometry — otherwise resolveDesktopRestoreTarget falls
-  // back to the PTY's spawn default (e.g. 80×24 for a hidden tab) and Take
-  // Back leaves the terminal partially restored. This observer measures the
-  // pane container as a side-channel, computes proposed cols/rows the way
-  // safeFit would, and reports it via pty:reportGeometry — a measurement-
-  // only IPC that updates lastRendererSizes and non-null subscriber
-  // baselines without resizing the PTY. We only fire while an override is
-  // active because the normal pty:resize path covers all other cases. See
-  // docs/mobile-fit-hold.md.
+  // Why: renderer resize forwarding is fire-and-forget. A visible pane can
+  // finish with xterm at the right grid while the PTY silently kept an older
+  // grid, so Codex keeps composing against stale columns. Fit first so xterm's
+  // normal onResize can send, then read applied PTY size and repair only drift.
+  const ptySizeReassertion = createPtySizeReassertion({
+    isDisposed: () => disposed,
+    getPtyId: () => transport.getPtyId(),
+    isRemotePtyId: isRemoteRuntimePtyId,
+    shouldSuppressDesktopResize: () => shouldSuppressDesktopPtyResize(),
+    fit: () => safeFit(pane),
+    getTerminalDimensions: () => ({ cols: pane.terminal.cols, rows: pane.terminal.rows }),
+    getAppliedSize: (ptyId) => window.api.pty.getSize(ptyId),
+    forwardResize: forwardPtyResize
+  })
+
+  // Why: observe the outer pane as the layout signal for both desktop drift
+  // healing and mobile take-back. Normal desktop panes compare xterm against
+  // the PTY's applied size; mobile-fit panes only report desktop geometry so
+  // the parked phone-sized PTY is not resized. See docs/mobile-fit-hold.md.
   let pendingGeometryReportRaf: number | null = null
-  const reportPaneGeometry = (): void => {
+  const handleObservedPaneGeometry = (): void => {
     pendingGeometryReportRaf = null
     const currentPtyId = transport.getPtyId()
     if (!currentPtyId) {
       return
     }
-    if (!getFitOverrideForPty(currentPtyId)) {
+    const fitOverride = getFitOverrideForPty(currentPtyId)
+    if (!fitOverride) {
+      if (shouldSuppressDesktopPtyResize()) {
+        return
+      }
+      requestStablePaneFit(pane as ManagedPaneInternal, () =>
+        ptySizeReassertion.request({ fit: false })
+      )
       return
     }
     let proposed: { cols: number; rows: number } | undefined
@@ -2277,7 +2288,7 @@ export function connectPanePty(
           if (pendingGeometryReportRaf !== null) {
             return
           }
-          pendingGeometryReportRaf = requestAnimationFrame(reportPaneGeometry)
+          pendingGeometryReportRaf = requestAnimationFrame(handleObservedPaneGeometry)
         })
   // Why: pane.xtermContainer is created later in pane-lifecycle's
   // attachWebgl/initial-fit path; pane.container is always present at the
@@ -2341,56 +2352,6 @@ export function connectPanePty(
         }
       }
     })
-  }
-
-  // Why: the renderer forwards resizes fire-and-forget and dedupes on the size
-  // it *last sent*, so a resize dropped main-side (it was hidden, a suppression
-  // window, or a provider no-op) leaves xterm and the PTY silently diverged —
-  // and a later same-cols layout fires no onResize, so it never self-corrects
-  // ("resizing sometimes doesn't fix it"). On becoming visible, re-fit and
-  // compare xterm against the PTY's ACTUAL size (not what we think we sent); if
-  // they truly differ, re-assert. Gated on real drift so we emit no spurious
-  // SIGWINCH (which would jar alt-screen TUIs) on an already-synced resume.
-  let reassertingPtySizeOnResume = false
-  const reassertPtySizeOnResume = (): void => {
-    const ptyId = transport.getPtyId()
-    // Skip parked/mobile-driven PTYs before the async size read: their drift
-    // from desktop xterm dims is intentional until mobile hands control back.
-    if (
-      disposed ||
-      reassertingPtySizeOnResume ||
-      !ptyId ||
-      isRemoteRuntimePtyId(ptyId) ||
-      shouldSuppressDesktopPtyResize()
-    ) {
-      return
-    }
-    reassertingPtySizeOnResume = true
-    void window.api.pty
-      .getSize(ptyId)
-      .then((actual) => {
-        // The pane may have been disposed or rebound to a different PTY during
-        // the async hop; bail if this reconcile no longer owns it.
-        if (disposed || transport.getPtyId() !== ptyId) {
-          return
-        }
-        safeFit(pane)
-        const cols = pane.terminal.cols
-        const rows = pane.terminal.rows
-        if (cols <= 0 || rows <= 0) {
-          return
-        }
-        // Re-assert only on genuine divergence from the PTY's applied size (a
-        // null read = unknown id, treated as "cannot confirm synced" so we
-        // forward once). forwardPtyResize owns the authoritative/mobile gating.
-        if (!actual || actual.cols !== cols || actual.rows !== rows) {
-          forwardPtyResize(cols, rows)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        reassertingPtySizeOnResume = false
-      })
   }
 
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
@@ -4696,7 +4657,7 @@ export function connectPanePty(
       // Why: re-assert the PTY size on resume so a resize that was dropped while
       // this pane was hidden self-heals on show, instead of waiting for a manual
       // resize that may never change xterm's column count.
-      reassertPtySizeOnResume()
+      ptySizeReassertion.request()
     },
     reconcileIfSessionDead,
     dispose() {
@@ -4705,6 +4666,7 @@ export function connectPanePty(
       // rAF so a torn-down pane cannot keep fitting/resizing after disposal.
       ptySizeReconcileHandle?.cancel()
       ptySizeReconcileHandle = null
+      ptySizeReassertion.dispose()
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }

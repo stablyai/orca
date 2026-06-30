@@ -611,6 +611,7 @@ describe('connectPanePty', () => {
           signal: vi.fn(),
           listSessions: vi.fn().mockResolvedValue([]),
           getSize: vi.fn().mockResolvedValue(null),
+          reportGeometry: vi.fn(),
           getMainBufferSnapshot: vi.fn().mockResolvedValue(null),
           getForegroundProcess: vi.fn().mockResolvedValue(null),
           hasChildProcesses: vi.fn().mockResolvedValue(false),
@@ -11218,6 +11219,7 @@ describe('connectPanePty', () => {
       binding: { noteVisibilityResume: () => void }
       transport: MockTransport
       deps: ReturnType<typeof createDeps>
+      pane: ReturnType<typeof createPane>
     }> {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
@@ -11232,7 +11234,59 @@ describe('connectPanePty', () => {
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
       }
-      return { binding, transport, deps }
+      return { binding, transport, deps, pane }
+    }
+
+    function installObservedPane(pane: ReturnType<typeof createPane>): {
+      trigger: () => void
+      restore: () => void
+    } {
+      const originalResizeObserver = globalThis.ResizeObserver
+      const originalElement = globalThis.Element
+      const hadResizeObserver = 'ResizeObserver' in globalThis
+      const hadElement = 'Element' in globalThis
+      type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
+      class MockElement extends EventTarget {
+        dataset: Record<string, string> = {}
+        classList = { contains: (className: string) => className === 'pane' }
+
+        querySelectorAll(): MockElement[] {
+          return []
+        }
+      }
+      class MockResizeObserver {
+        static instances: MockResizeObserver[] = []
+        observe = vi.fn()
+        disconnect = vi.fn()
+
+        constructor(private readonly callback: ResizeObserverCallbackLike) {
+          MockResizeObserver.instances.push(this)
+        }
+
+        trigger(): void {
+          this.callback([], this as never)
+        }
+      }
+
+      globalThis.Element = MockElement as never
+      globalThis.ResizeObserver = MockResizeObserver as never
+      pane.container = new MockElement() as unknown as HTMLElement
+
+      return {
+        trigger: () => MockResizeObserver.instances[0]?.trigger(),
+        restore: () => {
+          if (hadResizeObserver) {
+            globalThis.ResizeObserver = originalResizeObserver
+          } else {
+            Reflect.deleteProperty(globalThis, 'ResizeObserver')
+          }
+          if (hadElement) {
+            globalThis.Element = originalElement
+          } else {
+            Reflect.deleteProperty(globalThis, 'Element')
+          }
+        }
+      }
     }
 
     it('re-asserts the current size when the PTY drifted from xterm', async () => {
@@ -11245,6 +11299,115 @@ describe('connectPanePty', () => {
 
       // xterm is 120x40 (createPane default), PTY reports 80x24 → re-assert.
       expect(transport.resize).toHaveBeenCalledWith(120, 40)
+    })
+
+    it('re-asserts after observed pane geometry changes while visible', async () => {
+      const pane = createPane(2)
+      const observer = installObservedPane(pane)
+      try {
+        vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 200, rows: 40 })
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('pty-pane-2')
+        transportFactoryQueue.push(transport)
+        const manager = createManager(2)
+        const deps = createDeps({
+          restoredLeafId: LEAF_2,
+          paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+        })
+        pane.terminal.cols = 82
+        pane.terminal.rows = 40
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks()
+        transport.resize.mockClear()
+        vi.mocked(window.api.pty.getSize).mockClear()
+
+        observer.trigger()
+        await flushAsyncTicks()
+
+        expect(window.api.pty.getSize).toHaveBeenCalledWith('pty-pane-2')
+        expect(transport.resize).toHaveBeenCalledWith(82, 40)
+      } finally {
+        observer.restore()
+      }
+    })
+
+    it('reports desktop geometry without resizing while a mobile-fit override is active', async () => {
+      const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+      const pane = createPane(2)
+      const observer = installObservedPane(pane)
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('pty-pane-2')
+        transportFactoryQueue.push(transport)
+        const manager = createManager(2)
+        const deps = createDeps({
+          restoredLeafId: LEAF_2,
+          paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+        })
+        pane.fitAddon = {
+          ...pane.fitAddon,
+          proposeDimensions: vi.fn(() => ({ cols: 101, rows: 33 }))
+        } as never
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks()
+        setFitOverride('pty-pane-2', 'mobile-fit', 40, 30)
+        transport.resize.mockClear()
+        vi.mocked(window.api.pty.getSize).mockClear()
+        vi.mocked(window.api.pty.reportGeometry).mockClear()
+
+        observer.trigger()
+        await flushAsyncTicks()
+
+        expect(window.api.pty.getSize).not.toHaveBeenCalled()
+        expect(window.api.pty.reportGeometry).toHaveBeenCalledWith('pty-pane-2', 101, 33)
+        expect(transport.resize).not.toHaveBeenCalled()
+      } finally {
+        setFitOverride('pty-pane-2', 'desktop-fit', 0, 0)
+        observer.restore()
+      }
+    })
+
+    it('skips observed desktop reassertion while mobile owns the PTY without a fit override', async () => {
+      const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+      const pane = createPane(2)
+      const observer = installObservedPane(pane)
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('pty-pane-2')
+        transportFactoryQueue.push(transport)
+        const manager = createManager(2)
+        const deps = createDeps({
+          restoredLeafId: LEAF_2,
+          paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+        })
+        const fit = vi.fn()
+        pane.fitAddon = {
+          ...pane.fitAddon,
+          fit,
+          proposeDimensions: vi.fn(() => ({ cols: 130, rows: 50 }))
+        } as never
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks()
+        setDriverForPty('pty-pane-2', { kind: 'mobile', clientId: 'phone-1' })
+        transport.resize.mockClear()
+        fit.mockClear()
+        vi.mocked(window.api.pty.getSize).mockClear()
+        vi.mocked(window.api.pty.reportGeometry).mockClear()
+
+        observer.trigger()
+        await flushAsyncTicks()
+
+        expect(window.api.pty.getSize).not.toHaveBeenCalled()
+        expect(window.api.pty.reportGeometry).not.toHaveBeenCalled()
+        expect(transport.resize).not.toHaveBeenCalled()
+        expect(fit).not.toHaveBeenCalled()
+      } finally {
+        setDriverForPty('pty-pane-2', { kind: 'idle' })
+        observer.restore()
+      }
     })
 
     it('does NOT re-assert when the PTY already matches xterm (no spurious SIGWINCH)', async () => {
@@ -11267,6 +11430,51 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       expect(transport.resize).toHaveBeenCalledWith(120, 40)
+    })
+
+    it('queues re-asserted resizes while pane resize holds are active', async () => {
+      const originalCustomEvent = globalThis.CustomEvent
+      class MockCustomEvent<T> extends Event {
+        detail: T
+
+        constructor(type: string, init: { detail: T }) {
+          super(type)
+          this.detail = init.detail
+        }
+      }
+      globalThis.CustomEvent = MockCustomEvent as unknown as typeof CustomEvent
+      try {
+        const { holdPtyResizesForPaneSubtrees, queuePanePtyResizeIfHeld } =
+          await import('@/lib/pane-manager/pane-pty-resize-hold')
+        vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 80, rows: 24 })
+        const { binding, transport, pane } = await connectResumablePane()
+        await flushAsyncTicks()
+        Object.defineProperty(pane.container, 'classList', {
+          configurable: true,
+          value: { contains: (className: string) => className === 'pane' }
+        })
+        Object.defineProperty(pane.container, 'querySelectorAll', {
+          configurable: true,
+          value: () => []
+        })
+        const release = holdPtyResizesForPaneSubtrees([pane.container])
+        // Prove this fixture is using the same held pane element before the
+        // production reassertion overwrites the queued placeholder size.
+        expect(queuePanePtyResizeIfHeld(pane.container, 1, 1)).toBe(true)
+        transport.resize.mockClear()
+
+        binding.noteVisibilityResume()
+        await flushAsyncTicks()
+
+        expect(transport.resize).not.toHaveBeenCalled()
+
+        release.flush()
+
+        expect(transport.resize).toHaveBeenCalledTimes(1)
+        expect(transport.resize).toHaveBeenCalledWith(120, 40)
+      } finally {
+        globalThis.CustomEvent = originalCustomEvent
+      }
     })
 
     it('skips remote-runtime PTYs (their size lives outside the local ptySizes map)', async () => {

@@ -65,6 +65,7 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
+  RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../shared/runtime-types'
@@ -3228,39 +3229,11 @@ const api = {
       return () => ipcRenderer.removeListener('ui:createTerminal', listener)
     },
     onRequestTerminalCreate: (
-      callback: (data: {
-        requestId: string
-        worktreeId?: string
-        afterTabId?: string
-        targetGroupId?: string
-        command?: string
-        env?: Record<string, string>
-        launchConfig?: SleepingAgentLaunchConfig
-        launchToken?: string
-        launchAgent?: TuiAgent
-        startupCommandDelivery?: StartupCommandDelivery
-        title?: string
-        activate?: boolean
-        presentation?: RuntimeTerminalPresentation
-      }) => void
+      callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: {
-          requestId: string
-          worktreeId?: string
-          afterTabId?: string
-          targetGroupId?: string
-          command?: string
-          env?: Record<string, string>
-          launchConfig?: SleepingAgentLaunchConfig
-          launchToken?: string
-          launchAgent?: TuiAgent
-          startupCommandDelivery?: StartupCommandDelivery
-          title?: string
-          activate?: boolean
-          presentation?: RuntimeTerminalPresentation
-        }
+        data: RuntimeTerminalCreateRequestPayload
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)
       return () => ipcRenderer.removeListener('terminal:requestTabCreate', listener)

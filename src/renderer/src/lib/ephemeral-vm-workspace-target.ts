@@ -8,8 +8,8 @@ import {
   type EphemeralVmRecipeResultWarning
 } from '../../../shared/ephemeral-vm-recipes'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
 
 export type PrepareEphemeralVmWorkspaceTargetArgs = {
   repoId: string
@@ -94,7 +94,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     return {
       ok: false,
       error: translate(
-        'auto.lib.ephemeralVmWorkspaceTarget.registerProjectRootFailed',
+        'auto.lib.ephemeralVmWorkspaceTarget.projectRootRegistrationFailed',
         'Failed to register the recipe-created project root on the runtime.'
       ),
       stderr: provisioned.stderr
