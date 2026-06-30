@@ -88,6 +88,23 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
   })
 
+  it('places per-workspace environments under Experimental instead of as a beta sidebar item', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const experimental = sections.find((section) => section.id === 'experimental')
+    const entry = experimental?.searchEntries.find(
+      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+    )
+
+    expect(sections.map((section) => section.id)).not.toContain('ephemeral-vms')
+    expect(experimental?.group).toBe('experimental')
+    expect(entry?.targetSectionId).toBe('ephemeral-vms')
+  })
+
   it('omits Windows project runtime search entries when the active host is unsupported', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,

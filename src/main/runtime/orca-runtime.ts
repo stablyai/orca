@@ -1695,6 +1695,14 @@ type LinearCreateFieldIntent = {
   projectId?: string
 }
 
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
+
 function sameStringSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
     return false
@@ -2171,6 +2179,7 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2197,6 +2206,7 @@ export class OrcaRuntimeService {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      buildAgentHookPtyEnv?: () => Record<string, string>
     }
   ) {
     this.store = store
@@ -2214,6 +2224,7 @@ export class OrcaRuntimeService {
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
+    this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
   }
 
   getLocalProvider(): IPtyProvider | null {
@@ -9254,15 +9265,12 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-    if (!existingProject) {
-      throw new Error(`Project not found: ${args.projectId}`)
-    }
     let repo = await this.addRepo(args.path, args.kind === 'folder' ? 'folder' : 'git')
     let setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
     if (setup.projectId !== args.projectId) {
+      const existingProject = this.listProjects().find((project) => project.id === args.projectId)
       if (
-        !existingProject.providerIdentity ||
+        !existingProject?.providerIdentity ||
         existingProject.providerIdentity.provider !== 'github'
       ) {
         throw new Error('Imported folder does not match the selected project identity.')
@@ -12772,11 +12780,10 @@ export class OrcaRuntimeService {
         throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
       }
     } else if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
-      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
       try {
-        await this.fetchRemoteWithCache(repo.path, remote, ...localWorktreeGitOptionArgs)
+        await this.fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
       } catch {
         // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
         // not throw; the outer try/catch guarantees create-path tolerance even
@@ -15366,10 +15373,10 @@ export class OrcaRuntimeService {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         r: { requestId: string; tabId?: string; title?: string; error?: string }
       ): void => {
-        if (r.requestId !== requestId) {
+        if (event.sender !== win.webContents || r.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -15528,10 +15535,10 @@ export class OrcaRuntimeService {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         r: { requestId: string; tabId?: string; title?: string; error?: string }
       ): void => {
-        if (r.requestId !== requestId) {
+        if (event.sender !== win.webContents || r.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -15553,6 +15560,7 @@ export class OrcaRuntimeService {
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
         ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
         startupCommandDelivery: startupCommand.startupCommandDelivery,
+        source: 'runtime-session',
         activate: opts.activate
       })
     })
@@ -16596,9 +16604,14 @@ export class OrcaRuntimeService {
     tabId: string,
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string> {
+    const cleanBaseEnv = { ...baseEnv }
+    for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
+      delete cleanBaseEnv[key]
+    }
     const env = {
-      ...baseEnv,
+      ...cleanBaseEnv,
       ...agentTeamsEnv,
+      ...this.buildAgentHookPtyEnv?.(),
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: tabId,
       ORCA_WORKTREE_ID: scope.id

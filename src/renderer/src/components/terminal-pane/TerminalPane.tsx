@@ -121,7 +121,7 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
-import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 

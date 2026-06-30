@@ -1795,10 +1795,10 @@ export class RuntimeBrowserCommands {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         reply: { requestId: string; browserPageId?: string; error?: string }
       ): void => {
-        if (reply.requestId !== requestId) {
+        if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
         clearTimeout(timer)

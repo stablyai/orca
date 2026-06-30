@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IDisposable } from '@xterm/xterm'
 import {
   detectAgentStatusFromTitle,
@@ -25,9 +26,11 @@ import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import { shouldReconcileDeadSession } from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
+import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
@@ -101,6 +104,10 @@ import {
   observeTerminalBracketedPasteModeOutput
 } from './terminal-bracketed-paste'
 import { executeTerminalStartupCommandPaste } from './terminal-startup-command-paste'
+import {
+  waitForStableStartupGrid,
+  type TerminalStartupGridSettleHandle
+} from './terminal-startup-grid-settle'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
@@ -108,6 +115,7 @@ import { createCommandCodeOutputStatusDetector } from './command-code-output-sta
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
+import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
@@ -139,7 +147,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
-import type { TuiAgent } from '../../../../shared/types'
+import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
@@ -163,6 +171,12 @@ const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 128 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
+// Why: a submit repaint can take longer than one keystroke echo to fully
+// arrive, so a synchronized frame that *began* this close to a keystroke stays
+// latency-sensitive even when ConPTY splits its end marker past the redraw
+// window — the keystroke is the "user is here, paint now" signal, not the
+// late closing chunk.
+const FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS = 400
 // Why: OpenTUI can emit many tiny redraws that each look interactive but
 // collectively starve timers unless foreground writes have a rolling budget.
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
@@ -805,6 +819,79 @@ function containsCursorRestore(data: string): boolean {
   return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
 }
 
+const SPLIT_GEOMETRY_EPSILON_PX = 1
+
+function readElementRect(element: HTMLElement | null | undefined): DOMRect | null {
+  try {
+    return element?.getBoundingClientRect?.() ?? null
+  } catch {
+    return null
+  }
+}
+
+function hasVisibleRect(rect: DOMRect | null): rect is DOMRect {
+  return Boolean(
+    rect && rect.width > SPLIT_GEOMETRY_EPSILON_PX && rect.height > SPLIT_GEOMETRY_EPSILON_PX
+  )
+}
+
+function readProposedPaneGrid(pane: ManagedPane): { cols: number; rows: number } | null {
+  try {
+    const dimensions = pane.fitAddon.proposeDimensions()
+    if (!dimensions || dimensions.cols <= 0 || dimensions.rows <= 0) {
+      return null
+    }
+    return dimensions
+  } catch {
+    return null
+  }
+}
+
+function isPaneGridAlignedWithFit(pane: ManagedPane): boolean {
+  const proposed = readProposedPaneGrid(pane)
+  return Boolean(
+    proposed && pane.terminal.cols === proposed.cols && pane.terminal.rows === proposed.rows
+  )
+}
+
+function isSetupSplitGeometryReady(
+  pane: ManagedPane,
+  manager: PaneManager,
+  direction: SetupSplitDirection
+): boolean {
+  const splitElement = pane.container.parentElement
+  const directionClass = direction === 'vertical' ? 'is-vertical' : 'is-horizontal'
+  if (
+    !splitElement?.classList?.contains('pane-split') ||
+    !splitElement.classList.contains(directionClass)
+  ) {
+    return false
+  }
+
+  const sibling = manager
+    .getPanes()
+    .find(
+      (candidate) => candidate.id !== pane.id && candidate.container.parentElement === splitElement
+    )
+  const splitRect = readElementRect(splitElement)
+  const paneRect = readElementRect(pane.container)
+  const siblingRect = readElementRect(sibling?.container)
+  if (!hasVisibleRect(splitRect) || !hasVisibleRect(paneRect) || !hasVisibleRect(siblingRect)) {
+    return false
+  }
+
+  const splitAxis = direction === 'vertical' ? splitRect.width : splitRect.height
+  const paneAxis = direction === 'vertical' ? paneRect.width : paneRect.height
+  const siblingAxis = direction === 'vertical' ? siblingRect.width : siblingRect.height
+  return (
+    paneAxis > SPLIT_GEOMETRY_EPSILON_PX &&
+    siblingAxis > SPLIT_GEOMETRY_EPSILON_PX &&
+    splitAxis - paneAxis > SPLIT_GEOMETRY_EPSILON_PX &&
+    splitAxis - siblingAxis > SPLIT_GEOMETRY_EPSILON_PX &&
+    isPaneGridAlignedWithFit(pane)
+  )
+}
+
 /**
  * Establishes a binding between a terminal pane and its corresponding PTY stream,
  * managing input, output, title synchronization, and agent status tracking.
@@ -818,6 +905,8 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let connectFallbackTimer: ReturnType<typeof setTimeout> | null = null
+  let startupGridSettleHandle: TerminalStartupGridSettleHandle | null = null
+  let startupGridSettledForConnect = false
   let connectStarted = false
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
@@ -837,6 +926,10 @@ export function connectPanePty(
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
+  // Why: tracks the keystroke proximity captured when the current synchronized
+  // foreground frame opened, so a split end marker that lands after the redraw
+  // window still drains on the fast path instead of the 1s coalesce fallback.
+  let synchronizedForegroundFrameInteractive = false
   let suppressSnapshotReplayPtyResize = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
@@ -2195,6 +2288,9 @@ export function connectPanePty(
     if (shouldSuppressDesktopPtyResize()) {
       return
     }
+    if (queuePanePtyResizeIfHeld(pane.container, cols, rows)) {
+      return
+    }
     transport.resize(cols, rows)
   }
 
@@ -2211,38 +2307,43 @@ export function connectPanePty(
     if (suppressSnapshotReplayPtyResize) {
       return
     }
-    if (!isRendererPtyResizeAuthoritative()) {
-      return
-    }
-    if (shouldSuppressDesktopPtyResize()) {
-      return
-    }
-    if (queuePanePtyResizeIfHeld(pane.container, cols, rows)) {
-      return
-    }
-    transport.resize(cols, rows)
+    forwardPtyResize(cols, rows)
   })
 
-  // Why: while a mobile-fit override is active, the onResize listener above
-  // and the matching server-side gate both correctly drop pty:resize so the
-  // PTY stays parked at phone dims. But the server still needs to learn the
-  // real desktop pane geometry — otherwise resolveDesktopRestoreTarget falls
-  // back to the PTY's spawn default (e.g. 80×24 for a hidden tab) and Take
-  // Back leaves the terminal partially restored. This observer measures the
-  // pane container as a side-channel, computes proposed cols/rows the way
-  // safeFit would, and reports it via pty:reportGeometry — a measurement-
-  // only IPC that updates lastRendererSizes and non-null subscriber
-  // baselines without resizing the PTY. We only fire while an override is
-  // active because the normal pty:resize path covers all other cases. See
-  // docs/mobile-fit-hold.md.
+  // Why: renderer resize forwarding is fire-and-forget. A visible pane can
+  // finish with xterm at the right grid while the PTY silently kept an older
+  // grid, so Codex keeps composing against stale columns. Fit first so xterm's
+  // normal onResize can send, then read applied PTY size and repair only drift.
+  const ptySizeReassertion = createPtySizeReassertion({
+    isDisposed: () => disposed,
+    getPtyId: () => transport.getPtyId(),
+    isRemotePtyId: isRemoteRuntimePtyId,
+    shouldSuppressDesktopResize: () => shouldSuppressDesktopPtyResize(),
+    fit: () => safeFit(pane),
+    getTerminalDimensions: () => ({ cols: pane.terminal.cols, rows: pane.terminal.rows }),
+    getAppliedSize: (ptyId) => window.api.pty.getSize(ptyId),
+    forwardResize: forwardPtyResize
+  })
+
+  // Why: observe the outer pane as the layout signal for both desktop drift
+  // healing and mobile take-back. Normal desktop panes compare xterm against
+  // the PTY's applied size; mobile-fit panes only report desktop geometry so
+  // the parked phone-sized PTY is not resized. See docs/mobile-fit-hold.md.
   let pendingGeometryReportRaf: number | null = null
-  const reportPaneGeometry = (): void => {
+  const handleObservedPaneGeometry = (): void => {
     pendingGeometryReportRaf = null
     const currentPtyId = transport.getPtyId()
     if (!currentPtyId) {
       return
     }
-    if (!getFitOverrideForPty(currentPtyId)) {
+    const fitOverride = getFitOverrideForPty(currentPtyId)
+    if (!fitOverride) {
+      if (shouldSuppressDesktopPtyResize()) {
+        return
+      }
+      requestStablePaneFit(pane as ManagedPaneInternal, () =>
+        ptySizeReassertion.request({ fit: false })
+      )
       return
     }
     let proposed: { cols: number; rows: number } | undefined
@@ -2267,7 +2368,7 @@ export function connectPanePty(
           if (pendingGeometryReportRaf !== null) {
             return
           }
-          pendingGeometryReportRaf = requestAnimationFrame(reportPaneGeometry)
+          pendingGeometryReportRaf = requestAnimationFrame(handleObservedPaneGeometry)
         })
   // Why: pane.xtermContainer is created later in pane-lifecycle's
   // attachWebgl/initial-fit path; pane.container is always present at the
@@ -2333,56 +2434,6 @@ export function connectPanePty(
     })
   }
 
-  // Why: the renderer forwards resizes fire-and-forget and dedupes on the size
-  // it *last sent*, so a resize dropped main-side (it was hidden, a suppression
-  // window, or a provider no-op) leaves xterm and the PTY silently diverged —
-  // and a later same-cols layout fires no onResize, so it never self-corrects
-  // ("resizing sometimes doesn't fix it"). On becoming visible, re-fit and
-  // compare xterm against the PTY's ACTUAL size (not what we think we sent); if
-  // they truly differ, re-assert. Gated on real drift so we emit no spurious
-  // SIGWINCH (which would jar alt-screen TUIs) on an already-synced resume.
-  let reassertingPtySizeOnResume = false
-  const reassertPtySizeOnResume = (): void => {
-    const ptyId = transport.getPtyId()
-    // Skip parked/mobile-driven PTYs before the async size read: their drift
-    // from desktop xterm dims is intentional until mobile hands control back.
-    if (
-      disposed ||
-      reassertingPtySizeOnResume ||
-      !ptyId ||
-      isRemoteRuntimePtyId(ptyId) ||
-      shouldSuppressDesktopPtyResize()
-    ) {
-      return
-    }
-    reassertingPtySizeOnResume = true
-    void window.api.pty
-      .getSize(ptyId)
-      .then((actual) => {
-        // The pane may have been disposed or rebound to a different PTY during
-        // the async hop; bail if this reconcile no longer owns it.
-        if (disposed || transport.getPtyId() !== ptyId) {
-          return
-        }
-        safeFit(pane)
-        const cols = pane.terminal.cols
-        const rows = pane.terminal.rows
-        if (cols <= 0 || rows <= 0) {
-          return
-        }
-        // Re-assert only on genuine divergence from the PTY's applied size (a
-        // null read = unknown id, treated as "cannot confirm synced" so we
-        // forward once). forwardPtyResize owns the authoritative/mobile gating.
-        if (!actual || actual.cols !== cols || actual.rows !== rows) {
-          forwardPtyResize(cols, rows)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        reassertingPtySizeOnResume = false
-      })
-  }
-
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
   const cancelScheduledConnectFrame = (): void => {
@@ -2393,8 +2444,67 @@ export function connectPanePty(
       connectFrame = null
     }
   }
+  const measureStartupGrid = (): { cols: number; rows: number } | null => {
+    safeFit(pane)
+    const cols = pane.terminal.cols
+    const rows = pane.terminal.rows
+    return cols > 0 && rows > 0 ? { cols, rows } : null
+  }
+  const shouldSettleStartupGridBeforeConnect = (): boolean =>
+    Boolean(paneStartup?.command) &&
+    deps.isVisibleRef.current &&
+    !connectionId &&
+    runtimeEnvironmentId === null
+  const isStartupGridReadyForConnect = (): boolean => {
+    const setupSplitDirection = paneStartup?.waitForSetupSplitDirection
+    if (!setupSplitDirection) {
+      return true
+    }
+    // Why: the setup split reparents the main pane before its xterm grid
+    // necessarily reflects the new flex geometry; wait for both to agree.
+    return isSetupSplitGeometryReady(pane, manager, setupSplitDirection)
+  }
+  const settleStartupGridBeforeConnect = (connect: () => void): void => {
+    startupGridSettleHandle?.cancel()
+    let settledSynchronously = false
+    // Why: local startup commands can launch a TUI before the split-pane grid
+    // has settled; spawn from a briefly stable grid so the TUI paints cleanly.
+    const handle = waitForStableStartupGrid({
+      isAlive: () => !disposed,
+      isReadyToSettle: paneStartup?.waitForSetupSplitDirection
+        ? isStartupGridReadyForConnect
+        : undefined,
+      measure: measureStartupGrid,
+      onSettled: () => {
+        settledSynchronously = true
+        startupGridSettleHandle = null
+        connect()
+      },
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => {
+        if (typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(handle)
+        }
+      }
+    })
+    if (!settledSynchronously) {
+      startupGridSettleHandle = handle
+    }
+  }
   const runDeferredConnect = (): void => {
     if (connectStarted) {
+      return
+    }
+    if (!startupGridSettledForConnect && shouldSettleStartupGridBeforeConnect()) {
+      cancelScheduledConnectFrame()
+      if (connectFallbackTimer !== null) {
+        clearTimeout(connectFallbackTimer)
+        connectFallbackTimer = null
+      }
+      settleStartupGridBeforeConnect(() => {
+        startupGridSettledForConnect = true
+        runDeferredConnect()
+      })
       return
     }
     connectStarted = true
@@ -2422,6 +2532,12 @@ export function connectPanePty(
     }
 
     const reportError = (message: string): void => {
+      // Why: the transport connect can reject asynchronously after the pane has been
+      // disposed (e.g. its workspace was deleted) — dropping a late error avoids a toast
+      // racing the unmount. Mirrors the connect scheduler's disposed guard above.
+      if (disposed) {
+        return
+      }
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
 
@@ -2831,11 +2947,17 @@ export function connectPanePty(
     let foregroundRefreshRiskScanTail = ''
 
     function trailingIncompleteCsiSequence(data: string): string {
-      const escapeIndex = data.lastIndexOf('\x1b[')
+      const escapeIndex = data.lastIndexOf('\x1b')
       if (escapeIndex === -1) {
         return ''
       }
       const tail = data.slice(escapeIndex)
+      if (tail === '\x1b') {
+        return tail
+      }
+      if (!tail.startsWith('\x1b[')) {
+        return ''
+      }
       for (let index = 2; index < tail.length; index++) {
         const code = tail.charCodeAt(index)
         if (code >= 0x40 && code <= 0x7e) {
@@ -2845,7 +2967,7 @@ export function connectPanePty(
       return tail.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
     }
 
-    function foregroundAnsiOutputPrefersRenderRefresh(data: string): boolean {
+    function foregroundRendererRiskOutputPrefersRenderRefresh(data: string): boolean {
       if (!data) {
         return false
       }
@@ -2853,7 +2975,8 @@ export function connectPanePty(
         ? `${foregroundRefreshRiskScanTail}${data}`
         : data
       const prefersRefresh =
-        scanData.includes('\x1b[') && terminalOutputPrefersRenderRefresh(scanData)
+        (scanData.includes('\x1b[') || containsNonAsciiOutput(scanData)) &&
+        terminalOutputPrefersRenderRefresh(scanData)
       foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
       return prefersRefresh
     }
@@ -3073,19 +3196,22 @@ export function connectPanePty(
     function shouldForceForegroundRenderRefresh(data: string): {
       refresh: boolean
       inPlaceRewrite: boolean
+      recoverWebglAtlasAfterParse: boolean
     } {
       const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      if (foregroundAnsiOutputPrefersRenderRefresh(data)) {
-        // Why: Codex-style background SGR panels can paint cell fills while
-        // glyphs lag behind; refresh only renderer-risk ANSI chunks, not all output.
-        return { refresh: true, inPlaceRewrite: rewriteOutputPrefersRenderRefresh }
+      if (foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
+        return {
+          refresh: true,
+          inPlaceRewrite: rewriteOutputPrefersRenderRefresh,
+          recoverWebglAtlasAfterParse: true
+        }
       }
       if (rewriteOutputPrefersRenderRefresh) {
         // Why: resize fixes these panes because xterm's buffer is right but
         // in-place redraw cells can remain stale in the renderer until repaint.
-        return { refresh: true, inPlaceRewrite: true }
+        return { refresh: true, inPlaceRewrite: true, recoverWebglAtlasAfterParse: false }
       }
       if (
         windowsEastAsianOutputPrefersRenderRefresh(data, {
@@ -3097,14 +3223,15 @@ export function connectPanePty(
       ) {
         // Why: CJK/Korean from Microsoft Pinyin commits and native ConPTY agent
         // output can leave stale wide-glyph cells in the local Windows DOM renderer.
-        return { refresh: true, inPlaceRewrite: false }
+        return { refresh: true, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
       }
       return {
         refresh:
           shouldApplyNativeWindowsRewriteRefresh &&
           containsNonAsciiOutput(data) &&
           containsWindowsRewriteControl(data),
-        inPlaceRewrite: false
+        inPlaceRewrite: false,
+        recoverWebglAtlasAfterParse: false
       }
     }
 
@@ -3144,7 +3271,7 @@ export function connectPanePty(
       const foregroundOutput = foreground || parseHiddenStartupOutput
       const renderRefreshDecision = foregroundOutput
         ? shouldForceForegroundRenderRefresh(data)
-        : { refresh: false, inPlaceRewrite: false }
+        : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
       // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
@@ -3154,6 +3281,24 @@ export function connectPanePty(
         isForeground: foreground,
         isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
       })
+      // Why: recompute the latch on every synchronized START so each frame's
+      // interactivity is judged by its own open time vs the last keystroke and
+      // can't leak across a same-chunk close+open; an active frame with no new
+      // start retains it (the split-end-marker headline fix), and we only clear
+      // it once we leave synchronized output on a chunk that is not the end.
+      if (synchronizedForegroundOutput && synchronizedOutputStarted) {
+        synchronizedForegroundFrameInteractive =
+          performance.now() - lastTerminalInputAt <=
+          FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS
+      } else if (!nextSynchronizedForegroundOutputActive && !synchronizedOutputEnded) {
+        synchronizedForegroundFrameInteractive = false
+      }
+      // Why: ConPTY can split the closing chunk of a submit repaint past the
+      // 150ms redraw window. Treat the whole frame as latency-sensitive when it
+      // opened right after a keystroke so the scheduler drains it on the fast
+      // path (~16-32ms) instead of the 1s synchronized-frame coalesce fallback.
+      const synchronizedFrameLatencySensitive =
+        synchronizedForegroundOutput && synchronizedForegroundFrameInteractive
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (!foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
@@ -3163,7 +3308,9 @@ export function connectPanePty(
         beforeWrite: beforeTerminalOutputWrite,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
-          !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
+          !foreground || parseHiddenStartupOutput
+            ? true
+            : synchronizedFrameLatencySensitive || isLatencySensitiveForegroundOutput(data),
         forceForegroundRefresh:
           foregroundOutput &&
           (synchronizedForegroundOutput ||
@@ -3171,6 +3318,11 @@ export function connectPanePty(
             foregroundRenderRefreshNeeded),
         followupForegroundRefresh:
           nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
+        // Why: atlas recovery must repaint from the parsed xterm buffer, not
+        // a pre-write snapshot that a late TUI redraw can immediately stale.
+        onForegroundParsed: renderRefreshDecision.recoverWebglAtlasAfterParse
+          ? scheduleTerminalWebglAtlasRecovery
+          : undefined,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
@@ -4030,7 +4182,12 @@ export function connectPanePty(
       // to the PTY — the PTY is already at phone dimensions and must stay there.
       const reattachPtyId = transport.getPtyId()
       if (!reattachPtyId || !getFitOverrideForPty(reattachPtyId)) {
-        transport.resize(cols, rows)
+        safeFit(pane)
+        const reattachCols = pane.terminal.cols
+        const reattachRows = pane.terminal.rows
+        if (reattachCols > 0 && reattachRows > 0) {
+          transport.resize(reattachCols, reattachRows)
+        }
       }
       // Why: POSIX only delivers SIGWINCH when terminal dimensions actually
       // change. Sending it explicitly guarantees restored TUIs repaint at
@@ -4660,7 +4817,7 @@ export function connectPanePty(
       // Why: re-assert the PTY size on resume so a resize that was dropped while
       // this pane was hidden self-heals on show, instead of waiting for a manual
       // resize that may never change xterm's column count.
-      reassertPtySizeOnResume()
+      ptySizeReassertion.request()
     },
     reconcileIfSessionDead,
     dispose() {
@@ -4669,6 +4826,9 @@ export function connectPanePty(
       // rAF so a torn-down pane cannot keep fitting/resizing after disposal.
       ptySizeReconcileHandle?.cancel()
       ptySizeReconcileHandle = null
+      startupGridSettleHandle?.cancel()
+      startupGridSettleHandle = null
+      ptySizeReassertion.dispose()
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }

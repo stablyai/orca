@@ -16,6 +16,7 @@ import type {
   SshConnectionState
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
+import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
@@ -88,10 +89,64 @@ export function getRegisteredSshState(targetId: string): SshConnectionState | un
   return registeredGetSshState?.(targetId)
 }
 
+export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
+  if (!connectionManager) {
+    return
+  }
+  await detachActiveSshSession(targetId)
+  await connectionManager.disconnect(targetId)
+}
+
+export async function removeRegisteredSshTarget(targetId: string): Promise<void> {
+  if (!sshStore) {
+    return
+  }
+  // Why: removing a target is destructive — dispose() (not detach()) so the
+  // relay shuts down and remote PTY leases are terminated rather than preserved
+  // for a reattach to a target that will no longer exist.
+  await disposeActiveSshSession(targetId)
+  try {
+    await connectionManager?.disconnect(targetId)
+  } catch (err) {
+    // Why: a failed disconnect must not block metadata removal; otherwise the
+    // target lingers in the store and its leases are never cleaned up.
+    console.warn(
+      `[ssh] Failed to disconnect removed target ${targetId}: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
+  persistedStore?.removeSshRemotePtyLeases(targetId)
+  sshStore.removeTarget(targetId)
+}
+
 // Why: one session per SSH target encapsulates the entire relay lifecycle
 // (multiplexer, providers, abort controller, state machine). Eliminates the
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
+
+async function detachActiveSshSession(targetId: string): Promise<void> {
+  await teardownActiveSshSession(targetId, (session) => session.detach())
+}
+
+async function disposeActiveSshSession(targetId: string): Promise<void> {
+  await teardownActiveSshSession(targetId, (session) => session.dispose())
+}
+
+async function teardownActiveSshSession(
+  targetId: string,
+  teardown: (session: SshRelaySession) => void
+): Promise<void> {
+  const session = activeSessions.get(targetId)
+  if (!session) {
+    return
+  }
+  // Why: await port teardown so local listeners are fully released before
+  // disconnect/remove completes; otherwise immediate reconnect can hit EADDRINUSE.
+  await portForwardManager?.removeAllForwards(targetId)
+  teardown(session)
+  activeSessions.delete(targetId)
+  clearRelayLostBackoff(targetId)
+  clearRelayStateOverride(targetId)
+}
 
 function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
   return target?.relayGracePeriodSeconds
@@ -153,6 +208,12 @@ function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
+  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, which
+  // has no surface for them. Broadcasting their state would make the renderer fire
+  // a listTargets() lookup per event (incl. each relay-lost reconnect) for nothing.
+  if (isRuntimeOwnedSshTargetId(targetId)) {
+    return
+  }
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', {
@@ -621,25 +682,7 @@ export function registerSshHandlers(
   )
 
   ipcMain.handle('ssh:removeTarget', async (_event, args: { id: string }) => {
-    const session = activeSessions.get(args.id)
-    if (session) {
-      // Why: removing a target is destructive. Tear down the live relay before
-      // deleting metadata so callbacks cannot keep using an orphan target id.
-      await portForwardManager!.removeAllForwards(args.id)
-      session.dispose()
-      activeSessions.delete(args.id)
-      clearRelayLostBackoff(args.id)
-      clearRelayStateOverride(args.id)
-    }
-    try {
-      await connectionManager!.disconnect(args.id)
-    } catch (err) {
-      console.warn(
-        `[ssh] Failed to disconnect removed target ${args.id}: ${err instanceof Error ? err.message : String(err)}`
-      )
-    }
-    persistedStore!.removeSshRemotePtyLeases(args.id)
-    sshStore!.removeTarget(args.id)
+    await removeRegisteredSshTarget(args.id)
   })
 
   ipcMain.handle('ssh:importConfig', () => {
@@ -806,18 +849,7 @@ export function registerSshHandlers(
   }
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
-    const session = activeSessions.get(args.targetId)
-    if (session) {
-      // Why: await port teardown so local listeners are fully released
-      // before the disconnect completes. Without this, an immediate
-      // reconnect can hit EADDRINUSE on the same ports.
-      await portForwardManager!.removeAllForwards(args.targetId)
-      session.detach()
-      activeSessions.delete(args.targetId)
-      clearRelayLostBackoff(args.targetId)
-      clearRelayStateOverride(args.targetId)
-    }
-    await connectionManager!.disconnect(args.targetId)
+    await disconnectRegisteredSshTarget(args.targetId)
   })
 
   ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {

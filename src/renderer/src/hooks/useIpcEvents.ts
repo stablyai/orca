@@ -1556,7 +1556,9 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
-          if (isRuntimeEnvironmentActive()) {
+          // Why: runtime-session requests are host-owned tabs materialized by this
+          // renderer, not ordinary local creates that bypass remote runtime mode.
+          if (isRuntimeEnvironmentActive() && data.source !== 'runtime-session') {
             window.api.ui.replyTerminalCreate({
               requestId: data.requestId,
               error: translate(

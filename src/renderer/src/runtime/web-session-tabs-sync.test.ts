@@ -5,6 +5,7 @@ import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -142,6 +143,65 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabType: null
     })
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('ignores remote snapshots for the local floating workspace', () => {
+    const floatingTab: TerminalTab = {
+      id: 'floating-tab-1',
+      ptyId: 'pty-floating-1',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      title: 'VPS tmux',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const floatingUnifiedTab: Tab = {
+      id: floatingTab.id,
+      entityId: floatingTab.id,
+      groupId: 'floating-group',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'terminal',
+      label: floatingTab.title,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false
+    }
+    const state = makeState({
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+      ptyIdsByTabId: { [floatingTab.id]: ['pty-floating-1'] },
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingUnifiedTab] },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: floatingTab.id,
+            tabOrder: [floatingTab.id],
+            recentTabIds: [floatingTab.id]
+          }
+        ]
+      },
+      activeTabId: floatingTab.id,
+      activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: floatingTab.id }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], {
+        worktree: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        activeTabType: null
+      }),
+      ENV,
+      NOW
+    )
+
+    expect(patch).toBe(state)
   })
 
   it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {

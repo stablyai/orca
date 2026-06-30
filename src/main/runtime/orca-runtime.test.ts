@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -4849,6 +4850,85 @@ describe('OrcaRuntimeService', () => {
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
   })
 
+  it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
+    const repos: Record<string, unknown>[] = []
+    getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: (id: string, updates: Record<string, unknown>) => {
+        const index = repos.findIndex((repo) => repo.id === id)
+        if (index === -1) {
+          return null
+        }
+        repos[index] = { ...repos[index], ...updates }
+        return repos[index] as never
+      },
+      getProjects: () =>
+        repos
+          .map((repo) => {
+            const upstream = repo.upstream as { owner: string; repo: string } | undefined
+            if (!upstream) {
+              return null
+            }
+            return {
+              id: `github:${upstream.owner}/${upstream.repo}`,
+              displayName: repo.displayName,
+              badgeColor: repo.badgeColor,
+              providerIdentity: { provider: 'github', owner: upstream.owner, repo: upstream.repo },
+              sourceRepoIds: [repo.id],
+              createdAt: repo.addedAt,
+              updatedAt: repo.addedAt
+            }
+          })
+          .filter(Boolean) as never,
+      getProjectHostSetups: () =>
+        repos.map((repo) => {
+          const upstream = repo.upstream as { owner: string; repo: string } | undefined
+          return {
+            id: repo.id,
+            projectId: upstream ? `github:${upstream.owner}/${upstream.repo}` : repo.id,
+            hostId: 'local',
+            repoId: repo.id,
+            path: repo.path,
+            displayName: repo.displayName,
+            kind: repo.kind,
+            setupState: 'ready',
+            setupMethod: repo.projectHostSetupMethod ?? 'legacy-repo',
+            createdAt: repo.addedAt,
+            updatedAt: repo.addedAt
+          }
+        }) as never
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:stablyai/orca',
+        hostId: 'runtime:env-1',
+        path: tempRoot,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+
+      expect(result.project.id).toBe('github:stablyai/orca')
+      expect(result.repo.path).toBe(tempRoot)
+      expect(result.setup).toMatchObject({
+        projectId: 'github:stablyai/orca',
+        path: tempRoot,
+        setupMethod: 'imported-existing-folder'
+      })
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
     const colorStore = {
@@ -6644,6 +6724,47 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('injects runtime hook receiver env into terminal sessions', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-hooked' })
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      buildAgentHookPtyEnv: () => ({
+        ORCA_AGENT_HOOK_PORT: '5678',
+        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+        ORCA_AGENT_HOOK_ENV: 'remote',
+        ORCA_AGENT_HOOK_VERSION: '1'
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      env: {
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+      }
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
+    expect(spawnCall?.env).toEqual(
+      expect.objectContaining({
+        ORCA_AGENT_HOOK_PORT: '5678',
+        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+        ORCA_AGENT_HOOK_ENV: 'remote',
+        ORCA_AGENT_HOOK_VERSION: '1',
+        ORCA_PANE_KEY: expect.any(String),
+        ORCA_TAB_ID: expect.any(String),
+        ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+      })
+    )
+    expect(spawnCall?.env?.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+  })
+
   it.each([
     { label: 'canonical folder workspace selector', selector: TEST_FOLDER_WORKSPACE_KEY },
     { label: 'id-prefixed folder workspace selector', selector: `id:${TEST_FOLDER_WORKSPACE_KEY}` }
@@ -7181,6 +7302,78 @@ describe('OrcaRuntimeService', () => {
         cwd: TEST_WORKTREE_PATH,
         worktreeId: TEST_WORKTREE_ID
       })
+    )
+  })
+
+  it('accepts renderer-backed terminal create replies only from the target renderer', async () => {
+    const webContents = { send: vi.fn() }
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: { send: vi.fn() } },
+        { requestId: payload.requestId, error: 'spoofed renderer reply' }
+      )
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Renderer Terminal',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Renderer Terminal' }
+      )
+    })
+    webContents.send = send
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'codex',
+        rendererBacked: true,
+        title: 'Renderer Terminal'
+      })
+    ).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: 'tab-renderer',
+      title: 'Renderer Terminal',
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'visible'
+    })
+    expect(send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({
+        requestId: expect.any(String),
+        worktreeId: TEST_WORKTREE_ID,
+        command: 'codex',
+        title: 'Renderer Terminal'
+      })
+    )
+    expect(electronMocks.ipcMain.removeListener).toHaveBeenCalledWith(
+      'terminal:tabCreateReply',
+      expect.any(Function)
     )
   })
 
@@ -15767,7 +15960,13 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+    const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string; activate?: boolean }) => {
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: { send: vi.fn() } },
+        { requestId: payload.requestId, error: 'spoofed renderer reply' }
+      )
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
@@ -15803,7 +16002,7 @@ describe('OrcaRuntimeService', () => {
       })
       ipcMain.emit(
         'terminal:tabCreateReply',
-        {},
+        { sender: webContents },
         {
           requestId: payload.requestId,
           tabId: 'tab-renderer',
@@ -15811,11 +16010,12 @@ describe('OrcaRuntimeService', () => {
         }
       )
     })
+    webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { send }
+      webContents
     })
 
     const result = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -15826,7 +16026,8 @@ describe('OrcaRuntimeService', () => {
       'terminal:requestTabCreate',
       expect.objectContaining({
         worktreeId: TEST_WORKTREE_ID,
-        activate: false
+        activate: false,
+        source: 'runtime-session'
       })
     )
     expect(focusTerminal).not.toHaveBeenCalled()
@@ -15850,6 +16051,7 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+    const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -15886,15 +16088,16 @@ describe('OrcaRuntimeService', () => {
       })
       ipcMain.emit(
         'terminal:tabCreateReply',
-        {},
+        { sender: webContents },
         { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Terminal' }
       )
     })
+    webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { send }
+      webContents
     })
 
     const [first, second] = await Promise.all([
@@ -15951,20 +16154,22 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+    const webContents = { send: vi.fn() }
     const send = vi.fn((_channel: string, payload: { requestId: string; worktreeId: string }) => {
       const parentTabId =
         payload.worktreeId === TEST_WORKTREE_ID ? 'tab-renderer-a' : 'tab-renderer-b'
       ipcMain.emit(
         'terminal:tabCreateReply',
-        {},
+        { sender: webContents },
         { requestId: payload.requestId, tabId: parentTabId, title: 'Terminal' }
       )
     })
+    webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { send }
+      webContents
     })
 
     const firstCreate = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -16079,18 +16284,20 @@ describe('OrcaRuntimeService', () => {
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
+      const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
-          {},
+          { sender: webContents },
           { requestId: payload.requestId, tabId: 'tab-pending', title: 'Terminal' }
         )
       })
+      webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { send }
+        webContents
       })
 
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
@@ -16188,18 +16395,20 @@ describe('OrcaRuntimeService', () => {
       })
       // Why: reply with a tabId but never sync a matching surface graph, so
       // waitForMobileTerminalSurface times out and the rollback path runs.
+      const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
-          {},
+          { sender: webContents },
           { requestId: payload.requestId, tabId: 'tab-ghost', title: 'Terminal' }
         )
       })
+      webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { send }
+        webContents
       })
 
       const pending = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {

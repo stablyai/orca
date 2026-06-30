@@ -51,7 +51,8 @@ export function MobileSourceControlContent({ state }: Props) {
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
-  const createPrHeroActive = createPrAction.visible && !createPrAction.disabled
+  const createPrHeroActive =
+    createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
 
   return (
     <>

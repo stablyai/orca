@@ -370,6 +370,22 @@ describe('Subprocess: Relay entry point', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'uses a short startup grace for unlimited empty detached relays before any client connects',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-empty-unlimited-'))
+      relay = spawn(
+        ['--detached', '--grace-time', '0', '--sock-path', path.join(tmpDir, 'relay.sock')],
+        { ...process.env, ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '100' }
+      )
+      await relay.sentinelReceived
+
+      await relay.waitForExit(3000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'uses configured grace after a detached relay has accepted a socket client',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-connected-'))

@@ -80,7 +80,11 @@ import {
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { hardenExistingSecureFile } from '../shared/secure-file'
-import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
+import {
+  LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshRemotePtyLease,
+  type SshTarget
+} from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
@@ -1010,7 +1014,12 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  if (relayGracePeriodSeconds !== undefined) {
+  // Why: the old SSH form eagerly persisted 10800 even when the user had not
+  // chosen a timeout; treat that legacy default as the new implicit default.
+  if (
+    relayGracePeriodSeconds !== undefined &&
+    relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  ) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
   }
   return normalized

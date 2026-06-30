@@ -92,6 +92,26 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         'Use either --mobile-pairing or --no-pairing, not both.'
       )
     }
+    if (flags.get('recipe-json') === true && flags.get('no-pairing') === true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Recipe JSON output requires runtime pairing; remove --no-pairing.'
+      )
+    }
+    if (flags.get('recipe-json') === true && flags.get('mobile-pairing') === true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Recipe JSON output requires runtime pairing; remove --mobile-pairing.'
+      )
+    }
+    const projectRoot =
+      typeof flags.get('project-root') === 'string' ? (flags.get('project-root') as string) : null
+    if (flags.get('recipe-json') === true && !projectRoot) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Recipe JSON output requires --project-root.'
+      )
+    }
     const port = getOptionalServePort(flags)
     const exitCode = await serveOrcaApp({
       json,
@@ -101,7 +121,9 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
           ? (flags.get('pairing-address') as string)
           : null,
       noPairing: flags.get('no-pairing') === true,
-      mobilePairing: flags.get('mobile-pairing') === true
+      mobilePairing: flags.get('mobile-pairing') === true,
+      recipeJson: flags.get('recipe-json') === true,
+      projectRoot
     })
     process.exitCode = exitCode
   },

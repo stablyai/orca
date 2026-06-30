@@ -2,16 +2,15 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { exec, execFile } from 'node:child_process'
-import { parse } from 'yaml'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-startup-policy'
+import { parseOrcaYaml } from '../shared/orca-yaml'
 import { gitExecFileSync } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
   HookCommandSourcePolicy,
-  OrcaDefaultTabTemplate,
   OrcaHooks,
   Repo,
   SetupDecision,
@@ -35,80 +34,7 @@ function getHookShell(): string | undefined {
   return '/bin/bash'
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
-}
-
-function asTrimmedString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
-
-function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value
-    .map((entry) => {
-      const record = asRecord(entry)
-      if (!record) {
-        return null
-      }
-      const title = asTrimmedString(record.title)
-      const command = asTrimmedString(record.command)
-      const color = asTrimmedString(record.color)
-      const normalizedColor = color && DEFAULT_TAB_COLOR_RE.test(color) ? color : undefined
-      if (!title && !command && !normalizedColor) {
-        return null
-      }
-      return {
-        ...(title ? { title } : {}),
-        ...(normalizedColor ? { color: normalizedColor } : {}),
-        ...(command ? { command } : {})
-      }
-    })
-    .filter((entry): entry is OrcaDefaultTabTemplate => entry !== null)
-}
-
-/**
- * Parse the supported project defaults from `orca.yaml`.
- */
-export function parseOrcaYaml(content: string): OrcaHooks | null {
-  let root: unknown
-  try {
-    root = parse(content)
-  } catch {
-    return null
-  }
-
-  const record = asRecord(root)
-  if (!record) {
-    return null
-  }
-
-  const scriptsRecord = asRecord(record.scripts)
-  const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
-  const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
-  const issueCommand = asTrimmedString(record.issueCommand)
-  const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
-
-  if (!setup && !archive && !issueCommand && defaultTabs.length === 0) {
-    return null
-  }
-
-  return {
-    scripts: {
-      ...(setup ? { setup } : {}),
-      ...(archive ? { archive } : {})
-    },
-    ...(issueCommand ? { issueCommand } : {}),
-    ...(defaultTabs.length > 0 ? { defaultTabs } : {})
-  }
-}
+export { parseOrcaYaml }
 
 /**
  * Load hooks from orca.yaml in the given repo root.
@@ -139,7 +65,12 @@ export function hasHooksFile(repoPath: string): boolean {
 // return `null` from `parseOrcaYaml` and show a confusing "could not be parsed"
 // error.  Detecting well-formed but unrecognised keys lets the UI suggest an
 // update instead of implying the file is broken.
-const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand', 'defaultTabs'])
+const RECOGNIZED_ORCA_YAML_KEYS = new Set([
+  'scripts',
+  'issueCommand',
+  'defaultTabs',
+  'environmentRecipes'
+])
 
 /**
  * Return true when `orca.yaml` contains at least one top-level key that this

@@ -34,6 +34,27 @@ export function resetAllTerminalWebglAtlases(): void {
   }
 }
 
+export function resetAndRefreshAllTerminalWebglAtlases(): void {
+  const resetManagers: RegisteredPaneManager[] = []
+  for (const manager of liveManagers) {
+    try {
+      manager.resetWebglTextureAtlases()
+      resetManagers.push(manager)
+    } catch {
+      // Why: recovery is best-effort during pane teardown; a disposed manager
+      // should not block sibling terminals from rebuilding and repainting.
+    }
+  }
+  for (const manager of resetManagers) {
+    try {
+      manager.refreshAllPanes?.()
+    } catch {
+      // Why: a pane can unmount between atlas reset and repaint; later
+      // managers still need to repaint from their xterm buffers.
+    }
+  }
+}
+
 export function refitAndRefreshAllTerminalPanes(): void {
   for (const manager of liveManagers) {
     try {

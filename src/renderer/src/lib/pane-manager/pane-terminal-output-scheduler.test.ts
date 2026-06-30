@@ -69,6 +69,49 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('foreground', expect.any(Function))
   })
 
+  it('runs foreground parsed callbacks after immediate foreground output parses', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    let parseCallback: (() => void) | undefined
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+    const onForegroundParsed = vi.fn()
+
+    writeTerminalOutput(terminal, 'foreground', {
+      foreground: true,
+      onForegroundParsed
+    })
+
+    expect(onForegroundParsed).not.toHaveBeenCalled()
+    parseCallback?.()
+    expect(onForegroundParsed).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs foreground parsed callbacks after queued foreground output parses', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    let parseCallback: (() => void) | undefined
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+    const onForegroundParsed = vi.fn()
+
+    writeTerminalOutput(terminal, 'queued', {
+      foreground: true,
+      latencySensitive: false,
+      onForegroundParsed
+    })
+
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).toHaveBeenCalledWith('queued', expect.any(Function))
+    expect(onForegroundParsed).not.toHaveBeenCalled()
+    parseCallback?.()
+    expect(onForegroundParsed).toHaveBeenCalledTimes(1)
+  })
+
   it('synchronously refreshes visible rows after foreground output parses', async () => {
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createForegroundTerminal()

@@ -10,7 +10,10 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
@@ -89,6 +92,7 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
+    resumeProviderSession: record.providerSession,
     launchAgent: record.agent,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
@@ -99,6 +103,11 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
       launch_source: 'sidebar',
       request_kind: 'resume'
     }
+  })
+  state.claimAutomaticAgentResume(tab.id, {
+    worktreeId: record.worktreeId,
+    launchAgent: record.agent,
+    providerSession: record.providerSession
   })
   state.clearSleepingAgentSession(record.paneKey)
   state.setActiveTabType('terminal')
@@ -158,6 +167,66 @@ function getNewestActiveRecordsByClaimKey(
   return newestRecords
 }
 
+function providerSessionsMatch(
+  left: AgentProviderSessionMetadata | undefined,
+  right: AgentProviderSessionMetadata
+): boolean {
+  return Boolean(left && left.key === right.key && left.id === right.id)
+}
+
+function getAgentStatusTabId(entry: {
+  paneKey: string
+  tabId?: string | undefined
+}): string | null {
+  if (entry.tabId) {
+    return entry.tabId
+  }
+  const separatorIndex = entry.paneKey.indexOf(':')
+  return separatorIndex === -1 ? null : entry.paneKey.slice(0, separatorIndex)
+}
+
+function activeOrQueuedResumeClaimsProviderSession(
+  record: SleepingAgentSessionRecord,
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  const worktreeTabIds = new Set(
+    (state.tabsByWorktree[record.worktreeId] ?? []).map((tab) => tab.id)
+  )
+  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+    if (
+      worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
+      entry.worktreeId === record.worktreeId &&
+      entry.agentType === record.agent &&
+      entry.state !== 'done' &&
+      providerSessionsMatch(entry.providerSession, record.providerSession)
+    ) {
+      return true
+    }
+  }
+
+  for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
+    if (
+      worktreeTabIds.has(tabId) &&
+      startup.launchAgent === record.agent &&
+      providerSessionsMatch(startup.resumeProviderSession, record.providerSession)
+    ) {
+      return true
+    }
+  }
+
+  for (const [tabId, claim] of Object.entries(state.automaticAgentResumeClaimsByTabId)) {
+    if (
+      worktreeTabIds.has(tabId) &&
+      claim.worktreeId === record.worktreeId &&
+      claim.launchAgent === record.agent &&
+      providerSessionsMatch(claim.providerSession, record.providerSession)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
   if (record.interrupted === true) {
     return true
@@ -203,6 +272,12 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
       if (!isPaneOwned || activeClaimKeys.has(claimKey)) {
         state.clearSleepingAgentSession(record.paneKey)
       }
+      continue
+    }
+    if (activeOrQueuedResumeClaimsProviderSession(record, currentState)) {
+      // Why: main can replay the old wake record after the same provider
+      // session was already queued in a fresh tab; clear the stale replay.
+      state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     const paneOwnedClaimKeys = getCurrentPaneOwnedClaimKeys(activeWorktreeRecords)
