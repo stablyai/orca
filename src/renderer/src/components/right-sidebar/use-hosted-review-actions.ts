@@ -3,8 +3,9 @@ import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo } from '../../../../shared/types'
+import type { GlobalSettings, PRInfo, Repo } from '../../../../shared/types'
 import type { GitHubPRMergeMethod } from '../../../../shared/types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 
 export type HostedReviewActionInfo = Pick<
@@ -31,6 +32,7 @@ export function useHostedReviewActions({
   reviewLabel,
   defaultMergeMethod,
   autoMergeAction,
+  ownerSettings,
   onRefreshReview
 }: {
   review: HostedReviewActionInfo
@@ -41,6 +43,7 @@ export function useHostedReviewActions({
   reviewLabel: string
   defaultMergeMethod: GitHubPRMergeMethod
   autoMergeAction: GitHubPRAutoMergeAction | null
+  ownerSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   onRefreshReview: () => Promise<void>
 }): {
   merging: boolean
@@ -55,6 +58,9 @@ export function useHostedReviewActions({
   const [merging, setMerging] = useState(false)
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Why: runtime-owned sidebar reviews are not registered in the local Electron
+  // repo store, so GitHub mutations must follow the worktree owner runtime.
+  const reviewTarget = getActiveRuntimeTarget(ownerSettings)
 
   const handleMerge = useCallback(
     async (method: GitHubPRMergeMethod = defaultMergeMethod) => {
@@ -68,13 +74,25 @@ export function useHostedReviewActions({
               iid: review.number,
               method
             })
-          : await window.api.gh.mergePR({
-              repoPath: repo.path,
-              repoId: repo.id,
-              prNumber: review.number,
-              method,
-              prRepo: githubPR?.prRepo ?? null
-            })
+          : reviewTarget.kind === 'environment'
+            ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.mergePR>>>(
+                reviewTarget,
+                'github.mergePR',
+                {
+                  repo: repo.id,
+                  prNumber: review.number,
+                  method,
+                  prRepo: githubPR?.prRepo ?? null
+                },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.mergePR({
+                repoPath: repo.path,
+                repoId: repo.id,
+                prNumber: review.number,
+                method,
+                prRepo: githubPR?.prRepo ?? null
+              })
         if (!result.ok) {
           setActionError(result.error)
         } else {
@@ -91,6 +109,7 @@ export function useHostedReviewActions({
       isGitLab,
       defaultMergeMethod,
       onRefreshReview,
+      reviewTarget,
       repo.id,
       repo.path,
       review.number
@@ -105,14 +124,28 @@ export function useHostedReviewActions({
     setMerging(true)
     setActionError(null)
     try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath: repo.path,
-        repoId: repo.id,
-        prNumber: review.number,
-        enabled,
-        method: enabled ? defaultMergeMethod : undefined,
-        prRepo: githubPR?.prRepo ?? null
-      })
+      const result =
+        reviewTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.setPRAutoMerge>>>(
+              reviewTarget,
+              'github.setPRAutoMerge',
+              {
+                repo: repo.id,
+                prNumber: review.number,
+                enabled,
+                method: enabled ? defaultMergeMethod : undefined,
+                prRepo: githubPR?.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRAutoMerge({
+              repoPath: repo.path,
+              repoId: repo.id,
+              prNumber: review.number,
+              enabled,
+              method: enabled ? defaultMergeMethod : undefined,
+              prRepo: githubPR?.prRepo ?? null
+            })
       if (!result.ok) {
         setActionError(result.error)
       } else {
@@ -129,6 +162,7 @@ export function useHostedReviewActions({
     autoMergeAction,
     defaultMergeMethod,
     onRefreshReview,
+    reviewTarget,
     repo.id,
     repo.path,
     review.number
@@ -175,12 +209,23 @@ export function useHostedReviewActions({
                 repoId: repo.id,
                 iid: review.number
               })
-          : await window.api.gh.updatePRState({
-              repoPath: repo.path,
-              repoId: repo.id,
-              prNumber: review.number,
-              updates: { state: nextState }
-            })
+            : reviewTarget.kind === 'environment'
+              ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
+                  reviewTarget,
+                  'github.updatePRState',
+                  {
+                    repo: repo.id,
+                    prNumber: review.number,
+                    updates: { state: nextState }
+                  },
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.gh.updatePRState({
+                  repoPath: repo.path,
+                  repoId: repo.id,
+                  prNumber: review.number,
+                  updates: { state: nextState }
+                })
         if (!result.ok) {
           setActionError(result.error)
           toast.error(result.error)
@@ -213,6 +258,7 @@ export function useHostedReviewActions({
       confirm,
       isGitLab,
       onRefreshReview,
+      reviewTarget,
       repo.id,
       repo.path,
       review.number,

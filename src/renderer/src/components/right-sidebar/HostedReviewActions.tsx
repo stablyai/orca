@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { GlobalSettings, PRInfo, Repo, Worktree } from '../../../../shared/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github-pr-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
@@ -34,12 +34,14 @@ export default function HostedReviewActions({
   githubPR,
   repo,
   worktree,
+  ownerSettings,
   onRefreshReview
 }: {
   review: HostedReviewActionInfo
   githubPR?: PRInfo | null
   repo: Repo
   worktree: Worktree
+  ownerSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   onRefreshReview: () => Promise<void>
 }): React.JSX.Element | null {
   const isDeletingWorktree = useAppStore(
@@ -85,6 +87,7 @@ export default function HostedReviewActions({
     reviewLabel,
     defaultMergeMethod: mergeMethods.defaultMethod,
     autoMergeAction: mergePresentation.autoMergeAction,
+    ownerSettings,
     onRefreshReview
   })
   const isUpdatingReviewState = stateUpdating !== null

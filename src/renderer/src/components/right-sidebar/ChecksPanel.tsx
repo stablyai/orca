@@ -3731,6 +3731,7 @@ export default function ChecksPanel(): React.JSX.Element {
             githubPR={pr}
             repo={repo}
             worktree={activeWorktree}
+            ownerSettings={ownerSettings}
             onRefreshReview={refreshHostedReviewAfterMutation}
           />
         )}
