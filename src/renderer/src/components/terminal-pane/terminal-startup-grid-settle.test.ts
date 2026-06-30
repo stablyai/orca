@@ -88,6 +88,33 @@ describe('waitForStableStartupGrid', () => {
     expect(onSettled).toHaveBeenCalledWith({ cols: 88, rows: 50 })
   })
 
+  it('ignores pre-ready stable grids until an external split gate opens', () => {
+    const scheduler = createFrameScheduler()
+    const onSettled = vi.fn()
+    let ready = false
+    const measure = vi.fn(() => (ready ? { cols: 88, rows: 50 } : { cols: 180, rows: 50 }))
+
+    waitForStableStartupGrid({
+      isAlive: () => true,
+      isReadyToSettle: () => ready,
+      measure,
+      onSettled,
+      requestFrame: scheduler.requestFrame,
+      cancelFrame: scheduler.cancelFrame,
+      minFrames: 3,
+      stableFrames: 2,
+      maxFrames: 4
+    })
+
+    scheduler.run(8)
+    expect(onSettled).not.toHaveBeenCalled()
+
+    ready = true
+    scheduler.run()
+
+    expect(onSettled).toHaveBeenCalledWith({ cols: 88, rows: 50 })
+  })
+
   it('uses the latest usable grid at the frame cap when dimensions keep changing', () => {
     const scheduler = createFrameScheduler()
     const onSettled = vi.fn()

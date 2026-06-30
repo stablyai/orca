@@ -4,7 +4,7 @@ import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinat
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../../shared/types'
+import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 
 export type PtyConnectionDeps = {
@@ -28,6 +28,8 @@ export type PtyConnectionDeps = {
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     /** Show the restored-session banner when this startup command mounts. */
     showSessionRestoredBanner?: boolean
+    /** Initial startup may be paired with a setup split that changes its grid. */
+    waitForSetupSplitDirection?: SetupSplitDirection
   } | null
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>

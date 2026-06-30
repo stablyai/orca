@@ -5,6 +5,7 @@ export type TerminalStartupGridDimensions = {
 
 export type TerminalStartupGridSettleOptions = {
   isAlive: () => boolean
+  isReadyToSettle?: () => boolean
   measure: () => TerminalStartupGridDimensions | null
   onSettled: (dimensions: TerminalStartupGridDimensions | null) => void
   requestFrame: (callback: () => void) => number
@@ -48,6 +49,8 @@ export function waitForStableStartupGrid(
   let observedGridChange = false
   let pendingFrame: number | null = null
   let cancelled = false
+  let readyFrame = 0
+  const usesReadinessGate = options.isReadyToSettle !== undefined
 
   const settle = (dimensions: TerminalStartupGridDimensions | null): void => {
     if (cancelled) {
@@ -68,6 +71,16 @@ export function waitForStableStartupGrid(
 
     frame += 1
     const measured = options.measure()
+    const readyToSettle = options.isReadyToSettle?.() ?? true
+    if (!readyToSettle) {
+      previous = null
+      stableFrameCount = 0
+      observedGridChange = false
+      pendingFrame = options.requestFrame(tick)
+      return
+    }
+
+    readyFrame += 1
     if (usableDimensions(measured)) {
       latestUsable = measured
       if (dimensionsEqual(previous, measured)) {
@@ -81,10 +94,13 @@ export function waitForStableStartupGrid(
       stableFrameCount = 0
     }
 
-    const heldMinimumWindow = frame >= minFrames
+    const settleFrame = usesReadinessGate ? readyFrame : frame
+    const heldMinimumWindow = settleFrame >= minFrames
     const stableAfterChange =
-      observedGridChange && heldMinimumWindow && stableFrameCount >= stableFrames
-    if ((latestUsable && stableAfterChange) || frame >= maxFrames) {
+      (observedGridChange || usesReadinessGate) &&
+      heldMinimumWindow &&
+      stableFrameCount >= stableFrames
+    if ((latestUsable && stableAfterChange) || settleFrame >= maxFrames) {
       settle(latestUsable)
       return
     }

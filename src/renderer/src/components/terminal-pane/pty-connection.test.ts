@@ -492,6 +492,52 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
   return { promise, resolve: resolveDeferred }
 }
 
+function createRect(width: number, height: number, left = 0, top = 0): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({})
+  } as DOMRect
+}
+
+function stubElementRect(element: HTMLElement, readRect: () => DOMRect): void {
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: vi.fn(readRect)
+  })
+}
+
+function createMeasuredElement(args: {
+  className?: () => string
+  parentElement?: () => HTMLElement | null
+  rect: () => DOMRect
+}): HTMLElement {
+  const element = new EventTarget() as HTMLElement
+  Object.defineProperty(element, 'dataset', {
+    configurable: true,
+    value: {}
+  })
+  Object.defineProperty(element, 'classList', {
+    configurable: true,
+    value: {
+      contains: (className: string): boolean =>
+        (args.className?.() ?? '').split(/\s+/).includes(className)
+    }
+  })
+  Object.defineProperty(element, 'parentElement', {
+    configurable: true,
+    get: () => args.parentElement?.() ?? null
+  })
+  stubElementRect(element, args.rect)
+  return element
+}
+
 function temporarilySetNavigatorUserAgent(userAgent: string): () => void {
   const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
   const platform = userAgent.includes('Windows')
@@ -2289,6 +2335,91 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('waits for setup-split geometry before spawning the initial startup command', async () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const runNextFrame = (): void => {
+      const callback = frameCallbacks.shift()
+      if (!callback) {
+        throw new Error('expected a queued animation frame')
+      }
+      callback(0)
+    }
+
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+
+    const pane = createPane(1)
+    const siblingPane = createPane(2)
+    let panes = [pane]
+    let proposedGrid = { cols: 240, rows: 50 }
+    let splitMounted = false
+    const root = createMeasuredElement({ rect: () => createRect(1200, 800) })
+    const split = createMeasuredElement({
+      className: () => (splitMounted ? 'pane-split is-vertical' : ''),
+      rect: () => createRect(1200, 800)
+    })
+    const mainContainer = createMeasuredElement({
+      parentElement: () => (splitMounted ? split : root),
+      rect: () => (splitMounted ? createRect(600, 800) : createRect(1200, 800))
+    })
+    const setupContainer = createMeasuredElement({
+      parentElement: () => (splitMounted ? split : null),
+      rect: () => createRect(599, 800, 601, 0)
+    })
+    pane.container = mainContainer
+    siblingPane.container = setupContainer
+    ;(
+      pane.fitAddon as unknown as {
+        proposeDimensions: () => { cols: number; rows: number }
+      }
+    ).proposeDimensions = vi.fn(() => proposedGrid)
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = proposedGrid.cols
+      pane.terminal.rows = proposedGrid.rows
+    })
+
+    const manager = createManager(1)
+    manager.getPanes = vi.fn(() => panes)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        startup: { command: 'codex', waitForSetupSplitDirection: 'vertical' }
+      }) as never
+    )
+
+    runNextFrame()
+    for (let i = 0; i < 8; i++) {
+      runNextFrame()
+    }
+    expect(transport.connect).not.toHaveBeenCalled()
+
+    splitMounted = true
+    panes = [pane, siblingPane]
+    proposedGrid = { cols: 120, rows: 50 }
+    let postSplitFrames = 0
+    while (frameCallbacks.length > 0 && transport.connect.mock.calls.length === 0) {
+      if (postSplitFrames >= 12) {
+        throw new Error('startup did not connect after setup split became ready')
+      }
+      postSplitFrames += 1
+      runNextFrame()
+    }
+
+    expect(createdTransportOptions[0]?.command).toBe('codex')
+    expect(transport.connect).toHaveBeenCalledWith(expect.objectContaining({ cols: 120, rows: 50 }))
+  })
+
   it('does not reuse a sibling split pane pending spawn after remount', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
@@ -3432,6 +3563,49 @@ describe('connectPanePty', () => {
     expect(transport.attach).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
+  })
+
+  it('resizes a reattached PTY to the current grid when the pane narrows before reattach resolves', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const reattach = createDeferred<void>()
+    let currentPtyId: string | null = null
+    const transport = createMockTransport()
+    transport.getPtyId.mockImplementation(() => currentPtyId)
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      currentPtyId = sessionId ?? null
+      await reattach.promise
+      return sessionId ? { id: sessionId } : null
+    })
+    transportFactoryQueue.push(transport)
+    const pane = createPane(2)
+    pane.terminal.cols = 133
+    pane.terminal.rows = 63
+    let proposedGrid = { cols: 133, rows: 63 }
+    ;(
+      pane.fitAddon as unknown as {
+        proposeDimensions: () => { cols: number; rows: number }
+      }
+    ).proposeDimensions = vi.fn(() => proposedGrid)
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.cols = proposedGrid.cols
+      pane.terminal.rows = proposedGrid.rows
+    })
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'leaf-pty-2' }
+    })
+
+    connectPanePty(pane as never, createManager(2) as never, deps as never)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ cols: 133, rows: 63, sessionId: 'leaf-pty-2' })
+    )
+
+    proposedGrid = { cols: 65, rows: 63 }
+    reattach.resolve()
+    await flushAsyncTicks()
+
+    expect(transport.resize).toHaveBeenLastCalledWith(65, 63)
   })
 
   it('adopts a still-live background PTY via attach instead of reattaching when an eager buffer exists', async () => {
