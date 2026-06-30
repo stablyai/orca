@@ -7,6 +7,10 @@ export type GiteaRepoRef = {
   repo: string
   apiBaseUrl: string
   webBaseUrl: string
+  // True when apiBaseUrl was inferred from the host alone — an SSH/SCP remote
+  // with no subpath in its path. Such a base may be missing the host's web
+  // ROOT_URL subpath, so credential resolution may fall back to a host match.
+  apiBaseFromHost?: boolean
 }
 
 type LocalGitExecOptions = {
@@ -79,7 +83,12 @@ function apiBaseUrlFromWebBase(webBaseUrl: string): string {
   return `${webBaseUrl.replace(/\/+$/, '')}/api/v1`
 }
 
-function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRef | null {
+function makeRepoRef(
+  host: string,
+  path: string,
+  webOrigin: string,
+  isSshLike: boolean
+): GiteaRepoRef | null {
   const normalizedHost = host.toLowerCase()
   if (
     !normalizedHost ||
@@ -104,7 +113,10 @@ function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRe
     owner: parsed.owner,
     repo: parsed.repo,
     apiBaseUrl: apiBaseUrlFromWebBase(webBaseUrl),
-    webBaseUrl
+    webBaseUrl,
+    // Why: an SSH/SCP remote with no subpath segment can't reveal the host's web
+    // ROOT_URL subpath, so flag the base as host-inferred for credential lookup.
+    ...(isSshLike && !parsed.basePath ? { apiBaseFromHost: true } : {})
   }
 }
 
@@ -115,7 +127,7 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
     if (scpLike) {
       const host = scpLike[1]
       const path = scpLike[2]
-      return makeRepoRef(host, path, `https://${host.toLowerCase()}`)
+      return makeRepoRef(host, path, `https://${host.toLowerCase()}`, true)
     }
   }
 
@@ -138,7 +150,7 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
     // non-default port (e.g. :3000) never matched its server. SSH keeps the bare
     // hostname — its port is the SSH port, not the web port.
     const webOrigin = isHttp ? `${protocol}//${url.host}` : `https://${url.hostname.toLowerCase()}`
-    return makeRepoRef(isHttp ? url.host : url.hostname, url.pathname, webOrigin)
+    return makeRepoRef(isHttp ? url.host : url.hostname, url.pathname, webOrigin, !isHttp)
   } catch {
     return null
   }

@@ -46,8 +46,8 @@ fix(gitea): scope credentials by API-base subpath and fix auth-status 403
 | 4 | `src/main/gitea/issues.ts:266-280` — full failure after a committed PATCH | ✅ Fixed | `updateGiteaIssue` tracks whether the field PATCH committed; if the labels PUT then fails, it returns `{ ok: true, warning }` (new optional field on `GiteaMutationResult`) so the UI still refreshes the changed issue while surfacing the label failure as a non-fatal toast. |
 | 5 | `src/main/gitea/mappers.ts:114-115` — trimmed issue body | ✅ Fixed | `body: raw.body ?? undefined` (was `raw.body?.trim() \|\| undefined`) so the raw Markdown isn't rewritten on read. Extends the prior mapper fix in this area. |
 | 6 | `src/main/gitea/pull-requests.ts:140-143` — PR file list stops at page 1 | ✅ Fixed | `listGiteaPullRequestFiles` now pages (`limit 100`, up to `MAX_PR_FILES_PAGES = 50`) and merges all files, so large PRs don't drop changed files. |
-| 7 | `src/main/gitea/request.ts:41-65` — env token scoped by host only | ✅ Fixed | `resolveGiteaAuth` compares the **normalized host + API-base path** (`sameApiBase` via `giteaServerKey`) and passes `repo.apiBaseUrl` into the stored lookup, so `ORCA_GITEA_TOKEN` can't leak to a sibling subpath instance. Builds on (keeps) the #5493 host+port match. |
-| 8 | `src/main/gitea/server-store.ts:250-270` — stored creds by host only | ✅ Fixed | Added `giteaServerKey(apiBaseUrl)` (host+path, port-preserving). `getServerForHost(host, apiBaseUrl?)` prefers an exact host+path match when an API base is supplied (host-only fallback otherwise). Both callers (`request.ts`, `issues.ts`) pass `repo.apiBaseUrl`. |
+| 7 | `src/main/gitea/request.ts:41-65` — env token scoped by host only | ✅ Fixed | `resolveGiteaAuth` compares the **normalized host + API-base path** (`sameApiBase` via `giteaServerKey`) and passes `repo.apiBaseUrl` + the host-inferred flag into the stored lookup, so `ORCA_GITEA_TOKEN` can't leak to a sibling subpath instance. Builds on (keeps) the #5493 host+port match. |
+| 8 | `src/main/gitea/server-store.ts:250-270` — stored creds by host only | ✅ Fixed | Added `giteaServerKey(apiBaseUrl)` (host+path, port-preserving). `getServerForHost(host, apiBaseUrl?, apiBaseFromHost?)` prefers an exact host+path match; for a **host-inferred** base it accepts the host's lone connected server, refusing to guess when multiple instances share a host. Both callers (`request.ts`, `issues.ts`) pass the API base + flag. |
 | 9 | `src/renderer/.../GiteaIssueWorkspace.tsx:149-163` — guard async writes | ✅ Fixed | `refreshDetail`, `handleToggleState`, and `handleSubmitComment` capture `requestRef.current` before the await and bail if the selection changed, so a late response can't overwrite a newly-opened issue. |
 | 10 | `src/renderer/.../GiteaPullRequestWorkspace.tsx:134-228` — guard PR mutations | ✅ Fixed | `handleSubmitComment`, `handleMerge`, and `handleAddReviewComment` apply the same `requestRef` guard after each awaited IPC call. |
 | 11 | `src/renderer/.../GiteaTaskList.tsx:92-106` — one repo blanks the list | ✅ Fixed | Load uses `Promise.allSettled`, merges fulfilled repos, logs rejected ones, and only shows the error banner when **every** repo failed. |
@@ -123,6 +123,20 @@ fix(gitea): scope credentials by API-base subpath and fix auth-status 403
 - `gitea-integration-card.test.tsx` — per-server testing state (one finishing
   doesn't clear another).
 - `settings-search-keywords.test.ts` — Tasks-pane search indexes `gitea`.
+
+## Self-review (adversarial)
+
+An adversarial pass over the committed diff caught one **regression in the F7/F8
+credential scoping**: SSH clone URLs (`git@host:owner/repo.git`) can't carry the
+host's web ROOT_URL subpath, so a subpath-hosted Gitea accessed via an SSH remote
+derived a bare-host `apiBaseUrl` that no longer key-matched the stored server's
+subpath base — dropping the token (reads → null, writes → "Connect a Gitea
+account"). Fixed by flagging such bases as **host-inferred** (`GiteaRepoRef.apiBaseFromHost`,
+set in `repository-ref.ts` only for SSH/SCP remotes with no subpath segment) and
+allowing a host-only credential match for that case alone — while keeping the
+strict exact-match for authoritative HTTP bases and refusing to guess between
+multiple instances on one host. Covered by new tests in `repository-ref.test.ts`
+and `client.test.ts`. (Commit: *keep SSH-remote subpath repos authenticated*.)
 
 ## Notes for the reviewer
 

@@ -264,20 +264,32 @@ export function getCredentialError(serverIds: readonly string[]): string | undef
 // connected server matches. Used to authenticate repo-scoped Gitea requests.
 export function getServerForHost(
   host: string | null | undefined,
-  apiBaseUrl?: string | null
+  apiBaseUrl?: string | null,
+  apiBaseFromHost?: boolean
 ): GiteaServerToken | null {
   if (!host) {
     return null
   }
   const normalizedHost = host.toLowerCase()
   const file = getServerFile()
-  // Why: when the repo carries a subpath API base, require an exact host+path
-  // match so two instances on one host resolve to the right server (and token).
-  // Fall back to host-only matching when no API base is supplied (back-compat).
-  const targetKey = apiBaseUrl ? giteaServerKey(apiBaseUrl) : null
-  const server = targetKey
-    ? file.servers.find((entry) => giteaServerKey(entry.apiBaseUrl) === targetKey)
-    : file.servers.find((entry) => giteaServerHost(entry) === normalizedHost)
+  const hostMatches = file.servers.filter((entry) => giteaServerHost(entry) === normalizedHost)
+  let server: GiteaServer | undefined
+  if (apiBaseUrl) {
+    // Why: an authoritative API base (host + subpath) requires an exact match so
+    // sibling instances on one host resolve to the right server (and token).
+    const targetKey = giteaServerKey(apiBaseUrl)
+    server = targetKey
+      ? hostMatches.find((entry) => giteaServerKey(entry.apiBaseUrl) === targetKey)
+      : undefined
+    // Why: a host-inferred base (SSH remote with no subpath) can't reveal a
+    // subpath instance's path, so accept the host's lone connected server in that
+    // case — but never guess when multiple instances share the host.
+    if (!server && apiBaseFromHost && hostMatches.length === 1) {
+      server = hostMatches[0]
+    }
+  } else {
+    server = hostMatches[0]
+  }
   if (!server) {
     return null
   }

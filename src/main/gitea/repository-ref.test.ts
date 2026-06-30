@@ -72,7 +72,9 @@ describe('Gitea repository ref parsing', () => {
       owner: 'team',
       repo: 'project',
       apiBaseUrl: 'https://gitea.example.test/api/v1',
-      webBaseUrl: 'https://gitea.example.test'
+      webBaseUrl: 'https://gitea.example.test',
+      // No subpath in an SSH remote → base is host-inferred (may omit a subpath).
+      apiBaseFromHost: true
     })
   })
 
@@ -92,7 +94,8 @@ describe('Gitea repository ref parsing', () => {
       owner: 'team',
       repo: 'project',
       apiBaseUrl: 'https://gitea.example.test/api/v1',
-      webBaseUrl: 'https://gitea.example.test'
+      webBaseUrl: 'https://gitea.example.test',
+      apiBaseFromHost: true
     })
   })
 

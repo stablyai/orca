@@ -38,27 +38,43 @@ export function getEnvGiteaAuth(): { apiBaseUrl: string | null; token: string | 
   }
 }
 
-function sameApiBase(envApiBaseUrl: string, repoApiBaseUrl: string): boolean {
+function sameHost(apiBaseUrl: string, repoHost: string): boolean {
+  try {
+    return new URL(apiBaseUrl).host.toLowerCase() === repoHost.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function sameApiBase(envApiBaseUrl: string, repo: GiteaRepoRef): boolean {
   const env = giteaServerKey(envApiBaseUrl)
-  return env !== null && env === giteaServerKey(repoApiBaseUrl)
+  if (env === null) {
+    return false
+  }
+  if (env === giteaServerKey(repo.apiBaseUrl)) {
+    return true
+  }
+  // Why: a host-inferred base (SSH remote with no subpath) may be missing the env
+  // instance's subpath, so accept a host match for that ambiguous case only.
+  return repo.apiBaseFromHost === true && sameHost(envApiBaseUrl, repo.host)
 }
 
 export function resolveGiteaAuth(repo: GiteaRepoRef): GiteaResolvedAuth {
   const env = getEnvGiteaAuth()
   if (env.token) {
-    // With an explicit ORCA_GITEA_API_BASE_URL, scope the token to that exact API
-    // base (host + subpath) so a global token can't leak to a different server or
-    // a sibling instance under another subpath on the same host. Without one, fall
+    // With an explicit ORCA_GITEA_API_BASE_URL, scope the token to that API base
+    // (host + subpath) so a global token can't leak to a different server or a
+    // sibling instance under another subpath on the same host. Without one, fall
     // back to the repo's own base — the env-var back-compat hosted review uses.
     if (env.apiBaseUrl) {
-      if (sameApiBase(env.apiBaseUrl, repo.apiBaseUrl)) {
+      if (sameApiBase(env.apiBaseUrl, repo)) {
         return { apiBaseUrl: env.apiBaseUrl, token: env.token }
       }
     } else {
       return { apiBaseUrl: repo.apiBaseUrl, token: env.token }
     }
   }
-  const stored = getServerForHost(repo.host, repo.apiBaseUrl)
+  const stored = getServerForHost(repo.host, repo.apiBaseUrl, repo.apiBaseFromHost)
   if (stored) {
     return { apiBaseUrl: stored.server.apiBaseUrl, token: stored.token }
   }

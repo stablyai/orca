@@ -146,6 +146,31 @@ describe('Gitea client', () => {
     )
   })
 
+  it('applies the env subpath base to an SSH remote that cannot carry the subpath', async () => {
+    // SSH remotes derive a bare-host API base (no subpath), so the env override's
+    // subpath + token must still apply on the same host rather than being dropped.
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com/code'
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@git.example.com:team/repo.git\n',
+      stderr: ''
+    })
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/commits/abc123/status')) {
+        return Response.json({ state: 'success' })
+      }
+      expect(new Headers(init?.headers).get('Authorization')).toBe('token gitea-token')
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 7
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      'https://git.example.com/code/api/v1/repos/team/repo/pulls'
+    )
+  })
+
   it('falls back to a linked PR number when branch lookup misses', async () => {
     const fetchMock = vi.fn(async (url: string | URL) => {
       const requestUrl = String(url)
