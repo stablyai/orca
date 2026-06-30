@@ -8,6 +8,7 @@ import {
   isShellProcess
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import {
@@ -12591,11 +12592,19 @@ export class OrcaRuntimeService {
     const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
       ? [localWorktreeGitOptions]
       : []
+    // Devcontainer repos create worktrees with relative gitdir pointers so they
+    // stay valid when the same bind-mounted files are seen at the container's
+    // path (see Phase 3 / git --relative-paths).
+    const useRelativeWorktreePaths =
+      parseExecutionHostId(getRepoExecutionHostId(repo))?.kind === 'devcontainer'
     const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined => {
+      const withRelative: AddWorktreeOptions | undefined = useRelativeWorktreePaths
+        ? { ...options, relativePaths: true }
+        : options
       if (!hasLocalWorktreeGitOptions) {
-        return options
+        return withRelative
       }
-      return { ...options, ...localWorktreeGitOptions }
+      return { ...withRelative, ...localWorktreeGitOptions }
     }
     const hostedReviewExecutionContext = this.getHostedReviewExecutionOptions(repo)
     let effectiveRequestedName = args.name

@@ -41,6 +41,11 @@ export type AddWorktreeOptions = GitWorktreeExecOptions & {
     branch: string
     ref: string
   }
+  /** Create the worktree with relative gitdir pointers (`--relative-paths`,
+   *  git >= 2.48). Set for devcontainer repos so a worktree created host-side
+   *  stays valid when the same bind-mounted files are accessed at a different
+   *  absolute path inside the container. */
+  relativePaths?: boolean
 }
 
 export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
@@ -119,6 +124,38 @@ function isBranchCheckedOutInWorktreeError(error: unknown): boolean {
   return /cannot delete branch .*(?:used by worktree|checked out)|branch .*is checked out/i.test(
     getErrorText(error)
   )
+}
+
+const MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION = { major: 2, minor: 48 }
+
+function parseGitVersion(stdout: string): { major: number; minor: number } | null {
+  const match = stdout.match(/git version (\d+)\.(\d+)/i)
+  if (!match) {
+    return null
+  }
+  return { major: Number(match[1]), minor: Number(match[2]) }
+}
+
+async function assertGitSupportsRelativeWorktreePaths(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
+  const { stdout } = await gitExecFileAsync(['version'], gitExecOptions(repoPath, options))
+  const version = parseGitVersion(stdout)
+  if (!version) {
+    throw new Error(
+      `Git ${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major}.${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.minor} or newer is required for devcontainer worktrees with relative paths, but git version output could not be parsed: ${stdout.trim() || 'unknown'}`
+    )
+  }
+  if (
+    version.major < MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major ||
+    (version.major === MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major &&
+      version.minor < MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.minor)
+  ) {
+    throw new Error(
+      `Git ${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.major}.${MIN_RELATIVE_WORKTREE_PATHS_GIT_VERSION.minor} or newer is required for devcontainer worktrees with relative paths (found ${stdout.trim() || 'unknown'}).`
+    )
+  }
 }
 
 function normalizeLocalBranchRef(branch: string): string {
@@ -768,6 +805,15 @@ export async function addWorktree(
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
+  if (options.relativePaths) {
+    await assertGitSupportsRelativeWorktreePaths(repoPath, options)
+    // Why first: `--relative-paths` is an option to `worktree add` itself; it
+    // makes both the worktree `.git` file and the `.git/worktrees/<n>/gitdir`
+    // back-pointer relative, so they resolve from any absolute prefix (host vs
+    // in-container). Verified: an absolute-pointer worktree breaks when the
+    // host path is absent inside the container; a relative one stays valid.
+    args.push('--relative-paths')
+  }
   if (noCheckout) {
     args.push('--no-checkout')
   }

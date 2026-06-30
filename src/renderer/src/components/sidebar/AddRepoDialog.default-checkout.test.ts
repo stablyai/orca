@@ -32,6 +32,9 @@ describe('AddRepoDialog default-checkout handoff', () => {
     expect(source).toContain("onGitRepoReady(repo.id, 'clone_url')")
     expect(source).toContain("onGitRepoReady(repo.id, 'runtime_server_path')")
     expect(source).toContain('onGitRepoReady(repo.id, source)')
+    expect(source).toContain(
+      "onRepoReady: (repoId) => completeGitRepoAdd(repoId, 'local_folder_picker')"
+    )
   })
 
   it('does not fail nested import completion on non-authoritative refresh', () => {

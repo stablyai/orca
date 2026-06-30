@@ -185,7 +185,9 @@ import {
   setPtyOwnership,
   setLocalPtyProvider,
   rebindLocalProviderListeners,
-  unregisterSshPtyProvider
+  unregisterSshPtyProvider,
+  registerDockerPtyProvider,
+  unregisterDockerPtyProvider
 } from './pty'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import {
@@ -363,6 +365,7 @@ describe('registerPtyHandlers', () => {
     _resetWslCachesForTests()
     vi.useRealTimers()
     unregisterSshPtyProvider('ssh-1')
+    unregisterDockerPtyProvider('devcontainer:%2FUsers%2Fme%2Fwork%2Faprium')
     setLocalPtyProvider(new LocalPtyProvider())
     if (savedProcessPlatform) {
       Object.defineProperty(process, 'platform', savedProcessPlatform)
@@ -3055,8 +3058,11 @@ describe('registerPtyHandlers', () => {
     expect(sshSpawn).toHaveBeenCalledTimes(1)
   })
 
-  it('lists sessions from both local and SSH providers', async () => {
+  it('lists sessions from local, SSH, and devcontainer providers', async () => {
     registerPtyHandlers(mainWindow as never)
+    const dockerListProcesses = vi.fn(async () => [
+      { id: 'docker-pty', cwd: '/workspaces/aprium', title: 'docker-shell' }
+    ])
     const sshListProcesses = vi.fn(async () => [
       { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' }
     ])
@@ -3080,6 +3086,25 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+    registerDockerPtyProvider('devcontainer:%2FUsers%2Fme%2Fwork%2Faprium', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(async () => undefined),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: dockerListProcesses,
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
     const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
@@ -3089,9 +3114,15 @@ describe('registerPtyHandlers', () => {
     }[]
 
     expect(sshListProcesses).toHaveBeenCalled()
+    expect(dockerListProcesses).toHaveBeenCalled()
     expect(sessions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ cwd: '/remote', id: 'remote-pty', title: 'ssh-shell' })
+        expect.objectContaining({ cwd: '/remote', id: 'remote-pty', title: 'ssh-shell' }),
+        expect.objectContaining({
+          cwd: '/workspaces/aprium',
+          id: 'docker-pty',
+          title: 'docker-shell'
+        })
       ])
     )
 

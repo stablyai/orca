@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import type { GlobalSettings, Repo } from '../shared/types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { getRepoExecutionHostId, isLocalFilesystemHost } from '../shared/execution-host'
 import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
 
@@ -14,7 +14,10 @@ export async function prepareLocalWorktreeRootForRepo(
   store: Pick<WorktreeRootPreparationStore, 'getSettings'>,
   repo: Repo
 ): Promise<void> {
-  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
+  // Devcontainer repos prepare their worktree root locally too: the project is
+  // bind-mounted, so worktrees live on host disk (under the mount) and only the
+  // terminal runs in the container.
+  if (!isLocalFilesystemHost(getRepoExecutionHostId(repo)) || isFolderRepo(repo)) {
     return
   }
 

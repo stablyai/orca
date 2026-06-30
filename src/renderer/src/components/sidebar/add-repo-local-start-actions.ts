@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { FolderOpen, Globe, Monitor, Plus } from 'lucide-react'
+import { Container, FolderOpen, Globe, Monitor, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 
 export type AddRepoLocalStartActionHandlers = {
@@ -7,13 +7,15 @@ export type AddRepoLocalStartActionHandlers = {
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
   onOpenCreateStep: () => void
+  /** Optional — when provided, a "Devcontainer" entry is offered. */
+  onOpenDevcontainerStep?: () => void
   showRemoteAction?: boolean
   canCreateProject?: boolean
   browseHostKind?: 'local' | 'ssh' | 'runtime'
 }
 
 export type AddRepoLocalStartAction = {
-  kind: 'browse' | 'clone' | 'remote' | 'create'
+  kind: 'browse' | 'clone' | 'remote' | 'create' | 'devcontainer'
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
@@ -21,12 +23,14 @@ export type AddRepoLocalStartAction = {
   onClick: () => void
 }
 
+/** Build the Add-Project start-step actions (primary Browse + secondary entries). */
 export function getAddRepoLocalStartActions({
   isSshLikely,
   onBrowse,
   onOpenCloneStep,
   onOpenRemoteStep,
   onOpenCreateStep,
+  onOpenDevcontainerStep,
   showRemoteAction = true,
   canCreateProject = true,
   browseHostKind = 'local'
@@ -111,11 +115,28 @@ export function getAddRepoLocalStartActions({
     onClick: onOpenCreateStep
   }
 
-  const secondaryActions = showRemoteAction
+  const devcontainer = onOpenDevcontainerStep
+    ? {
+        kind: 'devcontainer' as const,
+        icon: Container,
+        title: translate(
+          'auto.components.sidebar.add.repo.local.start.actions.devcontainerTitle',
+          'Devcontainer'
+        ),
+        description: translate(
+          'auto.components.sidebar.add.repo.local.start.actions.devcontainerDescription',
+          'Open a devcontainer as a project'
+        ),
+        onClick: onOpenDevcontainerStep
+      }
+    : null
+
+  const baseSecondary = showRemoteAction
     ? isSshLikely
       ? [remote, clone, create]
       : [clone, remote, create]
     : [clone, create]
+  const secondaryActions = devcontainer ? [...baseSecondary, devcontainer] : baseSecondary
 
   return { primaryAction, secondaryActions }
 }

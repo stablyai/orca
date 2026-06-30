@@ -2,7 +2,8 @@ import type { GlobalSettings, Repo, WorkspaceHostScope } from '../../../../share
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
+  type ExecutionHostId,
+  type ExecutionHostKind
 } from '../../../../shared/execution-host'
 import {
   buildExecutionHostRegistry,
@@ -18,7 +19,7 @@ export type SidebarHostOption = {
   id: ExecutionHostId
   label: string
   detail: string
-  kind: 'local' | 'ssh' | 'runtime'
+  kind: ExecutionHostKind
   health: ExecutionHostHealth
   presence: 'local' | 'configured' | 'project' | 'active'
   // Why: surfaced to the sidebar host-header menu so it can warn on version skew.

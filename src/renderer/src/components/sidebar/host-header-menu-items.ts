@@ -53,6 +53,10 @@ export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeader
       break
     case 'local':
       break
+    case 'devcontainer':
+      // Why no host-level actions yet: devcontainer attach/lifecycle is
+      // resolved per-project at runtime; only rename/manage apply for now.
+      break
   }
 
   // Manage host… always closes out the list as the catch-all deep link.

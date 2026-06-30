@@ -18,7 +18,8 @@ export function AddRepoStepIndicator({
     step === 'remote' ||
     step === 'server-path' ||
     step === 'create' ||
-    step === 'nested'
+    step === 'nested' ||
+    step === 'devcontainer'
 
   if (!showBack) {
     return null
