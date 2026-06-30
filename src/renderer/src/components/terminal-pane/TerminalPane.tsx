@@ -41,7 +41,6 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { TerminalErrorBanner } from './TerminalErrorBanner'
 import { useTerminalErrorTable } from './use-terminal-error-table'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
@@ -314,11 +313,11 @@ export default function TerminalPane({
   // Add action starts with a fresh draft instead of reusing cancelled text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
-  const {
-    errors: terminalErrors,
-    push: pushTerminalError,
-    clear: clearTerminalError
-  } = useTerminalErrorTable(worktreeId)
+  // Why: the banner is rendered once per workspace in
+  // TerminalErrorBannerOverlayLayer, but TerminalPane still owns the dispatch
+  // side (push on PTY/paste errors, clear on reset) so the store stays the
+  // single source of truth.
+  const { push: pushTerminalError, clear: clearTerminalError } = useTerminalErrorTable(worktreeId)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
@@ -2807,13 +2806,6 @@ export default function TerminalPane({
           })
         }}
       />
-      {terminalErrors.length > 0 && isActive && (
-        <TerminalErrorBanner
-          errors={terminalErrors}
-          onDismiss={clearTerminalError}
-          onRestartDaemon={() => daemonActions.setPending('restart')}
-        />
-      )}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog

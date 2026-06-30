@@ -43,6 +43,7 @@ import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
+import { TerminalErrorBannerOverlayLayer } from './terminal-pane/TerminalErrorBannerOverlayLayer'
 import {
   collectBrowserWebviewIds,
   destroyRemovedBrowserWebview,
@@ -2139,6 +2140,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
+      <TerminalErrorBannerOverlayLayer worktreeId={worktreeId} />
     </div>
   )
 })

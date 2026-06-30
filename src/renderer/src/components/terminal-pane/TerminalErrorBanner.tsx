@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { TerminalErrorEntry } from './use-terminal-error-table'
 
@@ -28,7 +29,10 @@ export type TerminalErrorBannerProps = {
   onRestartDaemon?: () => void
 }
 
-export function TerminalErrorBanner({
+// Why: WS flap pushes new array refs to this banner roughly every 100ms. The
+// banner is mounted once per workspace and only reads the entries deduped in
+// the store, so memoization avoids re-rendering on every push.
+export const TerminalErrorBanner = memo(function TerminalErrorBanner({
   errors,
   onDismiss,
   onRestartDaemon
@@ -133,4 +137,4 @@ export function TerminalErrorBanner({
       </div>
     </div>
   )
-}
+})

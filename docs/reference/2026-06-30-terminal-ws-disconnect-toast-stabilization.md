@@ -262,9 +262,10 @@ const onPtyErrorRef = useRef((_paneId: number, message: string) => {
 
 - Replace every other site that calls `setTerminalError(...)`:
 
+  Note: the original line-712 site that gated the zero-dimensions diagnostic on `isVisible` was removed in favor of single-source-of-truth via `onResetErrorRef` (see "Step 4" later in this doc). The store now clears only on PTY reconnect, not on visibility, so the visibility-driven clear is no longer needed and would otherwise race the new path.
+
 | Line (approx) | Original | Replace with |
 |---|---|---|
-| 712 | `setTerminalError((prev) => (prev && isTerminalZeroDimensionsDiagnostic(prev) ? null : prev))` | `if (terminalErrors[0] && isTerminalZeroDimensionsDiagnostic(terminalErrors[0].message)) clearTerminalError()` |
 | 1515 | `setTerminalError(null)` (codex restart) | `clearTerminalError()` |
 | 1882 | `setTerminalError(formatTerminalPasteExecutionError(execution.reason))` | `pushTerminalError(formatTerminalPasteExecutionError(execution.reason))` |
 | 1912 | `setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.')` | `pushTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.')` |
