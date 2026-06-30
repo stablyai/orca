@@ -11,6 +11,32 @@ import { parseRefreshBaseRefErrorPrefix } from '../../../../shared/worktree-remo
 const WORKTREE_PANEL_ERROR_KEY_PREFIX =
   'auto.components.worktree.creation.WorktreeCreationPanel.errors' as const
 
+// Why: extracting the IIFE keeps the JSX readable and makes the
+// 4 branches (no error / unparseable / known code / unknown template)
+// individually testable. entry.error is trusted main-process output;
+// React's text-child escaping is the XSS guard.
+function resolveWorktreeCreationErrorMessage(
+  raw: string | undefined,
+  translate: (key: string, fallback: string, options?: Record<string, string>) => string
+): string {
+  if (!raw) {
+    return translate(
+      'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
+      'Something went wrong while creating the worktree.'
+    )
+  }
+  const parsed = parseRefreshBaseRefErrorPrefix(raw)
+  if (!parsed) {
+    return raw
+  }
+  if (parsed.code === 'unknown') {
+    return translate(`${WORKTREE_PANEL_ERROR_KEY_PREFIX}.unknown`, parsed.message, {
+      message: parsed.message
+    })
+  }
+  return translate(`${WORKTREE_PANEL_ERROR_KEY_PREFIX}.${parsed.code}`, parsed.message)
+}
+
 /**
  * In-frame creation state, shown in the workspace content area while a worktree
  * is being created. Presented as a faux tab: a tab strip carrying the new
@@ -95,34 +121,7 @@ export default function WorktreeCreationPanel({
               )}
             </span>
             <span className="text-muted-foreground">
-              {(() => {
-                const raw = entry.error
-                if (!raw) {
-                  return translate(
-                    'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                    'Something went wrong while creating the worktree.'
-                  )
-                }
-                // Why: errors thrown from the worktree-creation flow are tagged
-                // with a `[code]` prefix so the panel can render a localized,
-                // code-specific message instead of leaking raw git stderr.
-                const parsed = parseRefreshBaseRefErrorPrefix(raw)
-                if (!parsed) {
-                  return raw
-                }
-                if (parsed.code === 'unknown') {
-                  // Why: only the `unknown` bucket has no dedicated key — its
-                  // template interpolates {{message}} so the user still sees the
-                  // friendly prefix (e.g. "Could not refresh base ref ...").
-                  return translate(`${WORKTREE_PANEL_ERROR_KEY_PREFIX}.unknown`, parsed.message, {
-                    message: parsed.message
-                  })
-                }
-                return translate(
-                  `${WORKTREE_PANEL_ERROR_KEY_PREFIX}.${parsed.code}`,
-                  parsed.message
-                )
-              })()}
+              {resolveWorktreeCreationErrorMessage(entry.error, translate)}
             </span>
             <button
               type="button"
