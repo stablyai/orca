@@ -1,4 +1,4 @@
-import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import type { IDisposable, ILinkProvider, Terminal } from '@xterm/xterm'
 import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
@@ -20,8 +20,7 @@ import {
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
-  rangeForParsedFileLink,
-  type WrappedLogicalLine
+  rangeForParsedFileLink
 } from './wrapped-terminal-link-ranges'
 import {
   getTerminalPathExistsCacheKey,
@@ -37,6 +36,9 @@ import {
   isMacPlatform
 } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { resolveWorkspaceFileByBasename } from './terminal-workspace-file-resolution'
+import { preferLongestNonOverlappingLinks } from './terminal-link-overlap-selection'
+import type { ProvidedFileLink } from './terminal-provided-file-link'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
@@ -53,38 +55,6 @@ export type LinkHandlerDeps = {
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
-}
-
-type ProvidedFileLink = {
-  link: ILink
-  logicalLine: WrappedLogicalLine
-}
-
-function rangesOverlap(left: ILink['range'], right: ILink['range']): boolean {
-  const leftStartsAfterRightEnds =
-    left.start.y > right.end.y || (left.start.y === right.end.y && left.start.x > right.end.x)
-  const rightStartsAfterLeftEnds =
-    right.start.y > left.end.y || (right.start.y === left.end.y && right.start.x > left.end.x)
-  return !leftStartsAfterRightEnds && !rightStartsAfterLeftEnds
-}
-
-function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFileLink[] {
-  const selected: ProvidedFileLink[] = []
-  const byLengthDescending = [...links].sort(
-    (a, b) =>
-      b.link.text.length - a.link.text.length ||
-      a.link.range.start.y - b.link.range.start.y ||
-      a.link.range.start.x - b.link.range.start.x
-  )
-  for (const link of byLengthDescending) {
-    if (!selected.some((existing) => rangesOverlap(existing.link.range, link.link.range))) {
-      selected.push(link)
-    }
-  }
-  return selected.sort(
-    (a, b) =>
-      a.link.range.start.y - b.link.range.start.y || a.link.range.start.x - b.link.range.start.x
-  )
 }
 
 export function createFilePathLinkProvider(
@@ -157,6 +127,10 @@ export function createFilePathLinkProvider(
               if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
                 return null
               }
+              // Why: the cwd-relative path is the default target, but a bare
+              // filename may instead resolve to a file nested elsewhere in the
+              // worktree (see the workspace fallback below).
+              let linkAbsolutePath = resolved.absolutePath
               // Why: exact known workspace roots must stay clickable for SSH or
               // stale local paths even when filesystem probing says "missing".
               if (!worktreeRootLink) {
@@ -168,7 +142,23 @@ export function createFilePathLinkProvider(
                     : await window.api.shell.pathExists(resolved.absolutePath))
                 writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
                 if (!exists) {
-                  return null
+                  // Why (issue #5024): a bare filename that doesn't exist at the
+                  // cwd often refers to a file nested elsewhere in the worktree.
+                  // Resolve it with a targeted worktree basename lookup
+                  // (local/SSH; runtime hosts are skipped). Only a unique
+                  // match links.
+                  const workspaceMatch =
+                    !isRemoteRuntimePath && !/[\\/]/.test(parsed.pathText)
+                      ? await resolveWorkspaceFileByBasename({
+                          basename: parsed.pathText,
+                          worktreePath,
+                          connectionId: fileContext.connectionId
+                        })
+                      : null
+                  if (!workspaceMatch) {
+                    return null
+                  }
+                  linkAbsolutePath = workspaceMatch
                 }
               }
 
@@ -181,7 +171,7 @@ export function createFilePathLinkProvider(
                     if (!isTerminalLinkActivation(event)) {
                       return
                     }
-                    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+                    openDetectedFilePath(linkAbsolutePath, resolved.line, resolved.column, {
                       worktreeId,
                       worktreePath,
                       runtimeEnvironmentId,
@@ -193,16 +183,16 @@ export function createFilePathLinkProvider(
                     // default escape hatch; remote paths may not exist locally.
                     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
                       fileContext,
-                      resolved.absolutePath
+                      linkAbsolutePath
                     )
                     const hint = worktreeRootLink
                       ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
                       : canOpenWithSystemDefault
-                        ? isHtmlFilePath(resolved.absolutePath)
+                        ? isHtmlFilePath(linkAbsolutePath)
                           ? getTerminalHtmlFileOpenHint()
                           : openLinkHint
                         : getTerminalOrcaFileOpenHint()
-                    linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
+                    linkTooltip.textContent = `${linkAbsolutePath} (${hint})`
                     linkTooltip.style.display = ''
                   },
                   leave: () => {

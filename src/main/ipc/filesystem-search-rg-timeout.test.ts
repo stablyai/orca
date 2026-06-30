@@ -31,6 +31,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: vi.fn(),
+  gitSpawn: vi.fn(),
   wslAwareSpawn: wslAwareSpawnMock
 }))
 

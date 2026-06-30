@@ -11,7 +11,7 @@
  * Quick Open showed "No matching files" even though the scan was incomplete.
  * Centralizing the policy prevents future drift.
  */
-import { posix, win32 } from 'path'
+import { relativePathInsideRoot } from './cross-platform-path'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 
@@ -93,24 +93,6 @@ export function shouldIncludeQuickOpenPath(path: string): boolean {
   return true
 }
 
-// ─── Path flavor detection ───────────────────────────────────────────
-
-// Why: buildExcludePathPrefixes must run correctly even when the main process
-// OS differs from the remote relay OS (macOS app talking to a Linux relay, or
-// Windows app talking to a Linux relay). path.relative from the local OS is
-// wrong for remote roots — pick win32 vs posix based on the root's shape.
-function pathFlavor(rootPath: string): typeof posix | typeof win32 {
-  // Drive letter like C:\ or C:/
-  if (/^[a-zA-Z]:[\\/]/.test(rootPath)) {
-    return win32
-  }
-  // UNC \\server\share
-  if (rootPath.startsWith('\\\\')) {
-    return win32
-  }
-  return posix
-}
-
 // ─── Exclude-path normalization ──────────────────────────────────────
 
 /**
@@ -129,27 +111,21 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
   if (!Array.isArray(excludePaths)) {
     return []
   }
-  const flavor = pathFlavor(rootPath)
-  // Trim trailing separators so comparison is stable.
-  const trimmedRoot = rootPath.replace(/[\\/]+$/, '')
-  const normalizedRoot = `${trimmedRoot.replace(/\\/g, '/')}/`
   const out: string[] = []
   for (const raw of excludePaths) {
     if (typeof raw !== 'string' || raw.length === 0) {
       continue
     }
-    // Fast path: input already under the root with the same separator shape.
-    const rawFwd = raw.replace(/\\/g, '/')
-    let rel: string
-    if (rawFwd === normalizedRoot.slice(0, -1)) {
-      // Root-equal — refuse to exclude the whole tree.
+    // Why: this shared module is imported by the web build, so use the pure
+    // runtime-path helper instead of Node's path APIs.
+    let rel = relativePathInsideRoot(rootPath, raw)
+    if (rel === null) {
       continue
     }
-    rel = rawFwd.startsWith(normalizedRoot)
-      ? rawFwd.slice(normalizedRoot.length)
-      : // Fall back to path-flavor relative so we do not accidentally use the
-        // local OS's semantics on remote paths.
-        flavor.relative(trimmedRoot, raw).replace(/\\/g, '/')
+    if (rel === '') {
+      // Root-equal - refuse to exclude the whole tree.
+      continue
+    }
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
@@ -242,6 +218,8 @@ export type RgArgsOptions = {
   searchRoot: string
   /** Root-relative, `/`-separated prefixes (from buildExcludePathPrefixes). */
   excludePathPrefixes: readonly string[]
+  /** Optional positive rg globs that narrow the file universe before excludes. */
+  includeGlobs?: readonly string[]
   /** On Windows rg emits `\\`-separated paths; pass true to force `/` output. */
   forceSlashSeparator: boolean
 }
@@ -266,6 +244,7 @@ export type RgArgs = {
  */
 export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   const sepArgs = opts.forceSlashSeparator ? ['--path-separator', '/'] : []
+  const includeGlobs = (opts.includeGlobs ?? []).flatMap((glob) => ['--glob', glob])
   const hiddenDirGlobs = buildHiddenDirExcludeGlobs()
   const excludeGlobs: string[] = []
   for (const prefix of opts.excludePathPrefixes) {
@@ -279,6 +258,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     '--files',
     '--hidden',
     ...sepArgs,
+    ...includeGlobs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
     opts.searchRoot
@@ -291,6 +271,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     '--hidden',
     '--no-ignore-vcs',
     ...sepArgs,
+    ...includeGlobs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
     opts.searchRoot
@@ -368,14 +349,19 @@ export type GitLsFilesArgs = {
  * their existing non-git fallback limits in the callers.
  */
 export function buildGitLsFilesArgsForQuickOpen(
-  excludePathPrefixes: readonly string[] = []
+  excludePathPrefixes: readonly string[] = [],
+  positivePathspecs: readonly string[] = []
 ): GitLsFilesArgs {
   const excludeSpecs: string[] = []
   for (const prefix of excludePathPrefixes) {
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}`)
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}/**`)
   }
-  const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
+  const positiveSpecs = positivePathspecs.length > 0 ? [...positivePathspecs] : ['.']
+  const trailingPathspecs =
+    excludeSpecs.length > 0 || positivePathspecs.length > 0
+      ? ['--', ...positiveSpecs, ...excludeSpecs]
+      : []
 
   // Why: NUL preserves real Git paths; stage mode identifies gitlinks without
   // lstat probes for ordinary tracked files.

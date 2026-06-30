@@ -94,6 +94,7 @@ import {
   isENOENT,
   authorizeExternalPath
 } from './filesystem-auth'
+import { resolveQuickOpenFileByBasename } from './filesystem-basename-resolution'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
@@ -117,6 +118,8 @@ import {
 import { listRepoWorktrees } from '../repo-worktrees'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import { buildExcludePathPrefixes } from '../../shared/quick-open-filter'
+import { resolveUniqueQuickOpenBasenameFromPaths } from '../../shared/quick-open-unique-basename'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
@@ -1024,6 +1027,35 @@ export function registerFilesystemHandlers(
         return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
       }
       return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+    }
+  )
+
+  ipcMain.handle(
+    'fs:resolveUniqueFileByBasename',
+    async (
+      _event,
+      args: { rootPath: string; basename: string; connectionId?: string; excludePaths?: string[] }
+    ): Promise<string | null> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          return null
+        }
+        const options = { excludePaths: args.excludePaths }
+        if (provider.resolveUniqueFileByBasename) {
+          return provider.resolveUniqueFileByBasename(args.rootPath, args.basename, options)
+        }
+        // Why: capability-style fallback keeps older SSH provider test doubles
+        // and stale relays on the original whole-list path instead of dropping
+        // issue #5024 support entirely.
+        const files = await provider.listFiles(args.rootPath, options)
+        return resolveUniqueQuickOpenBasenameFromPaths(
+          files,
+          args.basename,
+          buildExcludePathPrefixes(args.rootPath, args.excludePaths)
+        )
+      }
+      return resolveQuickOpenFileByBasename(args.rootPath, args.basename, store, args.excludePaths)
     }
   )
 

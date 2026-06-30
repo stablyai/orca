@@ -137,6 +137,7 @@ describe('FsHandler', () => {
     expect(methods).toContain('fs.realpath')
     expect(methods).toContain('fs.search')
     expect(methods).toContain('fs.listFiles')
+    expect(methods).toContain('fs.resolveUniqueFileByBasename')
     expect(methods).toContain('fs.workspaceSpaceScan')
     expect(methods).toContain('fs.watch')
 

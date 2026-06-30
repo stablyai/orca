@@ -376,6 +376,37 @@ describe('SshFilesystemProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('fs.listFiles', { rootPath: '/home/user/project' })
   })
 
+  it('resolveUniqueFileByBasename sends targeted basename request', async () => {
+    mux.request.mockResolvedValue('src/Foo.ts')
+
+    const result = await provider.resolveUniqueFileByBasename('/home/user/project', 'Foo.ts', {
+      excludePaths: ['/home/user/project/worktrees/b']
+    })
+
+    expect(result).toBe('src/Foo.ts')
+    expect(mux.request).toHaveBeenCalledWith('fs.resolveUniqueFileByBasename', {
+      rootPath: '/home/user/project',
+      basename: 'Foo.ts',
+      excludePaths: ['/home/user/project/worktrees/b']
+    })
+  })
+
+  it('resolveUniqueFileByBasename falls back to listFiles on older relays', async () => {
+    mux.request
+      .mockRejectedValueOnce(Object.assign(new Error('Method not found'), { code: -32601 }))
+      .mockResolvedValueOnce(['worktrees/b/Foo.ts', 'src/Foo.ts'])
+
+    const result = await provider.resolveUniqueFileByBasename('/home/user/project', 'Foo.ts', {
+      excludePaths: ['/home/user/project/worktrees/b']
+    })
+
+    expect(result).toBe('src/Foo.ts')
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'fs.listFiles', {
+      rootPath: '/home/user/project',
+      excludePaths: ['/home/user/project/worktrees/b']
+    })
+  })
+
   describe('watch', () => {
     it('sends fs.watch request and returns unsubscribe', async () => {
       const callback = vi.fn()

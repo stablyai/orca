@@ -171,6 +171,11 @@ export type IFilesystemProvider = {
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
+  resolveUniqueFileByBasename?(
+    rootPath: string,
+    basename: string,
+    options?: { excludePaths?: string[] }
+  ): Promise<string | null>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }

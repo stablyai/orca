@@ -6,6 +6,7 @@ import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../..
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import type { SFTPWrapper, Stats } from 'ssh2'
+import { resolveSshUniqueFileByBasename } from './ssh-filesystem-basename-resolution'
 
 type SftpFactory = () => Promise<SFTPWrapper>
 type WatchRegistration = {
@@ -284,6 +285,20 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       params.excludePaths = options.excludePaths
     }
     return (await this.mux.request('fs.listFiles', params)) as string[]
+  }
+
+  async resolveUniqueFileByBasename(
+    rootPath: string,
+    basename: string,
+    options?: { excludePaths?: string[] }
+  ): Promise<string | null> {
+    return resolveSshUniqueFileByBasename(
+      this.mux,
+      this.listFiles.bind(this),
+      rootPath,
+      basename,
+      options
+    )
   }
 
   async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {

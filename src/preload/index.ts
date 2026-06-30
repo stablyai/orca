@@ -2586,6 +2586,12 @@ const api = {
       connectionId?: string
       excludePaths?: string[]
     }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
+    resolveUniqueFileByBasename: (args: {
+      rootPath: string
+      basename: string
+      connectionId?: string
+      excludePaths?: string[]
+    }): Promise<string | null> => ipcRenderer.invoke('fs:resolveUniqueFileByBasename', args),
     search: (args: {
       query: string
       rootPath: string

@@ -2245,4 +2245,26 @@ describe('registerFilesystemHandlers', () => {
       excludePaths: ['/home/user/repo/worktrees/feature']
     })
   })
+
+  it('fs:resolveUniqueFileByBasename forwards targeted lookups to the SSH filesystem provider', async () => {
+    const resolveUniqueFileByBasenameMock = vi.fn().mockResolvedValue('src/Foo.ts')
+    getSshFilesystemProviderMock.mockReturnValue({
+      resolveUniqueFileByBasename: resolveUniqueFileByBasenameMock
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:resolveUniqueFileByBasename')!(null, {
+        rootPath: '/home/user/repo',
+        basename: 'Foo.ts',
+        connectionId: 'conn-1',
+        excludePaths: ['/home/user/repo/worktrees/feature']
+      })
+    ).resolves.toBe('src/Foo.ts')
+
+    expect(resolveUniqueFileByBasenameMock).toHaveBeenCalledWith('/home/user/repo', 'Foo.ts', {
+      excludePaths: ['/home/user/repo/worktrees/feature']
+    })
+  })
 })

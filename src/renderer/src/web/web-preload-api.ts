@@ -47,6 +47,7 @@ import {
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { resolveUniqueQuickOpenBasenameFromPaths } from '../../../shared/quick-open-unique-basename'
 import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -1452,6 +1453,20 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         }
       )
       return result.files.map((entry) => entry.relativePath)
+    },
+    resolveUniqueFileByBasename: async ({ rootPath, basename, excludePaths }) => {
+      const file = await resolveRuntimeFilePath(rootPath)
+      const result = await callRuntimeResult<{ files: { relativePath: string }[] }>(
+        'files.listAll',
+        {
+          worktree: toRuntimeWorktreeSelector(file.worktree.id),
+          excludePaths
+        }
+      )
+      return resolveUniqueQuickOpenBasenameFromPaths(
+        result.files.map((entry) => entry.relativePath),
+        basename
+      )
     },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)

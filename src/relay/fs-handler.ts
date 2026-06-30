@@ -25,6 +25,7 @@ import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import { resolveUniqueQuickOpenFileByBasename } from './fs-handler-basename-resolution'
 
 type WatchState = {
   rootPath: string
@@ -91,6 +92,9 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
+    this.dispatcher.onRequest('fs.resolveUniqueFileByBasename', (p) =>
+      this.resolveUniqueFileByBasename(p)
+    )
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p, context) => this.unwatch(p, context))
@@ -322,6 +326,17 @@ export class FsHandler {
     } catch (err) {
       throw new Error(await buildInstallRgMessage(err))
     }
+  }
+
+  private async resolveUniqueFileByBasename(
+    params: Record<string, unknown>
+  ): Promise<string | null> {
+    const rootPath = expandTilde(params.rootPath as string)
+    return resolveUniqueQuickOpenFileByBasename(
+      rootPath,
+      params.basename as string,
+      params.excludePaths
+    )
   }
 
   private async workspaceSpaceScan(params: Record<string, unknown>, context: RequestContext) {

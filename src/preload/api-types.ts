@@ -2152,6 +2152,12 @@ export type PreloadApi = {
       connectionId?: string
       excludePaths?: string[]
     }) => Promise<string[]>
+    resolveUniqueFileByBasename: (args: {
+      rootPath: string
+      basename: string
+      connectionId?: string
+      excludePaths?: string[]
+    }) => Promise<string | null>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
     importExternalPaths: (args: {
       sourcePaths: string[]
