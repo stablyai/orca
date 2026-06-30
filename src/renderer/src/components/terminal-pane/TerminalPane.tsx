@@ -679,7 +679,15 @@ export default function TerminalPane({
   // Why: Windows ConPTY does not forward DECSET 2004 from foreground TUIs, so
   // xterm may not know multi-line text needs bracketed-paste protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
-  const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+  const [initialAgentStatus] = useState(
+    () => useAppStore.getState().pendingInitialAgentStatusByTabId[tabId] ?? undefined
+  )
+  const [startup] = useState(() => {
+    const pendingStartup = useAppStore.getState().pendingStartupByTabId[tabId]
+    return pendingStartup && initialAgentStatus
+      ? { ...pendingStartup, initialAgentStatus }
+      : pendingStartup
+  })
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => startup !== undefined && !isVisible
   )
@@ -687,6 +695,7 @@ export default function TerminalPane({
     () => new Set()
   )
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
+  const consumeTabInitialAgentStatus = useAppStore((store) => store.consumeTabInitialAgentStatus)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
   const [issueCommandSplit] = useState(
@@ -694,10 +703,11 @@ export default function TerminalPane({
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
   useEffect(() => {
-    if (startup) {
+    if (startup || initialAgentStatus) {
       consumeTabStartupCommand(tabId)
+      consumeTabInitialAgentStatus(tabId)
     }
-  }, [startup, tabId, consumeTabStartupCommand])
+  }, [startup, initialAgentStatus, tabId, consumeTabStartupCommand, consumeTabInitialAgentStatus])
 
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
@@ -1281,6 +1291,7 @@ export default function TerminalPane({
     worktreeId,
     cwd,
     startup,
+    initialAgentStatus,
     setupSplit,
     issueCommandSplit,
     isActive,

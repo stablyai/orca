@@ -20293,12 +20293,13 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-cli-agent-startup' })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),
       activateWorktree: vi.fn(),
       createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-cli-agent-startup' }),
+      revealTerminalSession,
       splitTerminal: vi.fn(),
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
@@ -20336,6 +20337,15 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
+    expect(revealTerminalSession).toHaveBeenCalledWith(
+      result.worktree.id,
+      expect.objectContaining({
+        initialAgentStatus: {
+          agent: 'codex',
+          prompt: 'hi'
+        }
+      })
+    )
   })
 
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {

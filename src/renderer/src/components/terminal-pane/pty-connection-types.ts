@@ -4,7 +4,7 @@ import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinat
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../../shared/types'
+import type { InitialAgentStatusSeed, TuiAgent } from '../../../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 
 export type PtyConnectionDeps = {
@@ -25,10 +25,11 @@ export type PtyConnectionDeps = {
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
     /** Initial prompt-start status for agents that lack native prompt hooks. */
-    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    initialAgentStatus?: InitialAgentStatusSeed
     /** Show the restored-session banner when this startup command mounts. */
     showSessionRestoredBanner?: boolean
   } | null
+  initialAgentStatus?: InitialAgentStatusSeed
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>

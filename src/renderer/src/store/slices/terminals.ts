@@ -6,6 +6,7 @@ import type {
   Tab,
   TerminalLayoutSnapshot,
   TerminalTab,
+  InitialAgentStatusSeed,
   TuiAgent,
   Worktree,
   WorkspaceKey,
@@ -340,7 +341,7 @@ export type TerminalSlice = {
       launchToken?: string
       launchAgent?: TuiAgent
       /** Initial prompt-start status for agents that lack native prompt hooks. */
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      initialAgentStatus?: InitialAgentStatusSeed
       /** Show the restored-session banner when this startup command mounts. */
       showSessionRestoredBanner?: boolean
       /** Telemetry metadata for the `agent_started` event. Threaded all the
@@ -349,6 +350,7 @@ export type TerminalSlice = {
       telemetry?: AgentStartedTelemetry
     }
   >
+  pendingInitialAgentStatusByTabId: Record<string, InitialAgentStatusSeed>
   pendingInitialCwdByTabId: Record<string, string>
   /** Queued setup-split requests — when present, TerminalPane creates the
    *  initial pane clean, then splits (vertical or horizontal per user setting)
@@ -500,12 +502,14 @@ export type TerminalSlice = {
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
       launchAgent?: TuiAgent
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      initialAgentStatus?: InitialAgentStatusSeed
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   ) => void
+  queueTabInitialAgentStatus: (tabId: string, seed: InitialAgentStatusSeed) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
+  consumeTabInitialAgentStatus: (tabId: string) => InitialAgentStatusSeed | null
   consumeTabInitialCwd: (tabId: string) => string | null
   consumeTabStartupCommand: (tabId: string) => {
     command: string
@@ -515,7 +519,7 @@ export type TerminalSlice = {
     launchConfig?: SleepingAgentLaunchConfig
     launchToken?: string
     launchAgent?: TuiAgent
-    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    initialAgentStatus?: InitialAgentStatusSeed
     showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
   } | null
@@ -576,6 +580,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
   pendingStartupByTabId: {},
+  pendingInitialAgentStatusByTabId: {},
   pendingInitialCwdByTabId: {},
   pendingSetupSplitByTabId: {},
   pendingIssueCommandSplitByTabId: {},
@@ -1021,6 +1026,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
+      const nextPendingInitialAgentStatusByTabId = { ...s.pendingInitialAgentStatusByTabId }
+      delete nextPendingInitialAgentStatusByTabId[tabId]
       const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
       delete nextPendingInitialCwdByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -1097,6 +1104,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
         pendingStartupByTabId: nextPendingStartupByTabId,
+        pendingInitialAgentStatusByTabId: nextPendingInitialAgentStatusByTabId,
         pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
@@ -2135,6 +2143,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: setup-split and issue-command-split are transient one-shots that
       // drive new-tab UX. They are not sleep-recovery state; clear in both
       // cases.
+      const nextPendingInitialAgentStatusByTabId = { ...s.pendingInitialAgentStatusByTabId }
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
       const nextPendingIssueCommandSplitByTabId = { ...s.pendingIssueCommandSplitByTabId }
       // Why: under remove-worktree (default), layout snapshots carry
@@ -2164,6 +2173,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         if (!keepIdentifiers) {
           delete nextRuntimePaneTitlesByTabId[tab.id]
         }
+        delete nextPendingInitialAgentStatusByTabId[tab.id]
         delete nextPendingSetupSplitByTabId[tab.id]
         delete nextPendingIssueCommandSplitByTabId[tab.id]
         if (nextUnreadTerminalTabs[tab.id]) {
@@ -2229,6 +2239,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+        pendingInitialAgentStatusByTabId: nextPendingInitialAgentStatusByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
         terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
@@ -2437,6 +2448,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }))
   },
 
+  queueTabInitialAgentStatus: (tabId, seed) => {
+    set((s) => ({
+      pendingInitialAgentStatusByTabId: {
+        ...s.pendingInitialAgentStatusByTabId,
+        [tabId]: seed
+      }
+    }))
+  },
+
   queueTabInitialCwd: (tabId, cwd) => {
     set((s) => ({
       pendingInitialCwdByTabId: {
@@ -2444,6 +2464,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         [tabId]: cwd
       }
     }))
+  },
+
+  consumeTabInitialAgentStatus: (tabId) => {
+    const pending = get().pendingInitialAgentStatusByTabId[tabId]
+    if (!pending) {
+      return null
+    }
+
+    set((s) => {
+      const next = { ...s.pendingInitialAgentStatusByTabId }
+      delete next[tabId]
+      return { pendingInitialAgentStatusByTabId: next }
+    })
+
+    return pending
   },
 
   consumeTabInitialCwd: (tabId) => {

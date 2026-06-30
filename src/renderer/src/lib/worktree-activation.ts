@@ -2,6 +2,7 @@
 import type {
   FolderWorkspace,
   GlobalSettings,
+  InitialAgentStatusSeed,
   SetupSplitDirection,
   Tab,
   TuiAgent,
@@ -73,7 +74,7 @@ export type WorktreeStartupPayload = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
-  initialAgentStatus?: { agent: TuiAgent; prompt: string }
+  initialAgentStatus?: InitialAgentStatusSeed
   telemetry?: AgentStartedTelemetry
 }
 
@@ -118,7 +119,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
       launchAgent?: TuiAgent
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      initialAgentStatus?: InitialAgentStatusSeed
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }

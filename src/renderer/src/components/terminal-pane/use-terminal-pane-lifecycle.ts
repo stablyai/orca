@@ -35,8 +35,6 @@ import type {
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { EventProps } from '../../../../shared/telemetry-events'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -76,6 +74,7 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
+import type { PtyConnectionDeps } from './pty-connection-types'
 import { reconcileDeadSessions, type ReconcilableBinding } from './terminal-dead-session-reconcile'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
@@ -166,19 +165,8 @@ type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: {
-    command: string
-    /** Renderer-delivered startup input for callers that need xterm paste
-     *  semantics before the submit Enter. */
-    delivery?: 'terminal-paste'
-    startupCommandDelivery?: StartupCommandDelivery
-    env?: Record<string, string>
-    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
-     *  so main fires the event only after the spawn succeeds. */
-    telemetry?: EventProps<'agent_started'>
-    /** Show the restored-session banner when this startup command mounts. */
-    showSessionRestoredBanner?: boolean
-  } | null
+  startup?: PtyConnectionDeps['startup']
+  initialAgentStatus?: PtyConnectionDeps['initialAgentStatus']
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
    *  keeping the main terminal interactive. */
@@ -483,6 +471,7 @@ export function useTerminalPaneLifecycle({
   worktreeId,
   cwd,
   startup,
+  initialAgentStatus,
   setupSplit,
   issueCommandSplit,
   isActive,
@@ -712,6 +701,7 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       cwd: startupCwd,
       startup,
+      initialAgentStatus,
       paneTransportsRef,
       paneMode2031Ref,
       paneLastThemeModeRef,
@@ -1077,6 +1067,7 @@ export function useTerminalPaneLifecycle({
         // sets deps.startup immediately before splitPane() and is therefore
         // unaffected by this clear.
         ptyDeps.startup = null
+        ptyDeps.initialAgentStatus = undefined
         const nextInitialCwdState = clearQueuedInitialCwdAfterFirstPane(
           queuedInitialCwdRef.current,
           defaultTabCwd,

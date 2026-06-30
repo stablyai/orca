@@ -1803,6 +1803,7 @@ describe('setActiveWorktree', () => {
       'canExpandPaneByTabId',
       'terminalLayoutsByTabId',
       'pendingStartupByTabId',
+      'pendingInitialAgentStatusByTabId',
       'pendingInitialCwdByTabId',
       'pendingSetupSplitByTabId',
       'pendingIssueCommandSplitByTabId',
@@ -1844,6 +1845,9 @@ describe('setActiveWorktree', () => {
       pendingStartupByTabId: {
         [orphanId]: { command: 'codex' }
       },
+      pendingInitialAgentStatusByTabId: {
+        [orphanId]: { agent: 'codex', prompt: 'stale prompt' }
+      },
       pendingInitialCwdByTabId: {
         [orphanId]: '/repo/packages/web'
       },
@@ -1867,6 +1871,7 @@ describe('setActiveWorktree', () => {
     expect(s.runtimePaneTitlesByTabId[orphanId]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
+    expect(s.pendingInitialAgentStatusByTabId[orphanId]).toBeUndefined()
     expect(s.pendingInitialCwdByTabId[orphanId]).toBeUndefined()
     expect(s.cacheTimerByKey[`${orphanId}:seed`]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[replacement.id]).toEqual(makeLayout())
@@ -2232,6 +2237,10 @@ describe('setActiveWorktree', () => {
       unreadTerminalTabs: {
         [closing.id]: true as const,
         [surviving.id]: true as const
+      },
+      pendingInitialAgentStatusByTabId: {
+        [closing.id]: { agent: 'codex', prompt: 'stale prompt' },
+        [surviving.id]: { agent: 'codex', prompt: 'keep prompt' }
       }
     })
 
@@ -2239,8 +2248,13 @@ describe('setActiveWorktree', () => {
 
     const s = store.getState()
     expect(s.unreadTerminalTabs[closing.id]).toBeUndefined()
+    expect(s.pendingInitialAgentStatusByTabId[closing.id]).toBeUndefined()
     // Siblings untouched.
     expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
+    expect(s.pendingInitialAgentStatusByTabId[surviving.id]).toEqual({
+      agent: 'codex',
+      prompt: 'keep prompt'
+    })
   })
 
   // Why: shutdownWorktreeTerminals tears down every PTY in the worktree. The
@@ -2265,6 +2279,10 @@ describe('setActiveWorktree', () => {
       unreadTerminalTabs: {
         [tabA.id]: true as const,
         [tabB.id]: true as const
+      },
+      pendingInitialAgentStatusByTabId: {
+        [tabA.id]: { agent: 'codex', prompt: 'a' },
+        [tabB.id]: { agent: 'codex', prompt: 'b' }
       }
     })
 
@@ -2273,6 +2291,8 @@ describe('setActiveWorktree', () => {
     const s = store.getState()
     expect(s.unreadTerminalTabs[tabA.id]).toBeUndefined()
     expect(s.unreadTerminalTabs[tabB.id]).toBeUndefined()
+    expect(s.pendingInitialAgentStatusByTabId[tabA.id]).toBeUndefined()
+    expect(s.pendingInitialAgentStatusByTabId[tabB.id]).toBeUndefined()
   })
 
   // Why: ownership regression (design §1.3). shutdownWorktreeTerminals used to

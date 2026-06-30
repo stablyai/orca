@@ -161,6 +161,7 @@ import type {
   SearchResult,
   StatsSummary,
   MemorySnapshot,
+  InitialAgentStatusSeed,
   TuiAgent,
   UpdateStatus,
   Worktree,
@@ -2510,6 +2511,7 @@ export type PreloadApi = {
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
         launchAgent?: TuiAgent
+        initialAgentStatus?: InitialAgentStatusSeed
         title?: string
         ptyId?: string
         activate?: boolean
@@ -2532,6 +2534,7 @@ export type PreloadApi = {
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
         launchAgent?: TuiAgent
+        initialAgentStatus?: InitialAgentStatusSeed
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean

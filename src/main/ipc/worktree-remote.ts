@@ -285,6 +285,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       env: sequencedStartup.env,
       ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
       ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
+      ...(sequencedStartup.initialAgentStatus
+        ? { initialAgentStatus: sequencedStartup.initialAgentStatus }
+        : {}),
       startupCommandDelivery: sequencedStartup.startupCommandDelivery,
       telemetry: sequencedStartup.telemetry,
       activate: true

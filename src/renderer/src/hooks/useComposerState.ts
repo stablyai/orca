@@ -3392,8 +3392,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         platform: selectedRepoAgentLaunchPlatform,
         isRemote: selectedRepoIsRemote
       })
-      const shouldSeedInitialAgentStatus =
-        tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
+      const trimmedStartupPrompt = submitStartupPrompt.trim()
+      const shouldSeedInitialAgentStatus = trimmedStartupPrompt.length > 0
 
       // Why: backend startup is safe only when the launch command is
       // self-contained. Agents that need post-ready paste/follow-up stay on
@@ -3412,6 +3412,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               launchAgent: tuiAgent,
               ...(startupPlan.startupCommandDelivery
                 ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+                : {}),
+              ...(shouldSeedInitialAgentStatus
+                ? {
+                    initialAgentStatus: {
+                      agent: tuiAgent,
+                      prompt: trimmedStartupPrompt
+                    }
+                  }
                 : {}),
               telemetry: composerTelemetry
             }
@@ -3498,7 +3506,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                   ? {
                       initialAgentStatus: {
                         agent: tuiAgent,
-                        prompt: submitStartupPrompt.trim()
+                        prompt: trimmedStartupPrompt
                       }
                     }
                   : {}),

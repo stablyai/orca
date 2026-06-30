@@ -14,6 +14,7 @@ type OrphanTerminalCleanupState = Pick<
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
+  | 'pendingInitialAgentStatusByTabId'
   | 'pendingInitialCwdByTabId'
   | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
@@ -60,6 +61,7 @@ export function buildOrphanTerminalCleanupPatch(
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
+  | 'pendingInitialAgentStatusByTabId'
   | 'pendingInitialCwdByTabId'
   | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
@@ -77,6 +79,7 @@ export function buildOrphanTerminalCleanupPatch(
       canExpandPaneByTabId: state.canExpandPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       pendingStartupByTabId: state.pendingStartupByTabId,
+      pendingInitialAgentStatusByTabId: state.pendingInitialAgentStatusByTabId,
       pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
       pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
       pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
@@ -96,6 +99,7 @@ export function buildOrphanTerminalCleanupPatch(
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
   const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
+  const nextPendingInitialAgentStatusByTabId = { ...state.pendingInitialAgentStatusByTabId }
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
   const nextPendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
@@ -118,6 +122,7 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextCanExpandPaneByTabId[orphanTabId]
     delete nextTerminalLayoutsByTabId[orphanTabId]
     delete nextPendingStartupByTabId[orphanTabId]
+    delete nextPendingInitialAgentStatusByTabId[orphanTabId]
     delete nextPendingInitialCwdByTabId[orphanTabId]
     delete nextPendingSetupSplitByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
@@ -146,6 +151,7 @@ export function buildOrphanTerminalCleanupPatch(
     canExpandPaneByTabId: nextCanExpandPaneByTabId,
     terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
     pendingStartupByTabId: nextPendingStartupByTabId,
+    pendingInitialAgentStatusByTabId: nextPendingInitialAgentStatusByTabId,
     pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
     pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,

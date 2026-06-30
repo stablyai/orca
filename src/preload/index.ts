@@ -44,6 +44,7 @@ import type {
   OnboardingState,
   PersistedUIState,
   FloatingTerminalCwdRequest,
+  InitialAgentStatusSeed,
   MarkdownDocument,
   SearchResult,
   TuiAgent,
@@ -3170,6 +3171,7 @@ const api = {
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
         launchAgent?: TuiAgent
+        initialAgentStatus?: InitialAgentStatusSeed
         title?: string
         ptyId?: string
         activate?: boolean
@@ -3191,6 +3193,7 @@ const api = {
           launchConfig?: SleepingAgentLaunchConfig
           launchToken?: string
           launchAgent?: TuiAgent
+          initialAgentStatus?: InitialAgentStatusSeed
           title?: string
           ptyId?: string
           activate?: boolean
@@ -3216,6 +3219,7 @@ const api = {
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
         launchAgent?: TuiAgent
+        initialAgentStatus?: InitialAgentStatusSeed
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
@@ -3234,6 +3238,7 @@ const api = {
           launchConfig?: SleepingAgentLaunchConfig
           launchToken?: string
           launchAgent?: TuiAgent
+          initialAgentStatus?: InitialAgentStatusSeed
           startupCommandDelivery?: StartupCommandDelivery
           title?: string
           activate?: boolean

@@ -13,6 +13,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../../shared/agent-status-types'
 
 // Repro command:
 //   pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts -t "OpenTUI-style small ANSI redraw"
@@ -1159,6 +1160,108 @@ describe('connectPanePty', () => {
       },
       undefined
     )
+  })
+
+  it('seeds a working status from backend initial agent metadata after spawn', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex-backend')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      initialAgentStatus: { agent: 'codex', prompt: 'Fix the status' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.('pty-codex-backend')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      {
+        state: 'working',
+        prompt: 'Fix the status',
+        agentType: 'codex'
+      },
+      undefined
+    )
+  })
+
+  it('normalizes backend initial agent metadata before setting status', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex-normalized-seed')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+    const longPrompt = `Fix\n${'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)}`
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      initialAgentStatus: { agent: 'codex', prompt: longPrompt }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.('pty-codex-normalized-seed')
+
+    const statusPayload = mockStoreState.setAgentStatus.mock.calls[0]?.[1] as
+      | { prompt?: string }
+      | undefined
+    expect(statusPayload?.prompt).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+    expect(statusPayload?.prompt).not.toContain('\n')
+  })
+
+  it('does not replace hook status with backend initial agent metadata', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex-hook-wins')
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }],
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'Real hook prompt',
+          agentType: 'codex'
+        }
+      }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      initialAgentStatus: { agent: 'codex', prompt: 'Seed prompt' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.('pty-codex-hook-wins')
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('seeds a working status from Command Code thinking output without a startup prompt', async () => {
@@ -3462,7 +3565,8 @@ describe('connectPanePty', () => {
     } as StoreState
     const deps = createDeps({
       restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
+      restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId },
+      initialAgentStatus: { agent: 'codex', prompt: 'Fix eager status' }
     })
 
     const pane = createPane(1)
@@ -3475,6 +3579,15 @@ describe('connectPanePty', () => {
     expect(pane.container.dataset.ptyId).toBe(eagerPtyId)
     expect(transport.connect).not.toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: eagerPtyId })
+    )
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      {
+        state: 'working',
+        prompt: 'Fix eager status',
+        agentType: 'codex'
+      },
+      undefined
     )
     const { hasPtySerializer } = await import('./pty-buffer-serializer')
     expect(hasPtySerializer(eagerPtyId)).toBe(true)

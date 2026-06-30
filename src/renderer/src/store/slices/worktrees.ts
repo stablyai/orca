@@ -2723,6 +2723,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                           ...(startup.startupCommandDelivery
                             ? { startupCommandDelivery: startup.startupCommandDelivery }
                             : {}),
+                          ...(startup.initialAgentStatus
+                            ? { startupInitialAgentStatus: startup.initialAgentStatus }
+                            : {}),
                           activate: true
                         }
                       : {})

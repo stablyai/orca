@@ -22,4 +22,17 @@ describe('worktree RPC schemas', () => {
 
     expect(parsed.success).toBe(false)
   })
+
+  it('rejects startup initial status without a startup command', () => {
+    const parsed = WorktreeCreate.safeParse({
+      repo: 'repo-1',
+      name: 'agent-startup',
+      startupInitialAgentStatus: {
+        agent: 'codex',
+        prompt: 'hi'
+      }
+    })
+
+    expect(parsed.success).toBe(false)
+  })
 })

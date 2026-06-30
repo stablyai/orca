@@ -132,6 +132,12 @@ export const WorktreeCreate = z
     startupEnv: z.record(z.string(), z.string()).optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+    startupInitialAgentStatus: z
+      .object({
+        agent: z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' }),
+        prompt: z.string().min(1)
+      })
+      .optional(),
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
@@ -146,6 +152,14 @@ export const WorktreeCreate = z
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
+    // Why: runtime only carries initialAgentStatus through the startup payload,
+    // so reject seeds that cannot be attached to a startup launch.
+    if (params.startupInitialAgentStatus && !params.startupCommand) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'startupInitialAgentStatus requires startupCommand'
+      })
+    }
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

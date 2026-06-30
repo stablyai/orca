@@ -1348,6 +1348,7 @@ export function useIpcEvents(): void {
           launchConfig,
           launchToken,
           launchAgent,
+          initialAgentStatus,
           title,
           ptyId,
           activate,
@@ -1521,13 +1522,20 @@ export function useIpcEvents(): void {
                 }
               }
             }
+            if (initialAgentStatus) {
+              // Why: backend-spawned PTYs are already running, so there may be
+              // no startup command to queue. This metadata-only seed lets the
+              // mounted pane show the launch before the first hook event.
+              store.queueTabInitialAgentStatus(tab.id, initialAgentStatus)
+            }
             if (command) {
               store.queueTabStartupCommand(tab.id, {
                 command,
                 ...(env ? { env } : {}),
                 ...(launchConfig ? { launchConfig } : {}),
                 ...(launchToken ? { launchToken } : {}),
-                ...(launchAgent ? { launchAgent } : {})
+                ...(launchAgent ? { launchAgent } : {}),
+                ...(initialAgentStatus ? { initialAgentStatus } : {})
               })
             }
             if (requestId) {
@@ -1637,6 +1645,9 @@ export function useIpcEvents(): void {
           if (data.title) {
             store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
           }
+          if (data.initialAgentStatus && !data.command) {
+            store.queueTabInitialAgentStatus(tab.id, data.initialAgentStatus)
+          }
           if (data.command) {
             store.queueTabStartupCommand(tab.id, {
               command: data.command,
@@ -1644,6 +1655,7 @@ export function useIpcEvents(): void {
               ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
               ...(data.launchToken ? { launchToken: data.launchToken } : {}),
               ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+              ...(data.initialAgentStatus ? { initialAgentStatus: data.initialAgentStatus } : {}),
               ...(data.startupCommandDelivery
                 ? { startupCommandDelivery: data.startupCommandDelivery }
                 : {})

@@ -1637,6 +1637,7 @@ describe('useIpcEvents updater integration', () => {
     const revealWorktreeInSidebar = vi.fn()
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
+    const queueTabInitialAgentStatus = vi.fn()
     const registerAgentLaunchConfig = vi.fn()
     const clearAgentLaunchConfig = vi.fn()
     const updateTabPtyId = vi.fn()
@@ -1662,6 +1663,7 @@ describe('useIpcEvents updater integration', () => {
       revealWorktreeInSidebar,
       setTabCustomTitle,
       queueTabStartupCommand,
+      queueTabInitialAgentStatus,
       registerAgentLaunchConfig,
       clearAgentLaunchConfig,
       updateTabPtyId,
@@ -1709,6 +1711,7 @@ describe('useIpcEvents updater integration', () => {
             command?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
+            initialAgentStatus?: { agent: TuiAgent; prompt: string }
             title?: string
             ptyId?: string
             activate?: boolean
@@ -1736,6 +1739,7 @@ describe('useIpcEvents updater integration', () => {
             command?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
+            initialAgentStatus?: { agent: TuiAgent; prompt: string }
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
@@ -2262,6 +2266,30 @@ describe('useIpcEvents updater integration', () => {
     })
 
     createTab.mockClear()
+    queueTabInitialAgentStatus.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-renderer-backed-status-only',
+      worktreeId: 'wt-2',
+      title: 'Codex',
+      presentation: 'background',
+      initialAgentStatus: { agent: 'codex', prompt: 'Fix the first status' }
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
+      activate: false,
+      recordInteraction: false
+    })
+    expect(queueTabInitialAgentStatus).toHaveBeenCalledWith('tab-new', {
+      agent: 'codex',
+      prompt: 'Fix the first status'
+    })
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-renderer-backed-status-only',
+      tabId: 'tab-new',
+      title: 'Codex'
+    })
+
+    createTab.mockClear()
     registerAgentLaunchConfig.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -2271,7 +2299,8 @@ describe('useIpcEvents updater integration', () => {
         agentArgs: '--model gpt-5',
         agentEnv: { CODEX_PROFILE: 'adopted' }
       },
-      launchAgent: 'codex'
+      launchAgent: 'codex',
+      initialAgentStatus: { agent: 'codex', prompt: 'Fix the first status' }
     })
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
@@ -2297,6 +2326,10 @@ describe('useIpcEvents updater integration', () => {
         leafId: '55555555-5555-4555-8555-555555555555'
       }
     )
+    expect(queueTabInitialAgentStatus).toHaveBeenCalledWith('tab-new', {
+      agent: 'codex',
+      prompt: 'Fix the first status'
+    })
 
     createTab.mockClear()
     setActiveView.mockClear()
