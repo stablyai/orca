@@ -17,6 +17,7 @@ import {
 } from './project-header-drag-contract'
 import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { useSidebarHeaderPointerDrag } from './sidebar-header-pointer-drag'
+import { collectHeaderDragBlockRowElements } from './header-drag-preview-rows'
 
 export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragController {
   const argsRef = useRef(args)
@@ -46,6 +47,8 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
     measureRects: (container, session) => {
       session.headerRects = measureProjectHeaderDragRects(container)
     },
+    getDragPreviewRows: (session) =>
+      collectHeaderDragBlockRowElements({ headerEl: session.handleEl, mode: 'project' }),
     computeDrop: (session, container) => {
       const containerRect = container.getBoundingClientRect()
       return computeProjectHeaderDropPreviewAcrossBuckets({

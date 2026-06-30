@@ -16,6 +16,7 @@ import {
 } from './group-header-drag-contract'
 import { createGroupHeaderDragSession } from './group-header-drag-start'
 import { useSidebarHeaderPointerDrag } from './sidebar-header-pointer-drag'
+import { collectHeaderDragBlockRowElements } from './header-drag-preview-rows'
 
 export function useGroupHeaderDrag(args: UseGroupHeaderDragArgs): GroupHeaderDragController {
   const argsRef = useRef(args)
@@ -41,6 +42,12 @@ export function useGroupHeaderDrag(args: UseGroupHeaderDragArgs): GroupHeaderDra
     measureRects: (container, session) => {
       session.headerRects = measureGroupHeaderDragRects(container, session.parentGroupId)
     },
+    getDragPreviewRows: (session) =>
+      collectHeaderDragBlockRowElements({
+        headerEl: session.handleEl,
+        mode: 'group',
+        parentAttr: session.parentGroupId ?? ''
+      }),
     computeDrop: (session, container) => {
       const containerRect = container.getBoundingClientRect()
       return computeGroupHeaderDropPreview({

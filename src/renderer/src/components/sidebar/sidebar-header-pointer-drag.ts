@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import {
+  createSidebarBlockDragPreview,
   createSidebarDragPreview,
   updateSidebarDragPreviewPosition
 } from './worktree-sidebar-pointer-drag-dom'
@@ -39,6 +40,9 @@ export type SidebarHeaderPointerDragConfig<
   buildState: (id: string, drop: TDrop | null) => TState
   areStatesEqual: (a: TState, b: TState) => boolean
   commit: (session: TSession, drop: TDrop) => void
+  /** Optional: the block's row elements (header first) to clone into the drag
+   *  preview so it shows the children. Falls back to the header alone. */
+  getDragPreviewRows?: (session: TSession) => HTMLElement[]
 }
 
 export type SidebarHeaderDragController<TState> = {
@@ -217,15 +221,24 @@ export function useSidebarHeaderPointerDrag<
           }
         }
         refreshHeaderRects()
-        // Clone the header row into a floating preview that follows the cursor
-        // (same primitive the worktree drag uses); the source row then hides.
+        // Clone the dragged block into a floating preview that follows the
+        // cursor (same primitive the worktree drag uses); the source then hides.
+        // Prefer the whole block (header + children); fall back to the header.
         try {
-          previewRef.current = createSidebarDragPreview({
-            sourceRow: session.handleEl,
-            pointerX: e.clientX,
-            pointerY: e.clientY,
-            draggedCount: 1
-          })
+          const previewRows = configRef.current.getDragPreviewRows?.(session) ?? []
+          previewRef.current =
+            previewRows.length > 1
+              ? createSidebarBlockDragPreview({
+                  rows: previewRows,
+                  pointerX: e.clientX,
+                  pointerY: e.clientY
+                })
+              : createSidebarDragPreview({
+                  sourceRow: session.handleEl,
+                  pointerX: e.clientX,
+                  pointerY: e.clientY,
+                  draggedCount: 1
+                })
         } catch {
           previewRef.current = null
         }
