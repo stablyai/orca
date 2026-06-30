@@ -2,7 +2,7 @@ import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
-import { powerShellCommand } from './ssh-remote-powershell'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import { execCommand } from './ssh-relay-deploy-helpers'
 
 // Why: the relay requires Node.js 18+. Version managers like nvm keep every
@@ -14,6 +14,16 @@ const MIN_NODE_MAJOR = 18
 // the path probes don't cover. Interactive configs (conda prompts, etc.) can
 // hang a login shell, so keep this short.
 const LOGIN_SHELL_PROBE_TIMEOUT_MS = 8_000
+
+const NODE_PACKAGE_MANAGER_HINTS: readonly { bin: string; label: string; install: string }[] = [
+  { bin: 'apt-get', label: 'Debian/Ubuntu', install: 'sudo apt-get install -y nodejs npm' },
+  { bin: 'dnf', label: 'Fedora/RHEL', install: 'sudo dnf install -y nodejs npm' },
+  { bin: 'yum', label: 'RHEL/CentOS', install: 'sudo yum install -y nodejs npm' },
+  { bin: 'pacman', label: 'Arch', install: 'sudo pacman -S --needed nodejs npm' },
+  { bin: 'apk', label: 'Alpine', install: 'sudo apk add nodejs npm' },
+  { bin: 'zypper', label: 'openSUSE', install: 'sudo zypper install -y nodejs npm' },
+  { bin: 'brew', label: 'macOS/Homebrew', install: 'brew install node' }
+]
 
 export async function resolveRemoteNodePath(
   conn: SshConnection,
@@ -40,7 +50,7 @@ export async function resolveRemoteNodePath(
     return loginShellPath
   }
 
-  throwNodeNotFound()
+  return await throwNodeNotFound(conn, host)
 }
 
 // Probe the on-disk install directories of every common Node version manager
@@ -81,6 +91,7 @@ for candidate in \\
   "$HOME/.local/bin/node" \\
   "$HOME/.fnm/aliases/default/bin/node" \\
   "$HOME/.fnm/node-versions"/*/installation/bin/node \\
+  "$HOME/.local/share/fnm/node-versions"/*/installation/bin/node \\
   "$HOME/.local/share/mise/shims/node" \\
   "$HOME/.local/share/mise/installs/node"/*/bin/node \\
   "$HOME/.asdf/shims/node" \\
@@ -168,12 +179,7 @@ async function nodeMeetsVersionRequirement(
     const versionOutput = await execCommand(conn, `${shellEscape(nodePath)} --version`, {
       wrapCommand: false
     })
-    const match = versionOutput.trim().match(/^v?(\d+)/)
-    if (!match) {
-      return false
-    }
-    const major = Number.parseInt(match[1]!, 10)
-    return major >= MIN_NODE_MAJOR
+    return nodeVersionMeetsRequirement(versionOutput)
   } catch {
     // Binary missing or fails to run — not usable.
     return false
@@ -188,34 +194,126 @@ async function resolveRemoteWindowsNodePath(conn: SshConnection): Promise<string
     'if ($env:ProgramFiles) { $paths += (Join-Path $env:ProgramFiles "nodejs/node.exe") }',
     'if (${env:ProgramFiles(x86)}) { $paths += (Join-Path ${env:ProgramFiles(x86)} "nodejs/node.exe") }',
     'if ($env:LOCALAPPDATA) { $paths += (Join-Path $env:LOCALAPPDATA "Programs/nodejs/node.exe") }',
+    '$found = $false',
     'foreach ($path in $paths) {',
     '  if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) {',
     '    Write-Output $path',
-    '    exit 0',
+    '    $found = $true',
     '  }',
     '}',
+    'if ($found) { exit 0 }',
     "Write-Error 'Node.js not found'",
     'exit 1'
   ].join('\n')
 
   try {
     const result = await execCommand(conn, powerShellCommand(script), { wrapCommand: false })
-    const nodePath = result.trim().split('\n')[0]
-    if (nodePath) {
+    for (const line of result.split('\n')) {
+      const nodePath = line.trim()
+      if (!nodePath) {
+        continue
+      }
       const normalized = normalizeWindowsRemotePath(nodePath)
-      console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
-      return normalized
+      if (await windowsNodeMeetsVersionRequirement(conn, normalized)) {
+        console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
+        return normalized
+      }
     }
   } catch {
     // Fall through to the shared error below.
   }
 
-  throwNodeNotFound()
+  throwWindowsNodeNotFound()
 }
 
-function throwNodeNotFound(): never {
+async function windowsNodeMeetsVersionRequirement(
+  conn: SshConnection,
+  nodePath: string
+): Promise<boolean> {
+  try {
+    const versionOutput = await execCommand(
+      conn,
+      powerShellCommand(`& ${powerShellLiteral(nodePath)} --version`),
+      { wrapCommand: false }
+    )
+    return nodeVersionMeetsRequirement(versionOutput)
+  } catch {
+    return false
+  }
+}
+
+function nodeVersionMeetsRequirement(versionOutput: string): boolean {
+  const match = versionOutput.trim().match(/^v?(\d+)/)
+  if (!match) {
+    return false
+  }
+  const major = Number.parseInt(match[1]!, 10)
+  return major >= MIN_NODE_MAJOR
+}
+
+async function detectPackageManager(conn: SshConnection): Promise<string | null> {
+  const bins = NODE_PACKAGE_MANAGER_HINTS.map((hint) => hint.bin).join(' ')
+  try {
+    const output = await execCommand(
+      conn,
+      `for p in ${bins}; do if command -v "$p" >/dev/null 2>&1; then echo "$p"; break; fi; done`,
+      { timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }
+    )
+    const detected = output.trim().split('\n')[0]
+    return NODE_PACKAGE_MANAGER_HINTS.some((hint) => hint.bin === detected) ? detected : null
+  } catch {
+    return null
+  }
+}
+
+function formatNodeInstallHints(detectedBin: string | null): string {
+  const tailored = detectedBin
+    ? NODE_PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === detectedBin)
+    : null
+  const lines = [
+    'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
+    '',
+    'Install Node.js 18+ with npm on the remote host, then reconnect:'
+  ]
+  if (tailored) {
+    lines.push(`  ${tailored.label}: ${tailored.install}`)
+  } else {
+    for (const hint of NODE_PACKAGE_MANAGER_HINTS) {
+      lines.push(`  ${hint.label}: ${hint.install}`)
+    }
+  }
+  lines.push(
+    '',
+    'Verify the remote runtime before reconnecting:',
+    '  node --version  # must be v18 or newer',
+    '  npm --version',
+    '',
+    'If your distro package is older than Node 18, install an LTS release from https://nodejs.org/.'
+  )
+  return lines.join('\n')
+}
+
+async function throwNodeNotFound(conn: SshConnection, host?: RemoteHostPlatform): Promise<never> {
+  if (host && isWindowsRemoteHost(host)) {
+    throwWindowsNodeNotFound()
+  }
+  throw new Error(formatNodeInstallHints(await detectPackageManager(conn)))
+}
+
+function throwWindowsNodeNotFound(): never {
   throw new Error(
-    'Node.js not found on remote host. Orca relay requires Node.js 18+. ' +
-      'Install Node.js on the remote and try again.'
+    [
+      'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
+      '',
+      'Install Node.js 18+ on the remote host, then reconnect:',
+      '  winget install OpenJS.NodeJS.LTS',
+      '  choco install nodejs-lts',
+      '',
+      'Verify the remote runtime before reconnecting:',
+      '  node --version  # must be v18 or newer',
+      '  npm --version',
+      '',
+      'If those package managers are unavailable, install an LTS release from https://nodejs.org/.'
+    ].join('\n')
   )
 }
