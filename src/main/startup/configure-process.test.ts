@@ -56,7 +56,7 @@ describe('patchPackagedProcessPath', () => {
     }
   })
 
-  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+  it('prepends user CLI install dirs for packaged darwin runs', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -68,12 +68,12 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
-    // Why: issue #829 — ~/.opencode/bin and ~/.vite-plus/bin are the documented
-    // fallback install locations for the opencode and Pi CLI install scripts.
-    // Without them on PATH, GUI-launched Orca reports both as "Not installed"
-    // even when `which` resolves them in the user's shell.
+    // Why: issue #829/#5657 need useful GUI PATH coverage without interactive rc init.
     expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
     expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    expect(segments).toContain(join('/Users/tester', '.pyenv', 'shims'))
+    expect(segments).toContain(join('/Users/tester', '.cargo', 'bin'))
+    expect(segments).toContain(join('/Users/tester', 'go', 'bin'))
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 

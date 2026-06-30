@@ -89,6 +89,7 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   const directories = [
     join(homePath, '.volta', 'bin'),
     join(homePath, '.asdf', 'shims'),
+    join(homePath, '.pyenv', 'shims'),
     join(homePath, '.fnm', 'aliases', 'default', 'bin'),
     // Why: mise (formerly rtx) exposes managed tool binaries via a shims
     // directory, similar to asdf. Without this, users who installed node
@@ -105,6 +106,10 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
     directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))
   } else {
     directories.push(join(homePath, '.local', 'bin'))
+    // Why: common Rust/Go CLI bins often live only in shell rc PATH.
+    // Probe them directly instead of reopening an interactive shell.
+    directories.push(join(homePath, '.cargo', 'bin'))
+    directories.push(join(homePath, 'go', 'bin'))
     // Why: pnpm uses platform-specific global bin directories that differ from
     // npm's ~/.local/bin. macOS follows the ~/Library convention while Linux
     // uses the XDG-compatible ~/.local/share path. Without these, users who
@@ -213,11 +218,8 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
   return resolveCliCommand('claude', options)
 }
 
-// Why: GUI-launched Electron apps inherit a minimal PATH that excludes Node
-// version manager directories. CLI tools like codex/claude are Node scripts
-// with #!/usr/bin/env node shebangs — they need `node` in PATH to execute,
-// not just to be *found*. This function returns the version manager bin paths
-// so the caller can augment process.env.PATH at startup.
+// Why: GUI-launched Electron apps inherit a minimal PATH that excludes user
+// CLI bins shells add in rc files; seed known bins without running rc init.
 export function getVersionManagerBinPaths(options: ResolveCommandOptions = {}): string[] {
   const platform = options.platform ?? process.platform
   const homePath = options.homePath ?? homedir()

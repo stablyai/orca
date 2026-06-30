@@ -241,19 +241,31 @@ describe('resolveCliCommands', () => {
     const pathClaude = join(pathDir, 'claude')
     const nvmCodex = join(root, '.nvm', 'versions', 'node', 'v24.13.0', 'bin', 'codex')
     const pnpmOpencode = join(root, 'Library', 'pnpm', 'opencode')
+    const pyenvAider = join(root, '.pyenv', 'shims', 'aider')
+    const cargoCrush = join(root, '.cargo', 'bin', 'crush')
+    const goRovo = join(root, 'go', 'bin', 'rovo')
     makeExecutable(pathClaude)
     makeExecutable(nvmCodex)
     makeExecutable(pnpmOpencode)
+    makeExecutable(pyenvAider)
+    makeExecutable(cargoCrush)
+    makeExecutable(goRovo)
 
-    const resolved = resolveCliCommands(['claude', 'codex', 'opencode', 'missing'], {
-      platform: 'darwin',
-      pathEnv: pathDir,
-      homePath: root
-    })
+    const resolved = resolveCliCommands(
+      ['claude', 'codex', 'opencode', 'aider', 'crush', 'rovo', 'missing'],
+      {
+        platform: 'darwin',
+        pathEnv: pathDir,
+        homePath: root
+      }
+    )
 
     expect(resolved.get('claude')).toBe(pathClaude)
     expect(resolved.get('codex')).toBe(nvmCodex)
     expect(resolved.get('opencode')).toBe(pnpmOpencode)
+    expect(resolved.get('aider')).toBe(pyenvAider)
+    expect(resolved.get('crush')).toBe(cargoCrush)
+    expect(resolved.get('rovo')).toBe(goRovo)
     expect(resolved.get('missing')).toBe('missing')
   })
 
@@ -275,16 +287,19 @@ describe('resolveCliCommands', () => {
 })
 
 describe('getVersionManagerBinPaths', () => {
-  it('includes volta, asdf, fnm, mise, pnpm, yarn, and bun directories', () => {
+  it('includes common user CLI directories', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-vm-paths-'))
     const paths = getVersionManagerBinPaths({ platform: 'darwin', pathEnv: '', homePath: root })
 
     expect(paths).toContain(join(root, '.volta', 'bin'))
     expect(paths).toContain(join(root, '.asdf', 'shims'))
+    expect(paths).toContain(join(root, '.pyenv', 'shims'))
     expect(paths).toContain(join(root, '.fnm', 'aliases', 'default', 'bin'))
     expect(paths).toContain(join(root, '.local', 'share', 'mise', 'shims'))
     expect(paths).toContain(join(root, 'Library', 'pnpm'))
     expect(paths).toContain(join(root, '.yarn', 'bin'))
+    expect(paths).toContain(join(root, '.cargo', 'bin'))
+    expect(paths).toContain(join(root, 'go', 'bin'))
     expect(paths).toContain(join(root, '.bun', 'bin'))
   })
 

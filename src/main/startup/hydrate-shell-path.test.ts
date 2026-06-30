@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
-import { delimiter } from 'node:path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'child_process'
 import {
   _resetHydrateShellPathCache,
@@ -32,10 +34,19 @@ function createMockShellProcess(): ChildProcessWithoutNullStreams {
 
 describe('hydrateShellPath', () => {
   const originalPath = process.env.PATH
+  const originalHome = process.env.HOME
+  const tempDirs: string[] = []
+
+  function createHome(): string {
+    const home = mkdtempSync(join(tmpdir(), 'orca-hydrate-shell-path-'))
+    tempDirs.push(home)
+    return home
+  }
 
   beforeEach(() => {
     _resetHydrateShellPathCache()
     spawnMock.mockReset()
+    process.env.HOME = createHome()
   })
 
   afterEach(() => {
@@ -43,6 +54,14 @@ describe('hydrateShellPath', () => {
       delete process.env.PATH
     } else {
       process.env.PATH = originalPath
+    }
+    if (originalHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalHome
+    }
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
@@ -133,6 +152,71 @@ describe('hydrateShellPath', () => {
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
   })
 
+  // Why: #5657 hangs when this probe runs interactive rc init. Startup must
+  // stay login-non-interactive and rely on no-spawn fallbacks for rc-only dirs.
+  it('uses a login-non-interactive shell (-lc, not -ilc) for the PATH probe', async () => {
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    const [spawnedShell, spawnArgs] = spawnMock.mock.calls[0]
+    expect(spawnedShell).toBe('/bin/zsh')
+    expect(spawnArgs[0]).toBe('-lc')
+    expect(spawnArgs).not.toContain('-ilc')
+
+    // The parser still accepts manager dirs when login files provide them.
+    const path = [
+      '/Users/tester/.cargo/bin',
+      '/Users/tester/.pyenv/shims',
+      '/Users/tester/.volta/bin',
+      '/opt/homebrew/bin'
+    ].join(delimiter)
+    proc.stdout.emit('data', Buffer.from(`__ORCA_SHELL_PATH__${path}__ORCA_SHELL_PATH__`))
+    proc.emit('close')
+
+    const result = await resultPromise
+    expect(result).toEqual({
+      segments: [
+        '/Users/tester/.cargo/bin',
+        '/Users/tester/.pyenv/shims',
+        '/Users/tester/.volta/bin',
+        '/opt/homebrew/bin'
+      ],
+      ok: true,
+      failureReason: 'none'
+    })
+  })
+
+  it('adds simple rc-only PATH exports statically without restoring interactive shell startup', async () => {
+    const home = createHome()
+    const guardedBin = join(home, 'company', 'bin')
+    mkdirSync(guardedBin, { recursive: true })
+    writeFileSync(
+      join(home, '.zshrc'),
+      ['if [[ -o interactive ]]; then', '  export PATH="$HOME/company/bin:$PATH"', 'fi'].join('\n')
+    )
+    process.env.HOME = home
+
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+
+    const [, spawnArgs] = spawnMock.mock.calls[0]
+    expect(spawnArgs[0]).toBe('-lc')
+
+    proc.stdout.emit('data', Buffer.from('__ORCA_SHELL_PATH__/usr/bin__ORCA_SHELL_PATH__'))
+    proc.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      segments: [guardedBin, '/usr/bin'],
+      ok: true,
+      failureReason: 'none'
+    })
+  })
+
   it('cleans up shell listeners when hydration times out', async () => {
     vi.useFakeTimers()
     const proc = createMockShellProcess()
@@ -153,6 +237,34 @@ describe('hydrateShellPath', () => {
       expect(proc.stdout.listenerCount('data')).toBe(0)
       expect(proc.listenerCount('error')).toBe(0)
       expect(proc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses static rc PATH exports when the shell probe times out', async () => {
+    vi.useFakeTimers()
+    const home = createHome()
+    const guardedBin = join(home, 'timeout-company', 'bin')
+    mkdirSync(guardedBin, { recursive: true })
+    writeFileSync(join(home, '.zshrc'), 'export PATH="$HOME/timeout-company/bin:$PATH"\n')
+    process.env.HOME = home
+    process.env.PATH = '/usr/bin'
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+
+    try {
+      const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+      const assertion = expect(resultPromise).resolves.toEqual({
+        segments: [guardedBin, '/usr/bin'],
+        ok: true,
+        failureReason: 'none'
+      })
+
+      await vi.advanceTimersByTimeAsync(5000)
+
+      await assertion
+      expect(proc.kill).toHaveBeenCalledWith('SIGKILL')
     } finally {
       vi.useRealTimers()
     }

@@ -154,13 +154,8 @@ export function patchPackagedProcessPath(): void {
     }
   }
 
-  // Why: CLI tools installed via Node version managers (nvm, volta, asdf, fnm,
-  // pnpm, yarn, bun) use #!/usr/bin/env node shebangs that need `node` in PATH.
-  // resolveCodexCommand() can locate the codex binary in these directories, but
-  // spawning it still fails if node itself isn't in PATH. Adding version manager
-  // bin paths here fixes all spawn sites (login, rate limits, usage tracking).
-  // On Windows this also seeds user-local installer dirs, since shell hydration
-  // is POSIX-only and Start Menu launches can miss user-level PATH updates.
+  // Why: packaged GUI launches miss user CLI bins that shells add from rc files.
+  // Seed known package-manager dirs without running interactive shell init.
   extraPaths.push(...getVersionManagerBinPaths())
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'

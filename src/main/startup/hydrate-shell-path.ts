@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { delimiter } from 'path'
 import type { ShellHydrationFailureReason } from '../../shared/types'
+import { applyShellStartupPathFiles } from './shell-startup-path'
 
 // Why: GUI-launched Electron on macOS/Linux inherits a minimal PATH from launchd
 // that does not include dirs appended by the user's shell rc files (~/.zshrc,
@@ -9,10 +10,8 @@ import type { ShellHydrationFailureReason } from '../../shared/types'
 // `which` probe even though they work fine from Terminal (see stablyai/orca#829).
 //
 // Rather than play whack-a-mole adding every agent's install dir to a hardcoded
-// list, we spawn the user's login shell once per app session and read the PATH
-// it would export. This matches the behavior of every popular Electron app that
-// handles this problem (Hyper, VS Code, Cursor, etc. via shell-env/fix-path) —
-// we implement it inline to avoid adding a dependency.
+// list, we ask the user's login shell for PATH once and statically scan simple
+// rc-file PATH edits that are safe to read without executing interactive init.
 
 const DELIMITER = '__ORCA_SHELL_PATH__'
 const SPAWN_TIMEOUT_MS = 5000
@@ -77,18 +76,34 @@ function parseCapturedPath(stdout: string): string[] {
   ]
 }
 
+function parseCurrentProcessPath(): string[] {
+  return (process.env.PATH ?? '')
+    .split(delimiter)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function addStaticStartupPathSegments(shell: string, result: HydrationResult): HydrationResult {
+  const baseSegments = result.ok ? result.segments : parseCurrentProcessPath()
+  const staticPath = applyShellStartupPathFiles(shell, baseSegments)
+  if (result.ok || staticPath.changed) {
+    return { segments: staticPath.segments, ok: true, failureReason: 'none' }
+  }
+  return result
+}
+
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
     // Why: printing $PATH between delimiters is resilient to rc-file banners,
     // MOTDs, and `echo` invocations that shells like fish print unprompted.
-    // `-ilc` runs the shell as a login+interactive so both .profile/.zprofile
-    // and .bashrc/.zshrc are sourced — matches what `which` in Terminal sees.
+    // Why: use login-but-non-interactive (`-lc`, not `-ilc`) so login PATH
+    // files run without spawn-heavy interactive init wedging macOS ES agents.
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
     let finished = false
     let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
 
-    const child = spawn(shell, ['-ilc', command], {
+    const child = spawn(shell, ['-lc', command], {
       // Why: inherit current env so the shell sees the same baseline, then let
       // it layer its own rc files on top. Do NOT forward stdio — some shells
       // (oh-my-zsh setups, powerlevel10k) print a lot to stderr on startup,
@@ -119,13 +134,16 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     timer = setTimeout(() => {
       // Why: slow rc files (corporate env setup, nvm eager init) can exceed
       // our budget. Kill the shell and fall back to process.env rather than
-      // blocking the Agents pane indefinitely.
+      // blocking the Agents pane indefinitely. Defense-in-depth only: a child
+      // in kernel sleep may ignore SIGKILL, so avoiding `-i` is the real fix.
       try {
         child.kill('SIGKILL')
       } catch {
         // ignore
       }
-      finish({ segments: [], ok: false, failureReason: 'timeout' })
+      finish(
+        addStaticStartupPathSegments(shell, { segments: [], ok: false, failureReason: 'timeout' })
+      )
     }, SPAWN_TIMEOUT_MS)
 
     const onStdoutData = (chunk: Buffer): void => {
@@ -133,16 +151,28 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     }
 
     const onError = (): void => {
-      finish({ segments: [], ok: false, failureReason: 'spawn_error' })
+      finish(
+        addStaticStartupPathSegments(shell, {
+          segments: [],
+          ok: false,
+          failureReason: 'spawn_error'
+        })
+      )
     }
 
     const onClose = (): void => {
       const segments = parseCapturedPath(stdout)
       if (segments.length === 0) {
-        finish({ segments: [], ok: false, failureReason: 'empty_path' })
+        finish(
+          addStaticStartupPathSegments(shell, {
+            segments: [],
+            ok: false,
+            failureReason: 'empty_path'
+          })
+        )
         return
       }
-      finish({ segments, ok: true, failureReason: 'none' })
+      finish(addStaticStartupPathSegments(shell, { segments, ok: true, failureReason: 'none' }))
     }
 
     child.stdout.on('data', onStdoutData)
