@@ -237,7 +237,6 @@ export type Repo = {
    *  default avatar (upstream owner, not the personal fork) and the fork
    *  indicator. Absent = not a fork, or fork status not yet resolved. */
   upstream?: GitHubRepositoryIdentity | null
-  gitRemoteIdentity?: GitRemoteIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -258,6 +257,8 @@ export type Repo = {
   issueSourcePreference?: IssueSourcePreference
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
+  /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
+  gitRemoteIdentity?: GitRemoteIdentity | null
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */
@@ -1935,12 +1936,31 @@ export type OrcaHooks = {
   }
   issueCommand?: string // Shared default command for linked GitHub issues
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
+  environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
+  environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
 }
 
 export type OrcaDefaultTabTemplate = {
   title?: string
   color?: string
   command?: string
+}
+
+export type OrcaVmRecipe = {
+  id: string
+  name: string
+  create: string
+  description?: string
+  suspend?: string
+  resume?: string
+  destroy?: string
+  destroyDisabled?: boolean
+}
+
+export type OrcaVmRecipeDiagnostic = {
+  index: number
+  field?: string
+  message: string
 }
 
 export type RepoHookSettings = {
@@ -3396,6 +3416,7 @@ export type PersistedTrustedOrcaHookRepo = {
   setup?: PersistedTrustedOrcaHookEntry
   archive?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
+  vmRecipe?: PersistedTrustedOrcaHookEntry
 }
 
 export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>

@@ -13,6 +13,7 @@ vi.mock('child_process', () => ({
 import { launchOrcaApp, serveOrcaApp } from './launch'
 
 class FakeChildProcess extends EventEmitter {
+  stdout = new EventEmitter()
   kill = vi.fn()
   unref = vi.fn()
 }
@@ -24,6 +25,7 @@ describe('serveOrcaApp', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
   })
@@ -118,6 +120,47 @@ describe('serveOrcaApp', () => {
         cwd: resolve(__dirname, '../../..')
       })
     )
+  })
+
+  it('prints recipe JSON from a detached server child and exits', async () => {
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    const result = serveOrcaApp({
+      pairingAddress: 'wss://sandbox.example.com',
+      recipeJson: true,
+      projectRoot: '/workspace/repo'
+    })
+    queueMicrotask(() => {
+      child.stdout.emit(
+        'data',
+        '{"schemaVersion":1,"pairingCode":"orca://pair?code=abc","projectRoot":"/workspace/repo"}\n'
+      )
+    })
+
+    await expect(result).resolves.toBe(0)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      [
+        '--serve',
+        '--serve-pairing-address',
+        'wss://sandbox.example.com',
+        '--serve-recipe-json',
+        '--serve-project-root',
+        '/workspace/repo'
+      ],
+      expect.objectContaining({
+        cwd: resolve(__dirname, '../../..'),
+        detached: true,
+        stdio: ['ignore', 'pipe', 'inherit']
+      })
+    )
+    expect(writeSpy).toHaveBeenCalledWith(
+      '{"schemaVersion":1,"pairingCode":"orca://pair?code=abc","projectRoot":"/workspace/repo"}\n'
+    )
+    expect(child.unref).toHaveBeenCalled()
   })
 
   it('uses a shell when a Windows npm command shim is the Electron executable', async () => {

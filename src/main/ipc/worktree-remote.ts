@@ -1272,10 +1272,7 @@ export async function prefetchRemoteWorktreeCreateBase(
 
   // Why: mirrors createRemoteWorktree's legacy local-base fallback so
   // prefetch and create share one process-local SSH fetch cache.
-  const fallbackRemote = basePlan.baseBranch.includes('/')
-    ? basePlan.baseBranch.split('/')[0]
-    : 'origin'
-  await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
+  await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
 }
 
 async function refreshLocalBaseRefForRemoteWorktreeCreate(
@@ -1584,9 +1581,8 @@ export async function createRemoteWorktree(
     // Why: local or otherwise non-remote-tracking bases preserve legacy
     // best-effort fetch behavior. Verified PR/MR SHA bases already have the
     // commit object locally, so a broad remote fetch only updates unrelated refs.
-    const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {
-      await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
+      await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
     } catch {
       /* best-effort */
     }
@@ -1938,17 +1934,15 @@ export async function createLocalWorktree(
       // (e.g. plain `main`, `master`, or any local branch), the legacy path
       // still ran a best-effort `git fetch origin`. Verified PR SHA bases
       // already have the needed commit object, so skip that broad fetch.
-      const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       legacyFetchPromise = runtime
-        .fetchRemoteWithCache(repo.path, fallbackRemote, ...localWorktreeGitOptionArgs)
+        .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
     if (!(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
-      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-      legacyFetchPromise = gitExecFileAsync(['fetch', remote], localGitExecOptions)
+      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], localGitExecOptions)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)

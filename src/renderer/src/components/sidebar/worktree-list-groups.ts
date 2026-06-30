@@ -35,7 +35,6 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slic
 import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
 export { branchName }
 
@@ -153,23 +152,9 @@ type WorktreeGroupEntry = {
 type ProjectGroupingIndex = {
   projectById: Map<string, Project>
   setupByRepoId: Map<string, ProjectHostSetup>
-  projectIdsRequiringSetupGroups: Set<string>
 }
 
 const projectGroupingIndexCache = new WeakMap<ProjectGroupingModel, ProjectGroupingIndex | null>()
-
-function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
-  const wslPath = parseWslUncPath(setup.path)
-  if (wslPath) {
-    // Why: Windows host and WSL on one machine are separate execution surfaces;
-    // only duplicate checkouts within the same surface make project grouping ambiguous.
-    return `${setup.projectId}::${setup.hostId}::wsl:${wslPath.distro.toLowerCase()}`
-  }
-  if (/^[A-Za-z]:[\\/]/.test(setup.path)) {
-    return `${setup.projectId}::${setup.hostId}::windows-host`
-  }
-  return `${setup.projectId}::${setup.hostId}::default`
-}
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
   if (!model) {
@@ -185,21 +170,9 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
     projectGroupingIndexCache.set(model, null)
     return null
   }
-  const setupCountByProjectSurface = new Map<string, number>()
-  for (const setup of projectHostSetups) {
-    const key = getProjectSetupSurfaceKey(setup)
-    setupCountByProjectSurface.set(key, (setupCountByProjectSurface.get(key) ?? 0) + 1)
-  }
-  const projectIdsRequiringSetupGroups = new Set<string>()
-  for (const setup of projectHostSetups) {
-    if ((setupCountByProjectSurface.get(getProjectSetupSurfaceKey(setup)) ?? 0) > 1) {
-      projectIdsRequiringSetupGroups.add(setup.projectId)
-    }
-  }
   const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
-    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
-    projectIdsRequiringSetupGroups
+    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup]))
   }
   projectGroupingIndexCache.set(model, index)
   return index
@@ -227,16 +200,9 @@ function getProjectGroupingForRepo(
       repo
     }
   }
-  if (projectIndex?.projectIdsRequiringSetupGroups.has(setup.projectId)) {
-    // Why: once a project has duplicate checkouts on one host, other host
-    // copies cannot be safely attached to one duplicate without explicit linking.
-    return {
-      key: `project:${project.id}::setup:${repoId}`,
-      label: repo?.displayName ?? setup.displayName,
-      repo,
-      projectId: project.id
-    }
-  }
+  // Why: recipe-created runtimes and local worktrees can be separate checkouts
+  // of the same Git project; the sidebar should follow project identity rather
+  // than path-scoped setup identity so those workspaces stay in one project.
   return {
     key: `project:${project.id}`,
     label: project.displayName,

@@ -31,10 +31,10 @@ import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
-  terminalOutputContainsEastAsianRendererRisk,
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
-  terminalRewriteOutputPrefersRenderRefresh
+  terminalRewriteOutputPrefersRenderRefresh,
+  windowsEastAsianOutputPrefersRenderRefresh
 } from '@/lib/pane-manager/terminal-complex-script'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
@@ -163,6 +163,12 @@ const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 128 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
+// Why: a submit repaint can take longer than one keystroke echo to fully
+// arrive, so a synchronized frame that *began* this close to a keystroke stays
+// latency-sensitive even when ConPTY splits its end marker past the redraw
+// window — the keystroke is the "user is here, paint now" signal, not the
+// late closing chunk.
+const FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS = 400
 // Why: OpenTUI can emit many tiny redraws that each look interactive but
 // collectively starve timers unless foreground writes have a rolling budget.
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
@@ -837,6 +843,10 @@ export function connectPanePty(
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
+  // Why: tracks the keystroke proximity captured when the current synchronized
+  // foreground frame opened, so a split end marker that lands after the redraw
+  // window still drains on the fast path instead of the 1s coalesce fallback.
+  let synchronizedForegroundFrameInteractive = false
   let suppressSnapshotReplayPtyResize = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
@@ -2422,6 +2432,12 @@ export function connectPanePty(
     }
 
     const reportError = (message: string): void => {
+      // Why: the transport connect can reject asynchronously after the pane has been
+      // disposed (e.g. its workspace was deleted) — dropping a late error avoids a toast
+      // racing the unmount. Mirrors the connect scheduler's disposed guard above.
+      if (disposed) {
+        return
+      }
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
 
@@ -3088,15 +3104,15 @@ export function connectPanePty(
         return { refresh: true, inPlaceRewrite: true }
       }
       if (
-        shouldApplyWindowsRendererUnicodeRefresh &&
-        recentInput &&
-        data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
-        terminalOutputContainsEastAsianRendererRisk(data)
+        windowsEastAsianOutputPrefersRenderRefresh(data, {
+          isWindowsClient: shouldApplyWindowsRendererUnicodeRefresh,
+          isNativeWindowsConpty: shouldApplyNativeWindowsRewriteRefresh,
+          hadRecentInput: recentInput,
+          maxInteractiveRedrawChars: FOREGROUND_INTERACTIVE_REDRAW_CHARS
+        })
       ) {
-        // Why: Microsoft Pinyin commits can surface as plain CJK foreground
-        // bytes; the prompt model is correct, but the local Windows renderer
-        // can leave individual glyph cells blank until repaint. Keep this
-        // scoped to recent East Asian text input, not all Unicode output.
+        // Why: CJK/Korean from Microsoft Pinyin commits and native ConPTY agent
+        // output can leave stale wide-glyph cells in the local Windows DOM renderer.
         return { refresh: true, inPlaceRewrite: false }
       }
       return {
@@ -3154,6 +3170,24 @@ export function connectPanePty(
         isForeground: foreground,
         isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
       })
+      // Why: recompute the latch on every synchronized START so each frame's
+      // interactivity is judged by its own open time vs the last keystroke and
+      // can't leak across a same-chunk close+open; an active frame with no new
+      // start retains it (the split-end-marker headline fix), and we only clear
+      // it once we leave synchronized output on a chunk that is not the end.
+      if (synchronizedForegroundOutput && synchronizedOutputStarted) {
+        synchronizedForegroundFrameInteractive =
+          performance.now() - lastTerminalInputAt <=
+          FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS
+      } else if (!nextSynchronizedForegroundOutputActive && !synchronizedOutputEnded) {
+        synchronizedForegroundFrameInteractive = false
+      }
+      // Why: ConPTY can split the closing chunk of a submit repaint past the
+      // 150ms redraw window. Treat the whole frame as latency-sensitive when it
+      // opened right after a keystroke so the scheduler drains it on the fast
+      // path (~16-32ms) instead of the 1s synchronized-frame coalesce fallback.
+      const synchronizedFrameLatencySensitive =
+        synchronizedForegroundOutput && synchronizedForegroundFrameInteractive
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (!foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
@@ -3163,7 +3197,9 @@ export function connectPanePty(
         beforeWrite: beforeTerminalOutputWrite,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
-          !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
+          !foreground || parseHiddenStartupOutput
+            ? true
+            : synchronizedFrameLatencySensitive || isLatencySensitiveForegroundOutput(data),
         forceForegroundRefresh:
           foregroundOutput &&
           (synchronizedForegroundOutput ||

@@ -59,6 +59,7 @@ import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments-search'
+import { getEphemeralVmsSearchEntry } from '@/components/settings/ephemeral-vms-search'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
@@ -430,20 +431,6 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
-    {
-      id: 'servers',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
-      ),
-      description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
-      icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
-    },
     ...(showDesktopOnlySettings
       ? [
           {
@@ -459,6 +446,35 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    {
+      id: 'servers',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
+        'Remote Orca Servers'
+      ),
+      description: isWebClient
+        ? 'Connect this browser to a saved Orca server.'
+        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+      icon: Server,
+      searchEntries: [runtimeEnvironmentsSearchEntry],
+      group: 'remote',
+      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
+    {
+      id: 'ephemeral-vms',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.ephemeralVms',
+        'Per-Workspace Environments'
+      ),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.ephemeralVmsDescription',
+        'Give each workspace its own on-demand, disposable environment on any provider, connected over an Orca server or SSH.'
+      ),
+      icon: Server,
+      searchEntries: [getEphemeralVmsSearchEntry()],
+      group: 'remote',
+      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
     ...(showDesktopOnlySettings && isMac
       ? [
           {

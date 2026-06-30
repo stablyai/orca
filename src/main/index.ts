@@ -2,8 +2,8 @@
    it owns app lifecycle, service wiring, window creation, and hook/daemon
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, statSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -93,6 +93,7 @@ import {
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
+import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
@@ -599,6 +600,23 @@ function startDesktopFirstWindowStartupServices(): Promise<void> {
     logStartupMilestone('local-pty-startup-ready')
   })
   return firstWindowStartupServicesReady
+}
+
+async function startServeAgentHookServer(): Promise<void> {
+  if (!isAgentStatusHooksEnabled(store?.getSettings())) {
+    return
+  }
+  try {
+    await agentHookServer.start({
+      env: app.isPackaged ? 'production' : 'development',
+      userDataPath: app.getPath('userData'),
+      endpointNamespace: devAgentHookEndpointNamespace
+    })
+  } catch (error) {
+    // Why: remote hook callbacks enrich agent status only. A headless runtime
+    // should still serve terminals if the loopback receiver cannot bind.
+    console.error('[agent-hooks] Failed to start serve hook server:', error)
+  }
 }
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
@@ -1209,6 +1227,8 @@ type ServeOptions = {
   pairingAddress: string | null
   noPairing: boolean
   mobilePairing: boolean
+  recipeJson: boolean
+  projectRoot: string | null
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -1234,7 +1254,9 @@ function getServeOptions(argv = process.argv): ServeOptions {
     ...(wsPort !== undefined ? { wsPort } : {}),
     pairingAddress: valueAfter('--serve-pairing-address'),
     noPairing: argv.includes('--serve-no-pairing'),
-    mobilePairing: argv.includes('--serve-mobile-pairing')
+    mobilePairing: argv.includes('--serve-mobile-pairing'),
+    recipeJson: argv.includes('--serve-recipe-json'),
+    projectRoot: valueAfter('--serve-project-root')
   }
 }
 
@@ -1259,6 +1281,18 @@ async function printServeReady(options: ServeOptions): Promise<void> {
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
+  if (options.recipeJson) {
+    if (!options.projectRoot) {
+      throw new Error('--serve-recipe-json requires --serve-project-root')
+    }
+    if (!isAbsolute(options.projectRoot)) {
+      throw new Error(`--serve-project-root must be absolute: ${options.projectRoot}`)
+    }
+    const projectRootStats = statSync(options.projectRoot)
+    if (!projectRootStats.isDirectory()) {
+      throw new Error(`--serve-project-root must be a directory: ${options.projectRoot}`)
+    }
+  }
   const endpoint = runtimeRpc.getWebSocketEndpoint()
   const pairing = options.noPairing
     ? ({ available: false } as const)
@@ -1271,6 +1305,19 @@ async function printServeReady(options: ServeOptions): Promise<void> {
     pairing.available && options.mobilePairing
       ? await renderTerminalPairingQr(pairing.pairingUrl)
       : null
+  if (options.recipeJson) {
+    if (!pairing.available) {
+      throw new Error('Recipe JSON output requires runtime pairing to be available')
+    }
+    console.log(
+      JSON.stringify({
+        schemaVersion: 1,
+        pairingCode: pairing.pairingUrl,
+        projectRoot: options.projectRoot
+      })
+    )
+    return
+  }
   if (options.json) {
     console.log(
       JSON.stringify({
@@ -1611,7 +1658,9 @@ app.whenReady().then(async () => {
     },
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
-    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
+    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+    buildAgentHookPtyEnv: () =>
+      isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
   automations = new AutomationService(store, {
@@ -1890,6 +1939,7 @@ app.whenReady().then(async () => {
   }
 
   if (serveOptions) {
+    await startServeAgentHookServer()
     registerHeadlessPtyRuntime(
       runtime,
       prepareCodexRuntimeHomeForLaunch,
@@ -2058,12 +2108,23 @@ app.on('will-quit', (e) => {
 })
 
 app.on('window-all-closed', () => {
+  // Why: headless `orca serve` has no desktop window, and offscreen browser
+  // windows are disposable implementation details. Closing/crashing the last
+  // one must not take down terminal/runtime RPC for the VM workspace — the
+  // policy fn returns false for serve mode so the app stays alive.
+  //
   // Why: on macOS, closing all windows normally keeps the app alive (dock
   // stays active). But when a quit is in progress (Cmd+Q), the window close
   // handler defers to the renderer for buffer capture, which cancels the
   // original quit sequence. Re-trigger quit here so the app actually exits
   // instead of requiring a second Cmd+Q.
-  if (process.platform !== 'darwin' || isQuitting) {
+  if (
+    shouldQuitWhenAllWindowsClosed({
+      platform: process.platform,
+      isQuitting,
+      isServeMode
+    })
+  ) {
     app.quit()
   }
 })

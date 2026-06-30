@@ -28,6 +28,16 @@ describe('resolveEffectiveWindowsPowerShell', () => {
     ).toBeNull()
   })
 
+  it('honors a direct pwsh.exe shell request even when the availability probe is false', () => {
+    expect(
+      resolveEffectiveWindowsPowerShell({
+        shellFamily: 'pwsh.exe',
+        implementation: 'powershell.exe',
+        pwshAvailable: false
+      })
+    ).toBe('pwsh.exe')
+  })
+
   it('returns powershell.exe when the saved implementation is powershell.exe', () => {
     expect(
       resolveEffectiveWindowsPowerShell({
@@ -48,14 +58,14 @@ describe('resolveEffectiveWindowsPowerShell', () => {
     ).toBe('pwsh.exe')
   })
 
-  it('falls back to powershell.exe when pwsh is preferred but unavailable', () => {
+  it('keeps an explicit pwsh.exe preference when the availability probe is false', () => {
     expect(
       resolveEffectiveWindowsPowerShell({
         shellFamily: 'powershell.exe',
         implementation: 'pwsh.exe',
         pwshAvailable: false
       })
-    ).toBe('powershell.exe')
+    ).toBe('pwsh.exe')
   })
 
   it('uses pwsh.exe for Auto when pwsh is available', () => {

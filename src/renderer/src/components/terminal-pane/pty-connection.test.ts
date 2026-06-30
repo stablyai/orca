@@ -7920,7 +7920,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('does not force the Windows CJK repaint path without recent terminal input', async () => {
+  it('forces the native Windows CJK repaint path for foreground agent output without recent terminal input', async () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -7951,7 +7951,7 @@ describe('connectPanePty', () => {
 
       capturedDataCallback.current?.('已经安装完成，软件已更新后重启。')
 
-      expect(refresh).not.toHaveBeenCalled()
+      expect(refresh).toHaveBeenCalledWith(0, 39, true)
     } finally {
       restoreNavigator()
     }
@@ -8156,6 +8156,221 @@ describe('connectPanePty', () => {
       expect(refresh).toHaveBeenCalledTimes(1)
       expect(refresh).toHaveBeenCalledWith(0, 39, true)
     } finally {
+      restoreNavigator()
+    }
+  })
+
+  it('drains a post-submit synchronized frame on the fast path when its end marker arrives late', async () => {
+    // Why (STA-1041): OpenCode wraps each submit repaint in a DEC 2026 frame.
+    // Under CPU contention ConPTY splits the closing chunk past the 150ms redraw
+    // window, so classifying only by the end chunk's own arrival time would judge
+    // it non-latency-sensitive and stall the repaint behind the 1s coalesce
+    // fallback. The frame opened right after Enter, so it must drain in ~16ms.
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      // Enter submits; the synchronized repaint frame opens immediately after.
+      sendTerminalInputThroughPane(pane, '\r')
+      const repaintBody = 'opencode repaint '.repeat(200)
+      expect(repaintBody.length).toBeGreaterThan(2048)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      // The frame body holds, then its hold-safety fallback drains it.
+      vi.advanceTimersByTime(40)
+      pane.terminal.write.mockClear()
+
+      // ConPTY delivers the closing chunk well past the 150ms redraw window.
+      vi.advanceTimersByTime(300)
+      const endChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
+      expect(endChunk.length).toBeGreaterThan(2048)
+      capturedDataCallback.current?.(endChunk)
+
+      // Fast path: the latency-sensitive coalesce window is ~16ms, not 1000ms.
+      vi.advanceTimersByTime(20)
+      expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      restoreNavigator()
+    }
+  })
+
+  it('keeps coalescing a synchronized frame end with no recent input behind the 1s fallback', async () => {
+    // Why (STA-1041): the fast-path relaxation only applies when the frame opened
+    // right after a keystroke. A background synchronized redraw (no recent input)
+    // whose cursor restore is genuinely split must still wait the full coalesce
+    // fallback so Windows never rasterizes the transient cursor position.
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      // No terminal input: this synchronized redraw is not submit-driven.
+      const repaintBody = 'opencode repaint '.repeat(200)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      // Let the non-latency-sensitive frame body drain via its hold-safety
+      // fallback (250ms) before isolating the closing chunk.
+      vi.advanceTimersByTime(300)
+      pane.terminal.write.mockClear()
+
+      const endChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
+      capturedDataCallback.current?.(endChunk)
+
+      // The fast 16ms window must NOT flush a background split-restore frame.
+      vi.advanceTimersByTime(20)
+      expect(pane.terminal.write).not.toHaveBeenCalled()
+
+      // The full coalesce fallback still drains it so the frame is never lost.
+      vi.advanceTimersByTime(1000)
+      expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      restoreNavigator()
+    }
+  })
+
+  it('does not leak the interactive latch across a same-chunk close+open to a stale frame', async () => {
+    // Why: a same-chunk close+open must re-evaluate the new frame from its own
+    // open time so a stale frame can't inherit the prior frame's fast path.
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      // Load-bearing setup: Enter submits and opens an INTERACTIVE frame so the
+      // latch (synchronizedForegroundFrameInteractive) genuinely becomes true. The
+      // frame stays OPEN (active) — no end marker yet — which is the precondition
+      // for the leak: the buggy set-branch is gated on !active.
+      sendTerminalInputThroughPane(pane, '\r')
+      const repaintBody = 'opencode repaint '.repeat(200)
+      expect(repaintBody.length).toBeGreaterThan(2048)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      // Move well past the 400ms interactive window WITHOUT closing the frame, so
+      // any NEW frame opening now must be classified non-interactive.
+      vi.advanceTimersByTime(500)
+      pane.terminal.write.mockClear()
+
+      // A single chunk closes the still-active prior frame AND opens a new one.
+      // The new frame opened ~500ms after the keystroke. Pre-hardening, the prior
+      // frame's active flag skips the set-branch and the end marker skips the
+      // reset-branch, so the new frame leaks interactive=true; the recompute must
+      // judge it from its own open time and yield false.
+      capturedDataCallback.current?.(`\x1b[?2026l\x1b[?2026h${repaintBody}`)
+      vi.advanceTimersByTime(40)
+      pane.terminal.write.mockClear()
+
+      // The new frame's split restore + end marker arrive in a later chunk.
+      const staleEndChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
+      expect(staleEndChunk.length).toBeGreaterThan(2048)
+      capturedDataCallback.current?.(staleEndChunk)
+
+      // The fast ~16ms window must NOT flush this stale non-interactive frame.
+      vi.advanceTimersByTime(20)
+      expect(pane.terminal.write).not.toHaveBeenCalled()
+
+      // Only the full 1s coalesce fallback drains it, restoring the protection.
+      vi.advanceTimersByTime(1000)
+      expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      restoreNavigator()
+    }
+  })
+
+  it('coalesces a second synchronized frame that opens after the window with no keystroke', async () => {
+    // Why: the second frame opens after the interactive window, so its START must
+    // be judged independently and stay on the 1s fallback path.
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      // Frame 1: submit-driven and interactive; opens and closes cleanly.
+      sendTerminalInputThroughPane(pane, '\r')
+      const repaintBody = 'opencode repaint '.repeat(200)
+      expect(repaintBody.length).toBeGreaterThan(2048)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}\x1b[?2026l`)
+      vi.advanceTimersByTime(40)
+
+      // Move past the 400ms window with no further keystroke, then open frame 2.
+      vi.advanceTimersByTime(500)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      vi.advanceTimersByTime(40)
+      pane.terminal.write.mockClear()
+
+      // Frame 2's split cursor restore + end marker arrive in a later chunk.
+      const secondEndChunk = `${repaintBody}\x1b[?25l\x1b[13;14H\x1b[?25h\x1b[?2026l`
+      capturedDataCallback.current?.(secondEndChunk)
+
+      // The fast ~16ms window must NOT flush this non-interactive second frame.
+      vi.advanceTimersByTime(20)
+      expect(pane.terminal.write).not.toHaveBeenCalled()
+
+      // The full 1s coalesce fallback drains it so the frame is never lost.
+      vi.advanceTimersByTime(1000)
+      expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
       restoreNavigator()
     }
   })

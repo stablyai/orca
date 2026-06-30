@@ -199,6 +199,27 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
   })
 
+  it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
+    registerRuntimeEnvironmentHandlers()
+
+    // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
+    // on the environment record (ephemeral-vm.ts), so the public list reads it
+    // straight from the record rather than cross-referencing the VM runtime store.
+    const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'orca VM abc12345',
+      pairingCode: pairingCode(),
+      source: 'ephemeral-vm'
+    })
+
+    const list = handler<undefined, { id: string; name: string; source?: string }[]>(
+      'runtimeEnvironments:list'
+    )
+
+    expect(await list(null, undefined)).toMatchObject([
+      { id: added.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
+    ])
+  })
+
   it('checks a saved remote runtime and records the runtime id on success', async () => {
     registerRuntimeEnvironmentHandlers()
     sendRemoteRuntimeRequestMock.mockResolvedValue({

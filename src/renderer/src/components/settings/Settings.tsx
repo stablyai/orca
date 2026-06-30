@@ -55,6 +55,7 @@ import { ComputerUsePane } from './ComputerUsePane'
 import { MobileSettingsPane } from './MobileSettingsPane'
 import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
+import { EphemeralVmsPane } from './EphemeralVmsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { AdvancedPane } from './AdvancedPane'
 import { SettingsSidebar } from './SettingsSidebar'
@@ -627,6 +628,8 @@ function Settings(): React.JSX.Element {
       ]
     ])
     if (showDesktopOnlySettings) {
+      // Why: Per-Workspace Environments shows a 'Beta' badge in the sidebar (from nav
+      // metadata) rather than skill install status — skill status lives inside the pane.
       next.set(
         'computer-use',
         getSkillNavInstallStatus({
@@ -1511,6 +1514,22 @@ function Settings(): React.JSX.Element {
                       allowLocalRuntime={!isWebClient}
                     />
                   ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="ephemeral-vms"
+                  title={translate(
+                    'auto.components.settings.Settings.ephemeralVms',
+                    'Per-Workspace Environments'
+                  )}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.Settings.ephemeralVmsDescription',
+                    'Give each workspace its own disposable environment on any provider, over an Orca server or SSH.'
+                  )}
+                  searchEntries={getSectionSearchEntries('ephemeral-vms')}
+                >
+                  {isSectionMounted('ephemeral-vms') ? <EphemeralVmsPane /> : null}
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (

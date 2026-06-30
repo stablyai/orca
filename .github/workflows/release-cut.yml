@@ -703,7 +703,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15
+          # Why: run the signed/notarized desktop DMG build on a Blacksmith
+          # macOS runner (~2x faster than GitHub macos-15: ~8min vs ~15-18min).
+          # The 6 vCPU tier is chosen over 12 vCPU because this job is
+          # dominated by notarization (an Apple-server round-trip, not CPU),
+          # so 12 vCPU was measured only ~30s faster while costing 2x/min.
+          # OS stays pinned to macos-15 to match the prior toolchain exactly;
+          # only the host changes. Blacksmith reports a genuine macOS host, so
+          # `runner.os == 'macOS'` and `matrix.platform == 'mac'` gates below
+          # still resolve correctly. Other jobs stay GitHub-hosted.
+          - os: blacksmith-6vcpu-macos-15
             platform: mac
             release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
             eb_cache_path: |

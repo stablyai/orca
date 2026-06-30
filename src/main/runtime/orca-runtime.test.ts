@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -4849,6 +4850,85 @@ describe('OrcaRuntimeService', () => {
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
   })
 
+  it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
+    const repos: Record<string, unknown>[] = []
+    getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: (id: string, updates: Record<string, unknown>) => {
+        const index = repos.findIndex((repo) => repo.id === id)
+        if (index === -1) {
+          return null
+        }
+        repos[index] = { ...repos[index], ...updates }
+        return repos[index] as never
+      },
+      getProjects: () =>
+        repos
+          .map((repo) => {
+            const upstream = repo.upstream as { owner: string; repo: string } | undefined
+            if (!upstream) {
+              return null
+            }
+            return {
+              id: `github:${upstream.owner}/${upstream.repo}`,
+              displayName: repo.displayName,
+              badgeColor: repo.badgeColor,
+              providerIdentity: { provider: 'github', owner: upstream.owner, repo: upstream.repo },
+              sourceRepoIds: [repo.id],
+              createdAt: repo.addedAt,
+              updatedAt: repo.addedAt
+            }
+          })
+          .filter(Boolean) as never,
+      getProjectHostSetups: () =>
+        repos.map((repo) => {
+          const upstream = repo.upstream as { owner: string; repo: string } | undefined
+          return {
+            id: repo.id,
+            projectId: upstream ? `github:${upstream.owner}/${upstream.repo}` : repo.id,
+            hostId: 'local',
+            repoId: repo.id,
+            path: repo.path,
+            displayName: repo.displayName,
+            kind: repo.kind,
+            setupState: 'ready',
+            setupMethod: repo.projectHostSetupMethod ?? 'legacy-repo',
+            createdAt: repo.addedAt,
+            updatedAt: repo.addedAt
+          }
+        }) as never
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      execFileSync('git', ['init'], { cwd: tempRoot, stdio: 'ignore' })
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:stablyai/orca',
+        hostId: 'runtime:env-1',
+        path: tempRoot,
+        kind: 'git',
+        setupMethod: 'imported-existing-folder'
+      })
+
+      expect(result.project.id).toBe('github:stablyai/orca')
+      expect(result.repo.path).toBe(tempRoot)
+      expect(result.setup).toMatchObject({
+        projectId: 'github:stablyai/orca',
+        path: tempRoot,
+        setupMethod: 'imported-existing-folder'
+      })
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
     const colorStore = {
@@ -6642,6 +6722,47 @@ describe('OrcaRuntimeService', () => {
       tabId: spawnedEnv.ORCA_TAB_ID,
       leafId: spawnedLeafId
     })
+  })
+
+  it('injects runtime hook receiver env into terminal sessions', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-hooked' })
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      buildAgentHookPtyEnv: () => ({
+        ORCA_AGENT_HOOK_PORT: '5678',
+        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+        ORCA_AGENT_HOOK_ENV: 'remote',
+        ORCA_AGENT_HOOK_VERSION: '1'
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      env: {
+        ORCA_AGENT_HOOK_PORT: '1111',
+        ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+        ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+      }
+    })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
+    expect(spawnCall?.env).toEqual(
+      expect.objectContaining({
+        ORCA_AGENT_HOOK_PORT: '5678',
+        ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+        ORCA_AGENT_HOOK_ENV: 'remote',
+        ORCA_AGENT_HOOK_VERSION: '1',
+        ORCA_PANE_KEY: expect.any(String),
+        ORCA_TAB_ID: expect.any(String),
+        ORCA_WORKTREE_ID: TEST_WORKTREE_ID
+      })
+    )
+    expect(spawnCall?.env?.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
   })
 
   it.each([

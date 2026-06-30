@@ -18,11 +18,6 @@ export const colors = {
   surfaceBright: '#f5f5f5',
 
   accentBlue: '#3b82f6',
-  // Primary-CTA fill (darker than accentBlue) so white on-fill text/icons clear
-  // WCAG AA 4.5:1; accentBlue itself is ~3.7:1 on white and stays a link/accent tint.
-  accentBlueCta: '#2563eb',
-  // On-fill text/icon color for the primary-CTA button.
-  onAccentBlue: '#ffffff',
 
   statusGreen: '#22c55e',
   statusAmber: '#f59e0b',
