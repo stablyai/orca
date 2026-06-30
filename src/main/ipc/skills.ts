@@ -11,12 +11,32 @@ import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 export function registerSkillsHandlers(store: Store): void {
   ipcMain.handle(
     'skills:discover',
     async (_event, target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
       const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
+      // Why: when connected to a remote Orca runtime the skill files live on
+      // the server, not on the local host. Proxy to the server's RPC method so
+      // discovery scans the correct filesystem. Prefer an explicit environmentId
+      // from the caller, then fall back to the persisted active environment.
+      const environmentId =
+        target?.environmentId?.trim() || store.getSettings().activeRuntimeEnvironmentId?.trim()
+      if (environmentId) {
+        const response = await callRuntimeEnvironment(
+          app.getPath('userData'),
+          environmentId,
+          'skills.discover',
+          parsedTarget,
+          15_000
+        )
+        if (response.ok) {
+          return response.result as SkillDiscoveryResult
+        }
+        return { skills: [], sources: [], scannedAt: Date.now() }
+      }
       return discoverSkillsOnTarget(resolveSkillDiscoveryTarget(parsedTarget), store.getRepos())
     }
   )
