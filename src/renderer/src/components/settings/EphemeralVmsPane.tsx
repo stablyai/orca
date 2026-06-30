@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
+import { ArrowRight, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -208,12 +208,14 @@ export function EphemeralVmsPane(): React.JSX.Element {
               variant="outline"
               size="xs"
               className="shrink-0 gap-1.5"
+              aria-label={translate('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
               onClick={() => void copyPrompt()}
             >
-              {promptCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
-              {promptCopied
-                ? translate('auto.components.settings.EphemeralVmsPane.copied', 'Copied')
-                : translate('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
+              {promptCopied ? (
+                translate('auto.components.settings.EphemeralVmsPane.copied', 'Copied')
+              ) : (
+                <Copy className="size-3" />
+              )}
             </Button>
           </div>
         </div>
