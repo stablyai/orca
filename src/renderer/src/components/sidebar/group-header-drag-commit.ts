@@ -17,7 +17,7 @@ export function commitGroupHeaderDragDrop(args: {
   }
   const siblingGroupIds = args.session.siblingGroupIds
   const sourceIndex = siblingGroupIds.indexOf(args.session.groupId)
-  // Fast-path: authoritative no-op check is the later siblingDropIndex comparison in sibling-space.
+  // Cheap no-op guard; the authoritative one is the sibling-space comparison below.
   if (args.sidebarDropIndex === sourceIndex) {
     return
   }

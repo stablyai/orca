@@ -259,7 +259,6 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
     }
   }
   if (targetBucketKey === null) {
-    // nearest project header at/above the pointer
     const above = [...args.repoRects]
       .filter((r) => r.top <= localY)
       .sort((a, b) => b.top - a.top)[0]
