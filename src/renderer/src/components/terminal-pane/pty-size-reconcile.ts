@@ -91,6 +91,15 @@ export type PtySizeReconcileHandle = { cancel: () => void }
 const POST_SPAWN_RECONCILE_SETTLE_FRAMES = 8
 const POST_SPAWN_RECONCILE_MAX_FRAMES = 180
 
+// Safe minimum grid forwarded as a last resort when a VISIBLE pane never became
+// measurable within the reconcile window and the PTY is still pinned at the
+// unusable 0×0 it was spawned at. A shell rendering into a 0-row grid shows a
+// blank/white pane (the "split terminal right → white screen" report); 80×24 is
+// the universal terminal default and the live onResize corrects it once the
+// pane finally lays out.
+const POST_SPAWN_RECONCILE_FALLBACK_COLS = 80
+const POST_SPAWN_RECONCILE_FALLBACK_ROWS = 24
+
 export function reconcilePtySizeAcrossFrames(
   options: PtySizeReconcileOptions
 ): PtySizeReconcileHandle {
@@ -194,6 +203,25 @@ export function reconcilePtySizeAcrossFrames(
     const settled = gridStable && appliedVerified
     if (!settled && frame < POST_SPAWN_RECONCILE_MAX_FRAMES) {
       pendingFrame = options.requestFrame(tick)
+      return
+    }
+    // Last resort on termination: a VISIBLE pane that never measured a usable
+    // grid (measure() returned null/zero every frame) and whose PTY is still
+    // pinned at the 0×0 it was spawned at would render blank — the split-right
+    // white-screen report. Forward a safe default so the shell has a real grid;
+    // the live onResize re-syncs the true size once the pane lays out. Skip
+    // while parked (mobile owns the size) and while hidden (a background spawn
+    // legitimately stays 0×0 and re-fits on show).
+    if (
+      !settled &&
+      !options.isParked() &&
+      options.isAuthoritative() &&
+      lastSentCols <= 0 &&
+      lastSentRows <= 0
+    ) {
+      options.resize(POST_SPAWN_RECONCILE_FALLBACK_COLS, POST_SPAWN_RECONCILE_FALLBACK_ROWS)
+      lastSentCols = POST_SPAWN_RECONCILE_FALLBACK_COLS
+      lastSentRows = POST_SPAWN_RECONCILE_FALLBACK_ROWS
     }
   }
 
