@@ -3,8 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
-import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
-import { createTextMateTokensProvider } from './textmate-token-provider'
+import { createTextMateTokensProvider, TEXTMATE_MAX_LINE_LENGTH } from './textmate-token-provider'
 
 const require = createRequire(import.meta.url)
 
@@ -25,25 +24,48 @@ async function loadNodeOniguruma(): Promise<IOnigLib> {
   return nodeOnigurumaPromise
 }
 
+const testGrammar = {
+  name: 'Test',
+  scopeName: 'source.test',
+  repository: {},
+  patterns: [
+    { match: '#.*$', name: 'comment.line.number-sign.test' },
+    { match: '\\b(fn)\\b', name: 'keyword.control.test' },
+    { match: '"(?:[^"\\\\]|\\\\.)*"', name: 'string.quoted.double.test' }
+  ]
+} as unknown as IRawGrammar
+
 describe('createTextMateTokensProvider', () => {
-  it('tokenizes Nim with the vendored TextMate grammar', async () => {
+  it('tokenizes with a TextMate grammar', async () => {
     const provider = await createTextMateTokensProvider({
-      scopeName: 'source.nim',
-      loadGrammar: async (scopeName) =>
-        scopeName === 'source.nim' ? (nimGrammar as unknown as IRawGrammar) : null,
+      scopeName: 'source.test',
+      loadGrammar: async (scopeName) => (scopeName === 'source.test' ? testGrammar : null),
       loadOniguruma: loadNodeOniguruma
     })
 
-    const procLine = provider.tokenize('proc greet(name: string) =', provider.getInitialState())
-    const procScopes = procLine.tokens.map((token) => token.scopes)
-    expect(procScopes).toContain('keyword.other')
-    expect(procScopes).toContain('entity.name.function.nim')
-    expect(procScopes).toContain('storage.type.concrete.nim')
+    const functionLine = provider.tokenize('fn greet = "hello"', provider.getInitialState())
+    const functionScopes = functionLine.tokens.map((token) => token.scopes)
+    expect(functionScopes).toContain('keyword.control.test')
+    expect(functionScopes).toContain('string.quoted.double.test')
 
     const commentLine = provider.tokenize('# hello', provider.getInitialState())
     expect(commentLine.tokens.map((token) => token.scopes)).toContain(
-      'comment.line.number-sign.nim'
+      'comment.line.number-sign.test'
     )
+  })
+
+  it('skips TextMate tokenization for very long lines', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.test',
+      loadGrammar: async (scopeName) => (scopeName === 'source.test' ? testGrammar : null),
+      loadOniguruma: loadNodeOniguruma
+    })
+
+    expect(
+      provider.tokenize('x'.repeat(TEXTMATE_MAX_LINE_LENGTH), provider.getInitialState())
+    ).toMatchObject({
+      tokens: [{ startIndex: 0, scopes: '' }]
+    })
   })
 
   it('fails clearly when a scope has no grammar', async () => {

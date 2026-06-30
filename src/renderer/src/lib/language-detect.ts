@@ -14,6 +14,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   // is what gives .tsx/.jsx files syntax highlighting in the editor.
   '.ts': 'typescript',
   '.tsx': 'typescript',
+  '.mts': 'typescript',
+  '.cts': 'typescript',
   '.js': 'javascript',
   '.jsx': 'javascript',
   '.mjs': 'javascript',
@@ -57,7 +59,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.ps1': 'powershell',
   '.yaml': 'yaml',
   '.yml': 'yaml',
-  '.toml': 'ini',
+  '.toml': 'toml',
   '.ini': 'ini',
   '.cfg': 'ini',
   '.conf': 'ini',

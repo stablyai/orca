@@ -824,7 +824,7 @@ export default function MonacoEditor({
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
         value={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={isDark ? 'orca-vs-dark' : 'orca-vs'}
         onChange={handleChange}
         onMount={handleMount}
         options={{

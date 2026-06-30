@@ -429,7 +429,7 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={isDark ? 'orca-vs-dark' : 'orca-vs'}
             onMount={handleMount}
             // Why: A single file can have multiple live diff tabs at once
             // (staged, unstaged, branch compare versions). The kept Monaco models

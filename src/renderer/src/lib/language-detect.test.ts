@@ -20,6 +20,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it('maps TypeScript module variants to Monaco base language ids', () => {
+    expect(detectLanguage('src/index.mts')).toBe('typescript')
+    expect(detectLanguage('src/index.cts')).toBe('typescript')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
@@ -28,6 +33,13 @@ describe('detectLanguage', () => {
   it('maps Windows Batch files to Monaco built-in Batch language id', () => {
     expect(detectLanguage('scripts/setup.bat')).toBe('bat')
     expect(detectLanguage('C:\\repo\\scripts\\bootstrap.CMD')).toBe('bat')
+  })
+
+  it('maps TOML separately while keeping config-style files on the INI path', () => {
+    expect(detectLanguage('config/settings.toml')).toBe('toml')
+    expect(detectLanguage('config/example.ini')).toBe('ini')
+    expect(detectLanguage('config/server.conf')).toBe('ini')
+    expect(detectLanguage('config/.env.local')).toBe('ini')
   })
 
   it('maps SystemVerilog and Verilog files to their Monaco language ids', () => {

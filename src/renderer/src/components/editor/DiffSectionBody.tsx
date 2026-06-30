@@ -176,7 +176,7 @@ export function DiffSectionBody({
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={isDark ? 'orca-vs-dark' : 'orca-vs'}
           onMount={onMount}
           // Why: @monaco-editor/react can dispose models before widget teardown.
           // Keep them through unmount and dispose unattached models next tick.

@@ -9,17 +9,52 @@ type TextMateTokensProvider = Monaco.languages.TokensProvider
 type TextMateTokenProviderModule = {
   createTextMateTokensProvider: typeof createTextMateTokensProviderType
 }
+export type TextMateScopeNameResolver = string | (() => Promise<string>)
+export type TextMateGrammarInjectionsProvider = (scopeName: string) => string[] | undefined
 
 export type TextMateLanguageRegistration = {
   language: Monaco.languages.ILanguageExtensionPoint
   configuration?: Monaco.languages.LanguageConfiguration
-  scopeName: string
+  scopeName: TextMateScopeNameResolver
   loadGrammar: TextMateGrammarLoader
+  getInjections?: TextMateGrammarInjectionsProvider
   loadProviderModule?: () => Promise<TextMateTokenProviderModule>
 }
 
 function loadDefaultProviderModule(): Promise<TextMateTokenProviderModule> {
   return import('./textmate-token-provider')
+}
+
+export function registerTextMateTokensProvider(
+  monaco: MonacoModule,
+  languageId: string,
+  registration: Pick<
+    TextMateLanguageRegistration,
+    'scopeName' | 'loadGrammar' | 'getInjections' | 'loadProviderModule'
+  >
+): void {
+  let tokensProviderPromise: Promise<TextMateTokensProvider> | undefined
+  monaco.languages.registerTokensProviderFactory(languageId, {
+    create: () => {
+      // Why: plain Monaco tokenization requests basic language features; onLanguage
+      // only fires for rich features, so it never loads for read-only editors.
+      tokensProviderPromise ??= (
+        registration.loadProviderModule ?? loadDefaultProviderModule
+      )().then(async ({ createTextMateTokensProvider }) => {
+        const scopeName =
+          typeof registration.scopeName === 'function'
+            ? await registration.scopeName()
+            : registration.scopeName
+
+        return createTextMateTokensProvider({
+          getInjections: registration.getInjections,
+          scopeName,
+          loadGrammar: registration.loadGrammar
+        })
+      })
+      return tokensProviderPromise
+    }
+  })
 }
 
 export function registerTextMateLanguage(
@@ -38,20 +73,5 @@ export function registerTextMateLanguage(
     monaco.languages.setLanguageConfiguration(registration.language.id, registration.configuration)
   }
 
-  let tokensProviderPromise: Promise<TextMateTokensProvider> | undefined
-  monaco.languages.registerTokensProviderFactory(registration.language.id, {
-    create: () => {
-      // Why: plain Monaco tokenization requests basic language features; onLanguage
-      // only fires for rich features, so it never loads for a read-only Nim editor.
-      tokensProviderPromise ??= (
-        registration.loadProviderModule ?? loadDefaultProviderModule
-      )().then(({ createTextMateTokensProvider }) =>
-        createTextMateTokensProvider({
-          scopeName: registration.scopeName,
-          loadGrammar: registration.loadGrammar
-        })
-      )
-      return tokensProviderPromise
-    }
-  })
+  registerTextMateTokensProvider(monaco, registration.language.id, registration)
 }

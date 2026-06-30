@@ -7,10 +7,12 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { registerOrcaMonacoTheme } from './monaco-languages/orca-monaco-theme'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { registerTextMateGrammarRegistry } from './monaco-languages/textmate-grammar-registry'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 
@@ -71,10 +73,12 @@ monacoTS.javascriptDefaults.setCompilerOptions({
   jsx: monacoTS.JsxEmit.Preserve
 })
 
+registerOrcaMonacoTheme(monaco)
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 registerNimLanguage(monaco)
+registerTextMateGrammarRegistry(monaco)
 installMonacoDiffEditorDisposalGuard(monaco)
 // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is
 // blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge

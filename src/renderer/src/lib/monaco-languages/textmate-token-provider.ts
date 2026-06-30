@@ -6,12 +6,16 @@ import onigurumaWasmUrl from 'vscode-oniguruma/release/onig.wasm?url'
 type TextMateTokensProvider = Monaco.languages.TokensProvider
 
 export type TextMateGrammarLoader = (scopeName: string) => Promise<IRawGrammar | null | undefined>
+export type TextMateGrammarInjectionsProvider = (scopeName: string) => string[] | undefined
 
 export type TextMateTokensProviderOptions = {
   scopeName: string
   loadGrammar: TextMateGrammarLoader
+  getInjections?: TextMateGrammarInjectionsProvider
   loadOniguruma?: () => Promise<IOnigLib>
 }
+
+export const TEXTMATE_MAX_LINE_LENGTH = 20_000
 
 let browserOnigurumaPromise: Promise<IOnigLib> | undefined
 
@@ -56,6 +60,14 @@ function createTokensProvider(
     tokenize(line, state) {
       const textMateState =
         state instanceof TextMateTokenizerState ? state : new TextMateTokenizerState(INITIAL)
+      // Why: TextMate regex grammars can be expensive on minified/generated one-line files.
+      if (line.length >= TEXTMATE_MAX_LINE_LENGTH) {
+        return {
+          endState: textMateState,
+          tokens: [{ startIndex: 0, scopes: '' }]
+        }
+      }
+
       const result = grammar.tokenizeLine(line, textMateState.ruleStack)
 
       return {
@@ -75,6 +87,7 @@ export async function createTextMateTokensProvider(
   options: TextMateTokensProviderOptions
 ): Promise<TextMateTokensProvider> {
   const registry = new Registry({
+    getInjections: options.getInjections,
     onigLib: (options.loadOniguruma ?? loadBrowserOniguruma)(),
     loadGrammar: options.loadGrammar
   })

@@ -2,12 +2,6 @@
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'
-import type { languages } from 'monaco-editor'
-
-declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
-  export const conf: languages.LanguageConfiguration
-  export const language: languages.IMonarchLanguage
-}
 
 // Monaco ships these contributions without public type declarations. We only
 // touch the paste-override surface, so declare the minimal shape we use.

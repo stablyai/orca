@@ -118,6 +118,8 @@
     "@electron/rebuild": "^4.0.4",
     "@monaco-editor/react": "^4.7.0",
     "@playwright/test": "^1.59.1",
+    "@shikijs/langs": "4.2.0",
+    "@shikijs/types": "4.2.0",
     "@stablyai/playwright-test": "^2.1.14",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/react-virtual": "^3.13.24",
