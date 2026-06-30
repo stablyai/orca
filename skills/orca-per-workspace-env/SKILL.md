@@ -71,7 +71,12 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
    §7h; Windows: §7i), filling in the provider's real commands. Make them executable.
 5. **[CHECKPOINT] Build the base snapshot (§3)** — paid, slow.
 6. **[CHECKPOINT] Authenticate the agent (§4)** — interactive; the user follows a URL/code.
-7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8).
+7. **Wire the recipe** so `orca.yaml` points create/suspend/resume/destroy at the scripts (§8). The
+   workspace composer reads `vmRecipes` from the project's primary checkout of `orca.yaml`, **not** from
+   a feature branch or worktree. So a recipe added only on a branch won't appear as a "Run on" option
+   until that `orca.yaml` change is committed and merged to the project's primary branch. Tell the user
+   this up front: `doctor`/`--provision` validate the scripts from the working copy on any branch, but
+   creating a workspace from the recipe in the picker needs it on primary.
 8. **Dry-run doctor** — `orca vm recipe doctor <recipe-id> --repo-path <repo> --json` (free, static; §9).
    Fix every failure before going live.
 9. **[CHECKPOINT] Live self-test** — get the user's OK once, then run
