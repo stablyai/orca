@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { safeFind } from './terminal-search-safe-find'
 
 type TerminalSearchProps = {
   isOpen: boolean
@@ -49,13 +50,21 @@ export default function TerminalSearch({
 
   const findNext = useCallback(() => {
     if (searchAddon && requestQuery) {
-      searchAddon.findNext(requestQuery, searchOptions())
+      safeFind(
+        (term, options) => searchAddon.findNext(term, options),
+        requestQuery,
+        searchOptions()
+      )
     }
   }, [searchAddon, requestQuery, searchOptions])
 
   const findPrevious = useCallback(() => {
     if (searchAddon && requestQuery) {
-      searchAddon.findPrevious(requestQuery, searchOptions())
+      safeFind(
+        (term, options) => searchAddon.findPrevious(term, options),
+        requestQuery,
+        searchOptions()
+      )
     }
   }, [searchAddon, requestQuery, searchOptions])
 
@@ -77,7 +86,11 @@ export default function TerminalSearch({
       return
     }
     if (searchAddon) {
-      searchAddon.findNext(requestQuery, searchOptions(true))
+      safeFind(
+        (term, options) => searchAddon.findNext(term, options),
+        requestQuery,
+        searchOptions(true)
+      )
     }
   }, [requestQuery, searchAddon, isOpen, caseSensitive, regex, searchStateRef, searchOptions])
 
