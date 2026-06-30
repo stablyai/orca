@@ -122,10 +122,14 @@ export async function deployAndLaunchRelay(
   }
 }
 
-// Why: resolve the remote home, derive the versioned relay dir, and check
-// whether the relay is already installed. Extracted so the deploy can run this
-// chain concurrently with node resolution (the two are independent). Home and
-// install-check stay sequential here because install-check needs the resolved dir.
+/**
+ * Resolve the remote home, derive the versioned relay directory, and check
+ * whether the relay is already installed there.
+ *
+ * Why: extracted so the deploy can run this chain concurrently with node-path
+ * resolution (the two are independent). Home and install-check stay sequential
+ * here because the install-check needs the resolved directory.
+ */
 async function resolveRemoteInstallState(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
@@ -148,6 +152,11 @@ async function resolveRemoteInstallState(
   return { remoteHome, remoteRelayDir, alreadyInstalled }
 }
 
+/**
+ * Detect the remote platform, resolve install state and node path, install the
+ * relay if it is not already present, then launch it and return the transport.
+ * Inner implementation wrapped by `deployAndLaunchRelay` with an overall timeout.
+ */
 async function deployAndLaunchRelayInner(
   conn: SshConnection,
   onProgress?: (status: string) => void,
