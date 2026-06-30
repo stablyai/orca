@@ -1,7 +1,12 @@
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
+export type SetupRunnerShellFamily = 'posix' | 'cmd' | 'powershell'
 export type SetupRunnerCommandShell = 'posix' | 'windows'
+export type SetupRunnerShell = {
+  family: SetupRunnerShellFamily
+  executable?: string
+}
 
 export type SetupRunnerCommandResolution = {
   command: string
@@ -11,9 +16,10 @@ export type SetupRunnerCommandResolution = {
 
 export function buildSetupRunnerCommand(
   runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
+  platform: SetupRunnerCommandPlatform,
+  shell?: SetupRunnerShell
 ): string {
-  return resolveSetupRunnerCommand(runnerScriptPath, platform).command
+  return resolveSetupRunnerCommand(runnerScriptPath, platform, shell).command
 }
 
 export function getSetupRunnerCommandPlatformForPath(
@@ -31,7 +37,8 @@ export function getSetupRunnerCommandPlatformForPath(
 
 export function resolveSetupRunnerCommand(
   runnerScriptPath: string,
-  platform: SetupRunnerCommandPlatform
+  platform: SetupRunnerCommandPlatform,
+  shell?: SetupRunnerShell
 ): SetupRunnerCommandResolution {
   if (platform === 'windows') {
     if (isWslUncPath(runnerScriptPath)) {
@@ -47,6 +54,22 @@ export function resolveSetupRunnerCommand(
         command: `bash ${quotePosixArg(runnerScriptPath)}`,
         runnerScriptPathForShell: runnerScriptPath,
         shell: 'posix'
+      }
+    }
+    if (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath)) {
+      const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
+      return {
+        command: `bash ${quotePosixArg(posixPath)}`,
+        runnerScriptPathForShell: posixPath,
+        shell: 'posix'
+      }
+    }
+    if (shell?.family === 'powershell' || /\.ps1$/i.test(runnerScriptPath)) {
+      const executable = shell?.executable?.trim() || 'powershell.exe'
+      return {
+        command: `${executable} -NoProfile -ExecutionPolicy Bypass -File ${quoteWindowsArg(runnerScriptPath)}`,
+        runnerScriptPathForShell: runnerScriptPath,
+        shell: 'windows'
       }
     }
     return {
@@ -84,4 +107,12 @@ function quotePosixArg(value: string): string {
 
 function quoteWindowsArg(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
+}
+
+function nativeWindowsPathToPosixShellPath(value: string): string {
+  const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
+  if (driveMatch) {
+    return `/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
+  }
+  return value.replace(/\\/g, '/')
 }

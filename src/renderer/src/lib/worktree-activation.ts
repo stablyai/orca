@@ -110,6 +110,16 @@ export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
 
+function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
+  if (setup.shell) {
+    return setup.shell.family === 'posix' ? 'posix' : 'windows'
+  }
+  return getSetupRunnerCommandPlatformForPath(
+    setup.runnerScriptPath,
+    navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
+  )
+}
+
 type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
@@ -420,10 +430,7 @@ export function ensureWorktreeHasInitialTerminal(
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForPath(
-      setup.runnerScriptPath,
-      navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
-    )
+    const platform = getSetupRunnerCommandPlatformForLaunch(setup)
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
@@ -660,7 +667,9 @@ function queueSetupAndIssueCommands(
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
       command:
-        wrappedSetupCommandStr ?? setup.command ?? buildSetupRunnerCommand(setup.runnerScriptPath),
+        wrappedSetupCommandStr ??
+        setup.command ??
+        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
       env: setup.envVars
     }
     if (mode === 'new-tab') {
@@ -689,7 +698,7 @@ function queueSetupAndIssueCommands(
     const queuedIssueCommand =
       'runnerScriptPath' in issueCommand
         ? {
-            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath),
+            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath, issueCommand.shell),
             env: issueCommand.envVars
           }
         : { command: issueCommand.command, env: issueCommand.env }
