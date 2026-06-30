@@ -56,7 +56,8 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
         containerTop: containerRect.top,
         scrollTop: container.scrollTop,
         repoRects: session.headerRects,
-        groupZones: measureProjectGroupHeaderDropZones(container)
+        groupZones: measureProjectGroupHeaderDropZones(container),
+        draggingRepoId: session.repoId
       })
     },
     buildState: (repoId, drop) =>

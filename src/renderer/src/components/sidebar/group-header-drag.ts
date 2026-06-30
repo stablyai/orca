@@ -55,7 +55,8 @@ export function useGroupHeaderDrag(args: UseGroupHeaderDragArgs): GroupHeaderDra
         containerTop: containerRect.top,
         scrollTop: container.scrollTop,
         rects: session.headerRects,
-        siblingGroupIds: session.siblingGroupIds
+        siblingGroupIds: session.siblingGroupIds,
+        draggingGroupId: session.groupId
       })
     },
     buildState: (groupId, drop) =>

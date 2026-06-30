@@ -106,6 +106,9 @@ export function computeGroupHeaderDropPreview(args: {
   scrollTop: number
   rects: readonly GroupHeaderDragRect[]
   siblingGroupIds: readonly string[]
+  /** The group being dragged, so the slot immediately below it (a no-op,
+   *  identical to leaving it in place) collapses to its home position above. */
+  draggingGroupId?: string
 }): GroupHeaderDropPreview | null {
   const { rects, siblingGroupIds } = args
   if (rects.length === 0 || siblingGroupIds.length === 0) {
@@ -148,6 +151,15 @@ export function computeGroupHeaderDropPreview(args: {
         break
       }
     }
+  }
+  // The slot right below the dragged group is the same as leaving it in place;
+  // collapse it to the home position above the group so only that shows.
+  const draggedRect = args.draggingGroupId
+    ? rects.find((rect) => rect.groupId === args.draggingGroupId)
+    : undefined
+  if (draggedRect && dropIndex === draggedRect.siblingIndex + 1) {
+    dropIndex = draggedRect.siblingIndex
+    indicatorY = Math.max(0, draggedRect.top - INDICATOR_GAP_PX)
   }
   return { dropIndex, dropIndicatorY: Math.max(args.scrollTop, indicatorY) }
 }

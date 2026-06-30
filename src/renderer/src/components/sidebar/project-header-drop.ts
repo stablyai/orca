@@ -179,6 +179,9 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   scrollTop: number
   repoRects: readonly ProjectHeaderDragRect[]
   groupZones: readonly ProjectGroupDropZone[]
+  /** The project being dragged, so the slot right below it in its own bucket (a
+   *  no-op) collapses to its home position above. */
+  draggingRepoId?: string
 }): ProjectHeaderCrossBucketDropPreview | null {
   const localY = args.pointerY - args.containerTop + args.scrollTop
   // 1) A group header directly under the pointer = append into that group.
@@ -233,6 +236,19 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
       indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
       break
     }
+  }
+  // Within its own bucket, the slot right below the dragged project is a no-op
+  // (same as leaving it put); collapse it to the home position above.
+  const draggedRect = args.draggingRepoId
+    ? args.repoRects.find((rect) => rect.repoId === args.draggingRepoId)
+    : undefined
+  if (
+    draggedRect &&
+    draggedRect.bucketKey === targetBucketKey &&
+    dropIndex === draggedRect.headerIndex + 1
+  ) {
+    dropIndex = draggedRect.headerIndex
+    indicatorY = Math.max(0, draggedRect.top - INDICATOR_GAP_PX)
   }
   return {
     targetBucketKey,

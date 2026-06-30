@@ -68,6 +68,20 @@ describe('computeGroupHeaderDropPreview', () => {
     ).toBeNull()
   })
 
+  it('collapses the slot below the dragged group to its home position above', () => {
+    // Pointer in the lower half of group a (the dragged one) would otherwise
+    // resolve to "below a" (dropIndex 1); it must snap to a's home (0).
+    const preview = computeGroupHeaderDropPreview({
+      pointerY: 60,
+      containerTop: 0,
+      scrollTop: 0,
+      rects,
+      siblingGroupIds: ['a', 'b'],
+      draggingGroupId: 'a'
+    })
+    expect(preview?.dropIndex).toBe(0)
+  })
+
   it('drops after the last group at its block bottom, not its header bottom', () => {
     // Block-extent rects (as measureGroupHeaderDragRects now produces): group b
     // spans its whole block 100..400, not just a 28px header.

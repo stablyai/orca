@@ -160,6 +160,21 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
       intoGroupId: '1'
     })
   })
+
+  it('collapses the slot below the dragged project (same bucket) to its home above', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 40, // lower half of bucket → would resolve to "below a" (index 1)
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 28 },
+        { repoId: 'b', bucketKey: 'group:1', headerIndex: 1, top: 50, bottom: 78 }
+      ],
+      groupZones: [],
+      draggingRepoId: 'a'
+    })
+    expect(result?.dropIndex).toBe(0)
+  })
 })
 
 describe('getProjectGroupOrderForSidebarDrop', () => {
