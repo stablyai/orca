@@ -1,4 +1,6 @@
 import { translate } from '@/i18n/i18n'
+import type { TerminalErrorEntry } from './use-terminal-error-table'
+
 const SSH_PREFIX = 'SSH connection is not active'
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
@@ -9,27 +11,31 @@ const STALE_DAEMON_CWD_MARKERS = [
   'node-pty: daemon_cwd failed: ENOENT'
 ]
 
-function isSshError(error: string): boolean {
-  return error.startsWith(SSH_PREFIX)
+function isSshMessage(message: string): boolean {
+  return message.startsWith(SSH_PREFIX)
 }
 
-export function shouldOfferDaemonRestart(error: string): boolean {
+export function shouldOfferDaemonRestart(messages: string[]): boolean {
+  const all = messages.join('\n')
   return [STALE_NODE_PTY_DAEMON_MARKERS, STALE_DAEMON_CWD_MARKERS].some((markers) =>
-    markers.every((marker) => error.includes(marker))
+    markers.every((marker) => all.includes(marker))
   )
 }
 
-export function TerminalErrorToast({
-  error,
-  onDismiss,
-  onRestartDaemon
-}: {
-  error: string
+export type TerminalErrorToastProps = {
+  errors: TerminalErrorEntry[]
   onDismiss: () => void
   onRestartDaemon?: () => void
-}): React.JSX.Element {
-  const ssh = isSshError(error)
-  const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+}
+
+export function TerminalErrorToast({
+  errors,
+  onDismiss,
+  onRestartDaemon
+}: TerminalErrorToastProps): React.JSX.Element {
+  const ssh = errors.some((e) => isSshMessage(e.message))
+  const messages = errors.map((e) => e.message)
+  const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(messages)
 
   return (
     <div
@@ -52,7 +58,13 @@ export function TerminalErrorToast({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
         <span style={{ minWidth: 0 }}>
-          {error}
+          {errors.map((e, idx) => (
+            <div key={e.message}>
+              {e.message}
+              {e.count > 1 ? ` (×${e.count})` : ''}
+              {idx < errors.length - 1 ? '\n' : null}
+            </div>
+          ))}
           {showDaemonRestart ? (
             <>
               {'\n'}
