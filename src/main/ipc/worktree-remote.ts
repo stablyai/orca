@@ -1588,8 +1588,7 @@ export async function createRemoteWorktree(
       throw new Error(
         formatRefreshBaseRefError({
           code: classified.code,
-          message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}".`,
-          cause: classified.cause
+          message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}".`
         })
       )
     }
@@ -2162,8 +2161,7 @@ export async function createLocalWorktree(
         throw new Error(
           formatRefreshBaseRefError({
             code: classified.code,
-            message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}".`,
-            cause: classified.cause
+            message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}".`
           })
         )
       }

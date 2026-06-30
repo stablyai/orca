@@ -119,8 +119,7 @@ describe('classifyRefreshBaseRefError', () => {
     const error = new Error('Command failed: git fetch\nfatal: Could not resolve host github.com')
     expect(classifyRefreshBaseRefError(error)).toEqual({
       code: 'network',
-      message: 'Network error. Check your connection.',
-      cause: error
+      message: 'Network error. Check your connection.'
     })
   })
 
@@ -130,8 +129,7 @@ describe('classifyRefreshBaseRefError', () => {
     )
     expect(classifyRefreshBaseRefError(error)).toEqual({
       code: 'auth',
-      message: 'git@github.com: Permission denied (publickey).',
-      cause: error
+      message: 'git@github.com: Permission denied (publickey).'
     })
   })
 

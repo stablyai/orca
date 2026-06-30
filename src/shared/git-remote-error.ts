@@ -194,7 +194,6 @@ const REFRESH_BASE_REF_CODE_SET = new Set<RefreshBaseRefErrorCode>([
 export type ClassifiedRefreshBaseRefError = {
   code: RefreshBaseRefErrorCode
   message: string
-  cause?: unknown
 }
 
 const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not exist/i
@@ -232,7 +231,7 @@ export function classifyRefreshBaseRefError(error: unknown): ClassifiedRefreshBa
   const stderr = stripCredentialsFromMessage(error.message)
   const code = detectRefreshBaseRefErrorCode(stderr)
   const humanMessage = normalizeGitErrorMessage(error, 'fetch')
-  return { code, message: humanMessage, cause: error }
+  return { code, message: humanMessage }
 }
 
 export function formatRefreshBaseRefError(result: ClassifiedRefreshBaseRefError): string {
