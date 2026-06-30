@@ -12,6 +12,14 @@ function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
   return Number.isFinite(start) ? start : null
 }
 
+/** The logical slot top (container coords) of an element's virtual row,
+ *  excluding intra-row spacing. Matches the virtualizer item.start the
+ *  gap-opening shift keys off, so drop boundaries align with it; null when the
+ *  element is not inside a measured virtual row. */
+export function resolveVirtualRowStart(element: HTMLElement): number | null {
+  return getVirtualRowStart(element.closest<HTMLElement>('[data-worktree-virtual-row]'))
+}
+
 /**
  * Resolve an element's top position relative to its scroll container, handling
  * virtual rows whose CSS transforms would otherwise skew the coordinate.
