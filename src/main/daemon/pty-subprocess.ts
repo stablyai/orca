@@ -309,12 +309,19 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
  * Runs a short native PTY spawn probe for daemon health checks.
  */
 export async function checkPtySpawnHealth(): Promise<void> {
-  if (process.platform !== 'darwin') {
+  if (process.platform === 'win32') {
     return
   }
 
-  ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
+  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
+  // stale native PTY path. A real short-lived spawn catches that before the
+  // main process routes fresh panes to a daemon that cannot create terminals.
+  if (process.platform === 'darwin') {
+    ensureNodePtySpawnHelperExecutable()
+    preflightMacNodePtySpawnEnvironment()
+  } else {
+    preflightDaemonCwd()
+  }
 
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH

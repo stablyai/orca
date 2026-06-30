@@ -6,6 +6,7 @@ import { createServer, connect, type Server } from 'net'
 import { DaemonServer } from './daemon-server'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
+  checkDaemonHealth,
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
@@ -92,8 +93,9 @@ describe('daemon health', () => {
     await server.start()
 
     try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('healthy')
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(true)
-      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
+      expect(ptySpawnHealthCheck).toHaveBeenCalledTimes(2)
     } finally {
       await server.shutdown()
     }
@@ -111,6 +113,7 @@ describe('daemon health', () => {
     await server.start()
 
     try {
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('pty-spawn-unhealthy')
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
     } finally {
       await server.shutdown()
@@ -118,6 +121,7 @@ describe('daemon health', () => {
   })
 
   it('fails when the token file is missing', async () => {
+    await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
     await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
   })
 

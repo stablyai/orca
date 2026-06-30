@@ -15,6 +15,7 @@ export type DaemonPidFile = {
 }
 
 export type DaemonProcessHandle = {
+  mode?: 'degraded-new-pty-fallback'
   shutdown(): Promise<void>
 }
 
@@ -47,6 +48,10 @@ export class DaemonSpawner {
     this.handle = await this.launcher(this.socketPath, this.tokenPath)
 
     return { socketPath: this.socketPath, tokenPath: this.tokenPath }
+  }
+
+  getHandle(): DaemonProcessHandle | null {
+    return this.handle
   }
 
   // Why: after the daemon process dies unexpectedly, the cached handle is

@@ -100,6 +100,9 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 // SSH providers will be registered here in Phase 1.
 
 let localProvider: IPtyProvider = new LocalPtyProvider()
+type FreshLocalFallbackProvider = IPtyProvider & {
+  routesFreshSpawnsToLocalProvider?: true
+}
 const sshProviders = new Map<string, IPtyProvider>()
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
@@ -919,6 +922,12 @@ function isClaudeLaunchCommand(command: string | undefined): boolean {
   return /(^|[\s;&|('"`])(?:[^\s;&|('"`]*[\\/])?claude(?:\.cmd|\.exe)?($|[\s;&|)'"`])/i.test(
     command
   )
+}
+
+function routesFreshSpawnsToLocalProvider(
+  provider: IPtyProvider
+): provider is FreshLocalFallbackProvider {
+  return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
 }
 
 /** Register an SSH PTY provider for a connection. */
@@ -1786,7 +1795,10 @@ export function registerPtyHandlers(
         )
       }
 
-      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const isDaemonHostSpawn =
+        !args.connectionId &&
+        !(provider instanceof LocalPtyProvider) &&
+        !routesFreshSpawnsToLocalProvider(provider)
       const requestedSessionId = args.sessionId?.trim()
       const sessionId =
         requestedSessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
@@ -2341,7 +2353,10 @@ export function registerPtyHandlers(
       // local filesystem (OpenCode plugin dir, Pi/OMP extension paths, Codex
       // home, dev CLI bin, attribution shim dir) that would resolve to
       // nothing — or something misleading — on the remote machine.
-      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const isDaemonHostSpawn =
+        !args.connectionId &&
+        !(provider instanceof LocalPtyProvider) &&
+        !routesFreshSpawnsToLocalProvider(provider)
       // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so
       // provider hooks and legacy Pi overlay cleanup can run in buildPtyHostEnv.
       // DaemonPtyAdapter.doSpawn mints an id the same way when sessionId is
@@ -2414,10 +2429,13 @@ export function registerPtyHandlers(
           launchConfig: args.launchConfig
         })
       let effectiveLaunchConfig = args.launchConfig
-      const preAllocatedHandle =
-        runtime && (!(provider instanceof LocalPtyProvider) || shouldRefreshAgentTeamsEnv)
-          ? runtime.createPreAllocatedTerminalHandle()
-          : null
+      const shouldPreAllocateTerminalHandle =
+        runtime !== undefined &&
+        ((!(provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(provider)) ||
+          shouldRefreshAgentTeamsEnv)
+      const preAllocatedHandle = shouldPreAllocateTerminalHandle
+        ? runtime.createPreAllocatedTerminalHandle()
+        : null
       if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
         // Why: native Agent Teams team ids/tokens are process-local. A sleeping
         // record preserves the user's native launch shape, but the team env
