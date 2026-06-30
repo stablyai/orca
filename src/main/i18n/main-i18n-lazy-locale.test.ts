@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: main-i18n now lazy-loads non-English catalogs through an i18next backend
-// instead of bundling all five eagerly. This guards the invariant that callers
-// which await setMainUiLanguage() (menu/tray/dialog registration in index.ts)
-// see fully-loaded translations on the first read — i.e. the lazy load resolves
-// before changeLanguage() settles. A regression here would silently fall back
-// to English menus for non-English users.
+// Why: main-i18n avoids bundling locale catalogs on the cold-start path.
+// English comes from translateMain() fallbacks; non-English catalogs load
+// through the backend before awaited menu/tray/dialog rendering reads them.
 
 vi.mock('electron', () => ({
   app: {
@@ -28,7 +25,8 @@ describe('main-i18n lazy locale loading', () => {
     await setMainUiLanguage(UI_LANGUAGE_ENGLISH)
   })
 
-  it('serves English synchronously from the eager bundle', () => {
+  it('serves English synchronously from caller fallbacks', () => {
+    expect(translateMain('missing.main.key', 'Fallback copy')).toBe('Fallback copy')
     expect(translateMain('menu.file', 'File')).toBe('File')
     expect(translateMain('menu.settings', 'Settings')).toBe('Settings')
   })

@@ -6,7 +6,6 @@ import i18next, {
   type TOptions
 } from 'i18next'
 
-import en from '../../renderer/src/i18n/locales/en.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
@@ -15,14 +14,10 @@ export const mainI18n: I18nInstance = i18next.createInstance()
 
 let initialized = false
 
-// Why: only the English catalog is bundled eagerly. The other four locales add
-// ~1.7MB to the main-process bundle (parsed before the first window opens) even
-// though the menu/tray/dialog strings are rendered after i18n init is awaited.
-// A lazy backend fetches each non-English catalog on demand, so changeLanguage()
-// loads its bundle instead of paying the parse cost at cold start. Safe because
-// ensureMainI18n() and setMainUiLanguage() are awaited before any menu builds
-// (index.ts whenReady), so the active locale is resolved before it is read.
-const NON_DEFAULT_LOCALE_LOADERS: Record<
+// Why: main-process callers pass English fallbacks to translateMain(), so the
+// main bundle does not need to parse any locale catalog at cold start. Only
+// non-English users pay for their selected catalog, after i18n is awaited.
+const LAZY_LOCALE_LOADERS: Record<
   Exclude<SupportedUiLocale, 'en'>,
   () => Promise<{ default: Record<string, unknown> }>
 > = {
@@ -36,10 +31,10 @@ const lazyLocaleBackend: BackendModule = {
   type: 'backend',
   init: () => {},
   read: (language: string, _namespace: string, callback: ReadCallback) => {
-    const loader = NON_DEFAULT_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
+    const loader = LAZY_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
     if (!loader) {
-      // English (and unknown locales) are served from bundled resources; signal
-      // "nothing to load" so i18next falls back to the in-memory catalog.
+      // English is intentionally represented by the empty bundled resource; its
+      // user-visible copy comes from translateMain() defaultValue fallbacks.
       callback(null, false)
       return
     }
@@ -63,14 +58,13 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
     await mainI18n.use(lazyLocaleBackend).init({
       fallbackLng: DEFAULT_UI_LOCALE,
       lng: DEFAULT_UI_LOCALE,
-      // Why: `resources` seeds the eager English catalog while
-      // `partialBundledLanguages` lets the backend supply the lazy locales — so
-      // i18next uses bundled `en` immediately and only hits the backend for the
-      // languages that aren't already in memory.
+      // Why: mark the default locale loaded with an empty resource bundle. Main
+      // process English strings come from translateMain() fallbacks, and
+      // partialBundledLanguages lets the backend supply non-English catalogs.
       partialBundledLanguages: true,
       resources: {
         en: {
-          translation: en
+          translation: {}
         }
       },
       interpolation: {
