@@ -206,19 +206,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // an unclean shutdown → return saved scrollback so the renderer can
     // display the previous terminal content.
     if (result.isNew && restoreInfo) {
-      // Why: if the checkpoint was captured while an alternate-screen app
-      // (vim, less, htop) was active, snapshotAnsi is the alt buffer content.
-      // Replaying that into a fresh shell would show stale TUI content. Use
-      // scrollbackAnsi (rows above the viewport only) which excludes the alt
-      // buffer. For normal sessions, use the full snapshot with rehydrate
-      // sequences to restore terminal modes (colors, cursor position, etc).
-      // Why: scrollbackAnsi may be empty if the emulator hadn't accumulated
-      // scrollback before the alt-screen app launched. In that case, skip
-      // cold restore entirely rather than showing a blank terminal — no
-      // content is better than confusing the user with an empty restore.
+      // Why prefer scrollbackAnsi for alt-screen: snapshotAnsi is the alt buffer
+      // (vim/less/htop); normal sessions use the full snapshot + rehydrate.
+      // Why the snapshotAnsi fallback: a hibernated TUI agent (empty scrollback)
+      // would otherwise get `|| null` → blank pane on wake. snapshotAnsi *alone*
+      // (no rehydrateSequences — they start with \x1b[?1049h, which the
+      // renderer's POST_REPLAY_MODE_RESET does NOT undo) lands the last frame as
+      // normal scrollback. An empty snapshot still yields null → no-op.
       const isAltScreen = restoreInfo.modes.alternateScreen
       const scrollback = isAltScreen
-        ? restoreInfo.scrollbackAnsi || null
+        ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
         : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
       // Why: use registerWriter (not openSession) to avoid deleting the
       // existing checkpoint.json. If the revived daemon crashes again before

@@ -2,7 +2,9 @@
  * chunk upload, completion, and cancellation in one hook so native audio state
  * cannot drift from the runtime RPC lifecycle. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Buffer } from 'node:buffer'
+// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' — Metro
+// can't resolve Node's builtin in a React Native bundle.
+import { Buffer } from 'buffer'
 import {
   addExpoTwoWayAudioEventListener,
   initialize,

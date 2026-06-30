@@ -602,7 +602,9 @@ export type PtyManagementSession = {
 }
 
 export type PtyManagementApi = {
-  listSessions: () => Promise<{ sessions: PtyManagementSession[] }>
+  // `degraded` is true when the daemon is alive but cannot spawn fresh PTYs, so
+  // new terminals run on the local provider without daemon persistence.
+  listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{ killedCount: number; remainingCount: number }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>

@@ -1334,7 +1334,9 @@
         "8ff5ae8866": "负责人",
         "82c87eceb9": "编辑负责人",
         "1ff5d979df": "未分配任何人",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如，批准工作流运行），然后才能解除合并阻止。",
+        "dd5d9a4f17": "{{value0}}更新",
+        "71a3c0f9d2": "启动工作区"
       },
       "QuickOpen": {
         "1dbd3f59ff": "手机",

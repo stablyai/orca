@@ -184,6 +184,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
   markCodexProjectTrusted,
@@ -1072,8 +1073,6 @@ function getAgentLaunchPlatformForRepo(
 
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
-const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
-const CODEX_COMPOSER_PROMPT = '›'
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
@@ -12303,9 +12302,7 @@ export class OrcaRuntimeService {
       TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
     return new Promise<string | null>((resolve) => {
       let settled = false
-      let recent = ''
-      let postHandshakeRecent = ''
-      let saw2004 = false
+      const scanner = createDraftPasteReadyScanner(readySignal)
       let quietTimer: NodeJS.Timeout | null = null
       let hardTimer: NodeJS.Timeout | null = null
       let unsubscribe: (() => void) | null = null
@@ -12333,36 +12330,12 @@ export class OrcaRuntimeService {
       }
 
       const observeData = (data: string): void => {
-        const combined = recent + data
-        recent = combined.slice(-512)
-        if (!saw2004) {
-          const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
-          if (markerIndex === -1) {
-            return
-          }
-          saw2004 = true
-          const postHandshakeChunk = combined.slice(markerIndex + DECSET_BRACKETED_PASTE.length)
-          if (readySignal === 'codex-composer-prompt') {
-            if (postHandshakeChunk.includes(CODEX_COMPOSER_PROMPT)) {
-              finish(ptyId)
-              return
-            }
-            postHandshakeRecent = postHandshakeChunk.slice(-512)
-            return
-          }
-          postHandshakeRecent = postHandshakeChunk.slice(-512)
-        } else {
-          if (
-            readySignal === 'codex-composer-prompt' &&
-            (data.includes(CODEX_COMPOSER_PROMPT) ||
-              (postHandshakeRecent + data).includes(CODEX_COMPOSER_PROMPT))
-          ) {
-            finish(ptyId)
-            return
-          }
-          postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
+        const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
+        if (ready) {
+          finish(ptyId)
+          return
         }
-        if (readySignal !== 'codex-composer-prompt' && saw2004) {
+        if (shouldArm) {
           armQuietTimer()
         }
       }

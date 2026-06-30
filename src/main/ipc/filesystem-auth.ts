@@ -328,7 +328,9 @@ export async function resolveAuthorizedPath(
   }
 
   try {
-    const realTarget = await realpath(resolvedTarget)
+    // Why: Windows/WSL realpath can return UNC-shaped paths that still need to
+    // compare against the resolved allow-list roots used by this module.
+    const realTarget = resolve(await realpath(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store, {
         canonicalSourcePath: resolvedTarget

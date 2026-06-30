@@ -44,6 +44,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { fetchPrHeadTrackingRef } from '../github/pr-head-tracking-ref'
+import { pruneWorktreePRRefreshAliases } from '../github/pr-refresh-coordinator'
 import { getDefaultRemote } from '../git/repo'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -161,6 +162,9 @@ function removeWorktreeMetadataAndTransientState(store: Store, worktreeId: strin
   store.removeWorktreeMeta(worktreeId)
   advertisedUrlWatcher.forgetWorktree(worktreeId)
   deleteWorktreeHistoryDir(worktreeId)
+  // Why: release the removed worktree's PR-refresh aliases so coalesced queue
+  // entries do not retain it for the rest of the session (memory creep).
+  pruneWorktreePRRefreshAliases(worktreeId)
 }
 
 async function closeLocalWatcherForRemoval(worktreePath: string): Promise<void> {
