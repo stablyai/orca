@@ -6,15 +6,31 @@ import { getCreationProgressLabel } from '@/lib/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 import { parseRefreshBaseRefErrorPrefix } from '../../../../shared/worktree-remote-error'
 
-// Why: single source of truth for the i18n path so a panel rename
-// doesn't require hunting through 5 locale files.
+/**
+ * i18n key prefix shared by the 5-class error messages emitted from main.
+ *
+ * Why: single source of truth for the i18n path so a panel rename
+ * doesn't require hunting through 5 locale files.
+ */
 const WORKTREE_PANEL_ERROR_KEY_PREFIX =
   'auto.components.worktree.creation.WorktreeCreationPanel.errors' as const
 
-// Why: extracting the IIFE keeps the JSX readable and makes the
-// 4 branches (no error / unparseable / known code / unknown template)
-// individually testable. entry.error is trusted main-process output;
-// React's text-child escaping is the XSS guard.
+/**
+ * Map an `entry.error` string from main into the user-visible message
+ * shown inside the creation panel.
+ *
+ * Branches:
+ *  - empty input  → default "something went wrong" translation
+ *  - no `[code]` prefix → render the raw string verbatim
+ *  - `[unknown]` → render with the `errors.unknown` template, passing
+ *    the raw message through `{{message}}`
+ *  - known code   → look up `errors.<code>` and fall back to the raw
+ *    message via the i18n's fallback argument
+ *
+ * Why: extracting the IIFE keeps the JSX readable and makes each
+ * branch individually testable. `entry.error` is trusted main-process
+ * output; React's text-child escaping is the XSS guard.
+ */
 function resolveWorktreeCreationErrorMessage(
   raw: string | undefined,
   translate: (key: string, fallback: string, options?: Record<string, string>) => string

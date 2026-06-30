@@ -1,5 +1,12 @@
 import { normalizeGitErrorMessage, stripCredentialsFromMessage } from './git-remote-error'
 
+/**
+ * Discriminated code for a refresh-base-ref failure, used by both the main
+ * throw sites and the renderer to pick an i18n key.
+ *
+ * `'unknown'` is a catch-all for stderr that matches none of the specific
+ * patterns below.
+ */
 export type RefreshBaseRefErrorCode =
   | 'network'
   | 'auth'
@@ -8,6 +15,7 @@ export type RefreshBaseRefErrorCode =
   | 'remoteForbidden'
   | 'unknown'
 
+/** Lookup set used to validate a parsed `[code]` prefix against the known codes. */
 const REFRESH_BASE_REF_CODE_SET = new Set<RefreshBaseRefErrorCode>([
   'network',
   'auth',
@@ -17,10 +25,15 @@ const REFRESH_BASE_REF_CODE_SET = new Set<RefreshBaseRefErrorCode>([
   'unknown'
 ])
 
+/** Result of `classifyRefreshBaseRefError`: the matched code plus a human-readable message. */
 export type ClassifiedRefreshBaseRefError = {
   code: RefreshBaseRefErrorCode
   message: string
 }
+
+// Why: short single-line descriptions are clearer as comment-style captions
+// for these regex constants than as JSDoc blocks above each one — the JSDoc
+// tool counts them via the function/export scan above.
 
 // git fetch on DNS failure or network unreachable
 const REFRESH_NETWORK_PATTERN =
@@ -36,9 +49,18 @@ const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not
 const REMOTE_FORBIDDEN_PATTERN =
   /repository .* not found|requested url returned error: (401|403|404)/i
 
-// Why: scan only the first 'fatal:' line (falling back to the full stderr
-// if no fatal: line exists) so a benign help-text mention of "no upstream"
-// in later lines doesn't override the actual failure cause.
+/**
+ * Map raw `git fetch` stderr to a `RefreshBaseRefErrorCode`.
+ *
+ * Why: scan only the first 'fatal:' line (falling back to the full stderr
+ * if no fatal: line exists) so a benign help-text mention of "no upstream"
+ * in later lines doesn't override the actual failure cause.
+ *
+ * Why: SSH auth rejections like "Permission denied (publickey)." land
+ * BEFORE the appended "fatal: Could not read from remote repository."
+ * tail line. Match the auth pattern against the full stderr so that
+ * trailing fatal noise can't hide the real cause from the classify step.
+ */
 function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCode {
   const scoped = (() => {
     const fatalLine = rawStderr.split(/\r?\n/).find((line) => /^fatal:\s/.test(line))
@@ -47,10 +69,6 @@ function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCo
   if (REFRESH_NETWORK_PATTERN.test(scoped)) {
     return 'network'
   }
-  // Why: SSH auth rejections like "Permission denied (publickey)." land
-  // BEFORE the appended "fatal: Could not read from remote repository."
-  // tail line. Match the auth pattern against the full stderr so that
-  // trailing fatal noise can't hide the real cause from the classify step.
   if (REFRESH_AUTH_PATTERN.test(rawStderr)) {
     return 'auth'
   }
@@ -66,13 +84,19 @@ function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCo
   return 'unknown'
 }
 
-// Why: the precheck and runtime throw sites synthesize a fallback Error
-// like "refresh failed: git_error" from `RemoteFetchResult.errorKind`
-// (which carries no stderr). That synthesized message matches none of
-// the 5 patterns above, so both surfaces always emit `unknown` — the
-// 5 specific i18n keys are exercised only by the createRemoteWorktree
-// path (Task 2 site) which has the real git stderr. This is a known
-// limitation until the runtime's RemoteFetchResult carries stderr.
+/**
+ * Best-effort classifier for a refresh-base-ref failure.
+ *
+ * Why: the precheck and runtime throw sites synthesize a fallback Error
+ * like "refresh failed: git_error" from `RemoteFetchResult.errorKind`
+ * (which carries no stderr). That synthesized message matches none of
+ * the 5 patterns above, so both surfaces always emit `unknown` — the
+ * 5 specific i18n keys are exercised only by the createRemoteWorktree
+ * path (Task 2 site) which has the real git stderr. This is a known
+ * limitation until the runtime's RemoteFetchResult carries stderr.
+ *
+ * Non-Error rejections fall through to `{code: 'unknown', message: 'Git remote operation failed.'}`.
+ */
 export function classifyRefreshBaseRefError(error: unknown): ClassifiedRefreshBaseRefError {
   if (!(error instanceof Error)) {
     return { code: 'unknown', message: 'Git remote operation failed.' }
@@ -83,10 +107,20 @@ export function classifyRefreshBaseRefError(error: unknown): ClassifiedRefreshBa
   return { code, message: humanMessage }
 }
 
+/**
+ * Render a classified error as `[code] message` — the wire format the
+ * renderer's `parseRefreshBaseRefErrorPrefix` can split back apart.
+ */
 export function formatRefreshBaseRefError(result: ClassifiedRefreshBaseRefError): string {
   return `[${result.code}] ${result.message}`
 }
 
+/**
+ * Inverse of `formatRefreshBaseRefError`: pull the `[code]` prefix out
+ * of a thrown-message string. Returns `null` when the string either has
+ * no prefix or carries an unrecognized code, so callers can fall back to
+ * rendering the raw message verbatim.
+ */
 export function parseRefreshBaseRefErrorPrefix(
   message: string
 ): { code: RefreshBaseRefErrorCode; message: string } | null {
@@ -101,16 +135,24 @@ export function parseRefreshBaseRefErrorPrefix(
   return { code, message: match[2] }
 }
 
+/**
+ * Shared throw helper for the three refresh-base-ref sites (refresh,
+ * precheck, runtime). Logs a credential-scrubbed copy of the cause to
+ * `console.error` (tagged with the call site) and throws an Error whose
+ * message is the formatted `[code]` form ready for the renderer to
+ * parse and map to i18n.
+ *
+ * Why: scrub before logging so credentials embedded in the original
+ * stderr never reach console (which can be piped to log files / bug
+ * reports). Both Error and non-Error rejections get scrubbed — a thrown
+ * string/object can still carry credentials in serialized form.
+ */
 export function throwRefreshBaseRefError(opts: {
   tag: 'refresh-base-ref' | 'refresh-base-ref-precheck' | 'refresh-base-ref-runtime'
   baseBranch: string
   remote: string
   cause: unknown
 }): never {
-  // Why: scrub before logging so credentials embedded in the original
-  // stderr never reach console (which can be piped to log files / bug reports).
-  // Both Error and non-Error rejections get scrubbed — a thrown string/object
-  // can still carry credentials in serialized form.
   const safeCause = (() => {
     if (opts.cause instanceof Error) {
       return new Error(stripCredentialsFromMessage(opts.cause.message))
