@@ -53,6 +53,10 @@ export const CLAUDE_EVENTS = [
 ] as const
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return join(homedir(), settings.configDirName, 'settings.local.json')
+}
+
+export function getSharedSettingsPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return join(homedir(), settings.configDirName, 'settings.json')
 }
 

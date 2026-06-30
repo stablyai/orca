@@ -1,8 +1,8 @@
-// Why: locks in the remote-install contract so a refactor cannot silently
-// drift the produced settings.json shape, the wrapper-quoted command path,
-// or the script body that lands on the remote box. Local install behavior
-// is exercised through `installer-utils.test.ts` and the per-CLI status
-// audit; this file covers ONLY the SFTP-backed path added in commit #8.
+// Why: locks in the install/remove contract so a refactor cannot silently
+// drift the produced settings shape, the wrapper-quoted command path, or the
+// script body. Local installs write managed hooks to settings.local.json and
+// migrate stale entries out of the shared settings.json; the remote SFTP path
+// keeps writing the box-local settings.json. Both contracts live here.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -109,15 +109,16 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
 }
 
 describe('ClaudeHookService.install', () => {
-  it('installs managed hooks into Claude settings and preserves user Bedrock settings', () => {
+  it('writes managed hooks to settings.local.json and migrates them out of the shared settings.json', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-hooks-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
-      const legacyPath = join(tmpHome, '.claude', 'settings.json')
+      const sharedPath = join(tmpHome, '.claude', 'settings.json')
+      const localPath = join(tmpHome, '.claude', 'settings.local.json')
       mkdirSync(join(tmpHome, '.claude'), { recursive: true })
       writeFileSync(
-        legacyPath,
+        sharedPath,
         JSON.stringify({
           apiKeyHelper: '/opt/company/claude-key-helper',
           awsAuthRefresh: '/opt/company/aws-refresh',
@@ -146,9 +147,17 @@ describe('ClaudeHookService.install', () => {
 
       const status = new ClaudeHookService().install()
       expect(status.state).toBe('installed')
+      expect(status.configPath).toBe(localPath)
 
-      const legacy = JSON.parse(readFileSync(legacyPath, 'utf-8'))
-      expect(legacy).toMatchObject({
+      const local = JSON.parse(readFileSync(localPath, 'utf-8'))
+      expect(local.hooks.StopFailure[0].hooks[0].command).toMatch(
+        process.platform === 'win32'
+          ? WINDOWS_POWERSHELL_LAUNCHER
+          : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
+      )
+
+      const shared = JSON.parse(readFileSync(sharedPath, 'utf-8'))
+      expect(shared).toMatchObject({
         apiKeyHelper: '/opt/company/claude-key-helper',
         awsAuthRefresh: '/opt/company/aws-refresh',
         awsCredentialExport: '/opt/company/aws-export',
@@ -157,28 +166,14 @@ describe('ClaudeHookService.install', () => {
           AWS_REGION: 'us-west-2'
         }
       })
-      const legacyCommands = legacy.hooks.Stop.flatMap(
+      const sharedCommands = shared.hooks.Stop.flatMap(
         (definition: { hooks: { command: string }[] }) =>
           definition.hooks.map((hook) => hook.command)
       )
-      expect(legacyCommands).toContain('/usr/local/bin/user-hook')
+      expect(sharedCommands).toContain('/usr/local/bin/user-hook')
       expect(
-        legacyCommands.some((command: string) =>
-          process.platform === 'win32'
-            ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
-            : command.includes(CLAUDE_SCRIPT_FILE_NAME)
-        )
-      ).toBe(true)
-      expect(
-        legacyCommands.some((command: string) =>
-          command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
-        )
+        sharedCommands.some((command: string) => command.includes('.orca/agent-hooks/claude-hook'))
       ).toBe(false)
-      expect(legacy.hooks.StopFailure[0].hooks[0].command).toMatch(
-        process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER
-          : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
-      )
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('DEVIN_PROJECT_DIR')
@@ -202,7 +197,7 @@ describe('ClaudeHookService.install', () => {
         expect(new ClaudeHookService().install().state).toBe('installed')
 
         const settings = JSON.parse(
-          readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
+          readFileSync(join(tmpHome, '.claude', 'settings.local.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
 
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
@@ -241,6 +236,59 @@ describe('ClaudeHookService.install', () => {
       }
     }
   )
+})
+
+describe('ClaudeHookService.remove', () => {
+  it('removes managed hooks from settings.local.json and the legacy shared settings.json', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-remove-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      const service = new ClaudeHookService()
+      service.install()
+
+      const sharedPath = join(tmpHome, '.claude', 'settings.json')
+      writeFileSync(
+        sharedPath,
+        JSON.stringify({
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] },
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command: '/Users/old/.orca/agent-hooks/claude-hook.sh'
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      )
+
+      const status = service.remove()
+      expect(status.state).toBe('not_installed')
+
+      const local = JSON.parse(
+        readFileSync(join(tmpHome, '.claude', 'settings.local.json'), 'utf-8')
+      )
+      expect(local.hooks ?? {}).toEqual({})
+
+      const shared = JSON.parse(readFileSync(sharedPath, 'utf-8'))
+      const sharedCommands = (shared.hooks.Stop as { hooks: { command: string }[] }[]).flatMap(
+        (definition) => definition.hooks.map((hook) => hook.command)
+      )
+      expect(sharedCommands).toContain('/usr/local/bin/user-hook')
+      expect(
+        sharedCommands.some((command) => command.includes('.orca/agent-hooks/claude-hook'))
+      ).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('ClaudeHookService.installRemote', () => {
@@ -337,7 +385,7 @@ describe('OpenClaudeHookService-compatible install', () => {
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
-      const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.json')
+      const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.local.json')
       mkdirSync(join(tmpHome, '.openclaude'), { recursive: true })
       writeFileSync(openClaudeSettings, JSON.stringify({ hooks: {} }))
 

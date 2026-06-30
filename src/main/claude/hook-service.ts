@@ -21,6 +21,7 @@ import {
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
+  getSharedSettingsPath,
   getRemoteManagedCommand,
   removeManagedHooks,
   type ClaudeCompatibleHookSettings
@@ -211,7 +212,23 @@ export class ClaudeHookService {
       getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
     )
     writeHooksJson(configPath, nextConfig)
+    this.sweepLegacyManagedHooksFromSharedSettings()
     return this.getStatus()
+  }
+
+  private sweepLegacyManagedHooksFromSharedSettings(): void {
+    const sharedSettingsPath = getSharedSettingsPath(this.options.settings)
+    const sharedConfig = readHooksJson(sharedSettingsPath)
+    if (!sharedConfig) {
+      return
+    }
+    const { config: sweptConfig, changed } = removeManagedHooks(
+      sharedConfig,
+      getManagedScriptFileName(this.options.settings)
+    )
+    if (changed) {
+      writeHooksJson(sharedSettingsPath, sweptConfig)
+    }
   }
 
   // Why: install Orca's Claude hook settings on the remote box rather than the
@@ -301,6 +318,7 @@ export class ClaudeHookService {
     if (changed) {
       writeHooksJson(configPath, nextConfig)
     }
+    this.sweepLegacyManagedHooksFromSharedSettings()
     return this.getStatus()
   }
 }
