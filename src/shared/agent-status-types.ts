@@ -21,6 +21,7 @@ export type WellKnownAgentType =
   | 'antigravity'
   | 'amp'
   | 'opencode'
+  | 'mimo-code'
   | 'cursor'
   | 'copilot'
   | 'aider'
@@ -63,6 +64,8 @@ export const AGENT_STATE_HISTORY_MAX = 20
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  taskTitle?: string
+  displayName?: string
   parentTerminalHandle?: string
   parentPaneKey?: string
   coordinatorHandle?: string
@@ -104,6 +107,12 @@ export type AgentStatusEntry = {
   toolName?: string
   /** Short preview of the tool input (e.g. file path, command). */
   toolInput?: string
+  /** JSON string of the AskUserQuestion tool input (`{ questions: [...] }`),
+   *  captured live when the agent calls AskUserQuestion. Unlike toolInput this
+   *  is NOT truncated to a short preview — clients render the full structured
+   *  prompt as a live card. Cleared (undefined) once the agent moves on to a
+   *  different tool or state so a stale prompt doesn't linger. */
+  interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
   /** True when the current `done` state was reached via an interrupt rather
@@ -145,6 +154,9 @@ export type AgentStatusPayload = {
   agentType?: AgentType
   toolName?: string
   toolInput?: string
+  /** JSON string of the AskUserQuestion tool input, captured live. See the
+   *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
+  interactivePrompt?: string
   lastAssistantMessage?: string
   interrupted?: boolean
 }
@@ -166,6 +178,7 @@ export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { pr
  */
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   paneKey: string
+  launchToken?: string
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
@@ -196,6 +209,13 @@ export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
  *  second line of defense against a buggy/malicious agent spamming huge
  *  strings into the cache (which lives per pane with bounded history). */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
+/** Maximum character length for the interactivePrompt field.
+ *  Why: this holds the full JSON of an AskUserQuestion tool input
+ *  (`{ questions: [...] }`), which clients render as a structured live card —
+ *  truncating to a 160-char preview like toolInput would corrupt the JSON and
+ *  drop options. Capped generously so multi-question prompts survive intact
+ *  while still bounding per-pane cache growth from a buggy/malicious agent. */
+export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 /**
  * Freshness threshold for explicit agent status. Retained past this point so
  * WorktreeCard's sidebar dot can decay "working" back to "active" when the
@@ -203,6 +223,8 @@ export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
  * dashboard + hover only display hook-reported data as-is.
  */
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
+const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
 
 // Why: typed as ReadonlySet<string> so .has() accepts any string without
 // requiring `state as AgentStatusState` at the check site. The narrowing
@@ -217,10 +239,10 @@ export const AGENT_TYPE_MAX_LENGTH = 40
 // sequence. Shared by the single-line and multiline normalizers so the
 // protection can't drift between them.
 function truncatePreservingSurrogates(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
+  if (value.length < maxLength) {
     return value
   }
-  let truncated = value.slice(0, maxLength)
+  let truncated = value.length === maxLength ? value : value.slice(0, maxLength)
   const lastCode = truncated.charCodeAt(truncated.length - 1)
   if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
     truncated = truncated.slice(0, -1)
@@ -233,12 +255,47 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
   if (typeof value !== 'string') {
     return ''
   }
-  // Why: include Unicode line separators (U+2028, U+2029) in the collapse
-  // set. A hook payload like "claude rogue" would otherwise bypass the
-  // single-line invariant that downstream UI and equality checks rely on —
-  // the data comes from an untrusted agent process.
-  const singleLine = value.trim().replace(/[\r\n\u2028\u2029]+/g, ' ')
-  return truncatePreservingSurrogates(singleLine, maxLength)
+  return normalizeSingleLinePreview(value, maxLength)
+}
+
+function normalizeSingleLinePreview(value: string, maxLength: number): string {
+  // Why: hook prompt/tool fields are previews. Bound the source scan before
+  // folding line breaks so paste-sized status text cannot run a full regex
+  // replacement just to keep a small dashboard label.
+  const scanEnd = Math.min(
+    value.length,
+    maxLength * SINGLE_LINE_FIELD_SCAN_MULTIPLIER + SINGLE_LINE_FIELD_SCAN_OVERHEAD
+  )
+  let index = 0
+  while (index < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(index))) {
+    index++
+  }
+
+  let normalized = ''
+  let lineSeparatorRun = false
+  while (index < scanEnd && normalized.length < maxLength) {
+    const code = value.charCodeAt(index)
+    if (isSingleLineSeparator(code)) {
+      if (code === 13 && value.charCodeAt(index + 1) === 10) {
+        index++
+      }
+      if (!lineSeparatorRun) {
+        normalized += ' '
+      }
+      lineSeparatorRun = true
+      index++
+      continue
+    }
+
+    normalized += value[index]
+    lineSeparatorRun = false
+    index++
+  }
+
+  if (normalized.length < maxLength) {
+    normalized = trimTrailingWhitespace(normalized)
+  }
+  return truncatePreservingSurrogates(normalized, maxLength)
 }
 
 // Why: assistant messages are a multi-paragraph "what did the agent say"
@@ -258,18 +315,84 @@ function normalizeMultilineField(value: unknown, maxLength: number): string {
   // normalizer's treatment of the same code points, keeping the two paths in
   // sync. Step order preserved: `\r\n` → `\n`, bare `\r` → `\n`,
   // U+2028/U+2029 → `\n`, then collapse blank-line runs.
-  const normalized = value
-    .trim()
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[\u2028\u2029]/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+  const { start, end } = getTrimmedStringBounds(value)
+  let normalized = ''
+  let newlineRun = 0
+  for (let index = start; index < end && normalized.length < maxLength; index++) {
+    const code = value.charCodeAt(index)
+    if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
+      if (code === 13 && value.charCodeAt(index + 1) === 10) {
+        index++
+      }
+      if (newlineRun < 2) {
+        normalized += '\n'
+      }
+      newlineRun++
+      continue
+    }
+
+    normalized += value[index]
+    newlineRun = 0
+  }
   return truncatePreservingSurrogates(normalized, maxLength)
+}
+
+function getTrimmedStringBounds(value: string): { start: number; end: number } {
+  let start = 0
+  let end = value.length
+  while (start < end && isEcmaTrimWhitespace(value.charCodeAt(start))) {
+    start++
+  }
+  while (end > start && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
+    end--
+  }
+  return { start, end }
+}
+
+function trimTrailingWhitespace(value: string): string {
+  let end = value.length
+  while (end > 0 && isEcmaTrimWhitespace(value.charCodeAt(end - 1))) {
+    end--
+  }
+  return end === value.length ? value : value.slice(0, end)
+}
+
+function isSingleLineSeparator(code: number): boolean {
+  return code === 13 || code === 10 || code === 0x2028 || code === 0x2029
+}
+
+function isEcmaTrimWhitespace(code: number): boolean {
+  return (
+    code === 0x20 ||
+    (code >= 0x09 && code <= 0x0d) ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  )
 }
 
 // Why: tool/assistant fields are optional on the entry (absence = "no update
 // for this field"). We only surface them when the caller actually provided a
 // string value so a missing field doesn't overwrite the prior cached state.
+// Why: interactivePrompt carries raw JSON (`{ questions: [...] }`) that clients
+// JSON.parse to render a structured card. Unlike the other normalizers we must
+// NOT trim, collapse newlines, or fold blank-line runs — any of those would
+// corrupt the JSON or alter option text inside it. Only guard the length cap
+// (preserving surrogate pairs) and drop empty strings to undefined.
+function normalizeInteractivePromptField(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined
+  }
+  const truncated = truncatePreservingSurrogates(value, maxLength)
+  return truncated.length > 0 ? truncated : undefined
+}
+
 function normalizeOptionalField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
     return undefined
@@ -319,6 +442,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
     toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+    interactivePrompt: normalizeInteractivePromptField(
+      obj.interactivePrompt,
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+    ),
     lastAssistantMessage: normalizeOptionalMultilineField(
       obj.lastAssistantMessage,
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH

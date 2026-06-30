@@ -6,8 +6,8 @@
 // so it can never starve static-asset serving, RPC crypto, or other clients
 // (issue #5308). The worker owns the subscribe, the per-event stat fanout, and
 // the event batching; the main thread only relays results.
-import { stat } from 'fs/promises'
-import { parentPort, workerData } from 'worker_threads'
+import { stat } from 'node:fs/promises'
+import { parentPort, workerData } from 'node:worker_threads'
 import type * as ParcelWatcher from '@parcel/watcher'
 import type { FsChangeEvent } from '../../shared/types'
 

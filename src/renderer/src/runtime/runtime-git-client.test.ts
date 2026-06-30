@@ -13,6 +13,7 @@ import {
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
   getRuntimeGitStatus,
+  getRuntimeGitSubmoduleStatus,
   pushRuntimeGit,
   rebaseRuntimeGitFromBase
 } from './runtime-git-client'
@@ -24,6 +25,7 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitStatus = vi.fn()
 const gitCheckIgnored = vi.fn()
+const gitSubmoduleStatus = vi.fn()
 const gitDiff = vi.fn()
 const gitHistory = vi.fn()
 const gitBulkStage = vi.fn()
@@ -44,6 +46,7 @@ beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitStatus.mockReset()
   gitCheckIgnored.mockReset()
+  gitSubmoduleStatus.mockReset()
   gitDiff.mockReset()
   gitHistory.mockReset()
   gitBulkStage.mockReset()
@@ -67,6 +70,7 @@ beforeEach(() => {
       git: {
         status: gitStatus,
         checkIgnored: gitCheckIgnored,
+        submoduleStatus: gitSubmoduleStatus,
         diff: gitDiff,
         history: gitHistory,
         bulkStage: gitBulkStage,
@@ -132,6 +136,37 @@ describe('runtime git client', () => {
     })
   })
 
+  it('forwards upstream-negative-cache bypass to local git status only when enabled', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: true }
+    )
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: false }
+    )
+
+    expect(gitStatus).toHaveBeenNthCalledWith(1, {
+      worktreePath: '/repo',
+      connectionId: undefined,
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(gitStatus).toHaveBeenNthCalledWith(2, {
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+  })
+
   it('checks ignored paths through local git IPC', async () => {
     gitCheckIgnored.mockResolvedValue(['dist/bundle.js'])
 
@@ -151,6 +186,29 @@ describe('runtime git client', () => {
       paths: ['dist/bundle.js', 'src/index.ts']
     })
     expect(result).toEqual(['dist/bundle.js'])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('passes submodule status area through local git IPC', async () => {
+    gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitSubmoduleStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      'vendor/lib',
+      'staged'
+    )
+
+    expect(gitSubmoduleStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      submodulePath: 'vendor/lib',
+      connectionId: 'ssh-1',
+      area: 'staged'
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -237,6 +295,32 @@ describe('runtime git client', () => {
     })
   })
 
+  it('passes submodule status area through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitSubmoduleStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      'vendor/lib',
+      'staged'
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.submoduleStatus',
+      params: { worktree: 'id:wt-1', submodulePath: 'vendor/lib', area: 'staged' },
+      timeoutMs: 15_000
+    })
+  })
+
   it('forwards includeIgnored through the active runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -258,6 +342,31 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.status',
       params: { worktree: 'id:wt-1', includeIgnored: true },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards upstream-negative-cache bypass through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { bypassEffectiveUpstreamNegativeCache: true }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.status',
+      params: { worktree: 'id:wt-1', bypassEffectiveUpstreamNegativeCache: true },
       timeoutMs: 15_000
     })
   })

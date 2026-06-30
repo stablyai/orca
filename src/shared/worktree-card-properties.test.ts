@@ -5,7 +5,7 @@ import {
   TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
-  isLegacyDefaultedCompactWorktreeCardProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 
@@ -62,15 +62,12 @@ describe('worktree card properties', () => {
     })
   })
 
-  it('recognizes only the exact old defaulted Compact preset', () => {
-    expect(isLegacyDefaultedCompactWorktreeCardProperties(['status', 'automation'])).toBe(true)
-    expect(isLegacyDefaultedCompactWorktreeCardProperties(['status', 'unread', 'automation'])).toBe(
-      true
-    )
-    expect(isLegacyDefaultedCompactWorktreeCardProperties(['automation', 'status'])).toBe(false)
-    expect(isLegacyDefaultedCompactWorktreeCardProperties(['status'])).toBe(false)
-    expect(isLegacyDefaultedCompactWorktreeCardProperties(['status', 'automation', 'pr'])).toBe(
-      false
-    )
+  it('recognizes only exact defaulted Compact presets', () => {
+    expect(isDefaultedCompactWorktreeCardProperties(['status'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'unread', 'automation'])).toBe(true)
+    expect(isDefaultedCompactWorktreeCardProperties(['automation', 'status'])).toBe(false)
+    expect(isDefaultedCompactWorktreeCardProperties(['status', 'automation', 'pr'])).toBe(false)
   })
 })

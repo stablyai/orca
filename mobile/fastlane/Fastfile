@@ -15,23 +15,146 @@
 # manually against the imported cert — works with any team API key.
 
 require "base64"
+require "json"
 
 default_platform(:ios)
 
-WORKSPACE = "ios/Orca.xcworkspace"
+MOBILE_ROOT = File.expand_path("..", __dir__)
+# Why: fastlane executes lanes from mobile/fastlane even when GitHub Actions
+# starts in mobile/, so release file paths must be rooted at the mobile app.
+APP_CONFIG_PATH = File.join(MOBILE_ROOT, "app.json")
+WORKSPACE = File.join(MOBILE_ROOT, "ios", "Orca.xcworkspace")
+BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
 SCHEME = "Orca"
 BUNDLE_ID = "com.stably.orca.mobile"
+TESTFLIGHT_GROUPS = ["peeps"].freeze
+DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
+
+# App Store version states in which the version "train" is terminally closed to
+# new TestFlight build uploads (altool rejects with 90186 "train ... is
+# closed"). Only approved/released/removed states qualify: a version that is
+# merely IN_REVIEW / WAITING_FOR_REVIEW / PROCESSING_FOR_APP_STORE still accepts
+# TestFlight builds, so bumping on those would break normal beta iteration.
+CLOSED_APP_STORE_STATES = %w[
+  READY_FOR_SALE
+  PENDING_DEVELOPER_RELEASE
+  PENDING_APPLE_RELEASE
+  REPLACED_WITH_NEW_VERSION
+  REMOVED_FROM_SALE
+  DEVELOPER_REMOVED_FROM_SALE
+].freeze
+
+def app_store_connect_api_key_from_env
+  app_store_connect_api_key(
+    key_id: ENV.fetch("ASC_KEY_ID"),
+    issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+    key_content: ENV.fetch("ASC_API_KEY_P8"),
+    is_key_content_base64: true,
+    in_house: false,
+  )
+end
+
+def load_mobile_app_config
+  JSON.parse(File.read(APP_CONFIG_PATH))
+end
+
+def write_mobile_app_config(config)
+  File.write(APP_CONFIG_PATH, "#{JSON.pretty_generate(config)}\n")
+end
+
+def current_mobile_version(config)
+  config.fetch("expo").fetch("version")
+end
+
+def truthy_option?(value)
+  %w[1 true yes on].include?(value.to_s.strip.downcase)
+end
+
+def bump_patch_version(version)
+  match = version.match(/\A(\d+)\.(\d+)\.(\d+)\z/)
+  UI.user_error!("Cannot bump non-semver mobile version '#{version}'") unless match
+
+  "#{match[1]}.#{match[2]}.#{match[3].to_i + 1}"
+end
+
+def resolve_requested_version(options, config)
+  requested = options[:version].to_s.strip
+  return requested unless requested.empty?
+
+  current_version = current_mobile_version(config)
+  truthy_option?(options[:bump_patch]) ? bump_patch_version(current_version) : current_version
+end
+
+# Returns true when `version`'s App Store train is closed to new build uploads.
+# `app` is a Spaceship::ConnectAPI::App the caller looks up (nil if lookup
+# failed). On a nil app or any API error, degrade to "open": we then proceed as
+# before this check existed — the upload either succeeds or fails with the same
+# 90186 we have always seen, never worse than today's behavior.
+def version_train_closed?(app, version)
+  return false unless app
+
+  app
+    .get_app_store_versions(filter: { versionString: version })
+    .any? { |app_store_version| CLOSED_APP_STORE_STATES.include?(app_store_version.app_store_state) }
+rescue StandardError => error
+  # Loud, not silent: a swallowed error here un-fixes the 90186 guard, so the
+  # degraded run must be visible rather than buried.
+  UI.error("Could not determine App Store state for #{version} (#{error.message}); assuming open and proceeding.")
+  false
+end
+
+def testflight_changelog
+  changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
+  changelog.empty? ? DEFAULT_TESTFLIGHT_CHANGELOG : changelog
+end
 
 platform :ios do
-  desc "Build, sign, and upload Orca Mobile to TestFlight"
-  lane :release do
-    api_key = app_store_connect_api_key(
-      key_id: ENV.fetch("ASC_KEY_ID"),
-      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
-      key_content: ENV.fetch("ASC_API_KEY_P8"),
-      is_key_content_base64: true,
-      in_house: false,
+  desc "Resolve the iOS release version and next TestFlight build number"
+  lane :prepare_release_version do |options|
+    api_key = app_store_connect_api_key_from_env
+    config = load_mobile_app_config
+    version = resolve_requested_version(options, config)
+
+    # Fail fast (seconds) if the resolved version's App Store train is already
+    # closed: Apple would otherwise reject the upload ~20 min later with 90186.
+    # Bumping the version is left to the human (the bump_patch input or a
+    # "Prepare mobile X" commit) so the marketing version stays a deliberate,
+    # release-notes-bearing decision rather than something CI invents.
+    app =
+      begin
+        Spaceship::ConnectAPI::App.find(BUNDLE_ID)
+      rescue StandardError => error
+        UI.error("Could not look up App Store app #{BUNDLE_ID} (#{error.message}); skipping closed-train check.")
+        nil
+      end
+    if version_train_closed?(app, version)
+      UI.user_error!(
+        "iOS version #{version} is already submitted/released on the App Store and cannot accept " \
+        "new builds. Re-dispatch with bump_patch_version: true (or a higher release_version), " \
+        "or land a \"Prepare mobile <version>\" commit.",
+      )
+    end
+
+    latest_build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      version: version,
+      initial_build_number: 0,
     )
+    build_number = latest_build_number.to_i + 1
+
+    # Keep app.json authoritative because Expo prebuild copies these values into
+    # the native project and runtime manifest used by the About screen.
+    config.fetch("expo")["version"] = version
+    config.fetch("expo").fetch("ios")["buildNumber"] = build_number.to_s
+    write_mobile_app_config(config)
+
+    UI.message("Prepared Orca Mobile iOS #{version} (#{build_number})")
+  end
+
+  desc "Build, sign, upload, and share Orca Mobile on TestFlight"
+  lane :release do
+    api_key = app_store_connect_api_key_from_env
 
     team_id = ENV.fetch("APPLE_TEAM_ID")
 
@@ -65,17 +188,22 @@ platform :ios do
           BUNDLE_ID => profile_name,
         },
       },
-      output_directory: "build",
+      output_directory: BUILD_OUTPUT_DIRECTORY,
       output_name: "Orca.ipa",
       clean: true,
     )
 
     upload_to_testflight(
       api_key: api_key,
-      skip_waiting_for_build_processing: true,
-      # Why: the human still drafts "What's New" + review notes in the ASC web
-      # UI (see the mobile-app-store-release skill). CI only delivers the build.
-      distribute_external: false,
+      # Why: fastlane can only assign external TestFlight groups after Apple
+      # finishes processing the uploaded build.
+      skip_waiting_for_build_processing: false,
+      distribute_external: true,
+      groups: TESTFLIGHT_GROUPS,
+      notify_external_testers: true,
+      # Why: fastlane requires release notes when distributing to external
+      # TestFlight testers, even for CI-triggered smoke releases.
+      changelog: testflight_changelog,
     )
   end
 end

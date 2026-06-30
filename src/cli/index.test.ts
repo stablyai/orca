@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: CLI parser tests share one mocked runtime client and fixture queue; splitting this file would duplicate setup and make command coverage harder to audit. */
-import path from 'path'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -82,7 +82,7 @@ vi.mock('./runtime/environments', () => ({
 }))
 
 vi.mock('child_process', async () => {
-  const { EventEmitter } = await import('events')
+  const { EventEmitter } = await import('node:events')
   return {
     spawn: spawnMock.mockImplementation(() => {
       const child = new EventEmitter()
@@ -222,6 +222,19 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('advertises explicit orchestration task display labels', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'task-create', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--task-title <text>] [--display-name <text>]')
+    expect(help).toContain('--task-title <text>  Concise title for the orchestration task')
+    expect(help).toContain('--display-name <text> UI label shown for dispatched worker rows')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('hides removed parent-workspace help and scopes create parent selectors', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()
@@ -245,6 +258,9 @@ describe('orca root help', () => {
     expect(createHelp).toContain('folder:<id>')
     expect(createHelp).toContain('folder:<folderId>')
     expect(createHelp).toContain('worktree:<id>')
+    expect(createHelp).toContain(
+      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base'
+    )
 
     logSpy.mockClear()
     await main(['worktree', 'set', '--help'], '/tmp/repo')
@@ -2417,7 +2433,8 @@ describe('orca cli worktree awareness', () => {
       worktree: 'path:/tmp/repo/feature',
       command: undefined,
       title: 'RUNNER',
-      focus: true
+      focus: true,
+      presentation: 'focused'
     })
   })
 
@@ -2529,6 +2546,7 @@ describe('orca cli worktree awareness', () => {
       command: 'codex',
       title: 'Codex',
       focus: true,
+      presentation: 'focused',
       rendererBacked: true,
       activate: true
     })
@@ -2929,10 +2947,24 @@ describe('orca cli worktree awareness', () => {
     })
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['orchestration', 'task-create', '--spec', 'spawn child workspace'], '/tmp/repo')
+    await main(
+      [
+        'orchestration',
+        'task-create',
+        '--spec',
+        'spawn child workspace',
+        '--task-title',
+        'Child workspace',
+        '--display-name',
+        'Spawn child workspace'
+      ],
+      '/tmp/repo'
+    )
 
     expect(callMock).toHaveBeenCalledWith('orchestration.taskCreate', {
       spec: 'spawn child workspace',
+      taskTitle: 'Child workspace',
+      displayName: 'Spawn child workspace',
       deps: undefined,
       parent: undefined,
       callerTerminalHandle: 'term_creator'

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT } from '../../../../shared/agent-tab-title'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
@@ -62,6 +63,28 @@ describe('generated agent tab titles', () => {
     expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
       'Refactor the auth middleware to use JWT'
     )
+  })
+
+  it('does not trim the full paste-sized prompt before generating an optional title', () => {
+    vi.useFakeTimers()
+    const trimSpy = vi.spyOn(String.prototype, 'trim')
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const prompt = `Fix the flaky status tests ${'large pasted text '.repeat(5000)}`
+
+    store.getState().setAgentStatus(makePaneKey(tabId, LEAF_ID), {
+      state: 'working',
+      prompt,
+      agentType: 'codex'
+    })
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.generatedTitle).toBe('Fix the flaky status tests large pasted')
+    expect(
+      trimSpy.mock.contexts.some(
+        (context) => String(context).length > GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT
+      )
+    ).toBe(false)
   })
 
   it('keeps manual rename precedence over generated and live titles', () => {

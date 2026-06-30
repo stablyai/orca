@@ -3,6 +3,9 @@ import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 
 const MOBILE_EMULATOR_HIDDEN_TOAST_ID = 'mobile-emulator-hidden'
+// Why: auto-dismiss the nudge after 30s so it can't linger forever; it stays
+// dismissible early and the Settings re-enable link is reachable until then.
+const MOBILE_EMULATOR_HIDDEN_TOAST_DURATION_MS = 30_000
 
 type MobileEmulatorHiddenToastDeps = {
   openSettingsPage: AppState['openSettingsPage']
@@ -10,8 +13,6 @@ type MobileEmulatorHiddenToastDeps = {
 }
 
 export function showMobileEmulatorHiddenToast(deps: MobileEmulatorHiddenToastDeps): void {
-  // Why: matches other one-time opt-out nudges — stay on screen until the user
-  // dismisses it so the Settings re-enable path is easy to find.
   toast.info(
     translate(
       'auto.components.emulator.pane.mobile.emulator.hidden.toast.e8f098a870',
@@ -42,7 +43,7 @@ export function showMobileEmulatorHiddenToast(deps: MobileEmulatorHiddenToastDep
           .
         </p>
       ),
-      duration: Infinity,
+      duration: MOBILE_EMULATOR_HIDDEN_TOAST_DURATION_MS,
       dismissible: true
     }
   )

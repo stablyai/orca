@@ -6,6 +6,7 @@ import {
   getWorktreePaletteSelectionItemIds,
   getWorktreePaletteCreateActionState
 } from './worktree-palette-create-action'
+import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from './worktree-palette-query-bounds'
 
 describe('worktree-palette-create-action', () => {
   it('shows create for typed queries with workspace matches but selects the first workspace row', () => {
@@ -149,6 +150,20 @@ describe('worktree-palette-create-action', () => {
         query: '   '
       }).showCreateAction
     ).toBe(false)
+  })
+
+  it('hides create for oversized pasted queries without echoing the payload', () => {
+    const oversizedQuery = 'secret-create-worktree-name'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+
+    expect(
+      getWorktreePaletteCreateActionState({
+        canCreateWorktree: true,
+        query: oversizedQuery
+      })
+    ).toEqual({
+      createWorktreeName: '',
+      showCreateAction: false
+    })
   })
 
   it('derives selection ids from rendered entries while skipping headers and hints', () => {

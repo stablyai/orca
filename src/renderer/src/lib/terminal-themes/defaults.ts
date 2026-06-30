@@ -38,18 +38,20 @@ export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
     black: '#2e3436',
     red: '#cc0000',
     green: '#4e9a06',
-    yellow: '#c4a000',
+    // Why: Claude-style previews use ANSI accent colors for readable text,
+    // so the light theme cannot keep Tango's near-white legacy values.
+    yellow: '#8e7700',
     blue: '#3465a4',
     magenta: '#75507b',
-    cyan: '#06989a',
-    white: '#d3d7cf',
+    cyan: '#05727e',
+    white: '#6a6a6a',
     brightBlack: '#555753',
     brightRed: '#ef2929',
-    brightGreen: '#8ae234',
-    brightYellow: '#fce94f',
-    brightBlue: '#729fcf',
+    brightGreen: '#1b7a1b',
+    brightYellow: '#6d5a00',
+    brightBlue: '#204a87',
     brightMagenta: '#ad7fa8',
-    brightCyan: '#34e2e2',
-    brightWhite: '#eeeeec'
+    brightCyan: '#034b50',
+    brightWhite: '#3d3d3d'
   }
 }

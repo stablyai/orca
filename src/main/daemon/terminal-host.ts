@@ -58,7 +58,11 @@ export type TerminalHostOptions = {
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
-  onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
+  onFinalCheckpoint?: (
+    sessionId: string,
+    snapshot: TerminalSnapshot,
+    records: TakePendingOutputResult['records']
+  ) => void
   // Why: production keeps a large cap, but tests need a small deterministic cap
   // without spawning thousands of full terminal sessions.
   maxTombstones?: number
@@ -134,6 +138,11 @@ export class TerminalHost {
       rows: size.rows,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false,
+      // Why: reap the dead session (dispose emulator + drop from the map) the
+      // moment its subprocess exits, instead of retaining it for the daemon's
+      // lifetime. Nothing reads a dead session's emulator (getSnapshot/
+      // takePendingOutput/listSessions all skip !isAlive sessions).
+      onExit: () => this.reapSession(opts.sessionId),
       ...(opts.shellReadyTimeoutMs !== undefined
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
         : {})
@@ -179,9 +188,27 @@ export class TerminalHost {
     this.recordTombstone(sessionId)
     if (opts.immediate) {
       session.forceKillAndDisposeSubprocess()
+      // Why: the immediate path tears down synchronously without firing the
+      // session's onExit hook, so reap it here. The graceful path below funnels
+      // through Session.handleSubprocessExit -> onExit -> reapSession.
+      this.reapSession(sessionId)
       return
     }
     session.kill()
+  }
+
+  // Why: dispose a dead session's headless emulator and drop it from the map so
+  // exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
+  // No-ops on live sessions (a live session must never be disposed here) and on
+  // already-reaped/unknown ids. Wired as the Session onExit hook and also called
+  // on the immediate-kill path.
+  private reapSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.isAlive) {
+      return
+    }
+    session.dispose()
+    this.sessions.delete(sessionId)
   }
 
   signal(sessionId: string, sig: string): void {
@@ -233,14 +260,29 @@ export class TerminalHost {
     return session.getSnapshot()
   }
 
-  // Why: same null-not-throw semantics as getSnapshot — incremental
-  // checkpoints are best-effort against sessions that may have just exited.
-  takePendingOutput(sessionId: string, includeSnapshot: boolean): TakePendingOutputResult | null {
+  // Why: read-only readback of the size the PTY actually applied (null-not-throw
+  // like getSnapshot). The renderer compares this against xterm to detect a
+  // resize that was dropped/coerced daemon-side and re-assert it.
+  getAppliedSize(sessionId: string): { cols: number; rows: number } | null {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
       return null
     }
-    return session.takePendingOutput(includeSnapshot)
+    return session.getAppliedSize()
+  }
+
+  // Why: same null-not-throw semantics as getSnapshot — incremental
+  // checkpoints are best-effort against sessions that may have just exited.
+  takePendingOutput(
+    sessionId: string,
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.takePendingOutput(includeSnapshot, opts)
   }
 
   isKilled(sessionId: string): boolean {
@@ -277,10 +319,10 @@ export class TerminalHost {
         if (!session.isAlive) {
           continue
         }
-        const snapshot = session.getSnapshot()
-        if (snapshot) {
+        const take = session.takePendingOutput(true, { teardownSnapshot: true })
+        if (take?.snapshot) {
           try {
-            this.onFinalCheckpoint(sessionId, snapshot)
+            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
           } catch {
             // Best-effort — don't block shutdown
           }

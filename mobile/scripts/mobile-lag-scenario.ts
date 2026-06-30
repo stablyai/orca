@@ -62,9 +62,14 @@ export function createMockWorktrees(
       repo: repo.displayName,
       path: `${repo.path}/worktrees/${name}`,
       branch: index % 6 === 0 ? 'main' : `feature/mobile-lag-${index + 1}`,
+      isArchived: false,
+      isMainWorktree: false,
+      hasHostSidebarActivity: index % 5 !== 0,
       parentWorktreeId: null,
       childWorktreeIds: [],
       displayName: name,
+      workspaceStatus: index % 9 === 0 ? 'in-review' : 'in-progress',
+      sortOrder: now - index * 1000,
       linkedIssue: index % 7 === 0 ? 200 + index : null,
       linkedPR,
       linkedLinearIssue: index % 13 === 0 ? `ORC-${index + 1}` : null,
@@ -85,12 +90,16 @@ export function createMockWorktrees(
 }
 
 function createMockAgent(index: number, now: number): RuntimeWorktreeAgentRow {
+  const scenarioTitle = `Investigate mobile lag scenario ${index + 1}`
+
   return {
     paneKey: `agent-${index}`,
     parentPaneKey: null,
     state: index % 12 === 0 ? 'waiting' : 'working',
     agentType: index % 3 === 0 ? 'claude' : 'codex',
-    prompt: `Investigate mobile lag scenario ${index + 1}`,
+    prompt: scenarioTitle,
+    taskTitle: scenarioTitle,
+    displayName: `Mobile lag ${index + 1}`,
     lastAssistantMessage: index % 6 === 0 ? 'Running focused checks' : null,
     toolName: null,
     toolInput: null,

@@ -1,5 +1,5 @@
-import { spawn, spawnSync, type ChildProcess } from 'child_process'
-import { existsSync, readFileSync, rmSync } from 'fs'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { app } from 'electron'
 
 // Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.

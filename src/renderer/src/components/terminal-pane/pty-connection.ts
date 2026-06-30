@@ -10,6 +10,8 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
+import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -20,12 +22,20 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
+import { shouldReconcileDeadSession } from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
-import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
+import {
+  nativeWindowsRewriteNeedsFollowupRenderRefresh,
+  terminalOutputPrefersRenderRefresh,
+  terminalRewriteOutputRenderRefreshDecision,
+  terminalRewriteOutputPrefersRenderRefresh,
+  windowsEastAsianOutputPrefersRenderRefresh
+} from '@/lib/pane-manager/terminal-complex-script'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
   queuePanePtyResizeIfHeld,
@@ -39,6 +49,7 @@ import {
 } from './layout-serialization'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
 import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
+import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   mode2031SequenceFor,
@@ -57,13 +68,17 @@ import {
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
-import { isLocalNativeWindowsPty } from '@/lib/pane-manager/windows-pty-compatibility'
-import { recordTerminalOutput, restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
-import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
+import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
+import {
+  captureTerminalWriteScrollIntent,
+  enforceTerminalWriteScrollIntent
+} from '@/lib/pane-manager/terminal-scroll-intent'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -75,12 +90,20 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import {
+  createCodexAutoApprovalHookCompletionSuppressor,
+  shouldSuppressCodexAutoApprovalSyntheticTitle,
+  shouldSuppressCodexAutoApprovalStatus
+} from './codex-auto-approval-notification-suppression'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
-  observeTerminalBracketedPasteModeOutput,
-  pasteTerminalText
+  observeTerminalBracketedPasteModeOutput
 } from './terminal-bracketed-paste'
+import { executeTerminalStartupCommandPaste } from './terminal-startup-command-paste'
+import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import { isKnownTuiAgentTerminalStartupCommand } from './terminal-startup-command-classifier'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
@@ -88,13 +111,17 @@ import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-lin
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
-  installTerminalCapabilityReplyHandlers
+  installTerminalCapabilityReplyHandlers,
+  sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
 } from './hidden-output-restore-scheduler'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
@@ -104,8 +131,15 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import {
   isResumableTuiAgent,
-  normalizeAgentProviderSession
+  normalizeAgentProviderSession,
+  type ResumableTuiAgent,
+  type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
+import {
+  normalizeCompatibleAgentTitleForOwner,
+  resolveCompatibleAgentTypeForOwner
+} from '../../../../shared/agent-title-owner'
+import type { TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
@@ -121,7 +155,7 @@ const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
-const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
+const HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS = 750
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
@@ -176,6 +210,20 @@ type E2eTerminalPtyOutputDebugApi = {
 
 type E2eTerminalPtyOutputDebugWindow = Window & {
   __terminalPtyOutputDebug?: E2eTerminalPtyOutputDebugApi
+}
+
+type PendingStartupCommand = {
+  command: string
+  env?: Record<string, string>
+}
+
+type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
+  agent: ResumableTuiAgent
+  launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
+  launchToken: string
+  useLiveEntry: boolean
+  hasSleepingRecord: boolean
+  sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null
 }
 
 const e2eTerminalPtyOutputDebugState: E2eTerminalPtyOutputDebugSnapshot = {
@@ -289,31 +337,13 @@ function readE2eHiddenSnapshotOverride(ptyId: string): Promise<PtyBufferSnapshot
   })
 }
 
-function firstStartupCommandToken(command: string): string {
-  const trimmed = command.trim()
-  const quote = trimmed[0]
-  if ((quote === '"' || quote === "'") && trimmed.length > 1) {
-    const end = trimmed.indexOf(quote, 1)
-    if (end > 1) {
-      return trimmed.slice(1, end)
-    }
-  }
-  return trimmed.split(/\s+/)[0] ?? ''
-}
-
-function isCodexStartupCommand(command: string): boolean {
-  const executable = firstStartupCommandToken(command)
-    .split(/[\\/]/)
-    .pop()
-    ?.toLowerCase()
-    .replace(STARTUP_COMMAND_EXTENSION_RE, '')
-  return executable === 'codex' || executable?.startsWith('codex-') === true
-}
-
 function shouldKeepHiddenStartupRendererQueriesLive(
   startup: PtyConnectionDeps['startup']
 ): boolean {
-  return startup?.telemetry?.agent_kind === 'codex' || isCodexStartupCommand(startup?.command ?? '')
+  return (
+    Boolean(startup?.telemetry?.agent_kind && startup.telemetry.agent_kind !== 'other') ||
+    isKnownTuiAgentTerminalStartupCommand(startup?.command ?? '')
+  )
 }
 
 function containsHiddenStartupRendererQuery(data: string): boolean {
@@ -323,28 +353,20 @@ function containsHiddenStartupRendererQuery(data: string): boolean {
 }
 
 const HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS = 64
-const HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES = ['\x1b]10;?', '\x1b]11;?'] as const
-
-function findOscTerminatorIndex(data: string, offset: number): number {
-  for (let index = offset; index < data.length; index++) {
-    const code = data.charCodeAt(index)
-    if (code === 0x07) {
-      return index + 1
-    }
-    if (code === 0x1b && data[index + 1] === '\\') {
-      return index + 2
-    }
-  }
-  return -1
-}
 
 function extractHiddenStartupRendererQueryData(
   data: string,
   pending: string
-): { statelessQueryData: string; statefulQueryData: string; pending: string } {
+): {
+  statelessQueryData: string
+  statefulQueryData: string
+  oscColorQueryData: string
+  pending: string
+} {
   const input = pending + data
   let statelessQueryData = ''
   let statefulQueryData = ''
+  let oscColorQueryData = ''
   let offset = 0
 
   while (offset < input.length) {
@@ -353,7 +375,12 @@ function extractHiddenStartupRendererQueryData(
       break
     }
     if (candidateIndex + 1 >= input.length) {
-      return { statelessQueryData, statefulQueryData, pending: input.slice(candidateIndex) }
+      return {
+        statelessQueryData,
+        statefulQueryData,
+        oscColorQueryData,
+        pending: input.slice(candidateIndex)
+      }
     }
     if (input.startsWith('\x1b[', candidateIndex)) {
       const finalByteIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
@@ -361,6 +388,7 @@ function extractHiddenStartupRendererQueryData(
         return {
           statelessQueryData,
           statefulQueryData,
+          oscColorQueryData,
           pending: input.slice(
             candidateIndex,
             candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
@@ -378,42 +406,34 @@ function extractHiddenStartupRendererQueryData(
     }
 
     if (input.startsWith('\x1b]', candidateIndex)) {
-      const remaining = input.slice(candidateIndex)
-      const matchingPrefix = HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.find((prefix) =>
-        remaining.startsWith(prefix)
-      )
-      if (!matchingPrefix) {
-        if (
-          HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) => prefix.startsWith(remaining))
-        ) {
-          return { statelessQueryData, statefulQueryData, pending: remaining }
-        }
-        offset = candidateIndex + 2
-        continue
-      }
-
-      const terminatorIndex = findOscTerminatorIndex(input, candidateIndex + matchingPrefix.length)
-      if (terminatorIndex === -1) {
+      const query = parseTerminalOscColorQuery(input, candidateIndex)
+      if (query.kind === 'partial') {
         return {
           statelessQueryData,
           statefulQueryData,
+          oscColorQueryData,
           pending: input.slice(
             candidateIndex,
             candidateIndex + HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS
           )
         }
       }
-      statelessQueryData += input.slice(candidateIndex, terminatorIndex)
-      offset = terminatorIndex
+      if (query.kind === 'none') {
+        offset = candidateIndex + 2
+        continue
+      }
+      oscColorQueryData += input.slice(candidateIndex, query.endIndex)
+      offset = query.endIndex
       continue
     }
 
-    if (
-      HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) =>
-        prefix.startsWith(input.slice(candidateIndex))
-      )
-    ) {
-      return { statelessQueryData, statefulQueryData, pending: input.slice(candidateIndex) }
+    if (parseTerminalOscColorQuery(input, candidateIndex).kind === 'partial') {
+      return {
+        statelessQueryData,
+        statefulQueryData,
+        oscColorQueryData,
+        pending: input.slice(candidateIndex)
+      }
     }
 
     {
@@ -422,7 +442,7 @@ function extractHiddenStartupRendererQueryData(
     }
   }
 
-  return { statelessQueryData, statefulQueryData, pending: '' }
+  return { statelessQueryData, statefulQueryData, oscColorQueryData, pending: '' }
 }
 
 function containsCsiRendererQuery(data: string): boolean {
@@ -493,6 +513,8 @@ let inactiveForegroundImmediateBudgetWindowStart = 0
 
 type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
+  noteVisibilityResume: () => void
+  reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
@@ -783,6 +805,10 @@ function containsCursorRestore(data: string): boolean {
   return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
 }
 
+/**
+ * Establishes a binding between a terminal pane and its corresponding PTY stream,
+ * managing input, output, title synchronization, and agent status tracking.
+ */
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -791,9 +817,12 @@ export function connectPanePty(
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
   let connectFrame: number | null = null
+  let connectFallbackTimer: ReturnType<typeof setTimeout> | null = null
+  let connectStarted = false
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
+  let cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
   let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -808,6 +837,7 @@ export function connectPanePty(
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
+  let suppressSnapshotReplayPtyResize = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -837,6 +867,107 @@ export function connectPanePty(
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
   const cacheKey = makePaneKey(deps.tabId, pane.leafId)
+  const getSleepingRecordForPane = (
+    state: ReturnType<typeof useAppStore.getState>
+  ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
+    const stableRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
+    if (stableRecord) {
+      return { paneKey: cacheKey, record: stableRecord }
+    }
+    const legacyMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
+      ([paneKey, record]) => {
+        const legacy = parseLegacyNumericPaneKey(paneKey)
+        return (
+          legacy?.tabId === deps.tabId &&
+          record.worktreeId === deps.worktreeId &&
+          (!record.tabId || record.tabId === deps.tabId)
+        )
+      }
+    )
+    const exactLegacyMatch = legacyMatches.find(([paneKey]) => {
+      const legacy = parseLegacyNumericPaneKey(paneKey)
+      return legacy?.numericPaneId === String(pane.id)
+    })
+    const providerSessionKeys = new Set(
+      legacyMatches.map(([, record]) =>
+        [
+          record.worktreeId,
+          record.agent,
+          record.providerSession.key,
+          record.providerSession.id
+        ].join('\0')
+      )
+    )
+    const oldestLegacyMatch = legacyMatches
+      .slice()
+      .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
+    // Why: duplicate legacy aliases can point at one provider session; consume
+    // the oldest capture as canonical and clear its aliases after resume.
+    const selectedLegacyMatch =
+      exactLegacyMatch ??
+      (providerSessionKeys.size === 1
+        ? legacyMatches.length === 1
+          ? legacyMatches[0]
+          : oldestLegacyMatch
+        : null)
+    if (!selectedLegacyMatch) {
+      return null
+    }
+    const [paneKey, record] = selectedLegacyMatch
+    return { paneKey, record }
+  }
+  const clearSleepingRecordProviderDuplicates = (
+    state: ReturnType<typeof useAppStore.getState>,
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+  ): void => {
+    state.clearSleepingAgentSession(consumed.paneKey)
+    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
+      if (
+        paneKey !== consumed.paneKey &&
+        record.worktreeId === consumed.record.worktreeId &&
+        record.agent === consumed.record.agent &&
+        record.providerSession.key === consumed.record.providerSession.key &&
+        record.providerSession.id === consumed.record.providerSession.id
+      ) {
+        // Why: legacy pane aliases can leave multiple sleeping rows for one
+        // provider session; once this pane resumes it, every alias is stale.
+        state.clearSleepingAgentSession(paneKey)
+      }
+    }
+  }
+  const launchToken = paneStartup?.launchConfig
+    ? (paneStartup.launchToken ?? createBrowserUuid())
+    : undefined
+  if (paneStartup?.launchConfig) {
+    useAppStore.getState().registerAgentLaunchConfig(cacheKey, paneStartup.launchConfig, {
+      agentType: paneStartup.launchAgent ?? paneStartup.initialAgentStatus?.agent,
+      ...(launchToken ? { launchToken } : {}),
+      tabId: deps.tabId,
+      leafId: pane.leafId
+    })
+  } else if (paneStartup) {
+    useAppStore.getState().clearAgentLaunchConfig(cacheKey)
+  }
+  const registerEffectiveLaunchConfig = (
+    effectiveLaunchConfig: PtyConnectResult['launchConfig'] | undefined,
+    metadata?: { launchToken?: string; launchAgent?: TuiAgent }
+  ): void => {
+    if (!effectiveLaunchConfig) {
+      return
+    }
+    useAppStore.getState().registerAgentLaunchConfig(cacheKey, effectiveLaunchConfig, {
+      agentType:
+        metadata?.launchAgent ?? paneStartup?.launchAgent ?? paneStartup?.initialAgentStatus?.agent,
+      ...((metadata?.launchToken ?? launchToken)
+        ? { launchToken: metadata?.launchToken ?? launchToken }
+        : {}),
+      tabId: deps.tabId,
+      leafId: pane.leafId
+    })
+  }
+  const clearRegisteredStartupLaunchConfig = (): void => {
+    useAppStore.getState().clearAgentLaunchConfig(cacheKey)
+  }
   const pendingSpawnKey = cacheKey
   const neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
@@ -844,6 +975,26 @@ export function connectPanePty(
       (entry) => entry.id === deps.tabId
     )
     return tab?.defaultTitle?.trim() || 'Terminal'
+  }
+  /**
+   * Resolves the authoritative owner agent type for this pane, checking tab launch,
+   * pane startup, and store state configuration.
+   *
+   * Why: launch ownership wins so Pi-compatible live titles/hooks can't repaint an
+   * OMP-owned pane back to Pi; the stored status agentType is only the last-resort
+   * fallback because it can itself be a Pi-compatible frame.
+   */
+  const getAuthoritativePaneAgent = (): AgentType | undefined => {
+    const state = useAppStore.getState()
+    const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (entry) => entry.id === deps.tabId
+    )
+    return (
+      tab?.launchAgent ??
+      paneStartup?.launchAgent ??
+      paneStartup?.initialAgentStatus?.agent ??
+      state.agentStatusByPaneKey[cacheKey]?.agentType
+    )
   }
   const clearInferredInterruptWorkingTitle = (): void => {
     const state = useAppStore.getState()
@@ -965,12 +1116,16 @@ export function connectPanePty(
     entry: AgentStatusEntry | undefined,
     options?: { allowInferredInterrupt?: boolean }
   ): void => {
+    const state = useAppStore.getState()
     if (!entry) {
+      // Why: an Orca-started agent can exit before its first hook status. The
+      // launch registry was still created up front, so clear it on command exit.
+      state.clearAgentLaunchConfig(cacheKey)
       return
     }
-    const state = useAppStore.getState()
     const current = state.agentStatusByPaneKey[cacheKey]
     if (!current) {
+      state.clearAgentLaunchConfig(cacheKey)
       return
     }
     const unchanged =
@@ -1144,10 +1299,16 @@ export function connectPanePty(
     bindPanePtyId(pane.id, ptyId, deps.tabId)
     pane.container.dataset.ptyId = ptyId
   }
+  let activePanePtyBinding: string | null = null
+  // Why: bind time so reconcile can ignore a listSessions snapshot requested
+  // before this PTY bound (newborn race). Null disables the guard (fail-safe).
+  let activePanePtyBindingBoundAt: number | null = null
   const clearPanePtyFitBinding = (): void => {
     // Why: fit bindings live in a module-level map, so pane teardown must
     // clear them explicitly instead of relying on DOM removal.
     bindPanePtyId(pane.id, null, deps.tabId)
+    activePanePtyBinding = null
+    activePanePtyBindingBoundAt = null
     delete pane.container.dataset.ptyId
   }
 
@@ -1161,6 +1322,10 @@ export function connectPanePty(
         allowDoneDetailAfterGrace: meta?.quietedHookDone,
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
+    dispatchAttention: (title, meta) =>
+      scheduleAgentTaskCompleteNotification(title, {
+        agentStatusSnapshot: meta.agentStatus
+      }),
     shouldPollProcessCadence: () =>
       isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
     isLive: () => {
@@ -1171,13 +1336,79 @@ export function connectPanePty(
         return true
       }
       return (useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? []).length > 0
-    }
+    },
+    shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(cacheKey, () => ({
+      tabId: deps.tabId,
+      ...(launchToken ? { launchToken } : {})
+    }))
   })
 
+  const focusSurvivingPtyPaneAfterKeptExit = (): void => {
+    if (manager.getActivePane()?.id !== pane.id) {
+      return
+    }
+    const hasPtyBinding = (paneId: number): boolean =>
+      Boolean(deps.paneTransportsRef.current.get(paneId)?.getPtyId())
+    const repairedActiveLeafId =
+      useAppStore.getState().terminalLayoutsByTabId[deps.tabId]?.activeLeafId ?? null
+    const repairedActivePaneId = repairedActiveLeafId
+      ? manager.getNumericIdForLeaf(repairedActiveLeafId)
+      : null
+    const targetPaneId =
+      repairedActivePaneId !== null &&
+      repairedActivePaneId !== pane.id &&
+      hasPtyBinding(repairedActivePaneId)
+        ? repairedActivePaneId
+        : (manager
+            .getPanes()
+            .find((candidate) => candidate.id !== pane.id && hasPtyBinding(candidate.id))?.id ??
+          null)
+    if (targetPaneId !== null) {
+      // Why: when a newborn split PTY dies before output/input, the pane stays
+      // mounted for diagnostics; move live focus to the sibling that still owns a PTY.
+      manager.setActivePane(targetPaneId, {
+        focus: deps.isActiveRef.current && deps.isVisibleRef.current
+      })
+    }
+  }
+
+  // Why: the transport's own exit handler (pty-transport.ts) normally makes
+  // onExit run-at-most-once by clearing connected/ptyId + unregistering BEFORE
+  // calling it. reconcileIfSessionDead drives onExit directly (bypassing that),
+  // so this guards the body so reconcile and any racing real/synthetic pty:exit
+  // for the same id close the pane exactly once. Scoped to the exiting ptyId
+  // (not a bare boolean): an intentional suppressed restart keeps the pane
+  // mounted and rebinds to a NEW ptyId, and that replacement's later real exit
+  // must still run — a one-shot boolean would strand the pane on rebind.
+  let handledExitPtyId: string | null = null
+  // Why: tracks the ptyId of a genuine fresh spawn — onPtySpawn fires only for
+  // fresh spawns, never reattach/coldRestore (pty-transport.ts). Lets the
+  // sole-pane exit branch tell "this newborn shell died on its own" from "a
+  // reattached persisted session was already dead", so a failing .envrc/direnv
+  // on a brand-new worktree keeps its dead terminal visible instead of bouncing
+  // the user to Landing.
+  let spawnedFreshPtyId: string | null = null
   const onExit = (ptyId: string): void => {
+    if (handledExitPtyId === ptyId) {
+      return
+    }
+    const currentPaneTransport = deps.paneTransportsRef.current.get(pane.id)
+    if (currentPaneTransport && currentPaneTransport !== transport) {
+      // Why: an old transport can deliver a late exit after this pane has
+      // rebound to a replacement PTY; only clear ownership for the exited id.
+      handledExitPtyId = ptyId
+      deps.clearTabPtyId(deps.tabId, ptyId)
+      deps.consumeSuppressedPtyExit(ptyId)
+      scheduleRuntimeGraphSync()
+      return
+    }
+    handledExitPtyId = ptyId
     agentCompletionCoordinator.dispose()
     clearPanePtyFitBinding()
-    deps.syncPanePtyLayoutBinding(pane.id, null)
+    const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId)
+    if (!isSuppressedExit) {
+      deps.clearExitedPanePtyLayoutBinding(pane.id, ptyId)
+    }
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
     // Why: if the PTY exits abruptly (Ctrl-D, crash, shell termination) without
@@ -1195,13 +1426,29 @@ export function connectPanePty(
     // pane stays mounted and can reconnect in place. Without consuming the
     // suppression here, split-pane Codex restarts would still close the pane
     // because this handler runs before the tab-level close logic sees the exit.
-    if (deps.consumeSuppressedPtyExit(ptyId)) {
+    if (isSuppressedExit) {
+      // Why: the action that suppressed the exit owns whether the leaf binding
+      // is a wake hint or should be discarded; runtime cleanup above is enough.
       manager.setPaneGpuRendering(pane.id, true)
       return
     }
     manager.setPaneGpuRendering(pane.id, true)
     const panes = manager.getPanes()
     if (panes.length <= 1) {
+      // Why: a worktree's sole newborn terminal can die on shell startup — e.g.
+      // a PR branch ships an .envrc whose direnv command fails, so the login
+      // shell exits non-zero immediately. Routing that through onPtyExitRef
+      // closes the only tab, which deactivates the worktree (setActiveWorktree
+      // (null)) and strands the user on the Landing screen for a worktree that
+      // was just created. Keep the dead pane mounted instead (mirrors the
+      // freshly-split guard below) so the direnv error stays visible and the
+      // worktree stays active. Gated on a genuine fresh spawn (onPtySpawn fired
+      // for this ptyId — reattach/coldRestore skip it) that the user never typed
+      // into, so a reattached-dead session or an explicit `exit` still tears
+      // down as before.
+      if (spawnedFreshPtyId === ptyId && !Number.isFinite(lastTerminalInputAt)) {
+        return
+      }
       deps.onPtyExitRef.current(ptyId)
       return
     }
@@ -1213,6 +1460,7 @@ export function connectPanePty(
     ) {
       // Why: a freshly split pane can lose its newborn PTY during setup; keep
       // the split visible so the failed session does not immediately collapse.
+      focusSurvivingPtyPaneAfterKeptExit()
       return
     }
     manager.closePane(pane.id)
@@ -1227,8 +1475,18 @@ export function connectPanePty(
   let allowInitialIdleCacheSeed = false
 
   const onTitleChange = (title: string, rawTitle: string): void => {
+    const paneTitle = normalizeCompatibleAgentTitleForOwner(title, getAuthoritativePaneAgent())
+    if (
+      shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
+        paneKey: cacheKey,
+        tabId: deps.tabId,
+        ...(launchToken ? { launchToken } : {})
+      })
+    ) {
+      return
+    }
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
-    deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
+    deps.setRuntimePaneTitle(deps.tabId, pane.id, paneTitle)
     if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitle(rawTitle)
     }
@@ -1238,7 +1496,7 @@ export function connectPanePty(
     // focus changes, onActivePaneChange syncs the newly active pane's stored
     // title to the tab.
     if (manager.getActivePane()?.id === pane.id) {
-      deps.updateTabTitle(deps.tabId, title)
+      deps.updateTabTitle(deps.tabId, paneTitle)
     }
 
     if (!hasConsideredInitialCacheTimerSeed) {
@@ -1262,15 +1520,24 @@ export function connectPanePty(
     if (!initialStatus) {
       return
     }
-    useAppStore.getState().setAgentStatus(
-      cacheKey,
-      {
-        state: 'working',
-        prompt: initialStatus.prompt,
-        agentType: initialStatus.agent
-      },
-      terminalTitle
-    )
+    const statusPayload = {
+      state: 'working' as const,
+      prompt: initialStatus.prompt,
+      agentType: resolveCompatibleAgentTypeForOwner(
+        initialStatus.agent,
+        getAuthoritativePaneAgent()
+      )
+    }
+    if (paneStartup.launchConfig) {
+      useAppStore
+        .getState()
+        .setAgentStatus(cacheKey, statusPayload, terminalTitle, undefined, undefined, {
+          launchConfig: paneStartup.launchConfig,
+          ...(launchToken ? { launchToken } : {})
+        })
+      return
+    }
+    useAppStore.getState().setAgentStatus(cacheKey, statusPayload, terminalTitle)
   }
 
   const seedCommandCodeOutputWorkingStatus = (prompt: string): void => {
@@ -1345,18 +1612,38 @@ export function connectPanePty(
     onDone: scheduleCommandCodeOutputDoneStatus
   })
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
-
-  const onPtySpawn = (ptyId: string): void => {
+  const bindActivePanePty = (
+    ptyId: string,
+    options: { seedInitialAgentStatus?: boolean; updateTabPtyId?: 'always' | 'if-missing' } = {}
+  ): void => {
     setPanePtyFitBinding(ptyId)
+    activePanePtyBinding = ptyId
+    // Why: record bind time on the spawn/attach chokepoint so the reconcile
+    // guard knows this binding is newer than any pre-bind snapshot.
+    activePanePtyBindingBoundAt = performance.now()
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
-    deps.updateTabPtyId(deps.tabId, ptyId)
-    // Why: Command Code has no prompt-start hook. Seed the visible working row
-    // once the PTY exists, then let real hook events refine or complete it.
-    applyInitialAgentStatus()
-    // Spawn completion is when a pane gains a concrete PTY ID. The initial
+    const tabPtyIds = useAppStore.getState().ptyIdsByTabId?.[deps.tabId] ?? []
+    if (options.updateTabPtyId !== 'if-missing' || !tabPtyIds.includes(ptyId)) {
+      deps.updateTabPtyId(deps.tabId, ptyId)
+    }
+    if (options.seedInitialAgentStatus) {
+      applyInitialAgentStatus()
+    }
+    // Spawn/attach completion is when a pane gains a concrete PTY ID. The initial
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
     agentCompletionCoordinator.startProcessTracking()
+  }
+
+  const onPtySpawn = (ptyId: string): void => {
+    // Why: record that this exact PTY was freshly spawned (not reattached), so a
+    // newborn shell that dies before any interaction (e.g. failing direnv on a
+    // just-created worktree) can be kept visible rather than tearing down the
+    // worktree. Reattach/coldRestore skip onPtySpawn (pty-transport.ts).
+    spawnedFreshPtyId = ptyId
+    // Why: Command Code has no prompt-start hook. Seed the visible working row
+    // once the PTY exists, then let real hook events refine or complete it.
+    bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
   }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
@@ -1608,12 +1895,16 @@ export function connectPanePty(
     workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
     workspaceEnv.ORCA_WORKSPACE_ROOT = folderWorkspace.folderPath
   }
-  const paneEnv = {
-    ...paneStartup?.env,
+  const paneIdentityEnv = {
     ...workspaceEnv,
     ORCA_PANE_KEY: cacheKey,
     ORCA_TAB_ID: deps.tabId,
-    ORCA_WORKTREE_ID: deps.worktreeId
+    ORCA_WORKTREE_ID: deps.worktreeId,
+    ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+  }
+  const paneEnv = {
+    ...paneStartup?.env,
+    ...paneIdentityEnv
   }
 
   // Why: folder workspaces can inherit their SSH target from child repos, so
@@ -1622,13 +1913,21 @@ export function connectPanePty(
   const connectionId = getConnectionId(deps.worktreeId) ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
-  const isNativeWindowsConpty = isLocalNativeWindowsPty({
+  // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
+  // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
+  // enables ConPTY synchronized-output protection, which strips an agent's
+  // transient cursor-show (?25h) and leaves the cursor invisible. The execution
+  // host is the authoritative signal: only a 'local' host is a local native PTY.
+  const executionHostId = getExecutionHostIdForWorktree(state, deps.worktreeId)
+  const isNativeWindowsConpty = isLocalNativeWindowsConpty({
     userAgent: navigator.userAgent,
     connectionId,
     cwd: deps.cwd,
-    shellOverride
+    shellOverride,
+    executionHostId
   })
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
+  const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
 
   const restoredPtyIdForTransport =
@@ -1666,6 +1965,10 @@ export function connectPanePty(
     markTerminalInputSent()
     recordAcceptedTerminalInputForHibernation()
   }
+  const terminalTheme = pane.terminal.options.theme
+  const terminalColorQueryReplies = terminalTheme
+    ? { foreground: terminalTheme.foreground, background: terminalTheme.background }
+    : undefined
   const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
@@ -1684,6 +1987,10 @@ export function connectPanePty(
     activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
+    ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
+    ...(paneStartup?.launchConfig ? { launchConfig: paneStartup.launchConfig } : {}),
+    ...(launchToken ? { launchToken } : {}),
+    ...(paneStartup?.launchAgent ? { launchAgent: paneStartup.launchAgent } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onTitleChange,
@@ -1699,6 +2006,15 @@ export function connectPanePty(
     ...(shouldOwnAgentStatusInRenderer
       ? {
           onAgentStatus: (payload) => {
+            if (
+              shouldSuppressCodexAutoApprovalStatus(payload, {
+                paneKey: cacheKey,
+                tabId: deps.tabId,
+                ...(launchToken ? { launchToken } : {})
+              })
+            ) {
+              return
+            }
             // Why: capture the store snapshot once so the title lookup and the
             // setAgentStatus call observe the same state. Re-reading getState()
             // between the two lines opens a brief window where the title could
@@ -1706,17 +2022,40 @@ export function connectPanePty(
             // be stored against a title that was never paired with it.
             const currentState = useAppStore.getState()
             const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-            currentState.setAgentStatus(
-              cacheKey,
-              payload,
-              resolveAgentStatusTerminalTitle(payload, title)
+            const authoritativePaneAgent = getAuthoritativePaneAgent()
+            const agentType = resolveCompatibleAgentTypeForOwner(
+              payload.agentType,
+              authoritativePaneAgent
             )
+            const statusPayload =
+              agentType === payload.agentType ? payload : { ...payload, agentType }
+            const resolvedStatusTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
+            const statusTitle = resolvedStatusTitle
+              ? normalizeCompatibleAgentTitleForOwner(
+                  resolvedStatusTitle,
+                  agentType ?? authoritativePaneAgent
+                )
+              : resolvedStatusTitle
+            if (launchToken) {
+              currentState.setAgentStatus(
+                cacheKey,
+                statusPayload,
+                statusTitle,
+                undefined,
+                undefined,
+                {
+                  launchToken
+                }
+              )
+            } else {
+              currentState.setAgentStatus(cacheKey, statusPayload, statusTitle)
+            }
             if (syncAgentTaskCompleteTrackingEnabled()) {
               const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
               const notificationPayload =
                 typeof storedStatus?.stateStartedAt === 'number'
-                  ? { ...payload, stateStartedAt: storedStatus.stateStartedAt }
-                  : payload
+                  ? { ...statusPayload, stateStartedAt: storedStatus.stateStartedAt }
+                  : statusPayload
               agentCompletionCoordinator.observeHookStatus(notificationPayload)
             }
             if (payload.state === 'working' && pendingTerminalBellNotification) {
@@ -1777,6 +2116,11 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
+    // Why (Defect #2): a keystroke against a pane whose daemon session was
+    // reaped while hidden is silently dropped — sendInput still returns true.
+    // Kick off a fire-and-forget liveness re-check so the dead pane is cleaned
+    // up without relying on (the never-occurring) sendInput false return.
+    recheckLivenessAfterInput()
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -1826,7 +2170,19 @@ export function connectPanePty(
     )
   }
 
+  const isRendererPtyResizeAuthoritative = (): boolean => {
+    if (deps.isVisibleRef.current) {
+      return true
+    }
+    // Why: hidden-tab layout churn is not authoritative; visible resume
+    // owns correction, and hidden SIGWINCH can reset full-screen TUIs.
+    return false
+  }
+
   const forwardPtyResize = (cols: number, rows: number): void => {
+    if (!isRendererPtyResizeAuthoritative()) {
+      return
+    }
     // Why: when a mobile-fit override is active OR mobile is currently the
     // driver of this PTY, the PTY is already at phone dims and any desktop
     // resize is wrong. Suppress resize forwarding to avoid spurious SIGWINCH
@@ -1852,6 +2208,12 @@ export function connectPanePty(
   pane.container.addEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
 
   const onResizeDisposable = pane.terminal.onResize(({ cols, rows }) => {
+    if (suppressSnapshotReplayPtyResize) {
+      return
+    }
+    if (!isRendererPtyResizeAuthoritative()) {
+      return
+    }
     if (shouldSuppressDesktopPtyResize()) {
       return
     }
@@ -1915,10 +2277,132 @@ export function connectPanePty(
   if (geometryReportObserver && pane.container instanceof Element) {
     geometryReportObserver.observe(pane.container)
   }
+
+  // Why: the deferred-rAF fit can spawn the PTY at a stale width when the pane's
+  // real (e.g. split/narrower) layout has not settled by the first frame — the
+  // PTY is born at the wide window width while xterm later reflows to the pane
+  // width. The corrective onResize is then dropped (isRendererPtyResizeAuthoritative()
+  // is false mid-mount), pinning process.stdout.columns forever and garbling
+  // TUIs. The reconcile re-fits across frames until the grid settles and forces
+  // the PTY to xterm's dimensions; the spawn-time sync is authoritative by
+  // definition so it bypasses the visibility gate (but not the mobile-fit
+  // override, which legitimately parks the PTY at phone dims). See
+  // pty-size-reconcile.ts for the convergence loop.
+  let ptySizeReconcileHandle: PtySizeReconcileHandle | null = null
+  const reconcilePtySizeAfterSpawn = (
+    ptyId: string,
+    spawnCols: number,
+    spawnRows: number
+  ): void => {
+    ptySizeReconcileHandle?.cancel()
+    ptySizeReconcileHandle = reconcilePtySizeAcrossFrames({
+      spawnCols,
+      spawnRows,
+      isAlive: () => !disposed && transport.getPtyId() === ptyId,
+      // Mobile legitimately parks the PTY at phone dims; skip those frames
+      // (neither fit nor forward) instead of cancelling the reconcile window.
+      isParked: () => Boolean(getFitOverrideForPty(ptyId)) || isPtyLocked(ptyId),
+      // Once the renderer resize is authoritative (pane visible), the live
+      // onResize owns future corrections, so the reconcile can hand off after
+      // the grid stabilizes. While hidden it keeps watching for a late settle.
+      isAuthoritative: () => isRendererPtyResizeAuthoritative(),
+      measure: () => {
+        safeFit(pane)
+        const cols = pane.terminal.cols
+        const rows = pane.terminal.rows
+        return cols > 0 && rows > 0 ? { cols, rows } : null
+      },
+      resize: (cols, rows) => {
+        if (!shouldSuppressDesktopPtyResize()) {
+          transport.resize(cols, rows)
+        }
+      },
+      // Why: confirm the PTY actually applied the size we forwarded before the
+      // reconcile hands off. transport.resize is fire-and-forget for daemon/SSH
+      // PTYs, so the loop can otherwise settle on a size the PTY dropped, leaving
+      // it pinned wide while xterm shows narrow — the mount-time desync. Skip
+      // remote-runtime PTYs (separate viewport channel; pty:getSize never tracks
+      // them) so they fall back to the grid-stable handoff.
+      getAppliedSize: isRemoteRuntimePtyId(ptyId) ? undefined : () => window.api.pty.getSize(ptyId),
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => {
+        if (typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(handle)
+        }
+      }
+    })
+  }
+
+  // Why: the renderer forwards resizes fire-and-forget and dedupes on the size
+  // it *last sent*, so a resize dropped main-side (it was hidden, a suppression
+  // window, or a provider no-op) leaves xterm and the PTY silently diverged —
+  // and a later same-cols layout fires no onResize, so it never self-corrects
+  // ("resizing sometimes doesn't fix it"). On becoming visible, re-fit and
+  // compare xterm against the PTY's ACTUAL size (not what we think we sent); if
+  // they truly differ, re-assert. Gated on real drift so we emit no spurious
+  // SIGWINCH (which would jar alt-screen TUIs) on an already-synced resume.
+  let reassertingPtySizeOnResume = false
+  const reassertPtySizeOnResume = (): void => {
+    const ptyId = transport.getPtyId()
+    // Skip parked/mobile-driven PTYs before the async size read: their drift
+    // from desktop xterm dims is intentional until mobile hands control back.
+    if (
+      disposed ||
+      reassertingPtySizeOnResume ||
+      !ptyId ||
+      isRemoteRuntimePtyId(ptyId) ||
+      shouldSuppressDesktopPtyResize()
+    ) {
+      return
+    }
+    reassertingPtySizeOnResume = true
+    void window.api.pty
+      .getSize(ptyId)
+      .then((actual) => {
+        // The pane may have been disposed or rebound to a different PTY during
+        // the async hop; bail if this reconcile no longer owns it.
+        if (disposed || transport.getPtyId() !== ptyId) {
+          return
+        }
+        safeFit(pane)
+        const cols = pane.terminal.cols
+        const rows = pane.terminal.rows
+        if (cols <= 0 || rows <= 0) {
+          return
+        }
+        // Re-assert only on genuine divergence from the PTY's applied size (a
+        // null read = unknown id, treated as "cannot confirm synced" so we
+        // forward once). forwardPtyResize owns the authoritative/mobile gating.
+        if (!actual || actual.cols !== cols || actual.rows !== rows) {
+          forwardPtyResize(cols, rows)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        reassertingPtySizeOnResume = false
+      })
+  }
+
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
-  connectFrame = requestAnimationFrame(() => {
-    connectFrame = null
+  const cancelScheduledConnectFrame = (): void => {
+    if (connectFrame !== null) {
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(connectFrame)
+      }
+      connectFrame = null
+    }
+  }
+  const runDeferredConnect = (): void => {
+    if (connectStarted) {
+      return
+    }
+    connectStarted = true
+    cancelScheduledConnectFrame()
+    if (connectFallbackTimer !== null) {
+      clearTimeout(connectFallbackTimer)
+      connectFallbackTimer = null
+    }
     if (disposed) {
       return
     }
@@ -1929,11 +2413,12 @@ export function connectPanePty(
     // Why: if fitAddon resolved to 0×0, the container likely has no layout
     // dimensions (display:none, unmounted, or zero-size parent). Surface a
     // diagnostic so the user sees something instead of a blank pane.
-    if (cols === 0 || rows === 0) {
-      deps.onPtyErrorRef?.current?.(
-        pane.id,
-        `Terminal has zero dimensions (${cols}×${rows}). The pane container may not be visible.`
-      )
+    // Gate on visibility: background/hidden tabs (orchestration workers, CLI
+    // `terminal create` without --focus) legitimately connect at 0×0 because
+    // safeFit skips fitting unmeasurable panes; they refit via the pane resize
+    // observer once shown, so the diagnostic must not fire while hidden.
+    if ((cols === 0 || rows === 0) && deps.isVisibleRef.current) {
+      deps.onPtyErrorRef?.current?.(pane.id, createTerminalZeroDimensionsMessage(cols, rows))
     }
 
     const reportError = (message: string): void => {
@@ -1998,12 +2483,20 @@ export function connectPanePty(
     // Why: for ordinary local startup commands, the local PTY provider already
     // writes via the shell-ready barrier. terminal-paste and SSH startup
     // commands stay renderer-delivered so xterm/relay can apply their handling.
-    let pendingStartupCommand =
-      shouldDeliverStartupViaTerminalPaste || connectionId ? (paneStartup?.command ?? null) : null
+    let pendingStartupCommand: PendingStartupCommand | null =
+      shouldDeliverStartupViaTerminalPaste || connectionId
+        ? paneStartup?.command
+          ? { command: paneStartup.command }
+          : null
+        : null
+    const startupShellReadyCommandHint = resolveSetupAgentSequenceLaunchCommand(
+      paneStartup?.env ?? {},
+      paneStartup?.command
+    )
     const shouldWaitForSshShellReady =
       Boolean(connectionId) &&
       shouldUseShellReadyStartupDelivery({
-        command: paneStartup?.command,
+        command: startupShellReadyCommandHint,
         startupCommandDelivery: paneStartup?.startupCommandDelivery
       }) &&
       !shouldDeliverStartupViaTerminalPaste
@@ -2042,45 +2535,137 @@ export function connectPanePty(
       }
       return CLIENT_PLATFORM
     }
-    const prepareColdRestoreAgentResumeCommand = (): boolean => {
+    const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {
-        return false
+        return null
       }
       const state = useAppStore.getState()
       const entry = state.agentStatusByPaneKey[cacheKey]
-      const sleepingRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
+      const sleepingRecordEntry = getSleepingRecordForPane(state)
+      const sleepingRecord = sleepingRecordEntry?.record
       const useLiveEntry = entry && entry.state !== 'done'
       const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
       if (!agent || !isResumableTuiAgent(agent)) {
-        return false
+        return null
       }
       const providerSession = normalizeAgentProviderSession(
         useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
       )
       if (!providerSession) {
-        return false
+        return null
       }
+      const matchingSleepingLaunchConfig =
+        sleepingRecord?.launchConfig &&
+        (!useLiveEntry ||
+          (sleepingRecord.agent === agent &&
+            sleepingRecord.providerSession.key === providerSession.key &&
+            sleepingRecord.providerSession.id === providerSession.id))
+          ? sleepingRecord.launchConfig
+          : undefined
+      const launchConfig =
+        (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
+        matchingSleepingLaunchConfig
+      const resumePlatform = getColdRestoreAgentResumePlatform()
       const startupPlan = buildAgentResumeStartupPlan({
         agent,
         providerSession,
         cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-        platform: getColdRestoreAgentResumePlatform()
+        agentArgs:
+          launchConfig !== undefined
+            ? launchConfig.agentArgs
+            : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+        agentEnv:
+          launchConfig !== undefined
+            ? launchConfig.agentEnv
+            : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+        ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+        platform: resumePlatform
       })
       if (!startupPlan) {
+        return null
+      }
+      const coldRestoreLaunchToken = createBrowserUuid()
+      // Why: cold restore means the PTY process is gone but the agent provider
+      // session is still resumable, so the replacement spawn must launch it.
+      return {
+        agent,
+        command: startupPlan.launchCommand,
+        env: {
+          ...startupPlan.env,
+          ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
+        },
+        launchConfig: startupPlan.launchConfig,
+        launchToken: coldRestoreLaunchToken,
+        useLiveEntry: Boolean(useLiveEntry),
+        hasSleepingRecord: Boolean(sleepingRecord),
+        sleepingRecordEntry
+      }
+    }
+    const applyColdRestoreAgentResumeStartup = (
+      startup: ColdRestoreAgentResumeStartup | null
+    ): boolean => {
+      if (!startup) {
         return false
       }
-      // Why: cold restore means the PTY process is gone but the agent provider
-      // session is still resumable, so the replacement shell must launch it.
-      pendingStartupCommand = startupPlan.launchCommand
-      if (sleepingRecord) {
-        showSessionRestoredBanner()
-      }
-      if (!useLiveEntry && sleepingRecord) {
-        state.clearSleepingAgentSession(cacheKey)
-      }
+      const state = useAppStore.getState()
+      state.registerAgentLaunchConfig(cacheKey, startup.launchConfig, {
+        agentType: startup.agent,
+        launchToken: startup.launchToken,
+        tabId: deps.tabId,
+        leafId: pane.leafId
+      })
       return true
+    }
+    const clearSleepingRecordAfterColdRestoreSpawn = (
+      startup: ColdRestoreAgentResumeStartup | null
+    ): void => {
+      if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
+        clearSleepingRecordProviderDuplicates(useAppStore.getState(), startup.sleepingRecordEntry)
+      }
+    }
+    const mergeStartupEnvWithPaneIdentity = (
+      env: Record<string, string> | undefined
+    ): Record<string, string> | undefined =>
+      env
+        ? {
+            ...env,
+            ...paneIdentityEnv,
+            ...(env.ORCA_AGENT_LAUNCH_TOKEN
+              ? { ORCA_AGENT_LAUNCH_TOKEN: env.ORCA_AGENT_LAUNCH_TOKEN }
+              : {})
+          }
+        : undefined
+    const startFreshColdRestoreAgentResume = (
+      startup: ColdRestoreAgentResumeStartup | null = buildColdRestoreAgentResumeStartup()
+    ): void => {
+      applyColdRestoreAgentResumeStartup(startup)
+      startFreshSpawn(startup)
+    }
+    const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
+      !disposed &&
+      deps.paneTransportsRef.current.get(pane.id) === transport &&
+      transport.getPtyId() === ptyId
+    const runTerminalPasteStartupCommand = async (command: string): Promise<boolean> => {
+      const ptyId = transport.getPtyId()
+      const result = await executeTerminalStartupCommandPaste({
+        command,
+        pane,
+        ptyId,
+        runtime: resolveTerminalPasteRuntime({
+          platform: CLIENT_PLATFORM,
+          ptyId,
+          connectionId,
+          remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+          transport,
+          isWindowsConpty: isNativeWindowsConpty
+        }),
+        transport,
+        isTargetCurrent: isStartupPasteTargetCurrent
+      })
+      if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
+        return false
+      }
+      return transport.sendInput('\r')
     }
     const schedulePendingStartupCommandDelivery = (): void => {
       if (!pendingStartupCommand) {
@@ -2104,21 +2689,19 @@ export function connectPanePty(
       startupInjectTimer = setTimeout(() => {
         startupInjectTimer = null
         void (async () => {
-          const command = pendingStartupCommand
-          if (!command || disposed) {
+          const startup = pendingStartupCommand
+          if (!startup || disposed) {
             return
           }
           if (shouldDeliverStartupViaTerminalPaste) {
             await waitForTerminalOutputParsed(pane.terminal)
           }
-          if (pendingStartupCommand !== command || disposed) {
+          if (pendingStartupCommand !== startup || disposed) {
             return
           }
+          const command = startup.command
           if (shouldDeliverStartupViaTerminalPaste) {
-            // Why: this mode must pass through xterm so bracketed-paste
-            // wrapping is applied before the submit Enter.
-            pasteTerminalText(pane.terminal, command)
-            transport.sendInput('\r')
+            await runTerminalPasteStartupCommand(command)
           } else {
             transport.sendInput(`${command}\r`)
           }
@@ -2127,9 +2710,18 @@ export function connectPanePty(
       }, 50)
     }
 
-    const startFreshSpawn = (): void => {
+    const startFreshSpawn = (startupOverride?: PendingStartupCommand | null): void => {
       clearPaneMode2031State()
       clearHiddenOutputRestoreState()
+      if (connectionId && startupOverride?.command) {
+        // Why: SSH providers use `command` only as spawn metadata; the renderer
+        // must still submit the resume command to the fresh remote shell.
+        pendingStartupCommand = { command: startupOverride.command }
+      }
+      const coldRestoreOverride =
+        startupOverride && 'launchConfig' in startupOverride
+          ? (startupOverride as ColdRestoreAgentResumeStartup)
+          : null
       // Why: pre-signal the main process so its cooperation gate suppresses
       // the daemon-snapshot seed for this paneKey. We issue declare and the
       // spawn back-to-back without awaiting, because Electron's
@@ -2145,6 +2737,13 @@ export function connectPanePty(
         url: '',
         cols,
         rows,
+        ...(startupOverride?.command ? { command: startupOverride.command } : {}),
+        ...(startupOverride?.env
+          ? { env: mergeStartupEnvWithPaneIdentity(startupOverride.env) }
+          : {}),
+        ...(coldRestoreOverride ? { launchConfig: coldRestoreOverride.launchConfig } : {}),
+        ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
+        ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
@@ -2155,7 +2754,46 @@ export function connectPanePty(
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
           const resolvedPtyId =
-            typeof spawnedPtyId === 'string' ? spawnedPtyId : transport.getPtyId()
+            spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
+              ? spawnedPtyId.id
+              : typeof spawnedPtyId === 'string'
+                ? spawnedPtyId
+                : transport.getPtyId()
+          if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
+            registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
+              ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
+              ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {})
+            })
+          }
+          if (resolvedPtyId) {
+            if (coldRestoreOverride?.hasSleepingRecord) {
+              showSessionRestoredBanner()
+            }
+            clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+          } else if (
+            paneStartup?.launchConfig ||
+            (startupOverride && 'launchConfig' in startupOverride)
+          ) {
+            // Why: delayed draft/follow-up delivery keys off this launch
+            // registry. If spawn produced no PTY, the launch is no longer a
+            // viable delivery target and must not wait for a future pane.
+            clearRegisteredStartupLaunchConfig()
+          }
+          if (
+            resolvedPtyId &&
+            spawnedPtyId &&
+            typeof spawnedPtyId === 'object' &&
+            'id' in spawnedPtyId &&
+            activePanePtyBinding !== resolvedPtyId &&
+            transport.getPtyId() === resolvedPtyId
+          ) {
+            // Why: daemon createOrAttach can turn an apparent fresh spawn into
+            // a reattach; the transport skips onPtySpawn there to preserve recency.
+            bindActivePanePty(resolvedPtyId, { updateTabPtyId: 'if-missing' })
+          }
+          if (resolvedPtyId) {
+            reconcilePtySizeAfterSpawn(resolvedPtyId, cols, rows)
+          }
           const gen = await preSignalPromise
           if (typeof gen === 'number' && resolvedPtyId) {
             if (!isRemoteRuntimePtyId(resolvedPtyId)) {
@@ -2171,6 +2809,9 @@ export function connectPanePty(
           return resolvedPtyId
         })
         .catch(async () => {
+          if (paneStartup?.launchConfig || (startupOverride && 'launchConfig' in startupOverride)) {
+            clearRegisteredStartupLaunchConfig()
+          }
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -2235,8 +2876,13 @@ export function connectPanePty(
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
     }
 
-    const replayDataCallback = (data: string): void => {
-      void (async () => {
+    let replayWriteQueue = Promise.resolve()
+    let pendingReplayData: string | null = null
+    let replayDrainQueued = false
+    const drainReplayDataQueue = async (): Promise<void> => {
+      while (pendingReplayData !== null) {
+        const data = pendingReplayData
+        pendingReplayData = null
         // Relay replay buffer holds the last 100 KB of output, which may
         // overlap with content already rendered in xterm before the
         // disconnect. Clear first to prevent duplication on SSH reconnect.
@@ -2244,13 +2890,30 @@ export function connectPanePty(
         await writeReplayDataAsync(data)
         await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
         if (disposed) {
+          pendingReplayData = null
           return
         }
         // Why: remote-runtime snapshots can arrive after WebGL attached to an
         // empty buffer; rebuilding after replay parses seeds the glyph atlas
         // from the now-populated xterm state.
         manager.rebuildPaneWebgl(pane.id)
-      })()
+      }
+    }
+    const replayDataCallback = (data: string): void => {
+      pendingReplayData = data
+      if (replayDrainQueued) {
+        return
+      }
+      replayDrainQueued = true
+      replayWriteQueue = replayWriteQueue
+        .catch(() => undefined)
+        .then(drainReplayDataQueue)
+        .finally(() => {
+          replayDrainQueued = false
+          if (pendingReplayData !== null) {
+            replayDataCallback(pendingReplayData)
+          }
+        })
     }
 
     type PendingHiddenOutputRestoreChunk = {
@@ -2268,6 +2931,7 @@ export function connectPanePty(
     let hiddenOutputRestoreRetryDeferred = false
     let hiddenOutputRestoreScheduled = false
     let hiddenOutputRestoreDeferredRetryTimer: ReturnType<typeof setTimeout> | null = null
+    let hiddenOutputRestoreForegroundDeadlineTimer: ReturnType<typeof setTimeout> | null = null
     let hiddenOutputRestoreDeferredRetryAttempts = 0
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
@@ -2275,6 +2939,8 @@ export function connectPanePty(
     let hiddenOutputRestoreGeneration = 0
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
+    let foregroundRewriteChunkEndedWithCarriageReturn = false
+    let foregroundRewriteCsiScanTail = ''
     let hiddenMode2031ScanTail = ''
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
@@ -2391,40 +3057,55 @@ export function connectPanePty(
     }
 
     function containsWindowsRewriteControl(data: string): boolean {
-      if (data.includes('\r') || data.includes('\b')) {
-        return true
-      }
-      let escapeIndex = data.indexOf('\x1b[')
-      while (escapeIndex !== -1) {
-        for (let index = escapeIndex + 2; index < data.length; index++) {
-          const char = data[index]
-          if (char >= '0' && char <= '9') {
-            continue
-          }
-          if (char === ';' || char === '?') {
-            continue
-          }
-          if (char === 'J' || char === 'K') {
-            return true
-          }
-          break
-        }
-        escapeIndex = data.indexOf('\x1b[', escapeIndex + 2)
-      }
-      return false
+      return data.includes('\r') || terminalRewriteOutputPrefersRenderRefresh(data)
     }
 
-    function shouldForceForegroundRenderRefresh(data: string): boolean {
+    function foregroundRewriteOutputPrefersRenderRefresh(data: string): boolean {
+      const decision = terminalRewriteOutputRenderRefreshDecision(data, {
+        previousChunkEndsWithCarriageReturn: foregroundRewriteChunkEndedWithCarriageReturn,
+        previousRewriteCsiScanTail: foregroundRewriteCsiScanTail
+      })
+      foregroundRewriteChunkEndedWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
+      foregroundRewriteCsiScanTail = decision.nextRewriteCsiScanTail
+      return decision.prefersRenderRefresh
+    }
+
+    function shouldForceForegroundRenderRefresh(data: string): {
+      refresh: boolean
+      inPlaceRewrite: boolean
+    } {
+      const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
+      const recentInput =
+        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (foregroundAnsiOutputPrefersRenderRefresh(data)) {
         // Why: Codex-style background SGR panels can paint cell fills while
         // glyphs lag behind; refresh only renderer-risk ANSI chunks, not all output.
-        return true
+        return { refresh: true, inPlaceRewrite: rewriteOutputPrefersRenderRefresh }
       }
-      return (
-        shouldApplyNativeWindowsRewriteRefresh &&
-        containsNonAsciiOutput(data) &&
-        containsWindowsRewriteControl(data)
-      )
+      if (rewriteOutputPrefersRenderRefresh) {
+        // Why: resize fixes these panes because xterm's buffer is right but
+        // in-place redraw cells can remain stale in the renderer until repaint.
+        return { refresh: true, inPlaceRewrite: true }
+      }
+      if (
+        windowsEastAsianOutputPrefersRenderRefresh(data, {
+          isWindowsClient: shouldApplyWindowsRendererUnicodeRefresh,
+          isNativeWindowsConpty: shouldApplyNativeWindowsRewriteRefresh,
+          hadRecentInput: recentInput,
+          maxInteractiveRedrawChars: FOREGROUND_INTERACTIVE_REDRAW_CHARS
+        })
+      ) {
+        // Why: CJK/Korean from Microsoft Pinyin commits and native ConPTY agent
+        // output can leave stale wide-glyph cells in the local Windows DOM renderer.
+        return { refresh: true, inPlaceRewrite: false }
+      }
+      return {
+        refresh:
+          shouldApplyNativeWindowsRewriteRefresh &&
+          containsNonAsciiOutput(data) &&
+          containsWindowsRewriteControl(data),
+        inPlaceRewrite: false
+      }
     }
 
     function writePtyOutputToXterm(
@@ -2460,22 +3141,36 @@ export function connectPanePty(
       // cursor-only restores need row invalidation even outside DEC 2026.
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      const foregroundOutput = foreground || parseHiddenStartupOutput
+      const renderRefreshDecision = foregroundOutput
+        ? shouldForceForegroundRenderRefresh(data)
+        : { refresh: false, inPlaceRewrite: false }
+      const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
+      // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
+      // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
+      // follow-up repaint corrects the column desync without a window resize.
+      const nativeWindowsInPlaceRewriteFollowup = nativeWindowsRewriteNeedsFollowupRenderRefresh({
+        isNativeWindowsConpty: shouldApplyNativeWindowsRewriteRefresh,
+        isForeground: foreground,
+        isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
+      })
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
-      if (hiddenMode2031ScanTail) {
+      if (!foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
       writeTerminalOutput(pane.terminal, data, {
-        foreground: foreground || parseHiddenStartupOutput,
+        foreground: foregroundOutput,
         beforeWrite: beforeTerminalOutputWrite,
         onBackgroundBacklogDropped: markHiddenOutputRestoreNeeded,
         latencySensitive:
           !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
         forceForegroundRefresh:
-          (foreground || parseHiddenStartupOutput) &&
+          foregroundOutput &&
           (synchronizedForegroundOutput ||
             nativeWindowsCursorRestore ||
-            shouldForceForegroundRenderRefresh(data)),
-        followupForegroundRefresh: nativeWindowsCursorRestore,
+            foregroundRenderRefreshNeeded),
+        followupForegroundRefresh:
+          nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
@@ -2526,6 +3221,13 @@ export function connectPanePty(
         hiddenStartupRendererQueryPending
       )
       hiddenStartupRendererQueryPending = extracted.pending
+      if (extracted.oscColorQueryData) {
+        // Why: Codex's startup palette probe has a 100 ms budget. Answer
+        // hidden color queries directly so renderer scheduling cannot miss it.
+        sendTerminalOscColorQueryReplies(extracted.oscColorQueryData, pane.terminal, (reply) =>
+          transport.sendInput(reply)
+        )
+      }
       if (extracted.statelessQueryData) {
         writePtyOutputToXterm(extracted.statelessQueryData, false, {
           hiddenStartupRendererQuery: true
@@ -2538,6 +3240,7 @@ export function connectPanePty(
     function takeHiddenStartupRendererQueryPendingForForeground(data: string): {
       statelessQueryData: string
       statefulQueryData: string
+      oscColorQueryData: string
       remainingData: string
       consumedCurrentChars: number
     } {
@@ -2547,6 +3250,7 @@ export function connectPanePty(
         return {
           statelessQueryData: '',
           statefulQueryData: '',
+          oscColorQueryData: '',
           remainingData: data,
           consumedCurrentChars: 0
         }
@@ -2555,6 +3259,7 @@ export function connectPanePty(
       const input = pending + data
       let statelessQueryData = ''
       let statefulQueryData = ''
+      let oscColorQueryData = ''
       let consumedInputChars = pending.length
       let nextPending = ''
       if (input.startsWith('\x1b[')) {
@@ -2572,24 +3277,15 @@ export function connectPanePty(
           consumedInputChars = finalByteIndex + 1
         }
       } else if (input.startsWith('\x1b]')) {
-        const matchingPrefix = HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.find((prefix) =>
-          input.startsWith(prefix)
-        )
-        const terminatorIndex = findOscTerminatorIndex(input, 2)
-        if (
-          !matchingPrefix &&
-          HIDDEN_STARTUP_OSC_COLOR_QUERY_PREFIXES.some((prefix) => prefix.startsWith(input))
-        ) {
-          nextPending = input
-          consumedInputChars = input.length
-        } else if (terminatorIndex === -1) {
+        const query = parseTerminalOscColorQuery(input, 0)
+        if (query.kind === 'partial') {
           nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
           consumedInputChars = input.length
+        } else if (query.kind === 'match') {
+          oscColorQueryData = input.slice(0, query.endIndex)
+          consumedInputChars = query.endIndex
         } else {
-          if (matchingPrefix) {
-            statelessQueryData = input.slice(0, terminatorIndex)
-          }
-          consumedInputChars = terminatorIndex
+          consumedInputChars = pending.length
         }
       } else if (input.length === 1) {
         nextPending = input
@@ -2603,6 +3299,7 @@ export function connectPanePty(
       return {
         statelessQueryData,
         statefulQueryData,
+        oscColorQueryData,
         remainingData: data.slice(consumedCurrentChars),
         consumedCurrentChars
       }
@@ -2649,6 +3346,7 @@ export function connectPanePty(
         hiddenOutputRestorePendingChunks = []
         hiddenOutputRestorePendingChars = 0
         hiddenOutputRestorePendingOverflow = true
+        armHiddenOutputRestoreForegroundDeadline()
         return
       }
       const pending: PendingHiddenOutputRestoreChunk = { data }
@@ -2660,6 +3358,7 @@ export function connectPanePty(
       }
       hiddenOutputRestorePendingChunks.push(pending)
       hiddenOutputRestorePendingChars += data.length
+      armHiddenOutputRestoreForegroundDeadline()
     }
 
     function getChunkDataAfterSnapshot(
@@ -2728,6 +3427,7 @@ export function connectPanePty(
       hiddenOutputRestoreScheduled = false
       cancelScheduledHiddenOutputRestore(pane.terminal)
       clearHiddenOutputRestoreDeferredRetryTimer()
+      clearHiddenOutputRestoreForegroundDeadlineTimer()
       hiddenOutputRestoreDeferredRetryAttempts = 0
     }
 
@@ -2740,6 +3440,81 @@ export function connectPanePty(
     }
     cleanupHiddenOutputRestoreDeferredRetry = clearHiddenOutputRestoreDeferredRetryTimer
 
+    function clearHiddenOutputRestoreForegroundDeadlineTimer(): void {
+      if (hiddenOutputRestoreForegroundDeadlineTimer === null) {
+        return
+      }
+      clearTimeout(hiddenOutputRestoreForegroundDeadlineTimer)
+      hiddenOutputRestoreForegroundDeadlineTimer = null
+    }
+    cleanupHiddenOutputRestoreForegroundDeadline = clearHiddenOutputRestoreForegroundDeadlineTimer
+
+    function armHiddenOutputRestoreForegroundDeadline(): void {
+      if (
+        disposed ||
+        hiddenOutputRestoreForegroundDeadlineTimer !== null ||
+        !shouldWritePtyOutputForeground(deps.isVisibleRef.current) ||
+        (hiddenOutputRestorePendingChunks.length === 0 && !hiddenOutputRestorePendingOverflow)
+      ) {
+        return
+      }
+      const ptyId = hiddenOutputRestorePtyId
+      if (ptyId === null || transport.getPtyId() !== ptyId) {
+        return
+      }
+      const deadlineGeneration = hiddenOutputRestoreGeneration
+      // Why: only foreground-visible output blocked behind recovery gets a
+      // deadline; hidden-time restore work can continue without user impact.
+      hiddenOutputRestoreForegroundDeadlineTimer = setTimeout(() => {
+        hiddenOutputRestoreForegroundDeadlineTimer = null
+        if (
+          disposed ||
+          hiddenOutputRestoreGeneration !== deadlineGeneration ||
+          hiddenOutputRestorePtyId !== ptyId ||
+          !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+        ) {
+          return
+        }
+        abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId)
+      }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
+    }
+
+    function abandonHiddenOutputRestoreAndDrainPendingForeground(expectedPtyId: string): void {
+      if (transport.getPtyId() !== expectedPtyId || hiddenOutputRestorePtyId !== expectedPtyId) {
+        resetHiddenOutputRestoreIfPtyChanged()
+        return
+      }
+      const pendingChunks = hiddenOutputRestorePendingOverflow
+        ? []
+        : hiddenOutputRestorePendingChunks.slice()
+      const hadPendingOverflow = hiddenOutputRestorePendingOverflow
+      hiddenOutputRestoreGeneration += 1
+      hiddenOutputRestoreInFlight = null
+      hiddenOutputRestoreNeeded = false
+      hiddenOutputRestorePtyId = null
+      hiddenOutputRestorePendingChunks = []
+      hiddenOutputRestorePendingChars = 0
+      hiddenOutputRestorePendingOverflow = false
+      hiddenOutputRestoreFreshSnapshotNeeded = false
+      hiddenOutputRestoreRetryDeferred = false
+      hiddenOutputRestoreScheduled = false
+      hiddenStartupRendererQueryPending = ''
+      hiddenRendererStateDirty = false
+      cancelScheduledHiddenOutputRestore(pane.terminal)
+      clearHiddenOutputRestoreDeferredRetryTimer()
+      clearHiddenOutputRestoreForegroundDeadlineTimer()
+      hiddenOutputRestoreDeferredRetryAttempts = 0
+
+      writeRestoreUnavailableWarning()
+      if (hadPendingOverflow) {
+        return
+      }
+      const pendingData = pendingChunks.map((chunk) => chunk.data).join('')
+      if (pendingData) {
+        writePtyOutputToXterm(pendingData, true)
+      }
+    }
+
     function scheduleHiddenOutputRestoreDeferredRetry(): void {
       if (
         disposed ||
@@ -2749,8 +3524,13 @@ export function connectPanePty(
         return
       }
       if (hiddenOutputRestoreDeferredRetryAttempts >= HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX) {
-        clearHiddenOutputRestoreState()
-        writeRestoreUnavailableWarning()
+        const ptyId = hiddenOutputRestorePtyId
+        if (ptyId !== null) {
+          abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId)
+        } else {
+          clearHiddenOutputRestoreState()
+          writeRestoreUnavailableWarning()
+        }
         return
       }
       hiddenOutputRestoreDeferredRetryAttempts += 1
@@ -2803,53 +3583,43 @@ export function connectPanePty(
       })
     }
 
-    function captureScrollStateForSnapshotReplay(): ScrollState | null {
-      const buf = pane.terminal.buffer?.active
-      if (!buf) {
-        return null
-      }
-      const viewportY = buf.viewportY
-      const baseY = buf.baseY
-      if (!Number.isFinite(viewportY) || !Number.isFinite(baseY)) {
-        return null
-      }
-      return {
-        bufferType: buf.type,
-        wasAtBottom: viewportY >= baseY,
-        viewportY,
-        baseY
-      }
-    }
-
-    function restoreScrollStateAfterSnapshotReplay(state: ScrollState | null): void {
-      if (!state || state.wasAtBottom) {
-        return
-      }
-      // Why: hidden-backlog replay clears xterm after visibility scroll restore;
-      // re-apply a scrolled-up viewport so recovery does not jump to bottom.
-      restoreScrollStateAfterLayout(pane.terminal, state)
-    }
-
     function applyMainBufferSnapshot(snapshot: {
       data: string
       cols: number
       rows: number
       seq?: number
+      alternateScreen?: boolean
     }): void {
-      const scrollState = captureScrollStateForSnapshotReplay()
-      discardTerminalOutput(pane.terminal)
-      if (
+      const scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+      const colsBeforeReplay = pane.terminal.cols
+      const rowsBeforeReplay = pane.terminal.rows
+      const hasSnapshotDimensions =
         Number.isFinite(snapshot.cols) &&
         Number.isFinite(snapshot.rows) &&
         snapshot.cols > 0 &&
-        snapshot.rows > 0 &&
+        snapshot.rows > 0
+      discardTerminalOutput(pane.terminal)
+      if (
+        hasSnapshotDimensions &&
         (pane.terminal.cols !== snapshot.cols || pane.terminal.rows !== snapshot.rows)
       ) {
         // Why: serialized terminal snapshots encode layout at their source
         // dimensions. Replay at those dimensions first, then fit back below.
-        pane.terminal.resize(snapshot.cols, snapshot.rows)
+        // This xterm-only resize must not SIGWINCH the live TUI.
+        suppressSnapshotReplayPtyResize = true
+        try {
+          pane.terminal.resize(snapshot.cols, snapshot.rows)
+        } finally {
+          suppressSnapshotReplayPtyResize = false
+        }
       }
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      if (!snapshot.alternateScreen) {
+        // Why: this clear (incl. \x1b[3J) wipes xterm's scrollback. Alt-screen
+        // TUIs (Claude Code, vim) keep their scroll history in xterm, so
+        // clearing on restore loses scroll-up after a hidden->visible return.
+        // Mirrors the attach-time guard in pty-transport.ts.
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      }
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       hiddenRendererStateDirty = false
@@ -2857,13 +3627,22 @@ export function connectPanePty(
       const currentPtyId = transport.getPtyId()
       if (currentPtyId && !getFitOverrideForPty(currentPtyId)) {
         safeFit(pane)
-        transport.resize(pane.terminal.cols, pane.terminal.rows)
-        if (!isRemoteRuntimePtyId(currentPtyId)) {
-          window.api.pty.signal(currentPtyId, 'SIGWINCH')
+        const replayChangedDimensions = hasSnapshotDimensions
+          ? pane.terminal.cols !== snapshot.cols || pane.terminal.rows !== snapshot.rows
+          : pane.terminal.cols !== colsBeforeReplay || pane.terminal.rows !== rowsBeforeReplay
+        if (replayChangedDimensions && isRendererPtyResizeAuthoritative()) {
+          transport.resize(pane.terminal.cols, pane.terminal.rows)
+          if (!isRemoteRuntimePtyId(currentPtyId)) {
+            // Why: redundant SIGWINCH can make alternate-screen TUIs rebuild
+            // their internal scroll viewport to the top on tab return.
+            window.api.pty.signal(currentPtyId, 'SIGWINCH')
+          }
         }
         scheduleReattachIdleAgentCursorReset()
       }
-      restoreScrollStateAfterSnapshotReplay(scrollState)
+      // Why: snapshot replay clears and rebuilds xterm state; re-apply the
+      // user's scroll intent once so hidden catch-up cannot repin the viewport.
+      enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
     }
 
     function requestHiddenOutputRestoreIfNeeded(opts?: { bypassScheduler?: boolean }): boolean {
@@ -2877,6 +3656,7 @@ export function connectPanePty(
       }
       hiddenOutputRestorePtyId = ptyId
       if (hiddenOutputRestoreInFlight) {
+        armHiddenOutputRestoreForegroundDeadline()
         return true
       }
       if (!opts?.bypassScheduler) {
@@ -2950,14 +3730,15 @@ export function connectPanePty(
           if (disposed) {
             return
           }
-          if (
-            hiddenOutputRestoreGeneration !== restoreGeneration ||
-            transport.getPtyId() !== currentPtyId ||
-            hiddenOutputRestorePtyId !== currentPtyId
-          ) {
+          const restoreGenerationChanged = hiddenOutputRestoreGeneration !== restoreGeneration
+          const restorePtyChanged =
+            transport.getPtyId() !== currentPtyId || hiddenOutputRestorePtyId !== currentPtyId
+          if (restoreGenerationChanged || restorePtyChanged) {
             // Why: the snapshot belongs to the requested PTY; after reattach,
             // replaying it would show stale/cleared output in the new terminal.
-            if (hiddenOutputRestorePtyId === currentPtyId) {
+            // A stale generation may be an abandoned timeout while a newer
+            // restore for the same PTY owns the current hidden-recovery state.
+            if (restorePtyChanged && hiddenOutputRestorePtyId === currentPtyId) {
               clearHiddenOutputRestoreState()
             }
             return
@@ -2976,6 +3757,7 @@ export function connectPanePty(
           if (drainPendingLiveChunksAfterSnapshot(snapshot.seq) && !needsFreshSnapshot) {
             hiddenOutputRestoreNeeded = false
             hiddenOutputRestorePtyId = null
+            clearHiddenOutputRestoreForegroundDeadlineTimer()
             return
           }
           if (!shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
@@ -2987,10 +3769,16 @@ export function connectPanePty(
           }
           hiddenOutputRestoreNeeded = true
         }
-      })().finally(() => {
-        hiddenOutputRestoreInFlight = null
+      })()
+      const hiddenOutputRestoreTask = hiddenOutputRestoreInFlight
+      let trackedHiddenOutputRestore: Promise<void>
+      trackedHiddenOutputRestore = hiddenOutputRestoreTask.finally(() => {
+        if (hiddenOutputRestoreInFlight === trackedHiddenOutputRestore) {
+          hiddenOutputRestoreInFlight = null
+        }
         if (hiddenOutputRestorePendingChunks.length > 0 || hiddenOutputRestorePendingOverflow) {
           hiddenOutputRestoreNeeded = true
+          armHiddenOutputRestoreForegroundDeadline()
         }
         if (
           !hiddenOutputRestoreRetryDeferred &&
@@ -3000,6 +3788,7 @@ export function connectPanePty(
           requestHiddenOutputRestoreIfNeeded()
         }
       })
+      hiddenOutputRestoreInFlight = trackedHiddenOutputRestore
       return true
     }
 
@@ -3064,6 +3853,13 @@ export function connectPanePty(
           hiddenStartupRendererQuery: true
         })
       }
+      if (pendingForegroundQuery?.oscColorQueryData) {
+        sendTerminalOscColorQueryReplies(
+          pendingForegroundQuery.oscColorQueryData,
+          pane.terminal,
+          (reply) => transport.sendInput(reply)
+        )
+      }
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
       if (shouldSkipHiddenRendererOutput(foreground, data)) {
@@ -3101,7 +3897,8 @@ export function connectPanePty(
 
     const handleReattachResult = (
       result: PtyConnectResult | string | void,
-      staleSessionId?: string | null
+      staleSessionId?: string | null,
+      coldRestoreStartup?: ColdRestoreAgentResumeStartup | null
     ): void => {
       if (disposed) {
         return
@@ -3121,24 +3918,34 @@ export function connectPanePty(
         })
         // Why: a stale restored daemon/SSH session can fail reattach after the
         // pane is mounted. Do not leave xterm alive without a backing PTY.
-        deps.syncPanePtyLayoutBinding(pane.id, null)
+        if (staleSessionId) {
+          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
+        } else {
+          deps.syncPanePtyLayoutBinding(pane.id, null)
+        }
         if (staleSessionId) {
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
-        prepareColdRestoreAgentResumeCommand()
-        startFreshSpawn()
+        startFreshColdRestoreAgentResume(coldRestoreStartup)
         return
       }
+      registerEffectiveLaunchConfig(connectResult?.launchConfig, {
+        ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
+        ...(coldRestoreStartup ? { launchAgent: coldRestoreStartup.agent } : {})
+      })
       if (connectResult?.sessionExpired) {
-        deps.syncPanePtyLayoutBinding(pane.id, null)
+        if (staleSessionId) {
+          deps.clearExitedPanePtyLayoutBinding(pane.id, staleSessionId)
+        } else {
+          deps.syncPanePtyLayoutBinding(pane.id, null)
+        }
         if (staleSessionId) {
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
         // Why: SSH sleep/reconnect can invalidate the relay-held PTY while
         // leaving the tab mounted. Replace the dead lease in-place instead of
         // stranding the pane behind a stale expired-session overlay.
-        prepareColdRestoreAgentResumeCommand()
-        startFreshSpawn()
+        startFreshColdRestoreAgentResume(coldRestoreStartup)
         return
       }
       setPanePtyFitBinding(ptyId)
@@ -3199,7 +4006,14 @@ export function connectPanePty(
         // land in the new shell's stdin. See replay-guard.ts.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.coldRestore.scrollback)
-        const didPrepareResume = prepareColdRestoreAgentResumeCommand()
+        const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
+        const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
+        if (didPrepareResume) {
+          if (preparedStartup?.hasSleepingRecord) {
+            showSessionRestoredBanner()
+          }
+          clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+        }
         // Cold-restore means the daemon lost the session and spawned a
         // fresh shell — no TUI is consuming the mode-setting bytes that a
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
@@ -3208,7 +4022,7 @@ export function connectPanePty(
         if (!isRemoteRuntimePtyId(ptyId)) {
           window.api.pty.ackColdRestore(ptyId)
         }
-        if (didPrepareResume) {
+        if (didPrepareResume && !coldRestoreStartup) {
           schedulePendingStartupCommandDelivery()
         }
       }
@@ -3393,6 +4207,7 @@ export function connectPanePty(
                 ? Promise.resolve(null)
                 : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
             let expiredReattachError = false
+            const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
             const reattachPromise = transport.connect({
@@ -3400,6 +4215,17 @@ export function connectPanePty(
               cols,
               rows,
               sessionId: pendingSessionId,
+              ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
+              ...(coldRestoreStartup?.env
+                ? { env: mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
+                : {}),
+              ...(coldRestoreStartup?.launchConfig
+                ? { launchConfig: coldRestoreStartup.launchConfig }
+                : {}),
+              ...(coldRestoreStartup?.launchToken
+                ? { launchToken: coldRestoreStartup.launchToken }
+                : {}),
+              ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
               callbacks: {
                 onData: dataCallback,
                 onReplayData: replayDataCallback,
@@ -3431,13 +4257,12 @@ export function connectPanePty(
                   if (disposed) {
                     return
                   }
-                  deps.syncPanePtyLayoutBinding(pane.id, null)
+                  deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  prepareColdRestoreAgentResumeCommand()
-                  startFreshSpawn()
+                  startFreshColdRestoreAgentResume(coldRestoreStartup)
                   return
                 }
-                handleReattachResult(result, pendingSessionId)
+                handleReattachResult(result, pendingSessionId, coldRestoreStartup)
                 const gen = await preSignalPromise
                 if (typeof gen === 'number') {
                   if (!isRemoteRuntimePtyId(pendingSessionId)) {
@@ -3455,17 +4280,15 @@ export function connectPanePty(
                   return
                 }
                 if (isSshSessionExpiredError(err)) {
-                  deps.syncPanePtyLayoutBinding(pane.id, null)
+                  deps.clearExitedPanePtyLayoutBinding(pane.id, pendingSessionId)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
-                  prepareColdRestoreAgentResumeCommand()
-                  startFreshSpawn()
+                  startFreshColdRestoreAgentResume(coldRestoreStartup)
                   return
                 }
-                prepareColdRestoreAgentResumeCommand()
-                startFreshSpawn()
+                startFreshColdRestoreAgentResume(coldRestoreStartup)
               })
           } else {
-            startFreshSpawn()
+            startFreshColdRestoreAgentResume()
           }
         })()
         return
@@ -3483,7 +4306,7 @@ export function connectPanePty(
     const existingPtyId = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
       (t) => t.id === deps.tabId
     )?.ptyId
-    const hasSleepingAgentSession = Boolean(storeSnapshot.sleepingAgentSessionsByPaneKey[cacheKey])
+    const hasSleepingAgentSession = Boolean(getSleepingRecordForPane(storeSnapshot))
 
     const restoredSessionId = restoredPtyId ?? null
     const sleptRemoteRuntimeSessionId =
@@ -3506,10 +4329,12 @@ export function connectPanePty(
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    const sleptRemoteColdRestoreStartup = sleptRemoteRuntimeSessionId
+      ? buildColdRestoreAgentResumeStartup()
+      : null
     if (sleptRemoteRuntimeSessionId) {
       deps.syncPanePtyLayoutBinding(pane.id, null)
       deps.clearTabPtyId(deps.tabId, sleptRemoteRuntimeSessionId)
-      prepareColdRestoreAgentResumeCommand()
     }
     const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[deps.tabId] ?? []
     const candidateHasEagerBuffer = Boolean(
@@ -3563,11 +4388,21 @@ export function connectPanePty(
           : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
 
       let expiredReattachError = false
+      const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
       const reattachPromise = transport.connect({
         url: '',
         cols,
         rows,
         sessionId: deferredReattachSessionId,
+        ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
+        ...(coldRestoreStartup?.env
+          ? { env: mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
+          : {}),
+        ...(coldRestoreStartup?.launchConfig
+          ? { launchConfig: coldRestoreStartup.launchConfig }
+          : {}),
+        ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
+        ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
@@ -3591,13 +4426,12 @@ export function connectPanePty(
             if (disposed) {
               return
             }
-            deps.syncPanePtyLayoutBinding(pane.id, null)
+            deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
-            prepareColdRestoreAgentResumeCommand()
-            startFreshSpawn()
+            startFreshColdRestoreAgentResume(coldRestoreStartup)
             return
           }
-          handleReattachResult(result, deferredReattachSessionId)
+          handleReattachResult(result, deferredReattachSessionId, coldRestoreStartup)
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
             if (!isRemoteRuntimePtyId(deferredReattachSessionId)) {
@@ -3619,16 +4453,14 @@ export function connectPanePty(
             ptyId: deferredReattachSessionId,
             reason: message
           })
-          deps.syncPanePtyLayoutBinding(pane.id, null)
+          deps.clearExitedPanePtyLayoutBinding(pane.id, deferredReattachSessionId)
           deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           if (connectionId && isSshSessionExpiredError(err)) {
-            prepareColdRestoreAgentResumeCommand()
-            startFreshSpawn()
+            startFreshColdRestoreAgentResume(coldRestoreStartup)
             return
           }
           reportError(message)
-          prepareColdRestoreAgentResumeCommand()
-          startFreshSpawn()
+          startFreshColdRestoreAgentResume(coldRestoreStartup)
         })
     } else if (detachedRemoteLeafPtyId || detachedLivePtyId || eagerLivePtyId) {
       // Why: mirrored web terminal layouts mount one pane per host leaf.
@@ -3662,9 +4494,7 @@ export function connectPanePty(
             onError: reportError
           }
         })
-        deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
-        deps.updateTabPtyId(deps.tabId, attachPtyId)
-        agentCompletionCoordinator.startProcessTracking()
+        bindActivePanePty(attachPtyId, { updateTabPtyId: 'if-missing' })
         if (attachPtyId === eagerLivePtyId) {
           registerPaneSerializerFor(attachPtyId)
         }
@@ -3697,14 +4527,13 @@ export function connectPanePty(
                   `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
                 )
               }
-              startFreshSpawn()
+              if (sleptRemoteColdRestoreStartup || hasSleepingAgentSession) {
+                startFreshColdRestoreAgentResume(sleptRemoteColdRestoreStartup ?? undefined)
+              } else {
+                startFreshSpawn()
+              }
               return
             }
-            // Why: this attach path reuses a PTY spawned by an earlier mount.
-            // Persist the binding here so tab-level PTY ownership stays correct
-            // even if no later spawn event or layout snapshot runs.
-            deps.syncPanePtyLayoutBinding(pane.id, spawnedPtyId)
-            deps.updateTabPtyId(deps.tabId, spawnedPtyId)
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
             transport.attach({
@@ -3717,27 +4546,129 @@ export function connectPanePty(
                 onError: reportError
               }
             })
-            // Why: attach sets the transport's PTY id; starting process
-            // tracking before this point no-ops because getPtyId() is empty.
-            agentCompletionCoordinator.startProcessTracking()
+            // Why: this path reuses a PTY spawned by an earlier mount, so no
+            // later spawn event will bind this remounted pane's DOM/container.
+            bindActivePanePty(spawnedPtyId, { updateTabPtyId: 'if-missing' })
           })
           .catch((err) => {
             reportError(err instanceof Error ? err.message : String(err))
           })
       } else {
         recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
-        startFreshSpawn()
+        if (sleptRemoteColdRestoreStartup || hasSleepingAgentSession) {
+          startFreshColdRestoreAgentResume(sleptRemoteColdRestoreStartup ?? undefined)
+        } else {
+          startFreshSpawn()
+        }
       }
     }
     scheduleRuntimeGraphSync()
-  })
+  }
+
+  // Why: Wayland/CI compositors can keep timers and CDP responsive while the
+  // next rAF never arrives; the terminal must still start its PTY once.
+  connectFallbackTimer = setTimeout(runDeferredConnect, 250)
+  connectFrame = requestAnimationFrame(runDeferredConnect)
+
+  // Why: on visibility resume a pane may still be bound to a daemon session
+  // reaped while hidden (the missed-exit defect). Route it through the SAME
+  // teardown a real onExit runs. Re-validate identity at apply time so a
+  // reattach racing the listSessions snapshot is never clobbered, and respect
+  // the remote/SSH guards. Suppression semantics come for free via onExit
+  // (which consults consumeSuppressedPtyExit) plus the per-ptyId guard above.
+  const reconcileIfSessionDead = (
+    liveSessionIds: Set<string>,
+    snapshotRequestedAt?: number
+  ): void => {
+    if (disposed) {
+      return
+    }
+    const currentPtyId = transport.getPtyId()
+    if (
+      !currentPtyId ||
+      // Why: the current ptyId's exit was already handled — onExit guards this
+      // too, but skipping here avoids a redundant shouldReconcile evaluation.
+      handledExitPtyId === currentPtyId ||
+      !shouldReconcileDeadSession({
+        ptyId: currentPtyId,
+        connectionId: transport.getConnectionId?.(),
+        liveSessionIds,
+        ptyBoundAt: activePanePtyBindingBoundAt,
+        snapshotRequestedAt
+      })
+    ) {
+      return
+    }
+    onExit(currentPtyId)
+  }
+
+  // Why (perf + startup correctness): listSessions() is authoritative only
+  // after a real visibility resume. Fresh PTY startup can briefly lag the daemon
+  // listing, so newborn terminals start disarmed and noteVisibilityResume grants
+  // exactly one first-input liveness probe for the next resume window.
+  let livenessRecheckArmedForResume = false
+
+  // Why (Defect #2 defense-in-depth): in the broken state sendInput returns
+  // true (connected/ptyId still set) so the dropped keystroke is invisible to
+  // the renderer. A fire-and-forget liveness re-check on the FIRST input after
+  // a resume cleans the pane up promptly instead of waiting for the resume
+  // pass alone. It REDUCES but cannot eliminate the first-keystroke drop (that
+  // byte is already gone daemon-side).
+  const recheckLivenessAfterInput = (): void => {
+    if (disposed || !livenessRecheckArmedForResume) {
+      return
+    }
+    // Why: consume the resume token before inspecting provider details so SSH,
+    // remote-runtime, and concurrent keystrokes cannot retry this hot-path check
+    // until the lifecycle reports another true hidden-to-visible resume.
+    livenessRecheckArmedForResume = false
+    const currentPtyId = transport.getPtyId()
+    const currentConnectionId = transport.getConnectionId?.()
+    if (
+      !currentPtyId ||
+      // Why: this ptyId's exit was already handled — nothing left to reconcile.
+      handledExitPtyId === currentPtyId ||
+      // Why: `remote:` web-runtime liveness is owned by the host snapshot, not
+      // listSessions; skip here so a remote pane's keystrokes never put a local
+      // daemon round-trip on the typing hot path (reconcile would no-op anyway).
+      isRemoteRuntimePtyId(currentPtyId) ||
+      (currentConnectionId !== null && currentConnectionId !== undefined)
+    ) {
+      return
+    }
+    // Why: capture request time before the round-trip so a pane that bound after
+    // this request is not torn down by its (pre-bind) stale snapshot.
+    const requestedAt = performance.now()
+    void window.api.pty
+      .listSessions()
+      .then((sessions) => {
+        reconcileIfSessionDead(new Set(sessions.map((session) => session.id)), requestedAt)
+      })
+      // Why: a rejected listing is "unknown" — never close a pane on it.
+      .catch(() => {})
+  }
 
   return {
     syncProcessTracking() {
       agentCompletionCoordinator.startProcessTracking()
     },
+    // Why: re-arm the once-per-resume input re-check when the pane becomes
+    // visible again. Called from the lifecycle visibility effect; the gate
+    // keeps the typing hot path off the listSessions IPC between resumes.
+    noteVisibilityResume() {
+      livenessRecheckArmedForResume = true
+      // Why: re-assert the PTY size on resume so a resize that was dropped while
+      // this pane was hidden self-heals on show, instead of waiting for a manual
+      // resize that may never change xterm's column count.
+      reassertPtySizeOnResume()
+    },
+    reconcileIfSessionDead,
     dispose() {
       disposed = true
+      // Why: the post-spawn reconcile polls across frames; cancel its pending
+      // rAF so a torn-down pane cannot keep fitting/resizing after disposal.
+      ptySizeReconcileHandle?.cancel()
+      ptySizeReconcileHandle = null
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }
@@ -3766,6 +4697,7 @@ export function connectPanePty(
       clearTerminalBellNotificationTimer()
       clearReattachIdleAgentCursorResetTimer()
       cleanupHiddenOutputRestoreDeferredRetry()
+      cleanupHiddenOutputRestoreForegroundDeadline()
       unregisterBacklogRecovery?.()
       unregisterBacklogRecovery = null
       unregisterDocumentVisibilityRecovery?.()
@@ -3782,8 +4714,11 @@ export function connectPanePty(
         // before its deferred PTY attach/spawn work runs. Cancel that queued
         // frame so stale bindings cannot reattach the PTY and steal the live
         // handler wiring from the current pane.
-        cancelAnimationFrame(connectFrame)
-        connectFrame = null
+        cancelScheduledConnectFrame()
+      }
+      if (connectFallbackTimer !== null) {
+        clearTimeout(connectFallbackTimer)
+        connectFallbackTimer = null
       }
       onDataDisposable.dispose()
       terminalCapabilityRepliesDisposable.dispose()

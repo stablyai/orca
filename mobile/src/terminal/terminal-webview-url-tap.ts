@@ -4,6 +4,7 @@ export const TERMINAL_HTTP_URL_REGEX_SOURCE =
   String.raw`]*[^\s"':,.!?{}|\\^~[\]` +
   '`' +
   String.raw`()<>]`
+export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
 
 export function findUrlAtColumn(lineText: string, col: number): string | null {
   if (typeof lineText !== 'string' || lineText.length === 0) {
@@ -14,7 +15,9 @@ export function findUrlAtColumn(lineText: string, col: number): string | null {
   while ((match = re.exec(lineText)) !== null) {
     const start = match.index
     const end = start + match[0].length
-    if (col >= start && col < end) {
+    // Why: desktop rejects overlong terminal URL candidates before opening;
+    // mobile taps should preserve the same safety bound.
+    if (match[0].length <= TERMINAL_HTTP_URL_MAX_LENGTH && col >= start && col < end) {
       return match[0]
     }
     // Why: protect the injected loop if the regex ever changes to allow empties.
@@ -27,13 +30,14 @@ export function findUrlAtColumn(lineText: string, col: number): string | null {
 
 export const URL_TAP_WEBVIEW_JS = `
   var URL_TAP_RE_SOURCE = ${JSON.stringify(TERMINAL_HTTP_URL_REGEX_SOURCE)};
+  var URL_TAP_MAX_LENGTH = ${TERMINAL_HTTP_URL_MAX_LENGTH};
   function findUrlAtColumn(lineText, col) {
     if (typeof lineText !== 'string' || lineText.length === 0) return null;
     var re = new RegExp(URL_TAP_RE_SOURCE, 'gi');
     var match;
     while ((match = re.exec(lineText)) !== null) {
       var end = match.index + match[0].length;
-      if (col >= match.index && col < end) return match[0];
+      if (match[0].length <= URL_TAP_MAX_LENGTH && col >= match.index && col < end) return match[0];
       if (match[0].length === 0) re.lastIndex++;
     }
     return null;

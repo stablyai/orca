@@ -8,6 +8,7 @@
  */
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
+import { warmPwshAvailabilityCache } from '../pwsh'
 
 export function parseArgs(argv: string[]): { socketPath: string; tokenPath: string } {
   let socketPath = ''
@@ -32,6 +33,7 @@ export function parseArgs(argv: string[]): { socketPath: string; tokenPath: stri
 
 async function main(): Promise<void> {
   const { socketPath, tokenPath } = parseArgs(process.argv.slice(2))
+  void warmPwshAvailabilityCache()
 
   // Why: node-pty can throw a C++ Napi::Error that escapes all JS try/catch
   // blocks (e.g. writing to a PTY whose fd was closed between the native

@@ -402,6 +402,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       originWhitelist={['*']}
       javaScriptEnabled
       scrollEnabled={false}
+      // Why: Android parent gesture containers can intercept vertical drags
+      // before the injected xterm scroll router sees them.
+      nestedScrollEnabled
       scalesPageToFit={false}
       // Why: Android WebView defaults textZoom to the system font scale, inflating
       // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.

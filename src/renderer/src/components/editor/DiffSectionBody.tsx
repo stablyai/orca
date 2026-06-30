@@ -1,4 +1,5 @@
-import { lazy, type RefObject } from 'react'
+import type { RefObject } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
@@ -8,6 +9,7 @@ import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-opt
 import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
 import { LargeDiffFallback } from './LargeDiffFallback'
+import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -33,6 +35,7 @@ type DiffSectionBodyProps = {
   modelPathBase: string
   isEditable: boolean
   diffEditorFontSize: number
+  diffWordWrap?: boolean
   terminalFontFamily?: string
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
@@ -57,6 +60,7 @@ export function DiffSectionBody({
   modelPathBase,
   isEditable,
   diffEditorFontSize,
+  diffWordWrap,
   terminalFontFamily,
   onCancelComment,
   onSubmitComment,
@@ -189,6 +193,7 @@ export function DiffSectionBody({
             fontSize: diffEditorFontSize,
             fontFamily: terminalFontFamily || 'monospace',
             lineNumbers: 'on',
+            ...buildDiffEditorWordWrapOptions(diffWordWrap),
             automaticLayout: true,
             renderOverviewRuler: false,
             scrollbar: combinedDiffSectionScrollbarOptions,

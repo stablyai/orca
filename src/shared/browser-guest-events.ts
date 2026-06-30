@@ -22,15 +22,20 @@ export type BrowserDownloadRequestedEvent = {
   filename: string
   totalBytes: number | null
   mimeType: string | null
+  savePath: string
+  status: 'downloading'
 }
 
 export type BrowserDownloadProgressEvent = {
+  browserPageId?: string
   downloadId: string
   receivedBytes: number
   totalBytes: number | null
+  state: 'progressing' | 'interrupted' | null
 }
 
 export type BrowserDownloadFinishedEvent = {
+  browserPageId?: string
   downloadId: string
   status: 'completed' | 'canceled' | 'failed'
   savePath: string | null

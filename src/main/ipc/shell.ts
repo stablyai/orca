@@ -1,14 +1,17 @@
 import { ipcMain, shell, dialog } from 'electron'
 import { spawn } from 'node:child_process'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
-import { basename, extname, isAbsolute, normalize, win32 } from 'node:path'
+import { basename, extname, isAbsolute, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ShellOpenLocalPathResult } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
-import { resolveCliCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
+import {
+  EXTERNAL_EDITOR_CLI_COMMAND,
+  resolveExternalEditorLaunchSpec
+} from '../external-editor-launch'
 
-export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
+export { EXTERNAL_EDITOR_CLI_COMMAND }
 
 const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png'
@@ -51,37 +54,20 @@ async function openInFileManager(pathValue: string): Promise<ShellOpenLocalPathR
   }
 }
 
-function resolveExternalEditorCommand(command?: string): string {
-  const trimmed = command?.trim()
-  return resolveCliCommand(trimmed || EXTERNAL_EDITOR_CLI_COMMAND)
-}
-
-function getLauncherBaseName(command: string): string {
-  const name = command.includes('\\') ? win32.basename(command) : basename(command)
-  return name.replace(/\.(?:cmd|exe|bat)$/i, '').toLowerCase()
-}
-
-function buildExternalEditorArgs(editorCommand: string, pathValue: string): string[] {
-  if (getLauncherBaseName(editorCommand) === 'cursor') {
-    // Why: Cursor can route bare folder launches through the last active
-    // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
-    return ['--new-window', pathValue]
-  }
-  return [pathValue]
-}
-
 async function launchExternalEditor(pathValue: string, command?: string): Promise<void> {
-  const editorCommand = resolveExternalEditorCommand(command)
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
-    editorCommand,
-    buildExternalEditorArgs(editorCommand, pathValue)
-  )
+  const launchSpec = resolveExternalEditorLaunchSpec(command, pathValue)
+  const { spawnCmd, spawnArgs } =
+    launchSpec.kind === 'executable'
+      ? getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs)
+      : { spawnCmd: launchSpec.spawnCmd, spawnArgs: launchSpec.spawnArgs }
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(spawnCmd, spawnArgs, {
       detached: true,
       stdio: 'ignore',
-      windowsHide: true
+      // Why: terminal editors such as nvim need a visible console on Windows;
+      // GUI editor launches stay hidden to avoid command-shim flashes.
+      windowsHide: launchSpec.hideWindowsConsole
     })
     let settled = false
 
@@ -142,8 +128,10 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
 }
 
 export function registerShellHandlers(): void {
-  ipcMain.handle('shell:openPath', (_event, path: string) => {
-    shell.showItemInFolder(path)
+  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
+    // Why: keep the legacy fire-and-forget renderer contract while reusing the
+    // same absolute/existing path validation as the explicit file-manager API.
+    void (await openInFileManager(path))
   })
 
   ipcMain.handle(
@@ -217,7 +205,9 @@ export function registerShellHandlers(): void {
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        properties: ['openDirectory', 'createDirectory']
+        // Why: callers only need an existing folder grant; enabling native
+        // creation can leave typed prefix directories behind on macOS.
+        properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null

@@ -41,13 +41,14 @@ export function canRerunAutomationRun({
 export function getAutomationRunViewState({
   run,
   workspaceExists,
-  terminalTabExists
+  terminalTargetExists
 }: {
   run: AutomationRun
   workspaceExists: boolean
-  terminalTabExists: boolean
+  terminalTargetExists: boolean
 }): AutomationRunViewState {
-  if (run.workspaceId && workspaceExists && run.terminalSessionId && terminalTabExists) {
+  const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
+  if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',
       actionLabel: 'View run',
@@ -56,13 +57,20 @@ export function getAutomationRunViewState({
     }
   }
 
+  if (run.workspaceId && workspaceExists && hasTerminalIdentity) {
+    return {
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run terminal is unavailable.',
+      canOpen: true
+    }
+  }
+
   if (run.workspaceId && workspaceExists) {
     return {
       availability: 'workspace',
       actionLabel: 'Resume workspace',
-      statusLabel: run.terminalSessionId
-        ? 'Workspace is available; original terminal is closed.'
-        : 'Workspace is available.',
+      statusLabel: 'Workspace is available.',
       canOpen: true
     }
   }

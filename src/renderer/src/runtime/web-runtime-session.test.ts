@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
+  activateWebRuntimeSessionWorktree,
   activateWebRuntimeSessionTab,
   closeWebRuntimeTerminal,
   closeWebRuntimeSessionTab,
@@ -61,6 +62,55 @@ function makeSnapshot(): RuntimeMobileSessionTabsResult {
     tabs: []
   }
 }
+
+describe('activateWebRuntimeSessionWorktree', () => {
+  beforeEach(() => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('can ask the host to activate session surfaces without notifying desktop clients', async () => {
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'activate',
+      ok: true,
+      result: { repoId: 'repo', worktreeId: WORKTREE_ID, activated: true }
+    })
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      activateWebRuntimeSessionWorktree({
+        worktreeId: WORKTREE_ID,
+        notifyDesktop: false
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: ENVIRONMENT_ID,
+      method: 'worktree.activate',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        notifyClients: false
+      },
+      timeoutMs: 15_000
+    })
+  })
+})
 
 describe('createWebRuntimeSessionBrowserTab', () => {
   beforeEach(() => {
@@ -430,7 +480,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       })
     ).resolves.toBe(true)
@@ -443,7 +499,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'host-tab-1::leaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
+        launchConfig: {
+          agentArgs: '--model gpt-5',
+          agentEnv: { CODEX_PROFILE: 'captured' }
+        },
+        launchAgent: 'codex',
         activate: true
       },
       timeoutMs: 15_000
@@ -1023,6 +1085,38 @@ describe('setWebRuntimeTabProps', () => {
         worktree: `id:${WORKTREE_ID}`,
         tabId: 'host-tab-1',
         isPinned: true
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('maps mirrored browser/editor unified ids before setting host tab props', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)
+    mocks.getState.mockReturnValue({})
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) =>
+        args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
+    )
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    expect(
+      setWebRuntimeTabProps({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        color: '#3b82f6'
+      })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.setTabProps',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        tabId: 'host-browser-unified',
+        color: '#3b82f6'
       },
       timeoutMs: 15_000
     })

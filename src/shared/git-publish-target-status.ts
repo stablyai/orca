@@ -1,5 +1,6 @@
 import type { GitUpstreamStatus } from './git-status-types'
 import type { GitPushTarget } from './types'
+import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
 
 export type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
@@ -47,27 +48,24 @@ export async function getPublishTargetStatus(
   }
 
   const { stdout } = await runGit(['rev-list', '--left-right', '--count', `HEAD...${remoteRef}`])
-  const tokens = stdout.trim().split(/\s+/)
-  if (tokens.length !== 2) {
+  const counts = parseGitRevListAheadBehindCounts(stdout)
+  if (counts.status === 'unexpected-field-count') {
     throw new Error(`Unexpected git rev-list output: ${JSON.stringify(stdout)}`)
   }
-
-  const ahead = Number.parseInt(tokens[0]!, 10)
-  const behind = Number.parseInt(tokens[1]!, 10)
-  if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
+  if (counts.status === 'unparseable-counts') {
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }
 
   const behindCommitsArePatchEquivalent =
-    ahead > 0 && behind > 0 && getBehindCommitsArePatchEquivalent
+    counts.ahead > 0 && counts.behind > 0 && getBehindCommitsArePatchEquivalent
       ? await getBehindCommitsArePatchEquivalent(remoteRef)
       : undefined
 
   return {
     hasUpstream: true,
     upstreamName,
-    ahead,
-    behind,
+    ahead: counts.ahead,
+    behind: counts.behind,
     ...(behindCommitsArePatchEquivalent !== undefined ? { behindCommitsArePatchEquivalent } : {})
   }
 }

@@ -41,6 +41,17 @@ function getProjectProviderIdentity(
     : null
 }
 
+function getProjectGitRemoteIdentity(
+  repo: Pick<Repo, 'gitRemoteIdentity'>
+): NonNullable<Repo['gitRemoteIdentity']> | null {
+  const identity = repo.gitRemoteIdentity
+  const canonicalKey =
+    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
+  const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
+  const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
+  return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
+}
+
 /** True when the repo resolves to a GitHub provider identity (via explicit
  *  upstream or a GitHub-sourced avatar icon). Used to scope GitHub-CLI setup
  *  prompts to users who actually have GitHub-backed projects. */
@@ -48,20 +59,29 @@ export function isGitHubBackedRepo(repo: Pick<Repo, 'upstream' | 'repoIcon'>): b
   return getProjectProviderIdentity(repo) !== null
 }
 
-export function getProjectIdentityKey(repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon'>): string {
+export function getProjectIdentityKey(
+  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): string {
   const identity = getProjectProviderIdentity(repo)
-  if (!identity) {
-    return `repo:${repo.id}`
+  if (identity) {
+    return `github:${normalizeIdentityPart(identity.owner)}/${normalizeIdentityPart(identity.repo)}`
   }
-  return `github:${normalizeIdentityPart(identity.owner)}/${normalizeIdentityPart(identity.repo)}`
+  const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
+  if (gitRemoteIdentity) {
+    return `git:${gitRemoteIdentity.canonicalKey}`
+  }
+  return `repo:${repo.id}`
 }
 
-function getProjectId(repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon'>): string {
+function getProjectId(
+  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): string {
   return getProjectIdentityKey(repo)
 }
 
 function createProjectFromRepo(repo: Repo, now: number): Project {
   const identity = getProjectProviderIdentity(repo)
+  const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   return {
     id: getProjectId(repo),
     displayName: repo.displayName,
@@ -69,6 +89,7 @@ function createProjectFromRepo(repo: Repo, now: number): Project {
     ...(repo.repoIcon !== undefined ? { repoIcon: repo.repoIcon } : {}),
     ...(repo.kind ? { kind: repo.kind } : {}),
     ...(identity ? { providerIdentity: identity } : {}),
+    ...(gitRemoteIdentity ? { gitRemoteIdentity } : {}),
     sourceRepoIds: [repo.id],
     createdAt: repo.addedAt || now,
     updatedAt: repo.addedAt || now

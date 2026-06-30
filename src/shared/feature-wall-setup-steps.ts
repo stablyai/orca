@@ -2,7 +2,6 @@ export type FeatureWallSetupStepId =
   | 'default-agent'
   | 'add-two-repos'
   | 'notifications'
-  | 'split-terminal'
   | 'two-worktrees'
   | 'browser'
   | 'task-sources'
@@ -17,7 +16,6 @@ export type FeatureWallSetupStep = {
 }
 
 export const FEATURE_WALL_SETUP_PARALLEL_WORK_STEP_IDS = [
-  'split-terminal',
   'two-worktrees',
   'browser'
 ] as const satisfies readonly FeatureWallSetupStepId[]
@@ -25,13 +23,6 @@ export const FEATURE_WALL_SETUP_PARALLEL_WORK_STEP_IDS = [
 export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
 
 export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
-  {
-    id: 'split-terminal',
-    name: 'Split a terminal',
-    subtitle: 'Split a terminal',
-    description:
-      'Split a terminal to run two things at once: two agents, an agent next to a dev server, or logs beside a shell.'
-  },
   {
     id: 'two-worktrees',
     name: 'Multi-task',

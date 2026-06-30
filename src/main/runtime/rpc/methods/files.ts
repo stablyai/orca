@@ -78,6 +78,15 @@ const FileWriteBase64Chunk = FileWriteBase64.extend({
   append: z.boolean().optional()
 })
 
+const FileReadChunk = FileOpen.extend({
+  offset: z.number().int().nonnegative(),
+  length: z
+    .number()
+    .int()
+    .positive()
+    .max(512 * 1024)
+})
+
 const FileRename = WorktreeSelector.extend({
   oldRelativePath: z
     .unknown()
@@ -174,6 +183,17 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.readChunk',
+    params: FileReadChunk,
+    handler: async (params, { runtime }) =>
+      runtime.readFileExplorerChunk(
+        params.worktree,
+        params.relativePath,
+        params.offset,
+        params.length
+      )
   }),
   defineMethod({
     name: 'files.readDir',

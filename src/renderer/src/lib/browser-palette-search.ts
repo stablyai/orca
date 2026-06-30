@@ -1,5 +1,6 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { MatchRange } from './worktree-palette-search'
 
 export type SearchableBrowserPage = {
@@ -29,6 +30,15 @@ export type BrowserPaletteSearchResult = {
   isCurrentPage: boolean
   isCurrentWorktree: boolean
   score: number
+}
+
+export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
+
+export function isBrowserPaletteQueryTooLarge(
+  query: string,
+  maxBytes = BROWSER_PALETTE_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
 function compareText(a: string, b: string): number {
@@ -104,7 +114,11 @@ export function searchBrowserPages(
   entries: SearchableBrowserPage[],
   query: string
 ): BrowserPaletteSearchResult[] {
-  const trimmedQuery = query.trim().toLowerCase()
+  if (isBrowserPaletteQueryTooLarge(query)) {
+    return []
+  }
+  const trimmed = query.trim()
+  const trimmedQuery = trimmed.toLowerCase()
   const results: BrowserPaletteSearchResult[] = []
 
   for (const entry of entries) {

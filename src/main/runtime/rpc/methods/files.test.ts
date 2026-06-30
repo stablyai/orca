@@ -338,6 +338,33 @@ describe('file RPC methods', () => {
     })
   })
 
+  it('reads a file chunk for a selected worktree', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      readFileExplorerChunk: vi.fn().mockResolvedValue({
+        contentBase64: 'YWJj',
+        bytesRead: 3,
+        eof: true
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.readChunk', {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 0,
+        length: 1024
+      })
+    )
+
+    expect(runtime.readFileExplorerChunk).toHaveBeenCalledWith('id:wt-1', 'archive.zip', 0, 1024)
+    expect(response).toMatchObject({
+      ok: true,
+      result: { contentBase64: 'YWJj', bytesRead: 3, eof: true }
+    })
+  })
+
   it('reads a file explorer directory for a selected worktree', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

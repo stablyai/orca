@@ -40,7 +40,8 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
     branch,
     state.settings,
     activeRepo.connectionId,
-    activeRepo.executionHostId
+    activeRepo.executionHostId,
+    true
   )
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     activeRepo.path,
@@ -48,7 +49,8 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
     state.settings,
     activeRepo.id,
     activeRepo.connectionId,
-    activeRepo.executionHostId
+    activeRepo.executionHostId,
+    true
   )
   const hostedReview = state.hostedReviewCache?.[hostedReviewCacheKey]?.data ?? null
   if (hostedReview && hostedReview.provider !== 'github') {

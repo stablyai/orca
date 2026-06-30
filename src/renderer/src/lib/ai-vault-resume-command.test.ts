@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-types'
 import {
   buildAiVaultResumeCommandForWorktree,
+  buildAiVaultResumeStartupForWorktree,
   getAiVaultResumePlatform
 } from './ai-vault-resume-command'
 
@@ -11,16 +13,28 @@ vi.mock('@/lib/new-workspace', () => ({
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
+type AiVaultResumeCommandState = Pick<
+  AppState,
+  | 'activeRepoId'
+  | 'activeWorktreeId'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'projects'
+  | 'repos'
+  | 'settings'
+  | 'worktreesByRepo'
+>
+
 function makeState(args: {
   worktreePath: string
   localWindowsRuntimePreference?: RuntimePreference
-}): Pick<
-  AppState,
-  'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
-> {
+  terminalWindowsShell?: string
+}): AiVaultResumeCommandState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    folderWorkspaces: [],
+    projectGroups: [],
     repos: [{ id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
     projects: [
       {
@@ -31,7 +45,12 @@ function makeState(args: {
           : {})
       }
     ],
-    settings: { localWindowsRuntimeDefault: { kind: 'windows-host' } },
+    settings: {
+      localWindowsRuntimeDefault: { kind: 'windows-host' },
+      ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
+      agentDefaultArgs: { claude: '', codex: '' },
+      agentDefaultEnv: { claude: {}, codex: {} }
+    },
     worktreesByRepo: {
       'repo-1': [
         {
@@ -41,14 +60,13 @@ function makeState(args: {
         }
       ]
     }
-  } as unknown as Pick<
-    AppState,
-    'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
-  >
+  } as unknown as AiVaultResumeCommandState
 }
 
 describe('ai vault resume command runtime', () => {
-  it('uses Windows command wrapping for Windows-host projects', () => {
+  it('queues a PowerShell-valid command for the default Windows shell', () => {
+    // Why: the queued command is typed into the live tab shell (default
+    // PowerShell), which mis-parses the cmd `""`-doubled wrapper (#6152).
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 
     expect(
@@ -62,7 +80,95 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
+    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
+  })
+
+  it('keeps the cmd wrapper when the configured Windows shell is cmd.exe', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude ""--resume"" ""session one"""')
+  })
+
+  it('queues a POSIX command for the Git Bash Windows shell', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'git-bash'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
+  })
+
+  it('keeps the cmd wrapper for the copy-to-clipboard command on Windows', () => {
+    // Regression guard: the copy path is self-contained for pasting into cmd.exe
+    // and must stay cmd-wrapped even though the queued path now follows the shell.
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'claude',
+        sessionId: 'session one',
+        cwd: 'C:\\Users\\alice\\repo',
+        platform: 'win32',
+        codexHome: null
+      })
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\alice\\repo"" && claude --resume ""session one"""')
+  })
+
+  it('uses configured agent defaults for resumable session history entries', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    state.settings = {
+      ...state.settings,
+      agentDefaultArgs: { claude: '--dangerously-skip-permissions --effort max' },
+      agentDefaultEnv: { claude: { ANTHROPIC_BASE_URL: 'https://claude.example.test' } }
+    } as never
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session-1',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toEqual({
+      command:
+        "cd '/home/alice/repo' && claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      launchConfig: {
+        agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
+        agentArgs: '--dangerously-skip-permissions --effort max',
+        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      }
+    })
   })
 
   it('uses POSIX command wrapping for Windows-path projects forced to WSL', () => {
@@ -83,7 +189,83 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd '/home/alice/repo' && claude --resume 'session one'")
+    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
+  })
+
+  it('uses POSIX command wrapping for SSH-owned worktrees on Windows clients', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
+  })
+
+  it('uses POSIX command wrapping for folder workspaces with their own SSH target', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    state.activeWorktreeId = 'folder:folder-1'
+    state.folderWorkspaces = [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'Platform',
+        folderPath: '/home/alice/platform',
+        connectionId: 'folder-ssh'
+      }
+    ] as never
+    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: null }] as never
+
+    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'folder:folder-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/platform',
+          codexHome: null
+        }
+      })
+    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
+  })
+
+  it('uses POSIX command wrapping for WSL UNC folder workspaces on Windows clients', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+    state.activeWorktreeId = 'folder:folder-1'
+    state.folderWorkspaces = [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'Platform',
+        folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
+      }
+    ] as never
+    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: 'local' }] as never
+
+    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'folder:folder-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/platform',
+          codexHome: null
+        }
+      })
+    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
   })
 
   it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {
@@ -92,5 +274,24 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
+  })
+
+  it('converts WSL UNC Codex homes before building Linux resume commands', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+        }
+      })
+    ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
   })
 })

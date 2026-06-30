@@ -43,4 +43,15 @@ describe('splitRepoReorderByHost', () => {
     })
     expect(groups).toEqual([{ hostId: 'local', orderedIds: ['a'] }])
   })
+
+  it('routes duplicate bare ids by occurrence in current repo order', () => {
+    const repos = [repo('same', 'local'), repo('same', 'runtime:env-1')]
+    const groups = splitRepoReorderByHost(['same', 'same'], repos, {
+      activeRuntimeEnvironmentId: null
+    })
+    expect(groups).toEqual([
+      { hostId: 'local', orderedIds: ['same'] },
+      { hostId: 'runtime:env-1', orderedIds: ['same'] }
+    ])
+  })
 })

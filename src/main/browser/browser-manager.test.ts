@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  appGetPathMock,
   shellOpenExternalMock,
   browserWindowFromWebContentsMock,
   menuBuildFromTemplateMock,
@@ -13,6 +14,7 @@ const {
   webContentsFromIdMock,
   screenGetCursorScreenPointMock
 } = vi.hoisted(() => ({
+  appGetPathMock: vi.fn(() => '/downloads'),
   shellOpenExternalMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
   menuBuildFromTemplateMock: vi.fn(),
@@ -26,6 +28,9 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    getPath: appGetPathMock
+  },
   BrowserWindow: {
     fromWebContents: browserWindowFromWebContentsMock
   },
@@ -46,8 +51,41 @@ import { browserManager } from './browser-manager'
 
 describe('browserManager', () => {
   const rendererWebContentsId = 5001
+  type DownloadItemHandlerState = 'progressing' | 'interrupted' | 'completed' | 'cancelled'
+  type DownloadItemHandler = (event: Electron.Event, state: DownloadItemHandlerState) => void
+
+  function createDownloadItem(
+    overrides: Partial<Electron.DownloadItem> = {}
+  ): Electron.DownloadItem {
+    return {
+      setSavePath: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+      cancel: vi.fn(),
+      getFilename: vi.fn(() => 'report.csv'),
+      getTotalBytes: vi.fn(() => 2048),
+      getMimeType: vi.fn(() => 'text/csv'),
+      getURL: vi.fn(() => 'https://example.com/report.csv'),
+      getReceivedBytes: vi.fn(() => 0),
+      ...overrides
+    } as unknown as Electron.DownloadItem
+  }
+
+  function getDownloadItemEventHandler(
+    item: Electron.DownloadItem,
+    method: 'on' | 'once',
+    eventName: string
+  ): DownloadItemHandler | undefined {
+    const eventMock = item[method] as unknown as {
+      mock: { calls: [string, DownloadItemHandler][] }
+    }
+    return eventMock.mock.calls.find(([event]) => event === eventName)?.[1]
+  }
 
   beforeEach(() => {
+    appGetPathMock.mockReset()
+    appGetPathMock.mockReturnValue('/downloads')
     shellOpenExternalMock.mockReset()
     browserWindowFromWebContentsMock.mockReset()
     menuBuildFromTemplateMock.mockReset()
@@ -980,11 +1018,16 @@ describe('browserManager', () => {
       openDevTools: guestOpenDevToolsMock
     }
     const item = {
-      pause: vi.fn(),
+      setSavePath: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+      cancel: vi.fn(),
       getFilename: vi.fn(() => 'report.csv'),
       getTotalBytes: vi.fn(() => 2048),
       getMimeType: vi.fn(() => 'text/csv'),
-      getURL: vi.fn(() => 'https://example.com/report.csv')
+      getURL: vi.fn(() => 'https://example.com/report.csv'),
+      getReceivedBytes: vi.fn(() => 0)
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
@@ -1024,7 +1067,245 @@ describe('browserManager', () => {
         filename: 'report.csv',
         origin: 'https://example.com',
         totalBytes: 2048,
-        mimeType: 'text/csv'
+        mimeType: 'text/csv',
+        savePath: '/downloads/report.csv',
+        status: 'downloading'
+      })
+    )
+    expect(item.setSavePath).toHaveBeenCalledWith('/downloads/report.csv')
+  })
+
+  it('sets the download save path immediately and reports progress and completion', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 408,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith('/downloads/report.csv')
+    expect(item.on).toHaveBeenCalledWith('updated', expect.any(Function))
+    expect(item.once).toHaveBeenCalledWith('done', expect.any(Function))
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:download-requested',
+      expect.objectContaining({
+        browserPageId: 'browser-1',
+        filename: 'report.csv',
+        savePath: '/downloads/report.csv',
+        status: 'downloading'
+      })
+    )
+
+    vi.mocked(item.getReceivedBytes).mockReturnValue(1024)
+    const updatedHandler = getDownloadItemEventHandler(item, 'on', 'updated')
+    updatedHandler?.({} as Electron.Event, 'progressing')
+
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:download-progress', {
+      browserPageId: 'browser-1',
+      downloadId: expect.any(String),
+      receivedBytes: 1024,
+      totalBytes: 2048,
+      state: 'progressing'
+    })
+
+    const doneHandler = getDownloadItemEventHandler(item, 'once', 'done')
+    doneHandler?.({} as Electron.Event, 'completed')
+
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:download-finished',
+      expect.objectContaining({
+        browserPageId: 'browser-1',
+        status: 'completed',
+        savePath: '/downloads/report.csv',
+        error: null
+      })
+    )
+  })
+
+  it('flushes started and terminal snapshots for downloads that finish before registration', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 409,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
+
+    const doneHandler = getDownloadItemEventHandler(item, 'once', 'done')
+    doneHandler?.({} as Electron.Event, 'completed')
+
+    expect(rendererSendMock).not.toHaveBeenCalled()
+
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    expect(rendererSendMock.mock.calls.map(([channel]) => channel)).toEqual([
+      'browser:download-requested',
+      'browser:download-finished'
+    ])
+  })
+
+  it('drops pending download records when an unregistered guest is destroyed', () => {
+    const guest = {
+      id: 412,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
+
+    const managerState = browserManager as unknown as { downloadsById: Map<string, unknown> }
+    expect(managerState.downloadsById.size).toBe(1)
+
+    const destroyedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    destroyedHandler?.()
+
+    expect(item.cancel).toHaveBeenCalledTimes(1)
+    expect(managerState.downloadsById.size).toBe(0)
+  })
+
+  it('cancels active downloads when the owning browser tab closes', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 410,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
+
+    browserManager.unregisterGuest('browser-1')
+
+    expect(item.cancel).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:download-finished',
+      expect.objectContaining({
+        browserPageId: 'browser-1',
+        status: 'canceled',
+        error: 'Tab closed before download completed.'
+      })
+    )
+  })
+
+  it('reports setSavePath failures without leaving a hidden download running', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 411,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const item = createDownloadItem({
+      setSavePath: vi.fn(() => {
+        throw new Error('cannot set path')
+      }) as never
+    })
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
+
+    expect(item.cancel).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock.mock.calls.map(([channel]) => channel)).toEqual([
+      'browser:download-requested',
+      'browser:download-finished'
+    ])
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:download-finished',
+      expect.objectContaining({
+        status: 'failed',
+        error: 'Failed to set download destination.'
       })
     )
   })

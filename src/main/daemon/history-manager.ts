@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join } from 'node:path'
 import {
   mkdirSync,
   writeFileSync,
@@ -11,7 +11,7 @@ import {
   readSync,
   fstatSync,
   promises as fsPromises
-} from 'fs'
+} from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
 import {
   decodeLogHeader,
@@ -285,6 +285,10 @@ export class HistoryManager {
     }
 
     this.writers.delete(sessionId)
+    // Why: the session is dead, so its disabled flag is dead state. Without this
+    // a session poisoned by a transient mid-life write error leaks its id in
+    // disabledSessions forever (sessionIds are fresh per PTY, never reused).
+    this.disabledSessions.delete(sessionId)
     try {
       this.updateMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
@@ -302,6 +306,14 @@ export class HistoryManager {
       recursive: true,
       force: true
     })
+  }
+
+  isSessionDisabled(sessionId: string): boolean {
+    return this.disabledSessions.has(sessionId)
+  }
+
+  disabledSessionCount(): number {
+    return this.disabledSessions.size
   }
 
   hasHistory(sessionId: string): boolean {

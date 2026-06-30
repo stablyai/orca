@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { Repo } from '../../shared/types'
@@ -129,11 +129,16 @@ describe('remote runtime request connection integration', () => {
         },
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        showRepo: (selector: string) => {
+          if (selector !== repo.id && selector !== `id:${repo.id}`) {
+            throw new Error('repo_not_found')
+          }
+          return repo
+        },
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
-        showRepo: () => repo,
         listDetectedManagedWorktrees: () => ({
           repoId: repo.id,
           authoritative: true,
@@ -348,7 +353,12 @@ describe('remote runtime request connection integration', () => {
         },
         watchFileExplorer: async () => () => {},
         listRepos: () => [repo],
-        showRepo: () => repo,
+        showRepo: (selector: string) => {
+          if (selector !== repo.id && selector !== `id:${repo.id}`) {
+            throw new Error('repo_not_found')
+          }
+          return repo
+        },
         listDetectedManagedWorktrees: () => ({
           repoId: repo.id,
           authoritative: true,

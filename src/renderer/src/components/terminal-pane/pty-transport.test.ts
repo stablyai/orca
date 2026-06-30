@@ -9,10 +9,16 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
+import {
+  TERMINAL_INPUT_CHUNK_MAX_BYTES,
+  TERMINAL_INPUT_MAX_BYTES
+} from '../../../../shared/terminal-input'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
+  let onReplay: ((payload: { id: string; data: string }) => void) | null = null
   let onExit: ((payload: { id: string; code: number }) => void) | null = null
 
   function flushPtySideEffects(): Promise<void> {
@@ -22,6 +28,7 @@ describe('createIpcPtyTransport', () => {
   beforeEach(() => {
     vi.resetModules()
     onData = null
+    onReplay = null
     onExit = null
 
     ;(globalThis as { window: typeof window }).window = {
@@ -39,7 +46,10 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
-          onReplay: vi.fn(() => () => {}),
+          onReplay: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
+            onReplay = callback
+            return () => {}
+          }),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -70,6 +80,87 @@ describe('createIpcPtyTransport', () => {
     expect(onData).not.toBeNull()
     expect(onExit).not.toBeNull()
     transport.disconnect()
+  })
+
+  it('ignores a stale exit for a previous PTY after reconnecting the same transport', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const onPtyExit = vi.fn()
+    spawn.mockResolvedValueOnce({ id: 'pty-old' }).mockResolvedValueOnce({ id: 'pty-new' })
+
+    const transport = createIpcPtyTransport({ onPtyExit })
+
+    await transport.connect({ url: '', callbacks: {} })
+    await transport.connect({ url: '', callbacks: {} })
+
+    onExit?.({ id: 'pty-old', code: 0 })
+
+    expect(onPtyExit).not.toHaveBeenCalledWith('pty-old')
+    expect(transport.getPtyId()).toBe('pty-new')
+    expect(transport.isConnected()).toBe(true)
+
+    onExit?.({ id: 'pty-new', code: 0 })
+
+    expect(onPtyExit).toHaveBeenCalledWith('pty-new')
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.isConnected()).toBe(false)
+  })
+
+  it('ignores stale data and replay for a previous PTY after reconnecting the same transport', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const onDataCallback = vi.fn()
+    const onReplayData = vi.fn()
+    spawn.mockResolvedValueOnce({ id: 'pty-old' }).mockResolvedValueOnce({ id: 'pty-new' })
+
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({
+      url: '',
+      callbacks: { onData: vi.fn(), onReplayData: vi.fn() }
+    })
+    await transport.connect({
+      url: '',
+      callbacks: { onData: onDataCallback, onReplayData }
+    })
+
+    onData?.({ id: 'pty-old', data: 'old data' })
+    onReplay?.({ id: 'pty-old', data: 'old replay' })
+
+    expect(onDataCallback).not.toHaveBeenCalled()
+    expect(onReplayData).not.toHaveBeenCalled()
+
+    onData?.({ id: 'pty-new', data: 'new data' })
+    onReplay?.({ id: 'pty-new', data: 'new replay' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('new data')
+    expect(onReplayData).toHaveBeenCalledWith('new replay')
+  })
+
+  it('exposes the connection identity captured at transport creation', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+
+    expect(createIpcPtyTransport({}).getConnectionId?.()).toBeNull()
+    expect(createIpcPtyTransport({ connectionId: 'ssh-1' }).getConnectionId?.()).toBe('ssh-1')
+  })
+
+  it('exposes local session metadata only for local IPC PTYs', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const localTransport = createIpcPtyTransport({
+      cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
+      shellOverride: 'wsl.exe'
+    })
+    const sshTransport = createIpcPtyTransport({
+      connectionId: 'ssh-1',
+      cwd: 'C:\\Users\\alice\\repo',
+      shellOverride: 'cmd.exe'
+    })
+
+    expect(localTransport.getLocalSessionMetadata?.()).toEqual({
+      cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
+      shellOverride: 'wsl.exe'
+    })
+    expect(sshTransport.getLocalSessionMetadata?.()).toBeNull()
   })
 
   it('defers title side effects until after terminal data is delivered', async () => {
@@ -264,6 +355,126 @@ describe('createIpcPtyTransport', () => {
     expect(sshTransport.sendInputAccepted).toBeUndefined()
   })
 
+  it('chunks large local IPC terminal input before renderer-to-main writes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+      const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
+
+      await transport.connect({ url: '', callbacks: {} })
+
+      expect(transport.sendInput(`${chunk}tail`)).toBe(true)
+      expect(window.api.pty.write).toHaveBeenCalledTimes(1)
+      expect(window.api.pty.write).toHaveBeenNthCalledWith(1, 'pty-1', chunk)
+
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(window.api.pty.write).toHaveBeenCalledTimes(2)
+      expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('yields while validating accepted large local IPC terminal input before renderer-to-main writes', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+      const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+      await transport.connect({ url: '', callbacks: {} })
+
+      expect(transport.sendInput(text)).toBe(true)
+      expect(window.api.pty.write).not.toHaveBeenCalled()
+
+      await vi.runAllTimersAsync()
+
+      expect(
+        vi
+          .mocked(window.api.pty.write)
+          .mock.calls.map(([, chunk]) => chunk)
+          .join('')
+      ).toBe(text)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects oversized local IPC terminal input before renderer-to-main writes', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(transport.sendInput('x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1))).toBe(false)
+    expect(window.api.pty.write).not.toHaveBeenCalled()
+  })
+
+  it('chunks large acknowledged local IPC terminal input before writeAccepted IPC', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+      const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
+
+      await transport.connect({ url: '', callbacks: {} })
+
+      const accepted = transport.sendInputAccepted?.(`${chunk}tail`)
+      await Promise.resolve()
+      expect(window.api.pty.writeAccepted).toHaveBeenCalledTimes(1)
+      expect(window.api.pty.writeAccepted).toHaveBeenNthCalledWith(1, 'pty-1', chunk)
+
+      await vi.runOnlyPendingTimersAsync()
+
+      await expect(accepted).resolves.toBe(true)
+      expect(window.api.pty.writeAccepted).toHaveBeenCalledTimes(2)
+      expect(window.api.pty.writeAccepted).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('yields while validating accepted large acknowledged local IPC terminal input before writeAccepted IPC', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+      const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+      await transport.connect({ url: '', callbacks: {} })
+
+      const accepted = transport.sendInputAccepted?.(text)
+      await Promise.resolve()
+      expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
+
+      await vi.runAllTimersAsync()
+
+      await expect(accepted).resolves.toBe(true)
+      expect(
+        vi
+          .mocked(window.api.pty.writeAccepted)
+          .mock.calls.map(([, chunk]) => chunk)
+          .join('')
+      ).toBe(text)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects oversized acknowledged local IPC terminal input before writeAccepted IPC', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({})
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    await expect(
+      transport.sendInputAccepted?.('x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1))
+    ).resolves.toBe(false)
+    expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
+  })
+
   it('suppresses attention side effects when replaying eager-buffered data during attach', async () => {
     // Why: eager PTY buffers capture output produced before the pane mounted —
     // typically catch-up bytes from a previous app session. A BEL or
@@ -400,16 +611,35 @@ describe('createIpcPtyTransport', () => {
     expect(flushed.endsWith('TAIL$')).toBe(true)
   })
 
+  it('drains pre-handler data and exit into eager buffers for fast background PTYs', async () => {
+    const { ensurePtyDispatcher, registerEagerPtyBuffer } = await import('./pty-transport')
+    const onEagerExit = vi.fn()
+
+    ensurePtyDispatcher()
+    onData?.({ id: 'pty-fast-setup', data: 'setup failed fast\n' })
+    onExit?.({ id: 'pty-fast-setup', code: 1 })
+
+    const handle = registerEagerPtyBuffer('pty-fast-setup', onEagerExit)
+
+    expect(handle.flush()).toBe('setup failed fast\n')
+    await Promise.resolve()
+    expect(onEagerExit).toHaveBeenCalledWith('pty-fast-setup', 1)
+  })
+
   it('enforces the eager buffer cap in UTF-8 bytes for multi-byte output', async () => {
     const { registerEagerPtyBuffer } = await import('./pty-transport')
     const cap = 512 * 1024
     const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    const output = `${'界'.repeat(cap)}PROMPT$`
+    const encodeSpy = vi.spyOn(TextEncoder.prototype, 'encode')
 
-    onData?.({ id: 'pty-restored', data: `${'界'.repeat(cap)}PROMPT$` })
+    onData?.({ id: 'pty-restored', data: output })
 
     const flushed = handle.flush()
     expect(new TextEncoder().encode(flushed).byteLength).toBeLessThanOrEqual(cap)
     expect(flushed.endsWith('PROMPT$')).toBe(true)
+    expect(encodeSpy).not.toHaveBeenCalledWith(output)
+    encodeSpy.mockRestore()
   })
 
   it('preserves a BOM when it starts the retained oversized eager-buffer tail', async () => {
@@ -1076,7 +1306,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',
         leafId: '11111111-1111-4111-8111-111111111111',
-        focus: false
+        focus: false,
+        presentation: 'background'
       },
       timeoutMs: 15_000
     })

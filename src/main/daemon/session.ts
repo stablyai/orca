@@ -2,6 +2,12 @@
 import { HeadlessEmulator } from './headless-emulator'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { PostReadyFlushGate } from './post-ready-flush-gate'
+import {
+  createShellReadyScanState,
+  drainShellReadyHeldBytes,
+  scanForShellReady,
+  type ShellReadyScanState
+} from '../shell-ready-marker-scanner'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -15,7 +21,6 @@ const SHELL_READY_TIMEOUT_MS = 15_000
 // older daemon/local paths that still report shell-ready support for Codex.
 export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 const KILL_TIMEOUT_MS = 5_000
-const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready\x07'
 // Why: pending records exist so the 5s checkpoint can persist increments
 // instead of re-serializing the whole buffer. If no client drains them (main
 // process gone, history disabled), memory must stay bounded — past the cap we
@@ -55,6 +60,12 @@ export type SessionOptions = {
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
   scrollback?: number
+  // Why: fired once the session reaches a terminal state (natural exit or
+  // kill-timeout force-dispose) so the owner (TerminalHost) can reap it —
+  // dispose the headless emulator and drop it from its session map. Without a
+  // reaper, dead sessions (and their ~5000-row scrollback emulators) accumulate
+  // for the lifetime of the long-lived daemon process.
+  onExit?: (code: number) => void
 }
 
 type AttachedClient = {
@@ -72,9 +83,10 @@ export class Session {
   private _disposed = false
   private emulator: HeadlessEmulator
   private subprocess: SubprocessHandle
+  private readonly onSessionExit?: (code: number) => void
   private attachedClients: AttachedClient[] = []
   private preReadyStdinQueue: string[] = []
-  private markerBuffer = ''
+  private shellReadyScanState: ShellReadyScanState | null = null
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
   private postReadyFlushGate: PostReadyFlushGate
@@ -86,6 +98,7 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.subprocess = opts.subprocess
+    this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
       cols: size.cols,
@@ -99,6 +112,7 @@ export class Session {
 
     if (opts.shellReadySupported) {
       this._shellState = 'pending'
+      this.shellReadyScanState = createShellReadyScanState()
       this.shellReadyTimer = setTimeout(() => {
         this.onShellReadyTimeout()
       }, opts.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS)
@@ -212,14 +226,30 @@ export class Session {
     return this.emulator.getSnapshot()
   }
 
+  // Why: the size the PTY actually applied (emulator dims, which Session.resize
+  // advances atomically with the subprocess), so the renderer can detect a
+  // resize that was dropped here (exited/disposed/invalid) instead of trusting
+  // its own last-requested size. Null on a disposed session.
+  getAppliedSize(): { cols: number; rows: number } | null {
+    if (this._disposed) {
+      return null
+    }
+    return this.emulator.getAppliedSize()
+  }
+
   /** Drains the records accumulated since the last take. Runs synchronously —
    *  when includeSnapshot is set, the serialize happens in the same turn so no
    *  PTY data can land between the drain and the snapshot (which would later
    *  be replayed twice on cold restore). */
-  takePendingOutput(includeSnapshot: boolean): TakePendingOutputResult | null {
+  takePendingOutput(
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
     if (this._disposed) {
       return null
     }
+    const releasedHeldBytes =
+      includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
     const records = this.pendingOutputRecords
     const overflowed = this.pendingOutputOverflowed
     this.pendingOutputRecords = []
@@ -227,7 +257,11 @@ export class Session {
     this.pendingOutputOverflowed = false
     this.pendingOutputSeq += 1
     return {
-      records: includeSnapshot ? [] : records,
+      records: includeSnapshot
+        ? releasedHeldBytes
+          ? [{ kind: 'output', data: releasedHeldBytes }]
+          : []
+        : records,
       seq: this.pendingOutputSeq,
       overflowed,
       snapshot: includeSnapshot ? this.emulator.getSnapshot() : null
@@ -248,6 +282,10 @@ export class Session {
     }
     this.emulator.clearScrollback()
     this.recordPendingOutput({ kind: 'clear' })
+  }
+
+  prepareForFinalSnapshot(): string {
+    return this.releaseHeldShellReadyBytes()
   }
 
   dispose(): void {
@@ -324,6 +362,9 @@ export class Session {
     }
     this.#teardownSubprocess()
     this._state = 'exited'
+    // Why: free the headless emulator's scrollback here too (this path skips
+    // dispose()). Matches forceDispose(); reaping just drops the map entry.
+    this.emulator.dispose()
   }
 
   /** Private: shared teardown helper called by dispose(), forceDispose(), and
@@ -344,6 +385,9 @@ export class Session {
       clearTimeout(this.shellReadyTimer)
       this.shellReadyTimer = null
     }
+    this.shellReadyScanState = null
+    this.preReadyStdinQueue = []
+    this.postReadyFlushGate.clear()
     try {
       this.subprocess.dispose()
     } catch (err) {
@@ -381,15 +425,27 @@ export class Session {
       return
     }
 
-    // Feed data to headless emulator for state tracking
-    this.emulator.write(data)
-    this.recordPendingOutput({ kind: 'output', data })
-
-    if (this._shellState === 'pending') {
-      this.scanForShellMarker(data)
+    if (this._shellState === 'pending' && this.shellReadyScanState) {
+      const scanned = scanForShellReady(this.shellReadyScanState, data)
+      data = scanned.output
+      if (scanned.matched) {
+        this.transitionToReady(scanned.postMarkerBytesObserved)
+      }
     } else {
       this.postReadyFlushGate.notifyData()
     }
+
+    this.emitSubprocessOutput(data)
+  }
+
+  private emitSubprocessOutput(data: string): void {
+    if (data.length === 0) {
+      return
+    }
+
+    // Feed data to headless emulator for state tracking
+    this.emulator.write(data)
+    this.recordPendingOutput({ kind: 'output', data })
 
     // Broadcast to attached clients
     for (const client of this.attachedClients) {
@@ -404,6 +460,7 @@ export class Session {
 
     this._exitCode = code
     this._state = 'exited'
+    this.releaseHeldShellReadyBytes()
 
     if (this.killTimer) {
       clearTimeout(this.killTimer)
@@ -418,10 +475,10 @@ export class Session {
     // Why: release the ptmx fd on the natural-exit path. Without this, the
     // node-pty wrapper's _socket stays alive until GC and the master fd leaks
     // (see docs/fix-pty-fd-leak.md). Do NOT route through #teardownSubprocess:
-    // that helper flips `_disposed = true`, which would short-circuit a later
-    // Session.dispose() call from TerminalHost's dead-session cleanup at
-    // terminal-host.ts:83 — skipping attachedClients/emulator/postReadyFlushGate
-    // cleanup. Call subprocess.dispose() directly inside try/catch.
+    // that helper flips `_disposed = true`, which would short-circuit the later
+    // Session.dispose() call from TerminalHost.reapSession (wired via onExit
+    // below) — skipping attachedClients/emulator/postReadyFlushGate cleanup.
+    // Call subprocess.dispose() directly inside try/catch.
     try {
       this.subprocess.dispose()
     } catch {
@@ -431,27 +488,29 @@ export class Session {
     for (const client of this.attachedClients) {
       client.onExit(code)
     }
+
+    // Why: hand off to the owner's reaper so the emulator is disposed and the
+    // session dropped from the host map; otherwise dead sessions accumulate.
+    this.onSessionExit?.(code)
   }
 
-  private scanForShellMarker(data: string): void {
-    this.markerBuffer += data
-
-    const markerIdx = this.markerBuffer.indexOf(SHELL_READY_MARKER)
-    if (markerIdx !== -1) {
-      this.markerBuffer = ''
-      this.transitionToReady()
-      return
+  private releaseHeldShellReadyBytes(): string {
+    if (!this.shellReadyScanState) {
+      return ''
     }
-
-    // Keep only the tail that could be the start of a partial marker match
-    const maxPartial = SHELL_READY_MARKER.length - 1
-    if (this.markerBuffer.length > maxPartial) {
-      this.markerBuffer = this.markerBuffer.slice(-maxPartial)
-    }
+    const heldBytes = drainShellReadyHeldBytes(this.shellReadyScanState)
+    this.shellReadyScanState = null
+    // Why: daemon scanning now runs before emulator/client fan-out so marker
+    // bytes can be stripped. If readiness never completes, preserve the
+    // previous behavior by releasing any held prefix before timeout or exit
+    // state changes discard it.
+    this.emitSubprocessOutput(heldBytes)
+    return heldBytes
   }
 
-  private transitionToReady(): void {
+  private transitionToReady(postMarkerBytesObserved = false): void {
     this._shellState = 'ready'
+    this.shellReadyScanState = null
     if (this.shellReadyTimer) {
       clearTimeout(this.shellReadyTimer)
       this.shellReadyTimer = null
@@ -459,7 +518,7 @@ export class Session {
     if (this.preReadyStdinQueue.length === 0) {
       return
     }
-    this.postReadyFlushGate.arm()
+    this.postReadyFlushGate.arm(postMarkerBytesObserved)
   }
 
   private onShellReadyTimeout(): void {
@@ -468,6 +527,7 @@ export class Session {
       return
     }
     this._shellState = 'timed_out'
+    this.releaseHeldShellReadyBytes()
     this.flushPreReadyQueue()
   }
 
@@ -510,5 +570,9 @@ export class Session {
     for (const client of clients) {
       client.onExit(-1)
     }
+
+    // Why: reap from the host map on the kill-timeout path too (emulator already
+    // disposed above; reapSession's dispose() call is a no-op and just drops it).
+    this.onSessionExit?.(-1)
   }
 }

@@ -183,6 +183,35 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
     expect(removeCalls(exec)).toEqual([])
   })
 
+  it('checks branch config without line-array or whitespace-regex splitting', async () => {
+    const exec = makeExec({
+      branchConfig: [
+        `branch.contributor/fix.pushRemote\tunused`,
+        `  branch.contributor/fix.remote    ${FORK_REMOTE}  `
+      ].join('\r\n')
+    })
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    try {
+      await cleanupUnusedWorktreePushTargetRemoteWithExec(
+        REPO_PATH,
+        'repo-1::/wt/a',
+        forkTarget(),
+        storeOf({ 'repo-1::/wt/a': forkTarget() }),
+        exec
+      )
+      const usedUnboundedOutputSplit = splitSpy.mock.calls.some(([separator]) => {
+        return (
+          separator instanceof RegExp &&
+          (separator.source === '\\r?\\n' || separator.source === '\\s+')
+        )
+      })
+      expect(removeCalls(exec)).toEqual([])
+      expect(usedUnboundedOutputSplit).toBe(false)
+    } finally {
+      splitSpy.mockRestore()
+    }
+  })
+
   it('keeps the remote when its URL no longer matches the fork (repurposed by the user)', async () => {
     const exec = makeExec({ getUrl: 'git@github.com:someone-else/orca.git' })
     await cleanupUnusedWorktreePushTargetRemoteWithExec(

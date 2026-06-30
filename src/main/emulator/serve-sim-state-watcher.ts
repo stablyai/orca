@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, readdirSync, watch } from 'fs'
-import { basename, join } from 'path'
-import { tmpdir } from 'os'
-import type { FSWatcher } from 'fs'
+import { existsSync, readFileSync, readdirSync, watch } from 'node:fs'
+import { basename, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { FSWatcher } from 'node:fs'
 
 // Why: terminal-started `serve-sim --detach` writes state under $TMPDIR/serve-sim/ and may
 // print JSON to the PTY. Orca-managed attach (CLI/pane) already registers via EmulatorBridge;
@@ -116,6 +116,15 @@ export class ServeSimStateWatcher {
       if (wt === worktreeId) {
         this.ptyToWorktree.delete(ptyId)
         this.ptyBuffers.delete(ptyId)
+      }
+    }
+    // Why: dedupe keys are worktree-scoped (`${worktreeId}::...`); prune them on
+    // forget so the Set does not grow for the session across worktree switches.
+    // A later re-bind of the same worktree is a fresh context and should re-emit.
+    const prefix = `${worktreeId}::`
+    for (const key of this.seenExternalKeys) {
+      if (key.startsWith(prefix)) {
+        this.seenExternalKeys.delete(key)
       }
     }
   }

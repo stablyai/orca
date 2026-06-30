@@ -1,3 +1,4 @@
+import { getEffectiveProjectGroupManualRank } from '../../../../shared/project-groups'
 import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
 import type { Row } from './worktree-list-groups'
 import type { Repo } from '../../../../shared/types'
@@ -67,12 +68,7 @@ export function getProjectGroupOrderForSidebarDrop(args: {
     if (!repo) {
       return undefined
     }
-    const order = repo.projectGroupOrder
-    if (typeof order === 'number' && Number.isFinite(order)) {
-      return order
-    }
-    const repoRank = args.repoOrderRankById?.get(repo.id)
-    return (repoRank ?? fallbackIndex) * 1000
+    return getEffectiveProjectGroupManualRank(repo, args.repoOrderRankById, fallbackIndex)
   }
   const before = getEffectiveOrder(ordered[args.dropIndex - 1], args.dropIndex - 1)
   const after = getEffectiveOrder(ordered[args.dropIndex], args.dropIndex)

@@ -292,6 +292,33 @@ describe('external worktree visibility policy', () => {
     expect(isLegacyRepoForExternalWorktreeVisibility(makeRepo({ addedAt: Number.NaN }))).toBe(true)
   })
 
+  it('shows explicitly imported external worktrees while repo visibility stays hide', () => {
+    const repo = makeRepo({
+      externalWorktreeVisibility: 'hide',
+      importedExternalWorktreePaths: ['/scratch/imported']
+    })
+    expect(
+      shouldShowWorktree({
+        repo,
+        worktree: makeWorktree({ path: '/scratch/imported', isMainWorktree: false }),
+        ownership: 'external',
+        isLegacyRepoForVisibility: false,
+        isSelectedCheckout: false,
+        importedExternalWorktreePaths: repo.importedExternalWorktreePaths
+      })
+    ).toBe(true)
+    expect(
+      shouldShowWorktree({
+        repo,
+        worktree: makeWorktree({ path: '/scratch/other', isMainWorktree: false }),
+        ownership: 'external',
+        isLegacyRepoForVisibility: false,
+        isSelectedCheckout: false,
+        importedExternalWorktreePaths: repo.importedExternalWorktreePaths
+      })
+    ).toBe(false)
+  })
+
   it('keeps unknown legacy rows visible for legacy repos after hiding external rows', () => {
     const repo = makeRepo({
       addedAt: EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT - 1,

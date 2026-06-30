@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines -- Why: history error-logging .catch() chains add ~10 lines of
 safety wiring spread across spawn/event-routing; splitting would scatter tightly coupled
 adapter ↔ history lifecycle logic. */
-import { basename } from 'path'
-import { existsSync } from 'fs'
+import { basename } from 'node:path'
+import { existsSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { HistoryManager } from './history-manager'
@@ -206,19 +206,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // an unclean shutdown → return saved scrollback so the renderer can
     // display the previous terminal content.
     if (result.isNew && restoreInfo) {
-      // Why: if the checkpoint was captured while an alternate-screen app
-      // (vim, less, htop) was active, snapshotAnsi is the alt buffer content.
-      // Replaying that into a fresh shell would show stale TUI content. Use
-      // scrollbackAnsi (rows above the viewport only) which excludes the alt
-      // buffer. For normal sessions, use the full snapshot with rehydrate
-      // sequences to restore terminal modes (colors, cursor position, etc).
-      // Why: scrollbackAnsi may be empty if the emulator hadn't accumulated
-      // scrollback before the alt-screen app launched. In that case, skip
-      // cold restore entirely rather than showing a blank terminal — no
-      // content is better than confusing the user with an empty restore.
+      // Why prefer scrollbackAnsi for alt-screen: snapshotAnsi is the alt buffer
+      // (vim/less/htop); normal sessions use the full snapshot + rehydrate.
+      // Why the snapshotAnsi fallback: a hibernated TUI agent (empty scrollback)
+      // would otherwise get `|| null` → blank pane on wake. snapshotAnsi *alone*
+      // (no rehydrateSequences — they start with \x1b[?1049h, which the
+      // renderer's POST_REPLAY_MODE_RESET does NOT undo) lands the last frame as
+      // normal scrollback. An empty snapshot still yields null → no-op.
       const isAltScreen = restoreInfo.modes.alternateScreen
       const scrollback = isAltScreen
-        ? restoreInfo.scrollbackAnsi || null
+        ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
         : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
       // Why: use registerWriter (not openSession) to avoid deleting the
       // existing checkpoint.json. If the revived daemon crashes again before
@@ -297,12 +294,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: sleep/exact-stop must preserve restorable terminal history,
     // so force a final checkpoint before killing the daemon session.
     if (opts.keepHistory) {
-      await this.checkpointSessions([id], { final: true })
+      await this.checkpointSessions([id], { final: true, teardown: true })
     }
     await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     this.coldRestoreCache.delete(id)
+    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
+    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
+    // (Under keepHistory the final checkpoint above already cleared the flag, so
+    // this is a harmless no-op there — kept unconditional to cover both paths.)
+    this.sessionsNeedingFullCheckpoint.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -355,6 +357,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async getInitialCwd(id: string): Promise<string> {
     return this.initialCwds.get(id) ?? ''
+  }
+
+  // Why: resize() is a fire-and-forget notify, so a resize can be dropped
+  // daemon-side (session not yet alive, exited, invalid dims, cold-restore
+  // snapshot-col coercion) without the renderer knowing. This reads the size
+  // the daemon actually applied so the renderer can detect that drift on resume
+  // and re-assert. Null (RPC failure / unknown session) means "cannot confirm",
+  // which the renderer treats as a cue to re-forward once.
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    try {
+      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
+        'getSize',
+        { sessionId: id }
+      )
+      return result.size ?? null
+    } catch {
+      return null
+    }
   }
 
   async clearBuffer(id: string): Promise<void> {
@@ -670,7 +690,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // socket per session. Returns a promise that resolves when all checkpoint
   // writes complete (callers that don't need to wait can void it).
   // Why final=true here: this runs on clean disconnect, where the full-depth
-  // snapshot (not the increment log) must be the restore source.
+  // snapshot (not the increment log) must be the restore source. It is not a
+  // teardown snapshot: the detached daemon and its PTYs keep running for warm
+  // reattach, so shell-ready scanner state must remain intact.
   private async checkpointAllSessions(): Promise<void> {
     const completed = await this.checkpointSessions(this.activeSessionIds, { final: true })
     for (const sessionId of completed) {
@@ -680,7 +702,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   private async checkpointSessions(
     sessionIds: Iterable<string>,
-    opts?: { final?: boolean }
+    opts?: { final?: boolean; teardown?: boolean }
   ): Promise<Set<string>> {
     const completed = new Set<string>()
     if (!this.historyManager) {
@@ -697,7 +719,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
           return
         }
         const sessionId = ids[index]
-        await this.checkpointSession(sessionId, opts?.final === true)
+        await this.checkpointSession(sessionId, {
+          final: opts?.final === true,
+          teardown: opts?.teardown === true
+        })
           .then(() => {
             completed.add(sessionId)
           })
@@ -714,7 +739,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return completed
   }
 
-  private async checkpointSession(sessionId: string, final: boolean): Promise<void> {
+  private async checkpointSession(
+    sessionId: string,
+    opts: { final: boolean; teardown: boolean }
+  ): Promise<void> {
     if (!this.supportsIncrementalCheckpoints) {
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
@@ -722,14 +750,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       return
     }
-    if (final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
+    if (opts.final || this.sessionsNeedingFullCheckpoint.has(sessionId)) {
       // Why take-with-snapshot instead of plain getSnapshot: the take clears
       // the daemon's pending records in the same synchronous turn as the
       // serialize. A plain snapshot would leave pre-snapshot records pending;
       // a later warm reattach would append them to the fresh log and cold
       // restore would replay them on top of a checkpoint that already
       // contains them.
-      await this.takeSnapshotAndCheckpoint(sessionId)
+      await this.takeSnapshotAndCheckpoint(sessionId, { teardown: opts.teardown })
       this.sessionsNeedingFullCheckpoint.delete(sessionId)
       return
     }
@@ -742,7 +770,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (take.overflowed) {
       // Why: overflow dropped records, so the log has a hole — only a full
       // snapshot (which reflects everything ever written) can re-anchor it.
-      await this.takeSnapshotAndCheckpoint(sessionId)
+      await this.takeSnapshotAndCheckpoint(sessionId, { teardown: false })
       return
     }
     if (take.records.length === 0) {
@@ -759,17 +787,28 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (appendResult === 'needs-checkpoint') {
       // Why dropping take.records is lossless: they were applied to the live
       // emulator before the take, so the snapshot below contains them.
-      await this.takeSnapshotAndCheckpoint(sessionId)
+      await this.takeSnapshotAndCheckpoint(sessionId, { teardown: false })
     }
   }
 
-  private async takeSnapshotAndCheckpoint(sessionId: string): Promise<void> {
+  private async takeSnapshotAndCheckpoint(
+    sessionId: string,
+    opts: { teardown: boolean }
+  ): Promise<void> {
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId,
-      includeSnapshot: true
+      includeSnapshot: true,
+      teardownSnapshot: opts.teardown
     })
     if (take?.snapshot && this.historyManager) {
       await this.historyManager.checkpoint(sessionId, take.snapshot)
+      if (take.records.length > 0) {
+        // Why: take-with-snapshot usually returns no records because the
+        // snapshot subsumes them. Held parser-state bytes, such as an
+        // incomplete shell-ready marker prefix, are not representable in the
+        // snapshot and must remain as a post-checkpoint log tail.
+        await this.historyManager.appendIncrements(sessionId, take.seq, take.records)
+      }
     }
   }
 
@@ -873,6 +912,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         this.coldRestoreCache.delete(event.sessionId)
+        // Why: an exited session can never be checkpointed again, so its pending
+        // full-checkpoint flag is dead state. Without this, a cold-restored
+        // session that exits before its first checkpoint leaks a permanent entry.
+        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager

@@ -35,7 +35,8 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
 
   const isCombinedDiff =
     file.mode === 'diff' &&
-    (file.diffSource === 'combined-uncommitted' ||
+    (file.diffSource === 'combined-all' ||
+      file.diffSource === 'combined-uncommitted' ||
       file.diffSource === 'combined-branch' ||
       file.diffSource === 'combined-commit')
 
@@ -66,6 +67,7 @@ export function getEditorHeaderOpenFileState(
   const isSingleDiff =
     file.mode === 'diff' &&
     file.diffSource !== undefined &&
+    file.diffSource !== 'combined-all' &&
     file.diffSource !== 'combined-uncommitted' &&
     file.diffSource !== 'combined-branch' &&
     file.diffSource !== 'combined-commit'

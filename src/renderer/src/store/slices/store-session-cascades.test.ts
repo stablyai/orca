@@ -101,6 +101,8 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
+import { computeVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -1490,13 +1492,13 @@ describe('reconnectPersistedTerminals', () => {
         [wt2]: [makeTab({ id: 'tab2', worktreeId: wt2, ptyId: 'old-pty-2' })]
       },
       terminalLayoutsByTabId: { tab1: makeLayout(), tab2: makeLayout() },
-      activeWorktreeIdsOnShutdown: [wt1, wt2]
+      activeWorktreeIdsOnShutdown: [wt1]
     })
 
     expect(store.getState().workspaceSessionReady).toBe(false)
     expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBeNull()
     expect(store.getState().tabsByWorktree[wt2][0].ptyId).toBeNull()
-    expect(store.getState().pendingReconnectWorktreeIds).toEqual([wt1, wt2])
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([wt1])
 
     await store.getState().reconnectPersistedTerminals()
 
@@ -1506,7 +1508,24 @@ describe('reconnectPersistedTerminals', () => {
     // records daemon session IDs as tab-level ptyIds so connectPanePty
     // can pass them as sessionId to the daemon's createOrAttach.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('old-pty-1')
-    expect(s.tabsByWorktree[wt2][0].ptyId).toBe('old-pty-2')
+    expect(s.tabsByWorktree[wt2][0].ptyId).toBeNull()
+    expect(s.ptyIdsByTabId.tab1).toEqual(['old-pty-1'])
+    expect(s.ptyIdsByTabId.tab2).toEqual([])
+    expect(
+      computeVisibleWorktreeIds(s.worktreesByRepo, [wt1, wt2], {
+        filterRepoIds: [],
+        showSleepingWorkspaces: false,
+        tabsByWorktree: s.tabsByWorktree,
+        ptyIdsByTabId: s.ptyIdsByTabId,
+        browserTabsByWorktree: s.browserTabsByWorktree,
+        hideDefaultBranchWorkspace: false,
+        hideAutomationGeneratedWorkspaces: false,
+        repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
+        workspaceHostScope: 'all',
+        defaultHostId: LOCAL_EXECUTION_HOST_ID,
+        worktreeLineageById: {}
+      })
+    ).toEqual([wt1])
     expect(s.pendingReconnectWorktreeIds).toEqual([])
     // No eager spawn — PTY creation deferred to pane mount
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
@@ -1796,6 +1815,65 @@ describe('reconnectPersistedTerminals', () => {
     expect(Object.keys(bindings)).not.toContain('pane:3')
     expect(Object.values(bindings).sort()).toEqual(['daemon-session-A', 'daemon-session-B'])
     expect(s.workspaceSessionReady).toBe(true)
+  })
+
+  it('does not advertise split-pane-only wake hints as hide-sleeping activity', async () => {
+    const store = createDaemonEnabledStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, ptyId: null })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          ...makeLayout(),
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: 'pane:1' },
+            second: { type: 'leaf', leafId: 'pane:3' }
+          },
+          ptyIdsByLeafId: { 'pane:1': 'daemon-session-A', 'pane:3': 'daemon-session-B' }
+        }
+      },
+      activeWorktreeIdsOnShutdown: []
+    })
+
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([])
+
+    await store.getState().reconnectPersistedTerminals()
+
+    const s = store.getState()
+    expect(s.terminalLayoutsByTabId.tab1?.ptyIdsByLeafId).toBeDefined()
+    expect(s.ptyIdsByTabId.tab1).toEqual([])
+    expect(
+      computeVisibleWorktreeIds(s.worktreesByRepo, [wt1], {
+        filterRepoIds: [],
+        showSleepingWorkspaces: false,
+        tabsByWorktree: s.tabsByWorktree,
+        ptyIdsByTabId: s.ptyIdsByTabId,
+        browserTabsByWorktree: s.browserTabsByWorktree,
+        hideDefaultBranchWorkspace: false,
+        hideAutomationGeneratedWorkspaces: false,
+        repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
+        workspaceHostScope: 'all',
+        defaultHostId: LOCAL_EXECUTION_HOST_ID,
+        worktreeLineageById: {}
+      })
+    ).toEqual([])
   })
 })
 

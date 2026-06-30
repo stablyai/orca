@@ -374,7 +374,7 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
   for (const [brand, wrongForms] of Object.entries(mistranslations).sort(
     ([left], [right]) => right.length - left.length
   )) {
-    if (!enValue.includes(brand)) {
+    if (!includesPreservedLatinTerm(enValue, brand)) {
       continue
     }
     // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —
@@ -435,10 +435,20 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
   return result
 }
 
+function phraseFixMatchesEnglish(enValue, fix) {
+  // Why: `whenEnMatches` (a RegExp) lets a rule guard on a real token (e.g. /\bPRs?\b/)
+  // instead of the looser case-insensitive `whenEnIncludes` substring, so a phrase fix can
+  // avoid firing on unrelated English that merely contains the substring (approve, preview).
+  if (fix.whenEnMatches) {
+    return fix.whenEnMatches.test(enValue)
+  }
+  return enValue.toLowerCase().includes(fix.whenEnIncludes.toLowerCase())
+}
+
 function applyPhraseFixes(enValue, localeValue, locale) {
   let result = localeValue
   for (const fix of LOCALE_PHRASE_FIXES[locale] ?? []) {
-    if (!enValue.toLowerCase().includes(fix.whenEnIncludes.toLowerCase())) {
+    if (!phraseFixMatchesEnglish(enValue, fix)) {
       continue
     }
     result = result.replace(fix.pattern, fix.replacement)

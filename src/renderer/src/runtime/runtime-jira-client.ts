@@ -22,6 +22,7 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
+import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
 
 export type RuntimeJiraSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
@@ -113,6 +114,9 @@ export async function jiraSearchIssues(
   limit?: number,
   siteId?: JiraSiteSelection | null
 ): Promise<JiraIssue[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(jql)) {
+    return []
+  }
   const target = getJiraRuntimeTarget(settings)
   const args = { jql, limit, siteId: siteId ?? undefined }
   return target.kind === 'environment'
@@ -255,6 +259,9 @@ export async function jiraListAssignableUsers(
   query?: string,
   siteId?: string | null
 ): Promise<JiraUser[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
   const target = getJiraRuntimeTarget(settings)
   const args = { key, query, siteId: siteId ?? undefined }
   return target.kind === 'environment'

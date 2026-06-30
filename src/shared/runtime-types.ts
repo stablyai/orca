@@ -34,6 +34,10 @@ export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
+// Why: the access scope a paired device token grants. Lives in shared so
+// pairing offers, status.get, and the device registry use one vocabulary.
+export type DeviceScope = 'mobile' | 'runtime'
+
 // Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
 // checked source so future variants cannot drift silently across layers.
 export type RuntimeTerminalDriverState =
@@ -57,6 +61,9 @@ export type RuntimeStatus = {
   capabilities?: RuntimeCapability[]
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
+  // the server stamps the authenticated token scope here for status.get only.
+  deviceScope?: DeviceScope
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -130,6 +137,9 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
   color?: string | null
   isPinned?: boolean
+  /** Per-tab view preference (terminal xterm vs native chat). Host-persisted so
+   *  paired clients converge; clients still win during the optimistic echo window. */
+  viewMode?: 'terminal' | 'chat'
   isActive: boolean
 }
 
@@ -152,6 +162,9 @@ export type RuntimeMobileSessionMarkdownTab = {
   sourceFilePath: string
   sourceRelativePath: string
   documentVersion: string
+  /** Tab-level color/pin, host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
 }
 
 export type RuntimeMobileSessionFileTab = {
@@ -164,6 +177,9 @@ export type RuntimeMobileSessionFileTab = {
   mode?: 'edit' | 'diff'
   diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
+  /** Tab-level color/pin, host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
   isActive: boolean
 }
 
@@ -321,6 +337,12 @@ export type RuntimeFilePreviewResult = {
   mimeType?: string
 }
 
+export type RuntimeFileReadChunkResult = {
+  contentBase64: string
+  bytesRead: number
+  eof: boolean
+}
+
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
@@ -336,8 +358,57 @@ export type RuntimeTerminalSummary = {
   preview: string
 }
 
+export type RuntimeTerminalVisualTerminalNode = {
+  type: 'terminal'
+  handle: string
+  tabId: string
+  leafId: string
+  title: string | null
+  connected: boolean
+  active: boolean
+}
+
+export type RuntimeTerminalVisualPaneNode =
+  | RuntimeTerminalVisualTerminalNode
+  | {
+      type: 'pane-split'
+      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualPaneNode
+      second: RuntimeTerminalVisualPaneNode
+    }
+
+export type RuntimeTerminalVisualTab = {
+  tabId: string
+  title: string | null
+  activeLeafId: string | null
+  panes: RuntimeTerminalVisualPaneNode
+}
+
+export type RuntimeTerminalVisualGroupNode = {
+  type: 'group'
+  groupId: string | null
+  activeTabId: string | null
+  tabs: RuntimeTerminalVisualTab[]
+}
+
+export type RuntimeTerminalVisualLayoutNode =
+  | RuntimeTerminalVisualGroupNode
+  | {
+      type: 'split'
+      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualLayoutNode
+      second: RuntimeTerminalVisualLayoutNode
+    }
+
+export type RuntimeTerminalVisualLayout = {
+  worktreeId: string
+  worktreePath: string
+  root: RuntimeTerminalVisualLayoutNode
+}
+
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
+  visualLayouts?: RuntimeTerminalVisualLayout[]
   totalCount: number
   truncated: boolean
 }
@@ -372,20 +443,41 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
+  refusedReason?: 'no-agent' | 'permission'
 }
+
+export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
+
+export type RuntimeTerminalAgentStatus = {
+  handle: string
+  isRunningAgent: boolean
+  status: RuntimeTerminalAgentStatusState
+}
+
+export type RuntimeTerminalPresentation = 'background' | 'focused'
 
 export type RuntimeTerminalCreate = {
   handle: string
   tabId?: string
+  paneKey?: string | null
+  ptyId?: string | null
   worktreeId: string
   title: string | null
   surface?: 'background' | 'visible'
+  warning?: string
 }
 
 export type RuntimeTerminalSplit = {
   handle: string
   tabId: string
   paneRuntimeId: number
+}
+
+export type RuntimeTerminalResolvePane = {
+  handle: string
+  tabId: string
+  leafId: string
+  ptyId: string | null
 }
 
 export type RuntimeTerminalFocus = {
@@ -427,7 +519,12 @@ export type RuntimeWorktreeAgentRow = {
   parentPaneKey: string | null
   state: AgentStatusState
   agentType: AgentType | null
+  /** Raw hook-reported prompt. Display surfaces can prefer displayName. */
   prompt: string
+  /** Explicit orchestration task title, or null outside dispatch. */
+  taskTitle: string | null
+  /** Explicit UI label for orchestration task rows, or null outside dispatch. */
+  displayName: string | null
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null
@@ -444,9 +541,15 @@ export type RuntimeWorktreePsSummary = {
   repo: string
   path: string
   branch: string
+  isArchived: boolean
+  isMainWorktree: boolean
+  hasHostSidebarActivity: boolean
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   displayName: string
+  workspaceStatus: string
+  sortOrder: number
+  manualOrder?: number
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null

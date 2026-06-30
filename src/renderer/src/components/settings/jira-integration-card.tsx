@@ -10,6 +10,7 @@ import {
 } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
@@ -39,6 +40,8 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const credentialCopy = hasRemoteProviderRuntime(settings)
     ? 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
     : 'Connect a Jira Cloud site with your Atlassian email and an API token. Credentials are stored locally and encrypted when local runtime storage supports it.'
+  const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
+  const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   const handleDisconnect = async (siteId?: string): Promise<void> => {
     await disconnectJira(siteId)
@@ -109,122 +112,123 @@ export function JiraIntegrationCard(): React.JSX.Element {
         ) : null
       }
     >
-      <ProviderHostScopeControl
-        labelPrefix={translate(
-          'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
-          'Account scope'
-        )}
-        scope={accountScope}
-        className="mt-3 rounded-md border border-border/40 bg-background/50 px-3 py-2 text-xs"
-      />
-      {connected && sites.length > 0 ? (
-        <div className="mt-3 space-y-2">
-          {sites.map((site) => {
-            const testResult = testResultBySite[site.id]
-            const testing = testingSiteId === site.id
-            return (
-              <div
-                key={site.id}
-                className="flex items-center gap-3 rounded-md border border-border/50 bg-background/60 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{site.displayName}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {site.siteUrl}
-                    {site.email ? ` · ${site.email}` : ''}
-                  </p>
-                </div>
-                {testResult?.state === 'ok' ? (
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
-                    <CheckCircle2 className="size-3.5" />
-                    {translate(
-                      'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
-                      'Verified'
-                    )}
-                  </span>
-                ) : null}
-                {testResult?.state === 'error' ? (
-                  <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
-                    <AlertCircle className="size-3.5 shrink-0" />
-                    <span className="truncate">{testResult.error}</span>
-                  </span>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleTest(site.id)}
-                  disabled={testing}
-                >
-                  {testing ? (
-                    <>
-                      <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+      <IntegrationCardDetails>
+        <ProviderHostScopeControl
+          labelPrefix={translate(
+            'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
+            'Account scope'
+          )}
+          scope={accountScope}
+          className={accountScopeRowClass}
+        />
+        {connected && sites.length > 0 ? (
+          <div className="space-y-2">
+            {sites.map((site) => {
+              const testResult = testResultBySite[site.id]
+              const testing = testingSiteId === site.id
+              return (
+                <div key={site.id} className={subordinateRowClass}>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {site.displayName}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {site.siteUrl}
+                      {site.email ? ` · ${site.email}` : ''}
+                    </p>
+                  </div>
+                  {testResult?.state === 'ok' ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
+                      <CheckCircle2 className="size-3.5" />
                       {translate(
-                        'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
-                        'Testing...'
+                        'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
+                        'Verified'
                       )}
-                    </>
-                  ) : (
-                    translate(
-                      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
-                      'Test'
-                    )
-                  )}
-                </Button>
-                <button
-                  onClick={() => void handleDisconnect(site.id)}
-                  aria-label={translate(
-                    'auto.components.settings.task.tracker.integration.cards.dd3529015d',
-                    'Disconnect {{value0}}',
-                    { value0: site.displayName }
-                  )}
-                  className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
-                >
-                  <Unlink className="size-3.5" />
-                </button>
-              </div>
-            )
-          })}
-          <p className="text-[11px] text-muted-foreground/70">
-            {translate(
-              'auto.components.settings.task.tracker.integration.cards.8c20e76308',
-              'Each connected Jira site has one token stored by the active runtime.'
-            )}
-          </p>
-        </div>
-      ) : connected ? (
-        <IntegrationCardDetails>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.task.tracker.integration.cards.8b2408a8e5',
-              'Jira is connected for this runtime. Re-check if the connected site list looks stale.'
-            )}
-          </p>
-          <div className="flex items-center gap-2">
+                    </span>
+                  ) : null}
+                  {testResult?.state === 'error' ? (
+                    <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      <span className="truncate">{testResult.error}</span>
+                    </span>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleTest(site.id)}
+                    disabled={testing}
+                  >
+                    {testing ? (
+                      <>
+                        <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                        {translate(
+                          'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
+                          'Testing...'
+                        )}
+                      </>
+                    ) : (
+                      translate(
+                        'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+                        'Test'
+                      )
+                    )}
+                  </Button>
+                  <button
+                    onClick={() => void handleDisconnect(site.id)}
+                    aria-label={translate(
+                      'auto.components.settings.task.tracker.integration.cards.dd3529015d',
+                      'Disconnect {{value0}}',
+                      { value0: site.displayName }
+                    )}
+                    className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
+                  >
+                    <Unlink className="size-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+            <p className="text-[11px] text-muted-foreground/70">
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.8c20e76308',
+                'Each connected Jira site has one token stored by the active runtime.'
+              )}
+            </p>
+          </div>
+        ) : connected ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.8b2408a8e5',
+                'Jira is connected for this runtime. Re-check if the connected site list looks stale.'
+              )}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
+                {translate(
+                  'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+                  'Re-check'
+                )}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
+                {translate(
+                  'auto.components.settings.task.tracker.integration.cards.disconnect_all',
+                  'Disconnect'
+                )}
+              </Button>
+            </div>
+          </>
+        ) : !checking ? (
+          <>
+            <p className="text-xs text-muted-foreground">{credentialCopy}</p>
             <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
               {translate(
                 'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
                 'Re-check'
               )}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
-              {translate(
-                'auto.components.settings.task.tracker.integration.cards.disconnect_all',
-                'Disconnect'
-              )}
-            </Button>
-          </div>
-        </IntegrationCardDetails>
-      ) : !checking ? (
-        <IntegrationCardDetails>
-          <p className="text-xs text-muted-foreground">{credentialCopy}</p>
-          <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
-            {translate(
-              'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
-              'Re-check'
-            )}
-          </Button>
-        </IntegrationCardDetails>
-      ) : null}
+          </>
+        ) : null}
+      </IntegrationCardDetails>
 
       <JiraConnectDialog
         open={dialogOpen}

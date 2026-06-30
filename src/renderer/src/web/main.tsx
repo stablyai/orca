@@ -1,13 +1,14 @@
 import '../assets/main.css'
 
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import WebConnect from './WebConnect'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   clearPairingInputFromAddressBar,
-  parseWebPairingInput,
+  decideWebPairingStartup,
   readPairingInputFromLocation
 } from './web-pairing'
 import {
@@ -23,22 +24,37 @@ const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
-  const [hasEnvironment, setHasEnvironment] = useState(() => {
-    const offer = initialPairingInput ? parseWebPairingInput(initialPairingInput) : null
-    if (offer) {
-      saveStoredWebRuntimeEnvironment(
-        createStoredWebRuntimeEnvironment({ name: 'Orca Server', offer })
-      )
+  // Why: current runtime links carry scope metadata. Runtime-scope offers keep
+  // the instant save path; mobile/legacy-unknown offers must be shown/probed.
+  const startupDecision = useMemo(() => {
+    const decision = decideWebPairingStartup({
+      initialPairingInput,
+      hasStoredEnvironment: readStoredWebRuntimeEnvironment() !== null
+    })
+    if (
+      decision.kind === 'auto-save-runtime-offer' ||
+      (decision.kind === 'show-connect' && decision.initialPairingInput !== null)
+    ) {
       clearPairingInputFromAddressBar()
+    }
+    return decision
+  }, [initialPairingInput])
+  const [hasEnvironment, setHasEnvironment] = useState(() => {
+    if (startupDecision.kind === 'auto-save-runtime-offer') {
+      saveStoredWebRuntimeEnvironment(
+        createStoredWebRuntimeEnvironment({ name: 'Orca Server', offer: startupDecision.offer })
+      )
       return true
     }
-    return readStoredWebRuntimeEnvironment() !== null
+    return startupDecision.kind === 'use-stored-environment'
   })
 
   if (!hasEnvironment) {
     return (
       <WebConnect
-        initialPairingInput={initialPairingInput}
+        initialPairingInput={
+          startupDecision.kind === 'show-connect' ? startupDecision.initialPairingInput : null
+        }
         onConnected={() => setHasEnvironment(true)}
       />
     )

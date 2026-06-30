@@ -3,7 +3,7 @@ the repo-path validation, preference-threading, and stats wiring patterns are
 reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain, webContents } from 'electron'
-import { resolve } from 'path'
+import { resolve } from 'node:path'
 import type {
   Repo,
   GitHubCreateIssueFields,
@@ -11,6 +11,7 @@ import type {
   GitHubOwnerRepo,
   GitHubPullRequestStateUpdate,
   GitHubPRRefreshCandidate,
+  GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
   PRRefreshOutcome
 } from '../../shared/types'
@@ -51,6 +52,7 @@ import {
   checkOrcaStarred,
   starOrca
 } from '../github/client'
+import type { GitHubPRBranchLookupOptions } from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
@@ -61,6 +63,10 @@ import {
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
 import { diagnoseGhAuth } from '../github/auth-diagnose'
+import {
+  notePRRefreshValidationDenial,
+  type PRRefreshValidationDenialReason
+} from '../github/pr-refresh-validation-backoff'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
@@ -139,27 +145,53 @@ type RepoScopedArgs = {
   sourceContext?: TaskSourceContext | null
 }
 
-function assertRegisteredRepo(args: string | RepoScopedArgs, store: Store): Repo {
+type RegisteredRepoValidationResult =
+  | { kind: 'ok'; repo: Repo }
+  | { kind: 'denied'; reason: PRRefreshValidationDenialReason; message: string }
+
+function validateRegisteredRepo(
+  args: string | RepoScopedArgs,
+  store: Store,
+  repos = store.getRepos()
+): RegisteredRepoValidationResult {
   const repoPath = typeof args === 'string' ? args : args.repoPath
   const repoId = typeof args === 'string' ? undefined : args.repoId
   const resolvedRepoPath = resolve(repoPath)
-  const repo = store
-    .getRepos()
-    .find((r) => (repoId ? r.id === repoId : resolve(r.path) === resolvedRepoPath))
+  const repo = repos.find((r) => (repoId ? r.id === repoId : resolve(r.path) === resolvedRepoPath))
   if (!repo) {
-    throw new Error('Access denied: unknown repository path')
+    return {
+      kind: 'denied',
+      reason: 'unknown-repo',
+      message: 'Access denied: unknown repository path'
+    }
   }
   if (repoId && resolve(repo.path) !== resolvedRepoPath) {
-    throw new Error('Access denied: repository path does not match repo id')
+    return {
+      kind: 'denied',
+      reason: 'repo-path-mismatch',
+      message: 'Access denied: repository path does not match repo id'
+    }
   }
   if (
     typeof args !== 'string' &&
     args.sourceContext?.provider === 'github' &&
     args.sourceContext.hostId !== getRepoExecutionHostId(repo)
   ) {
-    throw new Error('Access denied: GitHub source host does not match repository host')
+    return {
+      kind: 'denied',
+      reason: 'host-mismatch',
+      message: 'Access denied: GitHub source host does not match repository host'
+    }
   }
-  return repo
+  return { kind: 'ok', repo }
+}
+
+function assertRegisteredRepo(args: string | RepoScopedArgs, store: Store): Repo {
+  const result = validateRegisteredRepo(args, store)
+  if (result.kind === 'denied') {
+    throw new Error(result.message)
+  }
+  return result.repo
 }
 
 function repoConnectionId(repo: Repo): string | null {
@@ -169,6 +201,50 @@ function repoConnectionId(repo: Repo): string | null {
 function localGitOptionArgs(store: Store, repo: Repo): [] | [{ wslDistro?: string }] {
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
+}
+
+function applyRepoToPRRefreshCandidate(
+  store: Store,
+  repo: Repo,
+  candidate: GitHubPRRefreshCandidate
+): GitHubPRRefreshCandidate {
+  const localGitOptions = localGitOptionArgs(store, repo)[0]
+  const appliedCandidate = { ...candidate }
+  delete appliedCandidate.localGitOptions
+  delete appliedCandidate.connectionId
+  delete appliedCandidate.executionHostId
+  delete appliedCandidate.connectionState
+  return {
+    ...appliedCandidate,
+    repoPath: repo.path,
+    repoId: repo.id,
+    ...(localGitOptions ? { localGitOptions } : {}),
+    connectionId: repoConnectionId(repo),
+    executionHostId: repo.executionHostId ?? null,
+    connectionState: repo.connectionId ? 'connected' : 'unknown'
+  }
+}
+
+function validateAutomaticPRRefreshCandidate(
+  candidate: GitHubPRRefreshCandidate,
+  store: Store,
+  repos = store.getRepos()
+):
+  | { kind: 'ok'; candidate: GitHubPRRefreshCandidate }
+  | {
+      kind: 'skipped'
+      result: Extract<GitHubPRRefreshEnqueueResult, { kind: 'skipped' }>
+    } {
+  const result = validateRegisteredRepo(candidate, store, repos)
+  if (result.kind === 'denied') {
+    const skippedReason = notePRRefreshValidationDenial({
+      repoId: candidate.repoId,
+      repoPath: candidate.repoPath,
+      reason: result.reason
+    })
+    return { kind: 'skipped', result: { kind: 'skipped', skippedReason } }
+  }
+  return { kind: 'ok', candidate: applyRepoToPRRefreshCandidate(store, result.repo, candidate) }
 }
 
 export function registerGitHubHandlers(store: Store, stats: StatsCollector): void {
@@ -201,19 +277,31 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         branch: string
         linkedPRNumber?: number | null
         fallbackPRNumber?: number | null
+        acceptMergedFallbackPR?: boolean
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const localGitOptions = localGitOptionArgs(store, repo)[0]
       const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
         localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
+      const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptionArgs[0]
+        ? { ...hostedReviewOptionArgs[0] }
+        : args.acceptMergedFallbackPR === true
+          ? {}
+          : undefined
+      if (lookupOptions && args.acceptMergedFallbackPR === true) {
+        lookupOptions.acceptMergedFallbackPR = true
+      }
+      const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
+        ? [lookupOptions]
+        : []
       const pr = await getPRForBranch(
         repo.path,
         args.branch,
         args.linkedPRNumber ?? null,
         repoConnectionId(repo),
         args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
-        ...hostedReviewOptionArgs
+        ...lookupOptionArgs
       )
       // Emit pr_created when a PR is first detected for a branch.
       // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
@@ -233,16 +321,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle(
     'gh:refreshPRNow',
     async (_event, args: { candidate: GitHubPRRefreshCandidate }) => {
-      const repo = assertRegisteredRepo(args.candidate.repoPath, store)
-      const localGitOptions = localGitOptionArgs(store, repo)[0]
-      const outcome = await refreshPRNow({
-        ...args.candidate,
-        repoPath: repo.path,
-        repoId: repo.id,
-        ...(localGitOptions ? { localGitOptions } : {}),
-        connectionId: repo.connectionId ?? args.candidate.connectionId,
-        connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
-      })
+      const repo = assertRegisteredRepo(args.candidate, store)
+      const outcome = await refreshPRNow(applyRepoToPRRefreshCandidate(store, repo, args.candidate))
       recordPRIfNeeded(repo, outcome)
       return outcome
     }
@@ -251,28 +331,20 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle(
     'gh:enqueuePRRefresh',
     (
-      _event,
+      event,
       args: {
         candidate: GitHubPRRefreshCandidate
         reason: GitHubPRRefreshReason
         priority?: number
       }
-    ) => {
-      const repo = assertRegisteredRepo(args.candidate.repoPath, store)
-      const localGitOptions = localGitOptionArgs(store, repo)[0]
-      enqueuePRRefresh(
-        {
-          ...args.candidate,
-          repoPath: repo.path,
-          repoId: repo.id,
-          ...(localGitOptions ? { localGitOptions } : {}),
-          connectionId: repo.connectionId ?? args.candidate.connectionId,
-          connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
-        },
-        args.reason,
-        args.priority ?? 0
-      )
-      return true
+    ): GitHubPRRefreshEnqueueResult => {
+      const validation = validateAutomaticPRRefreshCandidate(args.candidate, store)
+      if (validation.kind === 'skipped') {
+        return validation.result
+      }
+      const senderWindowId = event?.sender?.id
+      enqueuePRRefresh(validation.candidate, args.reason, args.priority ?? 0, senderWindowId)
+      return { kind: 'queued' }
     }
   )
 
@@ -287,18 +359,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
           clearVisiblePRRefreshWindow(senderId)
         })
       }
-      const candidates = args.candidates.map((candidate) => {
-        const repo = assertRegisteredRepo(candidate.repoPath, store)
-        const localGitOptions = localGitOptionArgs(store, repo)[0]
-        return {
-          ...candidate,
-          repoPath: repo.path,
-          repoId: repo.id,
-          ...(localGitOptions ? { localGitOptions } : {}),
-          connectionId: repo.connectionId ?? candidate.connectionId,
-          connectionState: repo.connectionId ? 'connected' : candidate.connectionState
+      const candidates: GitHubPRRefreshCandidate[] = []
+      const repos = store.getRepos()
+      for (const candidate of args.candidates) {
+        const validation = validateAutomaticPRRefreshCandidate(candidate, store, repos)
+        if (validation.kind === 'ok') {
+          candidates.push(validation.candidate)
         }
-      })
+      }
       reportVisiblePRRefreshCandidates(candidates, args.generation, senderId)
       return true
     }
@@ -428,6 +496,44 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     const repo = assertRegisteredRepo(args, store)
     return dispatchWorkItem(args, repo, getWorkItemDetails, localGitOptionArgs(store, repo)[0])
   })
+
+  ipcMain.handle(
+    'gh:notifyWorkItemMutated',
+    (
+      event,
+      args: {
+        repoPath: string
+        repoId?: string
+        type: 'issue' | 'pr'
+        number: number
+      }
+    ) => {
+      const repo = args.repoId
+        ? store.getRepos().find((candidate) => candidate.id === args.repoId)
+        : assertRegisteredRepo(args, store)
+      if (!repo) {
+        return false
+      }
+      if (
+        (args.type !== 'issue' && args.type !== 'pr') ||
+        typeof args.number !== 'number' ||
+        !Number.isInteger(args.number) ||
+        args.number < 1
+      ) {
+        return false
+      }
+      broadcastWorkItemMutated(
+        {
+          repoPath: repo.path,
+          repoId: repo.id,
+          type: args.type,
+          number: args.number
+        },
+        event.sender.id
+      )
+      return true
+    }
+  )
 
   ipcMain.handle(
     'gh:prFileContents',
@@ -620,7 +726,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       })
       if (ok) {
         broadcastWorkItemMutated(
-          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
           event.sender.id
         )
       }

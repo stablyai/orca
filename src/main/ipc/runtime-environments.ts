@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,

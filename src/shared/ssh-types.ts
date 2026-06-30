@@ -60,12 +60,16 @@ export type SshConnectionStatus =
   | 'reconnection-failed'
   | 'error'
 
+export type SshRemotePlatform = 'linux' | 'darwin' | 'win32'
+
 export type SshConnectionState = {
   targetId: string
   status: SshConnectionStatus
   error: string | null
   /** Number of reconnection attempts since last disconnect. */
   reconnectAttempt: number
+  /** Remote OS detected by the SSH relay once available. */
+  remotePlatform?: SshRemotePlatform
 }
 
 export type SshRemotePtyLeaseState = 'attached' | 'detached' | 'terminated' | 'expired'

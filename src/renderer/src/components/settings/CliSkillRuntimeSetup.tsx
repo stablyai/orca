@@ -7,6 +7,7 @@ import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows
 } from '../../../../shared/wsl-login-shell-command'
+import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -19,6 +20,11 @@ export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
   label: string
+}
+
+const LOCAL_HOST_AGENT_RUNTIME: LocalAgentRuntime = {
+  runtime: 'host',
+  label: ''
 }
 
 export function getHostRuntimeLabel(): string {
@@ -62,15 +68,64 @@ export function getWslCliDistroRequest(
     : undefined
 }
 
-export function buildSkillCommandForRuntime(command: string, runtime: LocalAgentRuntime): string {
-  if (runtime.runtime !== 'wsl') {
+export function buildSkillCommandForRuntime(
+  command: string,
+  runtime?: LocalAgentRuntime,
+  currentPlatform = getSkillCommandPlatform()
+): string {
+  const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
+  const normalizedCommand = normalizeWindowsSkillUpdateCommand(
+    command,
+    resolvedRuntime,
+    currentPlatform
+  )
+  if (resolvedRuntime.runtime !== 'wsl') {
+    return normalizedCommand
+  }
+
+  const distroArg = resolvedRuntime.wslDistro?.trim()
+    ? ` -d ${quotePowerShellSingle(resolvedRuntime.wslDistro.trim())}`
+    : ''
+  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(normalizedCommand))
+  return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+}
+
+function normalizeWindowsSkillUpdateCommand(
+  command: string,
+  runtime: LocalAgentRuntime,
+  currentPlatform: NodeJS.Platform
+): string {
+  if (runtime.runtime === 'wsl' || currentPlatform !== 'win32') {
     return command
   }
-  const distroArg = runtime.wslDistro?.trim()
-    ? ` -d ${quotePowerShellSingle(runtime.wslDistro.trim())}`
-    : ''
-  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-  return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+
+  const trimmedCommand = command.trim()
+  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
+  if (!updateMatch) {
+    return command
+  }
+
+  // Why: the `skills update` subcommand is currently unreliable on native
+  // Windows, while reinstalling from the same repo source is idempotent and
+  // keeps the setup affordance working.
+  return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
+}
+
+function getSkillCommandPlatform(): NodeJS.Platform {
+  const platform =
+    typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
+  if (platform) {
+    return platform
+  }
+
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  if (userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  return 'linux'
 }
 
 export function buildSkillInstallCommandForRuntime(

@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 import { parseDocument } from 'yaml'
 import type { TerminalColorOverrides } from '../../shared/types'
 import {

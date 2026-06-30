@@ -11,6 +11,7 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -25,6 +26,7 @@ import type {
   GitHubCommentResult,
   GitHubWorkItem,
   GitPushTarget,
+  GitStagingArea,
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitUpstreamStatus,
@@ -44,6 +46,7 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
+  TuiAgent,
   UpdateStatus,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
@@ -62,7 +65,8 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeTerminalPresentation
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -77,6 +81,7 @@ import type {
   RateLimitState
 } from '../shared/rate-limit-types'
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
+import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -150,6 +155,12 @@ import type {
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type { AiVaultListArgs } from '../shared/ai-vault-types'
+import type { AgentType } from '../shared/native-chat-types'
+import type {
+  NativeChatAppendedMessages,
+  NativeChatAppendedPayload,
+  NativeChatReadSessionResult
+} from './api-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
@@ -161,9 +172,11 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
 import {
-  NATIVE_FILE_DROP_TARGET,
   ORCA_INTERNAL_FILE_DRAG_TYPE,
+  createNativeFileDropPayload,
+  createRejectedNativeFileDropPayload,
   hasNativeFileDragTypes,
+  NATIVE_FILE_DROP_MAX_PATHS,
   resolveNativeFileDropPath,
   type NativeDropResolution,
   type NativeFileDropPayload,
@@ -172,6 +185,11 @@ import {
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
+import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
+import type {
+  LocalhostWorktreeLabelResult,
+  LocalhostWorktreeLabelRoute
+} from '../shared/localhost-worktree-labels'
 import type {
   CrashReportBreadcrumbData,
   CrashReportSubmitArgs,
@@ -185,6 +203,20 @@ type NativeFileDropCallback = (data: NativeFileDropPayload) => void
 
 const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
+
+function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
+  if (process.platform !== 'linux') {
+    return null
+  }
+  if (
+    process.env.WAYLAND_DISPLAY ||
+    process.env.XDG_SESSION_TYPE?.toLowerCase() === 'wayland' ||
+    process.env.ELECTRON_OZONE_PLATFORM_HINT?.toLowerCase() === 'wayland'
+  ) {
+    return 'wayland'
+  }
+  return process.env.DISPLAY ? 'x11' : null
+}
 
 type AppRestartPrepOptions = {
   startedEventName: string
@@ -310,7 +342,8 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
       pathEntries.push({
         nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
         nativeFileDropDir: entry.dataset.nativeFileDropDir,
-        terminalTabId: entry.dataset.terminalTabId
+        terminalTabId: entry.dataset.terminalTabId,
+        terminalPaneLeafId: entry.dataset.terminalPaneLeafId ?? entry.dataset.leafId
       })
     }
   }
@@ -354,6 +387,21 @@ document.addEventListener(
     }
     const resolution = resolveNativeFileDrop(e)
 
+    // Why: resolving native File objects to paths is synchronous in preload.
+    // Reject oversized gestures by count before touching every File object.
+    if (files.length > NATIVE_FILE_DROP_MAX_PATHS) {
+      ipcRenderer.send(
+        'terminal:file-dropped-from-preload',
+        createRejectedNativeFileDropPayload({
+          byteLength: 0,
+          pathCount: files.length,
+          reason: 'too-many-paths',
+          status: 'rejected'
+        })
+      )
+      return
+    }
+
     const paths: string[] = []
     for (let i = 0; i < files.length; i++) {
       // webUtils.getPathForFile is the Electron 28+ replacement for File.path
@@ -374,31 +422,19 @@ document.addEventListener(
       return
     }
 
-    // Why: preload must emit exactly one native-drop event per drop gesture.
-    // The preload layer already has the full FileList. Re-emitting one IPC
-    // message per path and asking the renderer to reconstruct the gesture via
-    // timing would be both fragile and slower under large drops.
-    if (resolution?.target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
-      ipcRenderer.send('terminal:file-dropped-from-preload', {
-        paths,
-        target: NATIVE_FILE_DROP_TARGET.fileExplorer,
-        destinationDir: resolution.destinationDir
-      })
-    } else {
-      // Why: falls back to 'editor' so drops on surfaces without an explicit
-      // marker preserve the prior open-in-editor behavior instead of being
-      // silently discarded.
-      ipcRenderer.send('terminal:file-dropped-from-preload', {
-        paths,
-        target: resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor,
-        ...(resolution?.target === NATIVE_FILE_DROP_TARGET.terminal && resolution.tabId
-          ? { tabId: resolution.tabId }
-          : {})
-      })
+    const payload = createNativeFileDropPayload(resolution, paths)
+    if (!payload) {
+      return
     }
+    // Why: preload must emit exactly one native-drop event per drop gesture.
+    // The shared planner also rejects large path payloads without including
+    // path contents in the failure event.
+    ipcRenderer.send('terminal:file-dropped-from-preload', payload)
   },
   true
 )
+
+const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
 
 // Custom APIs for renderer
 const api = {
@@ -422,10 +458,13 @@ const api = {
     reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
-    // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
-    // the renderer's keyboard-layout probe can distinguish Polish Pro / US
-    // Extended / ABC Extended / IME Roman modes from plain US QWERTY (see
-    // src/renderer/src/lib/keyboard-layout/input-source-id.ts, issue #1205).
+    startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
+      startupDiagnosticsEnabled
+        ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
+        : Promise.resolve(),
+    // Why: on macOS this returns the active input mode, or the layout ID when
+    // no IME mode is selected, so renderer keyboard workarounds can distinguish
+    // CJK IMEs and compose layouts from plain US QWERTY (see issue #1205).
     // Returns null on non-Darwin or when the defaults read fails.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
@@ -445,7 +484,9 @@ const api = {
     get: () => ({
       platform: process.platform,
       osRelease:
-        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ?? ''
+        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ??
+        '',
+      displayServer: getLinuxDisplayServer()
     })
   } satisfies PreloadApi['platform'],
 
@@ -655,7 +696,24 @@ const api = {
   } satisfies PreloadApi['worktrees'],
 
   workspaceCleanup: {
-    scan: (args) => ipcRenderer.invoke('workspaceCleanup:scan', args),
+    scan: (args, onProgress) => {
+      if (!onProgress) {
+        return ipcRenderer.invoke('workspaceCleanup:scan', args)
+      }
+      const scanId = args?.scanId ?? crypto.randomUUID()
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: WorkspaceCleanupScanProgress
+      ): void => {
+        if (progress.scanId === scanId) {
+          onProgress(progress)
+        }
+      }
+      ipcRenderer.on('workspaceCleanup:scanProgress', listener)
+      return ipcRenderer
+        .invoke('workspaceCleanup:scan', { ...args, scanId })
+        .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))
+    },
     dismiss: (args) => ipcRenderer.invoke('workspaceCleanup:dismiss', args),
     clearDismissals: () => ipcRenderer.invoke('workspaceCleanup:clearDismissals'),
     hasKillableLocalProcesses: (args) =>
@@ -695,12 +753,16 @@ const api = {
       cwd?: string
       env?: Record<string, string>
       command?: string
+      launchConfig?: SleepingAgentLaunchConfig
+      launchToken?: string
+      launchAgent?: TuiAgent
       startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
+      terminalColorQueryReplies?: { foreground?: string; background?: string }
       // Why: closes the SIGKILL race documented in INVESTIGATION.md by
       // letting main patch + sync-flush the (worktreeId, tabId, leafId →
       // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -715,6 +777,7 @@ const api = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
+      launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
@@ -774,6 +837,7 @@ const api = {
       cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
+      alternateScreen?: boolean
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -807,6 +871,12 @@ const api = {
     /** Resolve the live cwd of a PTY via `/proc` (Linux) or `lsof` (macOS).
      *  Returns `''` when the id is unknown or the platform cannot resolve one. */
     getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
+
+    /** The PTY's last APPLIED size (its real winsize), or null if unknown.
+     *  Lets the renderer detect drift after a resize was dropped main-side and
+     *  re-assert, instead of trusting the size it last fired blind. */
+    getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
+      ipcRenderer.invoke('pty:getSize', { id }),
 
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
@@ -938,6 +1008,7 @@ const api = {
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
+      acceptMergedFallbackPR?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
 
     refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
@@ -992,6 +1063,13 @@ const api = {
       number: number
       type?: 'issue' | 'pr'
     }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
+
+    notifyWorkItemMutated: (args: {
+      repoPath: string
+      repoId?: string
+      type: 'issue' | 'pr'
+      number: number
+    }): Promise<boolean> => ipcRenderer.invoke('gh:notifyWorkItemMutated', args),
 
     prFileContents: (args: {
       repoPath: string
@@ -1757,6 +1835,11 @@ const api = {
     }
   },
 
+  localhostWorktreeLabels: {
+    register: (args: LocalhostWorktreeLabelRoute): Promise<LocalhostWorktreeLabelResult> =>
+      ipcRenderer.invoke('localhostWorktreeLabels:register', args)
+  } satisfies PreloadApi['localhostWorktreeLabels'],
+
   keybindings: {
     get: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:get'),
     ensureFile: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:ensureFile'),
@@ -1796,6 +1879,8 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:add', args),
+    cancelPendingLogin: (): Promise<boolean> =>
+      ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
@@ -1843,7 +1928,8 @@ const api = {
     copilotStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:copilotStatus'),
     hermesStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:hermesStatus')
+      ipcRenderer.invoke('agentHooks:hermesStatus'),
+    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus')
   },
 
   agentTrust: {
@@ -1883,7 +1969,16 @@ const api = {
     refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
       ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
-      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args),
+    detectRemoteWindowsTerminalCapabilities: (args: {
+      connectionId: string
+    }): Promise<{
+      wslAvailable: boolean
+      wslDistros: string[]
+      pwshAvailable: boolean
+      gitBashAvailable: boolean
+      hostPlatform: NodeJS.Platform | null
+    }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
   },
 
   notifications: {
@@ -2123,6 +2218,8 @@ const api = {
         filename: string
         totalBytes: number | null
         mimeType: string | null
+        savePath: string
+        status: 'downloading'
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2134,6 +2231,8 @@ const api = {
           filename: string
           totalBytes: number | null
           mimeType: string | null
+          savePath: string
+          status: 'downloading'
         }
       ) => callback(data)
       ipcRenderer.on('browser:download-requested', listener)
@@ -2142,14 +2241,22 @@ const api = {
 
     onDownloadProgress: (
       callback: (event: {
+        browserPageId?: string
         downloadId: string
         receivedBytes: number
         totalBytes: number | null
+        state: 'progressing' | 'interrupted' | null
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { downloadId: string; receivedBytes: number; totalBytes: number | null }
+        data: {
+          browserPageId?: string
+          downloadId: string
+          receivedBytes: number
+          totalBytes: number | null
+          state: 'progressing' | 'interrupted' | null
+        }
       ) => callback(data)
       ipcRenderer.on('browser:download-progress', listener)
       return () => ipcRenderer.removeListener('browser:download-progress', listener)
@@ -2157,6 +2264,7 @@ const api = {
 
     onDownloadFinished: (
       callback: (event: {
+        browserPageId?: string
         downloadId: string
         status: 'completed' | 'canceled' | 'failed'
         savePath: string | null
@@ -2166,6 +2274,7 @@ const api = {
       const listener = (
         _event: Electron.IpcRendererEvent,
         data: {
+          browserPageId?: string
           downloadId: string
           status: 'completed' | 'canceled' | 'failed'
           savePath: string | null
@@ -2259,11 +2368,6 @@ const api = {
       ipcRenderer.on('browser:open-link-in-orca-tab', listener)
       return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)
     },
-
-    acceptDownload: (args: {
-      downloadId: string
-    }): Promise<{ ok: true } | { ok: false; reason: string }> =>
-      ipcRenderer.invoke('browser:acceptDownload', args),
 
     cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:cancelDownload', args),
@@ -2374,6 +2478,52 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('emulator:frameStreamError', listener)
       return () => ipcRenderer.removeListener('emulator:frameStreamError', listener)
+    },
+    startVideoStream: (args: {
+      deviceId: string
+      streamId: string
+    }): Promise<{ streamId: string }> => ipcRenderer.invoke('emulator:videoStreamStart', args),
+    stopVideoStream: (args: { streamId: string }): Promise<void> =>
+      ipcRenderer.invoke('emulator:videoStreamStop', args),
+    onVideoStreamMeta: (
+      callback: (data: {
+        streamId: string
+        deviceId: string
+        meta: { codecId: string; width: number; height: number }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          streamId: string
+          deviceId: string
+          meta: { codecId: string; width: number; height: number }
+        }
+      ) => callback(data)
+      ipcRenderer.on('emulator:videoStreamMeta', listener)
+      return () => ipcRenderer.removeListener('emulator:videoStreamMeta', listener)
+    },
+    onVideoStreamFrame: (
+      callback: (data: {
+        streamId: string
+        deviceId: string
+        config: boolean
+        keyFrame: boolean
+        bytes: ArrayBuffer
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          streamId: string
+          deviceId: string
+          config: boolean
+          keyFrame: boolean
+          bytes: ArrayBuffer
+        }
+      ) => callback(data)
+      ipcRenderer.on('emulator:videoStreamFrame', listener)
+      return () => ipcRenderer.removeListener('emulator:videoStreamFrame', listener)
     },
     onPaneFocus: (callback: (data: { worktreeId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
@@ -2526,6 +2676,27 @@ const api = {
       connectionId: string
     }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
       ipcRenderer.invoke('fs:downloadFile', args),
+    saveDownloadedFile: (args: {
+      suggestedName: string
+      content: string
+      encoding: 'utf8' | 'base64'
+    }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:saveDownloadedFile', args),
+    startDownloadedFile: (args: {
+      suggestedName: string
+    }): Promise<
+      { canceled: true } | { canceled: false; transferId: string; destinationPath: string }
+    > => ipcRenderer.invoke('fs:startDownloadedFile', args),
+    appendDownloadedFileChunk: (args: {
+      transferId: string
+      contentBase64: string
+    }): Promise<{ ok: true }> => ipcRenderer.invoke('fs:appendDownloadedFileChunk', args),
+    finishDownloadedFile: (args: {
+      transferId: string
+    }): Promise<{ canceled: false; destinationPath: string }> =>
+      ipcRenderer.invoke('fs:finishDownloadedFile', args),
+    cancelDownloadedFile: (args: { transferId: string }): Promise<{ ok: true }> =>
+      ipcRenderer.invoke('fs:cancelDownloadedFile', args),
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -2658,7 +2829,14 @@ const api = {
       worktreePath: string
       connectionId?: string
       includeIgnored?: boolean
+      bypassEffectiveUpstreamNegativeCache?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+    submoduleStatus: (args: {
+      worktreePath: string
+      submodulePath: string
+      connectionId?: string
+      area?: GitStagingArea
+    }): Promise<unknown> => ipcRenderer.invoke('git:submoduleStatus', args),
     checkIgnored: (args: {
       worktreePath: string
       paths: string[]
@@ -3080,6 +3258,26 @@ const api = {
       ipcRenderer.on('ui:toggleStatusBar', listener)
       return () => ipcRenderer.removeListener('ui:toggleStatusBar', listener)
     },
+    onExportPdfRequested: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('export:requestPdf', listener)
+      return () => ipcRenderer.removeListener('export:requestPdf', listener)
+    },
+    onAppMenuPaste: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:appMenuPaste', listener)
+      return () => ipcRenderer.removeListener('ui:appMenuPaste', listener)
+    },
+    onEditableContextPaste: (
+      callback: (data: { plainTextOnly: boolean }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { plainTextOnly: boolean }
+      ): void => callback({ plainTextOnly: data?.plainTextOnly === true })
+      ipcRenderer.on('ui:editableContextPaste', listener)
+      return () => ipcRenderer.removeListener('ui:editableContextPaste', listener)
+    },
     onDictationKeyDown: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:dictationKeyDown', listener)
@@ -3112,9 +3310,14 @@ const api = {
         requestId?: string
         worktreeId: string
         command?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         title?: string
         ptyId?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3128,9 +3331,14 @@ const api = {
           requestId?: string
           worktreeId: string
           command?: string
+          env?: Record<string, string>
+          launchConfig?: SleepingAgentLaunchConfig
+          launchToken?: string
+          launchAgent?: TuiAgent
           title?: string
           ptyId?: string
           activate?: boolean
+          presentation?: RuntimeTerminalPresentation
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
@@ -3148,9 +3356,14 @@ const api = {
         afterTabId?: string
         targetGroupId?: string
         command?: string
+        env?: Record<string, string>
+        launchConfig?: SleepingAgentLaunchConfig
+        launchToken?: string
+        launchAgent?: TuiAgent
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
+        presentation?: RuntimeTerminalPresentation
       }) => void
     ): (() => void) => {
       const listener = (
@@ -3161,9 +3374,14 @@ const api = {
           afterTabId?: string
           targetGroupId?: string
           command?: string
+          env?: Record<string, string>
+          launchConfig?: SleepingAgentLaunchConfig
+          launchToken?: string
+          launchAgent?: TuiAgent
           startupCommandDelivery?: StartupCommandDelivery
           title?: string
           activate?: boolean
+          presentation?: RuntimeTerminalPresentation
         }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)
@@ -3338,11 +3556,13 @@ const api = {
       ipcRenderer.on('terminal:zoom', listener)
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
-    readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
-    readSelectionClipboardText: (): Promise<string> =>
-      ipcRenderer.invoke('clipboard:readSelectionText'),
+    readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readText', options),
+    readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readSelectionText', options),
     saveClipboardImageAsTempFile: (args?: {
       connectionId?: string | null
+      runtimeEnvironmentId?: string | null
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
@@ -3350,6 +3570,19 @@ const api = {
       ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
+    performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }): void => {
+      ipcRenderer.send('ui:performNativePaste', {
+        mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
+      })
+    },
+    writeClipboardFile: (
+      args:
+        | {
+            filePath: string
+            connectionId?: string | null
+          }
+        | string
+    ): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('clipboard:writeFile', args),
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),
@@ -3508,6 +3741,40 @@ const api = {
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSessions', args)
+  },
+
+  nativeChat: {
+    readSession: (
+      agent: AgentType,
+      sessionId: string,
+      limit?: number,
+      transcriptPath?: string
+    ): Promise<NativeChatReadSessionResult> =>
+      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
+    /** Start live tailing for a transcript. `onAppended` fires with only the
+     *  newly-appended messages. Returns an unsubscribe fn that closes the
+     *  main-process watcher (subscriptionId routes appends to this caller). */
+    subscribe: (
+      args: {
+        subscriptionId: string
+        agent: AgentType
+        sessionId: string
+        transcriptPath?: string
+      },
+      onAppended: (messages: NativeChatAppendedMessages) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: NativeChatAppendedPayload) => {
+        if (payload.subscriptionId === args.subscriptionId) {
+          onAppended(payload.messages)
+        }
+      }
+      ipcRenderer.on('nativeChat:appended', listener)
+      ipcRenderer.send('nativeChat:subscribe', args)
+      return () => {
+        ipcRenderer.removeListener('nativeChat:appended', listener)
+        ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
+      }
+    }
   },
 
   runtime: {
@@ -3918,6 +4185,11 @@ const api = {
      *  cannot resurrect it. Fire-and-forget; no response. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
+    },
+    /** Drop all cached hook statuses under one terminal tab prefix. Fired on
+     *  explicit tab close even when the renderer has no matching local row. */
+    dropByTabPrefix: (tabId: string): void => {
+      ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
     }
   },
 

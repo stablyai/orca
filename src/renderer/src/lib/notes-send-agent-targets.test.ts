@@ -122,6 +122,49 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  it('keeps permission status-backed targets visible but disabled', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'waiting') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(STATUS_TAB_ID, { title: 'Terminal 1' })] },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
+    ])
+  })
+
+  it('keeps status-backed working targets disabled when a live pane title needs permission', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(STATUS_TAB_ID, { title: 'Codex working' })] },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') },
+        runtimePaneTitlesByTabId: { [STATUS_TAB_ID]: { 1: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey,
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
+    ])
+  })
+
   it('lists a launch-agent tab with a recognized pane title before any hook status', () => {
     const targets = deriveNotesSendAgentTargets(
       state({
@@ -129,7 +172,7 @@ describe('notes send agent targets', () => {
           [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 2', launchAgent: 'codex' })]
         },
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
-        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
       NOW
@@ -147,11 +190,11 @@ describe('notes send agent targets', () => {
     ])
   })
 
-  it('recognizes a launch-agent tab by its OSC tab title when no pane title is set', () => {
+  it('recognizes a launch-agent tab by its explicit ready tab title when no pane title is set', () => {
     const targets = deriveNotesSendAgentTargets(
       state({
         tabsByWorktree: {
-          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
         },
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
       }),
@@ -160,6 +203,67 @@ describe('notes send agent targets', () => {
     )
 
     expect(targets.map((target) => target.paneKey)).toEqual([makePaneKey(LAUNCH_TAB_ID, LEAF_B)])
+  })
+
+  it('skips a launch-agent tab with only a bare agent-name title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([])
+  })
+
+  it('disables a launch-agent tab with a permission pane title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 2', launchAgent: 'codex' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex - action required' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: makePaneKey(LAUNCH_TAB_ID, LEAF_B),
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
+    ])
+  })
+
+  it('disables a launch-agent tab with a permission tab title when no pane title is set', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(LAUNCH_TAB_ID, { title: 'Codex - action required', launchAgent: 'codex' })
+          ]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        paneKey: makePaneKey(LAUNCH_TAB_ID, LEAF_B),
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      })
+    ])
   })
 
   it('skips a still-booting launch-agent tab whose title is not yet an agent', () => {
@@ -198,11 +302,11 @@ describe('notes send agent targets', () => {
     const targets = deriveNotesSendAgentTargets(
       state({
         tabsByWorktree: {
-          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex', launchAgent: 'codex' })]
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready', launchAgent: 'codex' })]
         },
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
         ptyIdsByTabId: { [LAUNCH_TAB_ID]: [] },
-        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
       NOW
@@ -232,8 +336,7 @@ describe('notes send agent targets', () => {
     expect(targets[0]).toMatchObject({
       tabId: LAUNCH_TAB_ID,
       leafId: LEAF_A,
-      status: 'disabled',
-      disabledReason: 'Agent is working'
+      status: 'eligible'
     })
   })
 
@@ -263,9 +366,9 @@ describe('notes send agent targets', () => {
   it('does not list a plain terminal tab without a launch agent or status', () => {
     const targets = deriveNotesSendAgentTargets(
       state({
-        tabsByWorktree: { [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex' })] },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Codex ready' })] },
         terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
-        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex' } }
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
       }),
       WORKTREE_ID,
       NOW

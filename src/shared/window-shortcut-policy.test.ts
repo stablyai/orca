@@ -104,6 +104,66 @@ describe('resolveWindowShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('honors remapped tab/workspace number ranges, including swapping the modifiers', () => {
+    // Swap on macOS: tab now uses Cmd+1-9, workspace uses Ctrl+1-9.
+    const swapped: KeybindingOverrides = {
+      'tab.selectByIndex': ['Mod+1'],
+      'workspace.selectByIndex': ['Ctrl+1']
+    }
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        swapped
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        swapped
+      )
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+
+    // A custom chord with an extra modifier also resolves.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit2', key: '2', meta: false, control: true, alt: false, shift: true },
+        'linux',
+        { 'tab.selectByIndex': ['Mod+Shift+1'] }
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 1 })
+
+    // Disabling the range leaves the chord unclaimed.
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'linux',
+        { 'workspace.selectByIndex': [] }
+      )
+    ).toBeNull()
+
+    // Both ranges disabled: neither the workspace nor the tab digit chord resolves.
+    const bothDisabled: KeybindingOverrides = {
+      'workspace.selectByIndex': [],
+      'tab.selectByIndex': []
+    }
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin',
+        bothDisabled
+      )
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        bothDisabled
+      )
+    ).toBeNull()
+  })
+
   it('keeps Orca-first active in terminal context but lets Terminal-first pass risky app chords', () => {
     const macWorktreePalette = {
       code: 'KeyJ',

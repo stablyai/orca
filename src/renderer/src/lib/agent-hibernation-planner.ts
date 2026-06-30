@@ -15,7 +15,7 @@ export const MAX_AGENT_HIBERNATION_IDLE_MS = 24 * 60 * 60 * 1000
 export type AgentHibernationPlannerSnapshot = {
   settings: Pick<GlobalSettings, 'experimentalAgentHibernation' | 'agentHibernationIdleMs'> | null
   activeWorktreeId: string | null
-  foregroundWorktreeIds: string[]
+  foregroundTerminalTabIds: string[]
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
   ptyIdsByTabId: Record<string, string[] | undefined>
@@ -25,6 +25,7 @@ export type AgentHibernationPlannerSnapshot = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
   lastTerminalInputAtByPaneKey: Record<string, number | undefined>
+  foregroundTerminalLastSeenAtByTabId: Record<string, number | undefined>
   now: number
 }
 
@@ -40,13 +41,6 @@ export type AgentHibernationCandidate = {
   signature: string
 }
 
-export type AgentHibernationConfirmationState = Record<string, string>
-
-export type AgentHibernationPlan = {
-  candidates: AgentHibernationCandidate[]
-  confirmationState: AgentHibernationConfirmationState
-}
-
 type EligiblePane = {
   paneKey: string
   tabId: string
@@ -56,6 +50,7 @@ type EligiblePane = {
   providerSessionId: string
   state: AgentStatusEntry['state']
   updatedAt: number
+  effectiveIdleStart: number
   inputAt: number
 }
 
@@ -120,6 +115,7 @@ function getEligiblePane(args: {
   livePtyIds: Set<string>
   sleepingAgentSessionsByPaneKey: AgentHibernationPlannerSnapshot['sleepingAgentSessionsByPaneKey']
   lastTerminalInputAtByPaneKey: AgentHibernationPlannerSnapshot['lastTerminalInputAtByPaneKey']
+  foregroundTerminalLastSeenAtByTabId: AgentHibernationPlannerSnapshot['foregroundTerminalLastSeenAtByTabId']
   mobileLockedPtyIds: Set<string>
   now: number
   idleMs: number
@@ -131,9 +127,14 @@ function getEligiblePane(args: {
     livePtyIds,
     sleepingAgentSessionsByPaneKey,
     lastTerminalInputAtByPaneKey,
+    foregroundTerminalLastSeenAtByTabId,
     mobileLockedPtyIds
   } = args
-  if (entry.state !== 'done' || sleepingAgentSessionsByPaneKey[entry.paneKey]) {
+  if (
+    entry.state !== 'done' ||
+    entry.interrupted === true ||
+    sleepingAgentSessionsByPaneKey[entry.paneKey]
+  ) {
     return null
   }
   if (
@@ -148,7 +149,16 @@ function getEligiblePane(args: {
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
     return null
   }
-  if (args.now - entry.updatedAt < args.idleMs) {
+  // Why: returning to the containing terminal tab should restart sleep even
+  // without pane input; sibling tabs in the worktree should keep their age.
+  const foregroundLastSeenAt = foregroundTerminalLastSeenAtByTabId[tab.id]
+  const effectiveIdleStart = Math.max(
+    entry.updatedAt,
+    typeof foregroundLastSeenAt === 'number' && Number.isFinite(foregroundLastSeenAt)
+      ? foregroundLastSeenAt
+      : 0
+  )
+  if (args.now - effectiveIdleStart < args.idleMs) {
     return null
   }
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
@@ -173,6 +183,7 @@ function getEligiblePane(args: {
     providerSessionId: entry.providerSession.id,
     state: entry.state,
     updatedAt: entry.updatedAt,
+    effectiveIdleStart,
     inputAt: typeof inputAt === 'number' && Number.isFinite(inputAt) ? inputAt : 0
   }
 }
@@ -183,7 +194,7 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
     .map(
       (pane) =>
-        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.inputAt}`
+        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
     )
   return `${worktreeId}|${parts.join('|')}`
 }
@@ -222,19 +233,14 @@ export function planAgentHibernationCandidates(
   }
   const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings.agentHibernationIdleMs)
   const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds.map(toRuntimePtyId))
-  const foregroundWorktreeIds = new Set(snapshot.foregroundWorktreeIds)
+  const foregroundTerminalTabIds = new Set(snapshot.foregroundTerminalTabIds)
   const runtimeLivenessRequiredWorktreeIds = new Set(
     snapshot.runtimeLivenessRequiredWorktreeIds ?? []
   )
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
-    if (
-      !worktreeId ||
-      worktreeId === snapshot.activeWorktreeId ||
-      foregroundWorktreeIds.has(worktreeId) ||
-      tabs.length === 0
-    ) {
+    if (!worktreeId || worktreeId === snapshot.activeWorktreeId || tabs.length === 0) {
       continue
     }
     if (
@@ -247,6 +253,9 @@ export function planAgentHibernationCandidates(
       continue
     }
     for (const tab of tabs) {
+      if (foregroundTerminalTabIds.has(tab.id)) {
+        continue
+      }
       const tabLivePtyIds = getLivePtyIdsForTab(
         tab,
         snapshot.ptyIdsByTabId,
@@ -265,6 +274,7 @@ export function planAgentHibernationCandidates(
           livePtyIds: new Set(tabLivePtyIds),
           sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
           lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
+          foregroundTerminalLastSeenAtByTabId: snapshot.foregroundTerminalLastSeenAtByTabId,
           mobileLockedPtyIds,
           now: snapshot.now,
           idleMs
@@ -288,19 +298,4 @@ export function planAgentHibernationCandidates(
   return candidates.sort(
     (a, b) => a.worktreeId.localeCompare(b.worktreeId) || a.paneKey.localeCompare(b.paneKey)
   )
-}
-
-export function confirmAgentHibernationCandidates(
-  previous: AgentHibernationConfirmationState,
-  candidates: AgentHibernationCandidate[]
-): AgentHibernationPlan {
-  const confirmationState: AgentHibernationConfirmationState = {}
-  const confirmed: AgentHibernationCandidate[] = []
-  for (const candidate of candidates) {
-    confirmationState[candidate.id] = candidate.signature
-    if (previous[candidate.id] === candidate.signature) {
-      confirmed.push(candidate)
-    }
-  }
-  return { candidates: confirmed, confirmationState }
 }

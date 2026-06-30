@@ -1,36 +1,31 @@
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PickerModal } from '../components/PickerModal'
-import { MobilePrComposeSheet, openMobilePrUrl } from '../components/MobilePrComposeSheet'
+import { openMobilePrUrl } from '../components/MobilePrComposeSheet'
 import { MobileBranchDiffPreviewDrawer } from './MobileBranchDiffPreviewDrawer'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
 type Props = {
   state: MobileSourceControlState
-  worktreeId: string
   actionSheetActions: ActionSheetAction[]
 }
 
-export function MobileSourceControlModals({ state, worktreeId, actionSheetActions }: Props) {
+export function MobileSourceControlModals({ state, actionSheetActions }: Props) {
   const {
-    client,
     branchDiffPreview,
     setBranchDiffPreview,
     showActionSheet,
     setShowActionSheet,
     discardTarget,
     setDiscardTarget,
-    showPrSheet,
-    setShowPrSheet,
-    prPrefill,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,
     createdPrUrl,
     setCreatedPrUrl,
-    status,
+    createdPrWarning,
+    setCreatedPrWarning,
     branchLabel,
-    loadStatus,
     checkoutBranch,
     runGitAction
   } = state
@@ -72,20 +67,6 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
         onCancel={() => setDiscardTarget(null)}
       />
 
-      <MobilePrComposeSheet
-        visible={showPrSheet}
-        client={client}
-        worktreeId={worktreeId ?? ''}
-        prefill={prPrefill ?? { provider: 'github', base: 'main', title: branchLabel, body: '' }}
-        head={status?.branch ?? null}
-        onClose={() => setShowPrSheet(false)}
-        onCreated={(url) => {
-          setShowPrSheet(false)
-          setCreatedPrUrl(url)
-          void loadStatus({ preserveReadyOnFailure: true, force: true })
-        }}
-      />
-
       <PickerModal
         visible={showBranchPicker}
         title="Switch Branch"
@@ -108,15 +89,23 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
       <ConfirmModal
         visible={createdPrUrl !== null}
         title="Pull Request Created"
-        message="Open it in your browser?"
+        message={
+          createdPrWarning
+            ? `Open it in your browser?\n\n${createdPrWarning}`
+            : 'Open it in your browser?'
+        }
         confirmLabel="Open"
         onConfirm={() => {
           if (createdPrUrl) {
             openMobilePrUrl(createdPrUrl)
           }
           setCreatedPrUrl(null)
+          setCreatedPrWarning(null)
         }}
-        onCancel={() => setCreatedPrUrl(null)}
+        onCancel={() => {
+          setCreatedPrUrl(null)
+          setCreatedPrWarning(null)
+        }}
       />
     </>
   )

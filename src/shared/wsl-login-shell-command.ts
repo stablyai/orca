@@ -27,9 +27,11 @@ export function buildWslLoginShellCommand(command: string): string {
     'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
     '  _orca_wsl_shell=/bin/sh',
     'fi',
-    'case "$(basename "$_orca_wsl_shell")" in',
+    '_orca_wsl_shell_name=$(basename "$_orca_wsl_shell" | tr "[:upper:]" "[:lower:]")',
+    'case "$_orca_wsl_shell_name" in',
     `  sh|dash) exec "$_orca_wsl_shell" -lc ${quotedCommand} ;;`,
-    `  *) exec "$_orca_wsl_shell" -ilc ${quotedCommand} ;;`,
+    `  bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc ${quotedCommand} ;;`,
+    `  *) exec /bin/sh -lc ${quotedCommand} ;;`,
     'esac'
   ].join('\n')
 }

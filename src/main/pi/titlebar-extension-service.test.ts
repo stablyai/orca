@@ -8,10 +8,10 @@ import {
   rmSync,
   symlinkSync,
   writeFileSync
-} from 'fs'
-import { tmpdir } from 'os'
-import type * as osModule from 'os'
-import { join } from 'path'
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import type * as osModule from 'node:os'
+import { join } from 'node:path'
 
 // The service calls app.getPath('userData') for its overlay root. Point that
 // at a real tmp dir so we can exercise the filesystem behavior end-to-end.

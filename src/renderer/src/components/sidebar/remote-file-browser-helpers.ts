@@ -1,14 +1,29 @@
 import { translate } from '@/i18n/i18n'
+import { shouldHandleTextControlPaste } from '@/lib/text-control-paste'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 export type DirEntry = {
   name: string
   isDirectory: boolean
 }
 
+export const REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isRemoteFileBrowserFilterQueryTooLarge(
+  query: string,
+  maxBytes = REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function filterEntries(entries: DirEntry[], filter: string): DirEntry[] {
-  const q = filter.trim().toLowerCase()
-  if (!q) {
+  if (isRemoteFileBrowserFilterQueryTooLarge(filter)) {
+    return []
+  }
+  const trimmedFilter = filter.trim()
+  if (!trimmedFilter) {
     return entries
   }
+  const q = trimmedFilter.toLowerCase()
   return entries.filter((e) => e.name.toLowerCase().includes(q))
 }
 
@@ -79,6 +94,14 @@ export function isPathMode(raw: string): boolean {
     return true
   }
   return raw === '~' || raw === '.' || raw === '..'
+}
+
+export function isRemoteFileBrowserPathResolveTextTooLarge(text: string): boolean {
+  return shouldHandleTextControlPaste(text)
+}
+
+export function shouldDeferRemoteFileBrowserPasteResolve(text: string): boolean {
+  return isRemoteFileBrowserPathResolveTextTooLarge(text)
 }
 
 export function parsePathInput(raw: string): ParsedInput {

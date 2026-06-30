@@ -1,5 +1,5 @@
-import { spawn as spawnProcess, type SpawnOptions } from 'child_process'
-import { dirname, resolve } from 'path'
+import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
+import { dirname, resolve } from 'node:path'
 import { RuntimeClientError } from './types'
 
 export function launchOrcaApp(): void {

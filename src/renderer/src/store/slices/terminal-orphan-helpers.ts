@@ -14,6 +14,7 @@ type OrphanTerminalCleanupState = Pick<
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
+  | 'pendingInitialCwdByTabId'
   | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'tabBarOrderByWorktree'
@@ -59,6 +60,7 @@ export function buildOrphanTerminalCleanupPatch(
   | 'canExpandPaneByTabId'
   | 'terminalLayoutsByTabId'
   | 'pendingStartupByTabId'
+  | 'pendingInitialCwdByTabId'
   | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'tabBarOrderByWorktree'
@@ -75,6 +77,7 @@ export function buildOrphanTerminalCleanupPatch(
       canExpandPaneByTabId: state.canExpandPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       pendingStartupByTabId: state.pendingStartupByTabId,
+      pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
       pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
       pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
       tabBarOrderByWorktree: state.tabBarOrderByWorktree,
@@ -93,6 +96,7 @@ export function buildOrphanTerminalCleanupPatch(
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
   const nextPendingStartupByTabId = { ...state.pendingStartupByTabId }
+  const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
   const nextPendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
   const nextTabBarOrderByWorktree = {
@@ -114,6 +118,7 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextCanExpandPaneByTabId[orphanTabId]
     delete nextTerminalLayoutsByTabId[orphanTabId]
     delete nextPendingStartupByTabId[orphanTabId]
+    delete nextPendingInitialCwdByTabId[orphanTabId]
     delete nextPendingSetupSplitByTabId[orphanTabId]
     delete nextPendingIssueCommandSplitByTabId[orphanTabId]
     for (const key of Object.keys(nextCacheTimerByKey)) {
@@ -141,6 +146,7 @@ export function buildOrphanTerminalCleanupPatch(
     canExpandPaneByTabId: nextCanExpandPaneByTabId,
     terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
     pendingStartupByTabId: nextPendingStartupByTabId,
+    pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
     pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
     pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
     tabBarOrderByWorktree: nextTabBarOrderByWorktree,

@@ -2,10 +2,10 @@
    bash, marker scanning, and env restoration cases in one suite so the
    generated wrapper contract is reviewed as a unit. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnSync } from 'child_process'
-import { tmpdir } from 'os'
-import { join, dirname } from 'path'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join, dirname } from 'node:path'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import type * as pty from 'node-pty'
 import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
 import {
@@ -97,9 +97,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
 
     await ready
-    // flush path waits for a post-ready data chunk (prompt draw) then 30ms,
-    // or falls back after 50ms if no data arrives.
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
@@ -112,7 +111,8 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
 
     await ready
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nPS> ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\r'])
@@ -125,10 +125,45 @@ describe('writeStartupCommandWhenShellReady', () => {
     writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
 
     await ready
-    vi.advanceTimersByTime(50)
+    proc._emitData('\r\nPS> ')
+    vi.advanceTimersByTime(30)
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
+  })
+
+  it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
+
+    await ready
+    vi.advanceTimersByTime(50)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual([])
+
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual(['codex\n'])
+  })
+
+  it('uses the short settle delay when marker scan already observed post-marker bytes', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve({ postMarkerBytesObserved: true })
+    writeStartupCommandWhenShellReady(ready, proc, 'codex', () => {})
+
+    await ready
+    vi.advanceTimersByTime(29)
+    await Promise.resolve()
+    expect(proc._writes).toEqual([])
+
+    vi.advanceTimersByTime(1)
+    await Promise.resolve()
+    expect(proc._writes).toEqual(['codex\n'])
   })
 })
 
@@ -138,11 +173,53 @@ describe('scanForShellReady', () => {
 
     expect(scanForShellReady(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
       output: 'before \x1b]777;orca-shell-readyx',
-      matched: false
+      matched: false,
+      postMarkerBytesObserved: false
     })
     expect(scanForShellReady(state, ' after')).toEqual({
       output: ' after',
-      matched: false
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+  })
+
+  it('reports post-marker bytes only when bytes follow the BEL terminator in the matching call', () => {
+    let state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07')).toEqual({
+      output: 'before ',
+      matched: true,
+      postMarkerBytesObserved: false
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07% ')).toEqual({
+      output: 'before % ',
+      matched: true,
+      postMarkerBytesObserved: true
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready')).toEqual({
+      output: 'before ',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, '\x07')).toEqual({
+      output: '',
+      matched: true,
+      postMarkerBytesObserved: false
+    })
+
+    state = createShellReadyScanState()
+    expect(scanForShellReady(state, '\x1b]777;orca-shell-ready')).toEqual({
+      output: '',
+      matched: false,
+      postMarkerBytesObserved: false
+    })
+    expect(scanForShellReady(state, '\x07% ')).toEqual({
+      output: '% ',
+      matched: true,
+      postMarkerBytesObserved: true
     })
   })
 })
@@ -360,6 +437,8 @@ describePosix('local PTY shell-ready launch config', () => {
     const bashRc = getBashShellReadyRcfileContent()
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+    const mimoRestoreLine =
+      '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
@@ -367,6 +446,9 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
+    expect(zshrc).toContain(mimoRestoreLine)
+    expect(zlogin).toContain(mimoRestoreLine)
+    expect(bashRc).toContain(mimoRestoreLine)
     expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')

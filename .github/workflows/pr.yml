@@ -45,8 +45,20 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      - name: Prepare dependency install
+        run: |
+          if [ -e node_modules ]; then
+            ls -ld node_modules
+            rm -rf node_modules
+          fi
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
+        # runners while creating the root node_modules. Use the normal resolver
+        # path, then verify package metadata stayed unchanged.
+        run: |
+          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
+          git diff --exit-code package.json pnpm-lock.yaml
 
       - name: Lint
         run: pnpm exec oxlint --format github

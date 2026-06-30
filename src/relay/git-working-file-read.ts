@@ -1,4 +1,4 @@
-import { readFile, stat } from 'fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { bufferToBlob } from './git-handler-utils'
 
 const MAX_RELAY_DIFF_WORKING_FILE_BYTES = 10 * 1024 * 1024

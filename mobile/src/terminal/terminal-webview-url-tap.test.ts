@@ -1,6 +1,9 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { TERMINAL_HTTP_URL_REGEX_SOURCE, findUrlAtColumn } from './terminal-webview-url-tap'
+import {
+  TERMINAL_HTTP_URL_MAX_LENGTH,
+  TERMINAL_HTTP_URL_REGEX_SOURCE,
+  findUrlAtColumn
+} from './terminal-webview-url-tap'
 import { XTERM_HTML } from './terminal-webview-html'
 
 describe('findUrlAtColumn', () => {
@@ -43,18 +46,14 @@ describe('findUrlAtColumn', () => {
     expect(findUrlAtColumn(line, line.indexOf('etc'))).toBeNull()
   })
 
-  it('keeps the regex source identical to the desktop terminal matcher', () => {
-    const desktopSource = readFileSync(
-      new URL(
-        '../../../src/renderer/src/components/terminal-pane/terminal-url-link-hit-testing.ts',
-        import.meta.url
-      ),
-      'utf8'
+  it('matches desktop URL boundary and length guards', () => {
+    expect(findUrlAtColumn('prefixhttps://example.com/path', 'prefix'.length)).toBeNull()
+    expect(findUrlAtColumn('prefix https://example.com/path', 'prefix '.length)).toBe(
+      'https://example.com/path'
     )
-    const match = desktopSource.match(/const TERMINAL_HTTP_URL_REGEX = (\/.*\/)gi/)
 
-    expect(match).not.toBeNull()
-    expect(`/${TERMINAL_HTTP_URL_REGEX_SOURCE}/`).toBe(match?.[1])
+    const overlongUrl = `https://example.com/${'a'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH)}`
+    expect(findUrlAtColumn(overlongUrl, 0)).toBeNull()
   })
 
   it('injects URL and OSC tap handling into the WebView document', () => {

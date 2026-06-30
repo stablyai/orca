@@ -16,6 +16,7 @@ import {
   disposeDividersIn
 } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
+import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
@@ -164,6 +165,18 @@ export class PaneManager {
     fitAllPanesInternal(this.panes)
   }
 
+  refreshAllPanes(): void {
+    for (const pane of this.panes.values()) {
+      try {
+        if (pane.terminal.rows > 0) {
+          pane.terminal.refresh(0, pane.terminal.rows - 1)
+        }
+      } catch {
+        // Why: restore-all repaint is best-effort while panes are mounting or tearing down.
+      }
+    }
+  }
+
   equalizePaneSizes(): void {
     if (this.panes.size < 2) {
       return
@@ -289,6 +302,10 @@ export class PaneManager {
 
   movePane(sourcePaneId: number, targetPaneId: number, zone: DropZone): void {
     handlePaneDrop(sourcePaneId, targetPaneId, zone, this.dragState, this.getDragCallbacks())
+  }
+
+  beginPaneDragFromPointerDown(paneId: number, handle: HTMLElement, event: PointerEvent): void {
+    beginPaneDragFromPointerDown(handle, paneId, this.dragState, this.getDragCallbacks(), event)
   }
 
   destroy(): void {

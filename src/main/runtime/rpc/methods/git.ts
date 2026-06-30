@@ -23,6 +23,7 @@ import {
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
+  GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
 } from './git-params'
@@ -87,16 +88,35 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,
-    handler: async (params, { runtime }) =>
-      params.includeIgnored === undefined
+    handler: async (params, { runtime }) => {
+      const options =
+        params.includeIgnored === undefined &&
+        params.bypassEffectiveUpstreamNegativeCache === undefined
+          ? undefined
+          : {
+              ...(params.includeIgnored === undefined
+                ? {}
+                : { includeIgnored: params.includeIgnored }),
+              ...(params.bypassEffectiveUpstreamNegativeCache === true
+                ? { bypassEffectiveUpstreamNegativeCache: true }
+                : {})
+            }
+      return options === undefined
         ? runtime.getRuntimeGitStatus(params.worktree)
-        : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
+        : runtime.getRuntimeGitStatus(params.worktree, options)
+    }
   }),
   defineMethod({
     name: 'git.checkIgnored',
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
+  }),
+  defineMethod({
+    name: 'git.submoduleStatus',
+    params: GitSubmoduleStatus,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
     name: 'git.history',

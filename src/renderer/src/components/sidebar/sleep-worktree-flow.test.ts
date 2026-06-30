@@ -14,9 +14,7 @@ const mocks = vi.hoisted(() => {
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
-  const cancelPendingSidebarWorktreeActivation = vi.fn()
   return {
-    cancelPendingSidebarWorktreeActivation,
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
     state,
@@ -35,9 +33,6 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
   markWorktreeSleepIntent: mocks.markWorktreeSleepIntent
 }))
-vi.mock('@/lib/sidebar-worktree-activation', () => ({
-  cancelPendingSidebarWorktreeActivation: mocks.cancelPendingSidebarWorktreeActivation
-}))
 
 import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
 
@@ -51,7 +46,6 @@ describe('runSleepWorktree', () => {
     mocks.state.consumeSuppressedPtyExit.mockClear()
     mocks.markWorktreeSleepIntent.mockClear()
     mocks.clearWorktreeSleepIntent.mockClear()
-    mocks.cancelPendingSidebarWorktreeActivation.mockClear()
     mocks.toastError.mockClear()
     mocks.state.activeWorktreeId = null
     mocks.state.tabsByWorktree = {}
@@ -74,15 +68,6 @@ describe('runSleepWorktree', () => {
     const browsersCallOrder = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
     const terminalsCallOrder = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
     expect(browsersCallOrder).toBeLessThan(terminalsCallOrder)
-  })
-
-  it('cancels a queued sidebar wake before sleeping worktrees', async () => {
-    await runSleepWorktrees(['wt-1', 'wt-2'])
-
-    expect(mocks.cancelPendingSidebarWorktreeActivation).toHaveBeenCalledTimes(1)
-    const cancelCall = mocks.cancelPendingSidebarWorktreeActivation.mock.invocationCallOrder[0]
-    const browserCall = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
-    expect(cancelCall).toBeLessThan(browserCall)
   })
 
   it('clears activeWorktreeId before teardown when the slept worktree is active', async () => {

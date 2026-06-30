@@ -36,11 +36,9 @@ import {
   FileText,
   GitBranch,
   Globe,
-  ImagePlus,
   Keyboard as KeyboardIcon,
   ListChecks,
   MessageSquare,
-  Mic,
   Monitor,
   Plus,
   RefreshCw,
@@ -85,10 +83,10 @@ import {
   triggerError,
   triggerEdgeBump
 } from '../../../../src/platform/haptics'
-import {
-  type TerminalKeyboardAvoidanceMetrics,
-  type TerminalModes,
-  type TerminalWebViewHandle
+import type {
+  TerminalKeyboardAvoidanceMetrics,
+  TerminalModes,
+  TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
 import { isTerminalOscLinkRanges } from '../../../../src/terminal/terminal-osc-link-ranges'
 import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
@@ -99,14 +97,28 @@ import {
 } from '../../../../src/terminal/terminal-accessory-layout'
 import {
   clearTerminalLiveInputFocusTimer,
+  defaultTerminalLiveInputHandles,
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
+  pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import {
+  getTerminalCommandKeyboardType,
+  getTerminalLiveInputKeyboardType
+} from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
+import {
+  appendBufferedDictation,
+  routeDictationTranscript
+} from '../../../../src/terminal/terminal-live-dictation-routing'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
+import {
+  recoverActiveTerminalAfterForeground,
+  shouldRecoverTerminalOnAppStateChange
+} from '../../../../src/terminal/terminal-foreground-recovery'
 import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
-import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
+import { normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
 import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
@@ -142,6 +154,10 @@ import {
   terminalRecordsEqual
 } from '../../../../src/session/mobile-terminal-records'
 import {
+  getMobileSessionTabTitle,
+  resolveMobileTerminalTabAgentId
+} from '../../../../src/session/mobile-terminal-tab-agent'
+import {
   buildMobileNewTabAgentOptions,
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
@@ -153,7 +169,15 @@ import {
   type MobileClipboardImageResizer
 } from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
+import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
+import {
+  acceptSessionSnapshot,
+  applyClosedTabTombstones,
+  type AppliedSnapshotMarker
+} from '../../../../src/session/session-tab-snapshot-gate'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -178,6 +202,7 @@ import {
 } from '../../../../src/session/mobile-session-route-helpers'
 import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import { resolveTabStripScrollOffset } from '../../../../src/session/tab-strip-scroll'
+import { activateOpenedSourceControlDiffTab } from '../../../../src/session/opened-mobile-session-tab'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
@@ -209,6 +234,7 @@ import type {
 } from './mobile-session-route-types'
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
+const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
 // Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
 // photos can exceed the upload byte budget; resize the raster down to fit before upload.
@@ -267,26 +293,6 @@ function getActiveTabIdForHandle(
         tab.type === 'terminal' && tab.terminal === terminalHandle
     )?.id ?? terminalHandle
   )
-}
-
-function getMobileSessionTabTitle(tab: MobileSessionTab): string {
-  if (tab.type === 'browser') {
-    const title = tab.title.trim()
-    if (title && !isBlankBrowserUrl(title)) {
-      return title
-    }
-    if (isBlankBrowserUrl(tab.url)) {
-      return 'New Browser'
-    }
-    return 'Browser'
-  }
-  if (tab.type === 'markdown') {
-    return tab.title || 'Markdown'
-  }
-  if (tab.type === 'file') {
-    return tab.title || 'File'
-  }
-  return tab.title || 'Terminal'
 }
 
 function MarkdownReader({
@@ -833,7 +839,7 @@ export default function SessionScreen() {
   const {
     hostId,
     worktreeId,
-    name: worktreeName,
+    name: routeWorktreeName,
     created,
     warning: createdWarning
   } = useLocalSearchParams<{
@@ -852,6 +858,12 @@ export default function SessionScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
+  const worktreeName = useLiveWorktreeName({
+    client,
+    connState,
+    routeName: routeWorktreeName,
+    worktreeId
+  })
   // Master-detail host state (U5/KTD2): on wide layouts a tapped panel docks beside the
   // session content; on narrow it stays null and the icons push full-screen routes.
   const { isWideLayout } = useResponsiveLayout()
@@ -875,6 +887,7 @@ export default function SessionScreen() {
   const {
     branch: prBranch,
     headSha: prHeadSha,
+    status: prStatus,
     isGithubRepo: prIsGithubRepo,
     repoLoaded: prRepoContextLoaded,
     loaded: prContextLoaded
@@ -893,6 +906,16 @@ export default function SessionScreen() {
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
+  // Why: subscription, 2s polling, and post-mutation refetch race to apply tab
+  // snapshots. Track the last applied (publicationEpoch, snapshotVersion) so a
+  // late-arriving older snapshot from the same publisher can't overwrite (and
+  // resurrect closed tabs in) a newer one. See session-tab-snapshot-gate.
+  const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
+  // Why: after an optimistic local close, suppress the tab until the publisher
+  // confirms its absence, so an in-flight snapshot generated before the close
+  // propagated (and thus newer by version) can't flash the tab back. Maps tab id
+  // to an expiry timestamp so a failed host-side close can't hide a tab forever.
+  const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
   // Why: baseline terminal zoom, reloaded on focus so a Settings → Terminal change
@@ -907,6 +930,8 @@ export default function SessionScreen() {
   const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
   )
+  const liveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
+  const defaultedLiveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
@@ -926,6 +951,10 @@ export default function SessionScreen() {
   const [pendingDiffNotesDelivery, setPendingDiffNotesDelivery] =
     useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
+  // Why: React state isn't a synchronous lock — a fast double-tap can fire two
+  // creates before `creating` re-renders. This ref blocks the second one in the
+  // same tick (server idempotency only dedupes identical clientMutationIds).
+  const creatingTerminalRef = useRef(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -1005,6 +1034,14 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
+    typeof Keyboard.addListener
+  > | null>(null)
+  const sessionTabActionSheetRequestSeqRef = useRef(0)
+  const dictationRouteContextRef = useRef<{
+    readonly handle: string | null
+    readonly liveInputEnabled: boolean
+  } | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
@@ -1024,6 +1061,7 @@ export default function SessionScreen() {
   // switching back to the terminal work). A ref breaks the callback dep cycle.
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
+  const pendingTerminalActivationAttemptRef = useRef<string | null>(null)
   // Why: handleTerminalOpenUrl is memoized on terminalLinkOpenMode, but
   // handleCreateBrowser is a per-render closure that captures the live `client`.
   // A terminal URL tap must run the CURRENT closure (the memoized one can hold a
@@ -1076,6 +1114,7 @@ export default function SessionScreen() {
   sessionTabsRef.current = sessionTabs
   activeSessionTabIdRef.current = activeSessionTabId
   markdownDocsRef.current = markdownDocs
+  liveInputTerminalHandlesRef.current = liveInputTerminalHandles
   const reconciledCreateWarningState = reconcileMobileSessionCreateWarningState(
     createWarningState,
     initialCreateWarning
@@ -1141,19 +1180,79 @@ export default function SessionScreen() {
     [clearToastHideTimer]
   )
 
+  // Why: direct input is now the mobile default, but only once per discovered
+  // handle so a user's buffered-mode toggle survives tab/list refreshes.
+  const defaultTerminalHandlesToLiveInput = useCallback((handles: readonly string[]) => {
+    const result = defaultTerminalLiveInputHandles(
+      liveInputTerminalHandlesRef.current,
+      defaultedLiveInputTerminalHandlesRef.current,
+      handles
+    )
+    if (!result.changed) {
+      return
+    }
+    const nextEnabledHandles = new Set(result.enabledHandles)
+    const nextDefaultedHandles = new Set(result.defaultedHandles)
+    liveInputTerminalHandlesRef.current = nextEnabledHandles
+    defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
+    setLiveInputTerminalHandles(nextEnabledHandles)
+  }, [])
+
+  const pruneTerminalHandlesFromLiveInput = useCallback((liveHandles: ReadonlySet<string>) => {
+    const result = pruneTerminalLiveInputHandles(
+      liveInputTerminalHandlesRef.current,
+      defaultedLiveInputTerminalHandlesRef.current,
+      liveHandles
+    )
+    if (!result.changed) {
+      return
+    }
+    const nextEnabledHandles = new Set(result.enabledHandles)
+    const nextDefaultedHandles = new Set(result.defaultedHandles)
+    liveInputTerminalHandlesRef.current = nextEnabledHandles
+    defaultedLiveInputTerminalHandlesRef.current = nextDefaultedHandles
+    setLiveInputTerminalHandles(nextEnabledHandles)
+  }, [])
+
+  const clearTerminalLiveInputDefault = useCallback(
+    (handle: string) => {
+      const liveHandles = new Set([
+        ...liveInputTerminalHandlesRef.current,
+        ...defaultedLiveInputTerminalHandlesRef.current
+      ])
+      liveHandles.delete(handle)
+      pruneTerminalHandlesFromLiveInput(liveHandles)
+    },
+    [pruneTerminalHandlesFromLiveInput]
+  )
+
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
     onTranscript: (text) => {
-      setInput((current) => {
-        if (!current.trim()) {
-          return text
+      // Live mode inserts the transcript straight into its originating PTY as
+      // text (no Return — the user sends it themselves), matching live keystroke
+      // semantics; buffered mode keeps appending to the command field.
+      const routeContext = dictationRouteContextRef.current
+      dictationRouteContextRef.current = null
+      const route = routeDictationTranscript(
+        text,
+        routeContext?.liveInputEnabled ?? liveInputEnabled
+      )
+      if (route.kind === 'live-insert') {
+        const insertHandle = routeContext?.handle ?? activeHandleRef.current
+        if (!insertHandle) {
+          return
         }
-        return `${current.trimEnd()} ${text}`
-      })
+        sendLiveTerminalInput(insertHandle, route.text)
+        showToast('Dictation inserted')
+        return
+      }
+      setInput((current) => appendBufferedDictation(current, route.text))
       showToast('Dictation inserted')
     },
     onError: (err) => {
+      dictationRouteContextRef.current = null
       // Dictation isn't set up on the desktop yet → open the setup sheet so the
       // user can download a model + enable it from here, instead of a dead-end toast.
       if (isDictationSetupRequiredError(err.message)) {
@@ -1166,16 +1265,28 @@ export default function SessionScreen() {
   })
 
   const startDictation = useCallback(() => {
+    const routeContext = activeHandle
+      ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
+      : null
+    dictationRouteContextRef.current = routeContext
     void dictation.start().catch((err) => {
+      if (dictationRouteContextRef.current === routeContext) {
+        dictationRouteContextRef.current = null
+      }
       triggerError()
       showToast(err instanceof Error ? err.message : String(err))
     })
-  }, [dictation, triggerError, showToast])
+  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+
+  const cancelDictation = useCallback(() => {
+    dictationRouteContextRef.current = null
+    void dictation.cancel()
+  }, [dictation])
 
   // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {
     if (dictation.isProcessing) {
-      void dictation.cancel()
+      cancelDictation()
     } else if (dictation.isStarting) {
       return
     } else if (dictation.isRecording) {
@@ -1183,7 +1294,7 @@ export default function SessionScreen() {
     } else {
       startDictation()
     }
-  }, [dictation, startDictation])
+  }, [cancelDictation, dictation, startDictation])
 
   // Hold mode: press starts, release stops — like a walkie-talkie.
   const handleDictationPressIn = useCallback(() => {
@@ -1197,9 +1308,9 @@ export default function SessionScreen() {
       void dictation.stop()
     } else if (dictation.isStarting) {
       // Released before recording began: cancel so we don't leave a live mic.
-      void dictation.cancel()
+      cancelDictation()
     }
-  }, [dictation])
+  }, [cancelDictation, dictation])
 
   const refreshDictationMode = useCallback(async () => {
     if (!client) {
@@ -1578,11 +1689,16 @@ export default function SessionScreen() {
           }
 
           const liveHandles = new Set(result.terminals.map((terminal) => terminal.handle))
+          // Why: terminal.list is the lifetime signal; session-tab snapshots can lag
+          // mobile-created tabs and must not erase a user's buffered-mode opt-out.
+          pruneTerminalHandlesFromLiveInput(liveHandles)
+          defaultTerminalHandlesToLiveInput([...liveHandles])
           for (const handle of Array.from(terminalUnsubsRef.current.keys())) {
             if (!liveHandles.has(handle)) {
               unsubscribeTerminal(handle)
               terminalRefs.current.delete(handle)
               initializedHandlesRef.current.delete(handle)
+              clearTerminalLiveInputDefault(handle)
               setTerminalKeyboardMetrics((prev) => {
                 if (!prev.has(handle)) {
                   return prev
@@ -1627,12 +1743,29 @@ export default function SessionScreen() {
         fetchTerminalsInFlightRef.current = false
       }
     },
-    [client, worktreeId, subscribeToTerminal, unsubscribeTerminal]
+    [
+      client,
+      worktreeId,
+      clearTerminalLiveInputDefault,
+      defaultTerminalHandlesToLiveInput,
+      pruneTerminalHandlesFromLiveInput,
+      subscribeToTerminal,
+      unsubscribeTerminal
+    ]
   )
 
   const applySessionTabs = useCallback(
     (result: SessionTabsResult) => {
-      let nextTabs = result.tabs
+      // Reject out-of-order snapshots, then suppress just-closed tabs until the
+      // publisher confirms their absence. See session-tab-snapshot-gate.
+      if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
+        return
+      }
+      let nextTabs = applyClosedTabTombstones(
+        result.tabs,
+        closedTabTombstonesRef.current,
+        Date.now()
+      )
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
       const currentMarkdownDocs = markdownDocsRef.current
@@ -1659,6 +1792,8 @@ export default function SessionScreen() {
       // render loop where the subscription effect tears down and replays itself.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
+      const terminalTabHandles = terminalTabs.map((terminal) => terminal.handle)
+      defaultTerminalHandlesToLiveInput(terminalTabHandles)
       const mergedTerminalsForActive = mergeTerminalRecordsByCurrentOrder(
         terminalTabs,
         terminalsRef.current
@@ -1753,7 +1888,7 @@ export default function SessionScreen() {
         setActiveHandle(null)
       }
     },
-    [subscribeToTerminal, unsubscribeTerminal]
+    [defaultTerminalHandlesToLiveInput, subscribeToTerminal, unsubscribeTerminal]
   )
 
   const readMarkdownTab = useCallback(
@@ -2400,6 +2535,35 @@ export default function SessionScreen() {
     }
   }, [])
 
+  useEffect(() => {
+    let previousAppState: AppStateStatus | null = AppState.currentState
+    const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      const shouldRecover = shouldRecoverTerminalOnAppStateChange(
+        previousAppState,
+        nextAppState,
+        Platform.OS
+      )
+      previousAppState = nextAppState
+      if (!shouldRecover) {
+        return
+      }
+      // Why: iOS can resume a live WKWebView with a blank xterm backing store
+      // without firing web-ready/reconnect; replay scrollback to repaint it.
+      recoverActiveTerminalAfterForeground({
+        activeHandleRef,
+        terminalRefs,
+        initializedHandlesRef,
+        connStateRef,
+        unsubscribeTerminal,
+        subscribeToTerminal,
+        schedule: scheduleDelayedAction
+      })
+    })
+    return () => {
+      sub.remove()
+    }
+  }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+
   // Why: viewport refits for layout changes outside the subscribe path
   // (tab strip toggling, fold/unfold, rotation) live in a dedicated hook —
   // see terminal-viewport-refit.ts for the full rationale.
@@ -2488,13 +2652,22 @@ export default function SessionScreen() {
   }, [router])
 
   useEffect(() => {
+    // Why: Expo can reuse this screen across worktrees. Reset pending
+    // keyboard listeners, snapshot floors, and tombstones so prior route state
+    // cannot open stale UI or reject the next worktree's first snapshot.
+    sessionTabActionSheetRequestSeqRef.current += 1
+    sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+    sessionTabActionSheetKeyboardHideSubRef.current = null
     clearTerminalCache()
     activeHandleRef.current = null
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
+    pendingTerminalActivationAttemptRef.current = null
     initialEmptySessionAutoCreateRef.current = null
+    appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
+    closedTabTombstonesRef.current.clear()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
@@ -2508,14 +2681,18 @@ export default function SessionScreen() {
     setSessionTabs([])
     setActiveSessionTabId(null)
     setLiveInputCapture('')
+    liveInputTerminalHandlesRef.current = new Set()
+    defaultedLiveInputTerminalHandlesRef.current = new Set()
     setLiveInputTerminalHandles(new Set())
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
     clearDelayedActionTimers()
     return () => {
+      sessionTabActionSheetRequestSeqRef.current += 1
+      sessionTabActionSheetKeyboardHideSubRef.current?.remove()
       clearDelayedActionTimers()
     }
-  }, [clearDelayedActionTimers, clearTerminalCache, worktreeId])
+  }, [clearDelayedActionTimers, clearTerminalCache, hostId, worktreeId])
 
   useEffect(() => {
     if (connState !== 'connected') {
@@ -2544,11 +2721,12 @@ export default function SessionScreen() {
     }
     void (async () => {
       if (client && created !== '1') {
-        // Why: desktop reveal can be slow on cold/busy hosts, but mobile
-        // session tabs are addressed by worktree id and can load immediately.
+        // Why: mobile needs host-owned tabs hydrated for this route, but should
+        // not pull other paired clients, especially desktop, into this worktree.
         void client
           .sendRequest('worktree.activate', {
-            worktree: `id:${worktreeId}`
+            worktree: `id:${worktreeId}`,
+            notifyClients: false
           })
           .catch(() => null)
       }
@@ -2573,7 +2751,8 @@ export default function SessionScreen() {
           void (async () => {
             await client
               .sendRequest('worktree.activate', {
-                worktree: `id:${worktreeId}`
+                worktree: `id:${worktreeId}`,
+                notifyClients: false
               })
               .catch(() => null)
             if (disposed) {
@@ -2702,6 +2881,7 @@ export default function SessionScreen() {
       pendingActiveSessionTabIdRef.current = matchingTab?.id ?? null
       pendingActiveTerminalHandleRef.current = handle
       activeSessionTabTypeRef.current = 'terminal'
+      defaultTerminalHandlesToLiveInput([handle])
       setActiveSessionTabId(matchingTab?.id ?? null)
       const prev = activeHandleRef.current
       activeHandleRef.current = handle
@@ -2722,13 +2902,21 @@ export default function SessionScreen() {
           void client
             .sendRequest('session.tabs.activate', {
               worktree: `id:${worktreeId}`,
-              tabId: matchingTab.id
+              tabId: matchingTab.id,
+              notifyClients: false
             })
             .catch(() => {})
         }
       }
     },
-    [client, sessionTabs, subscribeToTerminal, unsubscribeTerminal, worktreeId]
+    [
+      client,
+      defaultTerminalHandlesToLiveInput,
+      sessionTabs,
+      subscribeToTerminal,
+      unsubscribeTerminal,
+      worktreeId
+    ]
   )
 
   const switchSessionTab = useCallback(
@@ -2754,7 +2942,8 @@ export default function SessionScreen() {
           void client
             .sendRequest('session.tabs.activate', {
               worktree: `id:${worktreeId}`,
-              tabId: tab.id
+              tabId: tab.id,
+              notifyClients: false
             })
             .catch(() => {})
         }
@@ -2777,7 +2966,8 @@ export default function SessionScreen() {
         void client
           .sendRequest('session.tabs.activate', {
             worktree: `id:${worktreeId}`,
-            tabId: tab.id
+            tabId: tab.id,
+            notifyClients: false
           })
           .catch(() => {})
       }
@@ -2969,6 +3159,72 @@ export default function SessionScreen() {
     liveInputRef.current?.focus()
   }, [canSend, liveInputEnabled])
 
+  const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
+    sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+    sessionTabActionSheetKeyboardHideSubRef.current = null
+  }, [])
+
+  const openSessionTabActionSheet = useCallback((tab: MobileSessionTab) => {
+    if (tab.type === 'terminal') {
+      if (typeof tab.terminal !== 'string') {
+        return
+      }
+      setActionTarget({
+        handle: tab.terminal,
+        title: tab.title,
+        isActive: tab.terminal === activeHandleRef.current
+      })
+    } else if (tab.type === 'markdown') {
+      setMarkdownActionTarget(tab)
+    } else if (tab.type === 'file') {
+      setFileActionTarget(tab)
+    } else {
+      setBrowserActionTarget(tab)
+    }
+  }, [])
+
+  const openSessionTabActionSheetAfterKeyboardDismiss = useCallback(
+    (tab: MobileSessionTab) => {
+      // Why: live input can have a queued refocus; action sheets should open after
+      // the terminal keyboard is gone, not race it under the drawer.
+      sessionTabActionSheetRequestSeqRef.current += 1
+      const requestSeq = sessionTabActionSheetRequestSeqRef.current
+      clearSessionTabActionSheetKeyboardListener()
+      let didOpen = false
+      const openAfterDismiss = () => {
+        if (didOpen || requestSeq !== sessionTabActionSheetRequestSeqRef.current) {
+          return
+        }
+        didOpen = true
+        clearSessionTabActionSheetKeyboardListener()
+        openSessionTabActionSheet(tab)
+      }
+
+      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+
+      if (keyboardHeight <= 0) {
+        liveInputRef.current?.blur()
+        Keyboard.dismiss()
+        openAfterDismiss()
+        return
+      }
+
+      sessionTabActionSheetKeyboardHideSubRef.current = Keyboard.addListener(
+        'keyboardDidHide',
+        openAfterDismiss
+      )
+      liveInputRef.current?.blur()
+      Keyboard.dismiss()
+      scheduleDelayedAction(openAfterDismiss, TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS)
+    },
+    [
+      clearSessionTabActionSheetKeyboardListener,
+      keyboardHeight,
+      openSessionTabActionSheet,
+      scheduleDelayedAction
+    ]
+  )
+
   const handleTerminalTap = useCallback(
     (handle: string) => {
       if (handle !== activeHandleRef.current) {
@@ -3060,6 +3316,48 @@ export default function SessionScreen() {
     [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
   )
 
+  const handleOpenedFileDiffActivationSeqRef = useRef(0)
+  // Active tab captured at tap time (before the openDiff RPC). Capturing it when
+  // the diff finishes opening would misread a tab the user switched to mid-RPC
+  // as the tap-time tab, letting the retry steal focus back to the diff.
+  const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
+  const handleFileOpenStart = useCallback(() => {
+    fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
+  }, [])
+  const handleOpenedFileDiff = useCallback(
+    (relativePath: string) => {
+      const activationSeq = ++handleOpenedFileDiffActivationSeqRef.current
+      const activeTabIdAtTap = fileOpenStartActiveTabIdRef.current
+
+      let activated = false
+      const activateOpenedTab = async (): Promise<void> => {
+        // Route matching through the shared helper so the deterministic repro
+        // test exercises the same logic production runs.
+        const settled = await activateOpenedSourceControlDiffTab<MobileSessionTab>({
+          relativePath,
+          activeTabIdAtTap,
+          fetchSessionTabs,
+          getTabs: () => sessionTabsRef.current,
+          getActiveTabId: () => activeSessionTabIdRef.current,
+          getActivationState: () => ({
+            activated,
+            activationSeq,
+            latestActivationSeq: handleOpenedFileDiffActivationSeqRef.current
+          }),
+          switchSessionTab: (tab) => switchSessionTabRef.current?.(tab)
+        })
+        if (settled) {
+          activated = true
+        }
+      }
+
+      scheduleDelayedAction(() => void activateOpenedTab(), 300)
+      scheduleDelayedAction(() => void activateOpenedTab(), 900)
+      scheduleDelayedAction(() => void activateOpenedTab(), 1800)
+    },
+    [fetchSessionTabs, scheduleDelayedAction]
+  )
+
   const handleTerminalOpenUrl = useCallback(
     (handle: string, url: string) => {
       if (handle !== activeHandleRef.current) {
@@ -3086,6 +3384,7 @@ export default function SessionScreen() {
       } else {
         next.delete(activeHandle)
       }
+      liveInputTerminalHandlesRef.current = next
       return next
     })
     setLiveInputCapture('')
@@ -3374,9 +3673,17 @@ export default function SessionScreen() {
       clearToastHideTimer()
       clearDelayedActionTimers()
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      sessionTabActionSheetRequestSeqRef.current += 1
+      clearSessionTabActionSheetKeyboardListener()
       stopAccessoryRepeat()
     },
-    [clearDelayedActionTimers, clearTerminalCache, clearToastHideTimer, stopAccessoryRepeat]
+    [
+      clearDelayedActionTimers,
+      clearSessionTabActionSheetKeyboardListener,
+      clearTerminalCache,
+      clearToastHideTimer,
+      stopAccessoryRepeat
+    ]
   )
 
   const handleSelectionMode = useCallback((handle: string, active: boolean) => {
@@ -3684,17 +3991,27 @@ export default function SessionScreen() {
     agent?: MobileNewTabAgentOption['agent'],
     options?: { initialPrompt?: string; onPromptSent?: () => void }
   ) {
-    if (!client || creating) {
+    if (!client || creatingTerminalRef.current) {
       return
     }
+    creatingTerminalRef.current = true
 
     setCreating(true)
     setCreateError('')
+
+    // Why: idempotency key so a transport-level retry (reconnect replay) of this
+    // create resolves to the same terminal instead of spawning a duplicate. Kept
+    // compact (no worktree id) to stay under the schema's length cap; the ref
+    // guard above blocks concurrent taps synchronously.
+    const clientMutationId = `mobile-create:${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`
 
     try {
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,
+        clientMutationId,
         ...(agent ? { agent } : {})
       })
       if (response.ok) {
@@ -3719,6 +4036,7 @@ export default function SessionScreen() {
         })
         if (typeof created.terminal === 'string') {
           const createdHandle = created.terminal
+          defaultTerminalHandlesToLiveInput([createdHandle])
           activeHandleRef.current = createdHandle
           setActiveHandle(createdHandle)
           setTerminals((prev) => {
@@ -3783,6 +4101,7 @@ export default function SessionScreen() {
     } catch {
       setCreateError('Failed to create terminal')
     } finally {
+      creatingTerminalRef.current = false
       setCreating(false)
     }
   }
@@ -3961,6 +4280,7 @@ export default function SessionScreen() {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         initializedHandlesRef.current.delete(target.handle)
+        clearTerminalLiveInputDefault(target.handle)
         const next = terminals.filter((terminal) => terminal.handle !== target.handle)
         setTerminals(next)
         terminalsRef.current = next
@@ -3973,7 +4293,6 @@ export default function SessionScreen() {
             subscribeToTerminal(replacement.handle)
           }
         }
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
       }
     } catch {
       // Close failed — keep the local tab list unchanged.
@@ -3991,18 +4310,23 @@ export default function SessionScreen() {
       })
       if (response.ok) {
         if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
-          unsubscribeTerminal(tab.terminal)
-          terminalRefs.current.delete(tab.terminal)
-          initializedHandlesRef.current.delete(tab.terminal)
+          const terminalHandle = tab.terminal
+          unsubscribeTerminal(terminalHandle)
+          terminalRefs.current.delete(terminalHandle)
+          initializedHandlesRef.current.delete(terminalHandle)
+          clearTerminalLiveInputDefault(terminalHandle)
         }
         setSessionTabs((prev) => prev.filter((candidate) => candidate.id !== tab.id))
+        // Why: tombstone the closed tab and rely on the subscription/poll
+        // snapshot (gated by snapshotVersion) instead of a blind 300ms refetch
+        // that re-applied whatever the host had — often the not-yet-closed list.
+        closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         if (activeSessionTabId === tab.id) {
           activeSessionTabTypeRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null
           setActiveHandle(null)
         }
-        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
       }
     } catch {
       // Close failed — keep the authoritative session snapshot visible.
@@ -4025,6 +4349,54 @@ export default function SessionScreen() {
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
       : null
+
+  useEffect(() => {
+    if (!client || connState !== 'connected' || !activePendingTerminalTab) {
+      if (connState !== 'connected' || !activePendingTerminalTab) {
+        pendingTerminalActivationAttemptRef.current = null
+      }
+      return
+    }
+    const activationKey = `${worktreeId}:${activePendingTerminalTab.id}:${activePendingTerminalTab.leafId ?? ''}`
+    if (pendingTerminalActivationAttemptRef.current === activationKey) {
+      return
+    }
+    // Why: a hydrated headless/server-owned tab can already be active but still
+    // pending; activation is the RPC that materializes or focuses its PTY handle.
+    pendingTerminalActivationAttemptRef.current = activationKey
+    void client
+      .sendRequest('session.tabs.activate', {
+        worktree: `id:${worktreeId}`,
+        tabId: activePendingTerminalTab.id,
+        leafId: activePendingTerminalTab.leafId,
+        notifyClients: false
+      })
+      .then((response) => {
+        if (!response.ok) {
+          if (pendingTerminalActivationAttemptRef.current === activationKey) {
+            pendingTerminalActivationAttemptRef.current = null
+          }
+          return
+        }
+        applySessionTabs((response as RpcSuccess).result as SessionTabsResult)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
+      })
+      .catch(() => {
+        if (pendingTerminalActivationAttemptRef.current === activationKey) {
+          pendingTerminalActivationAttemptRef.current = null
+        }
+      })
+  }, [
+    activePendingTerminalTab,
+    applySessionTabs,
+    client,
+    connState,
+    fetchSessionTabs,
+    scheduleDelayedAction,
+    worktreeId
+  ])
+
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
@@ -4334,22 +4706,7 @@ export default function SessionScreen() {
                     onPress={() => switchSessionTab(t)}
                     onLongPress={() => {
                       triggerMediumImpact()
-                      if (t.type === 'terminal') {
-                        if (typeof t.terminal !== 'string') {
-                          return
-                        }
-                        setActionTarget({
-                          handle: t.terminal,
-                          title: t.title,
-                          isActive: t.terminal === activeHandle
-                        })
-                      } else if (t.type === 'markdown') {
-                        setMarkdownActionTarget(t)
-                      } else if (t.type === 'file') {
-                        setFileActionTarget(t)
-                      } else {
-                        setBrowserActionTarget(t)
-                      }
+                      openSessionTabActionSheetAfterKeyboardDismiss(t)
                     }}
                     delayLongPress={400}
                   >
@@ -4363,6 +4720,11 @@ export default function SessionScreen() {
                       {t.type === 'file' && (
                         <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
                       )}
+                      {t.type === 'terminal' &&
+                        (() => {
+                          const agentId = resolveMobileTerminalTabAgentId(t)
+                          return agentId ? <MobileAgentIcon agentId={agentId} size={13} /> : null
+                        })()}
                       <Text
                         style={[
                           styles.tabText,
@@ -4753,16 +5115,34 @@ export default function SessionScreen() {
 
                 {/* Input bar */}
                 {liveInputEnabled ? (
-                  <Pressable
-                    style={[styles.inputBar, styles.liveInputBar]}
-                    disabled={!canSend}
-                    onPress={focusLiveInput}
-                    accessibilityLabel="Focus live terminal input"
-                  >
-                    <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-                    <Text style={styles.liveInputHint} numberOfLines={1}>
-                      Keyboard input directly goes to terminal
-                    </Text>
+                  <View style={[styles.inputBar, styles.liveInputBar]}>
+                    <Pressable
+                      style={styles.liveInputFocusTarget}
+                      disabled={!canSend}
+                      onPress={focusLiveInput}
+                      accessibilityLabel="Focus live terminal input"
+                    >
+                      <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
+                      <MobileTerminalLiveInputStatus
+                        dictation={dictation}
+                        isAttaching={isAttaching}
+                      />
+                    </Pressable>
+                    <MobileTerminalInputActions
+                      canSend={canSend}
+                      isAttaching={isAttaching}
+                      dictation={dictation}
+                      dictationMode={dictationMode}
+                      buttonStyle={styles.dictationButton}
+                      activeButtonStyle={styles.dictationButtonActive}
+                      disabledButtonStyle={styles.sendButtonDisabled}
+                      onAttachImage={() => void attachImage('library')}
+                      onAttachFile={() => void attachImage('files')}
+                      onDictationToggle={handleDictationToggle}
+                      onDictationPressIn={handleDictationPressIn}
+                      onDictationPressOut={handleDictationPressOut}
+                      onDictationCancel={cancelDictation}
+                    />
                     <TextInput
                       ref={liveInputRef}
                       style={styles.liveInputCapture}
@@ -4775,14 +5155,16 @@ export default function SessionScreen() {
                       autoCorrect={false}
                       spellCheck={false}
                       smartInsertDelete={false}
-                      keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
+                      // Why: iOS textContentType wins over autoComplete and can
+                      // narrow the keyboard surface; keep IME switching available.
+                      autoComplete="off"
+                      keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
                       returnKeyType="default"
                       blurOnSubmit={false}
                       editable={canSend}
                       importantForAutofill="no"
-                      textContentType="none"
                     />
-                  </Pressable>
+                  </View>
                 ) : (
                   <View style={styles.inputBar}>
                     <TextInput
@@ -4806,77 +5188,32 @@ export default function SessionScreen() {
                       autoCorrect={autocompleteEnabled}
                       spellCheck={autocompleteEnabled}
                       smartInsertDelete={false}
-                      // Why: the default keyboard exposes autocomplete/autocorrect;
-                      // ascii-capable (iOS) / visible-password (Android) suppress it.
-                      keyboardType={
+                      // Why: terminal commands are not autofill content, but the
+                      // keyboard must stay default so non-Latin IMEs remain selectable.
+                      autoComplete="off"
+                      keyboardType={getTerminalCommandKeyboardType(
+                        Platform.OS,
                         autocompleteEnabled
-                          ? 'default'
-                          : Platform.OS === 'ios'
-                            ? 'ascii-capable'
-                            : 'visible-password'
-                      }
+                      )}
                       returnKeyType="send"
                       editable={canSend}
                       onSubmitEditing={() => void handleSend()}
                     />
-                    <Pressable
-                      style={[
-                        styles.dictationButton,
-                        (!canSend || isAttaching) && styles.sendButtonDisabled
-                      ]}
-                      disabled={!canSend || isAttaching}
-                      // Tap opens the photo library straight away (one-tap, like
-                      // Discord); long-press is the escape hatch for picking a file.
-                      onPress={() => void attachImage('library')}
-                      onLongPress={() => void attachImage('files')}
-                      delayLongPress={350}
-                      accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
-                      accessibilityHint="Long press to attach a file instead"
-                    >
-                      {isAttaching ? (
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
-                      ) : (
-                        <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                      )}
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.dictationButton,
-                        (dictation.isStarting || dictation.isRecording) &&
-                          styles.dictationButtonActive,
-                        !canSend && styles.sendButtonDisabled
-                      ]}
-                      disabled={!canSend}
-                      onPress={dictationMode === 'toggle' ? handleDictationToggle : undefined}
-                      onPressIn={dictationMode === 'hold' ? handleDictationPressIn : undefined}
-                      onPressOut={dictationMode === 'hold' ? handleDictationPressOut : undefined}
-                      onLongPress={
-                        dictationMode === 'toggle'
-                          ? () => {
-                              if (dictation.isRecording || dictation.isProcessing) {
-                                void dictation.cancel()
-                              }
-                            }
-                          : undefined
-                      }
-                      accessibilityLabel={
-                        dictation.isRecording
-                          ? 'Stop voice dictation'
-                          : dictation.isProcessing
-                            ? 'Cancel voice dictation'
-                            : dictation.isStarting
-                              ? 'Starting voice dictation'
-                              : 'Start voice dictation'
-                      }
-                    >
-                      {dictation.isProcessing ? (
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
-                      ) : dictation.isStarting || dictation.isRecording ? (
-                        <Mic size={17} color={colors.textPrimary} strokeWidth={2.4} />
-                      ) : (
-                        <Mic size={17} color={colors.textSecondary} strokeWidth={2.4} />
-                      )}
-                    </Pressable>
+                    <MobileTerminalInputActions
+                      canSend={canSend}
+                      isAttaching={isAttaching}
+                      dictation={dictation}
+                      dictationMode={dictationMode}
+                      buttonStyle={styles.dictationButton}
+                      activeButtonStyle={styles.dictationButtonActive}
+                      disabledButtonStyle={styles.sendButtonDisabled}
+                      onAttachImage={() => void attachImage('library')}
+                      onAttachFile={() => void attachImage('files')}
+                      onDictationToggle={handleDictationToggle}
+                      onDictationPressIn={handleDictationPressIn}
+                      onDictationPressOut={handleDictationPressOut}
+                      onDictationCancel={cancelDictation}
+                    />
                     <Pressable
                       style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
                       disabled={!canSend}
@@ -4900,10 +5237,13 @@ export default function SessionScreen() {
               connState={connState}
               branch={prBranch}
               headSha={prHeadSha}
+              gitStatus={prStatus}
               isGithubRepo={prIsGithubRepo}
               branchContextLoaded={prContextLoaded && prRepoContextLoaded}
               availableWidth={sessionContentRowWidth}
               onRequestClose={() => setActivePanel(null)}
+              onFileOpenStart={handleFileOpenStart}
+              onOpenedFileDiff={handleOpenedFileDiff}
             />
           )}
         </View>

@@ -8,6 +8,7 @@ import {
   resolveRuntimePath
 } from './cross-platform-path'
 import { parseWslUncPath } from './wsl-paths'
+import { isExplicitlyImportedExternalWorktreePath } from './external-worktree-inbox'
 import type {
   DetectedWorktree,
   ExternalWorktreeVisibility,
@@ -191,7 +192,8 @@ export function toDetectedWorktree(args: {
     ownership,
     repo: args.repo,
     isLegacyRepoForVisibility,
-    isSelectedCheckout: selectedCheckout
+    isSelectedCheckout: selectedCheckout,
+    importedExternalWorktreePaths: args.repo.importedExternalWorktreePaths
   })
 
   return {
@@ -208,11 +210,19 @@ export function shouldShowWorktree(args: {
   repo: Repo
   isLegacyRepoForVisibility: boolean
   isSelectedCheckout: boolean
+  importedExternalWorktreePaths?: readonly string[] | undefined
 }): boolean {
   if (args.isSelectedCheckout) {
     return true
   }
   if (args.ownership === 'orca-managed') {
+    return true
+  }
+  if (
+    isExplicitlyImportedExternalWorktreePath(args.worktree.path, {
+      importedExternalWorktreePaths: args.importedExternalWorktreePaths
+    })
+  ) {
     return true
   }
   if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {

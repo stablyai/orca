@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
+  deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
   isDictationReady,
@@ -70,6 +71,13 @@ describe('rpc wrappers', () => {
     const client = clientWith([ok({ started: true })])
     await downloadDictationModel(client, 'm1')
     expect(client.calls[0]).toEqual({ method: 'speech.models.download', params: { modelId: 'm1' } })
+  })
+
+  it('deletes a model and returns refreshed setup', async () => {
+    const setup: MobileSpeechSetup = { enabled: true, selectedModelId: '', models: [] }
+    const client = clientWith([ok(setup)])
+    await expect(deleteDictationModel(client, 'm1')).resolves.toEqual(setup)
+    expect(client.calls[0]).toEqual({ method: 'speech.models.delete', params: { modelId: 'm1' } })
   })
 
   it('sets config', async () => {

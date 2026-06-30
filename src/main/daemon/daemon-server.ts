@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: this class owns the daemon socket protocol,
    request routing, stream fanout, and session lifecycle in one place so
    renderer/daemon request semantics stay auditable across platform branches. */
-import { createServer, type Server, type Socket } from 'net'
-import { randomUUID } from 'crypto'
-import { performance } from 'perf_hooks'
-import { writeFileSync, chmodSync, unlinkSync } from 'fs'
-import { StringDecoder } from 'string_decoder'
+import { createServer, type Server, type Socket } from 'node:net'
+import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import { writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import { StringDecoder } from 'node:string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
@@ -377,6 +377,9 @@ export class DaemonServer {
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
+      case 'getSize':
+        return { size: this.host.getAppliedSize(request.payload.sessionId) }
+
       case 'takePendingOutput':
         // Why no await before this call: with includeSnapshot, drain and
         // serialize must share one synchronous turn — an intervening await
@@ -384,7 +387,8 @@ export class DaemonServer {
         // those bytes on top of a snapshot that already contains them.
         return this.host.takePendingOutput(
           request.payload.sessionId,
-          request.payload.includeSnapshot === true
+          request.payload.includeSnapshot === true,
+          { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
 
       case 'ping':

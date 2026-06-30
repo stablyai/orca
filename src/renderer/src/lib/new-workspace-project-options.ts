@@ -1,5 +1,6 @@
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
 export const NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX = 'folder-source:'
@@ -29,6 +30,15 @@ type NewWorkspaceProjectOptionBase = {
   displayName: string
   badgeColor: string
   detail: string
+}
+
+export const NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES = 2 * 1024
+
+export function isNewWorkspaceProjectOptionQueryTooLarge(
+  query: string,
+  maxBytes = NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
 type BuildNewWorkspaceProjectOptionsInput = {
@@ -169,6 +179,9 @@ export function searchNewWorkspaceProjectOptions(
   options: readonly NewWorkspaceProjectOption[],
   rawQuery: string
 ): NewWorkspaceProjectOption[] {
+  if (isNewWorkspaceProjectOptionQueryTooLarge(rawQuery)) {
+    return []
+  }
   const query = rawQuery.trim().toLowerCase()
   if (!query) {
     return [...options]

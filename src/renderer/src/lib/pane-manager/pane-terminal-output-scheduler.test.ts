@@ -144,6 +144,38 @@ describe('pane terminal output scheduler', () => {
     expect(terminal._core.refresh).toHaveBeenLastCalledWith(0, 23, true)
   })
 
+  it('schedules a follow-up repaint for a Claude-style in-place CR redraw without scroll', async () => {
+    // Why: issue #5656/#5653 — Claude Code's plain-ASCII prompt redraw (CR + CHA +
+    // reprint + erase-line, no DEC 2026, no scroll, no cursor hide/show restore)
+    // paints one frame late on Windows ConPTY. A single sync refresh races that
+    // late paint, so the connection layer requests followupForegroundRefresh.
+    // Prove the scheduler turns that into a second next-frame repaint.
+    const scheduledFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, '\r\x1b[3Gzzzx\x1b[K', {
+      foreground: true,
+      latencySensitive: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true
+    })
+
+    expect(terminal._core.refresh).toHaveBeenCalledTimes(1)
+    expect(scheduledFrames).toHaveLength(1)
+
+    scheduledFrames[0]?.(16)
+
+    expect(terminal._core.refresh).toHaveBeenCalledTimes(2)
+    expect(terminal._core.refresh).toHaveBeenLastCalledWith(0, 23, true)
+  })
+
   it('skips forced viewport refresh for ordinary foreground output', async () => {
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createForegroundTerminal()
@@ -316,7 +348,7 @@ describe('pane terminal output scheduler', () => {
     vi.runOnlyPendingTimers()
 
     expect(terminal.write).toHaveBeenCalledWith(
-      '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?2026ltyped',
+      '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?2026l\x1b[?25htyped',
       expect.any(Function)
     )
   })
@@ -346,12 +378,12 @@ describe('pane terminal output scheduler', () => {
     vi.runOnlyPendingTimers()
 
     expect(terminal.write).toHaveBeenCalledWith(
-      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?2026l',
+      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?2026l\x1b[?25h',
       expect.any(Function)
     )
   })
 
-  it('strips synchronized cursor shows that end before the real cursor restore', async () => {
+  it('defers synchronized cursor shows until after the frame ends', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
@@ -367,7 +399,7 @@ describe('pane terminal output scheduler', () => {
     vi.runOnlyPendingTimers()
 
     expect(terminal.write).toHaveBeenCalledWith(
-      '\x1b[?2026h\x1b[?25l\x1b[26;59H\x1b[?2026l',
+      '\x1b[?2026h\x1b[?25l\x1b[26;59H\x1b[?2026l\x1b[?25h',
       expect.any(Function)
     )
   })
@@ -437,8 +469,8 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).toHaveBeenCalledTimes(2)
     expect(terminal.write.mock.calls.map(([data]) => data)).toEqual([
-      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;3Hx\x1b[?2026l',
-      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;4Hx\x1b[?2026l'
+      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;3Hx\x1b[?2026l\x1b[?25h',
+      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;4Hx\x1b[?2026l\x1b[?25h'
     ])
   })
 

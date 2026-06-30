@@ -8,6 +8,7 @@ import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
 } from '@/runtime/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
 
 type BaseRefPickerProps = {
@@ -92,6 +93,11 @@ export function BaseRefPicker({
   }, [activeRuntimeEnvironmentId, repoId])
 
   useEffect(() => {
+    if (!isRuntimeRepoRefSearchQueryWithinLimit(baseRefQuery)) {
+      setBaseRefResults([])
+      setIsSearchingBaseRefs(false)
+      return
+    }
     const trimmedQuery = baseRefQuery.trim()
     if (trimmedQuery.length < 2) {
       setBaseRefResults([])

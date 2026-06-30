@@ -25,7 +25,7 @@ function BaseRefButton({
   return (
     <button
       type="button"
-      className="min-w-0 max-w-[9rem] truncate rounded-sm border-0 bg-transparent p-0 text-left font-mono text-[10.5px] font-medium text-foreground/90 underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground"
+      className="min-w-0 max-w-full truncate rounded-sm border-0 bg-transparent p-0 text-left font-mono text-[10.5px] font-medium text-foreground/90 underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground"
       onClick={onClick}
       title={`${title} (${baseRef})`}
     >
@@ -90,11 +90,13 @@ export function SourceControlBranchContextRow({
         <span className="shrink-0 text-muted-foreground">
           {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
         </span>
-        <BaseRefButton
-          baseRef={displayedBaseRef}
-          onClick={onChangeBaseRef}
-          title={changeBaseTitle}
-        />
+        <span className="min-w-0 flex-1">
+          <BaseRefButton
+            baseRef={displayedBaseRef}
+            onClick={onChangeBaseRef}
+            title={changeBaseTitle}
+          />
+        </span>
       </div>
     )
   }
@@ -102,11 +104,13 @@ export function SourceControlBranchContextRow({
   if (summary.status !== 'ready') {
     return (
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <BaseRefButton
-          baseRef={displayedBaseRef}
-          onClick={onChangeBaseRef}
-          title={changeBaseTitle}
-        />
+        <span className="min-w-0 flex-1">
+          <BaseRefButton
+            baseRef={displayedBaseRef}
+            onClick={onChangeBaseRef}
+            title={changeBaseTitle}
+          />
+        </span>
         <span className="min-w-0 flex-1 truncate" title={summary.errorMessage ?? undefined}>
           {summary.errorMessage ??
             translate(
@@ -131,15 +135,17 @@ export function SourceControlBranchContextRow({
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <span className="shrink-0">
           {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
         </span>
-        <BaseRefButton
-          baseRef={displayedBaseRef}
-          onClick={onChangeBaseRef}
-          title={changeBaseTitle}
-        />
+        <span className="min-w-0 flex-1">
+          <BaseRefButton
+            baseRef={displayedBaseRef}
+            onClick={onChangeBaseRef}
+            title={changeBaseTitle}
+          />
+        </span>
       </div>
       {stats.length > 0 ? (
         <span className="inline-flex shrink-0 items-center gap-1.5">

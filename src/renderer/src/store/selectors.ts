@@ -224,6 +224,10 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
       count += terminalIds.has(tab.entityId) ? 1 : 0
     } else if (tab.contentType === 'browser') {
       count += browserIds.has(tab.entityId) ? 1 : 0
+    } else if (tab.contentType === 'simulator') {
+      // Why: simulator unified tabs have no separate backing record; the tab
+      // itself is the visible floating workspace item.
+      count += 1
     } else {
       count += editorIds.has(tab.entityId) ? 1 : 0
     }
@@ -293,7 +297,6 @@ export function getProjectHostSetupProjectionFromState(
 
 // ─── Repos ──────────────────────────────────────────────────────────
 export const useRepos = () => useAppStore((s) => s.repos)
-export const useActiveRepoId = () => useAppStore((s) => s.activeRepoId)
 export const useActiveRepo = () =>
   useAppStore(useShallow((s) => s.repos.find((r) => r.id === s.activeRepoId) ?? null))
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
@@ -318,29 +321,3 @@ export const useActiveWorktree = () => {
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
 }
-
-// ─── Terminals ──────────────────────────────────────────────────────
-export const useActiveTerminalTabs = () =>
-  useAppStore((s) =>
-    s.activeWorktreeId ? (s.tabsByWorktree[s.activeWorktreeId] ?? EMPTY_TABS) : EMPTY_TABS
-  )
-export const useActiveTabId = () => useAppStore((s) => s.activeTabId)
-
-// ─── Settings ───────────────────────────────────────────────────────
-export const useSettings = () => useAppStore((s) => s.settings)
-
-// ─── UI ─────────────────────────────────────────────────────────────
-export const useSidebarOpen = () => useAppStore((s) => s.sidebarOpen)
-export const useSidebarWidth = () => useAppStore((s) => s.sidebarWidth)
-export const useActiveView = () => useAppStore((s) => s.activeView)
-export const useActiveModal = () => useAppStore((s) => s.activeModal)
-export const useModalData = () => useAppStore((s) => s.modalData)
-export const useGroupBy = () => useAppStore((s) => s.groupBy)
-export const useSortBy = () => useAppStore((s) => s.sortBy)
-export const useShowActiveOnly = () => useAppStore((s) => s.showActiveOnly)
-export const useShowSleepingWorkspaces = () => useAppStore((s) => s.showSleepingWorkspaces)
-export const useFilterRepoIds = () => useAppStore((s) => s.filterRepoIds)
-
-// ─── GitHub ─────────────────────────────────────────────────────────
-export const usePRCache = () => useAppStore((s) => s.prCache)
-export const useIssueCache = () => useAppStore((s) => s.issueCache)

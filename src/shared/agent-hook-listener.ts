@@ -10,9 +10,9 @@
 // module uses only Node builtins (http/fs/crypto/net/path/url/os) — none of
 // which pull `electron` — so it is safe to import from `src/relay/`. See
 // docs/design/agent-status-over-ssh.md §3 ("relay normalizes; Orca routes").
-import type { IncomingMessage } from 'http'
-import { createHash, randomUUID } from 'crypto'
-import { homedir } from 'os'
+import type { IncomingMessage } from 'node:http'
+import { createHash, randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import {
   chmodSync,
   closeSync,
@@ -24,8 +24,8 @@ import {
   statSync,
   unlinkSync,
   writeFileSync
-} from 'fs'
-import { join } from 'path'
+} from 'node:fs'
+import { join } from 'node:path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
@@ -173,6 +173,8 @@ export function warnOnHookEnvOrVersionMismatch(
 
 export type AgentHookEventPayload = {
   paneKey: string
+  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
@@ -311,6 +313,26 @@ type ExtractedPromptText = {
     | null
 }
 
+// Joins the `text` of an Anthropic-style content-block array ([{ type: 'text',
+// text }, ...]); plain string items are included too. Returns '' when nothing
+// textual is present so callers can fall through to the next prompt source.
+function contentBlockArrayText(value: unknown[]): string {
+  const parts: string[] = []
+  for (const item of value) {
+    if (typeof item === 'string') {
+      parts.push(item)
+      continue
+    }
+    if (item && typeof item === 'object') {
+      const text = (item as Record<string, unknown>).text
+      if (typeof text === 'string') {
+        parts.push(text)
+      }
+    }
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
 function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromptText {
   const candidateKeys = [
     'prompt',
@@ -328,6 +350,16 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       // surrounding whitespace would otherwise leak into UI and caches.
       return { text: value.trim(), source: key as Exclude<ExtractedPromptText['source'], null> }
     }
+    // Why: Kimi Code sends UserPromptSubmit `prompt` as a content-block array
+    // ([{ type: 'text', text }]) rather than a string. Extract its text for the
+    // genuine prompt keys. `message` stays string-only: it is the ambiguous
+    // status/permission field that hasExplicitUserPrompt intentionally distrusts.
+    if (key !== 'message' && Array.isArray(value)) {
+      const text = contentBlockArrayText(value)
+      if (text.length > 0) {
+        return { text, source: key as Exclude<ExtractedPromptText['source'], null> }
+      }
+    }
   }
   // Why: OpenCode's plugin sends MessagePart events with { role, text }. When
   // role === 'user', the text *is* the prompt — surface it even though
@@ -342,10 +374,16 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
 }
 
 function stripGrokUserQueryWrapper(promptText: string): string {
-  const match = promptText.match(/^<user_query>([\s\S]*?)(?:<\/user_query>)?$/)
+  const opener = '<user_query>'
+  if (!promptText.startsWith(opener)) {
+    return promptText
+  }
+  const closer = '</user_query>'
+  const wrappedText = promptText.slice(opener.length)
+  const text = wrappedText.endsWith(closer) ? wrappedText.slice(0, -closer.length) : wrappedText
   // Why: Grok emits the submitted prompt wrapped in its internal
   // `<user_query>` envelope; the status cache should hold the user text.
-  return match ? match[1].trim() : promptText
+  return text.trim()
 }
 
 function resolvePrompt(
@@ -367,6 +405,11 @@ function resolvePrompt(
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string
+  /** Full JSON of an AskUserQuestion tool input, set only on the event that
+   *  carries it. Deliberately NOT inherited across events in resolveToolState
+   *  so it clears the moment the agent moves to a different tool / state and a
+   *  stale prompt can't linger on the emitted payload. */
+  interactivePrompt?: string
   hasToolUpdate?: boolean
   hasToolInputField?: boolean
   lastAssistantMessage?: string
@@ -402,6 +445,10 @@ function resolveToolState(
   const merged: ToolSnapshot = {
     toolName,
     toolInput,
+    // Why: do NOT inherit `previous.interactivePrompt`. The prompt is only
+    // valid for the single AskUserQuestion event that produced it; carrying it
+    // forward would leave a stale live card on the next tool/state change.
+    interactivePrompt: update.interactivePrompt,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
       : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
@@ -561,7 +608,7 @@ function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]
 }
 
 function toolUpdate(
-  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput'>,
+  fields: Pick<ToolSnapshot, 'toolName' | 'toolInput' | 'interactivePrompt'>,
   options?: { hasToolInputField?: boolean }
 ): ToolSnapshot {
   return {
@@ -569,6 +616,85 @@ function toolUpdate(
     hasToolUpdate: true,
     hasToolInputField: options?.hasToolInputField === true
   }
+}
+
+/** True for the AskUserQuestion tool across the casing variants different
+ *  agents emit (`AskUserQuestion` / `ask_user_question` / `askUserQuestion`).
+ *  Why: this is the structured "pick an option" prompt whose full input the
+ *  clients render as a live card. */
+function isAskUserQuestionTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
+}
+
+/** Capture the full AskUserQuestion tool input as a JSON string when the tool
+ *  is an AskUserQuestion variant; otherwise undefined so resolveToolState
+ *  clears any prior prompt. Kept agent-generic: callers pass whatever raw
+ *  tool-input object their hook payload exposed. */
+/** Drop the hook envelope keys a plugin merges into its event properties so
+ *  the serialized interactive prompt holds only the question structure. */
+function stripHookEnvelopeKeys(record: Record<string, unknown>): Record<string, unknown> {
+  const { hook_event_name: _h, hookEventName: _he, ...rest } = record
+  return rest
+}
+
+/** Short, single-line description of a tool call for an approval card (the
+ *  command for Bash, the path for file tools, else a clipped JSON preview). */
+function summarizeApprovalInput(toolInput: unknown): string {
+  if (toolInput && typeof toolInput === 'object') {
+    const obj = toolInput as Record<string, unknown>
+    const direct = obj.command ?? obj.file_path ?? obj.path ?? obj.url ?? obj.pattern
+    if (typeof direct === 'string' && direct.length > 0) {
+      return direct.length > 200 ? `${direct.slice(0, 200)}…` : direct
+    }
+  }
+  try {
+    const json = JSON.stringify(toolInput) ?? ''
+    return json.length > 200 ? `${json.slice(0, 200)}…` : json
+  } catch {
+    return ''
+  }
+}
+
+/** Capture a pending interactive prompt as a normalized JSON envelope:
+ *  - AskUserQuestion → the raw `{ questions: [...] }` structure (kind inferred
+ *    by the client from the `questions` key, kept stable for back-compat).
+ *  - any other tool on a PermissionRequest → `{ approval: { tool, summary } }`
+ *    so the client can render an Allow/Deny card.
+ *  Returns undefined otherwise so resolveToolState clears any prior prompt. */
+function deriveInteractivePrompt(
+  toolName: string | undefined,
+  toolInput: unknown,
+  eventName?: unknown
+): string | undefined {
+  // Why: an AskUserQuestion is pending only on the Pre/Permission event. On
+  // PostToolUse it has already been answered, so re-asserting the `{questions}`
+  // prompt would re-show an answered card instead of letting it clear. The live
+  // working indicator keys off agentStatus.state (not this prompt), so dropping
+  // it here doesn't suppress it.
+  if (
+    isAskUserQuestionTool(toolName) &&
+    eventName !== 'PostToolUse' &&
+    toolInput !== undefined &&
+    toolInput !== null
+  ) {
+    try {
+      return JSON.stringify(toolInput)
+    } catch {
+      // Why: defend against circular/unserializable input from a buggy agent —
+      // a missing live card is better than throwing in the hook hot path.
+      return undefined
+    }
+  }
+  if (eventName === 'PermissionRequest' && typeof toolName === 'string' && toolName.length > 0) {
+    try {
+      return JSON.stringify({
+        approval: { tool: toolName, summary: summarizeApprovalInput(toolInput) }
+      })
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
 }
 
 function readFirstString(
@@ -687,8 +813,12 @@ function extractAssistantContentText(content: unknown): string | undefined {
 }
 
 function extractAntigravityUserRequest(content: string): string | undefined {
-  const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/)
-  const text = request ? request[1] : content
+  const opener = '<USER_REQUEST>'
+  const startIndex = content.indexOf(opener)
+  const bodyStartIndex = startIndex === -1 ? -1 : startIndex + opener.length
+  const endIndex = bodyStartIndex === -1 ? -1 : content.indexOf('</USER_REQUEST>', bodyStartIndex)
+  const text =
+    bodyStartIndex === -1 || endIndex === -1 ? content : content.slice(bodyStartIndex, endIndex)
   const trimmed = text.trim()
   return trimmed.length > 0 ? trimmed : undefined
 }
@@ -780,14 +910,12 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
       }
       let lastPrompt: string | undefined
       let lastPromptOffset = 0
-      let lineStart = 0
-      for (const line of text.split('\n')) {
+      for (const { line, byteOffset } of iterateTranscriptLinesWithByteOffsets(text)) {
         const prompt = extractCommandCodeUserPromptFromLine(line.trim())
         if (prompt !== undefined) {
           lastPrompt = prompt
-          lastPromptOffset = textBasePosition + Buffer.byteLength(text.slice(0, lineStart), 'utf8')
+          lastPromptOffset = textBasePosition + byteOffset
         }
-        lineStart += line.length + 1
       }
       return lastPrompt
         ? {
@@ -805,6 +933,24 @@ function readLastCommandCodeUserPromptEntryFromTranscript(
     }
   } catch {
     return undefined
+  }
+}
+
+function* iterateTranscriptLinesWithByteOffsets(
+  text: string
+): Generator<{ line: string; byteOffset: number }> {
+  let lineStart = 0
+  let byteOffset = 0
+
+  for (let index = 0; index <= text.length; index++) {
+    if (index < text.length && text.charCodeAt(index) !== 10) {
+      continue
+    }
+
+    const line = text.slice(lineStart, index)
+    yield { line, byteOffset }
+    byteOffset += Buffer.byteLength(line, 'utf8') + (index < text.length ? 1 : 0)
+    lineStart = index + 1
   }
 }
 
@@ -1004,16 +1150,12 @@ function readLastTextFromTranscriptOnce(
           completeRegion = combined.subarray(firstNewline + 1)
         }
         if (completeRegion.length > 0) {
-          const lines = completeRegion.toString('utf8').split('\n')
-          for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i].trim()
-            if (line.length === 0) {
-              continue
-            }
-            const extracted = extractLineText(line)
-            if (extracted !== undefined) {
-              return extracted
-            }
+          const extracted = findLastExtractedTranscriptLineText(
+            completeRegion.toString('utf8'),
+            extractLineText
+          )
+          if (extracted !== undefined) {
+            return extracted
           }
         }
         carryBytes = nextCarry
@@ -1025,6 +1167,30 @@ function readLastTextFromTranscriptOnce(
   } catch {
     return undefined
   }
+}
+
+function findLastExtractedTranscriptLineText(
+  text: string,
+  extractLineText: (line: string) => string | undefined
+): string | undefined {
+  let lineEnd = text.length
+
+  for (let index = text.length - 1; index >= -1; index--) {
+    if (index >= 0 && text.charCodeAt(index) !== 10) {
+      continue
+    }
+
+    const line = text.slice(index + 1, lineEnd).trim()
+    if (line.length > 0) {
+      const extracted = extractLineText(line)
+      if (extracted !== undefined) {
+        return extracted
+      }
+    }
+    lineEnd = index
+  }
+
+  return undefined
 }
 
 function extractClaudeToolFields(
@@ -1042,7 +1208,11 @@ function extractClaudeToolFields(
     Object.assign(
       update,
       toolUpdate(
-        { toolName, toolInput: deriveToolInputPreview(toolName, hookPayload.tool_input) },
+        {
+          toolName,
+          toolInput: deriveToolInputPreview(toolName, hookPayload.tool_input),
+          interactivePrompt: deriveInteractivePrompt(toolName, hookPayload.tool_input, eventName)
+        },
         { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
       )
     )
@@ -1086,12 +1256,17 @@ function extractCodexToolFields(
     eventName === 'PostToolUse'
   ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+    const rawInput = hookPayload.tool_input ?? hookPayload.input ?? hookPayload.arguments
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
     return toolUpdate(
-      { toolName, toolInput },
+      {
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, rawInput, eventName)
+      },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
     )
   }
@@ -1221,6 +1396,19 @@ function extractOpenCodeToolFields(
     const text = readString(hookPayload, 'text')
     if (text) {
       return { lastAssistantMessage: capOpenCodeHookText(text) }
+    }
+  }
+  if (eventName === 'AskUserQuestion') {
+    // Why: OpenCode posts the question.asked event's `event.properties` as the
+    // hook payload (the plugin merges `hook_event_name` into it). The structured
+    // input is that object — minus the hook envelope key — or its `tool_input`
+    // when wrapped. Capture the full JSON so clients render the live card.
+    const toolInputSource = hasOwnField(hookPayload, 'tool_input')
+      ? hookPayload.tool_input
+      : stripHookEnvelopeKeys(hookPayload)
+    return {
+      hasToolUpdate: true,
+      interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
   }
   return {}
@@ -1786,6 +1974,28 @@ function isGrokPermissionNotification(message: string | undefined): boolean {
   )
 }
 
+function getGrokNotificationType(hookPayload: Record<string, unknown>): string | undefined {
+  return (
+    readString(hookPayload, 'notificationType') ??
+    readString(hookPayload, 'notification_type') ??
+    readString(hookPayload, 'type')
+  )
+}
+
+function isGrokRoutinePermissionPromptNotification(
+  notificationType: string | undefined,
+  message: string | undefined,
+  level: string | undefined
+): boolean {
+  // Why: Grok emits this info notification before each tool even under
+  // bypassPermissions; PreToolUse already captures progress without paging users.
+  return (
+    isGrokEvent(notificationType, 'permission_prompt') &&
+    message?.trim().toLowerCase() === 'tool permission requested' &&
+    (!level || level.trim().toLowerCase() === 'info')
+  )
+}
+
 function isGrokIdleNotification(message: string | undefined): boolean {
   if (!message) {
     return false
@@ -1804,6 +2014,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // typecheck here instead of silently falling through to `false`.
   switch (source) {
     case 'claude':
+    // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit
+    // is its new-turn boundary too.
+    case 'kimi':
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -1814,6 +2027,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'amp':
       return eventName === 'agent.start'
     case 'opencode':
+    case 'mimo-code':
       return false
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
@@ -1866,7 +2080,7 @@ function hasExplicitUserPrompt(
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
-    return source === 'opencode' && eventName === 'MessagePart'
+    return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
   }
   if (extractedPrompt.text.length === 0) {
     return false
@@ -1895,6 +2109,8 @@ function extractToolFields(
   // typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
+    // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
+    case 'kimi':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
@@ -1905,6 +2121,7 @@ function extractToolFields(
     case 'amp':
       return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
+    case 'mimo-code':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
@@ -1968,6 +2185,7 @@ function normalizeClaudeEvent(
       agentType: 'claude',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2028,6 +2246,71 @@ function normalizeDevinEvent(
       agentType: 'devin',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
+    })
+  )
+}
+
+// Why: Kimi's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
+// instead of PermissionRequest while blocked on a human answer. Treat it as a
+// waiting state so the UI shows the attention icon instead of the working spinner.
+function isKimiUserInputTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
+}
+
+// Why: Kimi Code emits Claude-compatible hook payloads and reuses Claude's
+// lifecycle event names (UserPromptSubmit/PreToolUse/Stop/...). Normalize them
+// into Orca's shared status states while attributing the status to Kimi so the
+// sidebar shows the Kimi icon and label instead of falling back to Claude.
+function normalizeKimiEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const toolName = readString(hookPayload, 'tool_name')
+  const isUserInputTool = isKimiUserInputTool(toolName)
+
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+    stateName = 'done'
+  }
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('kimi', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('kimi', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+      }),
+      agentType: 'kimi',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2074,6 +2357,7 @@ function normalizeGeminiEvent(
       agentType: 'gemini',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2149,6 +2433,7 @@ function normalizeAntigravityEvent(
       agentType: 'antigravity',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2231,6 +2516,7 @@ function normalizeAmpEvent(
       agentType: 'amp',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2368,12 +2654,14 @@ function normalizeCodexEvent(
       agentType: 'codex',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
 }
 
-function normalizeOpenCodeEvent(
+function normalizeOpenCodeFamilyEvent(
+  source: 'opencode' | 'mimo-code',
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
@@ -2396,19 +2684,20 @@ function normalizeOpenCodeEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('opencode', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('opencode', eventName) }
+    extractToolFields(source, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(source, eventName) }
   )
 
   return parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
       prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('opencode', eventName)
+        resetOnNewTurn: isNewTurnEvent(source, eventName)
       }),
-      agentType: 'opencode',
+      agentType: source,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2471,6 +2760,7 @@ function normalizeCursorEvent(
       agentType: 'cursor',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
     })
@@ -2535,6 +2825,7 @@ function normalizeCopilotEvent(
       agentType: 'copilot',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2580,6 +2871,7 @@ function normalizePiCompatibleEvent(
       agentType,
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2651,6 +2943,7 @@ function normalizeDroidEvent(
       agentType: 'droid',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2689,6 +2982,7 @@ function normalizeCommandCodeEvent(
       agentType: 'command-code',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2710,6 +3004,8 @@ function normalizeGrokEvent(
   }
 
   const notificationMessage = readString(hookPayload, 'message')
+  const notificationType = getGrokNotificationType(hookPayload)
+  const notificationLevel = readString(hookPayload, 'level')
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
     isGrokEvent(
@@ -2723,6 +3019,15 @@ function normalizeGrokEvent(
     stateName = 'working'
   } else if (isGrokEvent(eventName, 'stop', 'session_end')) {
     stateName = 'done'
+  } else if (
+    isGrokEvent(eventName, 'notification') &&
+    isGrokRoutinePermissionPromptNotification(
+      notificationType,
+      notificationMessage,
+      notificationLevel
+    )
+  ) {
+    return null
   } else if (
     isGrokEvent(eventName, 'notification') &&
     isGrokPermissionNotification(notificationMessage)
@@ -2760,6 +3065,7 @@ function normalizeGrokEvent(
       agentType: 'grok',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2808,6 +3114,7 @@ function normalizeHermesEvent(
       agentType: 'hermes',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
@@ -2867,6 +3174,7 @@ export function normalizeHookPayload(
     return null
   }
   const worktreeId = readStringField(record, 'worktreeId')
+  const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   let promptInteractionKey: string | undefined
@@ -2906,15 +3214,24 @@ export function normalizeHookPayload(
       payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'opencode':
+    case 'mimo-code':
       if (extractedPrompt.source === 'role_user_text') {
         const messageId = readFirstString(hookPayloadRecord, [
           'messageID',
           'messageId',
           'message_id'
         ])
-        promptInteractionKey = messageId ? `opencode-message-${messageId}` : undefined
+        const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
+        promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
       }
-      payload = normalizeOpenCodeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeOpenCodeFamilyEvent(
+        source,
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'cursor':
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
@@ -2974,6 +3291,9 @@ export function normalizeHookPayload(
     case 'devin':
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'kimi':
+      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
@@ -2984,6 +3304,7 @@ export function normalizeHookPayload(
   return payload
     ? {
         paneKey,
+        launchToken,
         tabId,
         worktreeId,
         connectionId: null,
@@ -3019,6 +3340,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',
+  '/hook/mimo-code': 'mimo-code',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/omp': 'omp',
@@ -3027,7 +3349,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/grok': 'grok',
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
-  '/hook/devin': 'devin'
+  '/hook/devin': 'devin',
+  '/hook/kimi': 'kimi'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

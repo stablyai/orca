@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { FileWarning, Sparkles } from 'lucide-react-native'
+import * as Clipboard from 'expo-clipboard'
+import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRInfo } from '../../../../src/shared/types'
 import { PRSection } from './PRSection'
@@ -27,9 +29,46 @@ type Props = {
 // list is not yet available. Ports the desktop ConflictingFilesSection +
 // MergeConflictNotice into the mobile card shell.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
+  const [commandsCopied, setCommandsCopied] = useState(false)
+  const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const conflict = resolveConflictDisplay(pr)
+
+  useEffect(() => {
+    return () => {
+      if (copiedResetTimerRef.current) {
+        clearTimeout(copiedResetTimerRef.current)
+      }
+    }
+  }, [])
+
   if (!conflict) {
     return null
+  }
+  let noticeBody = 'Conflict file details are unavailable'
+  if (isRefreshing) {
+    noticeBody = 'Refreshing conflict details…'
+  } else if (conflict.localMergeClean) {
+    noticeBody =
+      'GitHub reports conflicts, but local Git did not reproduce them. Refresh the PR or push the branch to recalculate mergeability.'
+  }
+
+  const copyRefreshCommands = async () => {
+    if (!conflict.mergeabilityRefreshCommands) {
+      return
+    }
+    try {
+      await Clipboard.setStringAsync(conflict.mergeabilityRefreshCommands)
+    } catch {
+      return
+    }
+    if (copiedResetTimerRef.current) {
+      clearTimeout(copiedResetTimerRef.current)
+    }
+    setCommandsCopied(true)
+    copiedResetTimerRef.current = setTimeout(() => {
+      copiedResetTimerRef.current = null
+      setCommandsCopied(false)
+    }, 1500)
   }
 
   return (
@@ -44,11 +83,35 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
       {conflict.fileDetailsUnavailable ? (
         <View>
           <Text style={styles.noticeTitle}>This branch has conflicts that must be resolved</Text>
-          <Text style={styles.noticeBody}>
-            {isRefreshing
-              ? 'Refreshing conflict details…'
-              : 'Conflict file details are unavailable'}
-          </Text>
+          <Text style={styles.noticeBody}>{noticeBody}</Text>
+          {conflict.mergeabilityRefreshCommands ? (
+            <View style={styles.commandBox}>
+              <View style={styles.commandHeader}>
+                <Text style={styles.commandLabel}>Run from this worktree</Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.copyCommandButton,
+                    pressed && styles.copyCommandButtonPressed
+                  ]}
+                  onPress={() => void copyRefreshCommands()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy mergeability refresh commands"
+                >
+                  {commandsCopied ? (
+                    <Check size={13} color={colors.textPrimary} strokeWidth={2.2} />
+                  ) : (
+                    <Copy size={13} color={colors.textPrimary} strokeWidth={2.2} />
+                  )}
+                  <Text style={styles.copyCommandText}>
+                    {commandsCopied ? 'Copied' : 'Copy commands'}
+                  </Text>
+                </Pressable>
+              </View>
+              <Text selectable style={styles.commandText}>
+                {conflict.mergeabilityRefreshCommands}
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : (
         <View>

@@ -13,33 +13,13 @@ const mocks = vi.hoisted(() => {
       }
     }),
     tabsByWorktree: {} as Record<string, { id: string }[]>,
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    browserTabsByWorktree: {} as Record<string, { id: string }[]>,
-    openFiles: [] as { worktreeId: string }[]
+    ptyIdsByTabId: {} as Record<string, string[]>
   }
   const activateAndRevealWorktree = vi.fn()
-  const markInputQuietSchedulerInput = vi.fn()
-  const pendingCallbacks: (() => void)[] = []
-  const pendingCancels: ReturnType<typeof vi.fn>[] = []
-  const scheduleAfterInputQuiet = vi.fn((callback: () => void) => {
-    let cancelled = false
-    const cancel = vi.fn(() => {
-      cancelled = true
-    })
-    pendingCallbacks.push(() => {
-      if (!cancelled) {
-        callback()
-      }
-    })
-    pendingCancels.push(cancel)
-    return cancel
-  })
+  const activateAndRevealFolderWorkspace = vi.fn()
   return {
+    activateAndRevealFolderWorkspace,
     activateAndRevealWorktree,
-    markInputQuietSchedulerInput,
-    pendingCallbacks,
-    pendingCancels,
-    scheduleAfterInputQuiet,
     state,
     toastError: vi.fn()
   }
@@ -52,12 +32,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
-}))
-
-vi.mock('@/lib/input-quiet-scheduler', () => ({
-  markInputQuietSchedulerInput: mocks.markInputQuietSchedulerInput,
-  scheduleAfterInputQuiet: mocks.scheduleAfterInputQuiet
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
@@ -65,13 +41,10 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 
-describe('sleep flow vs queued slept-workspace activation', () => {
+describe('sleep flow vs slept-workspace activation', () => {
   beforeEach(() => {
     mocks.activateAndRevealWorktree.mockClear()
-    mocks.markInputQuietSchedulerInput.mockClear()
-    mocks.scheduleAfterInputQuiet.mockClear()
-    mocks.pendingCallbacks.length = 0
-    mocks.pendingCancels.length = 0
+    mocks.activateAndRevealFolderWorkspace.mockClear()
     mocks.toastError.mockClear()
     mocks.state.activeWorktreeId = 'wt-parent'
     mocks.state.setActiveWorktree.mockClear()
@@ -93,26 +66,22 @@ describe('sleep flow vs queued slept-workspace activation', () => {
       'tab-child-2': ['pty-child-2'],
       'tab-child-3': ['pty-child-3']
     }
-    mocks.state.browserTabsByWorktree = {}
-    mocks.state.openFiles = []
   })
 
-  it('does not let an old slept-parent activation fire after sleeping children', async () => {
+  it('does not leave behind a delayed parent activation after sleeping children', async () => {
     await runSleepWorktrees(['wt-parent'])
 
     expect(mocks.state.activeWorktreeId).toBeNull()
     expect(mocks.state.ptyIdsByTabId['tab-parent']).toEqual([])
 
-    // A normal click on the slept parent row during selection setup queues a
-    // wake internally, even though the user is just trying to select children.
     activateWorktreeFromSidebar('wt-parent')
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.pendingCallbacks).toHaveLength(1)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
+      revealInSidebar: false
+    })
 
     await runSleepWorktrees(['wt-child-1', 'wt-child-2', 'wt-child-3'])
-    mocks.pendingCallbacks[0]?.()
 
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.pendingCancels[0]).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
   })
 })

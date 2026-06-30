@@ -21,6 +21,7 @@ import {
   GitHubMarkdownComposerTabbar,
   type ComposerTab
 } from '@/components/github/github-markdown-composer-tabbar'
+import { hasBoundedGitHubMarkdownImageUrlText } from '@/components/github/github-markdown-image-url'
 import { useImageInput } from '@/components/github/use-image-input'
 import type { GitHubOwnerRepo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
@@ -309,7 +310,11 @@ export function GitHubMarkdownComposer({
         disabled={disabled}
         className="h-8 min-w-0 text-xs"
       />
-      <Button type="submit" size="xs" disabled={disabled || !imageUrl.trim()}>
+      <Button
+        type="submit"
+        size="xs"
+        disabled={disabled || !hasBoundedGitHubMarkdownImageUrlText(imageUrl)}
+      >
         {translate('auto.components.github.GitHubMarkdownComposer.e3bd59143c', 'Insert')}
       </Button>
       <Button type="button" variant="ghost" size="xs" onClick={() => setImageInputOpen(false)}>

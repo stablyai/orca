@@ -38,6 +38,7 @@ export type KeybindingActionId =
   | 'workspace.rename'
   | 'workspace.delete'
   | 'workspace.openBoard'
+  | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -47,8 +48,11 @@ export type KeybindingActionId =
   | 'sidebar.sourceControl.toggle'
   | 'sidebar.checks.toggle'
   | 'sidebar.ports.toggle'
+  | 'sidebar.sleepingWorkspaces.toggle'
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
+  | 'floatingWorkspace.maximize'
+  | 'floatingWorkspace.minimize'
   | 'zoom.in'
   | 'zoom.out'
   | 'zoom.reset'
@@ -72,6 +76,7 @@ export type KeybindingActionId =
   | 'tab.previousRecent'
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
+  | 'tab.selectByIndex'
   | 'browser.find'
   | 'browser.back'
   | 'browser.forward'
@@ -80,6 +85,7 @@ export type KeybindingActionId =
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
   | 'editor.find'
+  | 'editor.replace'
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
@@ -97,6 +103,8 @@ export type KeybindingActionId =
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
+  | 'terminal.setTitle'
+  | 'terminal.clearPaneTitle'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
@@ -292,6 +300,28 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'workspace.selectByIndex',
+    title: 'Select Workspace 1–9',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'worktree',
+      'select',
+      'switch',
+      'number',
+      'digit',
+      '1-9',
+      'index'
+    ],
+    // Why: one remappable row for the whole 1-9 range. The stored chord is a
+    // representative — its digit normalizes to 1, but the modifier set is what
+    // matters and any of 1-9 fires it. mac Cmd+1-9, Windows/Linux Ctrl+1-9 → Mod+1.
+    defaultBindings: platformBindings(['Mod+1'])
+  },
+  {
     id: 'voice.dictation',
     title: 'Dictation',
     group: 'Global',
@@ -368,6 +398,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'sidebar.sleepingWorkspaces.toggle',
+    title: 'Toggle Sleeping Workspaces',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'sidebar',
+      'sleeping',
+      'asleep',
+      'workspaces',
+      'worktree',
+      'filter',
+      'show',
+      'hide'
+    ],
+    // Why: ship unbound — issue #5209 asks to "assign a shortcut", so we avoid
+    // claiming a cross-platform chord and let users bind it in Settings.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.focusWorktreeList',
     title: 'Focus worktree list',
     group: 'Global',
@@ -382,6 +432,57 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'floating terminal', 'terminal'],
     defaultBindings: platformBindings(['Mod+Alt+A']),
+    allowInTerminal: true
+  },
+  {
+    id: 'floatingWorkspace.maximize',
+    title: 'Maximize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'maximize',
+      'expand'
+    ],
+    // Why: pairs with the floatingTerminal.toggle chord (Cmd+Opt+A) so
+    // maximize/restore lives on the same key anchor and stays one-handed,
+    // instead of the two-hand reach to Cmd+Opt+ArrowUp. macOS-only default;
+    // Linux/Windows stay unbound for users to assign.
+    defaultBindings: {
+      darwin: ['Mod+Alt+Shift+A'],
+      linux: [],
+      win32: []
+    },
+    allowInTerminal: true
+  },
+  {
+    id: 'floatingWorkspace.minimize',
+    title: 'Minimize Floating Workspace Panel',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'floating',
+      'workspace',
+      'panel',
+      'floating workspace',
+      'workspace panel',
+      'minimize',
+      'hide'
+    ],
+    // Why: intentionally unbound on every platform. floatingTerminal.toggle
+    // already owns the default show/hide chord; this action exists only so
+    // users can bind an explicit "hide the focused panel" shortcut in Settings.
+    defaultBindings: {
+      darwin: [],
+      linux: [],
+      win32: []
+    },
     allowInTerminal: true
   },
   {
@@ -585,6 +686,25 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'tab.selectByIndex',
+    title: 'Select Tab 1–9',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    // Why: deliberately no shared conflictGroup with workspace.selectByIndex.
+    // They live in different scopes, so swapping their modifiers (the headline
+    // use case) is never blocked as a false conflict; runtime stays deterministic
+    // because resolveWindowShortcutAction checks the workspace range first.
+    searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
+    // Why: representative chord for the 1-9 range (see workspace.selectByIndex).
+    // mac Ctrl+1-9 (Cmd+1-9 is the workspace jump); Windows/Linux Alt+1-9
+    // (Ctrl+1-9 is the workspace jump), so each platform gets a free chord.
+    defaultBindings: {
+      darwin: ['Ctrl+1'],
+      linux: ['Alt+1'],
+      win32: ['Alt+1']
+    }
+  },
+  {
     id: 'browser.find',
     title: 'Find in Browser',
     group: 'Browser',
@@ -655,6 +775,20 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'find', 'search'],
     defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'editor.replace',
+    title: 'Replace in editor',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'replace', 'find', 'search'],
+    // Why: match the source editor's native replace shortcut — Cmd+Alt+F on
+    // macOS, Ctrl+H on Linux/Windows.
+    defaultBindings: {
+      darwin: ['Mod+Alt+F'],
+      linux: ['Mod+H'],
+      win32: ['Mod+H']
+    }
   },
   {
     id: 'editor.save',
@@ -810,6 +944,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
   },
   {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.clearPaneTitle',
+    title: 'Clear Pane Title',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'clear title', 'remove title', 'title'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.closePane',
     title: 'Close active pane',
     group: 'Terminal Panes',
@@ -877,6 +1027,23 @@ const DEFINITIONS_BY_ID = new Map<KeybindingActionId, KeybindingDefinition>(
 const DEFINITION_IDS = new Set<KeybindingActionId>(
   KEYBINDING_DEFINITIONS.map((definition) => definition.id)
 )
+
+// Why: "Select Tab 1-9" / "Select Workspace 1-9" are single remappable rows
+// whose chord is a representative — the digit is canonicalized to 1, but the
+// binding fires for any of 1-9. These ids opt into that range behavior.
+export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
+  'tab.selectByIndex',
+  'workspace.selectByIndex'
+]
+
+const DIGIT_INDEX_ACTION_ID_SET = new Set<KeybindingActionId>(DIGIT_INDEX_ACTION_IDS)
+
+// The representative key for a digit-index chord is a single 1-9 number key.
+const DIGIT_INDEX_KEY_PATTERN = /^[1-9]$/
+
+export function isDigitIndexActionId(actionId: KeybindingActionId): boolean {
+  return DIGIT_INDEX_ACTION_ID_SET.has(actionId)
+}
 
 function platformBindings(bindings: readonly string[]): PlatformBindings {
   return {
@@ -1229,18 +1396,60 @@ function normalizeOptionsForAction(actionId: KeybindingActionId): NormalizeKeybi
   }
 }
 
+// Why: a digit-index row stores one representative chord. Rewrite the key to 1
+// so display and conflict detection stay stable across the 1-9 range, and
+// reject anything that is not a number key 1-9. Extra modifiers (e.g. Shift) are
+// intentionally allowed — only the key must be a digit; parseKeybinding has
+// already enforced that at least one modifier is present.
+function canonicalizeDigitIndexBinding(binding: string): KeybindingValidationResult {
+  const parsed = parseKeybinding(binding)
+  if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
+    return {
+      ok: false,
+      error: 'Pick a number key 1–9 with a modifier, like Cmd+1 or Ctrl+1.'
+    }
+  }
+  return { ok: true, value: canonicalizeParsedKeybinding({ ...parsed, key: '1' }) }
+}
+
+function finalizeDigitIndexBindings(
+  actionId: KeybindingActionId,
+  result: KeybindingValidationResult | string[]
+): KeybindingValidationResult | string[] {
+  if (!isDigitIndexActionId(actionId) || !Array.isArray(result)) {
+    return result
+  }
+  const canonical: string[] = []
+  for (const binding of result) {
+    const normalized = canonicalizeDigitIndexBinding(binding)
+    if (!normalized.ok) {
+      return normalized
+    }
+    if (!canonical.includes(normalized.value)) {
+      canonical.push(normalized.value)
+    }
+  }
+  return canonical
+}
+
 export function normalizeKeybindingListForAction(
   actionId: KeybindingActionId,
   input: string
 ): KeybindingValidationResult | string[] {
-  return normalizeKeybindingListWithOptions(input, normalizeOptionsForAction(actionId))
+  return finalizeDigitIndexBindings(
+    actionId,
+    normalizeKeybindingListWithOptions(input, normalizeOptionsForAction(actionId))
+  )
 }
 
 export function normalizeKeybindingArrayForAction(
   actionId: KeybindingActionId,
   input: readonly string[]
 ): KeybindingValidationResult | string[] {
-  return normalizeKeybindingArrayWithOptions(input, normalizeOptionsForAction(actionId))
+  return finalizeDigitIndexBindings(
+    actionId,
+    normalizeKeybindingArrayWithOptions(input, normalizeOptionsForAction(actionId))
+  )
 }
 
 const MODIFIER_KEYS = new Set([
@@ -1307,6 +1516,51 @@ function canUsePhysicalCodeFallback(input: KeybindingInput): boolean {
   return PHYSICAL_CODE_FALLBACK_KEYS.has(input.key ?? '')
 }
 
+function isLatinShortcutKey(key: string): boolean {
+  // Why: A-Z / 0-9 are the only single chars a Latin shortcut token names; any
+  // other produced character (Cyrillic с, Greek π, ...) cannot be a deliberate
+  // remap of a Latin chord, so it is safe to fall back to the physical code.
+  if (key.length !== 1) {
+    return false
+  }
+  const upper = key.toUpperCase()
+  return (upper >= 'A' && upper <= 'Z') || (key >= '0' && key <= '9')
+}
+
+function shouldUseNonLatinShortcutPhysicalFallback(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: non-Latin layouts (Cyrillic, Greek, ...) report a non-Latin logical key
+  // for physical letter keys (issue #6274), so Ctrl/Meta shortcuts never match.
+  // Fall back to the physical code, but only when no logical shortcut token
+  // exists, a real primary modifier (Ctrl or Meta) is held, and this is not an
+  // AltGr (Ctrl+Alt) text-composition event. macOS is excluded — it already has
+  // dedicated Option-composed fallbacks and Cmd shortcuts are layout-stable.
+  if (getKeybindingPlatform(platform) === 'darwin') {
+    return false
+  }
+  const hasPrimaryModifier = hasModifier(input, 'control') || hasModifier(input, 'meta')
+  if (!hasPrimaryModifier) {
+    return false
+  }
+  // AltGr surfaces as Ctrl+Alt on Windows/Linux; treat it as text, not a chord.
+  if (hasModifier(input, 'control') && hasModifier(input, 'alt')) {
+    return false
+  }
+  if (logicalKeyTokenFromInput(input) !== null) {
+    return false
+  }
+  const key = input.key ?? ''
+  return key !== '' && !MODIFIER_KEYS.has(key) && !isLatinShortcutKey(key)
+}
+
+function canFallBackToPhysicalCode(input: KeybindingInput, platform: NodeJS.Platform): boolean {
+  return (
+    canUsePhysicalCodeFallback(input) || shouldUseNonLatinShortcutPhysicalFallback(input, platform)
+  )
+}
+
 function physicalCodeKeyTokenFromInput(input: KeybindingInput): string | null {
   const code = input.code ?? ''
   if (code.startsWith('Key') && code.length === 4) {
@@ -1358,7 +1612,8 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   }
   if (
     !canUsePhysicalCodeFallback(input) &&
-    !shouldUseMacOptionComposedCaptureFallback(input, platform)
+    !shouldUseMacOptionComposedCaptureFallback(input, platform) &&
+    !shouldUseNonLatinShortcutPhysicalFallback(input, platform)
   ) {
     return null
   }
@@ -1432,7 +1687,15 @@ export function keybindingFromInputForAction(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): KeybindingValidationResult {
-  return keybindingFromInputWithOptions(input, platform, normalizeOptionsForAction(actionId))
+  const result = keybindingFromInputWithOptions(
+    input,
+    platform,
+    normalizeOptionsForAction(actionId)
+  )
+  if (!result.ok || !isDigitIndexActionId(actionId)) {
+    return result
+  }
+  return canonicalizeDigitIndexBinding(result.value)
 }
 
 function getDefaultBindings(definition: KeybindingDefinition, platform: NodeJS.Platform): string[] {
@@ -1455,6 +1718,19 @@ export function getEffectiveKeybindingsForAction(
   }
   const override = overrides?.[actionId]
   if (Array.isArray(override)) {
+    // Why: digit-index overrides resolve to their canonical <mods>+1 representative
+    // (deduped) so effective bindings stay consistent for display and conflict
+    // detection even if a hand-edited file stored a different digit.
+    if (isDigitIndexActionId(actionId)) {
+      const canonical: string[] = []
+      for (const binding of override) {
+        const normalized = canonicalizeDigitIndexBinding(binding)
+        if (normalized.ok && !canonical.includes(normalized.value)) {
+          canonical.push(normalized.value)
+        }
+      }
+      return canonical
+    }
     return override.flatMap((binding) => {
       const normalized = normalizeKeybindingWithOptions(
         binding,
@@ -1567,18 +1843,22 @@ function letterKeyMatches(
     return logicalKey === letter.toUpperCase()
   }
   return (
-    (canUsePhysicalCodeFallback(input) ||
+    (canFallBackToPhysicalCode(input, platform) ||
       shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) &&
     input.code === `Key${letter.toUpperCase()}`
   )
 }
 
-function digitKeyMatches(input: KeybindingInput, digit: string): boolean {
+function digitKeyMatches(
+  input: KeybindingInput,
+  digit: string,
+  platform: NodeJS.Platform
+): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canUsePhysicalCodeFallback(input) && input.code === `Digit${digit}`
+  return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
 }
 
 function isPunctuationKeyToken(token: string | null): token is string {
@@ -1626,7 +1906,7 @@ function keyMatches(
     return letterKeyMatches(input, parsedKey, parsed, platform)
   }
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
-    return digitKeyMatches(input, parsedKey)
+    return digitKeyMatches(input, parsedKey, platform)
   }
 
   if (parsedKey === 'NumpadAdd' || parsedKey === 'NumpadSubtract') {
@@ -1647,7 +1927,7 @@ function keyMatches(
       return semanticKey === parsedKey
     }
     return (
-      (canUsePhysicalCodeFallback(input) ||
+      (canFallBackToPhysicalCode(input, platform) ||
         shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
       physicalPunctuationKey(input) === parsedKey
     )
@@ -1657,7 +1937,9 @@ function keyMatches(
   if (logicalKey !== null) {
     return logicalKey === parsedKey
   }
-  return canUsePhysicalCodeFallback(input) && physicalCodeKeyTokenFromInput(input) === parsedKey
+  return (
+    canFallBackToPhysicalCode(input, platform) && physicalCodeKeyTokenFromInput(input) === parsedKey
+  )
 }
 
 function resolveModifierToken(
@@ -1729,6 +2011,49 @@ export function keybindingMatchesAction(
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).some((binding) =>
     keybindingMatchesInput(binding, input, platform)
   )
+}
+
+function digitFromInput(input: KeybindingInput, platform: NodeJS.Platform): string | null {
+  for (let value = 1; value <= 9; value++) {
+    const digit = String(value)
+    if (digitKeyMatches(input, digit, platform)) {
+      return digit
+    }
+  }
+  return null
+}
+
+// Why: digit-index rows bind a representative chord but fire for 1-9. Reuse the
+// representative's modifier set with the pressed digit, then match it through the
+// normal input matcher so Mod/Cmd resolution and layout fallbacks stay shared.
+// Honors keybindingIsActiveInContext, so terminal-first focus disables the range
+// just like the scope-based gating for every other shortcut.
+export function matchKeybindingDigitIndex(
+  actionId: KeybindingActionId,
+  input: KeybindingInput,
+  platform: NodeJS.Platform,
+  overrides?: KeybindingOverrides,
+  options: KeybindingMatchOptions = {}
+): number | null {
+  const definition = DEFINITIONS_BY_ID.get(actionId)
+  if (!definition || !keybindingIsActiveInContext(definition, options)) {
+    return null
+  }
+  const digit = digitFromInput(input, platform)
+  if (!digit) {
+    return null
+  }
+  for (const binding of getEffectiveKeybindingsForAction(actionId, platform, overrides)) {
+    const parsed = parseKeybinding(binding)
+    if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
+      continue
+    }
+    const candidate = canonicalizeParsedKeybinding({ ...parsed, key: digit })
+    if (keybindingMatchesInput(candidate, input, platform)) {
+      return Number(digit) - 1
+    }
+  }
+  return null
 }
 
 function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {

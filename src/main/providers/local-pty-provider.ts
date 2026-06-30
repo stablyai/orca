@@ -2,12 +2,17 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, delimiter } from 'path'
-import { win32 as pathWin32 } from 'path'
+import { basename, delimiter } from 'node:path'
+import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from './windows-powershell'
+import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
-import { existsSync } from 'fs'
+import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -26,13 +31,19 @@ import {
   getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   createShellReadyScanState,
+  drainShellReadyHeldBytes,
   scanForShellReady,
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
 } from './local-pty-shell-ready'
+import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
+import {
+  POWERLEVEL10K_WIZARD_DISABLE_ENV,
+  seedPowerlevel10kWizardEnv
+} from '../pty/powerlevel10k-wizard-env'
 import {
   isWindowsGitBashShellPath,
   resolveGitBashPath,
@@ -44,7 +55,12 @@ import { getAgentForegroundContextPaths } from './agent-foreground-context-paths
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 
-const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const PANE_IDENTITY_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN'
+] as const
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -55,6 +71,7 @@ const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
 // to invoke/clean them up on a destroyed environment, triggering a SIGABRT.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
+const ptyCleanupCallbacks = new Map<string, () => void>()
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
@@ -130,6 +147,15 @@ function disposePtyListeners(id: string): void {
   }
 }
 
+function runPtyCleanup(id: string): void {
+  const cleanup = ptyCleanupCallbacks.get(id)
+  if (!cleanup) {
+    return
+  }
+  ptyCleanupCallbacks.delete(id)
+  cleanup()
+}
+
 /**
  * Resolves a WSL context from a worktree id whose path is already a WSL path.
  */
@@ -155,6 +181,7 @@ function getWslContextFromPreferredDistro(
  * Removes all local tracking state for a PTY id after teardown.
  */
 function clearPtyState(id: string): void {
+  runPtyCleanup(id)
   disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
@@ -214,6 +241,15 @@ function resolveForegroundFallbackProcess(
   return shellName ?? processName ?? null
 }
 
+/** Basename of the spawned shell path, parsed for the *target* platform rather
+ *  than the host's native separator. Why: on Windows the shell path uses `\`,
+ *  but the POSIX `basename` (used when orchestrating from a non-Windows host or
+ *  CI) would not split it and would store the whole `C:\...\powershell.exe`
+ *  path as the shell name — breaking the foreground/child-process comparison. */
+function getSpawnedShellName(shellPath: string): string {
+  return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
+}
+
 /**
  * Disposes the native PTY handle while avoiding recycled-pid signals on POSIX.
  */
@@ -244,6 +280,7 @@ function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } 
  * Kills a local PTY and clears all associated local provider state.
  */
 function safeKillAndClean(id: string, proc: pty.IPty): void {
+  runPtyCleanup(id)
   disposePtyListeners(id)
   try {
     proc.kill()
@@ -327,6 +364,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let effectiveCwd: string
     let validationCwd: string
     let startupCommandDeliveredInShellArgs = false
+    let windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts> = []
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -355,6 +393,16 @@ export class LocalPtyProvider implements IPtyProvider {
       // the shared resolver can still fall back to inbox powershell.exe when
       // pwsh.exe was requested but is unavailable.
       const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+      const resolvedShellFamily: WindowsPowerShellShellFamily =
+        normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+          ? normalizedShellFamily
+          : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+            ? normalizedShellFamily
+            : undefined
+      const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+        shellFamily: resolvedShellFamily,
+        implementation: powerShellImplementation
+      })
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
       if (resolvedGitBashPath) {
@@ -364,35 +412,45 @@ export class LocalPtyProvider implements IPtyProvider {
       } else {
         shellPath = shouldResolvePowerShellFamily
           ? (resolveEffectiveWindowsPowerShell({
-              shellFamily:
-                normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                  ? 'powershell.exe'
-                  : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                    ? normalizedShellFamily
-                    : undefined,
+              shellFamily: resolvedShellFamily,
               implementation: powerShellImplementation,
-              pwshAvailable: this.opts.pwshAvailable?.() ?? false
+              pwshAvailable: shouldProbePwsh ? (this.opts.pwshAvailable?.() ?? false) : false
             }) ?? shellFamily)
           : shellFamily
       }
-      // Why: one-off overrides and persisted shell-family selection keep the
-      // same priority, while the shared resolver chooses which PowerShell
-      // executable is safe to run right now if that family is selected.
-      // Why: both this path and the daemon-subprocess path must derive the
-      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
-      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
-      // wsl.exe /mnt/<drive> cwd translation in one place.
-      const resolved = resolveWindowsShellLaunchArgs(
+      // Why: when the selected shell is a PowerShell family, resolve it to a
+      // real absolute executable and build a PowerShell -> cmd.exe fallback
+      // chain. Handing ConPTY a bare `pwsh.exe` lets Windows resolve it to the
+      // Store App Execution Alias stub, whose spawn fails with error code 5.
+      // The shared launch-args helper inside keeps both this path and the
+      // daemon path producing identical args (chcp 65001 / $PROFILE / wsl cwd).
+      windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
         shellPath,
         cwd,
         defaultCwd,
-        worktreeWslContext ?? preferredWslContext,
-        args.command
-      )
-      shellArgs = resolved.shellArgs
-      effectiveCwd = resolved.effectiveCwd
-      validationCwd = resolved.validationCwd
-      startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+        wslContext: worktreeWslContext ?? preferredWslContext,
+        startupCommand: args.command
+      })
+      const primaryAttempt = windowsFallbackAttempts[0]
+      if (primaryAttempt) {
+        shellPath = primaryAttempt.shellPath
+        shellArgs = primaryAttempt.shellArgs
+        effectiveCwd = primaryAttempt.effectiveCwd
+        validationCwd = primaryAttempt.validationCwd
+        startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
+      } else {
+        const resolved = resolveWindowsShellLaunchArgs(
+          shellPath,
+          cwd,
+          defaultCwd,
+          worktreeWslContext ?? preferredWslContext,
+          args.command
+        )
+        shellArgs = resolved.shellArgs
+        effectiveCwd = resolved.effectiveCwd
+        validationCwd = resolved.validationCwd
+        startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+      }
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -514,12 +572,21 @@ export class LocalPtyProvider implements IPtyProvider {
         delete finalEnv.ORCA_CODEX_HOME
       }
     }
+    seedPowerlevel10kWizardEnv(finalEnv, { envToDelete: args.envToDelete })
+    if (
+      finalEnv[POWERLEVEL10K_WIZARD_DISABLE_ENV] !== undefined &&
+      process.platform === 'win32' &&
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    ) {
+      addWslEnvKeys(finalEnv, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
+    }
     if (!wslInfo && process.platform !== 'win32') {
       // Why: OpenCode/Codex path restoration and OMP's typed-command status
       // wrapper need shell-ready code after user startup files run.
       const needsNoMarkerWrapper =
         finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
+        finalEnv.ORCA_MIMOCODE_HOME ||
         finalEnv.ORCA_OMP_STATUS_EXTENSION ||
         finalEnv.ORCA_CODEX_HOME ||
         finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
@@ -591,9 +658,15 @@ export class LocalPtyProvider implements IPtyProvider {
       // correct filename (see design doc §8).
       onBeforeFallbackSpawn: historyResult?.histFile
         ? (env, fallbackShell) => updateHistFileForFallback(env, fallbackShell)
-        : undefined
+        : undefined,
+      windowsFallbackAttempts
     })
     shellPath = spawnResult.shellPath
+    // Why: a Windows fallback (e.g. cmd.exe) embeds its own startup command in
+    // argv, so honor the winning shell's delivery flag to avoid a double write.
+    if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
+      startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
+    }
     if (args.command && getFallbackShellReadyConfig) {
       shellReadyLaunch = getFallbackShellReadyConfig(shellPath)
     }
@@ -604,7 +677,7 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
-    ptyShellName.set(id, basename(shellPath))
+    ptyShellName.set(id, getSpawnedShellName(shellPath))
     ptyAgentForegroundContextPaths.set(
       id,
       getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
@@ -613,17 +686,17 @@ export class LocalPtyProvider implements IPtyProvider {
     this.opts.onSpawned?.(id)
 
     // Shell-ready startup command support
-    let resolveShellReady: (() => void) | null = null
+    let resolveShellReady: ((signal: ShellReadySignal) => void) | null = null
     let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
     const shellReadyScanState = shellReadyLaunch?.supportsReadyMarker
       ? createShellReadyScanState()
       : null
     const shellReadyPromise = args.command
-      ? new Promise<void>((resolve) => {
+      ? new Promise<ShellReadySignal>((resolve) => {
           resolveShellReady = resolve
         })
-      : Promise.resolve()
-    const finishShellReady = (): void => {
+      : Promise.resolve({ postMarkerBytesObserved: false })
+    const finishShellReady = (signal: ShellReadySignal): void => {
       if (!resolveShellReady) {
         return
       }
@@ -633,18 +706,44 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       const resolve = resolveShellReady
       resolveShellReady = null
-      resolve()
+      resolve(signal)
+    }
+    const releaseHeldShellReadyBytes = (): void => {
+      if (!shellReadyScanState) {
+        return
+      }
+      const heldBytes = drainShellReadyHeldBytes(shellReadyScanState)
+      if (heldBytes.length === 0) {
+        return
+      }
+      this.opts.onData?.(id, heldBytes, Date.now())
+      for (const cb of dataListeners) {
+        cb({ id, data: heldBytes })
+      }
     }
     if (args.command) {
       if (shellReadyLaunch?.supportsReadyMarker) {
         shellReadyTimeout = setTimeout(() => {
-          finishShellReady()
+          releaseHeldShellReadyBytes()
+          finishShellReady({ postMarkerBytesObserved: false })
         }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
       } else {
-        finishShellReady()
+        finishShellReady({ postMarkerBytesObserved: false })
       }
     }
     let startupCommandCleanup: (() => void) | null = null
+    if (args.command) {
+      ptyCleanupCallbacks.set(id, () => {
+        if (shellReadyTimeout) {
+          clearTimeout(shellReadyTimeout)
+          shellReadyTimeout = null
+        }
+        releaseHeldShellReadyBytes()
+        startupCommandCleanup?.()
+        startupCommandCleanup = null
+        resolveShellReady = null
+      })
+    }
 
     const disposables: { dispose: () => void }[] = []
     const onDataDisposable = proc.onData((rawData) => {
@@ -653,7 +752,7 @@ export class LocalPtyProvider implements IPtyProvider {
         const scanned = scanForShellReady(shellReadyScanState, rawData)
         data = scanned.output
         if (scanned.matched) {
-          finishShellReady()
+          finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
         }
       }
       if (data.length === 0) {
@@ -727,6 +826,19 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyProcesses.get(id)?.resize(cols, rows)
   }
 
+  // Why: node-pty caches the last winsize it applied on the IPty handle, so its
+  // cols/rows are the authoritative applied size (node-pty clamps invalid dims
+  // and a resize on a dead handle is a no-op, neither of which the requested
+  // size in ptySizes would reflect). The renderer's resume drift-check compares
+  // against this to re-assert a resize the PTY never actually took.
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    const proc = ptyProcesses.get(id)
+    if (!proc || proc.cols <= 0 || proc.rows <= 0) {
+      return null
+    }
+    return { cols: proc.cols, rows: proc.rows }
+  }
+
   async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     const proc = ptyProcesses.get(id)
     if (!proc) {
@@ -735,8 +847,9 @@ export class LocalPtyProvider implements IPtyProvider {
     // Why: disposePtyListeners removes the onExit callback, so the natural
     // exit cleanup path from node-pty won't fire. Cleanup and notification
     // must happen unconditionally after the try/catch.
-    // Note: clearPtyState calls disposePtyListeners internally, so we only
-    // need to call it once via clearPtyState after killing the process.
+    // Timer/writer cleanup must happen here too: disposing listeners prevents
+    // the natural onExit callback from running the usual clearPtyState path.
+    runPtyCleanup(id)
     disposePtyListeners(id)
     try {
       proc.kill()
@@ -744,10 +857,7 @@ export class LocalPtyProvider implements IPtyProvider {
       /* Process may already be dead */
     }
     destroyPtyProcess(proc, { alreadyKilled: true })
-    ptyProcesses.delete(id)
-    ptyShellName.delete(id)
-    ptyAgentForegroundContextPaths.delete(id)
-    ptyLoadGeneration.delete(id)
+    clearPtyState(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
       cb({ id, code: -1 })

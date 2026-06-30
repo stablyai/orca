@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { getFindRequestQuery } from '@/lib/find-query-bounds'
 
 type BrowserFindProps = {
   isOpen: boolean
@@ -19,6 +20,7 @@ export default function BrowserFind({
   const [query, setQuery] = useState('')
   const [activeMatch, setActiveMatch] = useState(0)
   const [totalMatches, setTotalMatches] = useState(0)
+  const requestQuery = getFindRequestQuery(query)
 
   const safeFindInPage = useCallback(
     (text: string, opts?: Electron.FindInPageOptions): void => {
@@ -49,16 +51,16 @@ export default function BrowserFind({
   }, [webviewRef])
 
   const findNext = useCallback(() => {
-    if (query) {
-      safeFindInPage(query, { forward: true, findNext: true })
+    if (requestQuery) {
+      safeFindInPage(requestQuery, { forward: true, findNext: true })
     }
-  }, [query, safeFindInPage])
+  }, [requestQuery, safeFindInPage])
 
   const findPrevious = useCallback(() => {
-    if (query) {
-      safeFindInPage(query, { forward: false, findNext: true })
+    if (requestQuery) {
+      safeFindInPage(requestQuery, { forward: false, findNext: true })
     }
-  }, [query, safeFindInPage])
+  }, [requestQuery, safeFindInPage])
 
   useEffect(() => {
     if (isOpen) {
@@ -75,12 +77,12 @@ export default function BrowserFind({
     if (!isOpen) {
       return
     }
-    if (!query) {
+    if (!requestQuery) {
       safeStopFindInPage()
       return
     }
 
-    const runFind = (): void => safeFindInPage(query)
+    const runFind = (): void => safeFindInPage(requestQuery)
     if (!wasOpen) {
       runFind()
       return
@@ -90,7 +92,7 @@ export default function BrowserFind({
     // navigation still use the live query immediately.
     const id = window.setTimeout(runFind, 200)
     return () => window.clearTimeout(id)
-  }, [isOpen, query, safeFindInPage, safeStopFindInPage])
+  }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
 
   // Why: this effect captures `webviewRef.current` into a local variable, so
   // if the webview element were replaced while `isOpen` stays true the listener
@@ -117,7 +119,7 @@ export default function BrowserFind({
     }
   }, [webviewRef, isOpen])
 
-  if ((!isOpen || !query) && (activeMatch !== 0 || totalMatches !== 0)) {
+  if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
     setTotalMatches(0)
   }

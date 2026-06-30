@@ -121,6 +121,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   amp: 'Amp',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
+  'mimo-code': 'MiMo Code',
   cursor: 'Cursor',
   aider: 'Aider',
   pi: 'Pi',
@@ -130,7 +131,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   grok: 'Grok',
   hermes: 'Hermes',
   devin: 'Devin',
-  ante: 'Ante'
+  ante: 'Ante',
+  kimi: 'Kimi'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
@@ -161,6 +163,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   codex: true,
   autohand: true,
   opencode: true,
+  'mimo-code': true,
   pi: true,
   omp: true,
   gemini: true,

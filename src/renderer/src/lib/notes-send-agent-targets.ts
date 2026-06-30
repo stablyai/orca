@@ -8,6 +8,11 @@ import {
   type RunningAgentTargetState
 } from './running-agent-targets'
 
+const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
+const CLAUDE_IDLE_PREFIX = '\u2733'
+const GEMINI_IDLE_PREFIX = '\u25c7'
+const PI_IDLE_PREFIX = '\u03c0 - '
+
 export type NotesSendAgentTargetState = RunningAgentTargetState &
   Pick<AppState, 'runtimePaneTitlesByTabId'>
 
@@ -27,13 +32,35 @@ function isRecognizedAgentTitle(title: string | null): boolean {
   )
 }
 
-function launchAgentPaneLooksRecognized(paneTitle: string | null, tabTitle: string): boolean {
-  if (isRecognizedAgentTitle(paneTitle)) {
-    return true
+function detectLaunchAgentPaneStatus(paneTitle: string | null, tabTitle: string) {
+  if (paneTitle !== null && isRecognizedAgentTitle(paneTitle)) {
+    return detectLaunchAgentStatusFromTitle(paneTitle)
   }
   // Why: mirror isTerminalRunningAgent — the OSC-enriched tab title only counts
   // when the leaf has no runtime pane title of its own yet.
   return paneTitle === null && isRecognizedAgentTitle(tabTitle)
+    ? detectLaunchAgentStatusFromTitle(tabTitle)
+    : null
+}
+
+function detectLaunchAgentStatusFromTitle(title: string) {
+  const status = detectAgentStatusFromTitle(title)
+  if (status !== 'idle') {
+    return status
+  }
+  // Why: selected-target sends are immediate. A bare launch title like
+  // "Codex" proves agent identity, but not that the CLI is ready for input.
+  return isExplicitIdleLaunchTitle(title) ? status : null
+}
+
+function isExplicitIdleLaunchTitle(title: string): boolean {
+  return (
+    EXPLICIT_IDLE_TITLE_RE.test(title) ||
+    title.startsWith(CLAUDE_IDLE_PREFIX) ||
+    title.startsWith('* ') ||
+    title.includes(GEMINI_IDLE_PREFIX) ||
+    title.startsWith(PI_IDLE_PREFIX)
+  )
 }
 
 /**
@@ -94,13 +121,15 @@ export function deriveNotesSendAgentTargets(
       state.runtimePaneTitlesByTabId[tab.id],
       leafId
     )
-    if (!launchAgentPaneLooksRecognized(paneTitle, tab.title)) {
+    const launchStatus = detectLaunchAgentPaneStatus(paneTitle, tab.title)
+    if (!launchStatus) {
       // Why: launchAgent is set the instant Orca spawns the tab, but the runtime
       // only accepts a send once the pane reads as an agent. Skipping until the
       // title is recognized keeps "listed ⇒ sendable" and avoids the boot-window
       // "not a recognized agent session" error.
       continue
     }
+    const disabledReason = launchStatus === 'permission' ? 'Agent needs permission' : undefined
 
     targets.push({
       paneKey: makePaneKey(tab.id, leafId),
@@ -108,7 +137,8 @@ export function deriveNotesSendAgentTargets(
       leafId,
       agentType: tab.launchAgent,
       tabTitle: tab.title,
-      status: 'eligible'
+      status: disabledReason ? 'disabled' : 'eligible',
+      ...(disabledReason ? { disabledReason } : {})
     })
   }
 

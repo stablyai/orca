@@ -24,6 +24,12 @@ import type {
   ListProjectViewsResult,
   ResolveProjectRefResult
 } from '../../../../shared/github-project-types'
+import {
+  GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+  hasBoundedGitHubProjectRefInputText,
+  isGitHubProjectRefInputTooLarge
+} from '../../../../shared/github-project-ref-input'
+import { filterGitHubProjectPickerProjects } from './github-project-picker-filter'
 import { translate } from '@/i18n/i18n'
 
 export type ResolvedProjectSelection = {
@@ -334,7 +340,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   )
 
   const handlePaste = useCallback(async () => {
-    const parsed = parseProjectInput(pasteInput.trim())
+    if (isGitHubProjectRefInputTooLarge(pasteInput)) {
+      setPasteError(GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR)
+      return
+    }
+    const input = pasteInput.trim()
+    const parsed = parseProjectInput(input)
     if (!parsed) {
       setPasteError('Expected a project URL or owner/number')
       return
@@ -342,7 +353,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setPasteError(null)
     setPasteBusy(true)
     try {
-      const res = await resolveProjectRefForRuntime(settings, pasteInput.trim())
+      const res = await resolveProjectRefForRuntime(settings, input)
       if (!mountedRef.current) {
         return
       }
@@ -367,27 +378,14 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     }
   }, [handleChooseProject, mountedRef, pasteInput, settings])
 
+  const canSubmitPasteInput = !pasteBusy && hasBoundedGitHubProjectRefInputText(pasteInput)
+
   const filteredBrowse = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const pinnedKeys = new Set(
-      projectSettings.pinned.map((p) => `${p.ownerType}:${p.owner}:${p.number}`)
-    )
-    const recentKeys = new Set(
-      projectSettings.recent.map((r) => `${r.ownerType}:${r.owner}:${r.number}`)
-    )
-    return browseProjects.filter((p) => {
-      const key = `${p.ownerType}:${p.owner}:${p.number}`
-      if (pinnedKeys.has(key) || recentKeys.has(key)) {
-        return false
-      }
-      if (!q) {
-        return true
-      }
-      return (
-        p.title.toLowerCase().includes(q) ||
-        p.owner.toLowerCase().includes(q) ||
-        String(p.number).includes(q)
-      )
+    return filterGitHubProjectPickerProjects({
+      projects: browseProjects,
+      pinned: projectSettings.pinned,
+      recent: projectSettings.recent,
+      query
     })
   }, [browseProjects, projectSettings.pinned, projectSettings.recent, query])
 
@@ -573,8 +571,13 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 <Input
                   value={pasteInput}
                   onChange={(e) => {
-                    setPasteInput(e.target.value)
-                    setPasteError(null)
+                    const nextInput = e.target.value
+                    setPasteInput(nextInput)
+                    setPasteError(
+                      isGitHubProjectRefInputTooLarge(nextInput)
+                        ? GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR
+                        : null
+                    )
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -590,7 +593,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 <Button
                   size="sm"
                   onClick={() => void handlePaste()}
-                  disabled={pasteBusy || !pasteInput.trim()}
+                  disabled={!canSubmitPasteInput}
                   className="h-8"
                 >
                   {translate('auto.components.github.project.ProjectPicker.fce99a24a7', 'Add')}
@@ -807,6 +810,9 @@ function parseProjectInput(
   input: string
 ): { owner: string; number: number; viewNumber?: number } | null {
   if (!input) {
+    return null
+  }
+  if (isGitHubProjectRefInputTooLarge(input)) {
     return null
   }
   // owner/number

@@ -6,6 +6,10 @@ type RuntimeRepoSummary = {
   worktreeBaseRef?: string | null
 }
 
+type RuntimeWorktreeSummary = {
+  baseRef?: string | null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -40,6 +44,15 @@ function readDefaultBaseRef(value: unknown): string | null {
   return typeof value.defaultBaseRef === 'string' ? value.defaultBaseRef.trim() || null : null
 }
 
+function readWorktreeSummary(value: unknown): RuntimeWorktreeSummary | null {
+  if (!isRecord(value) || !isRecord(value.worktree)) {
+    return null
+  }
+  return {
+    baseRef: typeof value.worktree.baseRef === 'string' ? value.worktree.baseRef : null
+  }
+}
+
 export async function resolveMobileBranchCompareBaseRef(
   client: RpcClient,
   worktreeId: string
@@ -49,15 +62,23 @@ export async function resolveMobileBranchCompareBaseRef(
     return null
   }
 
-  let repoBaseRef: string | null = null
-  const repoResponse = await client.sendRequest('repo.list')
-  if (repoResponse.ok) {
-    const repo = readRepoSummaries(repoResponse.result).find((candidate) => candidate.id === repoId)
-    repoBaseRef = repo?.worktreeBaseRef?.trim() || null
+  const [worktreeResponse, repoResponse] = await Promise.all([
+    client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` }).catch(() => null),
+    client.sendRequest('repo.list').catch(() => null)
+  ])
+  if (worktreeResponse?.ok) {
+    const worktreeBaseRef = readWorktreeSummary(worktreeResponse.result)?.baseRef?.trim() || null
+    if (worktreeBaseRef) {
+      return worktreeBaseRef
+    }
   }
 
-  if (repoBaseRef) {
-    return repoBaseRef
+  if (repoResponse?.ok) {
+    const repo = readRepoSummaries(repoResponse.result).find((candidate) => candidate.id === repoId)
+    const repoBaseRef = repo?.worktreeBaseRef?.trim() || null
+    if (repoBaseRef) {
+      return repoBaseRef
+    }
   }
 
   const defaultResponse = await client.sendRequest('repo.baseRefDefault', { repo: `id:${repoId}` })

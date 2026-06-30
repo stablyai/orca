@@ -36,6 +36,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,

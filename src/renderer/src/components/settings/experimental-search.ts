@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
+import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -93,6 +94,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    getNativeChatExperimentalSearchEntry(),
     {
       title: translate(
         'auto.components.settings.experimental.search.9e4ddf776d',
@@ -148,11 +150,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     {
       title: translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
-        'Agent hibernation'
+        'Agent sleep'
       ),
       description: translate(
         'auto.components.settings.experimental.search.agentHibernation.description',
-        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.'
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by Orca; manually started agents may resume with current Orca defaults.'
       ),
       keywords: [
         ...translateSearchKeyword(
@@ -166,10 +168,6 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentHibernation.agents',
           'agents'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.agentHibernation.hibernate',
-          'hibernate'
         ),
         ...translateSearchKeyword(
           'auto.components.settings.experimental.search.agentHibernation.sleep',
@@ -255,13 +253,16 @@ export function getExperimentalSearchEntry() {
     agentsView: findEntry(
       translate('auto.components.settings.experimental.search.ccc5548ac5', 'Agents View')
     ),
+    nativeChat: findEntry(
+      translate('auto.components.settings.experimental.search.nativeChat.title', 'Native chat')
+    ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
     ),
     agentHibernation: findEntry(
       translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
-        'Agent hibernation'
+        'Agent sleep'
       )
     ),
     newWorktreeCardStyle: findEntry(

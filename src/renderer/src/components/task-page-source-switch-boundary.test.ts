@@ -21,11 +21,14 @@ describe('TaskPage source switching host boundary', () => {
     )
     const modalSection = sourceBetween(
       TASK_PAGE_SOURCE,
-      '<ProjectViewWrapper />',
+      '<ProjectViewWrapper selectedRepoIds={repoSelection} />',
       '<GitLabItemDialog'
     )
 
+    expect(modalSection).toContain('selectedRepoIds={repoSelection}')
     expect(detailSection).toContain('workItem={dialogWorkItem}')
+    expect(detailSection).toContain('<PullRequestPage')
+    expect(detailSection).toContain('sourceContext={dialogSourceContext}')
     expect(detailSection).toContain('<GitHubItemDialog')
     expect(detailSection).toContain('sourceContext={dialogSourceContext}')
     expect(modalSection).not.toContain('<GitHubItemDialog')

@@ -17,6 +17,15 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+
+const mocks = vi.hoisted(() => ({
+  getConnectionIdForFile: vi.fn()
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: mocks.getConnectionIdForFile
+}))
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -127,6 +136,8 @@ function makeSessionReadyState(): Partial<AppState> {
 describe('attachEditorAutosaveController', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    mocks.getConnectionIdForFile.mockReset()
+    mocks.getConnectionIdForFile.mockReturnValue(undefined)
   })
 
   afterEach(() => {
@@ -172,6 +183,54 @@ describe('attachEditorAutosaveController', () => {
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('saves folder workspace files through the path-specific SSH connection', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    store.getState().openFile({
+      filePath: '/home/neil/platform/api/src/file.ts',
+      relativePath: 'api/src/file.ts',
+      worktreeId: workspaceKey,
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/home/neil/platform/api/src/file.ts', 'edited')
+    store.getState().markFileDirty('/home/neil/platform/api/src/file.ts', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestDirtyFileSave()
+
+      expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
+        workspaceKey,
+        '/home/neil/platform/api/src/file.ts'
+      )
+      expect(writeFile).toHaveBeenCalledWith({
+        filePath: '/home/neil/platform/api/src/file.ts',
+        content: 'edited',
+        connectionId: 'ssh-1'
+      })
+      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
     } finally {
       cleanup()
     }

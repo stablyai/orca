@@ -3,13 +3,15 @@ import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
-  PaneStyleOptions,
-  ScrollState
+  PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
-import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
+import {
+  captureTerminalWriteScrollIntent,
+  enforceTerminalWriteScrollIntent
+} from './terminal-scroll-intent'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -58,18 +60,18 @@ function canMeasurePaneForFit(pane: ManagedPane): boolean {
   return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
 }
 
-function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
+function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
   // Why: split reparent has its own delayed restore; restoring here can fight that timer.
-  return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
-    ? null
-    : captureScrollState(pane.terminal)
+  return !(
+    'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
+  )
 }
 
 export function safeFit(pane: ManagedPane): void {
   if (!canMeasurePaneForFit(pane)) {
     return
   }
-  let scrollState: ScrollState | null = null
+  let scrollIntent = null as ReturnType<typeof captureTerminalWriteScrollIntent>
   let shouldRestoreScroll = false
   try {
     // Why: when a mobile client has resized this PTY to phone dimensions,
@@ -81,8 +83,10 @@ export function safeFit(pane: ManagedPane): void {
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
-        scrollState = captureScrollStateForFit(pane)
-        shouldRestoreScroll = true
+        if (canPreserveScrollIntentForFit(pane)) {
+          scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+          shouldRestoreScroll = true
+        }
         pane.terminal.resize(override.cols, override.rows)
       }
       return
@@ -95,15 +99,17 @@ export function safeFit(pane: ManagedPane): void {
       // churn, which was causing visible terminal blinking while resizing.
       return
     }
-    scrollState = captureScrollStateForFit(pane)
-    shouldRestoreScroll = true
+    if (canPreserveScrollIntentForFit(pane)) {
+      scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+      shouldRestoreScroll = true
+    }
     pane.fitAddon.fit()
   } catch {
     // Container may not have dimensions yet
   } finally {
-    if (shouldRestoreScroll && scrollState) {
+    if (shouldRestoreScroll) {
       try {
-        restoreScrollStateAfterLayout(pane.terminal, scrollState)
+        enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
       } catch {
         // Why: xterm can temporarily expose a terminal whose renderer has not
         // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.

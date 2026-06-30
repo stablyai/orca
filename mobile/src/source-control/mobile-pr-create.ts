@@ -1,162 +1,74 @@
-import type {
-  CreateHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewProvider
-} from '../../../src/shared/hosted-review'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import { hostedReviewCopy } from './hosted-review-copy'
+import {
+  buildMobileHostedReviewCreateParams,
+  createMobileHostedReview,
+  fetchMobileHostedReviewEligibility,
+  mobileRepoSelectorFromWorktreeId,
+  resolveMobileHostedReviewPrefill,
+  shouldPushBeforeMobileHostedReviewCreate,
+  type MobileHostedReviewCreateInput,
+  type MobileHostedReviewCreateOutcome,
+  type MobileHostedReviewEligibilityInput,
+  type MobileHostedReviewPrefill
+} from './mobile-hosted-review-service'
 
-// The mobile worktree id is `${repoId}::${path}`; the repo selector the host
-// hosted-review RPCs expect is `id:${repoId}`.
-export function mobileRepoSelectorFromWorktreeId(worktreeId: string): string {
-  const separatorIdx = worktreeId.indexOf('::')
-  const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
-  return `id:${repoId}`
+export type MobilePrEligibilityInput = MobileHostedReviewEligibilityInput
+export type MobilePrPrefill = MobileHostedReviewPrefill
+export type MobilePrCreateInput = MobileHostedReviewCreateInput
+export type MobilePrCreateOutcome = MobileHostedReviewCreateOutcome
+
+export {
+  buildMobileHostedReviewCreateParams as buildMobilePrCreateParams,
+  createMobileHostedReview as createMobilePr,
+  fetchMobileHostedReviewEligibility as fetchMobilePrEligibility,
+  mobileRepoSelectorFromWorktreeId,
+  resolveMobileHostedReviewPrefill as resolveMobilePrPrefill,
+  shouldPushBeforeMobileHostedReviewCreate as shouldPushBeforeMobilePrCreate
 }
 
-export type MobilePrEligibilityInput = {
-  branch: string
-  base?: string | null
-  hasUncommittedChanges: boolean
-  hasUpstream: boolean
-  ahead: number
-  behind: number
-  linkedGitHubPR?: number | null
-  linkedGitLabMR?: number | null
+export function getMobilePrCreateSuccessWarning(
+  outcome: Extract<MobilePrCreateOutcome, { ok: true }>,
+  provider: MobilePrPrefill['provider']
+): string | undefined {
+  const copy = hostedReviewCopy(provider)
+  if (outcome.existing) {
+    return outcome.number
+      ? `${copy.titleLabel} #${outcome.number} is already open.`
+      : `${copy.titleLabel} is already open.`
+  }
+  if (outcome.linkError) {
+    return `${copy.titleLabel} created, but Orca could not refresh it yet.`
+  }
+  return undefined
 }
 
-export async function fetchMobilePrEligibility(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string,
-  input: MobilePrEligibilityInput
-): Promise<HostedReviewCreationEligibility | null> {
-  const response = await client.sendRequest('hostedReview.getCreationEligibility', {
-    repo: mobileRepoSelectorFromWorktreeId(worktreeId),
-    worktree: `id:${worktreeId}`,
-    branch: input.branch,
-    base: input.base ?? null,
-    hasUncommittedChanges: input.hasUncommittedChanges,
-    hasUpstream: input.hasUpstream,
-    ahead: input.ahead,
-    behind: input.behind,
-    linkedGitHubPR: input.linkedGitHubPR ?? null,
-    linkedGitLabMR: input.linkedGitLabMR ?? null
-  })
-  if (!response.ok) {
+export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string | null {
+  if (prefill.canCreate !== false || shouldPushBeforeMobileHostedReviewCreate(prefill)) {
     return null
   }
-  return (response as RpcSuccess).result as HostedReviewCreationEligibility
-}
-
-export type MobilePrPrefill = {
-  provider: HostedReviewProvider
-  base: string
-  title: string
-  body: string
-}
-
-// Fetches hosted-review eligibility and derives the PR compose prefill from it
-// — so non-GitHub repos (e.g. GitLab) get the right provider/base instead of a
-// hardcoded one. Falls back to a github/main default (with the branch label as
-// title) when branch/eligibility is unavailable.
-export async function resolveMobilePrPrefill(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string,
-  args: {
-    branch: string | undefined
-    title: string
-    hasUncommittedChanges: boolean
-    hasUpstream: boolean
-    ahead: number
-    behind: number
-  }
-): Promise<MobilePrPrefill> {
-  const fallback: MobilePrPrefill = {
-    provider: 'github',
-    base: 'main',
-    title: args.title,
-    body: ''
-  }
-  if (!args.branch) {
-    return fallback
-  }
-  try {
-    const eligibility = await fetchMobilePrEligibility(client, worktreeId, {
-      branch: args.branch,
-      hasUncommittedChanges: args.hasUncommittedChanges,
-      hasUpstream: args.hasUpstream,
-      ahead: args.ahead,
-      behind: args.behind
-    })
-    if (!eligibility) {
-      return fallback
-    }
-    return {
-      provider: eligibility.provider,
-      base: eligibility.defaultBaseRef || 'main',
-      title: eligibility.title || args.title,
-      body: eligibility.body || ''
-    }
-  } catch {
-    return fallback
-  }
-}
-
-export type MobilePrCreateInput = {
-  provider: HostedReviewProvider
-  base: string
-  head?: string
-  title: string
-  body: string
-  draft: boolean
-}
-
-// Builds the hostedReview.create params, trimming title/body and dropping empty
-// optional fields so the host's required-string validation passes cleanly.
-export function buildMobilePrCreateParams(
-  worktreeId: string,
-  input: MobilePrCreateInput
-): Record<string, unknown> {
-  return {
-    repo: mobileRepoSelectorFromWorktreeId(worktreeId),
-    worktree: `id:${worktreeId}`,
-    provider: input.provider,
-    base: input.base,
-    ...(input.head && input.head.length > 0 ? { head: input.head } : {}),
-    title: input.title.trim(),
-    ...(input.body.trim().length > 0 ? { body: input.body.trim() } : {}),
-    draft: input.draft
-  }
-}
-
-export type MobilePrCreateOutcome =
-  | { ok: true; url: string; number: number }
-  | { ok: false; error: string }
-
-export async function createMobilePr(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string,
-  input: MobilePrCreateInput
-): Promise<MobilePrCreateOutcome> {
-  try {
-    const response = await client.sendRequest(
-      'hostedReview.create',
-      buildMobilePrCreateParams(worktreeId, input)
-    )
-    if (!response.ok) {
-      return { ok: false, error: response.error?.message || 'Failed to create pull request' }
-    }
-    const result = (response as RpcSuccess).result as CreateHostedReviewResult
-    if (result.ok) {
-      return { ok: true, url: result.url, number: result.number }
-    }
-    return { ok: false, error: result.error || 'Failed to create pull request' }
-  } catch (err) {
-    // Why: create-PR runs from an inline form; transport drops should surface as
-    // form errors instead of escaping as unhandled promise rejections.
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Failed to create pull request'
-    }
+  const copy = hostedReviewCopy(prefill.provider)
+  switch (prefill.blockedReason) {
+    case 'dirty':
+      return `Commit changes before creating a ${copy.reviewLabel}.`
+    case 'detached_head':
+      return `Check out a branch before creating a ${copy.reviewLabel}.`
+    case 'default_branch':
+      return `Switch to a feature branch before creating a ${copy.reviewLabel}.`
+    case 'no_upstream':
+      return `Publish commits before creating a ${copy.reviewLabel}.`
+    case 'needs_sync':
+      return `Sync this branch before creating a ${copy.reviewLabel}.`
+    case 'auth_required':
+      return `Authenticate before creating a ${copy.reviewLabel}.`
+    case 'unsupported_provider':
+      return `Creating ${copy.reviewLabel}s is not supported for this repo.`
+    case 'existing_review':
+      return `A ${copy.reviewLabel} already exists for this branch.`
+    case 'fork_head_unsupported':
+      return `Creating a ${copy.reviewLabel} from this fork is not supported.`
+    case 'needs_push':
+    case null:
+    case undefined:
+      return `This branch is not ready for a ${copy.reviewLabel} yet.`
   }
 }

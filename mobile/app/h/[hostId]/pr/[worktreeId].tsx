@@ -8,7 +8,7 @@ import { MobilePrViewPanel } from '../../../../src/components/pr-sidebar/MobileP
 export default function MobilePrViewScreen() {
   const { hostId, worktreeId } = useLocalSearchParams<{ hostId: string; worktreeId: string }>()
   const { client, state: connState } = useHostClient(hostId)
-  const { branch, headSha, isGithubRepo, repoLoaded, loaded } = useMobilePrBranchContext({
+  const { branch, headSha, status, isGithubRepo, repoLoaded, loaded } = useMobilePrBranchContext({
     client,
     connState,
     worktreeId
@@ -21,6 +21,7 @@ export default function MobilePrViewScreen() {
       worktreeId={worktreeId}
       branch={branch}
       headSha={headSha}
+      gitStatus={status}
       isGithubRepo={isGithubRepo}
       branchContextLoaded={loaded && repoLoaded}
       embedded={false}

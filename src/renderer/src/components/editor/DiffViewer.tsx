@@ -23,6 +23,7 @@ import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
+import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 
 export default function DiffViewer({
   modelKey,
@@ -450,6 +451,7 @@ export default function DiffViewer({
               fontSize: diffEditorFontSize,
               fontFamily: settings?.terminalFontFamily || 'monospace',
               lineNumbers: 'on',
+              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               automaticLayout: true,
               renderOverviewRuler: true,
               scrollbar: diffEditorScrollbarOptions,

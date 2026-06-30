@@ -39,6 +39,23 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+// Resolve PowerShell family names to deterministic absolute paths (the fs mock
+// above otherwise makes every probe miss). The real resolver — which skips the
+// Store App Execution Alias stub — is covered in
+// windows-powershell-executable.test.ts.
+const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+vi.mock('./windows-powershell-executable', () => ({
+  resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
+  resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
+    family === 'pwsh.exe'
+      ? [PWSH7_ABS, WINDOWS_POWERSHELL_ABS, CMD_ABS]
+      : [WINDOWS_POWERSHELL_ABS, CMD_ABS],
+  getWindowsCmdPath: () => CMD_ABS
+}))
+
 vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
 }))
@@ -57,10 +74,14 @@ vi.mock('../wsl', () => ({
   toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  isWslAvailable: () => true
+  isWslAvailable: () => true,
+  // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
+  // cwds that are meant to exist, so report them present without spawning wsl.exe.
+  wslUncDirectoryExists: () => true
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
@@ -75,13 +96,16 @@ describe('LocalPtyProvider', () => {
   }
   let exitCb: ((info: { exitCode: number }) => void) | undefined
   let origShell: string | undefined
+  let origPowerlevelWizardDisable: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
     origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     origShell = process.env.SHELL
+    origPowerlevelWizardDisable = process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     process.env.SHELL = '/bin/zsh'
+    delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
 
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
@@ -95,9 +119,16 @@ describe('LocalPtyProvider', () => {
 
     exitCb = undefined
     mockProc = {
-      onData: vi.fn(),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+        return {
+          dispose: () => {
+            if (exitCb === cb) {
+              exitCb = undefined
+            }
+          }
+        }
       }),
       write: vi.fn(),
       resize: vi.fn(),
@@ -120,6 +151,11 @@ describe('LocalPtyProvider', () => {
       delete process.env.SHELL
     } else {
       process.env.SHELL = origShell
+    }
+    if (origPowerlevelWizardDisable === undefined) {
+      delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
+    } else {
+      process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD = origPowerlevelWizardDisable
     }
   })
 
@@ -191,6 +227,35 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('suppresses the first-run Powerlevel10k wizard for spawned terminals', async () => {
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD).toBe('true')
+    })
+
+    it('preserves an explicit Powerlevel10k wizard env value', async () => {
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD: 'already-set' }
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD).toBe('already-set')
+    })
+
+    it('honors requests to delete the Powerlevel10k wizard env value', async () => {
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        envToDelete: ['POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD']
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD).toBeUndefined()
+    })
+
     it('uses fallback shell readiness when startup-command shell spawn falls back', async () => {
       vi.useFakeTimers()
       try {
@@ -211,13 +276,64 @@ describe('LocalPtyProvider', () => {
         const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
         dataCallback('\x1b]777;orca-shell-ready\x07user@host % ')
         await Promise.resolve()
-        vi.advanceTimersByTime(50)
+        vi.advanceTimersByTime(29)
         await Promise.resolve()
+        expect(mockProc.write).not.toHaveBeenCalled()
 
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
         expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('releases held marker-prefix bytes when local shell readiness times out', async () => {
+      vi.useFakeTimers()
+      const onData = vi.fn()
+      provider.configure({ onData })
+      try {
+        await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+        const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
+        dataCallback('\x1b]777;orca-shell-ready')
+        expect(onData).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1500)
+        await Promise.resolve()
+
+        expect(onData).toHaveBeenCalledWith(
+          expect.any(String),
+          '\x1b]777;orca-shell-ready',
+          expect.any(Number)
+        )
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(200)
+        await Promise.resolve()
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('releases held marker-prefix bytes when local shell exits before readiness', async () => {
+      const onData = vi.fn()
+      provider.configure({ onData })
+
+      await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+      const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
+      dataCallback('\x1b]777;orca-shell-ready')
+      expect(onData).not.toHaveBeenCalled()
+
+      exitCb?.({ exitCode: 0 })
+
+      expect(onData).toHaveBeenCalledWith(
+        expect.any(String),
+        '\x1b]777;orca-shell-ready',
+        expect.any(Number)
+      )
     })
 
     it('honors explicit terminal env overrides after deleting requested defaults', async () => {
@@ -247,6 +363,23 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    })
+
+    it('uses shell wrapper when MiMo home must survive shell startup', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          env.ORCA_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+          return env
+        }
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[1]).toEqual(['-l'])
+      expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
+      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
     })
 
     it('does not pass a Windows Codex home into WSL terminals', async () => {
@@ -393,6 +526,27 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const pwshAvailable = vi.fn(() => false)
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'pwsh.exe',
+        pwshAvailable
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe(PWSH7_ABS)
+      expect(spawnCall[1]).toContain('-EncodedCommand')
+      expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const savedCodexHome = process.env.CODEX_HOME
@@ -431,7 +585,25 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[0]).toBe('wsl.exe')
       expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-      expect(spawnCall[2].env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+      expect(spawnCall[2].env.WSLENV).toBe(
+        'ORCA_TERMINAL_HANDLE/u:POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
+      )
+    })
+
+    it('does not mark deleted Powerlevel10k wizard env for WSL import', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        envToDelete: [POWERLEVEL10K_WIZARD_DISABLE_ENV]
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env[POWERLEVEL10K_WIZARD_DISABLE_ENV]).toBeUndefined()
+      expect(spawnCall[2].env.WSLENV ?? '').not.toContain(POWERLEVEL10K_WIZARD_DISABLE_ENV)
     })
 
     it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
@@ -660,6 +832,21 @@ describe('LocalPtyProvider', () => {
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
+      vi.useFakeTimers()
+      try {
+        const { id } = await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
+
+        await provider.shutdown(id, { immediate: true })
+        vi.advanceTimersByTime(2000)
+        await Promise.resolve()
+
+        expect(mockProc.write).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('is a no-op for unknown PTY ids', async () => {

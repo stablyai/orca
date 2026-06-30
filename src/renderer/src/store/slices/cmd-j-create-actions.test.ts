@@ -133,4 +133,23 @@ describe('Cmd+J lifted creation actions', () => {
     })
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
+
+  it('keeps desktop terminal creation local when a local worktree overrides a runtime repo owner', async () => {
+    delete pairedWebFlag.__ORCA_WEB_CLIENT__
+    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
+    const store = createTestStore()
+    seedActiveWorkspace(store)
+    store.setState({
+      repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id, hostId: 'local' })]
+      },
+      settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
+    })
+
+    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
+    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toHaveLength(1)
+  })
 })

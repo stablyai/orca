@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
@@ -20,6 +21,7 @@ import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
+import { recordWebSessionReorderIntent } from './web-session-reorder-intent'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 
 export {
@@ -48,8 +50,11 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
+  launchConfig?: SleepingAgentLaunchConfig
   agent?: TuiAgent
+  launchAgent?: TuiAgent
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {
@@ -73,8 +78,11 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        ...(args.env ? { env: args.env } : {}),
         startupCommandDelivery: args.startupCommandDelivery,
+        ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
         agent: args.agent,
+        ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
         activate: args.activate !== false
       },
       timeoutMs: 15_000
@@ -275,6 +283,7 @@ async function refreshWebRuntimeSessionTabsSnapshot(
 export async function activateWebRuntimeSessionWorktree(args: {
   worktreeId: string
   environmentId?: string | null
+  notifyDesktop?: boolean
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -289,7 +298,8 @@ export async function activateWebRuntimeSessionWorktree(args: {
       selector: environmentId,
       method: 'worktree.activate',
       params: {
-        worktree: toRuntimeWorktreeSelector(args.worktreeId)
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        notifyClients: args.notifyDesktop !== false
       },
       timeoutMs: 15_000
     })
@@ -332,6 +342,14 @@ export async function moveWebRuntimeSessionTab(
     null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+
+  if (args.kind === 'reorder') {
+    // Why: record the intended LOCAL order synchronously, before the async host
+    // resolution below, so an in-flight pre-move snapshot carrying the old order
+    // can't snap the tab back. The reconcile applies this until the host echoes
+    // the new order. (tabOrder here is already local unified tab ids.)
+    recordWebSessionReorderIntent(args.worktreeId, args.targetGroupId, args.tabOrder, Date.now())
   }
 
   try {
@@ -427,6 +445,16 @@ async function callWebRuntimeSessionTabMethod(
     null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+
+  if (method === 'session.tabs.close') {
+    // Why: the caller prunes the local mirror synchronously, but the precise
+    // host id resolution below sits behind an async import. A host snapshot
+    // published in that gap would re-materialize the just-closed tab before any
+    // intent exists to suppress it (the immediate "flash back"). Record a
+    // best-effort intent synchronously now — the resolved-id record below then
+    // covers any id the static decode couldn't recover.
+    recordWebSessionCloseIntent(args.worktreeId, toHostSessionTabId(args.tabId), Date.now())
   }
 
   try {
@@ -674,26 +702,34 @@ export function setWebRuntimeTabProps(args: {
   tabId: string
   color?: string | null
   isPinned?: boolean
+  viewMode?: 'terminal' | 'chat'
 }): boolean {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
-  const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
-    ? toHostSessionTabId(args.tabId)
-    : args.tabId
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'session.tabs.setTabProps',
-      params: {
-        worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: hostTabId,
-        ...(args.color !== undefined ? { color: args.color } : {}),
-        ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {})
-      },
-      timeoutMs: 15_000
+  const state = useAppStore.getState()
+  void import('./web-session-tabs-sync')
+    .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
+      const hostTabId =
+        resolveHostSessionTabIdForWebSessionTab(state, {
+          environmentId,
+          worktreeId: args.worktreeId,
+          tabId: args.tabId
+        }) ?? (isWebTerminalSurfaceTabId(args.tabId) ? toHostSessionTabId(args.tabId) : args.tabId)
+      return window.api.runtimeEnvironments.call({
+        selector: environmentId,
+        method: 'session.tabs.setTabProps',
+        params: {
+          worktree: toRuntimeWorktreeSelector(args.worktreeId),
+          tabId: hostTabId,
+          ...(args.color !== undefined ? { color: args.color } : {}),
+          ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+        },
+        timeoutMs: 15_000
+      })
     })
     .then((response) => {
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)

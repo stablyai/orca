@@ -142,6 +142,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // path for browser-side features, but CLI creates must stay backgrounded
       // unless the caller explicitly asks for focus.
       focus,
+      ...(focus ? { presentation: 'focused' } : {}),
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)

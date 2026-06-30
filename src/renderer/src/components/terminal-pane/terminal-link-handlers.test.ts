@@ -1016,7 +1016,8 @@ describe('createFilePathLinkProvider range bounds', () => {
       ['/repo/package.json', true],
       ['/repo/Folder With Space/content.js', true],
       ['/repo/My Folder', true]
-    ])
+    ]),
+    depsOverrides: Partial<Parameters<typeof createFilePathLinkProvider>[1]> = {}
   ) {
     const pane = makePane(rows)
     const managerRef = {
@@ -1031,7 +1032,8 @@ describe('createFilePathLinkProvider range bounds', () => {
         startupCwd: '/repo',
         managerRef,
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-        pathExistsCache
+        pathExistsCache,
+        ...depsOverrides
       },
       linkTooltip,
       getTerminalFileOpenHint()
@@ -1554,6 +1556,23 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await collectLinks('see /repo/My Folder now')
 
     expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
+  })
+
+  it('uses the pane-specific cwd instead of a stale lifecycle startup cwd', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
+      return pathValue === '/repo/package.json'
+    })
+    const { provider } = createProviderSetup([makeBufferLine('package.json')], new Map(), {
+      startupCwd: '/repo/packages/web',
+      getPaneLinkCwd: () => '/repo'
+    })
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links.map((link) => link.text)).toEqual(['package.json'])
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/repo/package.json')
   })
 
   it('opens an existing extensionless spaced prefix from direct fallback cache', async () => {

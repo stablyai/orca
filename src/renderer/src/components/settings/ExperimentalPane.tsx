@@ -7,6 +7,7 @@ import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -34,6 +35,9 @@ export function ExperimentalPane({
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showAgentsView = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentsView
+  ])
+  const showNativeChat = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().nativeChat
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
@@ -146,6 +150,10 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
+      {showNativeChat ? (
+        <NativeChatExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
       {showTerminalAttention ? (
         <SearchableSetting
           title={translate(
@@ -201,7 +209,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title={translate(
             'auto.components.settings.ExperimentalPane.agentHibernation.title',
-            'Agent hibernation'
+            'Agent sleep'
           )}
           description={translate(
             'auto.components.settings.ExperimentalPane.agentHibernation.description',
@@ -216,13 +224,13 @@ export function ExperimentalPane({
               <Label>
                 {translate(
                   'auto.components.settings.ExperimentalPane.agentHibernation.title',
-                  'Agent hibernation'
+                  'Agent sleep'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.agentHibernation.copy',
-                  'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.'
+                  'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Agent sleep preserves launch options for agents started by Orca. Manually started agents may resume with your current Orca defaults. Experimental while we tune the safety model.'
                 )}
               </p>
             </div>
@@ -230,7 +238,7 @@ export function ExperimentalPane({
               checked={agentHibernationEnabled}
               ariaLabel={translate(
                 'auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel',
-                'Toggle agent hibernation'
+                'Toggle agent sleep'
               )}
               onChange={() =>
                 updateSettings({
@@ -243,11 +251,11 @@ export function ExperimentalPane({
             <NumberField
               label={translate(
                 'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
-                'Hibernate after'
+                'Sleep after'
               )}
               description={translate(
                 'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
-                'How many idle minutes a completed background agent must wait before Orca can hibernate it.'
+                'How many idle minutes a completed background agent must wait before Orca can sleep it.'
               )}
               value={agentHibernationIdleMinutes}
               min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}

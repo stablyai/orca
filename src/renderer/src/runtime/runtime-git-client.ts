@@ -9,6 +9,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus,
   GlobalSettings
@@ -121,21 +122,55 @@ export function getRuntimeGitScope(
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,
-  options?: { includeIgnored?: boolean }
+  options?: { includeIgnored?: boolean; bypassEffectiveUpstreamNegativeCache?: boolean }
 ): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
+  const upstreamCacheBypassArgs = options?.bypassEffectiveUpstreamNegativeCache
+    ? { bypassEffectiveUpstreamNegativeCache: true }
+    : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.status({
       worktreePath: context.worktreePath,
       connectionId: context.connectionId,
-      ...includeIgnoredArgs
+      ...includeIgnoredArgs,
+      ...upstreamCacheBypassArgs
     })
   }
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.status',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...includeIgnoredArgs },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      ...includeIgnoredArgs,
+      ...upstreamCacheBypassArgs
+    },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitSubmoduleStatus(
+  context: RuntimeGitContext,
+  submodulePath: string,
+  area: GitStagingArea = 'unstaged'
+): Promise<GitStatusResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.submoduleStatus({
+      worktreePath: context.worktreePath,
+      submodulePath,
+      connectionId: context.connectionId,
+      area
+    })
+  }
+  return callRuntimeRpc<GitStatusResult>(
+    target,
+    'git.submoduleStatus',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      submodulePath,
+      area
+    },
     { timeoutMs: 15_000 }
   )
 }

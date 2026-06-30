@@ -7,13 +7,13 @@ import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-co
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import {
-  type DetectedPort,
-  type EnrichedDetectedPort,
-  type SavedPortForward,
-  type SshTarget,
-  type SshConnectionStatus,
-  type SshConnectionState
+import type {
+  DetectedPort,
+  EnrichedDetectedPort,
+  SavedPortForward,
+  SshTarget,
+  SshConnectionStatus,
+  SshConnectionState
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isAuthError } from '../ssh/ssh-connection-utils'
@@ -155,8 +155,16 @@ function broadcastSshState(
 ): void {
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', { targetId, state })
+    win.webContents.send('ssh:state-changed', {
+      targetId,
+      state: withSshRemotePlatform(targetId, state)
+    })
   }
+}
+
+function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
+  const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
+  return remotePlatform ? { ...state, remotePlatform } : state
 }
 
 function publishRelayOverride(
@@ -166,7 +174,7 @@ function publishRelayOverride(
   error: string | null,
   reconnectAttempt: number
 ): void {
-  const state: SshConnectionState = { targetId, status, error, reconnectAttempt }
+  const state = withSshRemotePlatform(targetId, { targetId, status, error, reconnectAttempt })
   relayStateOverrides.set(targetId, state)
   broadcastSshState(getMainWindow, targetId, state)
 }
@@ -176,7 +184,8 @@ function clearRelayStateOverride(targetId: string): void {
 }
 
 function getPublicSshState(targetId: string): SshConnectionState | undefined {
-  return relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId) ?? undefined
+  const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
+  return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 
 function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
@@ -577,6 +586,19 @@ export function registerSshHandlers(
     connectionManager = new SshConnectionManager(callbacks)
   }
   portForwardManager ??= new SshPortForwardManager()
+  portForwardManager.setCallbacks({
+    onForwardClosed: (entry, reason) => {
+      if (reason.kind === 'unexpected-exit') {
+        console.warn(
+          `[ssh] Port forward ${entry.localPort} → ${entry.remoteHost}:${entry.remotePort} closed unexpectedly${
+            reason.detail ? `: ${reason.detail}` : ''
+          }`
+        )
+      }
+      persistPortForwardsWithUnrestored(entry.connectionId)
+      broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
+    }
+  })
   refreshActiveRelaySessions()
   registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
@@ -756,12 +778,12 @@ export function registerSshHandlers(
         clearRelayStateOverride(targetId)
         win.webContents.send('ssh:state-changed', {
           targetId,
-          state: {
+          state: withSshRemotePlatform(targetId, {
             targetId,
             status: 'connected',
             error: null,
             reconnectAttempt: 0
-          }
+          })
         })
       }
     } catch (err) {
@@ -1085,8 +1107,8 @@ export function registerSshHandlers(
     }
   )
 
-  ipcMain.handle('ssh:removePortForward', (_event, args: { id: string }) => {
-    const removed = portForwardManager!.removeForward(args.id)
+  ipcMain.handle('ssh:removePortForward', async (_event, args: { id: string }) => {
+    const removed = await portForwardManager!.removeForwardAndWait(args.id)
     if (removed) {
       persistPortForwards(removed.connectionId)
       broadcastPortForwards(getCurrentMainWindow, removed.connectionId)

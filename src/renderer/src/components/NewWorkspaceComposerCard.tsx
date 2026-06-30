@@ -3,6 +3,7 @@ composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   AlertTriangle,
   Check,
@@ -15,12 +16,19 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
+  measureTextControlPasteByteLength,
+  pasteTextIntoTextControl,
+  shouldHandleTextControlPaste
+} from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -28,6 +36,7 @@ import type {
   GitHubWorkItem,
   GitLabWorkItem,
   LinearIssue,
+  SetupAgentStartupPolicy,
   SparsePreset,
   TuiAgent
 } from '../../../shared/types'
@@ -84,6 +93,14 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** True when an existing local branch is selected and can be reused. */
+  canReuseSelectedBranch: boolean
+  reuseSelectedBranch: boolean
+  onReuseSelectedBranchChange: (next: boolean) => void
+  /** Shows the footer "Create more" switch — worktree targets only. */
+  showCreateMultiple?: boolean
+  createMultiple?: boolean
+  onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
@@ -101,6 +118,8 @@ type NewWorkspaceComposerCardProps = {
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
+  setupAgentStartupPolicy: SetupAgentStartupPolicy
+  onSetupAgentStartupPolicyChange: (value: SetupAgentStartupPolicy) => void
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: WorkspaceCreateErrorDisplay | null
@@ -317,6 +336,12 @@ export default function NewWorkspaceComposerCard({
   onSmartLinearIssueSelect,
   smartNameSelection,
   onClearSmartNameSelection,
+  canReuseSelectedBranch,
+  reuseSelectedBranch,
+  onReuseSelectedBranchChange,
+  showCreateMultiple = false,
+  createMultiple = false,
+  onCreateMultipleChange,
   smartNameGitHubSourceContext,
   forkPushWarning,
   detectedAgentIds,
@@ -333,6 +358,8 @@ export default function NewWorkspaceComposerCard({
   requiresExplicitSetupChoice,
   setupDecision,
   onSetupDecisionChange,
+  setupAgentStartupPolicy,
+  onSetupAgentStartupPolicyChange,
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
   createError,
@@ -400,6 +427,10 @@ export default function NewWorkspaceComposerCard({
         ? 'Run commands now'
         : 'Run setup now'
   const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+  // Why: defaultTabs launch commands can be long-running too, but they are not
+  // the setup command this setting gates agent startup on.
+  const showSetupAgentStartupPolicy =
+    setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -457,6 +488,39 @@ export default function NewWorkspaceComposerCard({
   const handleAddRepo = React.useCallback((): void => {
     openModal('add-repo')
   }, [openModal])
+  const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = event.clipboardData.getData('text/plain')
+    const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
+      stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+    })
+    if (
+      !byteLengthMeasurement.exceededLimit &&
+      !shouldHandleTextControlPaste(text, { measuredByteLength: byteLengthMeasurement.byteLength })
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    const textarea = event.currentTarget
+    // Why: large note pastes need one controlled owner so React receives a
+    // single final input event after chunked DOM insertion.
+    void pasteTextIntoTextControl(textarea, text, {
+      source: 'clipboard',
+      canContinue: (target) => target.ownerDocument.activeElement === target
+    })
+      .then((result) => {
+        if (result.status === 'rejected' && result.reason === 'too-large') {
+          toast.error(
+            translate(
+              'auto.components.NewWorkspaceComposerCard.notePasteTooLarge',
+              'Paste is too large for the note field.'
+            )
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
   const projectDescriptionId = React.useId()
   const readyProjectHostSetupOptions = React.useMemo(
     () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
@@ -658,6 +722,64 @@ export default function NewWorkspaceComposerCard({
               <span>{forkPushWarning}</span>
             </p>
           ) : null}
+          {/* Why (#5181): sits right under the branch selection (not the Name
+              field, which can differ from the branch) so reusing the picked
+              branch is an explicit, discoverable choice. Stays mounted and
+              collapses via a grid-rows transition (matching the Advanced
+              drawer) so the dialog grows/shrinks smoothly as the option
+              appears. Only offered when reuse is possible — an existing local
+              branch not already checked out in another worktree. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              canReuseSelectedBranch ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!canReuseSelectedBranch}
+          >
+            <div className="min-h-0">
+              <div className="space-y-1 pt-1">
+                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
+                  <span
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
+                      reuseSelectedBranch
+                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
+                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        'size-3 transition-opacity',
+                        reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={reuseSelectedBranch}
+                    onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
+                    // Why: while collapsed the row is aria-hidden, so disable the
+                    // input too — keeps a hidden control out of the tab order and
+                    // fully inert (no focusable control inside an aria-hidden tree).
+                    disabled={!canReuseSelectedBranch}
+                    className="sr-only"
+                  />
+                  <span>
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
+                      'Reuse branch'
+                    )}
+                  </span>
+                </label>
+                <p className="pl-6 text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
+                    'Check out the existing branch instead of creating a new one from it.'
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">
@@ -705,7 +827,10 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
-        <div>
+        {/* Why: Advanced is a disclosure header, so keep it visually grouped
+            with the content or footer below it while preserving normal spacing
+            from the Agent field above. */}
+        <div className="!mb-2">
           <Button
             type="button"
             variant="ghost"
@@ -723,6 +848,7 @@ export default function NewWorkspaceComposerCard({
         <div
           className={cn(
             'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+            !advancedOpen && '!mt-2',
             advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
@@ -771,6 +897,7 @@ export default function NewWorkspaceComposerCard({
                 <textarea
                   value={note}
                   onChange={(event) => onNoteChange(event.target.value)}
+                  onPaste={handleNotePaste}
                   onInput={(event) => {
                     // Why: start at one-line height, grow to fit content so a short
                     // note keeps the dialog compact while longer notes get room to
@@ -887,6 +1014,39 @@ export default function NewWorkspaceComposerCard({
                       ) : null}
                     </div>
                   ) : null}
+
+                  {showSetupAgentStartupPolicy ? (
+                    <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 bg-muted/25 p-3">
+                      <span className="min-w-0 space-y-1">
+                        <span className="block text-xs font-medium text-foreground">
+                          {translate(
+                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
+                            'Wait for setup to complete before starting agent'
+                          )}
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {translate(
+                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgentHelp',
+                            'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
+                          )}
+                        </span>
+                      </span>
+                      <SettingsSwitch
+                        checked={setupAgentStartupPolicy === 'wait-for-setup'}
+                        onChange={() =>
+                          onSetupAgentStartupPolicyChange(
+                            setupAgentStartupPolicy === 'wait-for-setup'
+                              ? 'start-immediately'
+                              : 'wait-for-setup'
+                          )
+                        }
+                        ariaLabel={translate(
+                          'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
+                          'Wait for setup to complete before starting agent'
+                        )}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -937,7 +1097,39 @@ export default function NewWorkspaceComposerCard({
         </div>
       ) : null}
 
-      <div className="flex justify-end">
+      <div
+        className={cn(
+          'flex items-center gap-3',
+          showCreateMultiple ? 'justify-between' : 'justify-end'
+        )}
+      >
+        {showCreateMultiple ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={createMultiple}
+            onClick={() => onCreateMultipleChange?.(!createMultiple)}
+            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
+                createMultiple ? 'bg-foreground' : 'bg-muted-foreground/30'
+              )}
+            >
+              <span
+                className={cn(
+                  'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
+                  createMultiple ? 'translate-x-4' : 'translate-x-0.5'
+                )}
+              />
+            </span>
+            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+              {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
+            </span>
+          </button>
+        ) : null}
         <Button
           onClick={() => void onCreate()}
           disabled={createDisabled}
