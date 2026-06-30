@@ -1183,11 +1183,9 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onExit).not.toHaveBeenCalled()
     expect(onPtyExit).not.toHaveBeenCalled()
-    // Why: onDisconnect is fired by the one-shot branch; the multiplexer's per-stream
-    // onError pass-through is fine but the transport no longer fans out resubscribe.
+    // Why: one-shot — a second onClose must not re-fire onDisconnect/onError,
+    // even though the multiplex per-stream close callback is called repeatedly.
     expect(onDisconnect).toHaveBeenCalledTimes(1)
-    // Why: Task 1 dedups the message in the error table, so identical repeats collapse
-    // to a single onError call at this transport boundary.
     expect(onError).toHaveBeenCalledTimes(1)
     expect(onError).toHaveBeenCalledWith(
       'Remote Orca runtime connection lost — waiting for runtime to come back.'
@@ -1195,7 +1193,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
   })
 
-  it('does not resubscribe when the user-initiated stream close fires onTransportClose', async () => {
+  it('surfaces a single one-shot error on multiplex WS close without resubscribing', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const transport = createRemoteRuntimePtyTransport('env-1', {

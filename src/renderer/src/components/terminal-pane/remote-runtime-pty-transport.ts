@@ -86,7 +86,6 @@ export function createRemoteRuntimePtyTransport(
   let multiplexedStreamHandle: string | null = null
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
-  let resubscribing = false
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}`
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -428,7 +427,7 @@ export function createRemoteRuntimePtyTransport(
           }
           multiplexedStream = null
           multiplexedStreamHandle = null
-          if (destroyed || !connected || !handle || resubscribing) {
+          if (destroyed || !connected || !handle) {
             return
           }
           // Why: when the WS-paired multiplex drops (paired runtime
