@@ -3075,3 +3075,81 @@ describe('buildRows pending creations', () => {
     expect(rows[0]).toMatchObject({ type: 'pending-creation', creationId: 'c1' })
   })
 })
+
+describe('buildRows show groups in the flat (none) view', () => {
+  const group: ProjectGroup = {
+    id: 'group-1',
+    name: 'Platform',
+    parentPath: '/platform',
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const groupedRepo: Repo = { ...repo, id: 'repo-grouped', projectGroupId: group.id }
+  const looseRepo: Repo = { ...repo, id: 'repo-loose', projectGroupId: undefined }
+  const groupedWorktree: Worktree = { ...worktree, id: 'wt-grouped', repoId: groupedRepo.id }
+  const looseWorktree: Worktree = { ...worktree, id: 'wt-loose', repoId: looseRepo.id }
+  const repoMap = new Map([
+    [groupedRepo.id, groupedRepo],
+    [looseRepo.id, looseRepo]
+  ])
+
+  it('frames the flat list with group folders and a trailing Ungrouped folder', () => {
+    // showGroups defaults to true, so passing projectGroups is enough.
+    const rows = buildRows(
+      'none',
+      [groupedWorktree, looseWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'project-group:group-1', label: 'Platform' },
+      { type: 'item', worktree: { id: 'wt-grouped' } },
+      { type: 'header', label: 'Ungrouped' },
+      { type: 'item', worktree: { id: 'wt-loose' } }
+    ])
+  })
+
+  it('renders a single flat list when show groups is off', () => {
+    const rows = buildRows(
+      'none',
+      [groupedWorktree, looseWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [group],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      undefined,
+      false // showGroups
+    )
+
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'all' })
+    expect(rows.filter((r) => r.type === 'header')).toHaveLength(1)
+  })
+})

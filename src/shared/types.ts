@@ -3120,6 +3120,10 @@ export type PersistedUIState = {
   markdownTocPanelWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
+  /** Whether group (folder) headers frame the sidebar. On (default) shows group
+   *  folders even in the flat 'none' view and wraps the repo lens; off collapses
+   *  them so the repo lens is a flat list and 'none' is a single flat list. */
+  showGroups: boolean
   /** Project header ordering in `groupBy: 'repo'`, independent of workspace
    *  `sortBy`. 'manual' (default) uses the persisted repo order and enables
    *  header drag; 'recent' orders by each project's most recent visible
