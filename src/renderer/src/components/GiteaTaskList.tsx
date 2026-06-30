@@ -89,7 +89,10 @@ export function GiteaTaskList({
     setLoading(true)
     setError(null)
     try {
-      const results = await Promise.all(
+      // Why: a single failing repo (e.g. an unsupported remote in a mixed
+      // selection) must not blank the whole cross-repo list — keep the rows that
+      // loaded and only surface the error when every repo failed.
+      const settled = await Promise.allSettled(
         repos.map(async (repo) => {
           const items = await fetchGiteaWorkItems(makeScope(repo), filter)
           return items.map((item) => ({ repo, item }))
@@ -98,12 +101,23 @@ export function GiteaTaskList({
       if (seq !== loadSeqRef.current) {
         return
       }
-      setRows(results.flat())
-    } catch {
-      if (seq !== loadSeqRef.current) {
-        return
+      const fulfilled = settled.filter(
+        (result): result is PromiseFulfilledResult<Row[]> => result.status === 'fulfilled'
+      )
+      const rejectedCount = settled.length - fulfilled.length
+      if (rejectedCount > 0) {
+        for (const result of settled) {
+          if (result.status === 'rejected') {
+            console.error('Failed to load Gitea work items for a repo', result.reason)
+          }
+        }
       }
-      setError(translate('auto.components.GiteaTaskList.0285721e62', 'Failed to load Gitea tasks.'))
+      setRows(fulfilled.flatMap((result) => result.value))
+      setError(
+        rejectedCount === repos.length
+          ? translate('auto.components.GiteaTaskList.0285721e62', 'Failed to load Gitea tasks.')
+          : null
+      )
     } finally {
       if (seq === loadSeqRef.current) {
         setLoading(false)

@@ -150,12 +150,18 @@ export function GiteaIssueWorkspace({
     if (!scope || !item) {
       return
     }
+    // Why: drop the result if the selection changed mid-request, so a late refresh
+    // can't overwrite the sheet the user has since switched to.
+    const requestId = requestRef.current
     const issue = (await window.api.gitea.issue({
       repoPath: scope.repoPath,
       repoId: scope.repoId ?? null,
       sourceContext: scope.sourceContext ?? null,
       number: item.number
     })) as GiteaIssue | null
+    if (requestId !== requestRef.current) {
+      return
+    }
     if (issue) {
       setDetail(issue)
       setClosed(issue.state !== 'open')
@@ -166,6 +172,7 @@ export function GiteaIssueWorkspace({
     if (!scope || !item || statePending) {
       return
     }
+    const requestId = requestRef.current
     const nextState = closed ? 'open' : 'closed'
     setStatePending(true)
     try {
@@ -178,6 +185,11 @@ export function GiteaIssueWorkspace({
       })
       if (!result.ok) {
         throw new Error(result.error)
+      }
+      // Why: ignore the result if the user switched issues while the toggle was
+      // in flight, so we don't apply this state to the newly-selected issue.
+      if (requestId !== requestRef.current) {
+        return
       }
       setClosed(nextState === 'closed')
     } catch (error) {
@@ -199,6 +211,7 @@ export function GiteaIssueWorkspace({
     if (!body) {
       return
     }
+    const requestId = requestRef.current
     setSubmitting(true)
     try {
       const result = await window.api.gitea.addIssueComment({
@@ -210,6 +223,11 @@ export function GiteaIssueWorkspace({
       })
       if (!result.ok) {
         throw new Error(result.error)
+      }
+      // Why: don't append this comment to a different issue if the user switched
+      // selection before the add resolved.
+      if (requestId !== requestRef.current) {
+        return
       }
       setComments((prev) => [
         ...prev,

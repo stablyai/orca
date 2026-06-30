@@ -90,7 +90,7 @@ export function GiteaPullRequestWorkspace({
         GiteaPRReviewComment[]
       >
     ])
-      .then(([prDetail, prFiles, prComments, prReviewComments]) => {
+      .then(async ([prDetail, prFiles, prComments, prReviewComments]) => {
         if (requestId !== requestRef.current) {
           return
         }
@@ -99,28 +99,27 @@ export function GiteaPullRequestWorkspace({
         setComments(prComments)
         setReviewComments(prReviewComments)
         if (prDetail?.headSha) {
-          void (
-            window.api.gitea.prChecks(scoped(scope, { headSha: prDetail.headSha })) as Promise<
-              GiteaPRCheck[]
-            >
-          )
-            .then((result) => {
-              if (requestId === requestRef.current) {
-                setChecks(result)
-              }
-            })
-            .catch(() => {
-              // Why: keep checks state consistent and surface the failure.
-              if (requestId === requestRef.current) {
-                setChecks([])
-                toast.error(
-                  translate(
-                    'auto.components.GiteaPullRequestWorkspace.c2d3e4f5a6',
-                    'Failed to load PR checks.'
-                  )
+          // Why: await checks before the chained finally clears `loading`, so the
+          // spinner stays up and the Checks tab doesn't flash an empty state first.
+          try {
+            const result = (await window.api.gitea.prChecks(
+              scoped(scope, { headSha: prDetail.headSha })
+            )) as GiteaPRCheck[]
+            if (requestId === requestRef.current) {
+              setChecks(result)
+            }
+          } catch {
+            // Why: keep checks state consistent and surface the failure.
+            if (requestId === requestRef.current) {
+              setChecks([])
+              toast.error(
+                translate(
+                  'auto.components.GiteaPullRequestWorkspace.c2d3e4f5a6',
+                  'Failed to load PR checks.'
                 )
-              }
-            })
+              )
+            }
+          }
         }
       })
       .catch(() => {})
@@ -135,6 +134,7 @@ export function GiteaPullRequestWorkspace({
     if (!scope || !item || submitting) {
       return
     }
+    const requestId = requestRef.current
     const body = commentDraft.trim()
     if (!body) {
       return
@@ -144,6 +144,9 @@ export function GiteaPullRequestWorkspace({
       const result = await window.api.gitea.addIssueComment(
         scoped(scope, { number: item.number, body })
       )
+      if (requestId !== requestRef.current) {
+        return
+      }
       if (!result.ok) {
         throw new Error(result.error)
       }
@@ -171,11 +174,15 @@ export function GiteaPullRequestWorkspace({
       if (!scope || !item || merging) {
         return
       }
+      const requestId = requestRef.current
       setMerging(true)
       try {
         const result = await window.api.gitea.prMerge(
           scoped(scope, { number: item.number, method })
         )
+        if (requestId !== requestRef.current) {
+          return
+        }
         if (!result.ok) {
           throw new Error(result.error)
         }
@@ -201,16 +208,23 @@ export function GiteaPullRequestWorkspace({
       if (!scope || !item) {
         return false
       }
+      const requestId = requestRef.current
       try {
         const result = await window.api.gitea.prAddReviewComment(
           scoped(scope, { number: item.number, path, line, body })
         )
+        if (requestId !== requestRef.current) {
+          return false
+        }
         if (!result.ok) {
           throw new Error(result.error)
         }
         const refreshed = (await window.api.gitea.prReviewComments(
           scoped(scope, { number: item.number })
         )) as GiteaPRReviewComment[]
+        if (requestId !== requestRef.current) {
+          return false
+        }
         setReviewComments(refreshed)
         return true
       } catch (error) {

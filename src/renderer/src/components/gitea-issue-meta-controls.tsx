@@ -58,6 +58,11 @@ export function GiteaIssueMetaControls({
       if (!result.ok) {
         throw new Error(result.error)
       }
+      // Why: a partial success (e.g. fields saved but labels rejected) still
+      // refreshes, but surface the warning so the label failure isn't swallowed.
+      if (result.warning) {
+        toast.warning(result.warning)
+      }
       onChanged()
     } catch (error) {
       toast.error(
