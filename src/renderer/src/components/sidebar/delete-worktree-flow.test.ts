@@ -60,7 +60,12 @@ vi.mock('sonner', () => ({
   }
 }))
 
+vi.mock('./delete-worktree-failure-toast', () => ({
+  showDeleteWorktreeFailureToast: vi.fn()
+}))
+
 import { toast } from 'sonner'
+import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 
 function setWorktrees(
@@ -100,6 +105,7 @@ describe('runWorktreeBatchDelete', () => {
     mocks.state.repos = []
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
+    vi.mocked(showDeleteWorktreeFailureToast).mockClear()
     setWorktrees([])
   })
 
@@ -178,11 +184,9 @@ describe('runWorktreeBatchDelete', () => {
 
     expect(runWorktreeBatchDelete(['wt-1'], { onDeleted })).toBe(true)
 
-    await vi.waitFor(() => expect(toast.info).toHaveBeenCalled())
-    const toastOptions = vi.mocked(toast.info).mock.calls[0]?.[1] as
-      | { action?: { onClick?: () => void } }
-      | undefined
-    toastOptions?.action?.onClick?.()
+    await vi.waitFor(() => expect(showDeleteWorktreeFailureToast).toHaveBeenCalled())
+    const toastOptions = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0]?.[0]
+    toastOptions?.onForceDelete()
 
     await vi.waitFor(() => {
       expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-1', true)

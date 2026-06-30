@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { syncPRChecksStatus, normalizeBranchName } from './github-checks'
+import {
+  deriveCheckStatusFromChecks,
+  syncPRChecksStatus,
+  normalizeBranchName
+} from './github-checks'
 import type { AppState } from '../types'
+import type { PRCheckDetail } from '../../../../shared/types'
+
+describe('deriveCheckStatusFromChecks', () => {
+  it('treats an action_required check as failure so it is not a silent pass', () => {
+    const checks: PRCheckDetail[] = [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null },
+      { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
+    ]
+    expect(deriveCheckStatusFromChecks(checks)).toBe('failure')
+  })
+})
 
 describe('normalizeBranchName', () => {
   it('strips refs/heads/ prefix', () => {
@@ -43,5 +58,37 @@ describe('syncPRChecksStatus', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
     expect(result?.prCache?.['repo-id::main']?.data?.checksStatus).toBe('success')
+  })
+
+  it('updates the local repo key while a runtime is focused when repo owner is known', () => {
+    const state = {
+      prCache: {
+        'repo-id::main': {
+          fetchedAt: 0,
+          data: { checksStatus: 'neutral' as const }
+        },
+        'runtime:env-win::repo-id::main': {
+          fetchedAt: 0,
+          data: { checksStatus: 'neutral' as const }
+        }
+      }
+    } as unknown as AppState
+
+    const result = syncPRChecksStatus(
+      state,
+      '/repo',
+      'repo-id',
+      'main',
+      [{ name: 'build', status: 'completed', conclusion: 'success', url: null }],
+      undefined,
+      undefined,
+      { activeRuntimeEnvironmentId: 'env-win' } as AppState['settings'],
+      null,
+      null,
+      true
+    )
+
+    expect(result?.prCache?.['repo-id::main']?.data?.checksStatus).toBe('success')
+    expect(result?.prCache?.['runtime:env-win::repo-id::main']?.data?.checksStatus).toBe('neutral')
   })
 })

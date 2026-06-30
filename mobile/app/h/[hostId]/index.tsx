@@ -44,6 +44,7 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
+import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -710,9 +711,12 @@ export function HostScreen({
       // Highlight the row immediately; the next worktree.ps poll confirms it.
       setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
+        // Why: opening a mobile session should hydrate host-owned tabs without
+        // pulling other paired clients, especially desktop, into this worktree.
         void client
           .sendRequest('worktree.activate', {
-            worktree: `id:${item.worktreeId}`
+            worktree: `id:${item.worktreeId}`,
+            notifyClients: false
           })
           .catch(() => null)
       }
@@ -765,6 +769,8 @@ export function HostScreen({
     count += filters.filterRepoIds.size
     return count
   }, [filters])
+  const selectedSortLabel =
+    SORT_OPTIONS.find((option) => option.value === sortMode)?.label ?? 'Recent'
 
   const handleGroupChange = useCallback(
     (value: MobileGroupMode) => {
@@ -937,19 +943,19 @@ export function HostScreen({
               </Pressable>
 
               <Pressable
-                style={[styles.sortButton, styles.embeddedModeButton]}
+                style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowSortPicker(true)}
                 accessibilityRole="button"
-                accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}`}
+                accessibilityLabel={`Sort by ${selectedSortLabel}`}
               >
                 <SlidersHorizontal size={14} color={colors.textSecondary} />
                 <Text style={styles.sortLabel} numberOfLines={1}>
-                  {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+                  {selectedSortLabel}
                 </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.groupButton, styles.embeddedModeButton]}
+                style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowGroupPicker(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Group workspaces"
@@ -1050,16 +1056,16 @@ export function HostScreen({
               </Text>
             </Pressable>
 
-            <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
+            <Pressable style={styles.modeButton} onPress={() => setShowSortPicker(true)}>
               <SlidersHorizontal size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel}>
-                {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+              <Text style={styles.sortLabel} numberOfLines={1}>
+                {selectedSortLabel}
               </Text>
             </Pressable>
 
-            <Pressable style={styles.groupButton} onPress={() => setShowGroupPicker(true)}>
+            <Pressable style={styles.modeButton} onPress={() => setShowGroupPicker(true)}>
               <Layers size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel}>
+              <Text style={styles.sortLabel} numberOfLines={1}>
                 {groupMode === 'none'
                   ? 'Group'
                   : groupMode === 'workspaceStatus'
@@ -1091,17 +1097,6 @@ export function HostScreen({
               <List
                 size={16}
                 color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-              />
-            </Pressable>
-
-            <Pressable
-              style={styles.newButton}
-              onPress={openNewWorktreeModal}
-              disabled={connState !== 'connected'}
-            >
-              <Plus
-                size={16}
-                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
               />
             </Pressable>
 
@@ -1182,7 +1177,9 @@ export function HostScreen({
           // above the Samsung 3-button nav / iOS home indicator.
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: spacing.lg + insets.bottom },
+            // Phone shows a floating "+" button bottom-right; reserve room so the
+            // last row stays tappable above it. Embedded sidebars keep the toolbar +.
+            { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
@@ -1238,6 +1235,11 @@ export function HostScreen({
             />
           )}
         />
+      )}
+
+      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
+      {!embedded && (
+        <NewWorkspaceFab onPress={openNewWorktreeModal} disabled={connState !== 'connected'} />
       )}
 
       <PickerModal
@@ -1570,21 +1572,18 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: colors.textPrimary
   },
-  sortButton: {
+  modeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  groupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexShrink: 1,
+    minWidth: 0,
     gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
   sortLabel: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 12,
     color: colors.textSecondary
   },
@@ -1607,9 +1606,6 @@ const styles = StyleSheet.create({
   },
   toolbarIconDisabled: {
     opacity: 0.6
-  },
-  newButton: {
-    padding: spacing.xs
   },
   searchToggle: {
     padding: spacing.xs

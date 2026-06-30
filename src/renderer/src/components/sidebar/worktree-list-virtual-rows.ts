@@ -60,7 +60,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96
   }
-  if (row?.type === 'imported-worktrees-card') {
+  if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
     return IMPORTED_WORKTREES_LINE_ROW_HEIGHT
   }
   if (row?.type === 'pending-creation') {

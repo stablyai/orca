@@ -13,18 +13,21 @@ const repo = {
   addedAt: 0
 } satisfies Repo
 
-function ids(args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean } = {}): string[] {
+function ids(
+  args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean; isDev?: boolean } = {}
+): string[] {
   return buildSettingsNavigationMetadata({
     isMac: args.isMac ?? false,
     isWindows: args.isWindows ?? false,
     isWebClient: args.isWebClient ?? false,
+    isDev: args.isDev ?? false,
     repos: [repo]
   }).map((section) => section.id)
 }
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 9)).toEqual([
+    expect(ids().slice(0, 10)).toEqual([
       'agents',
       'accounts',
       'orchestration',
@@ -33,8 +36,20 @@ describe('settings navigation metadata', () => {
       'setup-guide',
       'general',
       'integrations',
+      'mobile',
       'git'
     ])
+  })
+
+  it('places Mobile under Set Up instead of its own sidebar group', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
@@ -135,6 +150,17 @@ describe('settings navigation metadata', () => {
     expect(desktopIds).toContain('advanced')
     expect(desktopIds.indexOf('advanced')).toBeLessThan(desktopIds.indexOf('experimental'))
     expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
+  })
+
+  // Note: this exercises the isDev parameter and isWebClient branches only.
+  // Production safety rests on the hard `import.meta.env.DEV` term in the
+  // builder, which is compile-time-inlined per build and cannot be flipped from
+  // a test (vitest always runs with DEV=true) — don't mistake this for full
+  // prod-gate coverage. The bundle exclusion is what guarantees prod safety.
+  it('shows Dev tools only in desktop development metadata', () => {
+    expect(ids()).not.toContain('dev')
+    expect(ids({ isDev: true })).toContain('dev')
+    expect(ids({ isDev: true, isWebClient: true })).not.toContain('dev')
   })
 
   it('keeps macOS permissions mac-only', () => {

@@ -1,10 +1,20 @@
+import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { discoverSkills } from '../../../skills/discovery'
+
+const SkillDiscoveryParams = z.object({
+  cwd: z.string().optional().nullable()
+})
 
 export const SKILL_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'skills.discover',
-    params: null,
-    handler: async (_params, { runtime }) => discoverSkills({ repos: runtime.listRepos() })
+    params: SkillDiscoveryParams,
+    handler: async (params, { runtime }) => {
+      const cwd = params.cwd?.trim() || undefined
+      return cwd
+        ? discoverSkills({ repos: [], cwd })
+        : discoverSkills({ repos: runtime.listRepos() })
+    }
   })
 ]

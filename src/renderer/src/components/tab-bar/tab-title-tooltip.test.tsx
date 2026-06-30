@@ -85,7 +85,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-catalog-icon={agent} />
 }))
 
-vi.mock('@/lib/agent-title-decoration', () => ({
+vi.mock('../../../../shared/agent-title-decoration', () => ({
   stripLeadingAgentTitleDecoration: (title: string) =>
     title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
 }))

@@ -153,6 +153,16 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     macRoot: 'Comet',
     winRoot: 'Comet/User Data'
     // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
+  },
+  {
+    family: 'helium',
+    // Why: Helium deviates from the '<Browser> Safe Storage'/'<Browser>' convention —
+    // its Keychain entry is literally service 'Helium Storage Key', account 'Helium'.
+    label: 'Helium',
+    keychainService: 'Helium Storage Key',
+    keychainAccount: 'Helium',
+    macRoot: 'net.imput.helium'
+    // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
   }
 ]
 
@@ -765,6 +775,12 @@ export function getUserAgentForBrowser(
       // Why: Comet is Chromium-based and ships a Chrome-shaped version in its plist.
       // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
       const v = readBrowserVersion('/Applications/Comet.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'helium': {
+      // Why: Helium is Chromium-based and ships a Chrome-shaped version in its plist.
+      // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Helium.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
     case 'firefox':

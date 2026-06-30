@@ -377,6 +377,9 @@ export class DaemonServer {
       case 'getSnapshot':
         return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
+      case 'getSize':
+        return { size: this.host.getAppliedSize(request.payload.sessionId) }
+
       case 'takePendingOutput':
         // Why no await before this call: with includeSnapshot, drain and
         // serialize must share one synchronous turn — an intervening await

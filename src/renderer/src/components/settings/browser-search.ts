@@ -110,6 +110,28 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
+      title: translate(
+        'auto.components.settings.browser.search.19ea5607cf',
+        'Localhost Worktree Labels'
+      ),
+      description: translate(
+        'auto.components.settings.browser.search.4e0fdf0a3f',
+        'Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.82ba1c80ea',
+          'localhost'
+        ),
+        ...translateSearchKeyword('auto.components.settings.browser.search.6f5199381e', 'ports'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.8f036ea11f', 'worktree'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.c4e3bf3282', 'tabs'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.a8c55c9c91', 'favicon'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.660c1dd007', 'labels')
+      ]
+    },
+    {
       title: translate('auto.components.settings.browser.search.96afedcb5c', 'Session & Cookies'),
       description: translate(
         'auto.components.settings.browser.search.060ac1fcba',

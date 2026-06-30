@@ -13,6 +13,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
   RemoveWorktreeResult
@@ -28,6 +29,7 @@ import {
   describeMaxBufferOverflowError,
   isMaxBufferOverflowError
 } from '../git/max-buffer-overflow'
+import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -58,9 +60,22 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
 }
 
 export class SshGitProvider implements IGitProvider {
+  private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
+
   private connectionId: string
   private mux: SshChannelMultiplexer
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
+
+  private async runWithDiffDedupeClear<T>(run: () => Promise<T>): Promise<T> {
+    // Why: git mutations can stale both existing and concurrently-started diff reads.
+    // Clear before and after so later reads never join pre-mutation work.
+    this.gitDiffReadDedupe.clear()
+    try {
+      return await run()
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
+  }
   private loggedWorktreeIsCleanFallback = false
 
   constructor(
@@ -84,15 +99,46 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
+    this.gitDiffReadDedupe.clear()
     const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
     const upstreamCacheBypassArgs = options?.bypassEffectiveUpstreamNegativeCache
       ? { bypassEffectiveUpstreamNegativeCache: true }
       : {}
-    return (await this.mux.request('git.status', {
+    const request = {
       worktreePath,
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs
-    })) as GitStatusResult
+    }
+    return (await (options?.signal
+      ? this.mux.request('git.status', request, { signal: options.signal })
+      : this.mux.request('git.status', request))) as GitStatusResult
+  }
+
+  async getSubmoduleStatus(
+    worktreePath: string,
+    submodulePath: string,
+    area: GitStagingArea = 'unstaged'
+  ): Promise<GitStatusResult> {
+    // Why: mirror getStatus() — refreshing submodule state must invalidate
+    // in-flight diff reads so a later diff can't reuse a stale pending RPC.
+    this.gitDiffReadDedupe.clear()
+    try {
+      return (await this.mux.request('git.submoduleStatus', {
+        worktreePath,
+        submodulePath,
+        area
+      })) as GitStatusResult
+    } catch (error) {
+      // Why: a newer desktop client may talk to an older relay that predates
+      // git.submoduleStatus; surface an actionable reconnect hint instead of a
+      // raw JSON-RPC method-not-found error in Source Control.
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH submodule diff support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    }
   }
 
   async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
@@ -116,10 +162,13 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     message: string
   ): Promise<{ success: boolean; error?: string }> {
-    return (await this.mux.request('git.commit', {
-      worktreePath,
-      message
-    })) as { success: boolean; error?: string }
+    return this.runWithDiffDedupeClear(
+      async () =>
+        (await this.mux.request('git.commit', {
+          worktreePath,
+          message
+        })) as { success: boolean; error?: string }
+    )
   }
 
   async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
@@ -321,36 +370,70 @@ export class SshGitProvider implements IGitProvider {
     staged: boolean,
     compareAgainstHead?: boolean
   ): Promise<GitDiffResult> {
-    return (await this.mux.request('git.diff', {
-      worktreePath,
-      filePath,
-      staged,
-      compareAgainstHead
-    })) as GitDiffResult
+    return this.gitDiffReadDedupe.run(
+      stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
+      async () =>
+        (await this.mux.request('git.diff', {
+          worktreePath,
+          filePath,
+          staged,
+          compareAgainstHead
+        })) as GitDiffResult
+    ) as Promise<GitDiffResult>
   }
 
   async stageFile(worktreePath: string, filePath: string): Promise<void> {
-    await this.mux.request('git.stage', { worktreePath, filePath })
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.stage', { worktreePath, filePath })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
   }
 
   async unstageFile(worktreePath: string, filePath: string): Promise<void> {
-    await this.mux.request('git.unstage', { worktreePath, filePath })
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.unstage', { worktreePath, filePath })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
   }
 
   async bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
-    await this.mux.request('git.bulkStage', { worktreePath, filePaths })
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.bulkStage', { worktreePath, filePaths })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
   }
 
   async bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
-    await this.mux.request('git.bulkUnstage', { worktreePath, filePaths })
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.bulkUnstage', { worktreePath, filePaths })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
   }
 
   async discardChanges(worktreePath: string, filePath: string): Promise<void> {
-    await this.mux.request('git.discard', { worktreePath, filePath })
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.discard', { worktreePath, filePath })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
   }
 
   async bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void> {
-    await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
+    this.gitDiffReadDedupe.clear()
+    try {
+      await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
+    } finally {
+      this.gitDiffReadDedupe.clear()
+    }
   }
 
   async detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
@@ -360,15 +443,21 @@ export class SshGitProvider implements IGitProvider {
   }
 
   async abortMerge(worktreePath: string): Promise<void> {
-    await this.mux.request('git.abortMerge', { worktreePath })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.abortMerge', { worktreePath })
+    })
   }
 
   async abortRebase(worktreePath: string): Promise<void> {
-    await this.mux.request('git.abortRebase', { worktreePath })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.abortRebase', { worktreePath })
+    })
   }
 
   async checkoutBranch(worktreePath: string, branch: string): Promise<void> {
-    await this.mux.request('git.checkout', { worktreePath, branch })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.checkout', { worktreePath, branch })
+    })
   }
 
   async listLocalBranches(
@@ -410,41 +499,54 @@ export class SshGitProvider implements IGitProvider {
     pushTarget?: GitPushTarget,
     options: { forceWithLease?: boolean } = {}
   ): Promise<void> {
-    await this.mux.request('git.push', {
-      worktreePath,
-      publish,
-      pushTarget,
-      ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.push', {
+        worktreePath,
+        publish,
+        pushTarget,
+        ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+      })
     })
   }
 
   async pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+    })
   }
 
   async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.mux.request('git.fastForward', {
-      worktreePath,
-      ...(pushTarget ? { pushTarget } : {})
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.fastForward', {
+        worktreePath,
+        ...(pushTarget ? { pushTarget } : {})
+      })
     })
   }
 
   async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
-    await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
+    })
   }
 
   async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-    await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+    })
   }
 
   async syncForkDefaultBranch(
     worktreePath: string,
     expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult> {
-    return (await this.mux.request('git.forkSync', {
-      worktreePath,
-      ...(expectedUpstream ? { expectedUpstream } : {})
-    })) as GitForkSyncResult
+    return this.runWithDiffDedupeClear(
+      async () =>
+        (await this.mux.request('git.forkSync', {
+          worktreePath,
+          ...(expectedUpstream ? { expectedUpstream } : {})
+        })) as GitForkSyncResult
+    )
   }
 
   async fetchRemoteTrackingRef(
@@ -453,11 +555,13 @@ export class SshGitProvider implements IGitProvider {
     branch: string,
     ref: string
   ): Promise<void> {
-    await this.mux.request('git.fetchRemoteTrackingRef', {
-      worktreePath,
-      remote,
-      branch,
-      ref
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.fetchRemoteTrackingRef', {
+        worktreePath,
+        remote,
+        branch,
+        ref
+      })
     })
   }
 
@@ -466,10 +570,12 @@ export class SshGitProvider implements IGitProvider {
     remote: string,
     mrIid: number
   ): Promise<void> {
-    await this.mux.request('git.fetchGitLabMergeRequestHead', {
-      worktreePath,
-      remote,
-      mrIid
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.fetchGitLabMergeRequestHead', {
+        worktreePath,
+        remote,
+        mrIid
+      })
     })
   }
 
@@ -478,21 +584,44 @@ export class SshGitProvider implements IGitProvider {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]> {
-    return (await this.mux.request('git.branchDiff', {
-      worktreePath,
-      baseRef,
-      ...options
-    })) as GitDiffResult[]
+    const keyOptions = options ?? {}
+    return this.gitDiffReadDedupe.run(
+      stableInFlightKey([
+        'branchDiff',
+        worktreePath,
+        baseRef,
+        keyOptions.includePatch ?? null,
+        keyOptions.filePath ?? null,
+        keyOptions.oldPath ?? null
+      ]),
+      async () =>
+        (await this.mux.request('git.branchDiff', {
+          worktreePath,
+          baseRef,
+          ...options
+        })) as GitDiffResult[]
+    ) as Promise<GitDiffResult[]>
   }
 
   async getCommitDiff(
     worktreePath: string,
     args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
   ): Promise<GitDiffResult> {
-    return (await this.mux.request('git.commitDiff', {
-      worktreePath,
-      ...args
-    })) as GitDiffResult
+    return this.gitDiffReadDedupe.run(
+      stableInFlightKey([
+        'commitDiff',
+        worktreePath,
+        args.commitOid,
+        args.parentOid ?? null,
+        args.filePath,
+        args.oldPath ?? null
+      ]),
+      async () =>
+        (await this.mux.request('git.commitDiff', {
+          worktreePath,
+          ...args
+        })) as GitDiffResult
+    ) as Promise<GitDiffResult>
   }
 
   async listWorktrees(
@@ -514,11 +643,13 @@ export class SshGitProvider implements IGitProvider {
     targetDir: string,
     options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
   ): Promise<void> {
-    await this.mux.request('git.addWorktree', {
-      repoPath,
-      branchName,
-      targetDir,
-      ...options
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.addWorktree', {
+        repoPath,
+        branchName,
+        targetDir,
+        ...options
+      })
     })
   }
 
@@ -527,11 +658,14 @@ export class SshGitProvider implements IGitProvider {
     force?: boolean,
     options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
   ): Promise<RemoveWorktreeResult> {
-    return ((await this.mux.request('git.removeWorktree', {
-      worktreePath,
-      force,
-      ...options
-    })) ?? {}) as RemoveWorktreeResult
+    return this.runWithDiffDedupeClear(
+      async () =>
+        ((await this.mux.request('git.removeWorktree', {
+          worktreePath,
+          force,
+          ...options
+        })) ?? {}) as RemoveWorktreeResult
+    )
   }
 
   async worktreeIsClean(
@@ -583,11 +717,40 @@ export class SshGitProvider implements IGitProvider {
     ownerWorktreePath?: string
     checkOnly?: boolean
   }): Promise<void> {
-    await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
+    })
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {
-    await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
+    await this.runWithDiffDedupeClear(async () => {
+      await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
+    })
+  }
+
+  async forceDeletePreservedBranch(
+    repoPath: string,
+    branchName: string,
+    expectedHead: string
+  ): Promise<void> {
+    try {
+      await this.runWithDiffDedupeClear(async () => {
+        await this.mux.request('git.forceDeletePreservedBranch', {
+          repoPath,
+          branchName,
+          expectedHead
+        })
+      })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        // Why: older SSH relays predate git.forceDeletePreservedBranch; surface
+        // a reconnect prompt instead of a raw JSON-RPC method-not-found error.
+        throw new Error(
+          'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
   }
 
   async exec(

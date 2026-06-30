@@ -254,7 +254,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'qwen-code',
     label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
-    cmd: 'qwen-code',
+    // Why: QwenLM/qwen-code installs its CLI executable as `qwen`; the package
+    // name is not the binary users put on PATH. Keep `id` for stable identity.
+    cmd: 'qwen',
     faviconDomain: 'qwenlm.github.io',
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },

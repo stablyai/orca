@@ -9,7 +9,8 @@ import {
   pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
   sendAgentDraftPasteContent,
-  sendBracketedPasteToRunningAgent
+  sendBracketedPasteToRunningAgent,
+  submitPromptToAgentPty
 } from './agent-paste-draft'
 
 const testState = vi.hoisted(() => ({
@@ -386,6 +387,41 @@ describe('pasteDraftWhenAgentReady', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
+  })
+
+  it('submits to an exact PTY even when it is not the first PTY in the tab', async () => {
+    testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-left', 'pty-right'] }
+    testState.appState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1' }]
+    }
+    testState.appState.repos = [
+      { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+    ]
+    testState.appState.worktreesByRepo = { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
+    testState.appState.settings = { activeRuntimeEnvironmentId: 'owner-runtime' }
+
+    const promise = submitPromptToAgentPty({
+      tabId: 'tab-1',
+      ptyId: 'pty-right',
+      content: ISSUE_URL
+    })
+
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      1,
+      { activeRuntimeEnvironmentId: 'owner-runtime' },
+      'pty-right',
+      PASTED_ISSUE_URL
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      2,
+      { activeRuntimeEnvironmentId: 'owner-runtime' },
+      'pty-right',
+      '\r'
+    )
   })
 
   it('streams large running-agent drafts as bounded bracketed chunks before submit', async () => {

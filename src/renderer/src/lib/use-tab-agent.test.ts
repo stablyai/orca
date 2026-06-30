@@ -139,7 +139,7 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
-  it('keeps title fallback for real Gemini and Pi titles', () => {
+  it('keeps title fallback for real Gemini, MiMo, and Pi titles', () => {
     expect(
       resolveTabAgentFromSignals({
         foreground: undefined,
@@ -152,6 +152,19 @@ describe('resolveTabAgentFromSignals', () => {
         launchAgent: undefined
       })
     ).toBe('gemini')
+
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: 'MiMo Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: undefined
+      })
+    ).toBe('mimo-code')
 
     expect(
       resolveTabAgentFromSignals({
@@ -288,6 +301,36 @@ describe('resolveTabAgentFromSignals', () => {
         launchAgent: 'openclaude'
       })
     ).toBe('openclaude')
+  })
+
+  it('lets an explicit title override stale launch identity after the pane shows newer activity', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: true,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ Claude Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'codex'
+      })
+    ).toBe('claude')
+  })
+
+  it('does not let an explicit title override launch identity before any activity is observed', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        foreground: undefined,
+        hasObservedAgentSignal: false,
+        shellForegroundAfterAgentSignal: false,
+        isRemote: false,
+        title: '✳ Claude Code',
+        hookAgent: null,
+        hasCompletedHook: false,
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
   })
 
   it('lets shell foreground clear the icon after an agent was observed running', () => {
@@ -589,6 +632,85 @@ describe('useTabAgent', () => {
     expect(clearTabLaunchAgent).toHaveBeenCalledExactlyOnceWith('tab-1')
     expect(latestHookAgent).toBeNull()
     expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries helper foreground so daemon-derived agent beats stale launch identity', async () => {
+    vi.useFakeTimers()
+    getForegroundProcess.mockResolvedValueOnce('uv').mockResolvedValueOnce('claude')
+
+    try {
+      await renderHookProbe({ ...baseTab, launchAgent: 'opencode' })
+
+      expect(latestHookAgent).toBe('opencode')
+      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(2)
+      expect(latestHookAgent).toBe('claude')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retry unknown helper foreground without launch intent', async () => {
+    vi.useFakeTimers()
+    getForegroundProcess.mockResolvedValue('uv')
+
+    try {
+      await renderHookProbe({ ...baseTab, launchAgent: undefined })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+      expect(latestHookAgent).toBeNull()
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps one post-throttle shell retry to observe daemon-derived launch identity', async () => {
+    vi.useFakeTimers()
+    getForegroundProcess
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('zsh')
+      .mockResolvedValueOnce('claude')
+
+    try {
+      await renderHookProbe({ ...baseTab, launchAgent: 'opencode' })
+
+      expect(latestHookAgent).toBe('opencode')
+      expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250 + 1250 + 3500)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(4)
+      expect(latestHookAgent).toBe('opencode')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750)
+      })
+      await flushHookEffects()
+
+      expect(getForegroundProcess).toHaveBeenCalledTimes(5)
+      expect(latestHookAgent).toBe('claude')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('uses completed local hook status as launch lifecycle evidence after remount', async () => {

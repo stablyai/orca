@@ -1,3 +1,4 @@
+import { normalizeExecutionHostId } from './execution-host'
 import type { Repo, ProjectGroup, ProjectGroupCreatedFrom } from './types'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
@@ -56,6 +57,7 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
     }
     seen.add(raw.id)
     const now = Date.now()
+    const executionHostId = normalizeExecutionHostId(raw.executionHostId)
     groups.push({
       id: raw.id,
       name: normalizeProjectGroupName(typeof raw.name === 'string' ? raw.name : ''),
@@ -80,7 +82,9 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
-        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      // Why: runtime-owned groups otherwise look local after persistence reload.
+      ...(executionHostId ? { executionHostId } : {})
     })
   }
   groups.sort(

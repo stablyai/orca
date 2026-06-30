@@ -1,13 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
-import {
-  ChevronDown,
-  GripVertical,
-  LocateFixed,
-  MoreHorizontal,
-  PanelTopOpen,
-  Play
-} from 'lucide-react'
+import { ChevronDown, LocateFixed, MoreHorizontal, PanelTopOpen, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -16,7 +8,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { AI_VAULT_SESSION_DRAG_END_EVENT } from '@/lib/ai-vault-session-drag'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
@@ -51,6 +42,7 @@ export function SessionRowTrailingActions({
   worktreeInfo,
   onToggleDetails,
   onJumpToOriginalPane,
+  showJumpToWorktree,
   onJumpToWorktree,
   onResume,
   onCopyResume,
@@ -58,8 +50,7 @@ export function SessionRowTrailingActions({
   onCopyPath,
   onOpenLog,
   onRevealLog,
-  onOpenCwd,
-  onStartResumeDrag
+  onOpenCwd
 }: {
   session: AiVaultSession
   detailsExpanded: boolean
@@ -70,6 +61,7 @@ export function SessionRowTrailingActions({
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
   onCopyResume: () => void
@@ -78,75 +70,17 @@ export function SessionRowTrailingActions({
   onOpenLog: () => void
   onRevealLog: () => void
   onOpenCwd?: () => void
-  onStartResumeDrag: (event: React.DragEvent<HTMLButtonElement>) => void
 }) {
-  // Track drag state to cleanup on unmount
-  const isDraggingRef = useRef(false)
-
-  const handleDragStart = useCallback(
-    (event: React.DragEvent<HTMLButtonElement>) => {
-      isDraggingRef.current = true
-      onStartResumeDrag(event)
-    },
-    [onStartResumeDrag]
-  )
-
-  const handleDragEnd = useCallback(() => {
-    isDraggingRef.current = false
-    window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
-  }, [])
-
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
-
-  // Cleanup drag state on unmount if a drag was in progress
-  useEffect(() => {
-    return () => {
-      if (isDraggingRef.current) {
-        window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
-        isDraggingRef.current = false
-      }
-    }
-  }, [])
 
   return (
     <div
       className="flex shrink-0 items-center gap-1"
+      data-ai-vault-session-actions="true"
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
       <div className={HOVER_ACTION_GROUP_CLASS}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
-                'Drag to resume in a new tab'
-              )}
-              disabled={resumeDisabled}
-              draggable={!resumeDisabled}
-              onClick={(event) => {
-                event.stopPropagation()
-              }}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              data-testid="ai-vault-session-drag-handle"
-              // Why: the card is for inspection. Drag-to-resume lives on a
-              // quiet handle so the row does not look movable by default.
-              className="cursor-grab can-hover:pointer-events-none active:cursor-grabbing group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
-            >
-              <GripVertical className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
-              'Drag to resume in a new tab'
-            )}
-          </TooltipContent>
-        </Tooltip>
         {onJumpToOriginalPane ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -177,16 +111,18 @@ export function SessionRowTrailingActions({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <Tooltip>
-          <WorktreeJumpTooltipTrigger
-            disabled={!onJumpToWorktree}
-            ariaLabel={jumpToWorktreeTooltip}
-            onJumpToWorktree={onJumpToWorktree}
-          />
-          <TooltipContent side="top" sideOffset={4}>
-            {jumpToWorktreeTooltip}
-          </TooltipContent>
-        </Tooltip>
+        {showJumpToWorktree ? (
+          <Tooltip>
+            <WorktreeJumpTooltipTrigger
+              disabled={!onJumpToWorktree}
+              ariaLabel={jumpToWorktreeTooltip}
+              onJumpToWorktree={onJumpToWorktree}
+            />
+            <TooltipContent side="top" sideOffset={4}>
+              {jumpToWorktreeTooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -276,6 +212,7 @@ export function SessionRowTrailingActions({
             resumeLabel={resumeLabel}
             onResume={onResume}
             onJumpToOriginalPane={onJumpToOriginalPane}
+            showJumpToWorktree={showJumpToWorktree}
             onJumpToWorktree={onJumpToWorktree}
             onCopyResume={onCopyResume}
             onCopyId={onCopyId}

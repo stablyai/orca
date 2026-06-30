@@ -179,6 +179,14 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
   })
 
+  it('defines platform-native replace-in-editor shortcuts', () => {
+    expect(getEffectiveKeybindingsForAction('editor.replace', 'darwin')).toEqual(['Mod+Alt+F'])
+    expect(getEffectiveKeybindingsForAction('editor.replace', 'linux')).toEqual(['Mod+H'])
+    expect(getEffectiveKeybindingsForAction('editor.replace', 'win32')).toEqual(['Mod+H'])
+    expect(formatKeybindingList(['Mod+Alt+F'], 'darwin')).toBe('⌘⌥F')
+    expect(formatKeybindingList(['Mod+H'], 'linux')).toBe('Ctrl+H')
+  })
+
   it('uses overrides as the complete effective binding list for an action', () => {
     const overrides = {
       'worktree.quickOpen': ['Ctrl+Alt+O', 'not-a-shortcut']
@@ -223,6 +231,7 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
     expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
     expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(getKeybindingDefinition('tab.rename')?.searchKeywords).not.toContain('set title')
     expect(
       keybindingMatchesAction(
         'tab.rename',
@@ -408,6 +417,35 @@ describe('keybindings', () => {
         { key: '=', code: 'Equal', control: false, meta: true, alt: false, shift: false },
         'darwin',
         { 'terminal.equalizePaneSizes': ['Mod+Equal'] }
+      )
+    ).toBe(true)
+  })
+
+  it('names terminal title shortcuts after pane menu actions', () => {
+    const setTitle = getKeybindingDefinition('terminal.setTitle')
+    const clearTitle = getKeybindingDefinition('terminal.clearPaneTitle')
+
+    expect(setTitle?.title).toBe('Set Title…')
+    expect(setTitle?.group).toBe('Terminal Panes')
+    expect(setTitle?.scope).toBe('terminal')
+    expect(setTitle?.searchKeywords).toContain('set title')
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.setTitle', 'win32')).toEqual([])
+
+    expect(clearTitle?.title).toBe('Clear Pane Title')
+    expect(clearTitle?.group).toBe('Terminal Panes')
+    expect(clearTitle?.scope).toBe('terminal')
+    expect(clearTitle?.searchKeywords).toContain('remove title')
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('terminal.clearPaneTitle', 'win32')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'terminal.clearPaneTitle',
+        { key: 't', code: 'KeyT', control: false, meta: true, alt: true, shift: false },
+        'darwin',
+        { 'terminal.clearPaneTitle': ['Mod+Alt+T'] }
       )
     ).toBe(true)
   })
@@ -831,6 +869,67 @@ describe('keybindings', () => {
       ok: true,
       value: 'Mod+W'
     })
+  })
+
+  it('matches letter shortcuts on non-Latin layouts via the physical code (issue #6274)', () => {
+    // Cyrillic ЙЦУКЕН: physical C produces the logical key 'с' (Cyrillic es,
+    // U+0441) while code stays 'KeyC'. The produced character is not a Latin
+    // shortcut letter, so the chord must still match through the physical code.
+    const cyrillicCtrlC = {
+      key: 'с',
+      code: 'KeyC',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false
+    }
+    expect(keybindingMatchesAction('browser.grabElement', cyrillicCtrlC, 'win32')).toBe(true)
+    expect(keybindingMatchesAction('browser.grabElement', cyrillicCtrlC, 'linux')).toBe(true)
+
+    // Ctrl+Shift+C on the same layout (terminal copy) must match too.
+    expect(
+      keybindingMatchesAction('terminal.copySelection', { ...cyrillicCtrlC, shift: true }, 'win32')
+    ).toBe(true)
+
+    // Greek layout: physical P produces 'π' (U+03C0); Ctrl+P must still match.
+    expect(
+      keybindingMatchesAction(
+        'worktree.quickOpen',
+        { key: 'π', code: 'KeyP', control: true, meta: false, alt: false, shift: false },
+        'win32'
+      )
+    ).toBe(true)
+
+    // The fallback must not steal a different physical key: Ctrl+V (physical V,
+    // Cyrillic 'м') is not Ctrl+C, so grabElement must stay unmatched.
+    expect(
+      keybindingMatchesAction(
+        'browser.grabElement',
+        { key: 'м', code: 'KeyV', control: true, meta: false, alt: false, shift: false },
+        'win32'
+      )
+    ).toBe(false)
+  })
+
+  it('does not let non-Latin physical fallback hijack AltGr text input (issue #6274)', () => {
+    // Windows/Linux AltGr arrives as Ctrl+Alt. A composed character typed via
+    // AltGr (e.g. AltGr+C) must remain text input, never an app shortcut.
+    // editor.copyContext is Mod+Alt+C, so the modifier state otherwise matches —
+    // only the AltGr key gating may keep this from firing.
+    expect(
+      keybindingMatchesAction(
+        'editor.copyContext',
+        {
+          key: '¢',
+          code: 'KeyC',
+          control: true,
+          meta: false,
+          alt: true,
+          shift: false
+        },
+        'win32'
+      )
+    ).toBe(false)
   })
 
   it('uses shifted punctuation aliases only while Shift is pressed', () => {

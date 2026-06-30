@@ -4,6 +4,7 @@ import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
@@ -101,9 +102,22 @@ export function captureTerminalShutdownLayout({
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
-  const ptyEntries = panes
-    .map((pane) => [pane.leafId, paneTransports.get(pane.id)?.getPtyId() ?? null] as const)
-    .filter((entry): entry is readonly [ShutdownPane['leafId'], string] => entry[1] !== null)
+  const livePtyIdsByLeafId: Record<string, string> = {}
+  const preservedPtyIdsByLeafId: Record<string, string> = {}
+  for (const pane of panes) {
+    const transport = paneTransports.get(pane.id)
+    const livePtyId = transport?.getPtyId() ?? null
+    if (livePtyId) {
+      livePtyIdsByLeafId[pane.leafId] = livePtyId
+      continue
+    }
+    const priorPtyId = existingLayout?.ptyIdsByLeafId?.[pane.leafId]
+    if (transport && priorPtyId) {
+      // Why: shutdown can capture during the post-remount attach gap where
+      // each pane has a transport but the deferred PTY ID is still null.
+      preservedPtyIdsByLeafId[pane.leafId] = priorPtyId
+    }
+  }
 
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
@@ -117,10 +131,14 @@ export function captureTerminalShutdownLayout({
     fresh: {},
     currentLeafIds
   })
-  const mergedPtyIds = mergeCapturedLeafState({
-    prior: existingLayout?.ptyIdsByLeafId,
-    fresh: Object.fromEntries(ptyEntries),
-    currentLeafIds
+  const ptyIdsByLeafId = { ...preservedPtyIdsByLeafId, ...livePtyIdsByLeafId }
+  // Why: shutdown snapshots can otherwise persist focus on a mounted pane whose
+  // transport was already cleared during PTY exit/reconnect cleanup. Unlike
+  // scrollback, PTY bindings only preserve prior ids during a live attach gap.
+  layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+    root: layout.root,
+    activeLeafId: layout.activeLeafId,
+    ptyIdsByLeafId
   })
   if (Object.keys(mergedBuffers).length > 0) {
     layout.buffersByLeafId = mergedBuffers
@@ -128,8 +146,8 @@ export function captureTerminalShutdownLayout({
   if (Object.keys(mergedScrollbackRefs).length > 0) {
     layout.scrollbackRefsByLeafId = mergedScrollbackRefs
   }
-  if (Object.keys(mergedPtyIds).length > 0) {
-    layout.ptyIdsByLeafId = mergedPtyIds
+  if (Object.keys(ptyIdsByLeafId).length > 0) {
+    layout.ptyIdsByLeafId = ptyIdsByLeafId
   }
 
   const titleEntries = panes

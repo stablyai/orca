@@ -1,6 +1,7 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 
 type Props = {
@@ -87,7 +88,8 @@ function renderInline(text: string): ReactNode[] {
 
 function MobileMarkdownInner({ content, fallback = '' }: Props) {
   const text = content?.trim() ?? ''
-  const blocks = useMemo(() => parseMobileMarkdown(text), [text])
+  const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
+  const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }

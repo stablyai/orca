@@ -135,6 +135,7 @@ describe('GitHub PR local runtime routing', () => {
       if (args[0] === 'pr' && args[1] === 'view') {
         return {
           stdout: JSON.stringify({
+            id: 'PR_kwDO123',
             number: 7,
             title: 'PR',
             state: 'OPEN',

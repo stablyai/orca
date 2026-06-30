@@ -1,4 +1,5 @@
 import {
+  app,
   clipboard,
   ipcMain,
   nativeImage,
@@ -32,12 +33,25 @@ import {
   cleanupExpiredRemoteClipboardFiles,
   writeRemoteFileToClipboard
 } from './clipboard-remote-file-copy'
+import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
 type ClipboardWriteFileRequest = {
   filePath: string
   connectionId?: string
+}
+
+async function saveClipboardImageBufferForTarget(
+  buffer: Buffer,
+  args?: SaveClipboardImageAsTempFileArgs
+): Promise<string> {
+  assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
+  const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
+  if (runtimeEnvironmentId && !args?.connectionId) {
+    return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
+  }
+  return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
@@ -91,7 +105,7 @@ export function registerClipboardHandlers(store: Store): void {
         return null
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
-      return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
+      return saveClipboardImageBufferForTarget(image.toPNG(), args)
     }
   )
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer

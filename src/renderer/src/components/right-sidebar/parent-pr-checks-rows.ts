@@ -204,12 +204,17 @@ function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
       check.conclusion === 'failure' ||
       check.conclusion === 'timed_out' ||
       check.conclusion === 'cancelled' ||
+      check.conclusion === 'action_required' ||
       check.conclusion === 'pending' ||
       check.conclusion === null ||
       check.status === 'queued' ||
       check.status === 'in_progress'
   )
-  return interesting.slice(0, 2).map((check) => check.name)
+  const ordered = [
+    ...interesting.filter((check) => check.conclusion === 'action_required'),
+    ...interesting.filter((check) => check.conclusion !== 'action_required')
+  ]
+  return ordered.slice(0, 2).map((check) => check.name)
 }
 
 function getGitHubChecksEntry(
@@ -223,7 +228,8 @@ function getGitHubChecksEntry(
     prChecksCacheSuffix(review.number, prRepo, review.headSha),
     args.settings,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
   const withoutHead = getGitHubRepoCacheKey(
     args.repo.path,
@@ -231,7 +237,8 @@ function getGitHubChecksEntry(
     prChecksCacheSuffix(review.number, prRepo),
     args.settings,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
   return args.checksCache[withHead] ?? args.checksCache[withoutHead]
 }
@@ -246,7 +253,8 @@ function getHostedReviewKey(
     args.settings,
     args.repo.id,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
 }
 
@@ -257,7 +265,8 @@ function getPRKey(args: BuildParentPrChecksRowsArgs & { repo: Repo }, branch: st
     branch,
     args.settings,
     args.repo.connectionId,
-    args.repo.executionHostId
+    args.repo.executionHostId,
+    true
   )
 }
 

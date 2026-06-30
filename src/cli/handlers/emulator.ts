@@ -1,6 +1,14 @@
 import type { CommandHandler } from '../dispatch'
+import { formatLogcat } from '../emulator-logcat-format'
+import { parseEmulatorPermissionRequest } from '../emulator-permissions-args'
 import { printResult } from '../format'
-import { getOptionalStringFlag, getRequiredFiniteNumber, getRequiredStringFlag } from '../flags'
+import { resolveRepoPathArgument } from '../repo-path-arguments'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredFiniteNumber,
+  getRequiredStringFlag
+} from '../flags'
 import { getEmulatorCommandTarget } from '../selectors'
 import { RuntimeClientError } from '../runtime-client'
 
@@ -24,6 +32,26 @@ type EmulatorGesturePoint = {
   type: 'begin' | 'move' | 'end'
   x: number
   y: number
+}
+
+type EmulatorDeviceRow = {
+  backend?: 'ios' | 'android'
+  id?: string
+  name?: string
+  state?: string
+}
+
+function formatEmulatorDevices(value: unknown): string {
+  const devices = Array.isArray(value) ? (value as EmulatorDeviceRow[]) : []
+  if (devices.length === 0) {
+    return 'No emulator devices found.'
+  }
+  return devices
+    .map((device) => {
+      const platform = device.backend === 'android' ? 'Android' : 'iOS'
+      return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
+    })
+    .join('\n')
 }
 
 function assertNormalizedCoordinate(value: number, name: string): void {
@@ -90,6 +118,11 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
     const res = await client.call('emulator.list', { worktree: target.worktree })
     printResult(res, json, (v) => JSON.stringify(v, null, 2))
+  },
+  'emulator devices': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const res = await client.call('emulator.listDevices', { worktree: target.worktree })
+    printResult(res, json, formatEmulatorDevices)
   },
   'emulator attach': async ({ flags, client, cwd, json }) => {
     const target = await getEmulatorCommandTarget(flags, cwd, client)
@@ -197,5 +230,68 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
       const result = r as EmulatorShutdownResult
       return `Shut down ${result.deviceUdid || target.device || 'emulator'}`
     })
+  },
+  'emulator install': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const apkPath = resolveRepoPathArgument(
+      getRequiredStringFlag(flags, 'path'),
+      cwd,
+      client.isRemote,
+      'Remote emulator install'
+    )
+    const res = await client.call('emulator.install', {
+      path: apkPath,
+      reinstall: flags.get('reinstall') === true,
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `Installed ${apkPath}`)
+  },
+  'emulator launch': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const packageName = getRequiredStringFlag(flags, 'package')
+    const res = await client.call('emulator.launch', {
+      package: packageName,
+      activity: getOptionalStringFlag(flags, 'activity'),
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () => `Launched ${packageName}`)
+  },
+  'emulator permissions': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const request = parseEmulatorPermissionRequest(flags)
+    const res = await client.call('emulator.permissions', {
+      op: request.op,
+      package: request.packageName,
+      permission: request.permission,
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, () =>
+      request.op === 'reset' ? 'Reset runtime permissions' : `${request.op} ${request.packageName}`
+    )
+  },
+  'emulator ax': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const res = await client.call('emulator.ax', {
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, (r) => JSON.stringify(r, null, 2))
+  },
+  'emulator logcat': async ({ flags, client, cwd, json }) => {
+    const target = await getEmulatorCommandTarget(flags, cwd, client)
+    const res = await client.call('emulator.logcat', {
+      lines: getOptionalPositiveIntegerFlag(flags, 'lines'),
+      device: target.device,
+      emulator: target.emulator,
+      worktree: target.worktree
+    })
+    printResult(res, json, formatLogcat)
   }
 }

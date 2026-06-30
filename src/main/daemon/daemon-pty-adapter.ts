@@ -362,6 +362,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.initialCwds.get(id) ?? ''
   }
 
+  // Why: resize() is a fire-and-forget notify, so a resize can be dropped
+  // daemon-side (session not yet alive, exited, invalid dims, cold-restore
+  // snapshot-col coercion) without the renderer knowing. This reads the size
+  // the daemon actually applied so the renderer can detect that drift on resume
+  // and re-assert. Null (RPC failure / unknown session) means "cannot confirm",
+  // which the renderer treats as a cue to re-forward once.
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    try {
+      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
+        'getSize',
+        { sessionId: id }
+      )
+      return result.size ?? null
+    } catch {
+      return null
+    }
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.client.request('clearScrollback', { sessionId: id })
     this.markSessionDirty(id)

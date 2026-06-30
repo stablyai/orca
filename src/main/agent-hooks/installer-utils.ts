@@ -147,23 +147,63 @@ function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-// Why: Windows splits a raw hook command on whitespace, so a user profile path
-// like `C:\Users\Jane Doe` makes the agent try to execute `C:\Users\Jane` and
-// fail with exit code 1. Keep the script path inside an encoded PowerShell
-// command so cmd.exe never gets a chance to expand legal path characters like
-// `%` or `^` before the .cmd is invoked. #6078.
+function getWindowsPowerShellExecutablePath(): string {
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+  // Why: PATH lookup lets a worktree-local powershell.exe hijack hook payloads.
+  // Forward slashes keep this absolute path shell-friendly for cmd.exe and Git Bash.
+  return `${systemRoot.replaceAll('\\', '/')}/System32/WindowsPowerShell/v1.0/powershell.exe`
+}
+
 export function wrapWindowsHookCommand(scriptPath: string): string {
+  // Why: most Windows agents run hooks through Git Bash or another shell that
+  // mangles a raw backslash path. Codex has its own cmd.exe-safe fast path; the
+  // shared wrapper keeps the encoded launcher for every other agent.
   const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
   const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
-  return `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+  return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
-  // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
-  // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read
-  // and POST or CJK prompts arrive in Orca as literal question marks. Timeout
-  // caps best-effort hook posts if the local listener stalls.
-  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; launchToken=$env:ORCA_AGENT_LAUNCH_TOKEN; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
+  // Why: Codex runs these hooks inline on every turn. PowerShell startup alone
+  // makes trusted Windows hooks visibly slow, so mirror the POSIX curl path.
+  // Qualify curl so a repo-local curl.exe cannot hijack hook payloads.
+  return [
+    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    '  --connect-timeout 0.5 --max-time 1.5 ^',
+    '  -H "Content-Type: application/x-www-form-urlencoded" ^',
+    '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',
+    '  --data-urlencode "paneKey=%ORCA_PANE_KEY%" ^',
+    '  --data-urlencode "tabId=%ORCA_TAB_ID%" ^',
+    '  --data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%" ^',
+    '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
+    '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
+    '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    '  --data-urlencode "payload@-" >nul 2>nul'
+  ].join('\r\n')
+}
+
+// Why: status hooks fire up to 6× per turn; spawning PowerShell per post adds
+// ~300ms of interpreter startup each, which Codex 0.140's synchronous "Running
+// <event> hook" rows make visible. curl.exe (Windows 10 1803+) posts the same
+// form fields as the POSIX hook and reads the raw payload from stdin via
+// `--data-urlencode payload@-`, so UTF-8 (e.g. CJK prompts) survives byte-for-
+// byte without the code-page translation that previously forced PowerShell.
+export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): string {
+  return [
+    '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
+    `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}"`,
+    '--connect-timeout 0.5 --max-time 1.5',
+    '-H "Content-Type: application/x-www-form-urlencoded"',
+    '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',
+    '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
+    '--data-urlencode "tabId=%ORCA_TAB_ID%"',
+    '--data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%"',
+    '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
+    '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
+    '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
+    '--data-urlencode "payload@-"',
+    '>nul 2>&1'
+  ].join(' ')
 }
 
 export function removeManagedCommands(

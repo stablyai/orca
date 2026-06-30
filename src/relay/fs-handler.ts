@@ -17,6 +17,7 @@ import {
 } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
+import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
@@ -298,7 +299,18 @@ export class FsHandler {
       )
     })
     if (isGitRepo) {
-      return listFilesWithGit(rootPath, excludePathPrefixes)
+      // Why: a git monorepo parent fills nested-repo subtrees via the readdir
+      // walk, which can exhaust the same cap/deadline. Translate only those
+      // budget errors into install-rg guidance; genuine git failures keep
+      // their own messages.
+      try {
+        return await listFilesWithGit(rootPath, excludePathPrefixes)
+      } catch (err) {
+        if (isQuickOpenReaddirBudgetError(err)) {
+          throw new Error(await buildInstallRgMessage(err))
+        }
+        throw err
+      }
     }
     // Why: the readdir walker rejects on cap/deadline instead of returning a
     // partial list (design doc: silent truncation is worse than an explicit

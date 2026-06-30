@@ -150,6 +150,15 @@ export function canJumpToAiVaultSessionWorktree(
   )
 }
 
+// Why: a session in the worktree you're already viewing has nowhere to jump,
+// so we hide the affordance rather than offering a self-jump (the "Current
+// worktree" badge already signals where it lives).
+export function isAiVaultSessionInCurrentWorktree(
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+): boolean {
+  return worktreeInfo?.status === 'current'
+}
+
 export function aiVaultWorktreeJumpTooltip(
   worktreeInfo: AiVaultSessionWorktreeInfo | null
 ): string {

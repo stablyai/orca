@@ -210,4 +210,22 @@ describe('ChecksList expanded check details', () => {
     expect(stickyBar?.textContent).toContain('View full details')
     expect(stickyBar?.textContent).not.toContain('View full logs')
   })
+
+  it('uses resolved details when showing the action-required fallback hint', async () => {
+    renderChecksList({
+      onLoadCheckDetails: async () => ({
+        ...checkDetails,
+        conclusion: 'action_required',
+        title: null,
+        jobs: []
+      })
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('manual action on GitHub')
+    expect(container.textContent).not.toContain('No inline details are available')
+  })
 })

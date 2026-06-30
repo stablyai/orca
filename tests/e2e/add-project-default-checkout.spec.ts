@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'fs'
 import { mkdtemp } from 'fs/promises'
 import os from 'os'
 import path from 'path'
@@ -12,7 +12,12 @@ async function createCloneFixture(): Promise<{
   sourcePath: string
   destinationParent: string
 }> {
-  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-clone-'))
+  // Why: realpathSync so the path the test asserts on matches the store's
+  // repo.path on macOS, where os.tmpdir() (/var/...) symlinks to /private/var/...
+  // and the app canonicalizes repo.path via `git rev-parse --show-toplevel`.
+  const rootPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-clone-'))
+  )
   tempRoots.push(rootPath)
 
   const sourcePath = path.join(rootPath, 'default-checkout-source')
@@ -38,7 +43,12 @@ async function createLinkedWorktreeFixture(): Promise<{
   mainPath: string
   siblingPath: string
 }> {
-  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
+  // Why: realpathSync so mainPath matches the store's repo.path on macOS, where
+  // os.tmpdir() (/var/...) symlinks to /private/var/... and the app canonicalizes
+  // repo.path via `git rev-parse --show-toplevel` on add.
+  const rootPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
+  )
   tempRoots.push(rootPath)
 
   const mainPath = path.join(rootPath, 'linked-source')

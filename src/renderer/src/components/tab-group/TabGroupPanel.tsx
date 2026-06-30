@@ -1,7 +1,7 @@
 import { Suspense, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Columns2, Ellipsis, X } from 'lucide-react'
+import { Ellipsis, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DropdownMenu,
@@ -179,13 +179,8 @@ export default function TabGroupPanel({
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  // Why: every split pane owns its own split affordance (VS Code-style). The
-  // button always splits right; up/down and left stay on tab drag.
-  const splitPaneButtonClassName = `${menuButtonClassName} ${
-    isFocused ? 'opacity-100' : 'opacity-70 hover:opacity-100'
-  }`
   // Why: focused-only — quick commands and Close split pane stay with the
-  // active pane so unfocused strips stay compact aside from the split control.
+  // active pane so unfocused strips stay compact.
   const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
@@ -251,38 +246,10 @@ export default function TabGroupPanel({
             />
           ) : null}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          {/* Why: pane-scoped layout actions belong with each split pane instead
-              of the global tab-bar `+`, which should keep opening tabs exactly
-              as before. Split-right is one click (VS Code-style); close-group
-              stays on the focused pane only. */}
           <div
             className="ml-1.5 flex shrink-0 items-center gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={translate(
-                    'auto.components.tab.group.TabGroupPanel.addSplitPane',
-                    'Add split pane'
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    commands.createSplitGroup('right')
-                  }}
-                  className={splitPaneButtonClassName}
-                >
-                  <Columns2 className="size-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {translate(
-                  'auto.components.tab.group.TabGroupPanel.addSplitPane',
-                  'Add split pane'
-                )}
-              </TooltipContent>
-            </Tooltip>
             <div className={focusedActionChromeClassName}>
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />

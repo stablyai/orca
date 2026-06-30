@@ -1,76 +1,98 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+
+import '@testing-library/jest-dom/vitest'
+
+import React from 'react'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MobileNetworkInterfaceSection } from './MobileNetworkInterfaceSection'
+import type { MobileNetworkInterface } from './mobile-network-interface-selection'
+import { TooltipProvider } from '../ui/tooltip'
 
-type ReactElementLike = {
-  type: unknown
-  props: Record<string, unknown>
-}
+// Why: Radix Select/Dialog portal their content to <body> and don't always
+// unmount synchronously when the test container tears down, so content can
+// leak between tests. Forcing cleanup restores the empty DOM before each render.
+afterEach(() => {
+  cleanup()
+})
 
-function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
-  if (node == null || typeof node === 'string' || typeof node === 'number') {
-    return
-  }
-  if (Array.isArray(node)) {
-    node.forEach((entry) => visit(entry, cb))
-    return
-  }
-  const element = node as ReactElementLike
-  cb(element)
-  if (element.props?.children) {
-    visit(element.props.children, cb)
-  }
-}
+const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
+const TAILNET: MobileNetworkInterface = { name: 'tailscale0', address: '100.64.1.20' }
 
-function collectText(node: unknown): string {
-  if (node == null || typeof node === 'boolean') {
-    return ''
+function renderSection(
+  overrides: Partial<React.ComponentProps<typeof MobileNetworkInterfaceSection>> = {}
+) {
+  const onSelectedAddressChange = vi.fn()
+  const onRefreshNetworkInterfaces = vi.fn()
+  const onGenerateQr = vi.fn()
+  const props: React.ComponentProps<typeof MobileNetworkInterfaceSection> = {
+    networkInterfaces: [LAN, TAILNET],
+    selectedAddress: TAILNET.address,
+    onSelectedAddressChange,
+    refreshingNetworkInterfaces: false,
+    onRefreshNetworkInterfaces,
+    loading: false,
+    hasQrCode: false,
+    onGenerateQr,
+    ...overrides
   }
-  if (typeof node === 'string' || typeof node === 'number') {
-    return String(node)
-  }
-  if (Array.isArray(node)) {
-    return node.map(collectText).join('')
-  }
-  const element = node as ReactElementLike
-  return collectText(element.props?.children)
-}
-
-function findByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
-  let found: ReactElementLike | null = null
-  visit(node, (entry) => {
-    if (entry.props['aria-label'] === ariaLabel) {
-      found = entry
-    }
-  })
-  if (!found) {
-    throw new Error(`element not found: ${ariaLabel}`)
-  }
-  return found
+  const user = userEvent.setup()
+  const utils = render(
+    <TooltipProvider>
+      <MobileNetworkInterfaceSection {...props} />
+    </TooltipProvider>
+  )
+  return { ...utils, user, onSelectedAddressChange, onRefreshNetworkInterfaces, onGenerateQr }
 }
 
 describe('MobileNetworkInterfaceSection', () => {
-  it('shows refreshed tailnet interfaces and wires the refresh action', () => {
-    const onRefreshNetworkInterfaces = vi.fn()
-    const tree = MobileNetworkInterfaceSection({
-      networkInterfaces: [
-        { name: 'en0', address: '192.168.1.24' },
-        { name: 'tailscale0', address: '100.64.1.20' }
-      ],
-      selectedAddress: '192.168.1.24',
-      onSelectedAddressChange: vi.fn(),
-      refreshingNetworkInterfaces: false,
-      onRefreshNetworkInterfaces,
-      loading: false,
-      hasQrCode: false,
-      onGenerateQr: vi.fn()
-    })
+  it('renders the trigger with the currently selected address', () => {
+    renderSection()
+    expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
+  })
 
-    expect(collectText(tree)).toContain('100.64.1.20 (tailscale0)')
+  it('renders the (custom) label on the trigger when the selection is a manual address', () => {
+    renderSection({ selectedAddress: 'my-mac.tail-abcd.ts.net' })
+    expect(screen.getByRole('combobox')).toHaveTextContent('my-mac.tail-abcd.ts.net (custom)')
+  })
 
-    const refreshButton = findByAriaLabel(tree, 'Refresh network interfaces')
-    const onClick = refreshButton.props.onClick as () => void
-    onClick()
+  it('commits an OS interface picked from the list', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: '192.168.1.24 (en0)' }))
+    expect(onSelectedAddressChange).toHaveBeenCalledWith('192.168.1.24')
+  })
 
-    expect(onRefreshNetworkInterfaces).toHaveBeenCalledTimes(1)
+  it('opens the custom-address dialog from the Add custom address row', async () => {
+    const { user } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: /add custom address/i }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByLabelText('Address')).toBeInTheDocument()
+  })
+
+  it('confirms a valid custom address typed into the dialog', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: /add custom address/i }))
+    await user.type(screen.getByLabelText('Address'), 'my-mac.tail-abcd.ts.net')
+    await user.click(screen.getByRole('button', { name: /use address/i }))
+    expect(onSelectedAddressChange).toHaveBeenCalledWith('my-mac.tail-abcd.ts.net')
+  })
+
+  it('disables the confirm button while the typed address is invalid', async () => {
+    const { user, onSelectedAddressChange } = renderSection()
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: /add custom address/i }))
+    await user.type(screen.getByLabelText('Address'), 'not an address')
+    expect(screen.getByRole('button', { name: /use address/i })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /use address/i }))
+    expect(onSelectedAddressChange).not.toHaveBeenCalled()
+  })
+
+  it('shows No interfaces found when the list is empty', () => {
+    renderSection({ networkInterfaces: [], selectedAddress: undefined })
+    expect(screen.getByRole('combobox')).toHaveTextContent(/no interfaces found/i)
   })
 })

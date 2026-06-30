@@ -22,12 +22,8 @@ import {
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
 import { drainPreHandlerPtyData, drainPreHandlerPtyExit } from './pty-pre-handler-buffer'
-import type {
-  PtyTransport,
-  IpcPtyTransportOptions,
-  PtyConnectResult,
-  PtyDataMeta
-} from './pty-dispatcher'
+import type { PtyDataMeta } from './pty-dispatcher'
+import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import { createBellDetector } from './bell-detector'
 import {
   createAgentStatusOscProcessor,
@@ -44,14 +40,14 @@ export {
   subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
+export type { EagerPtyHandle } from './pty-dispatcher'
 export type {
-  EagerPtyHandle,
+  IpcPtyTransportOptions,
   LocalPtySessionMetadata,
-  PtyTransport,
   PtyBufferSnapshot,
   PtyConnectResult,
-  IpcPtyTransportOptions
-} from './pty-dispatcher'
+  PtyTransport
+} from './pty-transport-types'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -506,6 +502,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     // channel. Route it through onReplayData so the renderer engages the
     // replay guard and xterm auto-replies do not leak into the shell.
     ptyReplayHandlers.set(id, (data) => {
+      if (ptyId !== id) {
+        return
+      }
       if (storedCallbacks.onReplayData) {
         storedCallbacks.onReplayData(data)
       } else {
@@ -513,6 +512,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     })
     const dataHandler = (data: string, meta?: PtyDataMeta): void => {
+      if (ptyId !== id) {
+        return
+      }
       outputProcessor.processData(
         data,
         storedCallbacks,
@@ -642,6 +644,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function registerPtyExitHandler(id: string): void {
     const exitHandler = (code: number): void => {
+      if (ptyId !== null && ptyId !== id) {
+        // Why: a preserved sleep/reconnect session can report its old exit
+        // after this transport has already rebound to a replacement PTY.
+        unregisterPtyHandlers(id)
+        return
+      }
       clearAccumulatedState()
       connected = false
       ptyId = null

@@ -119,11 +119,89 @@ describe('regular terminal focus ownership', () => {
     const synced = resyncTerminalFocusForWindowFocus({
       container: pane,
       activeElement: document.activeElement,
-      syncFocused
+      syncFocused,
+      isMac: false
     })
 
     expect(synced).toBe(true)
     expect(syncFocused).toHaveBeenCalledWith(true)
+  })
+
+  it('rebuilds the IME context on macOS focus via blur then next-frame refocus', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const syncFocused = vi.fn()
+    const blur = vi.spyOn(helper, 'blur')
+    const focus = vi.spyOn(helper, 'focus')
+    helper.focus()
+    focus.mockClear()
+    const scheduled: (() => void)[] = []
+
+    const synced = resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      isMac: true,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+
+    expect(synced).toBe(true)
+    expect(syncFocused).toHaveBeenCalledWith(true)
+    expect(blur).toHaveBeenCalledOnce()
+    expect(focus).not.toHaveBeenCalled()
+
+    for (const run of scheduled) {
+      run()
+    }
+    expect(focus).toHaveBeenCalledOnce()
+  })
+
+  it('does not steal focus back if another element grabbed it during the frame', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    const syncFocused = vi.fn()
+    const focus = vi.spyOn(helper, 'focus')
+    helper.focus()
+    focus.mockClear()
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      isMac: true,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+
+    outside.focus()
+    for (const run of scheduled) {
+      run()
+    }
+    expect(focus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(outside)
+  })
+
+  it('skips the blur/refocus cycle on non-macOS platforms', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const syncFocused = vi.fn()
+    const blur = vi.spyOn(helper, 'blur')
+    helper.focus()
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      isMac: false,
+      scheduleRefocus: () => {
+        throw new Error('should not schedule refocus on non-macOS')
+      }
+    })
+
+    expect(blur).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(helper)
   })
 
   it('resolves an owned active xterm helper textarea', () => {

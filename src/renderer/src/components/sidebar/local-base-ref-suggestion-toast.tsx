@@ -87,8 +87,8 @@ function SuggestionToastBody({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-popover-foreground/80">
+    <div className="flex w-full flex-col gap-3">
+      <p className="text-sm leading-5 text-popover-foreground/80">
         {translate(
           'auto.components.sidebar.local.base.ref.suggestion.toast.f15fd80989',
           'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in',
@@ -109,7 +109,6 @@ function SuggestionToastBody({
             { value0: keepLocalMainUpToDateTitle }
           )}
         </button>
-        .
       </p>
       <div className="flex justify-end">
         {/* No explicit Dismiss: the toast is persistent and sonner's close (X)

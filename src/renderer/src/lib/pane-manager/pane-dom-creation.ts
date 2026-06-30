@@ -19,6 +19,10 @@ function getTerminalUrlOpenHint(): string {
     : 'click to open or Shift+click for system browser'
 }
 
+function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
+  return `${uri} (${openLinkHint})`
+}
+
 export function createPaneDOM(
   id: number,
   leafId: TerminalLeafId,
@@ -49,6 +53,9 @@ export function createPaneDOM(
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
   const openLinkHint = getTerminalUrlOpenHint()
+  // Why: async tooltip formatting can resolve after hover changes, so stale
+  // results must not overwrite the tooltip for the currently hovered link.
+  let linkTooltipHoverToken = 0
 
   const linkTooltip = document.createElement('div')
   linkTooltip.className = 'pane-link-tooltip'
@@ -69,11 +76,27 @@ export function createPaneDOM(
     {
       hover: (_event, uri) => {
         if (uri) {
-          linkTooltip.textContent = `${uri} (${openLinkHint})`
+          linkTooltipHoverToken += 1
+          const hoverToken = linkTooltipHoverToken
+          linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
           linkTooltip.style.display = ''
+          const formatted = options.formatLinkTooltip?.(uri, openLinkHint)
+          if (formatted && typeof formatted === 'object' && 'then' in formatted) {
+            void formatted.then(
+              (nextText) => {
+                if (hoverToken === linkTooltipHoverToken && nextText) {
+                  linkTooltip.textContent = nextText
+                }
+              },
+              () => undefined
+            )
+          } else if (formatted) {
+            linkTooltip.textContent = formatted
+          }
         }
       },
       leave: () => {
+        linkTooltipHoverToken += 1
         linkTooltip.style.display = 'none'
       }
     }

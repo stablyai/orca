@@ -226,6 +226,17 @@ export class Session {
     return this.emulator.getSnapshot()
   }
 
+  // Why: the size the PTY actually applied (emulator dims, which Session.resize
+  // advances atomically with the subprocess), so the renderer can detect a
+  // resize that was dropped here (exited/disposed/invalid) instead of trusting
+  // its own last-requested size. Null on a disposed session.
+  getAppliedSize(): { cols: number; rows: number } | null {
+    if (this._disposed) {
+      return null
+    }
+    return this.emulator.getAppliedSize()
+  }
+
   /** Drains the records accumulated since the last take. Runs synchronously —
    *  when includeSnapshot is set, the serialize happens in the same turn so no
    *  PTY data can land between the drain and the snapshot (which would later

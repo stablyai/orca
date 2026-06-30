@@ -21,6 +21,8 @@ import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const OPENCLAUDE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
 type FakeFs = {
   files: Map<string, string>
@@ -163,7 +165,7 @@ describe('ClaudeHookService.install', () => {
       expect(
         legacyCommands.some((command: string) =>
           process.platform === 'win32'
-            ? command.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+            ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
             : command.includes(CLAUDE_SCRIPT_FILE_NAME)
         )
       ).toBe(true)
@@ -174,7 +176,7 @@ describe('ClaudeHookService.install', () => {
       ).toBe(false)
       expect(legacy.hooks.StopFailure[0].hooks[0].command).toMatch(
         process.platform === 'win32'
-          ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+          ? WINDOWS_POWERSHELL_LAUNCHER
           : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
       )
       expect(
@@ -205,10 +207,34 @@ describe('ClaudeHookService.install', () => {
 
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
           const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(
-            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          )
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
+
+  // Why: the launcher must stay PowerShell-encoded for Git Bash, but the hook
+  // POST inside the .cmd should use curl.exe so each hook spawns one
+  // interpreter, not two. Posting via a second PowerShell was the slow path.
+  it.skipIf(process.platform !== 'win32')(
+    'posts from the managed .cmd via curl.exe, not a second PowerShell',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-curl-'))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+        const script = readFileSync(
+          join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+          'utf-8'
+        )
+        expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+        expect(script).toContain('--data-urlencode "payload@-"')
+        expect(script).toContain('/hook/claude')
+        expect(script).not.toMatch(/Invoke-WebRequest/i)
       } finally {
         vi.unstubAllEnvs()
         rmSync(tmpHome, { recursive: true, force: true })
@@ -326,9 +352,7 @@ describe('OpenClaudeHookService-compatible install', () => {
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
         if (process.platform === 'win32') {
-          expect(command).toMatch(
-            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          )
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         } else {
           expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
           expect(command).toMatch(/^if \[ -x /)

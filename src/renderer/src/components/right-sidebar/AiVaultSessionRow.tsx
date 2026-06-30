@@ -17,6 +17,7 @@ import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
 import {
+  AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
@@ -42,6 +43,7 @@ export function VaultSessionRow({
   resumeDisabled,
   onToggleDetails,
   onJumpToOriginalPane,
+  showJumpToWorktree,
   onJumpToWorktree,
   onResume,
   resumeLabel,
@@ -62,6 +64,7 @@ export function VaultSessionRow({
   resumeDisabled: boolean
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
   resumeLabel: string
@@ -82,8 +85,13 @@ export function VaultSessionRow({
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
   const startResumeDrag = useCallback(
-    (event: React.DragEvent<HTMLButtonElement>): void => {
+    (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-ai-vault-session-actions]')) {
+        event.preventDefault()
+        return
+      }
       if (resumeDisabled) {
         event.preventDefault()
         return
@@ -106,11 +114,19 @@ export function VaultSessionRow({
       <ContextMenuTrigger asChild className="block w-full min-w-0">
         <div
           className={cn(
-            'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+            'group/session-row flex w-full min-w-0 flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+            resumeDisabled ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing',
             !detailsExpanded && 'min-h-[98px]'
           )}
+          // Why: users naturally drag the session row itself; matching that
+          // gesture avoids hidden affordances and text-selection false starts.
+          draggable={!resumeDisabled}
           onClick={() => {
             onToggleDetails()
+          }}
+          onDragStart={startResumeDrag}
+          onDragEnd={() => {
+            window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
@@ -132,6 +148,7 @@ export function VaultSessionRow({
               worktreeInfo={worktreeInfo}
               onToggleDetails={onToggleDetails}
               onJumpToOriginalPane={onJumpToOriginalPane}
+              showJumpToWorktree={showJumpToWorktree}
               onJumpToWorktree={onJumpToWorktree}
               onResume={onResume}
               onCopyResume={onCopyResume}
@@ -140,7 +157,6 @@ export function VaultSessionRow({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
-              onStartResumeDrag={startResumeDrag}
             />
           </div>
           {detailsExpanded && worktreeInfo ? (
@@ -191,6 +207,7 @@ export function VaultSessionRow({
           resumeDisabled={resumeDisabled}
           resumeLabel={resumeLabel}
           onJumpToOriginalPane={onJumpToOriginalPane}
+          showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={onJumpToWorktree}
           onResume={onResume}
           onCopyResume={onCopyResume}
@@ -211,6 +228,7 @@ export function SessionActionMenuItems({
   resumeLabel,
   onResume,
   onJumpToOriginalPane,
+  showJumpToWorktree,
   onJumpToWorktree,
   onCopyResume,
   onCopyId,
@@ -224,6 +242,7 @@ export function SessionActionMenuItems({
   resumeLabel: string
   onResume: () => void
   onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onCopyResume: () => void
   onCopyId: () => void
@@ -246,13 +265,15 @@ export function SessionActionMenuItems({
           )}
         </Item>
       ) : null}
-      <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
-        <PanelTopOpen className="size-3.5" />
-        {translate(
-          'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
-          'Jump to Worktree'
-        )}
-      </Item>
+      {showJumpToWorktree ? (
+        <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
+          <PanelTopOpen className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
+            'Jump to Worktree'
+          )}
+        </Item>
+      ) : null}
       <Item disabled={resumeDisabled} onSelect={onResume}>
         <Play className="size-3.5" />
         {resumeLabel}

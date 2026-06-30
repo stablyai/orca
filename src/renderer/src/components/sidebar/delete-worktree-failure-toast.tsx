@@ -1,0 +1,88 @@
+import { toast } from 'sonner'
+import { Button } from '../ui/button'
+import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import { translate } from '@/i18n/i18n'
+
+type DeleteWorktreeFailureToastOptions = {
+  error: string
+  canForceDelete: boolean
+  onViewChanges: () => void
+  onForceDelete: () => void
+  worktreeId: string
+  worktreeName: string
+}
+
+function deleteWorktreeFailureToastId(worktreeId: string): string {
+  return `delete-worktree-failure:${worktreeId}`
+}
+
+function DeleteWorktreeFailureToastBody({
+  description,
+  canForceDelete,
+  onViewChanges,
+  onForceDelete,
+  toastId
+}: {
+  description?: string
+  canForceDelete: boolean
+  onViewChanges: () => void
+  onForceDelete: () => void
+  toastId: string
+}): React.JSX.Element {
+  const viewChanges = (): void => {
+    toast.dismiss(toastId)
+    onViewChanges()
+  }
+  const forceDelete = (): void => {
+    toast.dismiss(toastId)
+    onForceDelete()
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      {description ? (
+        <p className="text-sm leading-5 text-popover-foreground/80">{description}</p>
+      ) : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={viewChanges}>
+          {translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View')}
+        </Button>
+        {canForceDelete ? (
+          <Button type="button" variant="destructive" size="sm" onClick={forceDelete}>
+            {translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function showDeleteWorktreeFailureToast({
+  error,
+  canForceDelete,
+  onViewChanges,
+  onForceDelete,
+  worktreeId,
+  worktreeName
+}: DeleteWorktreeFailureToastOptions): void {
+  const toastCopy = getDeleteWorktreeToastCopy(worktreeName, canForceDelete, error)
+  const showToast = toastCopy.isDestructive ? toast.error : toast.info
+  const id = deleteWorktreeFailureToastId(worktreeId)
+
+  // Why: Sonner's native action/cancel slots share the title row and squeeze
+  // multi-line delete errors. Custom content gives the copy its own line.
+  showToast(toastCopy.title, {
+    id,
+    description: (
+      <DeleteWorktreeFailureToastBody
+        description={toastCopy.description}
+        canForceDelete={canForceDelete}
+        onViewChanges={onViewChanges}
+        onForceDelete={onForceDelete}
+        toastId={id}
+      />
+    ),
+    duration: canForceDelete ? Infinity : 10000,
+    dismissible: true
+  })
+}
