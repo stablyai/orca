@@ -202,6 +202,13 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #f59e0b;
+  --grid-color: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
+  --scryer-node-bg: var(--background);
+  --scryer-ext-bg: color-mix(in srgb, var(--muted) 76%, var(--background));
+  --scryer-ref-bg: color-mix(in srgb, var(--muted) 64%, var(--background));
+  --scryer-person-fill: color-mix(in srgb, var(--muted-foreground) 14%, var(--background));
+  --scryer-outline-stroke: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
+  --scryer-select-stroke: #10b981;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -285,6 +292,13 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #fbbf24;
+  --grid-color: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
+  --scryer-node-bg: color-mix(in srgb, var(--background) 88%, var(--muted));
+  --scryer-ext-bg: color-mix(in srgb, var(--muted) 46%, var(--background));
+  --scryer-ref-bg: color-mix(in srgb, var(--muted) 36%, var(--background));
+  --scryer-person-fill: color-mix(in srgb, var(--muted-foreground) 18%, var(--background));
+  --scryer-outline-stroke: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
+  --scryer-select-stroke: #34d399;
 }
 
 .linear-priority-bars {
@@ -3349,4 +3363,53 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+@keyframes scryer-dash-flow {
+  to {
+    stroke-dashoffset: -9;
+  }
+}
+
+.scryer-dash-flow {
+  animation: scryer-dash-flow 0.5s linear infinite;
+}
+
+@keyframes scryer-changed-glow {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.scryer-changed-glow {
+  animation: scryer-changed-glow 1.2s ease-in-out infinite;
+}
+
+.architecture-node-shape {
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.08));
+}
+
+.react-flow__node .react-flow__handle {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle,
+.react-flow__node.connection-nearby .react-flow__handle {
+  opacity: 1;
+}
+
+.edge-handle-dot {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.react-flow__edge:hover .edge-handle-dot,
+.react-flow__edge.selected .edge-handle-dot {
+  opacity: 1;
 }

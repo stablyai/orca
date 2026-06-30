@@ -19,6 +19,8 @@ function createMockRuntime(): CoordinatorRuntime & {
   sentMessages: { handle: string; text: string }[]
   terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
   createdTerminals: string[]
+  listTerminalCalls: (string | undefined)[]
+  createTerminalCalls: { worktree?: string; title?: string }[]
   createdTerminalOptions: { title?: string }[]
   probeDriftCalls: string[]
   probeDriftResult: DriftResult
@@ -34,6 +36,8 @@ function createMockRuntime(): CoordinatorRuntime & {
       writable: boolean
     }[],
     createdTerminals: [] as string[],
+    listTerminalCalls: [] as (string | undefined)[],
+    createTerminalCalls: [] as { worktree?: string; title?: string }[],
     createdTerminalOptions: [] as { title?: string }[],
     probeDriftCalls: [] as string[],
     probeDriftResult: null as DriftResult,
@@ -45,15 +49,26 @@ function createMockRuntime(): CoordinatorRuntime & {
       mock.sentMessages.push({ handle, text: action.text ?? '' })
       return { handle, accepted: true, bytesWritten: 0 }
     },
-    async listTerminals() {
-      return { terminals: mock.terminals }
+    async listTerminals(worktreeSelector?: string) {
+      mock.listTerminalCalls.push(worktreeSelector)
+      return {
+        terminals: worktreeSelector
+          ? mock.terminals.filter(
+              (terminal) =>
+                terminal.worktreeId === worktreeSelector ||
+                `id:${terminal.worktreeId}` === worktreeSelector
+            )
+          : mock.terminals
+      }
     },
-    async createTerminal(_worktree?: string, opts?: { title?: string }) {
+    async createTerminal(worktree?: string, opts?: { title?: string }) {
       const handle = `term_worker_${mock.createdTerminals.length}`
       mock.createdTerminals.push(handle)
+      mock.createTerminalCalls.push({ worktree, title: opts?.title })
       mock.createdTerminalOptions.push(opts ?? {})
-      mock.terminals.push({ handle, worktreeId: 'wt1', connected: true, writable: true })
-      return { handle, worktreeId: 'wt1', title: opts?.title ?? '' }
+      const worktreeId = worktree?.startsWith('id:') ? worktree.slice(3) : 'wt1'
+      mock.terminals.push({ handle, worktreeId, connected: true, writable: true })
+      return { handle, worktreeId, title: opts?.title ?? '' }
     },
     async waitForTerminal(handle: string) {
       return { handle, condition: 'exit' }
@@ -440,6 +455,48 @@ describe('Coordinator', () => {
 
     const result = await runPromise
     expect(result.status).toBe('completed')
+  })
+
+  it('dispatches each task using its execution context worktree selector', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [
+      { handle: 'term_a', worktreeId: 'wt_a', connected: true, writable: true },
+      { handle: 'term_b', worktreeId: 'wt_b', connected: true, writable: true }
+    ]
+
+    const taskA = db.createTask({
+      spec: 'task A',
+      executionContext: { worktreeSelector: 'id:wt_a', title: 'Task A' }
+    })
+    const taskB = db.createTask({
+      spec: 'task B',
+      executionContext: { worktreeSelector: 'id:wt_b', title: 'Task B' }
+    })
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50,
+      maxConcurrent: 2
+    })
+
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 120)
+    })
+
+    insertWorkerDone(db, { taskId: taskA.id, from: 'term_a' })
+    insertWorkerDone(db, { taskId: taskB.id, from: 'term_b' })
+
+    const result = await runPromise
+    expect(result.status).toBe('completed')
+    expect(runtime.listTerminalCalls).toContain('id:wt_a')
+    expect(runtime.listTerminalCalls).toContain('id:wt_b')
+    expect(runtime.probeDriftCalls).toEqual(expect.arrayContaining(['id:wt_a', 'id:wt_b']))
+    expect(runtime.sentMessages.map((message) => message.handle)).toEqual(
+      expect.arrayContaining(['term_a', 'term_b'])
+    )
   })
 
   it('logs a stale warning for dispatched rows past the threshold and does not auto-fail', async () => {

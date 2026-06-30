@@ -240,6 +240,19 @@ describe('Electron runtime package contract', () => {
     expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.mjs')
   })
 
+  it('keeps PR checks wired to the Node native module rebuild script', () => {
+    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
+    const parsedWorkflow = parse(prWorkflow)
+    const rebuildStep = parsedWorkflow.jobs.verify.steps.find(
+      (step) => step.name === 'Rebuild native modules for Node'
+    )
+
+    expect(rebuildStep.run).toBe('pnpm run rebuild:native:node')
+    expect(packageJson.scripts['rebuild:native:node']).toBe(
+      'node config/scripts/rebuild-node-native-deps.mjs'
+    )
+  })
+
   it('smokes the packaged CLI from outside the checkout in PR checks', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)

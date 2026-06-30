@@ -99,13 +99,20 @@ const InboxParams = z.object({
   terminal: OptionalString
 })
 
+const TaskExecutionContextParams = z.object({
+  worktreeSelector: OptionalString,
+  preferredTerminalHandle: OptionalString,
+  title: OptionalString
+})
+
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
   taskTitle: OptionalString,
   displayName: OptionalString,
   deps: OptionalString,
   parent: OptionalString,
-  callerTerminalHandle: OptionalString
+  callerTerminalHandle: OptionalString,
+  executionContext: TaskExecutionContextParams.optional()
 })
 
 const TaskListParams = z.object({
@@ -380,7 +387,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         displayName: params.displayName,
         deps,
         parentId: params.parent,
-        createdByTerminalHandle: params.callerTerminalHandle
+        createdByTerminalHandle: params.callerTerminalHandle,
+        executionContext: params.executionContext
       })
       return { task }
     }

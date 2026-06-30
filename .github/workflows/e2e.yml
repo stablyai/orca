@@ -130,6 +130,9 @@ jobs:
         with:
           run_install: false
 
+      - name: Verify Node.js version
+        run: pnpm run preflight:node
+
       # Why: this job runs the same pnpm install path as pr.yml's verify
       # job, so it needs the same pinned node-gyp override to avoid pnpm's
       # broken bundled gyp_main.py on Linux. Gate on runner.os matches
@@ -144,6 +147,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Rebuild native modules for Node
+        run: pnpm run rebuild:native:node
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8

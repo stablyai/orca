@@ -1796,6 +1796,116 @@ const api = {
     }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
   },
 
+  architecture: {
+    readArchitectureView: (args: {
+      projectPath: string
+      layer?: 'plan' | 'committed'
+      focusNodeId?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:readArchitectureView', args),
+    readModel: (args: { projectPath: string; modelName?: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:readModel', args),
+    readModelDocument: (args: {
+      projectPath: string
+      modelName?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:readModelDocument', args),
+    writeModel: (args: {
+      projectPath: string
+      model: unknown
+      modelName?: string | null
+    }): Promise<void> => ipcRenderer.invoke('architecture:writeModel', args),
+    writeModelDocument: (args: {
+      projectPath: string
+      model: unknown
+      modelName?: string | null
+      baseRevision?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:writeModelDocument', args),
+    patchNodeData: (args: {
+      projectPath: string
+      nodeId: string
+      patch: unknown
+      modelName?: string | null
+      baseRevision?: string | null
+      baseNodeData?: unknown
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:patchNodeData', args),
+    listModels: (args: { projectPath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:listModels', args),
+    createModel: (args: {
+      projectPath: string
+      modelName?: string | null
+      templateId?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:createModel', args),
+    saveModelAs: (args: {
+      projectPath: string
+      fromModelName?: string | null
+      toModelName: string
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:saveModelAs', args),
+    deleteModel: (args: { projectPath: string; modelName: string }): Promise<void> =>
+      ipcRenderer.invoke('architecture:deleteModel', args),
+    migrateGlobalModel: (args: { projectPath: string; modelName: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:migrateGlobalModel', args),
+    writeMcpConfig: (args: { projectPath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:writeMcpConfig', args),
+    listTemplates: (): Promise<unknown> => ipcRenderer.invoke('architecture:listTemplates'),
+    prepareInitialModelPrompt: (args: {
+      projectPath: string
+      modelName: string
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:prepareInitialModelPrompt', args),
+    prepareNodeFillPrompt: (args: {
+      projectPath: string
+      modelName?: string | null
+      nodeId: string
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:prepareNodeFillPrompt', args),
+    prepareAdvisorPrompt: (args: {
+      projectPath: string
+      modelName?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:prepareAdvisorPrompt', args),
+    checkDrift: (args: { projectPath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:checkDrift', args),
+    markSynced: (args: { projectPath: string }): Promise<void> =>
+      ipcRenderer.invoke('architecture:markSynced', args),
+    isSyncing: (args: { projectPath: string }): Promise<boolean> =>
+      ipcRenderer.invoke('architecture:isSyncing', args),
+    hasPreSyncSnapshot: (args: { projectPath: string }): Promise<boolean> =>
+      ipcRenderer.invoke('architecture:hasPreSyncSnapshot', args),
+    beginSync: (args: { projectPath: string; modelName?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:beginSync', args),
+    cancelSync: (args: { projectPath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:cancelSync', args),
+    finishSync: (args: { projectPath: string }): Promise<void> =>
+      ipcRenderer.invoke('architecture:finishSync', args),
+    beginEditSession: (args: { projectPath: string; agentRunId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:beginEditSession', args),
+    completeEditSession: (args: {
+      projectPath: string
+      agentRunId: string
+      foldPolicy?: 'never' | 'when_gate_passes'
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:completeEditSession', args),
+    cancelEditSession: (args: { projectPath: string; agentRunId: string }): Promise<void> =>
+      ipcRenderer.invoke('architecture:cancelEditSession', args),
+    readEditSession: (args: { projectPath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:readEditSession', args),
+    callTool: (args: { projectPath: string; call: unknown }): Promise<unknown> =>
+      ipcRenderer.invoke('architecture:callTool', args),
+    executeScryerOperation: (args: {
+      projectPath: string
+      operationId: string
+      input?: unknown
+      requestId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('architecture:executeScryerOperation', args),
+    watchModel: (args: { projectPath: string }): Promise<void> =>
+      ipcRenderer.invoke('architecture:watchModel', args),
+    onModelChanged: (
+      callback: (event: { projectPath: string; fileName: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { projectPath: string; fileName: string }
+      ): void => callback(payload)
+      ipcRenderer.on('architecture:modelChanged', listener)
+      return () => ipcRenderer.removeListener('architecture:modelChanged', listener)
+    }
+  },
+
   preflight: {
     check: (args?: {
       force?: boolean

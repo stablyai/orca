@@ -186,7 +186,11 @@ export default defineConfig({
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
-          )
+          ),
+          // Why: the CLI is compiled by tsc and imports the Native Scryer
+          // Engine through out/main. Keep the engine entry available after
+          // electron-vite cleans and rebuilds out/main in dev/package builds.
+          'scryer/engine/index': resolve('src/main/scryer/engine/index.ts')
         },
         plugins: [createStartupDiagnosticsBootstrapPlugin()]
       }

@@ -112,6 +112,12 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.npmRebuild).toBe(true)
   })
 
+  it('unpacks CLI runtime imports from out/main', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['out/main/agent-hooks/**', 'out/main/scryer/engine/**'])
+    )
+  })
+
   it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-deps-'))
     try {

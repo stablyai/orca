@@ -5,6 +5,7 @@ import { AUTOMATION_HANDLERS } from './handlers/automations'
 import { PROJECT_HANDLERS } from './handlers/project'
 import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
+import { PIPELINE_HANDLERS } from './handlers/pipelines'
 import { FILE_HANDLERS } from './handlers/file'
 import { TERMINAL_HANDLERS } from './handlers/terminal'
 import { BROWSER_NAV_HANDLERS } from './handlers/browser-nav'
@@ -22,6 +23,7 @@ import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
 import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
 import { EMULATOR_HANDLERS } from './handlers/emulator'
 import { LINEAR_HANDLERS } from './handlers/linear'
+import { SCRYER_HANDLERS } from './handlers/scryer'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -41,6 +43,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     PROJECT_HANDLERS,
     REPO_HANDLERS,
     WORKTREE_HANDLERS,
+    PIPELINE_HANDLERS,
     FILE_HANDLERS,
     TERMINAL_HANDLERS,
     BROWSER_NAV_HANDLERS,
@@ -57,7 +60,8 @@ function buildHandlers(): Map<string, CommandHandler> {
     AGENT_HOOK_HANDLERS,
     DIAGNOSTICS_HANDLERS,
     ENVIRONMENT_HANDLERS,
-    LINEAR_HANDLERS
+    LINEAR_HANDLERS,
+    SCRYER_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {

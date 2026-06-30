@@ -5,6 +5,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
+  | 'new-architecture'
   | 'new-browser'
   | 'new-markdown'
   | 'new-simulator'
@@ -22,6 +23,7 @@ export type TabCreateMenuOption = {
 
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
+  hasNewArchitecture?: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
@@ -110,6 +112,24 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
         translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
+    })
+  }
+
+  if (context.hasNewArchitecture) {
+    const label = translate('auto.components.tab.bar.TabBar.newArchitecture', 'New Architecture')
+    options.push({
+      id: 'new-architecture',
+      kind: 'new-architecture',
+      label,
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.architecture', 'architecture'),
+        translate(
+          'auto.components.tab.bar.tab.create.menu.options.architectureDiagram',
+          'architecture diagram'
+        ),
+        translate('auto.components.tab.bar.tab.create.menu.options.c4', 'c4'),
+        translate('auto.components.tab.bar.tab.create.menu.options.scryer', 'scryer')
       ]
     })
   }

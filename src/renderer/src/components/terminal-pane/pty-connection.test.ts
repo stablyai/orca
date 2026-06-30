@@ -9875,6 +9875,36 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
 
+  // Why: xterm protocol replies can be emitted during normal live output
+  // parsing too, not only during replay. Those ESC-prefixed bytes are not
+  // human interaction and must not dismiss a focused-tab BEL before the user
+  // clicks or types.
+  it('does not clear unread for xterm protocol replies outside replay', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
+
+    expect(deps.clearTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?1;2c')
+  })
+
   // Why: xterm auto-replies during replay must not masquerade as user
   // interaction. If they did, a pane that BELed during its scrollback
   // replay would instantly self-dismiss without the user ever seeing it.

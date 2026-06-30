@@ -31,6 +31,7 @@ import type { RuntimeStatusSlice } from './slices/runtime-status'
 import type { PullRequestGenerationSlice } from './slices/pull-request-generation'
 import type { CommitMessageGenerationSlice } from './slices/commit-message-generation'
 import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
+import type { ArchitectureSlice } from './slices/architecture'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -64,4 +65,5 @@ export type AppState = RepoSlice &
   RuntimeStatusSlice &
   PullRequestGenerationSlice &
   CommitMessageGenerationSlice &
-  PinnedTabCloseConfirmSlice
+  PinnedTabCloseConfirmSlice &
+  ArchitectureSlice

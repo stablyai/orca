@@ -96,7 +96,9 @@ export function AutomationRunHistory({
                 <div className="min-w-0">
                   <div>{formatAutomationDateTime(run.scheduledFor)}</div>
                   <div className="mt-1 truncate text-xs text-muted-foreground">
-                    {workspaceLabel.detailLabel}
+                    {run.pipelineRunId
+                      ? `Pipeline ${run.pipelineRunId}`
+                      : workspaceLabel.detailLabel}
                   </div>
                 </div>
                 <div

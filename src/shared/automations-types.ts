@@ -75,10 +75,22 @@ export type AutomationPrecheckResult = {
   completedAt: number
 }
 
+export type AutomationTarget =
+  | {
+      type: 'prompt'
+      prompt: string
+    }
+  | {
+      type: 'pipeline'
+      pipelineTemplateId: string
+      pipelineInput: unknown
+    }
+
 export type Automation = {
   id: string
   name: string
   prompt: string
+  target?: AutomationTarget
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
   /** Why: runContext carries the logical project + host setup identity for
@@ -129,6 +141,7 @@ export type AutomationRun = {
   sessionKind: 'terminal'
   chatSessionId: string | null
   terminalSessionId: string | null
+  pipelineRunId?: string | null
   /** Why: a terminal tab can later point at a different pane/PTY. Automation
    *  run reopening must target the pane that actually executed the run. */
   terminalPaneKey: string | null
@@ -145,6 +158,7 @@ export type AutomationRun = {
 export type AutomationCreateInput = {
   name: string
   prompt: string
+  target?: AutomationTarget
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
   runContext?: WorkspaceRunContext | null
@@ -169,6 +183,7 @@ export type AutomationUpdateInput = Partial<
     Automation,
     | 'name'
     | 'prompt'
+    | 'target'
     | 'precheck'
     | 'agentId'
     | 'runContext'
@@ -199,6 +214,7 @@ export type AutomationDispatchResult = {
   workspaceId?: string | null
   workspaceDisplayName?: string | null
   terminalSessionId?: string | null
+  pipelineRunId?: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null

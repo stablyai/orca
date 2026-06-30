@@ -107,7 +107,6 @@ globalThis.window = { api: mockApi }
 import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
-
 describe('TabsSlice', () => {
   let store: ReturnType<typeof createTestStore>
 
@@ -1983,6 +1982,70 @@ describe('TabsSlice', () => {
         first: { type: 'leaf', groupId: terminalGroupId },
         second: { type: 'leaf', groupId: simulatorGroupId }
       })
+    })
+
+    it('keeps architecture tabs whose workspace still exists', () => {
+      const groupId = 'g-architecture'
+      store.setState({
+        architectureTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'architecture-1',
+              worktreeId: WT,
+              modelRef: 'model',
+              projectPath: '/repo',
+              title: 'Architecture',
+              createdAt: 1
+            }
+          ]
+        },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'unified-architecture-1',
+              entityId: 'architecture-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'architecture',
+              label: 'Architecture',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'unified-architecture-1',
+              tabOrder: ['unified-architecture-1']
+            }
+          ]
+        },
+        layoutByWorktree: {
+          [WT]: { type: 'leaf', groupId }
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe('unified-architecture-1')
+      expect(state.unifiedTabsByWorktree[WT]).toEqual([
+        expect.objectContaining({ id: 'unified-architecture-1', contentType: 'architecture' })
+      ])
+      expect(state.groupsByWorktree[WT][0]).toEqual(
+        expect.objectContaining({
+          activeTabId: 'unified-architecture-1',
+          tabOrder: ['unified-architecture-1']
+        })
+      )
     })
 
     it('collapses empty split groups when reconciliation drops a stale tab', () => {

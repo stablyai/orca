@@ -31,6 +31,7 @@ type FloatingWorkspaceTabSwitchStore = Pick<
   AppState,
   | 'activeGroupIdByWorktree'
   | 'activateTab'
+  | 'architectureTabsByWorktree'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
   | 'openFiles'
@@ -86,7 +87,12 @@ function getFloatingWorkspaceVisibleTabs(
         .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
         .map((file) => file.id)
     ),
-    new Set((store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id))
+    new Set(
+      (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    ),
+    new Set(
+      (store.architectureTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    )
   )
 }
 

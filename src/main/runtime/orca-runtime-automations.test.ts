@@ -49,6 +49,7 @@ const existingAutomation = {
   id: 'auto-1',
   name: 'Daily review',
   prompt: 'Review changes',
+  target: { type: 'prompt', prompt: 'Review changes' },
   precheck: null,
   agentId: 'codex',
   projectId: 'repo-1',
@@ -100,6 +101,49 @@ describe('OrcaRuntimeService automation methods', () => {
       })
     )
     expect(automation.id).toBe('auto-1')
+  })
+
+  it('passes Pipeline automation targets through to the shared store', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+    const pipelineInput = {
+      templateId: 'parallel-planner-with-review',
+      repoId: 'repo-1',
+      sourceBranch: 'main',
+      targetBranch: 'pipeline-output',
+      taskSource: { type: 'manual' as const, tasks: [] },
+      maxConcurrent: 1,
+      plannerAgentId: 'codex' as const,
+      implementerAgentId: 'codex' as const,
+      mergerAgentId: 'codex' as const,
+      executionTargetType: 'local' as const
+    }
+
+    await runtime.createAutomation({
+      name: 'Daily Pipeline',
+      prompt: '',
+      target: {
+        type: 'pipeline',
+        pipelineTemplateId: 'parallel-planner-with-review',
+        pipelineInput
+      },
+      agentId: 'codex',
+      repo: 'repo-1',
+      workspaceMode: 'new_per_run',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    })
+
+    expect(store.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: '',
+        target: {
+          type: 'pipeline',
+          pipelineTemplateId: 'parallel-planner-with-review',
+          pipelineInput
+        }
+      })
+    )
   })
 
   it('updates and deletes existing automations through the shared store', async () => {

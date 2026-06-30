@@ -538,6 +538,6 @@ describe('getUpstreamStatus', () => {
         remoteName: 'fork',
         branchName: 'feature/fix'
       })
-    ).rejects.toThrow('fatal: not a git repository')
+    ).rejects.toThrow('Not a git repository.')
   })
 })

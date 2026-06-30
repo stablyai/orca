@@ -23,6 +23,8 @@ function createSnapshot(
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory: [],
+    architectureTabsByWorktree: {},
+    activeArchitectureTabIdByWorktree: {},
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},

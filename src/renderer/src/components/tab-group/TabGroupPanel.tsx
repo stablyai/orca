@@ -21,6 +21,7 @@ import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const ArchitecturePanel = lazy(() => import('../architecture/ArchitecturePanel'))
 
 export default function TabGroupPanel({
   groupId,
@@ -49,7 +50,19 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  const {
+    activeTab,
+    architectureItems,
+    browserItems,
+    commands,
+    editorItems,
+    tabBarOrder,
+    terminalTabs
+  } = model
+  const activeArchitectureWorkspace =
+    activeTab?.contentType === 'architecture'
+      ? (architectureItems.find((item) => item.id === activeTab.entityId) ?? null)
+      : null
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -113,6 +126,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewArchitectureTab={commands.newArchitectureTab}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
@@ -121,23 +135,30 @@ export default function TabGroupPanel({
       onTogglePaneExpand={commands.toggleTerminalPaneExpand}
       editorFiles={editorItems}
       browserTabs={browserItems}
+      architectureTabs={architectureItems}
       activeFileId={
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'browser' ||
+        activeTab?.contentType === 'architecture' ||
         activeTab?.contentType === 'simulator'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeArchitectureTabId={
+        activeTab?.contentType === 'architecture' ? activeTab.entityId : null
+      }
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
           : activeTab?.contentType === 'browser'
             ? 'browser'
-            : activeTab?.contentType === 'simulator'
-              ? 'simulator'
-              : 'editor'
+            : activeTab?.contentType === 'architecture'
+              ? 'architecture'
+              : activeTab?.contentType === 'simulator'
+                ? 'simulator'
+                : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -145,6 +166,16 @@ export default function TabGroupPanel({
       onCloseBrowserTab={(browserTabId) => {
         const item = model.groupTabs.find(
           (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
+        )
+        if (item) {
+          commands.closeItem(item.id)
+        }
+      }}
+      onActivateArchitectureTab={commands.activateArchitecture}
+      onCloseArchitectureTab={(architectureTabId) => {
+        const item = model.groupTabs.find(
+          (candidate) =>
+            candidate.entityId === architectureTabId && candidate.contentType === 'architecture'
         )
         if (item) {
           commands.closeItem(item.id)
@@ -339,6 +370,7 @@ export default function TabGroupPanel({
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'architecture' &&
           activeTab.contentType !== 'simulator' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content inside a plain relative pane body
@@ -357,6 +389,23 @@ export default function TabGroupPanel({
               </Suspense>
             </div>
           )}
+
+        {activeArchitectureWorkspace ? (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.tab.group.TabGroupPanel.loadingArchitecture',
+                    'Loading architecture...'
+                  )}
+                </div>
+              }
+            >
+              <ArchitecturePanel workspace={activeArchitectureWorkspace} />
+            </Suspense>
+          </div>
+        ) : null}
 
         {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
             overlay layers and absolutely positioned over this body element

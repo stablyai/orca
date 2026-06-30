@@ -29,9 +29,11 @@
     "../src/main/kimi/hook-service.ts",
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",
+    "../src/main/scryer/engine/**/*.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/win32-utils.ts"
   ],
+  "exclude": ["../src/main/scryer/engine/**/*.test.ts"],
   "compilerOptions": {
     "composite": true,
     "module": "CommonJS",

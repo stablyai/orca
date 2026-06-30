@@ -18,6 +18,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     markdownFrontmatterVisible: true,
     activeFileIdByWorktree: true,
     activeTabTypeByWorktree: true,
+    architectureTabsByWorktree: true,
+    activeArchitectureTabIdByWorktree: true,
     browserTabsByWorktree: true,
     browserPagesByWorkspace: true,
     activeBrowserTabIdByWorktree: true,

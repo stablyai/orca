@@ -4,6 +4,7 @@
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
@@ -11,12 +12,14 @@ import {
   FilePlus,
   FileText,
   Globe,
+  Network,
   Plus,
   Smartphone,
   TerminalSquare
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
+  ArchitectureWorkspace,
   BrowserTab as BrowserTabState,
   Tab,
   TerminalTab,
@@ -31,6 +34,7 @@ import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab, { getBrowserTabLabel } from './BrowserTab'
+import ArchitectureTab, { getArchitectureTabLabel } from './ArchitectureTab'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
@@ -117,6 +121,7 @@ type TabBarProps = {
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onNewArchitectureTab?: () => void
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
@@ -129,14 +134,18 @@ type TabBarProps = {
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: (OpenFile & { tabId?: string })[]
   browserTabs?: (BrowserTabState & { tabId?: string })[]
+  architectureTabs?: (ArchitectureWorkspace & { tabId?: string })[]
   activeFileId?: string | null
   activeBrowserTabId?: string | null
+  activeArchitectureTabId?: string | null
   activeSimulatorTabId?: string | null
   activeTabType?: WorkspaceVisibleTabType
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onActivateBrowserTab?: (tabId: string) => void
   onCloseBrowserTab?: (tabId: string) => void
+  onActivateArchitectureTab?: (tabId: string) => void
+  onCloseArchitectureTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
   onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
@@ -176,6 +185,13 @@ type TabItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'architecture'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: ArchitectureWorkspace & { tabId?: string }
+    }
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -186,6 +202,9 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   }
   if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'architecture') {
+    return getArchitectureTabLabel(item.data)
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -222,7 +241,11 @@ function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<stri
       continue
     }
     lookup.set(tab.id, tab)
-    if (tab.contentType === 'terminal' || tab.contentType === 'browser') {
+    if (
+      tab.contentType === 'terminal' ||
+      tab.contentType === 'browser' ||
+      tab.contentType === 'architecture'
+    ) {
       lookup.set(tab.entityId, tab)
     }
   }
@@ -242,6 +265,7 @@ function TabBarInner({
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
+  onNewArchitectureTab,
   onNewSimulatorTab,
   onOpenEntry,
   terminalOnly = false,
@@ -254,14 +278,18 @@ function TabBarInner({
   onTogglePaneExpand,
   editorFiles,
   browserTabs,
+  architectureTabs,
   activeFileId,
   activeBrowserTabId,
+  activeArchitectureTabId,
   activeSimulatorTabId,
   activeTabType,
   onActivateFile,
   onCloseFile,
   onActivateBrowserTab,
   onCloseBrowserTab,
+  onActivateArchitectureTab,
+  onCloseArchitectureTab,
   onDuplicateBrowserTab,
   onCloseAllFiles,
   onMakePreviewFilePermanent,
@@ -292,6 +320,7 @@ function TabBarInner({
   const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
+  const dropUnifiedTab = useAppStore((s) => s.dropUnifiedTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
@@ -464,6 +493,7 @@ function TabBarInner({
   // catches the moment focus leaves the renderer (including into a webview).
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
+  const suppressNewTabMenuOpenRef = useRef(false)
   const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
@@ -575,6 +605,7 @@ function TabBarInner({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly,
+        hasNewArchitecture: !terminalOnly && Boolean(onNewArchitectureTab),
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
@@ -583,6 +614,7 @@ function TabBarInner({
     [
       mobileEmulatorEnabled,
       onNewFileTab,
+      onNewArchitectureTab,
       onNewSimulatorTab,
       onOpenFileTab,
       terminalOnly,
@@ -590,7 +622,22 @@ function TabBarInner({
       workspaceHasSimulatorTab
     ]
   )
+  const closeNewTabMenu = (): void => {
+    suppressNewTabMenuOpenRef.current = true
+    flushSync(() => setNewTabMenuOpen(false))
+    requestAnimationFrame(() => {
+      setNewTabMenuOpen(false)
+      suppressNewTabMenuOpenRef.current = false
+    })
+  }
+  const handleNewTabMenuOpenChange = (open: boolean): void => {
+    if (open && suppressNewTabMenuOpenRef.current) {
+      return
+    }
+    setNewTabMenuOpen(open)
+  }
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
+    closeNewTabMenu()
     switch (option.kind) {
       case 'new-terminal':
         queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -611,6 +658,9 @@ function TabBarInner({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-architecture':
+        onNewArchitectureTab?.()
         break
       case 'new-markdown':
         onNewFileTab?.()
@@ -734,6 +784,19 @@ function TabBarInner({
       <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
+  const newArchitectureMenuItem =
+    !terminalOnly && onNewArchitectureTab ? (
+      <DropdownMenuItem
+        onSelect={() => {
+          closeNewTabMenu()
+          onNewArchitectureTab()
+        }}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Network className="size-4 text-muted-foreground" />
+        {translate('auto.components.tab.bar.TabBar.newArchitecture', 'New Architecture')}
+      </DropdownMenuItem>
+    ) : null
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -805,6 +868,7 @@ function TabBarInner({
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newArchitectureMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
@@ -812,6 +876,7 @@ function TabBarInner({
       <>
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newArchitectureMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
@@ -845,10 +910,18 @@ function TabBarInner({
     () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
     [browserTabs]
   )
+  const architectureMap = useMemo(
+    () => new Map((architectureTabs ?? []).map((tab) => [tab.id, tab])),
+    [architectureTabs]
+  )
 
   const terminalIds = useMemo(() => tabs.map((t) => t.id), [tabs])
   const editorFileIds = useMemo(() => editorFiles?.map((f) => f.tabId ?? f.id) ?? [], [editorFiles])
   const browserTabIds = useMemo(() => browserTabs?.map((tab) => tab.id) ?? [], [browserTabs])
+  const architectureTabIds = useMemo(
+    () => architectureTabs?.map((tab) => tab.id) ?? [],
+    [architectureTabs]
+  )
   const simulatorTabIds = useMemo(
     () =>
       (unifiedTabs ?? [])
@@ -864,7 +937,8 @@ function TabBarInner({
       terminalIds,
       editorFileIds,
       browserTabIds,
-      simulatorTabIds
+      simulatorTabIds,
+      architectureTabIds
     )
     const items: TabItem[] = []
     for (const id of ids) {
@@ -904,6 +978,20 @@ function TabBarInner({
         })
         continue
       }
+      const architectureTab = architectureMap.get(id)
+      if (architectureTab) {
+        const unifiedTab =
+          unifiedTabByVisibleId.get(id) ??
+          (architectureTab.tabId ? unifiedTabByVisibleId.get(architectureTab.tabId) : undefined)
+        items.push({
+          type: 'architecture',
+          id,
+          unifiedTabId: architectureTab.tabId ?? unifiedTab?.id ?? architectureTab.id,
+          isPinned: unifiedTab?.isPinned === true,
+          data: architectureTab
+        })
+        continue
+      }
       const simUnified = unifiedTabByVisibleId.get(id)
       if (simUnified && simUnified.contentType === 'simulator') {
         items.push({
@@ -922,10 +1010,12 @@ function TabBarInner({
     terminalIds,
     editorFileIds,
     browserTabIds,
+    architectureTabIds,
     simulatorTabIds,
     terminalMap,
     editorMap,
     browserMap,
+    architectureMap,
     unifiedTabByVisibleId
   ])
 
@@ -957,6 +1047,9 @@ function TabBarInner({
       if (item.type === 'simulator') {
         return activeTabType === 'simulator' && item.id === activeSimulatorTabId
       }
+      if (item.type === 'architecture') {
+        return activeTabType === 'architecture' && item.id === activeArchitectureTabId
+      }
       return (
         (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
       )
@@ -964,6 +1057,7 @@ function TabBarInner({
     return activeItem?.id ?? null
   }, [
     activeBrowserTabId,
+    activeArchitectureTabId,
     activeFileId,
     activeSimulatorTabId,
     activeTabId,
@@ -1172,6 +1266,29 @@ function TabBarInner({
                   />
                 )
               }
+              if (item.type === 'architecture') {
+                return (
+                  <ArchitectureTab
+                    key={item.id}
+                    tab={item.data}
+                    isActive={
+                      activeTabType === 'architecture' && activeArchitectureTabId === item.id
+                    }
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    onActivate={() => onActivateArchitectureTab?.(item.id)}
+                    onClose={() => onCloseArchitectureTab?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onSplitGroup={(direction) => {
+                      dropUnifiedTab(item.unifiedTabId, {
+                        groupId: resolvedGroupId,
+                        splitDirection: direction
+                      })
+                    }}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  />
+                )
+              }
               if (item.type === 'simulator') {
                 const simLabel = item.data.label || 'Mobile Emulator'
                 const simFile: OpenFile & { tabId: string } = {
@@ -1262,7 +1379,7 @@ function TabBarInner({
       ) : null}
       <DropdownMenu
         open={newTabMenuOpen}
-        onOpenChange={setNewTabMenuOpen}
+        onOpenChange={handleNewTabMenuOpenChange}
         // Why: this menu can stay open after the Mobile Emulator "Hide" action,
         // which shows a toast with a re-enable link; modal would disable body
         // pointer events and make that toast (and other outside UI) unclickable.
@@ -1282,51 +1399,53 @@ function TabBarInner({
             <Plus className="w-3.5 h-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          sideOffset={6}
-          className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
-          onCloseAutoFocus={(e) => {
-            // Why: terminal-producing menu actions activate a freshly-mounted
-            // xterm. Radix's default focus restore sends focus back to the "+"
-            // trigger after close, stealing it from the new terminal.
-            e.preventDefault()
-            runPendingNewTabMenuFocusAfterClose()
-          }}
-        >
-          {!terminalOnly && onOpenEntry ? (
-            <>
-              <TabBarCreateEntry
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                menuOpen={newTabMenuOpen}
-                menuOptions={createMenuOptions}
-                agentOptions={agentLaunchOptions}
-                onLaunchAgent={launchAgentFromNewTabEntry}
-                onOpenDefaultTerminal={() => {
-                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                  onNewTerminalTab()
-                }}
-                onOpenEntry={onOpenEntry}
-                onQueryChange={setCreateMenuQuery}
-                onSelectMenuOption={handleSelectCreateMenuOption}
-                onDidOpenEntry={() => setNewTabMenuOpen(false)}
-              />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
-            </>
-          ) : null}
-          {showStaticCreateMenuItems ? standardCreateMenuItems : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
-            <>
-              <DropdownMenuSeparator />
-              <QuickLaunchAgentMenuItems
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
-              />
-            </>
-          ) : null}
-        </DropdownMenuContent>
+        {newTabMenuOpen ? (
+          <DropdownMenuContent
+            align="start"
+            sideOffset={6}
+            className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+            onCloseAutoFocus={(e) => {
+              // Why: terminal-producing menu actions activate a freshly-mounted
+              // xterm. Radix's default focus restore sends focus back to the "+"
+              // trigger after close, stealing it from the new terminal.
+              e.preventDefault()
+              runPendingNewTabMenuFocusAfterClose()
+            }}
+          >
+            {!terminalOnly && onOpenEntry ? (
+              <>
+                <TabBarCreateEntry
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  menuOpen={newTabMenuOpen}
+                  menuOptions={createMenuOptions}
+                  agentOptions={agentLaunchOptions}
+                  onLaunchAgent={launchAgentFromNewTabEntry}
+                  onOpenDefaultTerminal={() => {
+                    queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                    onNewTerminalTab()
+                  }}
+                  onOpenEntry={onOpenEntry}
+                  onQueryChange={setCreateMenuQuery}
+                  onSelectMenuOption={handleSelectCreateMenuOption}
+                  onDidOpenEntry={closeNewTabMenu}
+                />
+                {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+              </>
+            ) : null}
+            {showStaticCreateMenuItems ? standardCreateMenuItems : null}
+            {showStaticCreateMenuItems && showAgentLaunchItems ? (
+              <>
+                <DropdownMenuSeparator />
+                <QuickLaunchAgentMenuItems
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
+                />
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        ) : null}
       </DropdownMenu>
     </div>
   )

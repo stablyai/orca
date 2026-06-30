@@ -601,6 +601,48 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('coalesces architecture tab creation with unified tab chrome', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    const architectureTab = useAppStore.getState().createArchitectureTab('wt-1')
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch).toMatchObject({
+      architectureTabsByWorktree: {
+        'wt-1': [expect.objectContaining({ id: architectureTab.id })]
+      },
+      activeArchitectureTabIdByWorktree: { 'wt-1': architectureTab.id },
+      unifiedTabs: {
+        'wt-1': [
+          expect.objectContaining({
+            entityId: architectureTab.id,
+            contentType: 'architecture'
+          })
+        ]
+      },
+      tabGroups: {
+        'wt-1': [
+          expect.objectContaining({
+            activeTabId: expect.any(String)
+          })
+        ]
+      },
+      tabGroupLayouts: {
+        'wt-1': expect.objectContaining({ type: 'leaf' })
+      },
+      activeGroupIdByWorktree: {
+        'wt-1': expect.any(String)
+      }
+    })
+    cleanup()
+  })
+
   it('cleanup unsubscribes and cancels a pending timer', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

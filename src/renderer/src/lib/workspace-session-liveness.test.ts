@@ -18,6 +18,8 @@ function createSnapshot(
     markdownFrontmatterVisible: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
+    architectureTabsByWorktree: {},
+    activeArchitectureTabIdByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},

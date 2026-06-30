@@ -113,6 +113,74 @@ describe('buildWorkspaceSessionPatch', () => {
     })
   })
 
+  it('persists architecture tab changes in incremental session patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        architectureTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'arch-1',
+              worktreeId: 'wt-1',
+              modelRef: 'model',
+              projectPath: '/repo',
+              title: 'Architecture',
+              createdAt: 1
+            }
+          ]
+        },
+        activeArchitectureTabIdByWorktree: { 'wt-1': 'arch-1' },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'unified-arch-1',
+              entityId: 'arch-1',
+              groupId: 'group-arch',
+              worktreeId: 'wt-1',
+              contentType: 'architecture',
+              label: 'Architecture',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-arch',
+              worktreeId: 'wt-1',
+              activeTabId: 'unified-arch-1',
+              tabOrder: ['unified-arch-1']
+            }
+          ]
+        },
+        layoutByWorktree: {
+          'wt-1': { type: 'leaf', groupId: 'group-arch' }
+        },
+        activeGroupIdByWorktree: { 'wt-1': 'group-arch' }
+      }),
+      ['architectureTabsByWorktree', 'activeArchitectureTabIdByWorktree']
+    )
+
+    expect(patch).toMatchObject({
+      architectureTabsByWorktree: {
+        'wt-1': [expect.objectContaining({ id: 'arch-1', title: 'Architecture' })]
+      },
+      activeArchitectureTabIdByWorktree: { 'wt-1': 'arch-1' },
+      unifiedTabs: {
+        'wt-1': [expect.objectContaining({ id: 'unified-arch-1', contentType: 'architecture' })]
+      },
+      tabGroups: {
+        'wt-1': [expect.objectContaining({ id: 'group-arch', tabOrder: ['unified-arch-1'] })]
+      },
+      tabGroupLayouts: {
+        'wt-1': { type: 'leaf', groupId: 'group-arch' }
+      },
+      activeGroupIdByWorktree: { 'wt-1': 'group-arch' }
+    })
+  })
+
   it('derives editor session keys when only editor drafts change', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({

@@ -937,6 +937,24 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
     })
 
+    it('records generic execution context when creating a task', async () => {
+      setup()
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'work in task workspace',
+        executionContext: {
+          worktreeSelector: 'id:wt_task',
+          preferredTerminalHandle: 'term_existing',
+          title: 'Pipeline task'
+        }
+      })) as { task: { id: string } }
+
+      expect(db.getTaskExecutionContext(result.task.id)).toEqual({
+        worktreeSelector: 'id:wt_task',
+        preferredTerminalHandle: 'term_existing',
+        title: 'Pipeline task'
+      })
+    })
+
     it('rejects invalid deps JSON', async () => {
       setup()
       await expect(

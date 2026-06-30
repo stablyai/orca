@@ -386,39 +386,46 @@ export class Coordinator {
       return
     }
 
-    const terminals = await this.getAvailableTerminals()
-    if (terminals.length === 0 && slotsAvailable > 0) {
-      // Why: no idle terminals exist — create one for the next task.
-      // Only create one per tick to avoid spawning many terminals at once.
-      try {
-        const created = await this.runtime.createTerminal(this.opts.worktree, {
-          title: `Worker: ${readyTasks[0].spec.slice(0, 40)}`
-        })
-        terminals.push(created.handle)
-        this.opts.onLog(`Created worker terminal ${created.handle}`)
-      } catch (err) {
-        this.opts.onLog(`Failed to create terminal: ${err}`)
-        return
-      }
-    }
-
     for (const task of readyTasks) {
-      if (slotsAvailable <= 0 || terminals.length === 0) {
+      if (slotsAvailable <= 0) {
         break
       }
 
-      const targetHandle = terminals.shift()!
+      const executionContext = this.db.getTaskExecutionContext(task.id)
+      const worktreeSelector = executionContext?.worktreeSelector ?? this.opts.worktree
+      const terminals = await this.getAvailableTerminals(worktreeSelector)
+      let targetHandle = selectPreferredTerminal(
+        terminals,
+        executionContext?.preferredTerminalHandle
+      )
+      if (!targetHandle) {
+        try {
+          const created = await this.runtime.createTerminal(worktreeSelector, {
+            title: executionContext?.title ?? `Worker: ${task.spec.slice(0, 40)}`
+          })
+          targetHandle = created.handle
+          this.opts.onLog(`Created worker terminal ${created.handle}`)
+        } catch (err) {
+          this.opts.onLog(`Failed to create terminal: ${err}`)
+          return
+        }
+      }
+
       slotsAvailable--
 
       try {
-        await this.dispatchTask(task, targetHandle)
+        await this.dispatchTask(task, targetHandle, worktreeSelector)
       } catch (err) {
         this.opts.onLog(`Failed to dispatch task ${task.id}: ${err}`)
       }
     }
   }
 
-  private async dispatchTask(task: TaskRow, targetHandle: string): Promise<void> {
+  private async dispatchTask(
+    task: TaskRow,
+    targetHandle: string,
+    worktreeSelector?: string
+  ): Promise<void> {
     // Why (§3.1): pre-flight drift check BEFORE `createDispatchContext` so a
     // refusal does NOT increment failure_count. createDispatchContext carries
     // `MAX(failure_count)` forward across contexts (db.ts:301-306), so burning
@@ -434,15 +441,15 @@ export class Coordinator {
       recentSubjects: string[]
     } | null = null
 
-    if (!this.opts.worktree) {
+    if (!worktreeSelector) {
       // Why (§7.4): CoordinatorOptions.worktree is optional. When undefined,
       // probeWorktreeDrift cannot resolve a selector; log once so operators
       // can see the guard did not run for this task and proceed. v2 may
       // always resolve a worktree via the coordinator-terminal handle.
       this.opts.onLog(`stale-base guard inert for ${task.id}: coordinator has no worktree selector`)
     } else {
-      baseDrift = await this.runtime.probeWorktreeDrift(this.opts.worktree).catch((err) => {
-        this.opts.onLog(`probeWorktreeDrift failed for ${this.opts.worktree}: ${err}`)
+      baseDrift = await this.runtime.probeWorktreeDrift(worktreeSelector).catch((err) => {
+        this.opts.onLog(`probeWorktreeDrift failed for ${worktreeSelector}: ${err}`)
         return null
       })
 
@@ -514,9 +521,9 @@ export class Coordinator {
     this.state.phase = 'monitoring'
   }
 
-  private async getAvailableTerminals(): Promise<string[]> {
+  private async getAvailableTerminals(worktreeSelector?: string): Promise<string[]> {
     try {
-      const result = await this.runtime.listTerminals(this.opts.worktree)
+      const result = await this.runtime.listTerminals(worktreeSelector)
       const dispatched = this.db.listTasks({ status: 'dispatched' })
       const busyHandles = new Set<string>()
 
@@ -578,4 +585,11 @@ export class Coordinator {
       setTimeout(resolve, ms)
     })
   }
+}
+
+function selectPreferredTerminal(terminals: string[], preferred?: string): string | undefined {
+  if (!preferred) {
+    return terminals[0]
+  }
+  return terminals.includes(preferred) ? preferred : terminals[0]
 }

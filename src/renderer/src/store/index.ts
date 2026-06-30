@@ -33,6 +33,7 @@ import { createRuntimeStatusSlice } from './slices/runtime-status'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
+import { createArchitectureSlice } from './slices/architecture'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -69,7 +70,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createRuntimeStatusSlice(...a),
   ...createPullRequestGenerationSlice(...a),
   ...createCommitMessageGenerationSlice(...a),
-  ...createPinnedTabCloseConfirmSlice(...a)
+  ...createPinnedTabCloseConfirmSlice(...a),
+  ...createArchitectureSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
