@@ -122,6 +122,10 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  /* Why: dark-on-light foregrounds keep banner text readable against the soft
+     tinted backgrounds in light mode. The -soft tints (e.g. rgba(220, 38, 38, 0.15))
+     are pale, so a pale fg would disappear — we use the deep hue variants
+     (#7f1d1d / #78350f) to maintain a 4.5:1+ contrast ratio (WCAG AA). */
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -147,11 +151,11 @@
   --destructive-foreground: #fcf3f3;
   --destructive-soft: color-mix(in srgb, var(--destructive) 15%, transparent);
   --destructive-border: color-mix(in srgb, var(--destructive) 40%, transparent);
-  --destructive-fg: #fca5a5;
+  --destructive-fg: #7f1d1d;
   --color-warning: #f59e0b;
   --color-warning-soft: color-mix(in srgb, var(--color-warning) 12%, transparent);
   --color-warning-border: color-mix(in srgb, var(--color-warning) 35%, transparent);
-  --color-warning-fg: #fde68a;
+  --color-warning-fg: #78350f;
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;

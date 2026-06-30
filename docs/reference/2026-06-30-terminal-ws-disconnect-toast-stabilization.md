@@ -6,7 +6,7 @@
 
 **Architecture:** Refactor `terminalError` in `TerminalPane.tsx` from a plain string into a bounded, deduplicated event table. Add a single, explicit `onResetErrorRef` callback that `pty-connection.ts` fires on successful PTY spawn/attach so the existing ad-hoc `setTerminalError(null)` calls collapse into one source of truth. Add a `closedByRemoteRuntime` flag in the multiplex stream so `onTransportClose` distinguishes "user navigated away" from "WS pulled the rug out" — the latter stops the catch path from appending another red line on every reconnect attempt.
 
-**Tech Stack:** TypeScript, React 18, vitest + @testing-library/react (happy-dom env), xterm.js (unchanged).
+**Tech Stack:** TypeScript, React 19, vitest + @testing-library/react (happy-dom env), xterm.js (unchanged).
 
 **Non-Goals:** Retry-cap / `exhausted` state machine is **not** part of this plan — see issue tracker for follow-up. The current 15 s forever reconnect loop is left untouched.
 
@@ -41,9 +41,8 @@ Create `src/renderer/src/components/terminal-pane/TerminalPane.test.tsx`:
 /**
  * @vitest-environment happy-dom
  */
-import { act, renderHook, type ReactNode } from 'react'
+import { act, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createRef, type RefObject } from 'react'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -355,9 +354,9 @@ export function TerminalErrorBanner({
         zIndex: 50,
         padding: '10px 14px',
         borderRadius: 6,
-        background: ssh ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
-        border: ssh ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(220, 38, 38, 0.4)',
-        color: ssh ? '#fde68a' : '#fca5a5',
+        background: ssh ? 'var(--color-warning-soft)' : 'var(--destructive-soft)',
+        border: ssh ? '1px solid var(--color-warning-border)' : '1px solid var(--destructive-border)',
+        color: ssh ? 'var(--color-warning-fg)' : 'var(--destructive-fg)',
         fontSize: 12,
         fontFamily: 'monospace',
         whiteSpace: 'pre-wrap',
@@ -390,7 +389,7 @@ export function TerminalErrorBanner({
               )}{' '}
               <a
                 href="https://github.com/stablyai/orca/issues"
-                style={{ color: '#fca5a5', textDecoration: 'underline' }}
+                style={{ color: 'var(--destructive-fg)', textDecoration: 'underline' }}
               >
                 {translate(
                   'auto.components.terminal.pane.TerminalErrorBanner.a7e2fd2699',
@@ -406,10 +405,10 @@ export function TerminalErrorBanner({
             onClick={onRestartDaemon}
             style={{
               marginLeft: 12,
-              border: '1px solid rgba(252, 165, 165, 0.45)',
+              border: '1px solid var(--destructive-border)',
               borderRadius: 6,
-              background: 'rgba(127, 29, 29, 0.35)',
-              color: '#fecaca',
+              background: 'color-mix(in srgb, var(--destructive) 35%, transparent)',
+              color: 'var(--destructive-fg)',
               cursor: 'pointer',
               fontSize: 12,
               padding: '4px 8px',
@@ -428,7 +427,7 @@ export function TerminalErrorBanner({
           style={{
             background: 'none',
             border: 'none',
-            color: ssh ? '#fde68a' : '#fca5a5',
+            color: ssh ? 'var(--color-warning-fg)' : 'var(--destructive-fg)',
             cursor: 'pointer',
             fontSize: 14,
             padding: '0 0 0 8px',

@@ -430,6 +430,12 @@ export function createRemoteRuntimePtyTransport(
           if (destroyed || !connected || !handle) {
             return
           }
+          // Why: clearing connected/handle here makes a duplicate close from
+          // the multiplexer short-circuit on the early-return guard above, so
+          // onError / onDisconnect fire exactly once per WS drop.
+          connected = false
+          handle = null
+          remotePtyId = null
           // Why: when the WS-paired multiplex drops (paired runtime
           // disconnected), do NOT kick off another resubscribe round — that
           // path was spamming the red error toast on every reconnect attempt.

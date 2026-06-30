@@ -37,7 +37,9 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
   onDismiss,
   onRestartDaemon
 }: TerminalErrorBannerProps): React.JSX.Element {
-  const ssh = errors.some((e) => isSshMessage(e.message))
+  // Why: mixed SSH + non-SSH tables are expected; only flip to SSH mode if
+  // every row is SSH, so non-SSH rows still get recovery actions.
+  const ssh = errors.length > 0 && errors.every((e) => isSshMessage(e.message))
   const messages = errors.map((e) => e.message)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(messages)
   // Why: palette tokens (--destructive-soft/border/fg, --color-warning-*) live
@@ -115,7 +117,7 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
               border: '1px solid var(--destructive-border)',
               borderRadius: 6,
               background: 'color-mix(in srgb, var(--destructive) 35%, transparent)',
-              color: '#fecaca',
+              color: 'var(--destructive-fg)',
               cursor: 'pointer',
               fontSize: 12,
               padding: '4px 8px',
