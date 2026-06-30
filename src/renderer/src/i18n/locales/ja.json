@@ -1334,7 +1334,9 @@
         "8ff5ae8866": "担当者",
         "82c87eceb9": "担当者を編集",
         "1ff5d979df": "担当者なし",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "dd5d9a4f17": "{{value0}}に更新",
+        "71a3c0f9d2": "ワークスペースを開始"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",

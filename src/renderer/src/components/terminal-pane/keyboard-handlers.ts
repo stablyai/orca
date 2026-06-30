@@ -4,6 +4,7 @@
 import { useEffect } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
@@ -65,6 +66,8 @@ export type SearchState = {
   regex: boolean
 }
 
+export type SearchNavigationDirection = 'next' | 'previous'
+
 /**
  * Pure decision function for Cmd+G / Cmd+Shift+G search navigation.
  * Returns 'next', 'previous', or null (no match).
@@ -75,7 +78,7 @@ export function matchSearchNavigate(
   isMac: boolean,
   searchOpen: boolean,
   searchState: SearchState
-): 'next' | 'previous' | null {
+): SearchNavigationDirection | null {
   if (e.altKey) {
     return null
   }
@@ -96,6 +99,25 @@ export function matchSearchNavigate(
     return null
   }
   return e.shiftKey ? 'previous' : 'next'
+}
+
+export function runTerminalSearchNavigation(
+  pane: Pick<ManagedPane, 'searchAddon'>,
+  direction: SearchNavigationDirection,
+  searchState: SearchState
+): boolean {
+  const { query, caseSensitive, regex } = searchState
+  const options = { caseSensitive, regex }
+
+  // Why: Cmd/Ctrl+G hits the same xterm decoration path as the search panel,
+  // so narrow-viewport highlight failures need the same containment.
+  return direction === 'next'
+    ? safeFind((term, findOptions) => pane.searchAddon.findNext(term, findOptions), query, options)
+    : safeFind(
+        (term, findOptions) => pane.searchAddon.findPrevious(term, findOptions),
+        query,
+        options
+      )
 }
 
 export function matchFileSearchShortcut(
@@ -233,12 +255,7 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const { query, caseSensitive, regex } = searchStateRef.current
-        if (direction === 'next') {
-          pane.searchAddon.findNext(query, { caseSensitive, regex })
-        } else {
-          pane.searchAddon.findPrevious(query, { caseSensitive, regex })
-        }
+        runTerminalSearchNavigation(pane, direction, searchStateRef.current)
         pane.terminal.focus()
         return
       }

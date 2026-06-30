@@ -7920,7 +7920,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('does not force the Windows CJK repaint path without recent terminal input', async () => {
+  it('forces the native Windows CJK repaint path for foreground agent output without recent terminal input', async () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -7951,7 +7951,7 @@ describe('connectPanePty', () => {
 
       capturedDataCallback.current?.('已经安装完成，软件已更新后重启。')
 
-      expect(refresh).not.toHaveBeenCalled()
+      expect(refresh).toHaveBeenCalledWith(0, 39, true)
     } finally {
       restoreNavigator()
     }

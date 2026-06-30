@@ -5299,7 +5299,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', async () => {
+    it('keeps PowerShell 7 selected when the pwsh availability probe is cold-false', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -5316,13 +5316,14 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_WINDOWS_POWERSHELL,
+        RESOLVED_PWSH7,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
+      expect(isPwshAvailableMock).not.toHaveBeenCalled()
     })
 
-    it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable', async () => {
+    it('keeps a pwsh.exe shellOverride when the pwsh availability probe is cold-false', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -5339,10 +5340,11 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_WINDOWS_POWERSHELL,
+        RESOLVED_PWSH7,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
+      expect(isPwshAvailableMock).not.toHaveBeenCalled()
     })
 
     it('ignores the PowerShell implementation setting for cmd.exe', async () => {

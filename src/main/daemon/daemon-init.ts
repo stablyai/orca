@@ -240,7 +240,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       if (liveSessionCount !== null && liveSessionCount > 0) {
         if (health === 'pty-spawn-unhealthy') {
           console.warn(
-            `[daemon] Preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}; fresh terminals will use the local provider until the daemon is restarted`
+            `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
           )
           return createPreservedDaemonHandle(
             runtimeDir,

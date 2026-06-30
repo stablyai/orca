@@ -59,7 +59,7 @@ vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
 }))
 
-import { createPtySubprocess } from './pty-subprocess'
+import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_ATTRIBUTION_SHIM_DIR',
@@ -173,6 +173,33 @@ describe('createPtySubprocess', () => {
         cwd: '/home/user',
         name: 'xterm-256color'
       })
+    )
+  })
+
+  it('uses bundled ConPTY for native Windows daemon terminals', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: 'C:\\Windows\\System32\\cmd.exe' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ useConptyDll: true })
     )
   })
 
@@ -1374,7 +1401,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('falls back to powershell.exe when PowerShell 7 is selected but unavailable on Windows', () => {
+  it('keeps PowerShell 7 selected when the pwsh availability probe is cold-false on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1397,13 +1424,14 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      WINDOWS_POWERSHELL_ABS,
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
+    expect(isPwshAvailableMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable on Windows', () => {
+  it('keeps a pwsh.exe shellOverride when the pwsh availability probe is cold-false on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1426,10 +1454,11 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).toHaveBeenCalledWith(
-      WINDOWS_POWERSHELL_ABS,
+      PWSH7_ABS,
       POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
+    expect(isPwshAvailableMock).not.toHaveBeenCalled()
   })
 
   it('ignores the PowerShell implementation setting for cmd.exe on Windows', () => {
@@ -2189,5 +2218,65 @@ describe('createPtySubprocess', () => {
       expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
       killSpy.mockRestore()
     })
+  })
+})
+
+describe('checkPtySpawnHealth (retry on transient failure)', () => {
+  let previousUserDataPath: string | undefined
+  let userDataPath: string
+
+  beforeEach(() => {
+    spawnMock.mockReset()
+    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-health-test-'))
+    process.env.ORCA_USER_DATA_PATH = userDataPath
+  })
+
+  afterEach(() => {
+    if (previousUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    }
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  // Why: a busy machine right after an upgrade can make one probe fail; the
+  // retry must keep a genuinely healthy daemon out of degraded mode. Windows
+  // short-circuits checkPtySpawnHealth, so this is a POSIX-only behavior.
+  itOnPosixHost(
+    'retries once and resolves when the first probe fails but the second succeeds',
+    async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      spawnMock
+        .mockImplementationOnce(() => {
+          const proc = mockPtyProcess()
+          queueMicrotask(() => proc._simulateExit(1))
+          return proc
+        })
+        .mockImplementationOnce(() => {
+          const proc = mockPtyProcess()
+          queueMicrotask(() => proc._simulateExit(0))
+          return proc
+        })
+
+      await expect(checkPtySpawnHealth()).resolves.toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
+    }
+  )
+
+  itOnPosixHost('rejects after exhausting retries when every probe fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    spawnMock.mockImplementation(() => {
+      const proc = mockPtyProcess()
+      queueMicrotask(() => proc._simulateExit(1))
+      return proc
+    })
+
+    await expect(checkPtySpawnHealth()).rejects.toThrow(/exited with code 1/)
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+    warn.mockRestore()
   })
 })
