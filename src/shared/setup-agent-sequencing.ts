@@ -2,7 +2,8 @@ import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
-  type SetupRunnerCommandShell
+  type SetupRunnerCommandShell,
+  type SetupRunnerShell
 } from './setup-runner-command'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
@@ -34,11 +35,12 @@ export function createSequencedSetupAgentCommands(args: {
   runnerScriptPath: string
   startupCommand: string
   platform: SetupRunnerCommandPlatform
+  shell?: SetupRunnerShell
   nonce?: string
   waitTimeoutSeconds?: number
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
-  const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform)
+  const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
   // Why: overlapping gated launches of the same setup runner must not race on
   // a shared completion marker.
   const markerPath = `${resolution.runnerScriptPathForShell}.${nonce}.done`

@@ -804,6 +804,35 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('keeps WSL setup shell metadata when gating startup behind setup completion', () => {
+    setSetupScriptLaunchMode('split-vertical')
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      { command: 'claude' },
+      {
+        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+        shell: { family: 'posix', executable: 'wsl.exe' },
+        envVars: { ORCA_ROOT_PATH: 'C:\\repo' },
+        waitForAgentStartup: true
+      }
+    )
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: expect.stringContaining('/mnt/c/repo/.git/orca/setup-runner.sh')
+      })
+    )
+    expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
+      command: expect.stringContaining('wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh'),
+      env: { ORCA_ROOT_PATH: 'C:\\repo' },
+      direction: 'vertical'
+    })
+  })
+
   it('forwards telemetry on the queued startup so main can fire agent_started', () => {
     const store = createMockStore()
 

@@ -250,6 +250,69 @@ describe('launchWorktreeBackgroundTerminals', () => {
     )
   })
 
+  it('uses configured PowerShell setup commands for Windows runner paths', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-windows' }]
+    state.worktreesByRepo['repo-1'] = [
+      {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: 'C:\\repo\\worktree',
+        displayName: 'Worktree'
+      }
+    ]
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      setup: {
+        runnerScriptPath: 'C:\\repo\\.git\\worktrees\\wt\\orca\\setup-runner.ps1',
+        shell: { family: 'powershell', executable: 'pwsh.exe' },
+        envVars: { ORCA_WORKTREE_PATH: 'C:\\repo\\worktree' }
+      }
+    })
+
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command:
+          'pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\repo\\.git\\worktrees\\wt\\orca\\setup-runner.ps1"',
+        connectionId: 'ssh-windows'
+      })
+    )
+  })
+
+  it('uses configured WSL setup commands for Windows bash runner paths', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-windows' }]
+    state.worktreesByRepo['repo-1'] = [
+      {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: 'C:\\repo\\worktree',
+        displayName: 'Worktree'
+      }
+    ]
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      setup: {
+        runnerScriptPath: 'C:\\repo\\.git\\worktrees\\wt\\orca\\setup-runner.sh',
+        shell: { family: 'posix', executable: 'wsl.exe' },
+        envVars: { ORCA_WORKTREE_PATH: 'C:\\repo\\worktree' }
+      }
+    })
+
+    expect(mockSpawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: 'wsl.exe -- bash /mnt/c/repo/.git/worktrees/wt/orca/setup-runner.sh',
+        connectionId: 'ssh-windows'
+      })
+    )
+  })
+
   it('still attempts setup when a default tab fails to spawn', async () => {
     const spawnError = new Error('pty unavailable')
     mockSpawn

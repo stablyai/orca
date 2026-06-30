@@ -1230,10 +1230,11 @@ describe('registerWorktreeHandlers', () => {
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
     createSetupRunnerScriptMock.mockReturnValueOnce({
-      runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
+      runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
-        ORCA_ROOT_PATH: '/workspace/repo',
-        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+        ORCA_ROOT_PATH: 'C:\\workspace\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
       },
       waitForAgentStartup: true
     })
@@ -1258,8 +1259,10 @@ describe('registerWorktreeHandlers', () => {
 
     expect(result.setup).toEqual(
       expect.objectContaining({
-        runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
-        command: expect.stringContaining('bash /workspace/repo/.git/orca/setup-runner.sh')
+        runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
+        command: expect.stringContaining(
+          'wsl.exe -- bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh'
+        )
       })
     )
     expect(result.setup?.command).toContain('printf')
