@@ -45,13 +45,6 @@ export default function WorktreeCreationPanel({
   const isVmCreation = entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
   const elapsedLabel = formatElapsedTime(now - entry.startedAt)
-  const provisioningCleanupLabel =
-    entry.phase === 'provisioning-vm'
-      ? translate(
-          'auto.components.worktree.creation.WorktreeCreationPanel.vmCancelCleanupHint',
-          'Cancel stops provisioning. Cleanup runs if a runtime was created.'
-        )
-      : null
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background">
@@ -109,7 +102,6 @@ export default function WorktreeCreationPanel({
           <VmProvisioningStatus
             elapsedLabel={elapsedLabel}
             log={entry.provisioningLog ?? ''}
-            cleanupLabel={provisioningCleanupLabel}
             error={
               isError
                 ? (entry.error ??
@@ -177,7 +169,6 @@ export default function WorktreeCreationPanel({
 function VmProvisioningStatus({
   elapsedLabel,
   log,
-  cleanupLabel,
   error,
   onCancel,
   onRetry,
@@ -185,7 +176,6 @@ function VmProvisioningStatus({
 }: {
   elapsedLabel: string
   log: string
-  cleanupLabel: string | null
   // When set, the recipe failed: keep the same centered layout + log, but swap the
   // spinner header for the error and Retry/Dismiss so nothing shifts on failure.
   error?: string | null
@@ -256,9 +246,6 @@ function VmProvisioningStatus({
                   'Cancel'
                 )}
               </button>
-              {cleanupLabel ? (
-                <div className="text-[11px] text-muted-foreground/80">{cleanupLabel}</div>
-              ) : null}
             </>
           )}
         </div>
