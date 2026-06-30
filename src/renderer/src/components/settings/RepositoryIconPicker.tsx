@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { githubAvatarIcon, type RepoIcon } from '../../../../shared/repo-icon'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
@@ -38,8 +39,16 @@ export function RepositoryIconPicker({
   const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
   const selectedEmoji = repo.repoIcon?.type === 'emoji' ? repo.repoIcon.emoji : ''
   const selectedBadgeColor = normalizeRepoBadgeColor(repo.badgeColor) ?? DEFAULT_REPO_BADGE_COLOR
-  const initialTab =
-    repo.repoIcon?.type === 'emoji' ? 'emoji' : repo.repoIcon?.type === 'lucide' ? 'icon' : 'avatar'
+  const initialTab: 'avatar' | 'icon' | 'emoji' =
+    repo.repoIcon?.type === 'emoji'
+      ? 'emoji'
+      : repo.repoIcon?.type === 'lucide'
+        ? 'icon'
+        : // Why: non-git folders have no GitHub remote, so the Avatar tab's
+          // primary action can't resolve one — start on the Icon grid instead.
+          isFolderRepo(repo)
+          ? 'icon'
+          : 'avatar'
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
