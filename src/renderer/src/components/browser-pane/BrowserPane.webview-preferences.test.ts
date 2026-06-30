@@ -35,4 +35,30 @@ describe('BrowserPane webview preferences', () => {
     )
     expect(creationBlock).not.toContain('disablehtmlfullscreenwindowresize')
   })
+
+  it('uses the runtime-resolved partition before renderer profile mirror fallback', () => {
+    const source = browserPaneSource()
+    const pagePanePropsBlock = sourceBetween(
+      source,
+      'renderedBrowserPages.map((page) => (',
+      '<BrowserMobileDriverOverlay'
+    )
+
+    expect(pagePanePropsBlock).toContain('sessionPartition={browserTab.sessionPartition ?? null}')
+    expect(source).toContain(
+      'const webviewPartition = sessionPartition ?? sessionProfile?.partition ?? ORCA_BROWSER_PARTITION'
+    )
+  })
+
+  it('remounts the webview when the stored resolved partition changes', () => {
+    const source = browserPaneSource()
+    const remountBlock = sourceBetween(
+      source,
+      "if (webview && webview.getAttribute('partition') !== webviewPartition)",
+      "webview.setAttribute('partition', webviewPartition)"
+    )
+
+    expect(remountBlock).toContain('destroyPersistentWebview(browserTab.id)')
+    expect(remountBlock).toContain('webview = undefined')
+  })
 })

@@ -869,6 +869,7 @@ export default function BrowserPane({
               workspaceId={browserTab.id}
               worktreeId={browserTab.worktreeId}
               sessionProfileId={browserTab.sessionProfileId ?? null}
+              sessionPartition={browserTab.sessionPartition ?? null}
               isActive={isActive && page.id === activeBrowserPage?.id}
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
@@ -2648,6 +2649,7 @@ function BrowserPagePane({
   workspaceId,
   worktreeId,
   sessionProfileId,
+  sessionPartition,
   isActive,
   isAutomationVisible,
   isMobileDriven,
@@ -2659,6 +2661,7 @@ function BrowserPagePane({
   workspaceId: string
   worktreeId: string
   sessionProfileId: string | null
+  sessionPartition: string | null
   isActive: boolean
   isAutomationVisible: boolean
   isMobileDriven: boolean
@@ -2814,7 +2817,7 @@ function BrowserPagePane({
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
     : null
-  const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
+  const webviewPartition = sessionPartition ?? sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
