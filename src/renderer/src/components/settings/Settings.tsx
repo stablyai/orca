@@ -1525,7 +1525,7 @@ function Settings(): React.JSX.Element {
                   badge="Beta"
                   description={translate(
                     'auto.components.settings.Settings.ephemeralVmsDescription',
-                    'Give each workspace its own on-demand, disposable environment on any provider you choose — connect over an Orca server or SSH. The skill sets it up for this repo.'
+                    'Give each workspace its own disposable environment on any provider, over an Orca server or SSH.'
                   )}
                   searchEntries={getSectionSearchEntries('ephemeral-vms')}
                 >

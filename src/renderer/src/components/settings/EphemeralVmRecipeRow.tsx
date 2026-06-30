@@ -1,4 +1,4 @@
-import { Loader2, Play, Stethoscope } from 'lucide-react'
+import { Play } from 'lucide-react'
 import type React from 'react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -12,14 +12,10 @@ type Recipe = NonNullable<OrcaHooks['environmentRecipes']>[number]
 export function EphemeralVmRecipeRow({
   entry,
   recipe,
-  doctorBusy,
-  onDoctor,
   onUse
 }: {
   entry: RecipeCatalogEntry
   recipe: Recipe
-  doctorBusy: boolean
-  onDoctor: () => void
   onUse: () => void
 }): React.JSX.Element {
   const destroyLabel = recipe.destroyDisabled
@@ -42,14 +38,6 @@ export function EphemeralVmRecipeRow({
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <Button type="button" variant="ghost" size="xs" className="gap-1.5" onClick={onDoctor}>
-          {doctorBusy ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : (
-            <Stethoscope className="size-3" />
-          )}
-          {translate('auto.components.settings.EphemeralVmRecipeRow.doctor', 'Doctor')}
-        </Button>
         <Button type="button" variant="outline" size="xs" className="gap-1.5" onClick={onUse}>
           <Play className="size-3" />
           {translate(

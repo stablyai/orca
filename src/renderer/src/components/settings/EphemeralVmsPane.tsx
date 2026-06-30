@@ -2,13 +2,10 @@ import { ArrowRight, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-reac
 import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { OrcaHooks } from '../../../../shared/types'
-import type { EphemeralVmRecipeDoctorResult } from '../../../../shared/ephemeral-vm-recipes'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import { RecipeDoctorDialog } from './EphemeralVmRecipeDialogs'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
 import {
@@ -34,7 +31,6 @@ import {
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
 >[number]
-type Recipe = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 // Why: the pane leans on the skill, so the nudge is one line — the skill carries
 // provider choice, prerequisites, the snapshot build, agent auth, and validation.
@@ -46,9 +42,6 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [doctorResult, setDoctorResult] = useState<EphemeralVmRecipeDoctorResult | null>(null)
-  const [doctorOpen, setDoctorOpen] = useState(false)
-  const [doctorBusyKey, setDoctorBusyKey] = useState<string | null>(null)
   const [promptCopied, setPromptCopied] = useState(false)
   const mountedRef = useMountedRef()
 
@@ -107,36 +100,6 @@ export function EphemeralVmsPane(): React.JSX.Element {
   useEffect(() => {
     void refresh()
   }, [refresh])
-
-  const runDoctor = async (entry: RecipeCatalogEntry, recipe: Recipe): Promise<void> => {
-    const key = `${entry.repoId}:${recipe.id}`
-    setDoctorBusyKey(key)
-    try {
-      const result = await window.api.ephemeralVm.doctor({
-        repoId: entry.repoId,
-        recipeId: recipe.id
-      })
-      if (mountedRef.current) {
-        setDoctorResult(result)
-        setDoctorOpen(true)
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.EphemeralVmsPane.doctorError',
-                'Could not run recipe doctor.'
-              )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setDoctorBusyKey(null)
-      }
-    }
-  }
 
   const openWorkspaceComposerForRecipe = (repoId: string, recipeId: string): void => {
     openModal('new-workspace-composer', {
@@ -265,7 +228,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.EphemeralVmsPane.recipesHelp',
-                'Appear here once your agent adds them to orca.yaml — then Doctor and create a workspace.'
+                'Appear here once your agent adds them to orca.yaml — then create a workspace.'
               )}
             </p>
           </div>
@@ -304,8 +267,6 @@ export function EphemeralVmsPane(): React.JSX.Element {
                   key={`${entry.repoId}:${recipe.id}`}
                   entry={entry}
                   recipe={recipe}
-                  doctorBusy={doctorBusyKey === `${entry.repoId}:${recipe.id}`}
-                  onDoctor={() => void runDoctor(entry, recipe)}
                   onUse={() => openWorkspaceComposerForRecipe(entry.repoId, recipe.id)}
                 />
               ))}
@@ -313,8 +274,6 @@ export function EphemeralVmsPane(): React.JSX.Element {
           )}
         </div>
       </div>
-
-      <RecipeDoctorDialog open={doctorOpen} result={doctorResult} onOpenChange={setDoctorOpen} />
     </div>
   )
 }

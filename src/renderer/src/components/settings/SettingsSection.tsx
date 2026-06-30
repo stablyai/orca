@@ -75,7 +75,7 @@ export function SettingsSection({
             ) : null}
             {badgeAccessory}
           </h2>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
