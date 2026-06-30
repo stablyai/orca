@@ -108,6 +108,7 @@ import { createCommandCodeOutputStatusDetector } from './command-code-output-sta
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
+import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
@@ -2847,11 +2848,17 @@ export function connectPanePty(
     let foregroundRefreshRiskScanTail = ''
 
     function trailingIncompleteCsiSequence(data: string): string {
-      const escapeIndex = data.lastIndexOf('\x1b[')
+      const escapeIndex = data.lastIndexOf('\x1b')
       if (escapeIndex === -1) {
         return ''
       }
       const tail = data.slice(escapeIndex)
+      if (tail === '\x1b') {
+        return tail
+      }
+      if (!tail.startsWith('\x1b[')) {
+        return ''
+      }
       for (let index = 2; index < tail.length; index++) {
         const code = tail.charCodeAt(index)
         if (code >= 0x40 && code <= 0x7e) {
@@ -2861,7 +2868,7 @@ export function connectPanePty(
       return tail.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
     }
 
-    function foregroundAnsiOutputPrefersRenderRefresh(data: string): boolean {
+    function foregroundRendererRiskOutputPrefersRenderRefresh(data: string): boolean {
       if (!data) {
         return false
       }
@@ -2869,7 +2876,8 @@ export function connectPanePty(
         ? `${foregroundRefreshRiskScanTail}${data}`
         : data
       const prefersRefresh =
-        scanData.includes('\x1b[') && terminalOutputPrefersRenderRefresh(scanData)
+        (scanData.includes('\x1b[') || containsNonAsciiOutput(scanData)) &&
+        terminalOutputPrefersRenderRefresh(scanData)
       foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
       return prefersRefresh
     }
@@ -3089,19 +3097,22 @@ export function connectPanePty(
     function shouldForceForegroundRenderRefresh(data: string): {
       refresh: boolean
       inPlaceRewrite: boolean
+      recoverWebglAtlasAfterParse: boolean
     } {
       const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      if (foregroundAnsiOutputPrefersRenderRefresh(data)) {
-        // Why: Codex-style background SGR panels can paint cell fills while
-        // glyphs lag behind; refresh only renderer-risk ANSI chunks, not all output.
-        return { refresh: true, inPlaceRewrite: rewriteOutputPrefersRenderRefresh }
+      if (foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
+        return {
+          refresh: true,
+          inPlaceRewrite: rewriteOutputPrefersRenderRefresh,
+          recoverWebglAtlasAfterParse: true
+        }
       }
       if (rewriteOutputPrefersRenderRefresh) {
         // Why: resize fixes these panes because xterm's buffer is right but
         // in-place redraw cells can remain stale in the renderer until repaint.
-        return { refresh: true, inPlaceRewrite: true }
+        return { refresh: true, inPlaceRewrite: true, recoverWebglAtlasAfterParse: false }
       }
       if (
         windowsEastAsianOutputPrefersRenderRefresh(data, {
@@ -3113,14 +3124,15 @@ export function connectPanePty(
       ) {
         // Why: CJK/Korean from Microsoft Pinyin commits and native ConPTY agent
         // output can leave stale wide-glyph cells in the local Windows DOM renderer.
-        return { refresh: true, inPlaceRewrite: false }
+        return { refresh: true, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
       }
       return {
         refresh:
           shouldApplyNativeWindowsRewriteRefresh &&
           containsNonAsciiOutput(data) &&
           containsWindowsRewriteControl(data),
-        inPlaceRewrite: false
+        inPlaceRewrite: false,
+        recoverWebglAtlasAfterParse: false
       }
     }
 
@@ -3160,7 +3172,7 @@ export function connectPanePty(
       const foregroundOutput = foreground || parseHiddenStartupOutput
       const renderRefreshDecision = foregroundOutput
         ? shouldForceForegroundRenderRefresh(data)
-        : { refresh: false, inPlaceRewrite: false }
+        : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
       // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
@@ -3207,6 +3219,11 @@ export function connectPanePty(
             foregroundRenderRefreshNeeded),
         followupForegroundRefresh:
           nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
+        // Why: atlas recovery must repaint from the parsed xterm buffer, not
+        // a pre-write snapshot that a late TUI redraw can immediately stale.
+        onForegroundParsed: renderRefreshDecision.recoverWebglAtlasAfterParse
+          ? scheduleTerminalWebglAtlasRecovery
+          : undefined,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
