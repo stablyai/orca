@@ -39,6 +39,11 @@ export type PtyConnectionDeps = {
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  // Why: a successful PTY connect is the single source of truth for clearing
+  // the toast table. Firing this on every fresh-spawn / reattach success (not
+  // on incidental unlocks) means errors only clear when something actually
+  // succeeded, not when a state flag flips.
+  onResetErrorRef?: React.RefObject<() => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void

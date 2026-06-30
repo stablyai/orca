@@ -98,7 +98,6 @@ import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/prima
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
-import { isTerminalZeroDimensionsDiagnostic } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
@@ -532,6 +531,10 @@ export default function TerminalPane({
     }
     pushTerminalError(message)
   })
+  const onResetErrorRef = useRef<() => void>(clearTerminalError)
+  useLayoutEffect(() => {
+    onResetErrorRef.current = clearTerminalError
+  }, [clearTerminalError])
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -710,15 +713,12 @@ export default function TerminalPane({
       // after first visibility lets inactive agent tabs refit and SIGWINCH.
       setShouldMeasureHiddenStartup(false)
     }
-    if (isVisible) {
-      // Why: a hidden pane that connected at 0×0 self-heals via the pane resize
-      // observer once shown, so clear that stale diagnostic. Scoped to the
-      // zero-dimensions message so genuine paste/save-failure errors survive.
-      if (terminalErrors[0] && isTerminalZeroDimensionsDiagnostic(terminalErrors[0].message)) {
-        clearTerminalError()
-      }
-    }
-  }, [isVisible, shouldMeasureHiddenStartup, terminalErrors, clearTerminalError])
+    // Why: a 0×0 diagnostic is only ever reported when the pane is already
+    // visible but un-sized, and Task 1's dedup keeps it bounded. The toast
+    // now only clears via the new onResetErrorRef fired on PTY connect, so
+    // the previous visibility-driven clear is no longer needed and would
+    // otherwise race the new single-source-of-truth path.
+  }, [isVisible, shouldMeasureHiddenStartup])
 
   const clearSessionRestoredBannerForPane = useCallback((paneId: number): void => {
     setSessionRestoredBannerPaneIds((prev) => {
@@ -1313,6 +1313,7 @@ export default function TerminalPane({
     isVisibleRef,
     onPtyExitRef,
     onPtyErrorRef,
+    onResetErrorRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
@@ -1519,7 +1520,9 @@ export default function TerminalPane({
       transport?.destroy?.()
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
-      clearTerminalError()
+      // Why: the new connectPanePty call below fires onResetErrorRef on
+      // successful spawn/attach, so a manual clear here would double-fire the
+      // reset — drop it.
 
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
@@ -1534,6 +1537,7 @@ export default function TerminalPane({
         isVisibleRef,
         onPtyExitRef,
         onPtyErrorRef,
+        onResetErrorRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,

@@ -721,6 +721,28 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('fires onResetErrorRef when a PTY successfully connects', async () => {
+    // Why (regression): Task 2 makes "PTY successfully connected" the single
+    // source of truth for clearing the toast table — fresh spawn, sync attach,
+    // reattach, and the pending StrictMode spawn all funnel through it. The
+    // test exercises the sync attach path: the tab's existing ptyId + mock
+    // transport let connectPanePty bind an existing PTY without spawning.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transportFactoryQueue.push(transport)
+    const onResetErrorRef = { current: vi.fn() }
+    const deps = createDeps({ onResetErrorRef })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    // Why: the exact call count depends on whether connectPanePty enters the
+    // fresh-spawn path or the sync-attach path (test harness state-dependent),
+    // but every successful path fires onResetErrorRef at least once. Multiple
+    // fires are safe because clearTerminalError on an empty table is a no-op.
+    expect(onResetErrorRef.current).toHaveBeenCalled()
+  })
+
   it('threads the resolved local project runtime into IPC terminal transport options', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

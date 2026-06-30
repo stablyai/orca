@@ -815,6 +815,9 @@ export function connectPanePty(
   deps: PtyConnectionDeps
 ): PanePtyBinding {
   exposeE2eTerminalPtyOutputDebug()
+  const resetError = (): void => {
+    deps.onResetErrorRef?.current?.()
+  }
   let disposed = false
   let connectFrame: number | null = null
   let connectFallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -1644,6 +1647,11 @@ export function connectPanePty(
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
+    // Why: a confirmed fresh PTY is the single source of truth for clearing
+    // the toast table. onPtySpawn is only emitted for fresh spawns
+    // (pty-transport.ts), so firing the reset here keeps incidental clears
+    // (visibility, unlocks) out of the path.
+    resetError()
   }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
@@ -3952,6 +3960,11 @@ export function connectPanePty(
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
       agentCompletionCoordinator.startProcessTracking()
+      // Why: a successful reattach is still a fresh-attached terminal for the
+      // user, even though transport skipped onPtySpawn (pty-transport.ts) to
+      // preserve recency. Clear any stale toast here so reattach + coldRestore
+      // converge on the same single-source-of-truth clear path.
+      resetError()
 
       // Why: mobile terminal streaming needs the exact screen state from
       // xterm.js. The shared helper installs both the SerializeAddon-backed
@@ -4495,6 +4508,10 @@ export function connectPanePty(
           }
         })
         bindActivePanePty(attachPtyId, { updateTabPtyId: 'if-missing' })
+        // Why: a successful sync attach is the third success path for the
+        // same single-source-of-truth clear — the pane now owns a live PTY
+        // that the user can see and type into.
+        resetError()
         if (attachPtyId === eagerLivePtyId) {
           registerPaneSerializerFor(attachPtyId)
         }
@@ -4549,6 +4566,10 @@ export function connectPanePty(
             // Why: this path reuses a PTY spawned by an earlier mount, so no
             // later spawn event will bind this remounted pane's DOM/container.
             bindActivePanePty(spawnedPtyId, { updateTabPtyId: 'if-missing' })
+            // Why: StrictMode/remount reused a sibling mount's spawned PTY; the
+            // first mount already fired the spawn-side reset but toasts from
+            // between mounts may linger, so call again at bind-time.
+            resetError()
           })
           .catch((err) => {
             reportError(err instanceof Error ? err.message : String(err))
