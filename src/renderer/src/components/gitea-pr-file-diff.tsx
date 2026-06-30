@@ -24,13 +24,23 @@ type GiteaPrFileDiffProps = {
   onAddReviewComment: (path: string, line: number, body: string) => Promise<boolean>
 }
 
-const STATUS_LABELS: Record<GiteaPRFile['status'], string> = {
-  added: 'Added',
-  modified: 'Modified',
-  deleted: 'Deleted',
-  renamed: 'Renamed',
-  copied: 'Copied',
-  changed: 'Changed'
+// Why: a function (not a module const) so the labels re-resolve on language
+// change instead of being captured once at import.
+function statusLabel(status: GiteaPRFile['status']): string {
+  switch (status) {
+    case 'added':
+      return translate('auto.components.gitea.pr.file.diff.643d805160', 'Added')
+    case 'modified':
+      return translate('auto.components.gitea.pr.file.diff.552647cfb3', 'Modified')
+    case 'deleted':
+      return translate('auto.components.gitea.pr.file.diff.6a18d47646', 'Deleted')
+    case 'renamed':
+      return translate('auto.components.gitea.pr.file.diff.184ffbc460', 'Renamed')
+    case 'copied':
+      return translate('auto.components.gitea.pr.file.diff.3e96a427af', 'Copied')
+    case 'changed':
+      return translate('auto.components.gitea.pr.file.diff.1e228bc58e', 'Changed')
+  }
 }
 
 export function GiteaPrFileDiff({
@@ -101,7 +111,7 @@ export function GiteaPrFileDiff({
           {file.path}
         </span>
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {STATUS_LABELS[file.status]}
+          {statusLabel(file.status)}
         </span>
         {file.additions > 0 ? (
           <span className="shrink-0 text-[11px] text-status-success">+{file.additions}</span>

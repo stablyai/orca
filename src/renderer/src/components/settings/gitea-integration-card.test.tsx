@@ -144,4 +144,62 @@ describe('GiteaTaskIntegrationCard', () => {
     expect(rendered.textContent).toContain('Checking Gitea access')
     expect(findButton(rendered, 'Connect Gitea')).toBeUndefined()
   })
+
+  it('tracks testing state per server so one finishing does not clear another', async () => {
+    const resolvers: Record<string, (value: { ok: boolean }) => void> = {}
+    installStore({
+      giteaStatus: {
+        connected: true,
+        servers: [
+          {
+            id: 'srv-1',
+            baseUrl: 'https://a.example.com',
+            apiBaseUrl: 'https://a.example.com/api/v1',
+            displayName: 'Server A',
+            account: null
+          },
+          {
+            id: 'srv-2',
+            baseUrl: 'https://b.example.com',
+            apiBaseUrl: 'https://b.example.com/api/v1',
+            displayName: 'Server B',
+            account: null
+          }
+        ]
+      },
+      giteaTestConnection: vi.fn(
+        (serverId?: string) =>
+          new Promise<{ ok: boolean }>((resolve) => {
+            resolvers[serverId as string] = resolve
+          })
+      )
+    })
+
+    const rendered = await renderCard()
+    // Both Test/Testing buttons, in server (A, B) DOM order.
+    const testButtons = (): HTMLButtonElement[] =>
+      Array.from(rendered.querySelectorAll('button')).filter((button) =>
+        /^Test/.test(button.textContent?.trim() ?? '')
+      )
+
+    await act(async () => {
+      testButtons()[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      testButtons()[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(testButtons().map((button) => button.textContent?.trim())).toEqual([
+      'Testing...',
+      'Testing...'
+    ])
+
+    // Server A settling must not clear Server B's still-running spinner.
+    await act(async () => {
+      resolvers['srv-1']?.({ ok: true })
+    })
+    expect(testButtons().map((button) => button.textContent?.trim())).toEqual([
+      'Test',
+      'Testing...'
+    ])
+  })
 })

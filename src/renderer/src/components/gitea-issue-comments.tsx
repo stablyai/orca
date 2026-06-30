@@ -7,7 +7,7 @@ const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'aut
 function formatRelativeTime(input: string): string {
   const date = new Date(input)
   if (Number.isNaN(date.getTime())) {
-    return 'recently'
+    return translate('auto.components.gitea.issue.comments.7649eb9d31', 'recently')
   }
   const diffMinutes = Math.round((date.getTime() - Date.now()) / 60_000)
   if (Math.abs(diffMinutes) < 60) {

@@ -19,7 +19,9 @@ export function GiteaTaskIntegrationCard(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [testingServerId, setTestingServerId] = useState<string | null>(null)
+  // Track testing state per server so concurrent tests can't clobber each
+  // other's spinner (server A settling must not re-enable server B's row).
+  const [testingServerIds, setTestingServerIds] = useState<Set<string>>(() => new Set())
   const [testResultByServer, setTestResultByServer] = useState<Record<string, VerificationResult>>(
     {}
   )
@@ -41,7 +43,7 @@ export function GiteaTaskIntegrationCard(): React.JSX.Element {
   }
 
   const handleTest = async (serverId: string): Promise<void> => {
-    setTestingServerId(serverId)
+    setTestingServerIds((prev) => new Set(prev).add(serverId))
     setTestResultByServer((prev) => {
       const next = { ...prev }
       delete next[serverId]
@@ -74,9 +76,14 @@ export function GiteaTaskIntegrationCard(): React.JSX.Element {
         }
       }))
     } finally {
-      // Why: always clear the per-server spinner, even on rejection.
+      // Why: always clear this server's spinner, even on rejection, without
+      // touching any other server still mid-test.
       if (mountedRef.current) {
-        setTestingServerId(null)
+        setTestingServerIds((prev) => {
+          const next = new Set(prev)
+          next.delete(serverId)
+          return next
+        })
       }
     }
   }
@@ -135,7 +142,7 @@ export function GiteaTaskIntegrationCard(): React.JSX.Element {
         <div className="mt-3 space-y-2">
           {servers.map((server) => {
             const testResult = testResultByServer[server.id]
-            const testing = testingServerId === server.id
+            const testing = testingServerIds.has(server.id)
             return (
               <div
                 key={server.id}

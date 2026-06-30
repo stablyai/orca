@@ -36,6 +36,8 @@ export function IntegrationsPane(): React.JSX.Element {
           <GitLabIntegrationCard />
           <BitbucketIntegrationCard />
           <AzureDevOpsIntegrationCard />
+          {/* Why: Gitea is both a review host and an issue tracker, so it shows
+              here and again under Task providers via two distinct cards. */}
           <GiteaIntegrationCard />
         </div>
       </section>
@@ -55,6 +57,8 @@ export function IntegrationsPane(): React.JSX.Element {
         <div className="space-y-3">
           <LinearIntegrationCard />
           <JiraIntegrationCard />
+          {/* Why: task-tracker counterpart of the Review-providers Gitea card;
+              same provider, surfaced for its issues/tasks. */}
           <GiteaTaskIntegrationCard />
         </div>
       </section>
