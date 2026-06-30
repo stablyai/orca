@@ -1742,10 +1742,29 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   updateProjectGroup: async (groupId, updates) => {
+    // Why: project groups are focused-host-scoped by design — fetch/create/update/
+    // delete all route by the focused host, and the list is replaced (not merged).
+    const target = getActiveRuntimeTarget(get().settings)
+    const previousGroup = get().projectGroups.find((group) => group.id === groupId)
+    // Optimistically apply so a drag reorder (tabOrder) re-sorts the instant the
+    // drag is dropped (no flash before the async round-trip); main's
+    // authoritative group replaces this below, and a failure reverts it.
+    set((s) => ({
+      projectGroups: s.projectGroups.map((group) =>
+        group.id === groupId ? { ...group, ...updates } : group
+      )
+    }))
+    const revertOptimistic = (): void => {
+      if (!previousGroup) {
+        return
+      }
+      set((s) => ({
+        projectGroups: s.projectGroups.map((group) =>
+          group.id === groupId ? previousGroup : group
+        )
+      }))
+    }
     try {
-      // Why: project groups are focused-host-scoped by design — fetch/create/update/
-      // delete all route by the focused host, and the list is replaced (not merged).
-      const target = getActiveRuntimeTarget(get().settings)
       const updated =
         target.kind === 'local'
           ? await window.api.projectGroups.update({ groupId, updates })
@@ -1758,6 +1777,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).group
       if (!updated) {
+        revertOptimistic()
         return false
       }
       const ownedGroup = projectGroupWithFetchedOwner(updated, target)
@@ -1767,6 +1787,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }))
       return true
     } catch (err) {
+      revertOptimistic()
       console.error('Failed to update project group:', err)
       return false
     }
