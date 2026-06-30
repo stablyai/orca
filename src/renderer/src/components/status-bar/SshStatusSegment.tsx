@@ -12,7 +12,10 @@ import { useAppStore } from '../../store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow, type RuntimeHostConnectionState } from './RuntimeHostStatusRow'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
@@ -168,15 +171,19 @@ export function SshStatusSegment({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const targets = Array.from(sshTargetLabels.entries()).map(([id, label]) => {
-    const state = sshConnectionStates.get(id)
-    return {
-      id,
-      label,
-      status: (state?.status ?? 'disconnected') as SshConnectionStatus,
-      syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
-    }
-  })
+  const targets = Array.from(sshTargetLabels.entries())
+    // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
+    // as a user-facing SSH host in the status bar.
+    .filter(([id]) => !isRuntimeOwnedSshTargetId(id))
+    .map(([id, label]) => {
+      const state = sshConnectionStates.get(id)
+      return {
+        id,
+        label,
+        status: (state?.status ?? 'disconnected') as SshConnectionStatus,
+        syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
+      }
+    })
   const runtimeHosts = runtimeEnvironments
     .filter(isUserManagedRuntimeEnvironment)
     .map((environment) => {

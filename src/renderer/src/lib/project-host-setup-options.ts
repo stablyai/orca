@@ -1,6 +1,8 @@
 import {
   getExecutionHostLabel,
+  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
@@ -116,7 +118,8 @@ function buildReadySetupOptions({
         setup.projectId === projectId &&
         setup.setupState === 'ready' &&
         eligibleRepoIds.has(setup.repoId) &&
-        !isEphemeralVmProjectHost(host)
+        !isEphemeralVmProjectHost(host) &&
+        !isRuntimeOwnedSshSetupHost(setup.hostId)
       )
     })
     .map((setup) => ({
@@ -138,7 +141,12 @@ function buildNeedsSetupOptions({
   pendingSetupByHost
 }: BuildNeedsSetupOptionsInput): NeedsSetupProjectHostOption[] {
   return hosts
-    .filter((host) => !readySetupByHost.has(host.id) && !isEphemeralVmProjectHost(host))
+    .filter(
+      (host) =>
+        !readySetupByHost.has(host.id) &&
+        !isEphemeralVmProjectHost(host) &&
+        !isRuntimeOwnedSshSetupHost(host.id)
+    )
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
       const availability = getHostSetupAvailability(host)
@@ -160,6 +168,14 @@ function buildNeedsSetupOptions({
 
 function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
   return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
+}
+
+// Why: a per-workspace-env SSH repo projects a setup with hostId `ssh:runtime-ssh-<id>`. The
+// execution-host registry filters runtime-owned targets, so its host is absent here — guard on the
+// hostId directly so the hidden target never becomes a selectable run-target option.
+function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
 function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {

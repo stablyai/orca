@@ -381,10 +381,10 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(runTargetButton).toBeTruthy()
     act(() => runTargetButton?.click())
 
-    expect(document.body.textContent).toContain('Ephemeral VM')
+    expect(document.body.textContent).toContain('Per-Workspace Environment')
     const ephemeralVmItem = [
       ...document.body.querySelectorAll<HTMLElement>('[role="option"]')
-    ].find((item) => item.textContent?.includes('Ephemeral VM'))
+    ].find((item) => item.textContent?.includes('Per-Workspace Environment'))
     expect(ephemeralVmItem).toBeTruthy()
     act(() => ephemeralVmItem?.click())
 
@@ -432,7 +432,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     const runTargetButton =
       current.container.querySelector<HTMLButtonElement>('button[role="combobox"]')
-    expect(runTargetButton?.textContent).toContain('Ephemeral VM')
+    expect(runTargetButton?.textContent).toContain('Per-Workspace Environment')
     act(() => runTargetButton?.click())
 
     const builderItem = [...document.body.querySelectorAll<HTMLElement>('[cmdk-item]')].find(

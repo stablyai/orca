@@ -112,6 +112,7 @@ import {
 } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
+import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
@@ -1799,7 +1800,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
-                const sshConnectionId = repo?.connectionId ?? null
+                // Runtime-owned (per-workspace-env) SSH targets are hidden and their relay health is
+                // owned by the runtime layer (broadcasts suppressed) — don't show a false disconnected.
+                const sshConnectionId =
+                  repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
+                    ? repo.connectionId
+                    : null
                 const sshStatus = sshConnectionId
                   ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
                   : null

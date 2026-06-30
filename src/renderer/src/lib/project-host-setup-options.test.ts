@@ -134,6 +134,29 @@ describe('buildProjectHostSetupOptions', () => {
     ])
   })
 
+  it('omits runtime-owned SSH (per-workspace-env) setups even when their host is filtered out', () => {
+    // The execution-host registry filters runtime-owned targets, so the setup's host is absent
+    // here — guard on the hostId so the hidden target never becomes a selectable run-target.
+    const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo'), repo('vm-repo')],
+      hosts: [host('local')],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        setup('vm', 'project-1', runtimeSshHostId, 'vm-repo', {
+          path: '/workspace/orca',
+          displayName: 'orca'
+        })
+      ]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
+    ])
+    expect(options.some((o) => String(o.hostId).includes('runtime-ssh-'))).toBe(false)
+  })
+
   it('omits setups that are not ready or cannot create through an eligible repo', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',

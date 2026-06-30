@@ -246,7 +246,7 @@ function WorkspaceRunTargetCombobox({
       : ''
   const ephemeralVmLabel = translate(
     'auto.components.NewWorkspaceComposerCard.ephemeralVm',
-    'Ephemeral VM'
+    'Per-Workspace Environment'
   )
 
   const handleHostSelect = React.useCallback(
@@ -343,15 +343,12 @@ function WorkspaceRunTargetCombobox({
             {recipes.length > 0 ? (
               <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
                 <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={Boolean(selectedRecipe)}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm outline-none',
-                      'hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground',
-                      selectedRecipe && 'bg-accent/60'
-                    )}
+                  {/* Why: a real CommandItem (not a raw button) so cmdk registers it — fixes the row
+                      only rendering under the first host, the uneven height, and the double-highlight. */}
+                  <CommandItem
+                    value="per-workspace-env"
+                    onSelect={() => setVmRecipesOpen(true)}
+                    className="items-center gap-2 px-3 py-2"
                   >
                     <Check
                       className={cn(
@@ -364,7 +361,7 @@ function WorkspaceRunTargetCombobox({
                       <div className="truncate text-sm">{ephemeralVmLabel}</div>
                     </div>
                     <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-                  </button>
+                  </CommandItem>
                 </PopoverTrigger>
                 <PopoverContent side="right" align="start" sideOffset={6} className="w-72 p-0">
                   <Command value={selectedRecipe ? `recipe:${selectedRecipe.id}` : ''}>
