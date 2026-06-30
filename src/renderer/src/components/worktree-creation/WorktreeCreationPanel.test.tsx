@@ -133,10 +133,10 @@ describe('WorktreeCreationPanel', () => {
     const container = await renderPanel(false)
 
     expect(container.textContent).toContain('Provisioning VM')
-    expect(container.textContent).toContain('Recipe output')
     expect(container.querySelector('pre')?.textContent).toBe(
       'creating sandbox\nstarting orca serve\n'
     )
-    expect(container.querySelector('pre')?.className).toContain('max-h-72')
+    // Constant height so the log box never grows before the scroll kicks in.
+    expect(container.querySelector('pre')?.className).toContain('h-72')
   })
 })

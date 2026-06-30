@@ -184,21 +184,16 @@ function VmProvisioningStatus({
             <div className="text-xs text-muted-foreground">{cleanupLabel}</div>
           ) : null}
         </div>
-        <section className="overflow-hidden rounded-md border border-border bg-card shadow-xs">
-          <div className="flex h-8 items-center border-b border-border px-3 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
-            {translate(
-              'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningLogTitle',
-              'Recipe output'
-            )}
-          </div>
-          <pre className="scrollbar-sleek max-h-72 min-h-36 overflow-auto whitespace-pre-wrap bg-muted/30 p-3 font-mono text-[11px] leading-4 text-muted-foreground">
-            {log ||
-              translate(
+        <pre className="scrollbar-sleek h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-4 text-muted-foreground">
+          {log || (
+            <span className="text-muted-foreground/60">
+              {translate(
                 'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningLogEmpty',
                 'Waiting for recipe output…'
               )}
-          </pre>
-        </section>
+            </span>
+          )}
+        </pre>
       </div>
     </div>
   )
