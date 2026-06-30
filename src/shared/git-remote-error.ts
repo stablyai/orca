@@ -196,14 +196,19 @@ export type ClassifiedRefreshBaseRefError = {
   message: string
 }
 
-const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not exist/i
-const REMOTE_FORBIDDEN_PATTERN =
-  /repository .* not found|requested url returned error: (401|403|404)/i
+// git fetch on DNS failure or network unreachable
 const REFRESH_NETWORK_PATTERN =
   /Could not resolve host|Network is unreachable|Connection (reset|timed out|refused)/i
+// SSH publickey auth or HTTPS auth failure
 const REFRESH_AUTH_PATTERN =
   /Authentication failed|Permission denied \(publickey\)|could not read Username/i
+// git fetch when no upstream tracking info is configured
 const REFRESH_NO_UPSTREAM_PATTERN = /no tracking information|no upstream/i
+// git fetch when the requested ref does not exist on the remote
+const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not exist/i
+// git fetch when the remote returns 401/403/404 or 'Repository not found'
+const REMOTE_FORBIDDEN_PATTERN =
+  /repository .* not found|requested url returned error: (401|403|404)/i
 
 function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCode {
   if (REFRESH_NETWORK_PATTERN.test(rawStderr)) {
