@@ -6,22 +6,23 @@ export type { TerminalErrorEntry }
 
 const EMPTY: TerminalErrorEntry[] = []
 
-export type TerminalErrorTable = {
-  errors: TerminalErrorEntry[]
+export type TerminalErrorActions = {
   push: (message: string) => void
   clear: () => void
 }
 
-// Why: per-worktree keyed reads so split panes sharing the same multiplex
-// runtime coalesce to one banner instead of fanning out redundant toasts.
-// The store-backed push/clear actions are stable references, so callers can
-// pass them through refs without useLayoutEffect bookkeeping.
-export function useTerminalErrorTable(
+/**
+ * Why: TerminalPane consumes push/clear for dispatch handlers but does not
+ * render the banner. Subscribing to terminalErrorsByWorktreeId here would
+ * force every pane in the worktree to re-render on each push, even though
+ * only the workspace-level overlay reads the entries. Use this hook when
+ * you only need to write to the slice.
+ */
+export function useTerminalErrorActions(
   worktreeId: string,
   options: { now?: () => number } = {}
-): TerminalErrorTable {
+): TerminalErrorActions {
   const now = options.now
-  const errors = useAppStore((s) => s.terminalErrorsByWorktreeId[worktreeId] ?? EMPTY)
   const push = useCallback(
     (message: string) => {
       useAppStore.getState().pushTerminalError(worktreeId, message, now?.())
@@ -31,5 +32,16 @@ export function useTerminalErrorTable(
   const clear = useCallback(() => {
     useAppStore.getState().clearTerminalErrors(worktreeId)
   }, [worktreeId])
-  return { errors, push, clear }
+  return { push, clear }
+}
+
+/**
+ * Why: TerminalErrorBannerOverlayLayer reads the slice and re-renders only
+ * when this worktree's entries change. The selector is intentionally
+ * shallow — referential equality of the array reference is what makes
+ * React.memo on TerminalErrorBanner short-circuit on every push that
+ * doesn't touch this worktree.
+ */
+export function useTerminalErrorTable(worktreeId: string): TerminalErrorEntry[] {
+  return useAppStore((s) => s.terminalErrorsByWorktreeId[worktreeId] ?? EMPTY)
 }

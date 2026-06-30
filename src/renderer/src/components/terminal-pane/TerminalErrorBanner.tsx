@@ -40,6 +40,13 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
   const ssh = errors.some((e) => isSshMessage(e.message))
   const messages = errors.map((e) => e.message)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(messages)
+  // Why: palette tokens (--destructive-soft/border/fg, --color-warning-*) live
+  // in src/renderer/src/assets/main.css :root/.dark. They're built off the
+  // documented --destructive/--color-warning, so SSH keeps a soft warning tone
+  // (yellow) without colliding with destructive.
+  const background = ssh ? 'var(--color-warning-soft)' : 'var(--destructive-soft)'
+  const borderColor = ssh ? 'var(--color-warning-border)' : 'var(--destructive-border)'
+  const foreground = ssh ? 'var(--color-warning-fg)' : 'var(--destructive-fg)'
 
   return (
     <div
@@ -51,9 +58,9 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
         zIndex: 50,
         padding: '10px 14px',
         borderRadius: 6,
-        background: ssh ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
-        border: ssh ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(220, 38, 38, 0.4)',
-        color: ssh ? '#fde68a' : '#fca5a5',
+        background,
+        border: `1px solid ${borderColor}`,
+        color: foreground,
         fontSize: 12,
         fontFamily: 'monospace',
         whiteSpace: 'pre-wrap',
@@ -86,7 +93,7 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
               )}{' '}
               <a
                 href="https://github.com/stablyai/orca/issues"
-                style={{ color: '#fca5a5', textDecoration: 'underline' }}
+                style={{ color: foreground, textDecoration: 'underline' }}
               >
                 {translate(
                   'auto.components.terminal.pane.TerminalErrorBanner.a7e2fd2699',
@@ -102,9 +109,12 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
             onClick={onRestartDaemon}
             style={{
               marginLeft: 12,
-              border: '1px solid rgba(252, 165, 165, 0.45)',
+              // Why: bg/border use destructive-soft/border tokens so the action
+              // button reads as a destructive secondary control, with a darker
+              // base for contrast against the soft banner background.
+              border: '1px solid var(--destructive-border)',
               borderRadius: 6,
-              background: 'rgba(127, 29, 29, 0.35)',
+              background: 'color-mix(in srgb, var(--destructive) 35%, transparent)',
               color: '#fecaca',
               cursor: 'pointer',
               fontSize: 12,
@@ -124,7 +134,7 @@ export const TerminalErrorBanner = memo(function TerminalErrorBanner({
           style={{
             background: 'none',
             border: 'none',
-            color: ssh ? '#fde68a' : '#fca5a5',
+            color: foreground,
             cursor: 'pointer',
             fontSize: 14,
             padding: '0 0 0 8px',

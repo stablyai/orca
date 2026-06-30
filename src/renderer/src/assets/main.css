@@ -145,6 +145,13 @@
   --accent-foreground: #171717;
   --destructive: #e40014;
   --destructive-foreground: #fcf3f3;
+  --destructive-soft: color-mix(in srgb, var(--destructive) 15%, transparent);
+  --destructive-border: color-mix(in srgb, var(--destructive) 40%, transparent);
+  --destructive-fg: #fca5a5;
+  --color-warning: #f59e0b;
+  --color-warning-soft: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  --color-warning-border: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --color-warning-fg: #fde68a;
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
@@ -224,6 +231,13 @@
   --accent-foreground: #fafafa;
   --destructive: #ff6568;
   --destructive-foreground: #df2225;
+  --destructive-soft: color-mix(in srgb, var(--destructive) 15%, transparent);
+  --destructive-border: color-mix(in srgb, var(--destructive) 40%, transparent);
+  --destructive-fg: #fca5a5;
+  --color-warning: #f59e0b;
+  --color-warning-soft: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  --color-warning-border: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  --color-warning-fg: #fde68a;
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;

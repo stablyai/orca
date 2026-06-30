@@ -25,7 +25,13 @@ export const createTerminalErrorsSlice: StateCreator<AppState, [], [], TerminalE
   terminalErrorsByWorktreeId: {},
   pushTerminalError: (worktreeId, message, now) => {
     set((state) => {
+      if (typeof worktreeId !== 'string' || worktreeId.length === 0) {
+        return state
+      }
       const ts = now ?? Date.now()
+      if (!Number.isFinite(ts) || ts < 0) {
+        return state
+      }
       const prev = state.terminalErrorsByWorktreeId[worktreeId] ?? []
       const kept = prev.filter((entry) => ts - entry.lastSeenAt < ERROR_DEDUP_WINDOW_MS)
       const existing = kept.find((entry) => entry.message === message)
@@ -43,11 +49,19 @@ export const createTerminalErrorsSlice: StateCreator<AppState, [], [], TerminalE
     })
   },
   clearTerminalErrors: (worktreeId) => {
-    set((state) => ({
-      terminalErrorsByWorktreeId: {
-        ...state.terminalErrorsByWorktreeId,
-        [worktreeId]: []
+    set((state) => {
+      if (typeof worktreeId !== 'string' || worktreeId.length === 0) {
+        return state
       }
-    }))
+      if (!state.terminalErrorsByWorktreeId[worktreeId]) {
+        return state
+      }
+      return {
+        terminalErrorsByWorktreeId: {
+          ...state.terminalErrorsByWorktreeId,
+          [worktreeId]: []
+        }
+      }
+    })
   }
 })

@@ -17,12 +17,12 @@
 | File | Role | Change |
 |---|---|---|
 | `src/renderer/src/components/terminal-pane/TerminalPane.tsx` | React state owner | Switch to event-table + reset helper; add `onResetErrorRef` |
-| `src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx` | Toast renderer | Accept `errors: ErrorEntry[]` instead of `error: string`; render count badges |
+| `src/renderer/src/components/terminal-pane/TerminalErrorBanner.tsx` | Toast renderer | Accept `errors: ErrorEntry[]` instead of `error: string`; render count badges |
 | `src/renderer/src/components/terminal-pane/pty-connection-types.ts` | Deps shape | Add optional `onResetErrorRef: React.RefObject<() => void>` |
 | `src/renderer/src/components/terminal-pane/pty-connection.ts` | PTY wiring | Fire the reset helper at the same points where `onPtySpawn` already indicates a fresh attach |
 | `src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts` | Multiplex transport | Distinguish `closedByRemoteRuntime` flag in `onTransportClose` |
 | `src/renderer/src/components/terminal-pane/TerminalPane.test.tsx` *(new)* | Component test | Event table dedup + truncate behavior |
-| `src/renderer/src/components/terminal-pane/TerminalErrorToast.test.tsx` *(new)* | Component test | Multi-row rendering and SSH-color branch |
+| `src/renderer/src/components/terminal-pane/TerminalErrorBanner.test.tsx` *(new)* | Component test | Multi-row rendering and SSH-color branch |
 | `src/renderer/src/components/terminal-pane/pty-connection.test.ts` | Existing | Add assertion for `onResetErrorRef` being called on successful attach |
 
 ---
@@ -276,11 +276,11 @@ const onPtyErrorRef = useRef((_paneId: number, message: string) => {
 | 2617 | `setTerminalError(formatTerminalPasteExecutionError(execution.reason))` | `pushTerminalError(...)` |
 | 2798 | `onDismiss={() => setTerminalError(null)}` | `onDismiss={clearTerminalError}` |
 
-Replace the `<TerminalErrorToast ...>` JSX site (around line 2794) to pass the new prop:
+Replace the `<TerminalErrorBanner ...>` JSX site (around line 2794) to pass the new prop:
 
 ```tsx
 {terminalErrors.length > 0 && (
-  <TerminalErrorToast
+  <TerminalErrorBanner
     errors={terminalErrors}
     onDismiss={clearTerminalError}
   />
@@ -295,9 +295,9 @@ cd /home/ppw/orca/workspaces/orca/页面优化 && pnpm vitest run src/renderer/s
 ```
 Expected: PASS for the new table tests; existing `pty-connection.test.ts` assertions on `onPtyErrorRef` should still pass (they use `vi.fn()`).
 
-- [ ] **Step 8: Update `<TerminalErrorToast>` to accept the table**
+- [ ] **Step 8: Update `<TerminalErrorBanner>` to accept the table**
 
-Edit `src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx`:
+Edit `src/renderer/src/components/terminal-pane/TerminalErrorBanner.tsx`:
 
 - Top of file, replace the existing imports with:
 
@@ -330,17 +330,17 @@ export function shouldOfferDaemonRestart(messages: string[]): boolean {
 - Replace the component export with:
 
 ```tsx
-export interface TerminalErrorToastProps {
+export interface TerminalErrorBannerProps {
   errors: TerminalErrorEntry[]
   onDismiss: () => void
   onRestartDaemon?: () => void
 }
 
-export function TerminalErrorToast({
+export function TerminalErrorBanner({
   errors,
   onDismiss,
   onRestartDaemon
-}: TerminalErrorToastProps): React.JSX.Element {
+}: TerminalErrorBannerProps): React.JSX.Element {
   const ssh = errors.some((e) => isSshMessage(e.message))
   const messages = errors.map((e) => e.message)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(messages)
@@ -377,7 +377,7 @@ export function TerminalErrorToast({
             <>
               {'\n'}
               {translate(
-                'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
+                'auto.components.terminal.pane.TerminalErrorBanner.cc6d997c65',
                 'Restart the terminal daemon from here to clear stale daemon state.'
               )}
             </>
@@ -385,7 +385,7 @@ export function TerminalErrorToast({
             <>
               {'\n'}
               {translate(
-                'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
+                'auto.components.terminal.pane.TerminalErrorBanner.5c8ce20be6',
                 'If this persists, please'
               )}{' '}
               <a
@@ -393,7 +393,7 @@ export function TerminalErrorToast({
                 style={{ color: '#fca5a5', textDecoration: 'underline' }}
               >
                 {translate(
-                  'auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699',
+                  'auto.components.terminal.pane.TerminalErrorBanner.a7e2fd2699',
                   'file an issue'
                 )}
               </a>
@@ -418,7 +418,7 @@ export function TerminalErrorToast({
             }}
           >
             {translate(
-              'auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c',
+              'auto.components.terminal.pane.TerminalErrorBanner.e4aa243f8c',
               'Restart daemon'
             )}
           </button>
@@ -457,7 +457,7 @@ Expected: PASS — the wrapper component is exercised by the consumers.
 ```bash
 cd /home/ppw/orca/workspaces/orca/页面优化 && \
   git add src/renderer/src/components/terminal-pane/use-terminal-error-table.ts \
-          src/renderer/src/components/terminal-pane/TerminalErrorToast.tsx \
+          src/renderer/src/components/terminal-pane/TerminalErrorBanner.tsx \
           src/renderer/src/components/terminal-pane/TerminalPane.tsx \
           src/renderer/src/components/terminal-pane/TerminalPane.test.tsx && \
   git commit -m "feat(terminal-pane): dedup + cap the error toast table"
@@ -756,7 +756,7 @@ cd /home/ppw/orca/workspaces/orca/页面优化 && \
   - Optimization **5 (render layer)** → merged into Task 1 step 8-9 (the toast already mutates with the table)
   - Optimization 2 (retry cap) → **explicitly out of scope** per user direction
 - [x] Placeholder scan — no "TODO", "TBD", "implement later"; every step shows file path + concrete code.
-- [x] Type consistency — `TerminalErrorEntry` defined in `use-terminal-error-table.ts`, imported by both `TerminalPane.tsx` and `TerminalErrorToast.tsx`; `onResetErrorRef` shape identical in `pty-connection-types.ts` and `TerminalPane.tsx`; `closedByRemoteRuntime` referenced identically in transport file.
+- [x] Type consistency — `TerminalErrorEntry` defined in `use-terminal-error-table.ts`, imported by both `TerminalPane.tsx` and `TerminalErrorBanner.tsx`; `onResetErrorRef` shape identical in `pty-connection-types.ts` and `TerminalPane.tsx`; `closedByRemoteRuntime` referenced identically in transport file.
 - [x] Cross-platform safety — no `navigator.userAgent` or path-style changes; all platform-dependent behavior already lives behind runtime checks elsewhere in `TerminalPane.tsx`. The new code touches only React state, refs, and typed callbacks.
 - [x] AGENTS.md compliance — comments document the *why* of the dedup window, the cap, the cleanup-on-connect, and the WS-close branch — not the *what*.
 

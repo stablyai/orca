@@ -41,7 +41,7 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { useTerminalErrorTable } from './use-terminal-error-table'
+import { useTerminalErrorActions } from './use-terminal-error-table'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
@@ -317,7 +317,7 @@ export default function TerminalPane({
   // TerminalErrorBannerOverlayLayer, but TerminalPane still owns the dispatch
   // side (push on PTY/paste errors, clear on reset) so the store stays the
   // single source of truth.
-  const { push: pushTerminalError, clear: clearTerminalError } = useTerminalErrorTable(worktreeId)
+  const { push: pushTerminalError, clear: clearTerminalError } = useTerminalErrorActions(worktreeId)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
@@ -531,6 +531,9 @@ export default function TerminalPane({
     pushTerminalError(message)
   })
   const onResetErrorRef = useRef<() => void>(clearTerminalError)
+  useLayoutEffect(() => {
+    onResetErrorRef.current = clearTerminalError
+  }, [clearTerminalError])
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
