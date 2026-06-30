@@ -111,9 +111,6 @@ export type IssueCommandLaunch =
   | { command: string; env?: Record<string, string> }
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
-  if (setup.shell) {
-    return setup.shell.family === 'posix' ? 'posix' : 'windows'
-  }
   return getSetupRunnerCommandPlatformForPath(
     setup.runnerScriptPath,
     navigator.userAgent.includes('Windows') ? 'windows' : 'posix'

@@ -1438,6 +1438,17 @@ describe('createSetupRunnerScript', () => {
   })
 })
 
+describe('resolveSetupRunnerShell', () => {
+  it('preserves wsl.exe for Windows setup launch metadata', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'wsl.exe' }, 'win32')).toEqual({
+      family: 'posix',
+      executable: 'wsl.exe'
+    })
+  })
+})
+
 describe('shouldRunSetupForCreate', () => {
   const makeRepo = (setupRunPolicy?: 'ask' | 'run-by-default' | 'skip-by-default') =>
     ({

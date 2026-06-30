@@ -57,6 +57,15 @@ export function resolveSetupRunnerCommand(
       }
     }
     if (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath)) {
+      if (isWslExecutable(shell?.executable)) {
+        const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
+        const executable = shell?.executable?.trim() || 'wsl.exe'
+        return {
+          command: `${quoteWindowsExecutable(executable)} -- bash ${quotePosixArg(wslPath)}`,
+          runnerScriptPathForShell: wslPath,
+          shell: 'posix'
+        }
+      }
       const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
       return {
         command: `bash ${quotePosixArg(posixPath)}`,
@@ -67,7 +76,7 @@ export function resolveSetupRunnerCommand(
     if (shell?.family === 'powershell' || /\.ps1$/i.test(runnerScriptPath)) {
       const executable = shell?.executable?.trim() || 'powershell.exe'
       return {
-        command: `${executable} -NoProfile -ExecutionPolicy Bypass -File ${quoteWindowsArg(runnerScriptPath)}`,
+        command: `${quoteWindowsExecutable(executable)} -NoProfile -ExecutionPolicy Bypass -File ${quoteWindowsArg(runnerScriptPath)}`,
         runnerScriptPathForShell: runnerScriptPath,
         shell: 'windows'
       }
@@ -109,10 +118,27 @@ function quoteWindowsArg(value: string): string {
   return `"${value.replace(/"/g, '""')}"`
 }
 
+function quoteWindowsExecutable(value: string): string {
+  return /[\s"]/.test(value) ? quoteWindowsArg(value) : value
+}
+
 function nativeWindowsPathToPosixShellPath(value: string): string {
   const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
   if (driveMatch) {
     return `/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
   }
   return value.replace(/\\/g, '/')
+}
+
+function nativeWindowsPathToWslShellPath(value: string): string {
+  const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
+  if (driveMatch) {
+    return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
+  }
+  return value.replace(/\\/g, '/')
+}
+
+function isWslExecutable(value: string | undefined): boolean {
+  const basename = value?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  return basename === 'wsl.exe' || basename === 'wsl'
 }

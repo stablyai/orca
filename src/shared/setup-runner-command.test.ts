@@ -48,6 +48,15 @@ describe('buildSetupRunnerCommand', () => {
     )
   })
 
+  it('uses wsl.exe with WSL paths for native Windows POSIX setup runners', () => {
+    expect(
+      buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.sh', 'windows', {
+        family: 'posix',
+        executable: 'wsl.exe'
+      })
+    ).toBe('wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh')
+  })
+
   it('keeps cmd.exe launch semantics for cmd setup runners', () => {
     expect(
       buildSetupRunnerCommand('C:\\repo\\.git\\orca\\setup-runner.cmd', 'windows', {

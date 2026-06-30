@@ -585,15 +585,17 @@ export function resolveSetupRunnerShell(
     typeof terminalWindowsShell === 'string' && terminalWindowsShell.trim()
       ? terminalWindowsShell.trim()
       : 'powershell.exe'
+  const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const family = resolveWindowsShellStartupFamily(configuredShell)
   if (family === 'posix') {
-    return { family: 'posix' }
+    return shellBasename === 'wsl.exe' || shellBasename === 'wsl'
+      ? { family: 'posix', executable: configuredShell }
+      : { family: 'posix' }
   }
   if (family === 'cmd') {
     return { family: 'cmd' }
   }
 
-  const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const shellFamily: WindowsPowerShellShellFamily =
     shellBasename === 'pwsh.exe' ? 'pwsh.exe' : 'powershell.exe'
   const implementationValue = settings?.terminalWindowsPowerShellImplementation

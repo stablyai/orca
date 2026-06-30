@@ -112,6 +112,29 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it('queues setup through returned POSIX shell metadata on native Windows paths', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+      command: 'bash /c/repo/.git/orca/setup-runner.sh',
+      env: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+  })
+
   it('creates a single tab without setup split when no setup is provided', () => {
     const store = createMockStore()
 
@@ -471,6 +494,29 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       })
     )
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
+  })
+
+  it('queues WSL setup launch commands with WSL path conversion on native Windows paths', () => {
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+      shell: { family: 'posix', executable: 'wsl.exe' },
+      envVars: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-2', {
+      command: 'wsl.exe -- bash /mnt/c/repo/.git/orca/setup-runner.sh',
+      env: {
+        ORCA_ROOT_PATH: 'C:\\repo',
+        ORCA_WORKTREE_PATH: 'C:\\worktrees\\wt-1'
+      }
+    })
   })
 
   it('queues a startup command when agent launch is provided', () => {
