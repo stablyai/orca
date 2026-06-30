@@ -27,7 +27,8 @@ export function briefToolArg(input: unknown): string {
     const obj = input as Record<string, unknown>
     const path = obj.file_path ?? obj.path ?? obj.notebook_path
     if (typeof path === 'string' && path.length > 0) {
-      return path.split('/').pop() ?? path
+      // Split on both separators so Windows agent paths (C:\...\app.tsx) yield a basename.
+      return path.split(/[\\/]/).pop() ?? path
     }
     const cmd = obj.command ?? obj.cmd ?? obj.query ?? obj.pattern
     if (typeof cmd === 'string') {

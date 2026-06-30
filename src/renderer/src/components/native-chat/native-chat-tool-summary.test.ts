@@ -34,6 +34,10 @@ describe('briefToolArg', () => {
     expect(briefToolArg({ file_path: '/a/b/app.tsx' })).toBe('app.tsx')
   })
 
+  it('uses the basename for Windows-style backslash paths', () => {
+    expect(briefToolArg({ file_path: 'C:\\Users\\me\\project\\app.tsx' })).toBe('app.tsx')
+  })
+
   it('falls back to a clipped command', () => {
     expect(briefToolArg({ command: 'git status --short' })).toBe('git status --short')
   })
