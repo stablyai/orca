@@ -13,8 +13,13 @@ export type ProjectHeaderDragRect = {
   // not the mounted subset. Virtualized rows unmount off-screen headers, so
   // loop index over mounted rects would map drops to the wrong persisted order.
   headerIndex: number
+  // top/bottom span the project's whole block (header + worktrees) so the drop
+  // line lands at block boundaries. headerBottom is the header row's bottom,
+  // used as the before/after threshold so hovering a project's body (its
+  // worktrees) reads as "after it", not "before it".
   top: number
   bottom: number
+  headerBottom?: number
 }
 
 export const INDICATOR_GAP_PX = 4
@@ -142,7 +147,8 @@ export function measureProjectHeaderDragRects(
       bucketKey: elementBucketKey,
       headerIndex,
       top,
-      bottom: next ?? contentBottom
+      bottom: next ?? contentBottom,
+      headerBottom: top + element.getBoundingClientRect().height
     })
   })
   rects.sort((left, right) => left.top - right.top)
@@ -261,7 +267,9 @@ export function computeProjectHeaderDropPreviewAcrossBuckets(args: {
   let dropIndex = targetRects.length
   let indicatorY = (targetRects.at(-1)?.bottom ?? localY) + INDICATOR_GAP_PX
   for (const rect of targetRects) {
-    const mid = (rect.top + rect.bottom) / 2
+    // Threshold on the header row, not the whole block: hovering a project's
+    // body (worktrees) reads as "after it" instead of "before it".
+    const mid = (rect.top + (rect.headerBottom ?? rect.bottom)) / 2
     if (localY < mid) {
       dropIndex = rect.headerIndex
       indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)

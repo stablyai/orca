@@ -207,6 +207,23 @@ describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
     expect(result?.dropIndex).toBe(1)
     expect(result?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(300)
   })
+
+  it('treats hovering a project body (its worktrees) as "after" it, not "before"', () => {
+    // Project "a" block 0..300 with a 28px header. y=40 is in its worktrees —
+    // below the header but above the block midpoint (150). With the header-row
+    // threshold this reads as "after a" (append), not "before a" (dropIndex 0).
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 40,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, headerBottom: 28, bottom: 300 }
+      ],
+      groupZones: []
+    })
+    expect(result?.dropIndex).toBe(1)
+    expect(result?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(300)
+  })
 })
 
 describe('getProjectGroupOrderForSidebarDrop', () => {
