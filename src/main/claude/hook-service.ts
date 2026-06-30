@@ -216,6 +216,10 @@ export class ClaudeHookService {
     return this.getStatus()
   }
 
+  // Why: older installs wrote managed hooks to the git-synced shared
+  // settings.json. Strip only those entries (user-authored hooks stay) and
+  // never create the file: readHooksJson returns null when it is unparseable
+  // and {} when missing, so the early return avoids resurrecting/clobbering it.
   private sweepLegacyManagedHooksFromSharedSettings(): void {
     const sharedSettingsPath = getSharedSettingsPath(this.options.settings)
     const sharedConfig = readHooksJson(sharedSettingsPath)

@@ -52,10 +52,14 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
+// Why: managed hooks are machine-specific, so they belong in the never-synced
+// settings.local.json, not the git-synced settings.json shared across machines.
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return join(homedir(), settings.configDirName, 'settings.local.json')
 }
 
+// Why: the legacy, git-synced settings.json that older installs polluted with
+// managed hooks; kept only so install/remove can sweep those stale entries out.
 export function getSharedSettingsPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return join(homedir(), settings.configDirName, 'settings.json')
 }
