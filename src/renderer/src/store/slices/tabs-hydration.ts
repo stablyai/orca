@@ -63,6 +63,9 @@ function hydrateUnifiedFormat(
       continue
     }
     const persistedEditFileIds = persistedEditFileIdsByWorktree[worktreeId] ?? new Set<string>()
+    const persistedArchitectureIds = new Set(
+      (session.architectureTabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
+    )
     const generatedTitleByTerminalId = new Map(
       (session.tabsByWorktree[worktreeId] ?? [])
         .filter((tab) => tab.generatedTitle?.trim())
@@ -97,6 +100,9 @@ function hydrateUnifiedFormat(
           // Why: old web-client sessions could persist host surface ids
           // containing "::"; those are invalid pane-key tab ids.
           return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
+        }
+        if (tab.contentType === 'architecture') {
+          return persistedArchitectureIds.has(tab.entityId)
         }
         if (!isTransientEditorContentType(tab.contentType)) {
           return true

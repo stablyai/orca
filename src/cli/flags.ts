@@ -67,6 +67,17 @@ export function getOptionalPositiveIntegerFlag(
   return value
 }
 
+export function getRequiredPositiveIntegerFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): number {
+  const value = getOptionalPositiveIntegerFlag(flags, name)
+  if (value === undefined) {
+    throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
+  }
+  return value
+}
+
 export function getOptionalNonNegativeIntegerFlag(
   flags: Map<string, string | boolean>,
   name: string

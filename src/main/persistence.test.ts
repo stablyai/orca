@@ -1610,6 +1610,52 @@ describe('Store', () => {
     expect(store.updateAutomation(automation.id, { precheck: null }).precheck).toBeNull()
   })
 
+  it('persists pipeline automation targets and pipeline run links', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const pipelineInput = {
+      templateId: 'parallel-planner-with-review',
+      repoId: 'r1',
+      sourceBranch: 'main',
+      targetBranch: 'pipeline-output',
+      taskSource: { type: 'manual' as const, tasks: [] },
+      maxConcurrent: 1,
+      plannerAgentId: 'codex' as const,
+      implementerAgentId: 'codex' as const,
+      mergerAgentId: 'codex' as const,
+      executionTargetType: 'local' as const
+    }
+    const automation = store.createAutomation({
+      name: 'Pipeline',
+      prompt: '',
+      target: {
+        type: 'pipeline',
+        pipelineTemplateId: 'parallel-planner-with-review',
+        pipelineInput
+      },
+      agentId: 'codex',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      pipelineRunId: 'pipe_run_1',
+      error: null
+    })
+
+    expect(store.listAutomations()[0].target).toMatchObject({
+      type: 'pipeline',
+      pipelineTemplateId: 'parallel-planner-with-review'
+    })
+    expect(store.listAutomationRuns(automation.id)[0].pipelineRunId).toBe('pipe_run_1')
+  })
+
   it('numbers automation run titles per automation', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

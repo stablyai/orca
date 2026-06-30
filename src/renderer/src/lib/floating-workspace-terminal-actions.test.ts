@@ -512,6 +512,7 @@ describe('switchFloatingWorkspaceTab', () => {
           }
         ]
       },
+      architectureTabsByWorktree: {},
       openFiles: [],
       setActiveTab: vi.fn(),
       settings: { activeRuntimeEnvironmentId: null },

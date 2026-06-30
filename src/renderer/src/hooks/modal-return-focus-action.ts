@@ -4,7 +4,7 @@ import type { BrowserFocusTarget } from '../components/browser-pane/browser-focu
 // Captured at open time because Radix steals document focus once the dialog
 // mounts, so the raw activeElement is gone by close time.
 export type ModalReturnFocusSurface = {
-  tabType: 'browser' | 'editor' | 'terminal' | 'simulator'
+  tabType: 'browser' | 'editor' | 'terminal' | 'simulator' | 'architecture'
   worktreeId: string | null
   browserPageId: string | null
   browserTarget: BrowserFocusTarget

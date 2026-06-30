@@ -679,6 +679,50 @@ describe('hydrateBrowserSession', () => {
     expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
   })
 
+  it('restores active architecture tab type after browser hydrate fallback', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'architecture' }
+    })
+
+    store.getState().hydrateArchitectureSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      architectureTabsByWorktree: {
+        [wt]: [
+          {
+            id: 'architecture-1',
+            worktreeId: wt,
+            modelRef: 'model',
+            projectPath: '/repo',
+            title: 'Architecture',
+            createdAt: 1
+          }
+        ]
+      },
+      activeArchitectureTabIdByWorktree: { [wt]: 'architecture-1' },
+      activeTabTypeByWorktree: { [wt]: 'architecture' }
+    })
+
+    const s = store.getState()
+    expect(s.activeArchitectureTabIdByWorktree[wt]).toBe('architecture-1')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('architecture')
+    expect(s.activeTabType).toBe('architecture')
+  })
+
   it('drops browser tabs for invalid worktrees', () => {
     const store = createTestStore()
     const validWt = 'repo1::/path/wt1'

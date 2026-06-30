@@ -57,6 +57,17 @@ function previewActiveSurfacePatch(
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
     }
   }
+  if (unifiedTab.contentType === 'architecture') {
+    return {
+      activeArchitectureTabId: unifiedTab.entityId,
+      activeTabType: 'architecture',
+      activeArchitectureTabIdByWorktree: {
+        ...state.activeArchitectureTabIdByWorktree,
+        [worktreeId]: unifiedTab.entityId
+      },
+      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('architecture')
+    }
+  }
   return {
     activeFileId: unifiedTab.entityId,
     activeTabType: 'editor',

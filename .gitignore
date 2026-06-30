@@ -82,6 +82,14 @@ docs/**
 !docs/reference/**
 # Keep generated React perf scan ledgers local; durable docs still use docs/reference.
 docs/reference/react-performance-audit.md
+!docs/orca-scryer-decision-map.md
+!docs/adr/
+!docs/adr/**
+!docs/scryer-cli-tool-parity.md
+!docs/prd/
+!docs/prd/orca-scryer-engine-catalog-foundation.md
+!docs/prd/orca-scryer-operation-migration-work-set.md
+!docs/prd/orca-scryer-operation-migration-issue-slices.md
 !docs/STYLEGUIDE.md
 !docs/mobile-terminal-shortcut-bar.md
 
@@ -115,3 +123,4 @@ src/renderer/src/i18n/locales/.zh-catalog-cache.json
 src/renderer/src/i18n/locales/.ko-catalog-cache.json
 src/renderer/src/i18n/locales/.ja-catalog-cache.json
 src/renderer/src/i18n/locales/.es-catalog-cache.json
+.gitnexus

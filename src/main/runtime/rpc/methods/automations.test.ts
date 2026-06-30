@@ -133,6 +133,60 @@ describe('automation RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   })
 
+  it('passes Pipeline automation targets through create requests', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', name: 'Pipeline' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+    const pipelineInput = {
+      templateId: 'parallel-planner-with-review',
+      repoId: 'repo-1',
+      sourceBranch: 'main',
+      targetBranch: 'pipeline-output',
+      taskSource: {
+        type: 'github_issues' as const,
+        provider: 'github' as const,
+        owner: 'Nikolatesla-lj',
+        repo: 'orca',
+        prdIssueNumber: 13,
+        pipelinePrdLabel: 'pipeline:prd-13',
+        state: 'open' as const
+      },
+      maxConcurrent: 1,
+      plannerAgentId: 'codex',
+      implementerAgentId: 'codex',
+      mergerAgentId: 'codex',
+      executionTargetType: 'local'
+    }
+
+    await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Pipeline',
+        prompt: '',
+        target: {
+          type: 'pipeline',
+          pipelineTemplateId: 'parallel-planner-with-review',
+          pipelineInput
+        },
+        agentId: 'codex',
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    )
+
+    expect(runtime.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: {
+          type: 'pipeline',
+          pipelineTemplateId: 'parallel-planner-with-review',
+          pipelineInput
+        }
+      })
+    )
+  })
+
   it('preserves null baseBranch update values through the RPC boundary', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

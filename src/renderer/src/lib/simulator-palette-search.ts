@@ -28,7 +28,12 @@ export type SimulatorPaletteSearchResult = {
   score: number
 }
 
-type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type SimulatorPaletteActiveTabType =
+  | 'browser'
+  | 'editor'
+  | 'terminal'
+  | 'simulator'
+  | 'architecture'
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 

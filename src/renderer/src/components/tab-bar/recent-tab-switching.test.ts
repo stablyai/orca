@@ -32,10 +32,12 @@ function stateWithTabs(
 ): Pick<
   AppState,
   | 'activeBrowserTabId'
+  | 'activeArchitectureTabId'
   | 'activeFileId'
   | 'activeGroupIdByWorktree'
   | 'activeTabId'
   | 'activeTabType'
+  | 'architectureTabsByWorktree'
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
   | 'openFiles'
@@ -50,10 +52,12 @@ function stateWithTabs(
   ]
   return {
     activeBrowserTabId: null,
+    activeArchitectureTabId: null,
     activeFileId: tabs.find((entry) => entry.id === activeTabId)?.entityId ?? null,
     activeGroupIdByWorktree: { [WT]: GROUP },
     activeTabId: null,
     activeTabType: 'editor',
+    architectureTabsByWorktree: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {
       [WT]: [{ id: GROUP, worktreeId: WT, activeTabId, tabOrder, recentTabIds }]

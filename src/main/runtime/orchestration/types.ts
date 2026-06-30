@@ -18,6 +18,12 @@ export type GateStatus = 'pending' | 'resolved' | 'timeout'
 
 export type CoordinatorStatus = 'idle' | 'running' | 'completed' | 'failed'
 
+export type OrchestrationTaskExecutionContext = {
+  worktreeSelector?: string
+  preferredTerminalHandle?: string
+  title?: string
+}
+
 export type MessageRow = {
   id: string
   from_handle: string
@@ -43,6 +49,7 @@ export type TaskRow = {
   spec: string
   status: TaskStatus
   deps: string
+  execution_context_json: string | null
   result: string | null
   created_at: string
   completed_at: string | null

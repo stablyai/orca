@@ -1,6 +1,7 @@
 name: PR Checks
 
 on:
+  workflow_dispatch:
   pull_request:
     types:
       - opened
@@ -28,6 +29,9 @@ jobs:
         uses: pnpm/action-setup@v6
         with:
           run_install: false
+
+      - name: Verify Node.js version
+        run: pnpm run preflight:node
 
       # Why: pnpm's bundled node-gyp ships gyp_main.py without execute
       # permission, which breaks native module builds (e.g. node-pty's
@@ -95,8 +99,8 @@ jobs:
       # Why: postinstall rebuilds better-sqlite3 for Electron's ABI via
       # @electron/rebuild, but vitest runs under system Node.js. Rebuild
       # it for Node so orchestration tests can load the native module.
-      - name: Rebuild better-sqlite3 for Node
-        run: pnpm rebuild better-sqlite3
+      - name: Rebuild native modules for Node
+        run: pnpm run rebuild:native:node
 
       # Why: install intentionally blocks Electron's package postinstall, but
       # some unit tests import `electron` under Node and require path.txt.

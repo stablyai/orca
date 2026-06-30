@@ -43,7 +43,24 @@ import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { Coordinator } from './orchestration/coordinator'
 import { OrchestrationDb } from './orchestration/db'
+import { PipelineDb } from '../pipelines/db'
+import { PipelineService } from '../pipelines/service'
+import { inspectPipelineBranchCommits } from '../pipelines/git-commit-inspector'
+import { createPipelineRuntimeExecutor } from '../pipelines/runtime-executor'
+import {
+  buildPipelineCommandWithExitMarker,
+  parsePipelineCommandExitCode
+} from '../pipelines/runtime-command-output'
+import {
+  PipelineTerminalOutputError,
+  waitForPipelineTerminalOutput
+} from '../pipelines/runtime-terminal-output'
+import type {
+  PipelineRuntimeAgentInput,
+  PipelineRuntimeWorktreeInput
+} from '../pipelines/runtime-executor'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   Automation,
@@ -1911,6 +1928,7 @@ export class OrcaRuntimeService {
   private agentDetector: AgentDetector | null = null
   private ptyForegroundAgentRefreshes = new Map<string, Promise<void>>()
   private _orchestrationDb: OrchestrationDb | null = null
+  private pipelineService: PipelineService | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
@@ -2374,6 +2392,7 @@ export class OrcaRuntimeService {
     return this.store.createAutomation({
       name: input.name,
       prompt: input.prompt,
+      target: input.target,
       precheck: input.precheck,
       agentId: input.agentId,
       runContext: input.runContext,
@@ -2403,6 +2422,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'prompt')) {
       patch.prompt = updates.prompt
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'target')) {
+      patch.target = updates.target
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'precheck')) {
       patch.precheck = updates.precheck
@@ -2544,6 +2566,203 @@ export class OrcaRuntimeService {
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this._orchestrationDb = db
+  }
+
+  getPipelineService(): PipelineService {
+    if (!this.pipelineService) {
+      const { app } = require('electron')
+      const dbPath = join(app.getPath('userData'), 'pipeline.db')
+      this.pipelineService = new PipelineService({
+        db: new PipelineDb(dbPath),
+        executor: createPipelineRuntimeExecutor({
+          orchestrationDb: this.getOrchestrationDb(),
+          runtime: {
+            createWorktree: (input) => this.createPipelineWorktree(input),
+            runAgent: (input) => this.runPipelineAgent(input),
+            createAgentTerminal: (input) => this.createPipelineAgentTerminal(input),
+            runCoordinator: async ({ db, coordinatorRunId, coordinatorHandle, maxConcurrent }) => {
+              const coordinatorRun = db.getCoordinatorRun(coordinatorRunId)
+              if (!coordinatorRun) {
+                throw new Error(`Coordinator run not found: ${coordinatorRunId}`)
+              }
+              const coordinator = new Coordinator(db, this, {
+                spec: coordinatorRun.spec,
+                coordinatorHandle,
+                pollIntervalMs: coordinatorRun.poll_interval_ms,
+                maxConcurrent,
+                onLog: (message) => {
+                  console.log(`[pipeline:${coordinatorRunId}] ${message}`)
+                }
+              })
+              const result = await coordinator.runFromExistingRun(coordinatorRunId)
+              return {
+                status: result.status === 'completed' ? 'completed' : 'failed',
+                completedTaskIds: result.completedTasks,
+                failedTaskIds: result.failedTasks
+              }
+            },
+            inspectCommits: inspectPipelineBranchCommits,
+            runCommand: (input) => this.runPipelineCommand(input)
+          }
+        })
+      })
+    }
+    return this.pipelineService
+  }
+
+  setPipelineService(service: PipelineService): void {
+    this.pipelineService = service
+  }
+
+  private async createPipelineWorktree(
+    input: PipelineRuntimeWorktreeInput
+  ): Promise<{ id: string; path: string }> {
+    const result = await this.createManagedWorktree({
+      repoSelector: input.repoSelector,
+      name: input.name,
+      baseBranch: input.baseBranch,
+      branchNameOverride: input.branchNameOverride,
+      linkedIssue: input.linkedIssue,
+      comment: input.comment,
+      displayName: input.displayName,
+      telemetrySource: 'unknown',
+      workspaceStatus: input.workspaceStatus,
+      activate: false,
+      setupDecision: 'skip',
+      lineage: input.lineage
+    })
+    return { id: result.worktree.id, path: result.worktree.path }
+  }
+
+  private async runPipelineAgent(
+    input: PipelineRuntimeAgentInput
+  ): Promise<{ terminalId?: string | null; stdout: string }> {
+    const worktree = await this.resolveWorktreeSelector(`id:${input.worktreeId}`)
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (!repo) {
+      throw new Error(`Pipeline agent repo not found for worktree ${input.worktreeId}`)
+    }
+    const startup = this.buildStartupForAgent(repo, input.agentId, input.prompt)
+    if (repo.connectionId) {
+      await this.markRemoteWorkspaceTrustedForAgent(input.agentId, repo.connectionId, worktree.path)
+    } else {
+      this.markLocalWorkspaceTrustedForAgent(input.agentId, worktree.path)
+    }
+    const terminal = await this.createTerminal(`id:${worktree.id}`, {
+      command: startup.startup.command,
+      env: startup.startup.env,
+      title: input.title,
+      focus: false
+    })
+    if (startup.followup) {
+      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+    }
+    const stdout = await this.waitForPipelineAgentOutput(
+      terminal.handle,
+      input.stage === 'planner' ? '</plan>' : '</promise>'
+    )
+    return { terminalId: terminal.handle, stdout }
+  }
+
+  private async createPipelineAgentTerminal(input: {
+    agentId: TuiAgent
+    worktreeId: string
+    title: string
+  }): Promise<{ terminalId: string | null }> {
+    const worktree = await this.resolveWorktreeSelector(`id:${input.worktreeId}`)
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (!repo) {
+      throw new Error(`Pipeline worker repo not found for worktree ${input.worktreeId}`)
+    }
+    const startup = this.buildStartupForAgent(repo, input.agentId, '')
+    if (repo.connectionId) {
+      await this.markRemoteWorkspaceTrustedForAgent(input.agentId, repo.connectionId, worktree.path)
+    } else {
+      this.markLocalWorkspaceTrustedForAgent(input.agentId, worktree.path)
+    }
+    const terminal = await this.createTerminal(`id:${worktree.id}`, {
+      command: startup.startup.command,
+      env: startup.startup.env,
+      title: input.title,
+      focus: false
+    })
+    const wait = await this.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 10_000
+    }).catch(() => null)
+    if (wait && !wait.satisfied) {
+      throw new Error(`Pipeline worker agent blocked: ${wait.blockedReason ?? 'unknown'}`)
+    }
+    return { terminalId: terminal.handle }
+  }
+
+  private async waitForPipelineAgentOutput(handle: string, expectedText: string): Promise<string> {
+    // Why: TUI agents can report idle before the injected Pipeline prompt has
+    // produced its structured stage output, so the marker is the completion gate.
+    const result = await waitForPipelineTerminalOutput({
+      handle,
+      expectedText,
+      timeoutMs: 30 * 60_000,
+      outputLimit: 2_000,
+      readTerminal: (terminalHandle, options) => this.readTerminal(terminalHandle, options),
+      waitForTerminal: (terminalHandle, options) => this.waitForTerminal(terminalHandle, options)
+    })
+    return result.stdout
+  }
+
+  private async runPipelineCommand(input: {
+    command: string
+    cwd: string
+    timeoutSeconds: number
+  }): Promise<{
+    command: string
+    exitCode: number | null
+    timedOut: boolean
+    stdout: string
+    stderr: string
+  }> {
+    const marker = `__ORCA_PIPELINE_COMMAND_EXIT_${randomUUID().replace(/-/g, '')}__`
+    const wrappedCommand = buildPipelineCommandWithExitMarker({
+      command: input.command,
+      marker,
+      platform: process.platform
+    })
+    const terminal = await this.createTerminal(`path:${input.cwd}`, {
+      command: wrappedCommand,
+      title: `Pipeline command: ${input.command.slice(0, 48)}`,
+      focus: false
+    })
+    let exitCode: number | null = null
+    let timedOut = false
+    let stdout = ''
+    try {
+      const output = await waitForPipelineTerminalOutput({
+        handle: terminal.handle,
+        expectedText: marker,
+        timeoutMs: input.timeoutSeconds * 1000,
+        outputLimit: 2_000,
+        readTerminal: (terminalHandle, options) => this.readTerminal(terminalHandle, options),
+        waitForTerminal: (terminalHandle, options) => this.waitForTerminal(terminalHandle, options)
+      })
+      stdout = output.stdout
+      exitCode = parsePipelineCommandExitCode(stdout, marker)
+    } catch (error) {
+      timedOut = error instanceof PipelineTerminalOutputError && error.code === 'timeout'
+      if (!timedOut) {
+        throw error
+      }
+    }
+    if (!stdout) {
+      const read = await this.readTerminal(terminal.handle, { limit: 2000 })
+      stdout = read.tail.join('\n')
+    }
+    return {
+      command: input.command,
+      exitCode,
+      timedOut,
+      stdout,
+      stderr: ''
+    }
   }
 
   setAutomationService(service: AutomationService): void {

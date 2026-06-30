@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: inline tab rename E2E keeps shared rename, cancel, close, and persistence helpers together so the tab-state assertions stay in one realistic user-flow fixture. */
 /**
  * E2E tests for inline tab renaming (double-click a tab to rename).
  *
@@ -92,12 +93,41 @@ test.describe('Tab Rename (Inline)', () => {
     }, worktreeId)
   }
 
+  async function setActiveCustomTitle(
+    page: Parameters<typeof getActiveTabId>[0],
+    worktreeId: string,
+    title: string
+  ): Promise<string> {
+    const tabId = await page.evaluate(
+      ({ targetWorktreeId, title }) => {
+        const store = window.__store
+        if (!store) {
+          return null
+        }
+
+        const state = store.getState()
+        const activeId = state.activeTabIdByWorktree[targetWorktreeId] ?? state.activeTabId
+        if (activeId) {
+          state.setTabCustomTitle(activeId, title)
+        }
+        return activeId
+      },
+      { targetWorktreeId: worktreeId, title }
+    )
+    expect(tabId).not.toBeNull()
+    await expect
+      .poll(async () => getActiveCustomTitle(page, worktreeId), { timeout: 3_000 })
+      .toBe(title)
+    await expect(tabLocatorByTitle(page, title)).toBeVisible()
+    return tabId!
+  }
+
   test('double-clicking a tab opens an inline rename input and Enter commits', async ({
     orcaPage
   }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
-    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
-    expect(originalTitle.length).toBeGreaterThan(0)
+    const originalTitle = 'Rename Seed Enter'
+    await setActiveCustomTitle(orcaPage, worktreeId, originalTitle)
 
     const tabLocator = tabLocatorByTitle(orcaPage, originalTitle)
     await tabLocator.dblclick()
@@ -148,7 +178,8 @@ test.describe('Tab Rename (Inline)', () => {
 
   test('Escape during inline rename discards the edit', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
-    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    const originalTitle = 'Rename Seed Escape'
+    await setActiveCustomTitle(orcaPage, worktreeId, originalTitle)
 
     const tabLocator = tabLocatorByTitle(orcaPage, originalTitle)
     await tabLocator.dblclick()
@@ -163,24 +194,19 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.press('Escape')
 
     await expect(renameInput).toBeHidden()
-    // Why: the final assertion must be on user-observable DOM, not the store's
-    // customTitle field. A render-layer bug where the tab silently paints the
-    // in-progress "Should Be Discarded" text would leave customTitle null
-    // (Escape cleared it) yet flash the discarded label to the user — the
-    // original title must still be the one rendered on the tab.
+    // Why: the final assertion must be on user-observable DOM, not only the
+    // store. A render-layer bug could leave the discarded label painted.
     await expect(tabLocatorByTitle(orcaPage, originalTitle)).toBeVisible()
     await expect
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
-      .toBe(null)
+      .toBe(originalTitle)
   })
 
   test('renaming to an empty string resets the tab to its default title', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Snapshot the default (non-custom) title first so the DOM assertion later
-    // can verify the tab reverts to *this exact* rendered text — a store-only
-    // `customTitle === null` check would pass even if the rendered label was
-    // stuck on "Seeded Custom".
+    // Snapshot the default (non-custom) title first to make sure the tab has
+    // rendered before we seed the custom title.
     const defaultTitle = await getActiveTabTitle(orcaPage, worktreeId)
     expect(defaultTitle.length).toBeGreaterThan(0)
 
@@ -215,12 +241,16 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.fill('')
     await renameInput.press('Enter')
 
-    // User-observable DOM assertion: the tab element must re-render with the
-    // original default title, not the "Seeded Custom" override.
-    await expect(tabLocatorByTitle(orcaPage, defaultTitle)).toBeVisible()
     await expect
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
       .toBe(null)
+    // User-observable DOM assertion: the custom title is gone. The underlying
+    // shell may update the default title asynchronously, so do not pin this to
+    // the earlier "Terminal N" snapshot.
+    await expect(tabLocatorByTitle(orcaPage, 'Seeded Custom')).toBeHidden()
+    const resetTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    expect(resetTitle).not.toBe('Seeded Custom')
+    await expect(tabLocatorByTitle(orcaPage, resetTitle)).toBeVisible()
   })
 
   test('clicking away (blur) commits the rename', async ({ orcaPage }) => {
@@ -248,12 +278,30 @@ test.describe('Tab Rename (Inline)', () => {
     const activeId = await getActiveTabId(orcaPage)
     const activeTab = tabs.find((t) => t.id === activeId)!
     const otherTab = tabs.find((t) => t.id !== activeId)!
+    await orcaPage.evaluate(
+      ({ targetWorktreeId, activeTabId, otherTabId }) => {
+        const store = window.__store
+        if (!store) {
+          return
+        }
+        const state = store.getState()
+        state.setTabCustomTitle(activeTabId, 'Rename Seed Blur Active')
+        state.setTabCustomTitle(otherTabId, 'Rename Seed Blur Other')
+        state.setActiveTab(activeTabId, targetWorktreeId)
+      },
+      {
+        targetWorktreeId: worktreeId,
+        activeTabId: activeTab.id,
+        otherTabId: otherTab.id
+      }
+    )
+    await expect(tabLocatorByTitle(orcaPage, 'Rename Seed Blur Active')).toBeVisible()
 
-    const tabLocator = tabLocatorByTitle(orcaPage, activeTab.title!)
+    const tabLocator = tabLocatorByTitle(orcaPage, 'Rename Seed Blur Active')
     await tabLocator.dblclick()
 
     const renameInput = orcaPage.getByRole('textbox', {
-      name: `Rename tab ${activeTab.title}`,
+      name: 'Rename tab Rename Seed Blur Active',
       exact: true
     })
     await expect(renameInput).toBeVisible()
@@ -261,7 +309,7 @@ test.describe('Tab Rename (Inline)', () => {
     await renameInput.fill('Committed By Blur')
     // Why: clicking the other tab triggers blur on the input, which should
     // run commitRename and save the typed title before the focus shifts.
-    await tabLocatorByTitle(orcaPage, otherTab.title!).click()
+    await tabLocatorByTitle(orcaPage, 'Rename Seed Blur Other').click()
 
     await expect(renameInput).toBeHidden()
     await expect(tabLocatorByTitle(orcaPage, 'Committed By Blur')).toBeVisible()
@@ -284,7 +332,8 @@ test.describe('Tab Rename (Inline)', () => {
     orcaPage
   }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
-    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    const originalTitle = 'Rename Seed Right Click'
+    await setActiveCustomTitle(orcaPage, worktreeId, originalTitle)
 
     const tabLocator = tabLocatorByTitle(orcaPage, originalTitle)
     await tabLocator.dblclick()
@@ -386,7 +435,8 @@ test.describe('Tab Rename (Inline)', () => {
   test('middle-clicking inside the rename input does not close the tab', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const tabsBefore = (await getWorktreeTabs(orcaPage, worktreeId)).length
-    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    const originalTitle = 'Rename Seed Middle Click'
+    await setActiveCustomTitle(orcaPage, worktreeId, originalTitle)
 
     const tabLocator = tabLocatorByTitle(orcaPage, originalTitle)
     await tabLocator.dblclick()

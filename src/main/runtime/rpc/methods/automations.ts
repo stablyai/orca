@@ -13,9 +13,11 @@ import {
   OptionalPlainString,
   OptionalPositiveInt,
   OptionalString,
+  requiredStringAllowingEmpty,
   requiredNumber,
   requiredString
 } from '../schemas'
+import { PipelineRunParams } from './pipelines'
 
 const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -99,9 +101,22 @@ const AutomationRuns = z.object({
   automationId: OptionalString
 })
 
+const AutomationTarget = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('prompt'),
+    prompt: requiredString('Missing automation prompt')
+  }),
+  z.object({
+    type: z.literal('pipeline'),
+    pipelineTemplateId: requiredString('Missing pipeline template id'),
+    pipelineInput: PipelineRunParams
+  })
+])
+
 const AutomationCreate = z.object({
   name: requiredString('Missing automation name'),
-  prompt: requiredString('Missing automation prompt'),
+  prompt: requiredStringAllowingEmpty('Missing automation prompt'),
+  target: AutomationTarget.optional(),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
   runContext: WorkspaceRunContext,
@@ -122,6 +137,7 @@ const AutomationCreate = z.object({
 const AutomationUpdateFields = z.object({
   name: OptionalString,
   prompt: OptionalString,
+  target: AutomationTarget.optional(),
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
   runContext: WorkspaceRunContext,

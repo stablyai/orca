@@ -198,6 +198,45 @@ describe('OrchestrationDb', () => {
       expect(d.getTask(task.id)?.created_by_terminal_handle).toBe('term_creator')
     })
 
+    it('persists generic task execution context', () => {
+      const d = createDb()
+      const task = d.createTask({
+        spec: 'work in a specific workspace',
+        executionContext: {
+          worktreeSelector: 'id:wt_task',
+          preferredTerminalHandle: 'term_existing',
+          title: 'Pipeline task #7'
+        }
+      })
+
+      expect(d.getTaskExecutionContext(task.id)).toEqual({
+        worktreeSelector: 'id:wt_task',
+        preferredTerminalHandle: 'term_existing',
+        title: 'Pipeline task #7'
+      })
+    })
+
+    it('merges task execution context updates', () => {
+      const d = createDb()
+      const task = d.createTask({
+        spec: 'work in a specific workspace',
+        executionContext: {
+          worktreeSelector: 'id:wt_task',
+          title: 'Pipeline task #7'
+        }
+      })
+
+      expect(
+        d.updateTaskExecutionContext(task.id, {
+          preferredTerminalHandle: 'term_pipeline_worker'
+        })
+      ).toEqual({
+        worktreeSelector: 'id:wt_task',
+        preferredTerminalHandle: 'term_pipeline_worker',
+        title: 'Pipeline task #7'
+      })
+    })
+
     it('creates a task with deps as pending', () => {
       const d = createDb()
       const parent = d.createTask({ spec: 'parent' })

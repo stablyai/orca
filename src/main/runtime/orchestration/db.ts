@@ -12,7 +12,8 @@ import type {
   TaskRow,
   DispatchContextRow,
   DecisionGateRow,
-  CoordinatorRun
+  CoordinatorRun,
+  OrchestrationTaskExecutionContext
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 
@@ -41,7 +42,41 @@ function generateId(prefix: string): string {
 // the terminal that created a task so task-record worktree creation can infer
 // the parent workspace even when no dispatch context exists. v4 → v5 adds
 // explicit task_title/display_name fields for orchestration worker UI labels.
-const SCHEMA_VERSION = 5
+// v5 → v6 adds generic per-task execution context for pipeline/worktree routing.
+const SCHEMA_VERSION = 6
+
+function normalizeTaskExecutionContext(
+  context: OrchestrationTaskExecutionContext | null | undefined
+): OrchestrationTaskExecutionContext | null {
+  if (!context) {
+    return null
+  }
+  const normalized: OrchestrationTaskExecutionContext = {}
+  if (context.worktreeSelector?.trim()) {
+    normalized.worktreeSelector = context.worktreeSelector.trim()
+  }
+  if (context.preferredTerminalHandle?.trim()) {
+    normalized.preferredTerminalHandle = context.preferredTerminalHandle.trim()
+  }
+  if (context.title?.trim()) {
+    normalized.title = context.title.trim()
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null
+}
+
+function parseTaskExecutionContext(
+  raw: string | null | undefined
+): OrchestrationTaskExecutionContext | null {
+  if (!raw) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw) as OrchestrationTaskExecutionContext
+    return normalizeTaskExecutionContext(parsed)
+  } catch {
+    return null
+  }
+}
 
 export class OrchestrationDb {
   private db: Database.Database
@@ -88,6 +123,7 @@ export class OrchestrationDb {
         created_by_terminal_handle TEXT,
         task_title    TEXT,
         display_name  TEXT,
+        execution_context_json TEXT,
         spec          TEXT NOT NULL,
         status        TEXT NOT NULL DEFAULT 'pending'
           CHECK(status IN (
@@ -244,6 +280,11 @@ export class OrchestrationDb {
         }
         if (!this.hasColumn('tasks', 'display_name')) {
           this.db.exec(`ALTER TABLE tasks ADD COLUMN display_name TEXT`)
+        }
+      }
+      if (current < 6) {
+        if (!this.hasColumn('tasks', 'execution_context_json')) {
+          this.db.exec(`ALTER TABLE tasks ADD COLUMN execution_context_json TEXT`)
         }
       }
       this.createUndeliveredInboxIndexIfPossible()
@@ -434,6 +475,7 @@ export class OrchestrationDb {
     deps?: string[]
     parentId?: string
     createdByTerminalHandle?: string
+    executionContext?: OrchestrationTaskExecutionContext
   }): TaskRow {
     const id = generateId('task')
     const depsJson = JSON.stringify(task.deps ?? [])
@@ -444,9 +486,10 @@ export class OrchestrationDb {
       taskTitle: task.taskTitle,
       displayName: task.displayName
     })
+    const executionContext = normalizeTaskExecutionContext(task.executionContext)
     this.db
       .prepare(
-        'INSERT INTO tasks (id, parent_id, created_by_terminal_handle, task_title, display_name, spec, status, deps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO tasks (id, parent_id, created_by_terminal_handle, task_title, display_name, execution_context_json, spec, status, deps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
       .run(
         id,
@@ -454,11 +497,29 @@ export class OrchestrationDb {
         task.createdByTerminalHandle ?? null,
         display.taskTitle || null,
         display.displayName || null,
+        executionContext ? JSON.stringify(executionContext) : null,
         task.spec,
         status,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
+  }
+
+  getTaskExecutionContext(taskId: string): OrchestrationTaskExecutionContext | null {
+    const row = this.getTask(taskId)
+    return parseTaskExecutionContext(row?.execution_context_json)
+  }
+
+  updateTaskExecutionContext(
+    taskId: string,
+    patch: OrchestrationTaskExecutionContext
+  ): OrchestrationTaskExecutionContext | null {
+    const current = this.getTaskExecutionContext(taskId) ?? {}
+    const next = normalizeTaskExecutionContext({ ...current, ...patch })
+    this.db
+      .prepare('UPDATE tasks SET execution_context_json = ? WHERE id = ?')
+      .run(next ? JSON.stringify(next) : null, taskId)
+    return next
   }
 
   getTask(id: string): TaskRow | undefined {

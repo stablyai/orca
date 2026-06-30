@@ -3,6 +3,7 @@ import { STATUS_METHODS } from './status'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
+import { PIPELINE_METHODS } from './pipelines'
 import { TERMINAL_METHODS } from './terminal'
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
@@ -42,6 +43,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...PIPELINE_METHODS,
   ...TERMINAL_METHODS,
   ...BROWSER_CORE_METHODS,
   ...BROWSER_SCREENCAST_METHODS,

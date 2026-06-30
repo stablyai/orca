@@ -110,12 +110,20 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('activeBrowserTabIdByWorktree')) {
     patch.activeBrowserTabIdByWorktree = snapshot.activeBrowserTabIdByWorktree
   }
+  if (changed.has('architectureTabsByWorktree')) {
+    patch.architectureTabsByWorktree = snapshot.architectureTabsByWorktree
+  }
+  if (changed.has('activeArchitectureTabIdByWorktree')) {
+    patch.activeArchitectureTabIdByWorktree = snapshot.activeArchitectureTabIdByWorktree
+  }
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
   }
   if (
     hasAnyChangedField(changed, [
       'activeGroupIdByWorktree',
+      'activeArchitectureTabIdByWorktree',
+      'architectureTabsByWorktree',
       'groupsByWorktree',
       'layoutByWorktree',
       'unifiedTabsByWorktree'
