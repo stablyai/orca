@@ -182,6 +182,7 @@ const FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS = 400
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
 const FOREGROUND_BUDGET_WINDOW_MS = 500
 const INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS = 32 * 1024
+const FOREGROUND_GRID_DRIFT_CHECK_MIN_MS = 250
 // Why: this is only shown if hidden renderer output was skipped and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
@@ -2324,6 +2325,58 @@ export function connectPanePty(
     getAppliedSize: (ptyId) => window.api.pty.getSize(ptyId),
     forwardResize: forwardPtyResize
   })
+  let pendingForegroundGridDriftCheckRaf: number | null = null
+  let lastForegroundGridDriftCheckAt = Number.NEGATIVE_INFINITY
+  const readProposedTerminalGrid = (): { cols: number; rows: number } | null => {
+    try {
+      const proposed = pane.fitAddon.proposeDimensions()
+      if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
+        return null
+      }
+      return proposed
+    } catch {
+      return null
+    }
+  }
+  const terminalGridDriftedFromFit = (): boolean => {
+    const proposed = readProposedTerminalGrid()
+    return Boolean(
+      proposed && (pane.terminal.cols !== proposed.cols || pane.terminal.rows !== proposed.rows)
+    )
+  }
+  const scheduleForegroundGridDriftCheck = (): void => {
+    // Why: mobile-owned PTYs intentionally keep a non-desktop grid; drift
+    // healing would refit xterm even if resize forwarding is later suppressed.
+    if (
+      disposed ||
+      !deps.isVisibleRef.current ||
+      shouldSuppressDesktopPtyResize() ||
+      pendingForegroundGridDriftCheckRaf !== null
+    ) {
+      return
+    }
+    const now = performance.now()
+    if (now - lastForegroundGridDriftCheckAt < FOREGROUND_GRID_DRIFT_CHECK_MIN_MS) {
+      return
+    }
+    lastForegroundGridDriftCheckAt = now
+    pendingForegroundGridDriftCheckRaf = requestAnimationFrame(() => {
+      pendingForegroundGridDriftCheckRaf = null
+      if (
+        disposed ||
+        !deps.isVisibleRef.current ||
+        shouldSuppressDesktopPtyResize() ||
+        !terminalGridDriftedFromFit()
+      ) {
+        return
+      }
+      // Why: xterm cell metrics can settle after the DOM box stops resizing, so
+      // ResizeObserver never fires even though FitAddon now proposes more cols.
+      requestStablePaneFit(pane as ManagedPaneInternal, () =>
+        ptySizeReassertion.request({ fit: false })
+      )
+    })
+  }
 
   // Why: observe the outer pane as the layout signal for both desktop drift
   // healing and mobile take-back. Normal desktop panes compare xterm against
@@ -3269,6 +3322,9 @@ export function connectPanePty(
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
       const foregroundOutput = foreground || parseHiddenStartupOutput
+      if (foreground) {
+        scheduleForegroundGridDriftCheck()
+      }
       const renderRefreshDecision = foregroundOutput
         ? shouldForceForegroundRenderRefresh(data)
         : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
@@ -4829,6 +4885,10 @@ export function connectPanePty(
       startupGridSettleHandle?.cancel()
       startupGridSettleHandle = null
       ptySizeReassertion.dispose()
+      if (pendingForegroundGridDriftCheckRaf !== null) {
+        cancelAnimationFrame(pendingForegroundGridDriftCheckRaf)
+        pendingForegroundGridDriftCheckRaf = null
+      }
       if (terminalKeyTargetSupportsEvents) {
         terminalKeyTarget.removeEventListener('keydown', onTerminalKeyDown, { capture: true })
       }
