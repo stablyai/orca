@@ -359,6 +359,14 @@ function WorkspaceRunTargetCombobox({
                     <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm">{ephemeralVmLabel}</div>
+                      {/* Why: a second line so this row matches the two-line height of the host
+                          options above, and to hint what choosing it opens. */}
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {translate(
+                          'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
+                          'Provision an on-demand environment from a recipe'
+                        )}
+                      </div>
                     </div>
                     <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
                   </CommandItem>
