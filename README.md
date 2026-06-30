@@ -224,6 +224,38 @@ brew install --cask stablyai/orca/orca
 yay -S stably-orca-bin
 ```
 
+#### Headless Ubuntu / Linux AppImage troubleshooting
+
+The Linux AppImage packages the desktop app. On a fresh or headless Ubuntu 22.04 server it may fail before the window opens because Electron still needs desktop, sandbox, and FUSE libraries from the host.
+
+Recommended path for servers:
+
+- If you only need to run agent CLIs or a project on a remote machine, install those CLI tools directly on the server and connect to that machine from an Orca desktop session over SSH rather than launching the AppImage on the server console.
+- Run the Orca desktop AppImage on a workstation with a display, then use your normal SSH workflow to reach the Ubuntu host.
+- For a remote GUI session, provide a real desktop session, VNC/RDP, or X11/Wayland forwarding; a plain SSH shell with no `DISPLAY` is not enough for the desktop AppImage.
+
+Ubuntu 22.04 dependency checklist:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  ca-certificates curl fuse libfuse2 \
+  libgtk-3-0 libgbm1 libnss3 libxss1 libasound2 \
+  libatk-bridge2.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 \
+  xdg-utils desktop-file-utils
+chmod +x ./orca-linux.AppImage
+./orca-linux.AppImage
+```
+
+If the AppImage still does not start:
+
+- `FATAL:gpu_data_manager_impl_private.cc` or GPU/GL errors: retry with `./orca-linux.AppImage --disable-gpu`.
+- `The SUID sandbox helper binary was found, but is not configured correctly`: use a desktop session with user namespaces enabled, or test with `./orca-linux.AppImage --no-sandbox` only on a trusted single-user machine.
+- `dlopen(): error loading libfuse.so.2`: install `libfuse2`; Ubuntu 22.04 ships FUSE 3 by default, but many AppImages still require the FUSE 2 compatibility library.
+- `Gtk-WARNING cannot open display` or `Missing X server or $DISPLAY`: start Orca from a graphical login, VNC/RDP session, or forwarded display; headless SSH alone is unsupported for the desktop UI.
+- To inspect missing libraries without launching the UI, run `./orca-linux.AppImage --appimage-extract` and then `ldd squashfs-root/orca`.
+- Prefer package-manager builds such as the Arch AUR package where available, because the OS package manager can surface missing shared-library dependencies more clearly than an AppImage.
+
 ### Mobile Companion — iOS, Android
 
 Pair with your desktop app to monitor and steer your agents from your phone.
