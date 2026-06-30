@@ -1,5 +1,5 @@
-import { accessSync, constants as fsConstants, existsSync, statSync } from 'fs'
-import { isAbsolute, join, normalize } from 'path'
+import { accessSync, constants as fsConstants, existsSync, statSync } from 'node:fs'
+import { isAbsolute, join, normalize } from 'node:path'
 import type {
   EphemeralVmRecipeDoctorCheck,
   EphemeralVmRecipeDoctorResult
