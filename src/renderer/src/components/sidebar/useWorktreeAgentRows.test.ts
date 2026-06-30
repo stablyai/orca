@@ -360,6 +360,39 @@ describe('buildWorktreeAgentRows', () => {
     ])
   })
 
+  it('anchors missing-tab row order to the oldest state history entry', () => {
+    const first = makeEntry(PANE_KEY_1, 2400, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      stateHistory: [
+        { state: 'working', prompt: 'omp worker', startedAt: 1000 },
+        { state: 'blocked', prompt: 'omp worker', startedAt: 1800 }
+      ]
+    })
+    const second = makeEntry(PANE_KEY_2, 1600, {
+      state: 'waiting',
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      stateHistory: [
+        { state: 'working', prompt: 'omp worker', startedAt: 1000 },
+        { state: 'blocked', prompt: 'omp worker', startedAt: 1200 }
+      ]
+    })
+
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [second, first],
+      retained: [],
+      now: 2500
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.startedAt, row.tab.createdAt])).toEqual([
+      [PANE_KEY_1, 1000, 1000],
+      [PANE_KEY_2, 1000, 1000]
+    ])
+  })
+
   it('uses ordinal pane-key comparison for final row ordering ties', () => {
     expect(comparePaneKeysOrdinal('tab-\u00e4', 'tab-z')).toBeGreaterThan(0)
   })
