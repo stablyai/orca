@@ -69,11 +69,13 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkil
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
+  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
+import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 
@@ -2369,6 +2371,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
+      // Why: an SSH-mode per-workspace-env's workspace is the repo's main worktree, so deleting it
+      // routes here (project removal) rather than through removeWorktree. Tear down the backing
+      // ephemeral runtime (Docker/VM + hidden SSH target) first so it doesn't leak when the project
+      // is removed. Matches on the repo's runtime-owned connectionId and its known worktree ids.
+      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
+        await cleanupEphemeralVmRuntimesForDeleted({
+          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
+          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
+        })
+      }
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
       await (target.kind === 'local'
         ? window.api.repos.remove({ repoId: projectId })
