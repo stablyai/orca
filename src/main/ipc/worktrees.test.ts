@@ -3661,24 +3661,27 @@ describe('registerWorktreeHandlers', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-ssh',
-        name: 'improve-dashboard'
-      })
-    ).rejects.toThrow(
-      /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref "origin\/main" from "origin"\./
-    )
+    try {
+      await expect(
+        handlers['worktrees:create'](null, {
+          repoId: 'repo-ssh',
+          name: 'improve-dashboard'
+        })
+      ).rejects.toThrow(
+        /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref "origin\/main" from "origin"\./
+      )
 
-    expect(provider.addWorktree).not.toHaveBeenCalled()
-    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      '/remote/repo',
-      'origin',
-      'main',
-      'refs/remotes/origin/main'
-    )
-    expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref]', expect.any(Error))
-    consoleSpy.mockRestore()
+      expect(provider.addWorktree).not.toHaveBeenCalled()
+      expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+        '/remote/repo',
+        'origin',
+        'main',
+        'refs/remotes/origin/main'
+      )
+      expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref]', expect.any(Error))
+    } finally {
+      consoleSpy.mockRestore()
+    }
   })
 
   it('classifies a non-Error rejection from refreshRemoteTrackingBase to [unknown]', async () => {
@@ -3716,16 +3719,19 @@ describe('registerWorktreeHandlers', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-ssh',
-        name: 'improve-dashboard'
-      })
-    ).rejects.toThrow(/^\[unknown\] Could not refresh base ref "origin\/main" from "origin"\.$/)
-    // Why: the throw helper passes opts.cause through verbatim when it is not
-    // an Error (the security scrub step is gated on instanceof Error).
-    expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref]', 'plain string rejection')
-    consoleSpy.mockRestore()
+    try {
+      await expect(
+        handlers['worktrees:create'](null, {
+          repoId: 'repo-ssh',
+          name: 'improve-dashboard'
+        })
+      ).rejects.toThrow(/^\[unknown\] Could not refresh base ref "origin\/main" from "origin"\.$/)
+      // Why: the throw helper passes opts.cause through verbatim when it is not
+      // an Error (the security scrub step is gated on instanceof Error).
+      expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref]', 'plain string rejection')
+    } finally {
+      consoleSpy.mockRestore()
+    }
   })
 
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
@@ -4230,18 +4236,21 @@ describe('registerWorktreeHandlers', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-1',
-        name: 'improve-dashboard'
-      })
-    ).rejects.toThrow(
-      /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref "origin\/main" from "origin"\./
-    )
+    try {
+      await expect(
+        handlers['worktrees:create'](null, {
+          repoId: 'repo-1',
+          name: 'improve-dashboard'
+        })
+      ).rejects.toThrow(
+        /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref "origin\/main" from "origin"\./
+      )
 
-    expect(addWorktreeMock).not.toHaveBeenCalled()
-    expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref-precheck]', expect.any(Error))
-    consoleSpy.mockRestore()
+      expect(addWorktreeMock).not.toHaveBeenCalled()
+      expect(consoleSpy).toHaveBeenCalledWith('[refresh-base-ref-precheck]', expect.any(Error))
+    } finally {
+      consoleSpy.mockRestore()
+    }
   })
 
   it('delegates remote-tracking base freshness to the runtime before create', async () => {
