@@ -133,7 +133,8 @@ import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
-import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
+import { useRepoHeaderDrag } from './project-header-drag'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 import { computeHeaderDragRowShifts } from './header-drag-row-shifts'
 import { resolveHeaderDragBlockUnits } from './header-drag-block-units'
 import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
@@ -391,7 +392,7 @@ function stopRepoHeaderMenuEvent(event: React.SyntheticEvent<HTMLElement>): void
 }
 
 function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>): boolean {
-  return isRepoHeaderActionTarget(event.target, event.currentTarget)
+  return isHeaderActionTarget(event.target, event.currentTarget)
 }
 
 function getWorktreeOptionId(rowKey: string): string {

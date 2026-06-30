@@ -86,8 +86,7 @@ vi.mock('./project-header-drag', () => ({
   useRepoHeaderDrag: () => ({
     state: { draggingRepoId: null, dropIndicatorY: null },
     onHandlePointerDown: vi.fn()
-  }),
-  isRepoHeaderActionTarget: () => false
+  })
 }))
 
 vi.mock('@/components/ui/hover-card', () => ({

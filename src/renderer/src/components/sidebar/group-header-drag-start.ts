@@ -3,10 +3,10 @@ import type { PointerEvent } from 'react'
 
 import { measureGroupHeaderDragRects } from './group-header-drop'
 import {
-  isGroupHeaderActionTarget,
   isGroupHeaderDragHandleTarget,
   type GroupHeaderDragSession
 } from './group-header-drag-contract'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export function createGroupHeaderDragSession(args: {
@@ -22,7 +22,7 @@ export function createGroupHeaderDragSession(args: {
   if (!isGroupHeaderDragHandleTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  if (isGroupHeaderActionTarget(args.event.target, args.event.currentTarget)) {
+  if (isHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
   const group = args.groupsById.get(args.groupId)

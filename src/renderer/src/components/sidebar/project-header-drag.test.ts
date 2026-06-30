@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 
-import { isRepoHeaderActionTarget } from './project-header-drag'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 
 function createHeader(markup: string): HTMLElement {
   const header = document.createElement('div')
@@ -19,20 +19,20 @@ describe('repo header action targets', () => {
       </span>
     `)
 
-    expect(isRepoHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
+    expect(isHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
   })
 
   it('ignores native nested controls', () => {
     const header = createHeader('<button type="button"><span id="icon"></span></button>')
 
-    expect(isRepoHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
+    expect(isHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
   })
 
   it('does not ignore plain header text or the header itself', () => {
     const header = createHeader('<span id="label">Orca</span>')
 
-    expect(isRepoHeaderActionTarget(header.querySelector('#label'), header)).toBe(false)
-    expect(isRepoHeaderActionTarget(header, header)).toBe(false)
+    expect(isHeaderActionTarget(header.querySelector('#label'), header)).toBe(false)
+    expect(isHeaderActionTarget(header, header)).toBe(false)
   })
 
   it('ignores the hover collapse affordance', () => {
@@ -42,6 +42,6 @@ describe('repo header action targets', () => {
       </div>
     `)
 
-    expect(isRepoHeaderActionTarget(header.querySelector('#chevron'), header)).toBe(true)
+    expect(isHeaderActionTarget(header.querySelector('#chevron'), header)).toBe(true)
   })
 })

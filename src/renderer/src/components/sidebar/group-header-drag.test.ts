@@ -3,11 +3,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  isGroupHeaderActionTarget,
-  isGroupHeaderDragHandleTarget,
-  useGroupHeaderDrag
-} from './group-header-drag'
+import { isGroupHeaderDragHandleTarget, useGroupHeaderDrag } from './group-header-drag'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 import type { GroupDragState } from './group-header-drag-contract'
 import type { ProjectGroup } from '../../../../shared/types'
 
@@ -31,20 +28,20 @@ describe('group header action targets', () => {
       </span>
     `)
 
-    expect(isGroupHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
+    expect(isHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
   })
 
   it('ignores native nested controls', () => {
     const header = createHeader('<button type="button"><span id="icon"></span></button>')
 
-    expect(isGroupHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
+    expect(isHeaderActionTarget(header.querySelector('#icon'), header)).toBe(true)
   })
 
   it('does not ignore plain header text or the header itself', () => {
     const header = createHeader('<span id="label">My Group</span>')
 
-    expect(isGroupHeaderActionTarget(header.querySelector('#label'), header)).toBe(false)
-    expect(isGroupHeaderActionTarget(header, header)).toBe(false)
+    expect(isHeaderActionTarget(header.querySelector('#label'), header)).toBe(false)
+    expect(isHeaderActionTarget(header, header)).toBe(false)
   })
 
   it('ignores the hover collapse affordance', () => {
@@ -54,7 +51,7 @@ describe('group header action targets', () => {
       </div>
     `)
 
-    expect(isGroupHeaderActionTarget(header.querySelector('#chevron'), header)).toBe(true)
+    expect(isHeaderActionTarget(header.querySelector('#chevron'), header)).toBe(true)
   })
 })
 

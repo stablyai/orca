@@ -74,7 +74,4 @@ export function useGroupHeaderDrag(args: UseGroupHeaderDragArgs): GroupHeaderDra
   })
 }
 
-export {
-  isGroupHeaderActionTarget,
-  isGroupHeaderDragHandleTarget
-} from './group-header-drag-contract'
+export { isGroupHeaderDragHandleTarget } from './group-header-drag-contract'

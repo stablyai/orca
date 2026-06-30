@@ -7,9 +7,9 @@ import {
 } from './project-header-drop'
 import {
   isProjectHeaderDragHandleTarget,
-  isRepoHeaderActionTarget,
   type ProjectHeaderDragSession
 } from './project-header-drag-contract'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 import type { Repo } from '../../../../shared/types'
 
 export function createProjectHeaderDragSession(args: {
@@ -29,7 +29,7 @@ export function createProjectHeaderDragSession(args: {
   if (!isProjectHeaderDragHandleTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
+  if (isHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
   const repo = args.repoById.get(args.repoId)

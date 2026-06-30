@@ -2,7 +2,7 @@ import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
 import type { Repo } from '../../../../shared/types'
-import { isHeaderDragHandleTarget, isHeaderActionTarget } from './header-drag-target-predicates'
+import { isHeaderDragHandleTarget } from './header-drag-target-predicates'
 
 export type RepoDragState = {
   draggingRepoId: string | null
@@ -60,11 +60,4 @@ export function isProjectHeaderDragHandleTarget(
   currentTarget: HTMLElement
 ): boolean {
   return isHeaderDragHandleTarget(target, currentTarget, REPO_HEADER_DRAG_HANDLE_SELECTOR)
-}
-
-export function isRepoHeaderActionTarget(
-  target: EventTarget | null,
-  currentTarget: HTMLElement
-): boolean {
-  return isHeaderActionTarget(target, currentTarget)
 }

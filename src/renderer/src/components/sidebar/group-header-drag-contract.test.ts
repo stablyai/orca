@@ -1,9 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import {
-  isGroupHeaderActionTarget,
-  isGroupHeaderDragHandleTarget
-} from './group-header-drag-contract'
+import { isGroupHeaderDragHandleTarget } from './group-header-drag-contract'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 
 function build(html: string): { root: HTMLElement; handle: HTMLElement; button: HTMLElement } {
   const root = document.createElement('div')
@@ -26,6 +24,6 @@ describe('group header drag predicates', () => {
   })
   it('treats buttons inside the header as action targets', () => {
     const { root, button } = build('<button></button>')
-    expect(isGroupHeaderActionTarget(button, root)).toBe(true)
+    expect(isHeaderActionTarget(button, root)).toBe(true)
   })
 })

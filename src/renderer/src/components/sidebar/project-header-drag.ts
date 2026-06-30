@@ -94,7 +94,4 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
   })
 }
 
-export {
-  isRepoHeaderActionTarget,
-  isProjectHeaderDragHandleTarget
-} from './project-header-drag-contract'
+export { isProjectHeaderDragHandleTarget } from './project-header-drag-contract'

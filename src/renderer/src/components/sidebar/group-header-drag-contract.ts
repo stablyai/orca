@@ -3,7 +3,7 @@ import type { PointerEvent } from 'react'
 
 import type { GroupHeaderDragRect } from './group-header-drop'
 import type { ProjectGroup } from '../../../../shared/types'
-import { isHeaderDragHandleTarget, isHeaderActionTarget } from './header-drag-target-predicates'
+import { isHeaderDragHandleTarget } from './header-drag-target-predicates'
 
 export type GroupDragState = {
   draggingGroupId: string | null
@@ -51,11 +51,4 @@ export function isGroupHeaderDragHandleTarget(
   currentTarget: HTMLElement
 ): boolean {
   return isHeaderDragHandleTarget(target, currentTarget, GROUP_HEADER_DRAG_HANDLE_SELECTOR)
-}
-
-export function isGroupHeaderActionTarget(
-  target: EventTarget | null,
-  currentTarget: HTMLElement
-): boolean {
-  return isHeaderActionTarget(target, currentTarget)
 }
