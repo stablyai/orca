@@ -39,6 +39,7 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-sc
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
+import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -1052,9 +1053,17 @@ describe('Store', () => {
           host: 'unlimited.example.com',
           port: 22,
           username: 'dev',
-          relayGracePeriodSeconds: 10800,
+          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
           remoteWorkspaceSyncEnabled: true,
           remoteWorkspaceSyncGracePeriodSeconds: 0
+        },
+        {
+          id: 'ssh-form-default-relay',
+          label: 'Form-default relay',
+          host: 'form-default.example.com',
+          port: 22,
+          username: 'dev',
+          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
         }
       ]
     })
@@ -1066,6 +1075,7 @@ describe('Store', () => {
     expect(targets[1].relayGracePeriodSeconds).toBe(0)
     expect(targets[2].relayGracePeriodSeconds).toBe(0)
     expect(targets[3].relayGracePeriodSeconds).toBe(0)
+    expect(targets[4]).not.toHaveProperty('relayGracePeriodSeconds')
     for (const target of targets) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -1077,6 +1087,7 @@ describe('Store', () => {
     expect(persisted.sshTargets?.[1]?.relayGracePeriodSeconds).toBe(0)
     expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(0)
     expect(persisted.sshTargets?.[3]?.relayGracePeriodSeconds).toBe(0)
+    expect(persisted.sshTargets?.[4]).not.toHaveProperty('relayGracePeriodSeconds')
     for (const target of persisted.sshTargets ?? []) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')

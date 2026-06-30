@@ -4454,7 +4454,7 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Host or SSH config alias is required.",
           "sshPortInvalid": "Port must be between 1 and 65535.",
-          "sshRelayGraceInvalid": "Relay grace period must be between 60 and {{value0}} seconds.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
           "sshSaved": "SSH host added.",
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
@@ -4463,7 +4463,7 @@
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
           "serverDescription": "Pair with Orca running on another computer.",
-          "sshDescription": "Add a machine you can log into over SSH.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
           "cancel": "Cancel",
           "saving": "Saving...",
           "save": "Save",
@@ -4487,7 +4487,8 @@
           "sshImportSynced": "Synced {{value0}} host{{value1}}.",
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
-          "importSshConfig": "Import ~/.ssh/config"
+          "importSshConfig": "Import ~/.ssh/config",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
         }
       },
       "shared": {
@@ -6261,7 +6262,7 @@
           "2227ce47b6": "대상을 저장하지 못했습니다.",
           "f602009125": "대상이 추가됨",
           "b4ba0ce33d": "타겟이 업데이트되었습니다.",
-          "3879cbaa52": "릴레이 유예 기간은 60초에서 {{value0}}초 사이여야 하며, 재설정될 때까지 유지를 선택해야 합니다.",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "포트는 1에서 65535 사이여야 합니다.",
           "0e5aa04161": "호스트 또는 SSH 구성 별칭이 필요합니다.",
           "f1fc50dad2": "SSH 대상을 로드하지 못했습니다.",
@@ -6296,7 +6297,9 @@
           "c77f1abfe3": "원격 terminals 종료 중",
           "18968ede9e": "오류",
           "f0871e6bfb": "연결",
-          "47e94bd6ba": "연결됨"
+          "47e94bd6ba": "연결됨",
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "그러면 이 SSH 대상에서 활성 terminal 세션이 중지됩니다. 다시 연결해도 복원되지 않습니다.",
@@ -6308,11 +6311,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "취소",
-          "1b19b00e93": "(7일).",
-          "137e88ce8d": "연결 해제 후 릴레이가 terminals을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:",
-          "b574994adc": "원격 terminals은 종료하거나 릴레이를 재설정할 때까지 계속 사용할 수 있습니다.",
-          "71fc546097": "재설정될 때까지 살아 있음",
-          "92f80edbfd": "릴레이 유예 기간(초)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "선택 사항. ProxyJump / ssh -J와 동일합니다.",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "점프 호스트",
@@ -6332,7 +6335,9 @@
           "9518545cb6": "대상 추가",
           "a62b4cb39a": "변경 사항 저장",
           "29af933cd5": "새로운 SSH 대상",
-          "f2331ce599": "SSH 대상 편집"
+          "f2331ce599": "SSH 대상 편집",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)"
         },
         "TasksPane": {
           "3a72b9745e": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",

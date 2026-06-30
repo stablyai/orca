@@ -4454,7 +4454,7 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Host or SSH config alias is required.",
           "sshPortInvalid": "Port must be between 1 and 65535.",
-          "sshRelayGraceInvalid": "Relay grace period must be between 60 and {{value0}} seconds.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
           "sshSaved": "SSH host added.",
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
@@ -4463,7 +4463,7 @@
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
           "serverDescription": "Pair with Orca running on another computer.",
-          "sshDescription": "Add a machine you can log into over SSH.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
           "cancel": "Cancel",
           "saving": "Saving...",
           "save": "Save",
@@ -4487,7 +4487,8 @@
           "sshImportSynced": "Synced {{value0}} host{{value1}}.",
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
-          "importSshConfig": "Import ~/.ssh/config"
+          "importSshConfig": "Import ~/.ssh/config",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
         }
       },
       "shared": {
@@ -6276,7 +6277,7 @@
           "2227ce47b6": "No se pudo guardar el objetivo",
           "f602009125": "Objetivo agregado",
           "b4ba0ce33d": "Objetivo actualizado",
-          "3879cbaa52": "El período de gracia de retransmisión debe estar entre 60 y {{value0}} segundos, o elegir mantener activo hasta que se reinicie",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "El puerto debe estar entre 1 y 65535",
           "0e5aa04161": "Se requiere un alias de configuración de host o SSH",
           "f1fc50dad2": "No se pudieron cargar destinos SSH",
@@ -6311,7 +6312,9 @@
           "c77f1abfe3": "Terminar con terminales remotos",
           "18968ede9e": "Error",
           "f0871e6bfb": "conectar",
-          "47e94bd6ba": "conectado"
+          "47e94bd6ba": "conectado",
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "Esto detendrá las sesiones de terminal activas en este destino SSH. Volver a conectarlos no los restaurará.",
@@ -6323,11 +6326,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancelar",
-          "1b19b00e93": "(7 días).",
-          "137e88ce8d": "Cuánto tiempo el relé mantiene vivos los terminales después de la desconexión. Predeterminado: 10800 (3 horas). Máximo:",
-          "b574994adc": "Los terminales remotos permanecen disponibles hasta que los finalice o reinicie el relé.",
-          "71fc546097": "Mantener vivo hasta reiniciar",
-          "92f80edbfd": "Período de gracia del relevo (segundos)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "Opcional. Equivalente a ProxyJump/ssh -J.",
           "11bcb4507a": "bastion.ejemplo.com",
           "b2ab248ded": "Anfitrión de salto",
@@ -6347,7 +6350,9 @@
           "9518545cb6": "Agregar destino",
           "a62b4cb39a": "Guardar cambios",
           "29af933cd5": "Nuevo destino SSH",
-          "f2331ce599": "Editar destino SSH"
+          "f2331ce599": "Editar destino SSH",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)"
         },
         "TasksPane": {
           "3a72b9745e": "Elija qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral.",

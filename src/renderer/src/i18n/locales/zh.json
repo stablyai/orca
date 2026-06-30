@@ -4454,7 +4454,7 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Host or SSH config alias is required.",
           "sshPortInvalid": "Port must be between 1 and 65535.",
-          "sshRelayGraceInvalid": "Relay grace period must be between 60 and {{value0}} seconds.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
           "sshSaved": "SSH host added.",
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
@@ -4463,7 +4463,7 @@
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
           "serverDescription": "Pair with Orca running on another computer.",
-          "sshDescription": "Add a machine you can log into over SSH.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
           "cancel": "Cancel",
           "saving": "Saving...",
           "save": "Save",
@@ -4487,7 +4487,8 @@
           "sshImportSynced": "Synced {{value0}} host{{value1}}.",
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
-          "importSshConfig": "Import ~/.ssh/config"
+          "importSshConfig": "Import ~/.ssh/config",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
         }
       },
       "shared": {
@@ -6261,7 +6262,7 @@
           "2227ce47b6": "保存目标失败",
           "f602009125": "目标已添加",
           "b4ba0ce33d": "目标已更新",
-          "3879cbaa52": "中继宽限期必须介于 60 到 {{value0}} 秒之间，或者选择保持活动状态直至重置",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "端口必须介于 1 和 65535 之间",
           "0e5aa04161": "需要主机或 SSH 配置别名",
           "f1fc50dad2": "无法加载 SSH 目标",
@@ -6296,7 +6297,9 @@
           "c77f1abfe3": "结束远程终端",
           "18968ede9e": "错误",
           "f0871e6bfb": "连接",
-          "47e94bd6ba": "已连接"
+          "47e94bd6ba": "已连接",
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "这将停止此 SSH 目标上的活动终端会话。重新连接不会恢复它们。",
@@ -6308,11 +6311,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "取消",
-          "1b19b00e93": "（7 天）。",
-          "137e88ce8d": "断开连接后继电器使终端保持活动状态的时间。默认值：10800（3 小时）。最大限度：",
-          "b574994adc": "远程终端保持可用状态，直到您结束它们或重置继电器。",
-          "71fc546097": "保持活动状态直至重置",
-          "92f80edbfd": "中继宽限期（秒）",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "可选。相当于 ProxyJump / ssh -J。",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "跳跃主机",
@@ -6332,7 +6335,9 @@
           "9518545cb6": "添加目标",
           "a62b4cb39a": "保存更改",
           "29af933cd5": "新的 SSH 目标",
-          "f2331ce599": "编辑 SSH 目标"
+          "f2331ce599": "编辑 SSH 目标",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)"
         },
         "TasksPane": {
           "3a72b9745e": "选择要在“任务”页面和侧边栏快捷键中显示的任务提供商。",

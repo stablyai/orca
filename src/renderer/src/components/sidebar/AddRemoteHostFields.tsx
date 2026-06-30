@@ -103,6 +103,12 @@ export function SshHostFields({
           )}
         />
       </div>
+      <p className="text-xs text-muted-foreground sm:col-span-2">
+        {translate(
+          'auto.components.sidebar.AddRemoteHostDialog.sshPersistenceDefault',
+          'Remote terminals on this host stay alive until you end them or reset the relay.'
+        )}
+      </p>
     </form>
   )
 }

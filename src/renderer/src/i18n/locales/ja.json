@@ -4454,7 +4454,7 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Host or SSH config alias is required.",
           "sshPortInvalid": "Port must be between 1 and 65535.",
-          "sshRelayGraceInvalid": "Relay grace period must be between 60 and {{value0}} seconds.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
           "sshSaved": "SSH host added.",
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
@@ -4463,7 +4463,7 @@
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
           "serverDescription": "Pair with Orca running on another computer.",
-          "sshDescription": "Add a machine you can log into over SSH.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
           "cancel": "Cancel",
           "saving": "Saving...",
           "save": "Save",
@@ -4487,7 +4487,8 @@
           "sshImportSynced": "Synced {{value0}} host{{value1}}.",
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
-          "importSshConfig": "Import ~/.ssh/config"
+          "importSshConfig": "Import ~/.ssh/config",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
         }
       },
       "shared": {
@@ -6298,7 +6299,7 @@
           "2227ce47b6": "ターゲットの保存に失敗しました",
           "f602009125": "ターゲットが追加されました",
           "b4ba0ce33d": "ターゲットが更新されました",
-          "3879cbaa52": "リレーの猶予期間は 60 ～ {{value0}} 秒にする必要があります。または、リセットされるまでキープアライブを選択",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "ポートは 1 ～ 65535 でなければなりません",
           "0e5aa04161": "ホストまたは SSH 構成エイリアスが必要です",
           "f1fc50dad2": "SSH ターゲットのロードに失敗しました",
@@ -6333,7 +6334,9 @@
           "c77f1abfe3": "リモート terminals の終了",
           "18968ede9e": "エラー",
           "f0871e6bfb": "接続",
-          "47e94bd6ba": "接続されています"
+          "47e94bd6ba": "接続されています",
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "これにより、この SSH ターゲット上のアクティブな terminal セッションが停止されます。再接続しても復元されません。",
@@ -6345,11 +6348,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "キャンセル",
-          "1b19b00e93": "(7日間)。",
-          "137e88ce8d": "切断後にリレーが terminals を存続させる期間。デフォルト: 10800 (3 時間)。最大：",
-          "b574994adc": "リモート terminals は、終了するかリレーをリセットするまで使用可能です。",
-          "71fc546097": "リセットされるまで維持",
-          "92f80edbfd": "リレー猶予期間 (秒)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "オプション。 ProxyJump / ssh -J と同等。",
           "11bcb4507a": "バスティオン.example.com",
           "b2ab248ded": "ジャンプホスト",
@@ -6369,7 +6372,9 @@
           "9518545cb6": "ターゲットの追加",
           "a62b4cb39a": "変更を保存",
           "29af933cd5": "新規 SSH ターゲット",
-          "f2331ce599": "SSH ターゲットの編集"
+          "f2331ce599": "SSH ターゲットの編集",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)"
         },
         "TasksPane": {
           "3a72b9745e": "[タスク] ページとサイドバーのショートカットに表示するタスク プロバイダーを選択します。",
