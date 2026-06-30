@@ -457,7 +457,7 @@ export type RuntimeTerminalAgentStatus = {
 }
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'
-export type RuntimeTerminalCreateRequestPayload = {
+type RuntimeTerminalCreateBaseRequestPayload = {
   requestId: string
   worktreeId?: string
   afterTabId?: string
@@ -471,10 +471,16 @@ export type RuntimeTerminalCreateRequestPayload = {
   title?: string
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
-  // Why: only the host-owned runtime-session bridge may bypass the renderer's
-  // active-runtime local terminal guard; ordinary UI requests must omit this.
-  source?: 'runtime-session'
 }
+
+export type RuntimeTerminalCreateRequestPayload =
+  | (RuntimeTerminalCreateBaseRequestPayload & { source?: undefined })
+  | (RuntimeTerminalCreateBaseRequestPayload & {
+      worktreeId: string
+      // Why: only the host-owned runtime-session bridge may bypass the renderer's
+      // active-runtime local terminal guard; ordinary UI requests must omit this.
+      source: 'runtime-session'
+    })
 
 export type RuntimeTerminalCreate = {
   handle: string

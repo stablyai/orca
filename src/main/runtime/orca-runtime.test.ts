@@ -7184,6 +7184,78 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('accepts renderer-backed terminal create replies only from the target renderer', async () => {
+    const webContents = { send: vi.fn() }
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: { send: vi.fn() } },
+        { requestId: payload.requestId, error: 'spoofed renderer reply' }
+      )
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Renderer Terminal',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Renderer Terminal' }
+      )
+    })
+    webContents.send = send
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'codex',
+        rendererBacked: true,
+        title: 'Renderer Terminal'
+      })
+    ).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: 'tab-renderer',
+      title: 'Renderer Terminal',
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'visible'
+    })
+    expect(send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({
+        requestId: expect.any(String),
+        worktreeId: TEST_WORKTREE_ID,
+        command: 'codex',
+        title: 'Renderer Terminal'
+      })
+    )
+    expect(electronMocks.ipcMain.removeListener).toHaveBeenCalledWith(
+      'terminal:tabCreateReply',
+      expect.any(Function)
+    )
+  })
+
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
     const spawn = vi
       .fn()
