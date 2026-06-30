@@ -52,6 +52,10 @@ import {
 } from '../hooks'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  classifyRefreshBaseRefError,
+  formatRefreshBaseRefError
+} from '../../shared/git-remote-error'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
@@ -1575,9 +1579,18 @@ export async function createRemoteWorktree(
   if (remoteTrackingBase) {
     try {
       await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, remoteTrackingBase)
-    } catch {
+    } catch (err) {
+      // Why: the underlying git fetch failure carries the real cause (DNS,
+      // SSH, missing ref, repo forbidden). Surface it through the shared
+      // classifier so the renderer can show a localized, actionable message.
+      console.error('[refresh-base-ref]', err)
+      const classified = classifyRefreshBaseRefError(err)
       throw new Error(
-        `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+        formatRefreshBaseRefError({
+          code: classified.code,
+          message: `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}".`,
+          cause: classified.cause
+        })
       )
     }
   } else if (!(await hasRemoteCommitObject(provider, repo.path, baseBranch))) {

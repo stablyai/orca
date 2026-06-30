@@ -3665,7 +3665,7 @@ describe('registerWorktreeHandlers', () => {
         name: 'improve-dashboard'
       })
     ).rejects.toThrow(
-      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+      /^\[(network|auth|noUpstream|remoteRefMissing|remoteForbidden|unknown)\] Could not refresh base ref "origin\/main" from "origin"\./
     )
 
     expect(provider.addWorktree).not.toHaveBeenCalled()
