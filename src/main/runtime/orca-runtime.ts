@@ -12788,11 +12788,9 @@ export class OrcaRuntimeService {
         ...localWorktreeGitOptionArgs
       )
       if (!refreshResult.ok) {
-        // Why: legacy runtime path mirrors worktree-remote's classification so
-        // both surfaces emit identical [code] messages and renderer i18n keys
-        // apply uniformly. RemoteFetchResult carries no stderr, so synthesize
-        // a placeholder cause for the classifier.
-        const fallbackError = new Error('refresh failed')
+        // Why: legacy runtime path mirrors worktree-remote so both surfaces
+        // emit identical [code] messages and renderer i18n keys apply uniformly.
+        const fallbackError = new Error(`refresh failed: ${refreshResult.errorKind}`)
         console.error('[refresh-base-ref-runtime]', fallbackError)
         const classified = classifyRefreshBaseRefError(fallbackError)
         throw new Error(
