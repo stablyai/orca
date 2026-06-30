@@ -76,11 +76,27 @@ export function measureGroupHeaderDragRects(
     if (parentGroupId !== undefined && elementParent !== parentGroupId) {
       return
     }
-    const rect = element.getBoundingClientRect()
     const top = resolveVirtualRowTop(element, container, containerRect)
-    rects.push({ groupId, siblingIndex, top, bottom: top + rect.height })
+    rects.push({ groupId, siblingIndex, top, bottom: top })
   })
   rects.sort((left, right) => left.top - right.top)
+  // Why: a group's drop footprint is its whole block (header + projects +
+  // worktrees), not just the header row. Extend each rect's bottom to the next
+  // sibling group's top — and the last to the bottom of the last rendered row
+  // — so the drop line lands at block boundaries instead of inside a group
+  // below its header. (Uses the last row's bottom, not scrollHeight, which can
+  // exceed the rendered content.)
+  let contentBottom = rects.at(-1)?.top ?? 0
+  container.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]').forEach((element) => {
+    const rowBottom =
+      resolveVirtualRowTop(element, container, containerRect) +
+      element.getBoundingClientRect().height
+    contentBottom = Math.max(contentBottom, rowBottom)
+  })
+  for (let index = 0; index < rects.length; index++) {
+    const next = rects[index + 1]
+    rects[index]!.bottom = next ? next.top : contentBottom
+  }
   return rects
 }
 

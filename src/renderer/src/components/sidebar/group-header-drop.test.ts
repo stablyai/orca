@@ -67,6 +67,26 @@ describe('computeGroupHeaderDropPreview', () => {
       })
     ).toBeNull()
   })
+
+  it('drops after the last group at its block bottom, not its header bottom', () => {
+    // Block-extent rects (as measureGroupHeaderDragRects now produces): group b
+    // spans its whole block 100..400, not just a 28px header.
+    const blockRects: GroupHeaderDragRect[] = [
+      { groupId: 'a', siblingIndex: 0, top: 0, bottom: 100 },
+      { groupId: 'b', siblingIndex: 1, top: 100, bottom: 400 }
+    ]
+    const preview = computeGroupHeaderDropPreview({
+      pointerY: 380, // lower half of group b's block
+      containerTop: 0,
+      scrollTop: 0,
+      rects: blockRects,
+      siblingGroupIds: ['a', 'b']
+    })
+    expect(preview?.dropIndex).toBe(2)
+    // Indicator sits at the bottom of b's block (~400), below its worktrees —
+    // not at a ~128 header bottom inside the group.
+    expect(preview?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(400)
+  })
 })
 
 describe('getSiblingGroupIdsByParent', () => {
