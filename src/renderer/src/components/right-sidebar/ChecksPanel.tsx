@@ -1315,7 +1315,7 @@ export default function ChecksPanel(): React.JSX.Element {
       connectionId
     }
     void (async () => {
-      const status = await getRuntimeGitStatus(context)
+      const status = await getRuntimeGitStatus(context, { coalesceInFlight: true })
       if (
         !stale &&
         shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)

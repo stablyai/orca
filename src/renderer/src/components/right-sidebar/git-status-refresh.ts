@@ -31,6 +31,8 @@ export type GitStatusRefreshDeps = {
   ) => Promise<GitUpstreamStatus | null>
 }
 
+type GitStatusRefreshFreshness = 'fresh' | 'passive'
+
 const MAX_REFRESH_ORDERING_WORKTREES = 1024
 const strictUpstreamRefreshGenerationByWorktree = new Map<string, number>()
 const automaticUpstreamRefreshInFlightByWorktree = new Map<string, number>()
@@ -137,6 +139,7 @@ export async function refreshGitStatusForWorktree({
   worktreePath,
   connectionId,
   pushTarget,
+  freshness = 'fresh',
   deps
 }: {
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
@@ -144,16 +147,27 @@ export async function refreshGitStatusForWorktree({
   worktreePath: string
   connectionId?: string
   pushTarget?: GitPushTarget
+  freshness?: GitStatusRefreshFreshness
   deps: GitStatusRefreshDeps
 }): Promise<void> {
+  if (freshness === 'fresh') {
+    beginStrictUpstreamRefresh(worktreeId)
+  }
   const upstreamStartGeneration = beginAutomaticUpstreamRefresh(worktreeId)
   try {
-    const status = (await getRuntimeGitStatus({
-      settings,
-      worktreeId,
-      worktreePath,
-      connectionId
-    })) as GitStatusResult
+    const status = (await getRuntimeGitStatus(
+      {
+        settings,
+        worktreeId,
+        worktreePath,
+        connectionId
+      },
+      {
+        // Why: passive polls and scans may converge on the same expensive
+        // status+numstat snapshot; mutation/manual refreshes must observe fresh state.
+        coalesceInFlight: freshness === 'passive'
+      }
+    )) as GitStatusResult
 
     if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, upstreamStartGeneration)) {
       return

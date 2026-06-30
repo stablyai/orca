@@ -122,6 +122,63 @@ export function getRuntimeGitScope(
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,
+  options?: {
+    includeIgnored?: boolean
+    bypassEffectiveUpstreamNegativeCache?: boolean
+    coalesceInFlight?: boolean
+  }
+): Promise<GitStatusResult> {
+  if (options?.coalesceInFlight) {
+    return getCoalescedRuntimeGitStatus(context, options)
+  }
+  return getRuntimeGitStatusUncoalesced(context, options)
+}
+
+const runtimeGitStatusInFlight = new Map<string, Promise<GitStatusResult>>()
+
+function getRuntimeGitStatusCoalescingKey(
+  context: RuntimeGitContext,
+  options?: {
+    includeIgnored?: boolean
+    bypassEffectiveUpstreamNegativeCache?: boolean
+  }
+): string {
+  const target = getActiveRuntimeTarget(context.settings)
+  return JSON.stringify({
+    target,
+    worktreeId: context.worktreeId ?? null,
+    worktreePath: context.worktreePath,
+    connectionId: context.connectionId ?? null,
+    includeIgnored: options?.includeIgnored === true,
+    bypassEffectiveUpstreamNegativeCache: options?.bypassEffectiveUpstreamNegativeCache === true
+  })
+}
+
+async function getCoalescedRuntimeGitStatus(
+  context: RuntimeGitContext,
+  options?: {
+    includeIgnored?: boolean
+    bypassEffectiveUpstreamNegativeCache?: boolean
+  }
+): Promise<GitStatusResult> {
+  const key = getRuntimeGitStatusCoalescingKey(context, options)
+  const inFlight = runtimeGitStatusInFlight.get(key)
+  if (inFlight) {
+    return inFlight
+  }
+  const promise = getRuntimeGitStatusUncoalesced(context, options)
+  runtimeGitStatusInFlight.set(key, promise)
+  try {
+    return await promise
+  } finally {
+    if (runtimeGitStatusInFlight.get(key) === promise) {
+      runtimeGitStatusInFlight.delete(key)
+    }
+  }
+}
+
+async function getRuntimeGitStatusUncoalesced(
+  context: RuntimeGitContext,
   options?: { includeIgnored?: boolean; bypassEffectiveUpstreamNegativeCache?: boolean }
 ): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
