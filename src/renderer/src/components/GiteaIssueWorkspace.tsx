@@ -357,6 +357,7 @@ export function GiteaIssueWorkspace({
                 issueNumber={item.number}
                 title={title}
                 labelNames={labels}
+                appliedLabelIds={detail?.labelIds ?? []}
                 assigneeLogins={(detail?.assignees ?? []).map((user) => user.login)}
                 repoLabels={repoLabels}
                 repoAssignees={repoAssignees}

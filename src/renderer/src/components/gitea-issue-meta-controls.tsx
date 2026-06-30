@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import type { GiteaIssueUpdate, GiteaLabel, GiteaUser } from '../../../shared/types'
 import type { GiteaIssueScope } from '@/store/slices/gitea'
+import { resolveAppliedLabelIds, toggleLabelId } from './gitea-issue-label-toggle'
 import { translate } from '@/i18n/i18n'
 
 type GiteaIssueMetaControlsProps = {
@@ -14,6 +15,7 @@ type GiteaIssueMetaControlsProps = {
   issueNumber: number
   title: string
   labelNames: string[]
+  appliedLabelIds: number[]
   assigneeLogins: string[]
   repoLabels: GiteaLabel[]
   repoAssignees: GiteaUser[]
@@ -34,6 +36,7 @@ export function GiteaIssueMetaControls({
   issueNumber,
   title,
   labelNames,
+  appliedLabelIds,
   assigneeLogins,
   repoLabels,
   repoAssignees,
@@ -70,18 +73,13 @@ export function GiteaIssueMetaControls({
     }
   }
 
-  const selectedLabelNames = new Set(labelNames)
   const selectedLogins = new Set(assigneeLogins)
+  // Toggle against the IDs Gitea actually has on the issue so labels missing from
+  // the capped/org-excluded repo label list aren't dropped by the replace-all PUT.
+  const appliedLabelIdSet = new Set(resolveAppliedLabelIds(appliedLabelIds, labelNames, repoLabels))
 
   const toggleLabel = (label: GiteaLabel): void => {
-    const next = new Set(selectedLabelNames)
-    if (next.has(label.name)) {
-      next.delete(label.name)
-    } else {
-      next.add(label.name)
-    }
-    const labelIds = repoLabels.filter((entry) => next.has(entry.name)).map((entry) => entry.id)
-    void save('labels', { labelIds })
+    void save('labels', { labelIds: toggleLabelId([...appliedLabelIdSet], label.id) })
   }
 
   const toggleAssignee = (user: GiteaUser): void => {
@@ -165,9 +163,7 @@ export function GiteaIssueMetaControls({
                   }
                 />
                 <span className="min-w-0 flex-1 truncate">{label.name}</span>
-                {selectedLabelNames.has(label.name) ? (
-                  <Check className="size-3.5 shrink-0" />
-                ) : null}
+                {appliedLabelIdSet.has(label.id) ? <Check className="size-3.5 shrink-0" /> : null}
               </button>
             ))
           )}

@@ -62,6 +62,9 @@ export type GiteaIssue = {
   state: 'open' | 'closed'
   url: string
   labels: string[]
+  // IDs of the labels on the issue. Lets the editor toggle one label as a delta
+  // instead of rebuilding the set from the capped repo-label list (#5493).
+  labelIds?: number[]
   assignees: GiteaUser[]
   author?: GiteaUser
   milestone?: string

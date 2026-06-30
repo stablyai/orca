@@ -81,6 +81,16 @@ function mapLabelNames(labels: RawGiteaLabel[] | null | undefined): string[] {
   return labels.map((label) => label.name?.trim()).filter((name): name is string => Boolean(name))
 }
 
+// Why: the editor toggles labels as a delta against the IDs actually on the
+// issue, so keep every applied id (even one whose name was dropped) to avoid
+// silently removing it on the replace-all update (#5493).
+function mapLabelIds(labels: RawGiteaLabel[] | null | undefined): number[] {
+  if (!Array.isArray(labels)) {
+    return []
+  }
+  return labels.map((label) => label.id).filter((id): id is number => typeof id === 'number')
+}
+
 function mapAssignees(assignees: RawGiteaUser[] | null | undefined): GiteaUser[] {
   if (!Array.isArray(assignees)) {
     return []
@@ -106,6 +116,7 @@ export function mapGiteaIssue(raw: RawGiteaIssue, context: GiteaIssueContext): G
     state: raw.state === 'closed' ? 'closed' : 'open',
     url: raw.html_url ?? '',
     labels: mapLabelNames(raw.labels),
+    labelIds: mapLabelIds(raw.labels),
     assignees: mapAssignees(raw.assignees),
     author: mapGiteaUser(raw.user),
     milestone: raw.milestone?.title?.trim() || undefined,
