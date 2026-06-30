@@ -4554,9 +4554,7 @@ export class OrcaRuntimeService {
   private readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
-    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-    resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId) => {
       if (!this.notifier?.openFile) {
         throw new Error('renderer_unavailable')

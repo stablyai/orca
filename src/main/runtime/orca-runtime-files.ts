@@ -150,11 +150,7 @@ export type ResolvedRuntimeFileTarget = {
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
   requireStore(): Store
-  resolveWorktreeSelector(selector: string): Promise<ResolvedRuntimeFileWorktree>
   resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
-  resolveRuntimeGitTarget(
-    selector: string
-  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
   openFile(
     worktreeId: string,
     filePath: string,

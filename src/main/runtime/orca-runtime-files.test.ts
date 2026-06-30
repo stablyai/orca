@@ -127,7 +127,6 @@ function createRuntimeFileCommands(options?: {
   openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
   resolveRuntimeFileTarget?: ReturnType<typeof vi.fn>
-  resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
 }) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
@@ -141,14 +140,12 @@ function createRuntimeFileCommands(options?: {
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
-    resolveWorktreeSelector: vi.fn(async () => worktree),
     resolveRuntimeFileTarget:
       options?.resolveRuntimeFileTarget ??
       vi.fn(async () => ({
         worktree,
         connectionId: store.getRepo(worktree.repoId)?.connectionId
       })),
-    resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
