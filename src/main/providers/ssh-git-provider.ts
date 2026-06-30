@@ -223,7 +223,10 @@ export class SshGitProvider implements IGitProvider {
         cwd,
         stdin: plan.stdinPayload,
         timeoutMs,
-        operation
+        operation,
+        // Why: commit/PR agents on SSH hosts are often installed by shell
+        // startup files, so this path opts into login-shell PATH resolution.
+        shell: true
       },
       undefined,
       operation
@@ -296,6 +299,7 @@ export class SshGitProvider implements IGitProvider {
       timeoutMs: number
       env?: Record<string, string>
       operation?: string
+      shell?: boolean
     },
     signal?: AbortSignal,
     operation?: string
