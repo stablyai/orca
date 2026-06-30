@@ -658,6 +658,8 @@ function writeForegroundTerminalChunkWithIntent(
     forceViewportRefresh: options.forceViewportRefresh,
     followupViewportRefresh: options.followupViewportRefresh,
     onParsed: () => {
+      // Why: recovery must repaint from the scrolled buffer state that xterm
+      // will keep, not from a pre-intent-restored viewport snapshot.
       enforceTerminalWriteScrollIntent(terminal, scrollIntent)
       options.onParsed?.()
     }
