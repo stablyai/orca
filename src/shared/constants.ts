@@ -184,11 +184,8 @@ function getDefaultWorkspaceDir(homeDir: string): string {
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
-    nestWorkspaces: true,
-    // Why: default layout nests worktrees under a repo-named subfolder; the
-    // format preset lets the runtime use a single format-driven code path.
+    // Why: default layout nests worktrees under a repo-named subfolder.
     worktreeNamingMode: 'nested',
-    worktreeNameFormat: '{repoName}/{name}',
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,

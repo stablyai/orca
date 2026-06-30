@@ -32,7 +32,7 @@ function makeStore(existingAutomations: Automation[] = []) {
     deleteAutomation: vi.fn(),
     getSettings: vi.fn(() => ({
       workspaceDir: '/tmp',
-      nestWorkspaces: false,
+      worktreeNamingMode: 'flat' as const,
       refreshLocalBaseRefOnWorktreeCreate: false,
       branchPrefix: '',
       branchPrefixCustom: ''

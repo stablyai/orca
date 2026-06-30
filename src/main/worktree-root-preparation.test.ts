@@ -35,7 +35,7 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     authorizeExternalPathMock.mockReset()
     store.getSettings.mockReset().mockReturnValue({
       workspaceDir: '/Users/alice/orca/workspaces',
-      nestWorkspaces: false
+      worktreeNamingMode: 'flat'
     })
   })
 

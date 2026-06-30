@@ -7,7 +7,7 @@ import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<
   GlobalSettings,
-  'nestWorkspaces' | 'workspaceDir' | 'worktreeNameFormat' | 'worktreeNamingMode'
+  'workspaceDir' | 'worktreeNameFormat' | 'worktreeNamingMode'
 >
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
@@ -93,7 +93,11 @@ export function computeWorktreePath(
   const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
   const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
 
-  if (settings.worktreeNameFormat) {
+  const mode = settings.worktreeNamingMode ?? 'nested'
+
+  // Why: custom mode uses the user-supplied format string with placeholder
+  // aliases. Only apply when the format is actually set.
+  if (mode === 'custom' && settings.worktreeNameFormat) {
     const formatted = settings.worktreeNameFormat
       .replace(/\{repoName\}/g, repoName)
       .replace(/\{repo\}/g, repoName)
@@ -102,7 +106,9 @@ export function computeWorktreePath(
     return pathOps.join(workspaceRoot, formatted)
   }
 
-  if (settings.nestWorkspaces) {
+  // Why: nested mode groups worktrees under a repo-named subfolder; flat
+  // mode places them directly under the workspace root.
+  if (mode === 'nested') {
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
   return pathOps.join(workspaceRoot, sanitizedName)
@@ -146,7 +152,6 @@ export function getWorktreePathSettings(
   settings: WorktreePathSettings
 ): WorktreePathSettings {
   return {
-    nestWorkspaces: settings.nestWorkspaces,
     workspaceDir: getEffectiveWorktreeBasePath(repo, settings),
     worktreeNameFormat: settings.worktreeNameFormat,
     worktreeNamingMode: settings.worktreeNamingMode
@@ -159,7 +164,6 @@ export function getWorktreeCreationLayout(
 ): OrcaWorkspaceLayout {
   return {
     path: getEffectiveWorktreeBasePath(repo, settings),
-    nestWorkspaces: settings.nestWorkspaces,
     worktreeNameFormat: settings.worktreeNameFormat,
     worktreeNamingMode: settings.worktreeNamingMode
   }

@@ -13,7 +13,7 @@ export type WorktreeBaseWatchKind = 'base' | 'git-common'
 export type WorktreeBaseRepoWatchConfig = {
   repoId: string
   repoName: string
-  nestWorkspaces: boolean
+  isNested: boolean
 }
 
 export type WorktreeBaseWatchTarget = {
@@ -36,7 +36,7 @@ export function pathRelativeToWorktreeWatchRoot(
 }
 
 function isRootCompletionEvent(parts: string[], config: WorktreeBaseRepoWatchConfig): boolean {
-  if (config.nestWorkspaces) {
+  if (config.isNested) {
     return (
       parts.length === 2 &&
       normalizeRuntimePathForComparison(parts[0]) ===
@@ -49,7 +49,7 @@ function isRootCompletionEvent(parts: string[], config: WorktreeBaseRepoWatchCon
 // Why: root creation can arrive before Git finishes registration; the `.git`
 // marker is the checkout-complete signal, while deeper file churn is ignored.
 function isGitMarkerCompletionEvent(parts: string[], config: WorktreeBaseRepoWatchConfig): boolean {
-  if (config.nestWorkspaces) {
+  if (config.isNested) {
     return (
       parts.length === 3 &&
       normalizeRuntimePathForComparison(parts[0]) ===

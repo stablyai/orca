@@ -5,7 +5,7 @@ describe('planWorktreeFolderRename', () => {
   const base = {
     repoId: 'repo1',
     repoPath: '/repos/orca',
-    settings: { nestWorkspaces: false, workspaceDir: '/ws' },
+    settings: { worktreeNamingMode: 'flat' as const, workspaceDir: '/ws' },
     platform: 'darwin' as NodeJS.Platform,
     isRemote: false
   }

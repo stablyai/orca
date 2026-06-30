@@ -305,7 +305,7 @@ describe('OrcaRuntimeRpcServer', () => {
     removeWorktreeMeta: () => {},
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
-      nestWorkspaces: false,
+      worktreeNamingMode: 'flat' as const,
       branchPrefix: 'none',
       branchPrefixCustom: ''
     })

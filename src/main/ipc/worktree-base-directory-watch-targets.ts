@@ -100,9 +100,9 @@ function isRuntimePathAbsoluteForRepo(repoPath: string, pathValue: string): bool
 
 function getBaseWatchLayout(
   repo: Repo,
-  pathSettings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>,
+  pathSettings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeNamingMode'>,
   connectionId: string | undefined
-): { workspaceRoot: string; nestWorkspaces: boolean } {
+): { workspaceRoot: string; isNested: boolean } {
   if (
     connectionId &&
     !hasRepoWorktreeBasePath(repo) &&
@@ -110,12 +110,12 @@ function getBaseWatchLayout(
   ) {
     // Why: SSH creates default worktrees beside the remote repo when the
     // global workspace dir is a desktop-local absolute path.
-    return { workspaceRoot: resolveRuntimePath(repo.path, '..'), nestWorkspaces: false }
+    return { workspaceRoot: resolveRuntimePath(repo.path, '..'), isNested: false }
   }
 
   return {
     workspaceRoot: computeWorkspaceRoot(repo.path, pathSettings),
-    nestWorkspaces: pathSettings.nestWorkspaces
+    isNested: pathSettings.worktreeNamingMode === 'nested'
   }
 }
 
@@ -126,7 +126,7 @@ async function maybeAddBaseTarget(
   connectionId?: string
 ): Promise<void> {
   const pathSettings = getWorktreePathSettings(repo, settings)
-  const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
+  const { workspaceRoot, isNested } = getBaseWatchLayout(repo, pathSettings, connectionId)
   // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
   if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
     const key = `${repo.id}:${workspaceRoot}`
@@ -142,7 +142,7 @@ async function maybeAddBaseTarget(
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
-    nestWorkspaces
+    isNested
   }
   const remoteProvider = getRemoteProvider(connectionId)
   if (connectionId && !remoteProvider) {

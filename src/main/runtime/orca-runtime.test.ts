@@ -1006,7 +1006,7 @@ const store = {
   getGitHubCache: () => undefined as never,
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
-    nestWorkspaces: false,
+    worktreeNamingMode: 'flat' as const,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: ''
@@ -1119,9 +1119,9 @@ computeWorktreePathMock.mockImplementation(
   (
     sanitizedName: string,
     repoPath: string,
-    settings: { nestWorkspaces: boolean; workspaceDir: string }
+    settings: { worktreeNamingMode: 'flat' | 'nested' | 'custom'; workspaceDir: string }
   ) => {
-    if (settings.nestWorkspaces) {
+    if (settings.worktreeNamingMode === 'nested') {
       const repoName =
         repoPath
           .split(/[\\/]/)
@@ -18385,7 +18385,7 @@ describe('OrcaRuntimeService', () => {
       comment: 'keep me',
       orcaCreatedAt: 123,
       orcaCreationSource: 'runtime',
-      orcaCreationWorkspaceLayout: { path: '/tmp', nestWorkspaces: false }
+      orcaCreationWorkspaceLayout: { path: '/tmp', worktreeNamingMode: 'flat' as const }
     })
 
     expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { comment: 'keep me' })
@@ -23990,7 +23990,7 @@ describe('OrcaRuntimeService', () => {
       getGitHubCache: () => undefined as never,
       getSettings: () => ({
         workspaceDir: 'C:\\workspaces',
-        nestWorkspaces: false,
+        worktreeNamingMode: 'flat' as const,
         refreshLocalBaseRefOnWorktreeCreate: false,
         branchPrefix: 'none',
         branchPrefixCustom: ''

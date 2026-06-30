@@ -364,7 +364,7 @@ describe('registerWorktreeHandlers', () => {
     store.getSparsePresets.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      nestWorkspaces: false,
+      worktreeNamingMode: 'flat',
       refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: '/workspace'
     })
@@ -435,9 +435,9 @@ describe('registerWorktreeHandlers', () => {
       (
         sanitizedName: string,
         repoPath: string,
-        settings: { nestWorkspaces: boolean; workspaceDir: string }
+        settings: { worktreeNamingMode: 'flat' | 'nested' | 'custom'; workspaceDir: string }
       ) => {
-        if (settings.nestWorkspaces) {
+        if (settings.worktreeNamingMode === 'nested') {
           const repoName =
             repoPath
               .split(/[\\/]/)
@@ -700,7 +700,7 @@ describe('registerWorktreeHandlers', () => {
         isPinned: true,
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false }
+        orcaCreationWorkspaceLayout: { path: '/workspace', worktreeNamingMode: 'flat' }
       }
     })
 
@@ -808,7 +808,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(computeWorktreePathMock).toHaveBeenCalledWith('feature', '/workspace/repo', {
-      nestWorkspaces: false,
+      worktreeNamingMode: 'flat',
       workspaceDir: '../worktrees'
     })
     expect(addWorktreeMock).toHaveBeenCalledWith(
@@ -821,7 +821,7 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::../worktrees/feature',
       expect.objectContaining({
-        orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
+        orcaCreationWorkspaceLayout: { path: '../worktrees', worktreeNamingMode: 'flat' }
       })
     )
   })
@@ -2862,7 +2862,7 @@ describe('registerWorktreeHandlers', () => {
     }
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      nestWorkspaces: false,
+      worktreeNamingMode: 'flat',
       refreshLocalBaseRefOnWorktreeCreate: true,
       workspaceDir: '/workspace'
     })
@@ -2959,7 +2959,7 @@ describe('registerWorktreeHandlers', () => {
     }
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
-      nestWorkspaces: false,
+      worktreeNamingMode: 'flat',
       refreshLocalBaseRefOnWorktreeCreate: true,
       workspaceDir: '/workspace'
     })

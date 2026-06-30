@@ -765,7 +765,8 @@ type RuntimeStore = {
   saveSparsePreset?: Store['saveSparsePreset']
   getSettings(): {
     workspaceDir: string
-    nestWorkspaces: boolean
+    worktreeNamingMode?: 'flat' | 'nested' | 'custom'
+    worktreeNameFormat?: string
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
@@ -12461,7 +12462,8 @@ export class OrcaRuntimeService {
         orcaCreationSource: 'runtime',
         orcaCreationWorkspaceLayout: {
           path: settings.workspaceDir,
-          nestWorkspaces: settings.nestWorkspaces
+          worktreeNamingMode: settings.worktreeNamingMode,
+          worktreeNameFormat: settings.worktreeNameFormat
         },
         ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
         ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),

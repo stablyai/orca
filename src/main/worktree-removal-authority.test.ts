@@ -69,7 +69,7 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
         meta: undefined,
         worktreePath: '/orca/workspaces/app/legacy-orphan',
         repo: { path: '/repos/app' },
-        knownOrcaLayouts: [{ path: '/orca/workspaces', nestWorkspaces: true }]
+        knownOrcaLayouts: [{ path: '/orca/workspaces', worktreeNamingMode: 'nested' }]
       })
     ).toBe(true)
   })
@@ -80,7 +80,7 @@ describe('canCleanupUnregisteredOrcaWorktreeDirectory', () => {
         meta: undefined,
         worktreePath: '/orca/workspaces/legacy-orphan',
         repo: { path: '/repos/app' },
-        knownOrcaLayouts: [{ path: '/orca/workspaces', nestWorkspaces: false }]
+        knownOrcaLayouts: [{ path: '/orca/workspaces', worktreeNamingMode: 'flat' }]
       })
     ).toBe(false)
   })
@@ -93,7 +93,7 @@ describe('stripOrcaProvenanceMetaUpdates', () => {
         comment: 'keep me',
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false },
+        orcaCreationWorkspaceLayout: { path: '/workspace', worktreeNamingMode: 'flat' },
         automationProvenance: {
           kind: 'created-by-automation',
           automationId: 'automation-1',

@@ -41,7 +41,7 @@ const PROJECT_GIT_COMMON_DIR = join(PROJECT_ROOT, '.git')
 
 const settings = {
   workspaceDir: WORKTREE_ROOT,
-  nestWorkspaces: true
+  worktreeNamingMode: 'nested'
 } as GlobalSettings
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -236,7 +236,7 @@ describe('worktree base directory watcher', () => {
       key: `base:${WORKTREE_ROOT}`,
       kind: 'base' as const,
       path: WORKTREE_ROOT,
-      repos: new Map([['repo-1', { repoId: 'repo-1', repoName: 'project', nestWorkspaces: false }]])
+      repos: new Map([['repo-1', { repoId: 'repo-1', repoName: 'project', isNested: false }]])
     }
 
     expect(

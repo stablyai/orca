@@ -72,7 +72,7 @@ function makeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return {
     workspaceDir: '/orca/workspaces',
-    nestWorkspaces: true,
+    worktreeNamingMode: 'nested',
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,
@@ -132,7 +132,7 @@ describe('worktree ownership classification', () => {
 
   it('treats flat workspace-root descendants as unknown legacy without strong metadata', () => {
     const repo = makeRepo()
-    const settings = makeSettings({ nestWorkspaces: false })
+    const settings = makeSettings({ worktreeNamingMode: 'flat' })
     expect(
       classifyWorktreeOwnership({
         repo,
@@ -146,8 +146,8 @@ describe('worktree ownership classification', () => {
   it('keeps flat-layout history weak after switching the same root to nested mode', () => {
     const repo = makeRepo()
     const settings = makeSettings({
-      nestWorkspaces: true,
-      workspaceDirHistory: [{ path: '/orca/workspaces', nestWorkspaces: false }]
+      worktreeNamingMode: 'nested',
+      workspaceDirHistory: [{ path: '/orca/workspaces', worktreeNamingMode: 'flat' }]
     })
     expect(
       classifyWorktreeOwnership({
@@ -163,7 +163,7 @@ describe('worktree ownership classification', () => {
     const repo = makeRepo()
     const settings = makeSettings({
       workspaceDir: '/new/workspaces',
-      workspaceDirHistory: [{ path: '/old/workspaces', nestWorkspaces: true }]
+      workspaceDirHistory: [{ path: '/old/workspaces', worktreeNamingMode: 'nested' }]
     })
     expect(
       classifyWorktreeOwnership({
@@ -181,7 +181,7 @@ describe('worktree ownership classification', () => {
       { length: LARGE_WORKSPACE_HISTORY_COUNT },
       (_, index) => ({
         path: `/history/workspaces-${index}`,
-        nestWorkspaces: index % 2 === 0
+        worktreeNamingMode: (index % 2 === 0 ? 'nested' : 'flat') as 'nested' | 'flat'
       })
     )
     const settings = makeSettings({
@@ -192,11 +192,11 @@ describe('worktree ownership classification', () => {
     const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
 
     expect(layouts).toHaveLength(LARGE_WORKSPACE_HISTORY_COUNT + 1)
-    expect(layouts[0]).toEqual({ path: '/new/workspaces', nestWorkspaces: true })
-    expect(layouts[1]).toEqual({ path: '/history/workspaces-0', nestWorkspaces: true })
+    expect(layouts[0]).toEqual({ path: '/new/workspaces', worktreeNamingMode: 'nested' })
+    expect(layouts[1]).toEqual({ path: '/history/workspaces-0', worktreeNamingMode: 'nested' })
     expect(layouts.at(-1)).toEqual({
       path: `/history/workspaces-${LARGE_WORKSPACE_HISTORY_COUNT - 1}`,
-      nestWorkspaces: false
+      worktreeNamingMode: 'flat'
     })
   })
 

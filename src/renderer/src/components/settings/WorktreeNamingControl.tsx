@@ -45,18 +45,14 @@ export function WorktreeNamingControl({
     if (next === 'flat') {
       updateSettings({
         worktreeNamingMode: 'flat',
-        nestWorkspaces: false,
         worktreeNameFormat: undefined
       })
       return
     }
     if (next === 'nested') {
-      // Why: nested is a format preset so the runtime uses one code path;
-      // nestWorkspaces stays true for back-compat with legacy readers.
       updateSettings({
         worktreeNamingMode: 'nested',
-        nestWorkspaces: true,
-        worktreeNameFormat: '{repoName}/{name}'
+        worktreeNameFormat: undefined
       })
       return
     }
@@ -66,7 +62,6 @@ export function WorktreeNamingControl({
       customFormat && customFormat !== '{repoName}/{name}' ? customFormat : '{repoName}.{name}'
     updateSettings({
       worktreeNamingMode: 'custom',
-      nestWorkspaces: false,
       worktreeNameFormat: seed
     })
   }

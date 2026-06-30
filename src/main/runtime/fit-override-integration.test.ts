@@ -61,7 +61,7 @@ const store = {
   removeWorktreeMeta: () => {},
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
-    nestWorkspaces: false,
+    worktreeNamingMode: 'flat' as const,
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: ''

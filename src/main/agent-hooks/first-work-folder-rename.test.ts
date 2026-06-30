@@ -6,7 +6,7 @@ import {
 } from './first-work-folder-rename'
 
 const REPO = { id: 'repo1', path: '/repos/orca', connectionId: null } as unknown as Repo
-const SETTINGS = { nestWorkspaces: false, workspaceDir: '/ws' } as unknown as GlobalSettings
+const SETTINGS = { worktreeNamingMode: 'flat', workspaceDir: '/ws' } as unknown as GlobalSettings
 const OLD_ID = 'repo1::/ws/cunner'
 
 function makeDeps(overrides: Partial<FirstWorkFolderRenameDeps> = {}): FirstWorkFolderRenameDeps {

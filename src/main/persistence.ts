@@ -441,20 +441,17 @@ function buildWorkspaceDirHistoryForUpdate(
 ): OrcaWorkspaceLayout[] | null {
   if (
     !('workspaceDir' in updates) &&
-    !('nestWorkspaces' in updates) &&
     !('worktreeNameFormat' in updates) &&
     !('worktreeNamingMode' in updates)
   ) {
     return null
   }
   const nextPath = updates.workspaceDir ?? current.workspaceDir
-  const nextNestWorkspaces = updates.nestWorkspaces ?? current.nestWorkspaces
   const nextWorktreeNameFormat = updates.worktreeNameFormat ?? current.worktreeNameFormat
   const nextWorktreeNamingMode = updates.worktreeNamingMode ?? current.worktreeNamingMode
   if (
     normalizeRuntimePathForComparison(nextPath) ===
       normalizeRuntimePathForComparison(current.workspaceDir) &&
-    nextNestWorkspaces === current.nestWorkspaces &&
     nextWorktreeNameFormat === current.worktreeNameFormat &&
     nextWorktreeNamingMode === current.worktreeNamingMode
   ) {
@@ -463,7 +460,6 @@ function buildWorkspaceDirHistoryForUpdate(
 
   const previousLayout: OrcaWorkspaceLayout = {
     path: current.workspaceDir,
-    nestWorkspaces: current.nestWorkspaces,
     worktreeNameFormat: current.worktreeNameFormat,
     worktreeNamingMode: current.worktreeNamingMode
   }
@@ -517,12 +513,12 @@ function migrateTerminalScrollbackRows(settings: unknown): {
 }
 
 function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
-  return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}:${layout.worktreeNameFormat ?? ''}:${layout.worktreeNamingMode ?? ''}`
+  return `${normalizeRuntimePathForComparison(layout.path)}:${layout.worktreeNamingMode ?? ''}:${layout.worktreeNameFormat ?? ''}`
 }
 
-// Why: worktreeNamingMode is the new unified UI control. Existing profiles
-// only carry nestWorkspaces (+ optionally worktreeNameFormat). Derive the
-// mode from whichever legacy field was active so the dropdown shows the
+// Why: worktreeNamingMode replaces the legacy nestWorkspaces boolean. Existing
+// profiles only carry nestWorkspaces (+ optionally worktreeNameFormat). Derive
+// the mode from whichever legacy field was active so the dropdown shows the
 // right state on first load after upgrade.
 function migrateWorktreeNamingMode(
   settings: Partial<GlobalSettings> | undefined
@@ -537,21 +533,19 @@ function migrateWorktreeNamingMode(
   if (settings?.worktreeNameFormat) {
     return 'custom'
   }
-  return settings?.nestWorkspaces === true ? 'nested' : 'flat'
+  // Why: read the legacy nestWorkspaces boolean from the raw parsed object;
+  // it's no longer on the GlobalSettings type but still present in old saves.
+  return (settings as Record<string, unknown>)?.nestWorkspaces === true ? 'nested' : 'flat'
 }
 
-// Why: when the user picks 'nested' in the new UI we persist a preset format
-// string so the runtime uses a single format-driven code path. On load, if
-// the mode is nested but no format is stored, backfill the preset so legacy
-// profiles match newly-created ones.
+// Why: worktreeNameFormat is only used in custom mode now. On load, keep it
+// if the migrated mode is custom; otherwise clear it so nested/flat don't
+// carry a stale format string.
 function migrateWorktreeNameFormat(
   settings: Partial<GlobalSettings> | undefined
 ): string | undefined {
   if (settings?.worktreeNameFormat) {
     return settings.worktreeNameFormat
-  }
-  if (settings?.nestWorkspaces === true) {
-    return '{repoName}/{name}'
   }
   return undefined
 }
@@ -2933,12 +2927,13 @@ export class Store {
           settings: {
             ...defaults.settings,
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
-            // Why: worktreeNamingMode is the unified UI control for folder
-            // layout. Derive it once from legacy state so existing profiles
+            // Why: worktreeNamingMode replaces the legacy nestWorkspaces
+            // boolean. Derive it once from legacy state so existing profiles
             // land in the right mode without a manual re-select: a previously
             // set worktreeNameFormat wins (custom), then nestWorkspaces
-            // (nested), else flat. The legacy fields stay in sync so rollback
-            // builds and any code still reading them keep working.
+            // (nested), else flat. The legacy nestWorkspaces field is still
+            // carried through by the ...parsed.settings spread so rollback
+            // builds can read it, but new code only uses worktreeNamingMode.
             worktreeNamingMode: migrateWorktreeNamingMode(parsed.settings),
             worktreeNameFormat: migrateWorktreeNameFormat(parsed.settings),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry

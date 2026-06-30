@@ -223,8 +223,14 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('prepares local worktree roots when workspace directory changes', async () => {
-    store.getSettings.mockReturnValue({ workspaceDir: '/old/workspaces', nestWorkspaces: false })
-    store.updateSettings.mockReturnValue({ workspaceDir: '/new/workspaces', nestWorkspaces: false })
+    store.getSettings.mockReturnValue({
+      workspaceDir: '/old/workspaces',
+      worktreeNamingMode: 'flat'
+    })
+    store.updateSettings.mockReturnValue({
+      workspaceDir: '/new/workspaces',
+      worktreeNamingMode: 'flat'
+    })
     registerSettingsHandlers(store as never)
 
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
@@ -238,8 +244,11 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('prepares local worktree roots when workspace nesting changes', async () => {
-    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
-    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: true })
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', worktreeNamingMode: 'flat' })
+    store.updateSettings.mockReturnValue({
+      workspaceDir: '/workspaces',
+      worktreeNamingMode: 'nested'
+    })
     registerSettingsHandlers(store as never)
 
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
@@ -247,14 +256,17 @@ describe('registerSettingsHandlers', () => {
       args: unknown
     ) => Promise<unknown>
 
-    await handler(settingsInvokeEvent, { nestWorkspaces: true })
+    await handler(settingsInvokeEvent, { worktreeNamingMode: 'nested' })
 
     expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
   })
 
   it('does not prepare local worktree roots when workspace layout values do not change', async () => {
-    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
-    store.updateSettings.mockReturnValue({ workspaceDir: '/workspaces', nestWorkspaces: false })
+    store.getSettings.mockReturnValue({ workspaceDir: '/workspaces', worktreeNamingMode: 'flat' })
+    store.updateSettings.mockReturnValue({
+      workspaceDir: '/workspaces',
+      worktreeNamingMode: 'flat'
+    })
     registerSettingsHandlers(store as never)
 
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
@@ -262,7 +274,7 @@ describe('registerSettingsHandlers', () => {
       args: unknown
     ) => Promise<unknown>
 
-    await handler(settingsInvokeEvent, { workspaceDir: '/workspaces', nestWorkspaces: false })
+    await handler(settingsInvokeEvent, { workspaceDir: '/workspaces', worktreeNamingMode: 'flat' })
 
     expect(prepareLocalWorktreeRootsForReposMock).not.toHaveBeenCalled()
   })

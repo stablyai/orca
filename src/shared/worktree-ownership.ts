@@ -46,7 +46,7 @@ export function effectiveExternalWorktreeVisibility(
 }
 
 export function buildKnownOrcaWorkspaceLayouts(
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
+  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeNamingMode' | 'workspaceDirHistory'>,
   repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
@@ -54,7 +54,7 @@ export function buildKnownOrcaWorkspaceLayouts(
   if (repo && repoBasePath) {
     layouts.push({
       path: resolveWorkspaceLayoutPath(repo.path, repoBasePath),
-      nestWorkspaces: settings.nestWorkspaces
+      worktreeNamingMode: settings.worktreeNamingMode
     })
   }
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
@@ -62,7 +62,7 @@ export function buildKnownOrcaWorkspaceLayouts(
       path: repo
         ? resolveWorkspaceLayoutPath(repo.path, settings.workspaceDir)
         : settings.workspaceDir,
-      nestWorkspaces: settings.nestWorkspaces
+      worktreeNamingMode: settings.worktreeNamingMode
     })
     appendWorkspaceLayouts(
       layouts,
@@ -80,7 +80,7 @@ export function buildKnownOrcaWorkspaceLayouts(
 
   const seen = new Set<string>()
   return layouts.filter((layout) => {
-    const key = `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
+    const key = `${normalizeRuntimePathForComparison(layout.path)}:${layout.worktreeNamingMode ?? ''}`
     if (seen.has(key)) {
       return false
     }
@@ -130,7 +130,7 @@ function shouldIncludeWorkspaceLayout(
 
 function buildWslWorkspaceLayouts(
   repoPath: string,
-  settings: Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDirHistory'>
+  settings: Pick<GlobalSettings, 'worktreeNamingMode' | 'workspaceDirHistory'>
 ): OrcaWorkspaceLayout[] {
   const parsed = parseWslUncPath(repoPath)
   if (!parsed) {
@@ -143,17 +143,17 @@ function buildWslWorkspaceLayouts(
   }
   const root = `//wsl.localhost/${parsed.distro}${linuxHome}/orca/workspaces`
   const historicalModes = (settings.workspaceDirHistory ?? []).map(
-    (layout) => layout.nestWorkspaces
+    (layout) => layout.worktreeNamingMode ?? 'nested'
   )
-  const modes = [settings.nestWorkspaces, ...historicalModes]
-  return [...new Set(modes)].map((nestWorkspaces) => ({ path: root, nestWorkspaces }))
+  const modes = [settings.worktreeNamingMode ?? 'nested', ...historicalModes]
+  return [...new Set(modes)].map((mode) => ({ path: root, worktreeNamingMode: mode }))
 }
 
 export function classifyWorktreeOwnership(args: {
   repo: Repo
   worktree: Pick<Worktree, 'path' | 'isMainWorktree'>
   meta?: WorktreeMeta
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
+  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeNamingMode' | 'workspaceDirHistory'>
   knownOrcaLayouts: OrcaWorkspaceLayout[]
 }): WorktreeOwnership {
   if (hasStrongOrcaMetadata(args.meta)) {
@@ -179,7 +179,7 @@ export function toDetectedWorktree(args: {
   repo: Repo
   worktree: Worktree
   meta?: WorktreeMeta
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
+  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeNamingMode' | 'workspaceDirHistory'>
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   isLegacyRepoForVisibility?: boolean
 }): DetectedWorktree {
@@ -259,7 +259,7 @@ export function matchesStrongOrcaCreatePath(
     return false
   }
   for (const layout of knownOrcaLayouts) {
-    if (!layout.nestWorkspaces) {
+    if (layout.worktreeNamingMode !== 'nested') {
       continue
     }
     const relative = relativePathInsideRoot(layout.path, worktreePath)
@@ -290,7 +290,7 @@ function isUnderFlatOrUntrustedOrcaRoot(
     if (relative === null) {
       continue
     }
-    if (!layout.nestWorkspaces) {
+    if (layout.worktreeNamingMode !== 'nested') {
       return true
     }
   }
@@ -309,7 +309,7 @@ function canClassifyAsExternal(
     if (relative === null) {
       continue
     }
-    return layout.nestWorkspaces
+    return layout.worktreeNamingMode === 'nested'
   }
   return true
 }

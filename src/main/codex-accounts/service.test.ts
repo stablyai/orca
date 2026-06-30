@@ -47,7 +47,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
   const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
     workspaceDir: testState.fakeHomeDir,
-    nestWorkspaces: false,
+    worktreeNamingMode: 'flat' as const,
     refreshLocalBaseRefOnWorktreeCreate: false,
     localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: false,

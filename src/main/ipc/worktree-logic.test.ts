@@ -180,19 +180,19 @@ describe('getConfiguredBranchPrefix', () => {
 })
 
 describe('computeWorktreePath', () => {
-  it('nests under repo name when nestWorkspaces is true', () => {
+  it('nests under repo name when worktreeNamingMode is nested', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'nested',
         workspaceDir: '/workspaces'
       })
     ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
   })
 
-  it('uses flat layout when nestWorkspaces is false', () => {
+  it('uses flat layout when worktreeNamingMode is flat', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'flat',
         workspaceDir: '/workspaces'
       })
     ).toBe(posix.join('/workspaces', 'feature'))
@@ -201,7 +201,7 @@ describe('computeWorktreePath', () => {
   it('strips .git suffix from repo path when nesting', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project.git', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'nested',
         workspaceDir: '/workspaces'
       })
     ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
@@ -213,14 +213,14 @@ describe('computeWorktreePath', () => {
     )
     expect(
       computeWorktreePath('feature', '/projects/app/repo', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'flat',
         workspaceDir: '../worktrees'
       })
     ).toBe(posix.resolve('/projects/app/worktrees/feature'))
   })
 
   it('scopes the same relative repo override to each repo root', () => {
-    const settings = { nestWorkspaces: false, workspaceDir: '/global/workspaces' }
+    const settings = { worktreeNamingMode: 'flat' as const, workspaceDir: '/global/workspaces' }
     const repoA = { path: '/projects/a/repo', worktreeBasePath: '../worktrees' }
     const repoB = { path: '/projects/b/repo', worktreeBasePath: '../worktrees' }
 
@@ -232,14 +232,14 @@ describe('computeWorktreePath', () => {
     ).toBe(posix.resolve('/projects/b/worktrees/feature'))
     expect(getWorktreeCreationLayout(repoA, settings)).toEqual({
       path: '../worktrees',
-      nestWorkspaces: false
+      worktreeNamingMode: 'flat'
     })
   })
 
   it('resolves Windows-style relative workspace directories with Windows separators', () => {
     expect(
       computeWorktreePath('feature', 'C:\\Projects\\app\\repo', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'flat',
         workspaceDir: '..\\worktrees'
       })
     ).toBe('C:\\Projects\\app\\worktrees\\feature')
@@ -248,7 +248,7 @@ describe('computeWorktreePath', () => {
   it('uses worktreeNameFormat with dot separator', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{repoName}.{name}'
       })
@@ -258,7 +258,7 @@ describe('computeWorktreePath', () => {
   it('uses worktreeNameFormat with nested separator', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{repoName}/{name}'
       })
@@ -268,7 +268,7 @@ describe('computeWorktreePath', () => {
   it('uses worktreeNameFormat with name only', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{name}'
       })
@@ -278,27 +278,27 @@ describe('computeWorktreePath', () => {
   it('uses worktreeNameFormat with dash separator', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{repoName}-{name}'
       })
     ).toBe(posix.join('/workspaces', 'my-project-feature'))
   })
 
-  it('ignores nestWorkspaces when worktreeNameFormat is set', () => {
+  it('uses worktreeNameFormat when worktreeNamingMode is custom', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{name}'
       })
     ).toBe(posix.join('/workspaces', 'feature'))
   })
 
-  it('falls back to nestWorkspaces when worktreeNameFormat is unset', () => {
+  it('falls back to worktreeNamingMode when worktreeNameFormat is unset', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
-        nestWorkspaces: true,
+        worktreeNamingMode: 'nested',
         workspaceDir: '/workspaces'
       })
     ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
@@ -307,7 +307,7 @@ describe('computeWorktreePath', () => {
   it('supports {repo} alias for {repoName} in custom format', () => {
     expect(
       computeWorktreePath('fix-bug', '/repos/my-project', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{repo}.{branch}'
       })
@@ -317,7 +317,7 @@ describe('computeWorktreePath', () => {
   it('supports {branch} alias for {name} in custom format', () => {
     expect(
       computeWorktreePath('fix-bug', '/repos/my-project', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'custom',
         workspaceDir: '/workspaces',
         worktreeNameFormat: '{repo}/{branch}'
       })
@@ -327,9 +327,8 @@ describe('computeWorktreePath', () => {
   it('nested mode preset resolves to repo-named subfolder', () => {
     expect(
       computeWorktreePath('fix-bug', '/repos/my-project', {
-        nestWorkspaces: true,
-        workspaceDir: '/workspaces',
         worktreeNamingMode: 'nested',
+        workspaceDir: '/workspaces',
         worktreeNameFormat: '{repoName}/{name}'
       })
     ).toBe(posix.join('/workspaces', 'my-project', 'fix-bug'))
@@ -338,9 +337,8 @@ describe('computeWorktreePath', () => {
   it('flat mode resolves to name only under workspace dir', () => {
     expect(
       computeWorktreePath('fix-bug', '/repos/my-project', {
-        nestWorkspaces: false,
-        workspaceDir: '/workspaces',
-        worktreeNamingMode: 'flat'
+        worktreeNamingMode: 'flat',
+        workspaceDir: '/workspaces'
       })
     ).toBe(posix.join('/workspaces', 'fix-bug'))
   })
@@ -348,9 +346,8 @@ describe('computeWorktreePath', () => {
   it('custom mode with dot separator stays flat', () => {
     expect(
       computeWorktreePath('fix-bug', '/repos/my-project', {
-        nestWorkspaces: false,
-        workspaceDir: '/workspaces',
         worktreeNamingMode: 'custom',
+        workspaceDir: '/workspaces',
         worktreeNameFormat: '{repoName}.{name}'
       })
     ).toBe(posix.join('/workspaces', 'my-project.fix-bug'))
@@ -359,7 +356,7 @@ describe('computeWorktreePath', () => {
   it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
     expect(
       computeRemoteWorktreePath('feature', '/remote/repo', {
-        nestWorkspaces: false,
+        worktreeNamingMode: 'flat',
         workspaceDir: '/local/workspaces'
       })
     ).toBe('/remote/feature')
@@ -371,7 +368,7 @@ describe('computeWorktreePath', () => {
         'feature',
         '/remote/project/repo',
         {
-          nestWorkspaces: false,
+          worktreeNamingMode: 'flat',
           workspaceDir: '../worktrees'
         },
         { useConfiguredAbsolutePath: true }
@@ -382,7 +379,7 @@ describe('computeWorktreePath', () => {
         'feature',
         'C:\\Remote\\repo',
         {
-          nestWorkspaces: false,
+          worktreeNamingMode: 'flat',
           workspaceDir: '..\\worktrees'
         },
         { useConfiguredAbsolutePath: true }

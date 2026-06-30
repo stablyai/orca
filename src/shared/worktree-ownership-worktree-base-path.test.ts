@@ -21,7 +21,7 @@ function makeWorktree(path: string): Pick<Worktree, 'path' | 'isMainWorktree'> {
 function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return {
     workspaceDir: '/global/workspaces',
-    nestWorkspaces: true,
+    worktreeNamingMode: 'nested',
     workspaceDirHistory: [],
     ...overrides
   } as GlobalSettings
@@ -35,11 +35,11 @@ describe('repo-specific worktree ownership layouts', () => {
 
     expect(buildKnownOrcaWorkspaceLayouts(settings, repoA)[0]).toEqual({
       path: '/projects/a/worktrees',
-      nestWorkspaces: true
+      worktreeNamingMode: 'nested'
     })
     expect(buildKnownOrcaWorkspaceLayouts(settings, repoB)[0]).toEqual({
       path: '/projects/b/worktrees',
-      nestWorkspaces: true
+      worktreeNamingMode: 'nested'
     })
     expect(
       classifyWorktreeOwnership({
@@ -83,7 +83,7 @@ describe('repo-specific worktree ownership layouts', () => {
 
     expect(buildKnownOrcaWorkspaceLayouts(relativeSettings, repo)[0]).toEqual({
       path: '/remote/worktrees',
-      nestWorkspaces: true
+      worktreeNamingMode: 'nested'
     })
     expect(
       buildKnownOrcaWorkspaceLayouts(absoluteSettings, repo).some(
