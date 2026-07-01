@@ -3255,6 +3255,57 @@ describe('connectPanePty', () => {
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
   })
 
+  it('keeps provider session identity when spawn returns an effective launch config', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const initialLaunchConfig = {
+      agentArgs: '--resume-from-startup',
+      agentEnv: {}
+    }
+    const effectiveLaunchConfig = {
+      agentCommand: 'codex',
+      agentArgs: '--effective',
+      agentEnv: {}
+    }
+    const providerSession = { key: 'session_id', id: 'codex-session-1' }
+    transport.connect.mockResolvedValue({
+      id: 'pty-local-1',
+      launchConfig: effectiveLaunchConfig
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        startup: {
+          command: "codex 'resume' 'codex-session-1'",
+          launchConfig: initialLaunchConfig,
+          launchToken: 'launch-token-1',
+          launchAgent: 'codex',
+          providerSession
+        }
+      }) as never
+    )
+    await flushAsyncTicks(20)
+
+    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
+      paneKey,
+      initialLaunchConfig,
+      expect.objectContaining({ providerSession })
+    )
+    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenLastCalledWith(
+      paneKey,
+      effectiveLaunchConfig,
+      expect.objectContaining({
+        agentType: 'codex',
+        launchToken: 'launch-token-1',
+        providerSession
+      })
+    )
+  })
+
   it('flushes pending interrupt inference before dropping an exited foreground agent command', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
@@ -4372,7 +4423,8 @@ describe('connectPanePty', () => {
       agentType: 'codex',
       launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
       tabId: 'tab-1',
-      leafId: LEAF_1
+      leafId: LEAF_1,
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
     })
   })
 
@@ -4537,7 +4589,8 @@ describe('connectPanePty', () => {
       agentType: 'codex',
       launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
       tabId: 'tab-1',
-      leafId: LEAF_1
+      leafId: LEAF_1,
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
     })
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
@@ -4800,7 +4853,8 @@ describe('connectPanePty', () => {
         agentType: 'codex',
         launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
         tabId: 'tab-1',
-        leafId: LEAF_2
+        leafId: LEAF_2,
+        providerSession: { key: 'session_id', id: 'codex-session-1' }
       }
     )
     expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()

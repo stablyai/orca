@@ -1,5 +1,14 @@
 import type { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../shared/agent-status-types'
+import {
+  isResumableTuiAgent,
+  type AgentProviderSessionMetadata,
+  type ResumableTuiAgent,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -9,8 +18,120 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
-export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  return `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
+type ProviderSessionClaim = Pick<
+  SleepingAgentSessionRecord,
+  'worktreeId' | 'agent' | 'providerSession'
+>
+
+type QueuedProviderSessionClaim = {
+  worktreeId: string
+  agent: ResumableTuiAgent
+  providerSession: AgentProviderSessionMetadata
+}
+
+export function getProviderSessionClaimKey(claim: ProviderSessionClaim): string {
+  return `${claim.worktreeId}\0${claim.agent}\0${claim.providerSession.key}\0${claim.providerSession.id}`
+}
+
+function findTerminalTabWorktreeId(
+  tabsByWorktree: AppStoreState['tabsByWorktree'],
+  tabId: string | undefined
+): string | null {
+  if (!tabId) {
+    return null
+  }
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
+function getTabIdFromPaneKey(paneKey: string): string | undefined {
+  const separator = paneKey.indexOf(':')
+  return separator > 0 ? paneKey.slice(0, separator) : undefined
+}
+
+function isFreshProviderSessionClaim(entry: AgentStatusEntry): boolean {
+  return Date.now() - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+}
+
+function addClaimKey(
+  keys: Set<string>,
+  claim: QueuedProviderSessionClaim | null | undefined
+): void {
+  if (!claim) {
+    return
+  }
+  keys.add(getProviderSessionClaimKey(claim))
+}
+
+export function getQueuedOrPendingProviderSessionClaimKeys(
+  state: AppStoreState,
+  worktreeId: string
+): Set<string> {
+  const keys = new Set<string>()
+
+  for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
+    if (
+      !startup.providerSession ||
+      !startup.launchAgent ||
+      !isResumableTuiAgent(startup.launchAgent) ||
+      findTerminalTabWorktreeId(state.tabsByWorktree, tabId) !== worktreeId
+    ) {
+      continue
+    }
+    addClaimKey(keys, {
+      worktreeId,
+      agent: startup.launchAgent,
+      providerSession: startup.providerSession
+    })
+  }
+
+  for (const [paneKey, entry] of Object.entries(state.agentLaunchConfigByPaneKey)) {
+    const identity = entry.identity
+    if (
+      !identity.providerSession ||
+      !identity.agentType ||
+      !isResumableTuiAgent(identity.agentType)
+    ) {
+      continue
+    }
+    const tabId = identity.tabId ?? getTabIdFromPaneKey(paneKey)
+    if (findTerminalTabWorktreeId(state.tabsByWorktree, tabId) !== worktreeId) {
+      continue
+    }
+    addClaimKey(keys, {
+      worktreeId,
+      agent: identity.agentType,
+      providerSession: identity.providerSession
+    })
+  }
+
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    if (!entry.providerSession || !isResumableTuiAgent(entry.agentType) || entry.state === 'done') {
+      continue
+    }
+    const tabWorktreeId = findTerminalTabWorktreeId(
+      state.tabsByWorktree,
+      entry.tabId ?? getTabIdFromPaneKey(paneKey)
+    )
+    const entryWorktreeId = tabWorktreeId ?? entry.worktreeId
+    if (entryWorktreeId !== worktreeId) {
+      continue
+    }
+    if (!tabWorktreeId && !isFreshProviderSessionClaim(entry)) {
+      continue
+    }
+    addClaimKey(keys, {
+      worktreeId,
+      agent: entry.agentType,
+      providerSession: entry.providerSession
+    })
+  }
+
+  return keys
 }
 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {

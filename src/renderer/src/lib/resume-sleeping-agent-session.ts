@@ -14,6 +14,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import { translate } from '@/i18n/i18n'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
+  getQueuedOrPendingProviderSessionClaimKeys,
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
@@ -90,6 +91,7 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: record.agent,
+    providerSession: record.providerSession,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
@@ -184,6 +186,7 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
   const activeClaimKeys = new Set(activeWorktreeRecords.map(getProviderSessionClaimKey))
   const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(activeWorktreeRecords)
   const freshlyLaunchedClaimKeys = new Set<string>()
+  const queuedOrPendingClaimKeys = getQueuedOrPendingProviderSessionClaimKeys(state, worktreeId)
 
   let launched = 0
   for (const record of worktreeRecords) {
@@ -200,9 +203,15 @@ export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): numb
     if (isPassiveCompletedHibernationEvidence(record)) {
       // Why: completed-agent hibernation is passive history; activation should
       // only keep displayable evidence, never start new work from it.
-      if (!isPaneOwned || activeClaimKeys.has(claimKey)) {
+      if (!isPaneOwned || activeClaimKeys.has(claimKey) || queuedOrPendingClaimKeys.has(claimKey)) {
         state.clearSleepingAgentSession(record.paneKey)
       }
+      continue
+    }
+    if (queuedOrPendingClaimKeys.has(claimKey)) {
+      // Why: queued and registered resume startups are ownership claims until
+      // the agent hook proves a different provider session.
+      state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     const paneOwnedClaimKeys = getCurrentPaneOwnedClaimKeys(activeWorktreeRecords)

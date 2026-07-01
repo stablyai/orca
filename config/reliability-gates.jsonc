@@ -82,11 +82,14 @@
         "https://github.com/stablyai/orca/pull/6833"
       ],
       "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, and reconnect code must not replay or resume a provider session id already owned, queued, pending, or live in that workspace.",
-      "oracle": "Provider-session claim keys are owned by preserved active tabs, inactive split leaves, visible non-focused split groups, live records, quit records, and worktree-sleep records; duplicates clear without launching a second resume command.",
+      "oracle": "Provider-session claim keys are owned by preserved active tabs, inactive split leaves, visible non-focused split groups, live hook records, queued startup commands, pending launch-config registrations, quit records, and worktree-sleep records; display-only or replay-looking evidence without provider-session identity cannot claim ownership, and duplicates clear without launching a second resume command.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/renderer/src/lib/resume-sleeping-agent-session-provider-claims.test.ts"
       ],
-      "testFiles": ["src/renderer/src/lib/resume-sleeping-agent-session.test.ts"],
+      "testFiles": [
+        "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "src/renderer/src/lib/resume-sleeping-agent-session-provider-claims.test.ts"
+      ],
       "runtimeBudget": {
         "p95Seconds": 15,
         "scope": "local renderer state test"
@@ -97,20 +100,19 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests encode provider-session dedupe and ownership claims across active/inactive/visible split records. Needs saved red/green artifact for the class-level replay invariant."
+        "evidence": "Tests encode provider-session dedupe and ownership claims across active/inactive/visible split records, queued/pending resume commands, live hook records, and wrong-session/display-only non-claims. Red case: removing the queued/pending claim scan or provider identity threading allows a second resume tab for an already staged provider session."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Current state tests are cheap. PRs adding ownership scans must show bounded work over records and no hidden-pane wake loop before blocking promotion."
+        "evidence": "Ownership checks scan bounded renderer maps once per activation: sleeping records for the target workspace, pendingStartupByTabId, agentLaunchConfigByPaneKey, and agentStatusByPaneKey. There is no provider polling or hidden-pane wake loop."
       },
       "promotionCriteria": [
         "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
-        "Add explicit pending/queued ownership cases for resume commands already staged but not yet connected.",
-        "Attach red/green evidence that display/replay evidence alone cannot claim ownership."
+        "Attach saved CI red/green evidence for queued/pending ownership and display-only non-claim variants.",
+        "Add a focused activation-level repeat-wake fixture if a future state harness can model the full Terminal mount cycle without broad Electron coverage."
       ],
       "knownGaps": [
-        "Current command does not yet model delayed hooks, wrong-session hooks, or pending connection claims explicitly.",
-        "Current command does not run a real workspace activation loop repeatedly through Electron."
+        "Current command proves repeat-replay prevention at renderer state level; it does not run a real workspace activation loop repeatedly through Electron."
       ],
       "demotionRule": "Demote or quarantine if failures are non-actionable or if a duplicate resume escape occurs outside the modeled matrix."
     },

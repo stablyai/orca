@@ -132,6 +132,7 @@ import {
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
   type ResumableTuiAgent,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
@@ -225,6 +226,7 @@ type PendingStartupCommand = {
 
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
+  providerSession: AgentProviderSessionMetadata
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
   launchToken: string
   useLiveEntry: boolean
@@ -953,14 +955,19 @@ export function connectPanePty(
       agentType: paneStartup.launchAgent ?? paneStartup.initialAgentStatus?.agent,
       ...(launchToken ? { launchToken } : {}),
       tabId: deps.tabId,
-      leafId: pane.leafId
+      leafId: pane.leafId,
+      ...(paneStartup.providerSession ? { providerSession: paneStartup.providerSession } : {})
     })
   } else if (paneStartup) {
     useAppStore.getState().clearAgentLaunchConfig(cacheKey)
   }
   const registerEffectiveLaunchConfig = (
     effectiveLaunchConfig: PtyConnectResult['launchConfig'] | undefined,
-    metadata?: { launchToken?: string; launchAgent?: TuiAgent }
+    metadata?: {
+      launchToken?: string
+      launchAgent?: TuiAgent
+      providerSession?: AgentProviderSessionMetadata
+    }
   ): void => {
     if (!effectiveLaunchConfig) {
       return
@@ -972,7 +979,10 @@ export function connectPanePty(
         ? { launchToken: metadata?.launchToken ?? launchToken }
         : {}),
       tabId: deps.tabId,
-      leafId: pane.leafId
+      leafId: pane.leafId,
+      ...((metadata?.providerSession ?? paneStartup?.providerSession)
+        ? { providerSession: metadata?.providerSession ?? paneStartup?.providerSession }
+        : {})
     })
   }
   const clearRegisteredStartupLaunchConfig = (): void => {
@@ -2610,6 +2620,7 @@ export function connectPanePty(
           ...startupPlan.env,
           ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
         },
+        providerSession,
         launchConfig: startupPlan.launchConfig,
         launchToken: coldRestoreLaunchToken,
         useLiveEntry: Boolean(useLiveEntry),
@@ -2628,7 +2639,8 @@ export function connectPanePty(
         agentType: startup.agent,
         launchToken: startup.launchToken,
         tabId: deps.tabId,
-        leafId: pane.leafId
+        leafId: pane.leafId,
+        providerSession: startup.providerSession
       })
       return true
     }
@@ -2778,7 +2790,10 @@ export function connectPanePty(
           if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
             registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
               ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
-              ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {})
+              ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+              ...(coldRestoreOverride
+                ? { providerSession: coldRestoreOverride.providerSession }
+                : {})
             })
           }
           if (resolvedPtyId) {
@@ -3967,7 +3982,8 @@ export function connectPanePty(
       }
       registerEffectiveLaunchConfig(connectResult?.launchConfig, {
         ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
-        ...(coldRestoreStartup ? { launchAgent: coldRestoreStartup.agent } : {})
+        ...(coldRestoreStartup ? { launchAgent: coldRestoreStartup.agent } : {}),
+        ...(coldRestoreStartup ? { providerSession: coldRestoreStartup.providerSession } : {})
       })
       if (connectResult?.sessionExpired) {
         if (staleSessionId) {
