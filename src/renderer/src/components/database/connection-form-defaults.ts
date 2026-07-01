@@ -4,8 +4,10 @@
 import type { DbConnectionSummary, DbEngine, DbSslMode } from '../../../../shared/database-types'
 import { DB_DEFAULT_PORT } from '../../../../shared/database-types'
 
-// '' represents "Auto (smart by host)" in the SSL select; maps to undefined in the payload.
-export type SslFieldValue = '' | DbSslMode
+// 'auto' represents "Auto (smart by host)" in the SSL select; maps to undefined
+// in the payload. Radix Select forbids an empty-string item value, so the
+// sentinel must be a non-empty string.
+export type SslFieldValue = 'auto' | DbSslMode
 
 export type ConnectionFormState = {
   name: string
@@ -29,7 +31,7 @@ export function buildInitialState(
       port: connection.port.toString(),
       database: connection.database,
       user: connection.user,
-      ssl: connection.ssl ?? '',
+      ssl: connection.ssl ?? 'auto',
       readOnly: connection.readOnly
     }
   }
@@ -40,7 +42,7 @@ export function buildInitialState(
     port: DB_DEFAULT_PORT.postgres.toString(),
     database: '',
     user: '',
-    ssl: '',
+    ssl: 'auto',
     readOnly: false
   }
 }

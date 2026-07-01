@@ -57,7 +57,7 @@ export function ConnectionForm({
   const [database, setDatabase] = useState('')
   const [user, setUser] = useState('')
   const [password, setPassword] = useState('')
-  const [ssl, setSsl] = useState<SslFieldValue>('')
+  const [ssl, setSsl] = useState<SslFieldValue>('auto')
   const [readOnly, setReadOnly] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -83,7 +83,7 @@ export function ConnectionForm({
 
   // Build the current form fields into a create payload — shared by Test and Save.
   function currentInput(): DbConnectionInput {
-    const sslValue: DbSslMode | undefined = ssl === '' ? undefined : ssl
+    const sslValue: DbSslMode | undefined = ssl === 'auto' ? undefined : ssl
     return {
       name: name.trim(),
       engine,
@@ -259,7 +259,7 @@ export function ConnectionForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">
+                  <SelectItem value="auto">
                     {translate(
                       'auto.components.database.ConnectionForm.sslAuto',
                       'Auto (smart by host)'
