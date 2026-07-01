@@ -1,5 +1,14 @@
 /* eslint-disable max-lines */
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
@@ -90,6 +99,10 @@ import {
 } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
+
+const DevToolsPane = import.meta.env.DEV
+  ? lazy(() => import('./DevToolsPane').then((module) => ({ default: module.DevToolsPane })))
+  : null
 
 const SETTINGS_NAV_GROUPS = [
   {
@@ -1560,6 +1573,24 @@ function Settings(): React.JSX.Element {
                   >
                     {isSectionMounted('advanced') ? (
                       <AdvancedPane settings={settings} updateSettings={updateSettings} />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+
+                {showDesktopOnlySettings && import.meta.env.DEV ? (
+                  <SettingsSection
+                    id="dev"
+                    title={translate('auto.components.settings.Settings.dev', 'Dev Tools')}
+                    description={translate(
+                      'auto.components.settings.Settings.devDescription',
+                      'Dev-only tools for exercising UI states.'
+                    )}
+                    searchEntries={getSectionSearchEntries('dev')}
+                  >
+                    {DevToolsPane && isSectionMounted('dev') ? (
+                      <Suspense fallback={null}>
+                        <DevToolsPane />
+                      </Suspense>
                     ) : null}
                   </SettingsSection>
                 ) : null}

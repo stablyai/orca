@@ -1,16 +1,10 @@
 import {
-  PASTE_PAYLOAD_METADATA_YIELD_CODE_UNITS,
   countPastePayloadLines,
   getPastePayloadUtf8ByteLength,
   hasPastePayloadControlSequence,
   measurePastePayloadMetadata,
-  measurePastePayloadMetadataWithYield,
-  type PastePayloadMetadata
+  measurePastePayloadMetadataWithYield
 } from '@/lib/paste-payload-metadata'
-
-export type TerminalPastePayloadMetadata = PastePayloadMetadata
-
-export const TERMINAL_PASTE_METADATA_YIELD_CODE_UNITS = PASTE_PAYLOAD_METADATA_YIELD_CODE_UNITS
 
 export const measureTerminalPastePayloadMetadata = measurePastePayloadMetadata
 export const measureTerminalPastePayloadMetadataWithYield = measurePastePayloadMetadataWithYield

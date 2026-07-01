@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { type PairedDevice, type Platform, type StepIndex } from './MobileHero'
+import type { PairedDevice, Platform, StepIndex } from './MobileHero'
 import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
@@ -32,6 +32,10 @@ export default function MobilePage(): React.JSX.Element {
   const [pairLoading, setPairLoading] = useState(false)
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
+  // Why: tracks whether `selectedAddress` came from the user typing a
+  // manual value rather than from an OS-enumerated interface, so the
+  // refresh path can keep their choice instead of snapping back to LAN.
+  const [addressIsManual, setAddressIsManual] = useState(false)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [devices, setDevices] = useState<PairedDevice[]>([])
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
@@ -215,9 +219,22 @@ export default function MobilePage(): React.JSX.Element {
       // Resolve the new address before committing it so we can detect a real
       // change and remint the QR — otherwise the QR keeps encoding the stale
       // endpoint after a network refresh swaps the active interface.
-      const newAddress = selectRefreshedNetworkAddress(selectedAddress, result.interfaces)
+      const newAddress = selectRefreshedNetworkAddress(
+        selectedAddress,
+        result.interfaces,
+        addressIsManual
+      )
       if (mountedRef.current) {
+        // Why: selectRefreshedNetworkAddress can rewrite selectedAddress
+        // (e.g. when a refresh surfaces a tailnet interface and the user
+        // had been on LAN). Re-derive `addressIsManual` from the new
+        // value so the next refresh doesn't snap the user back to LAN
+        // just because they once picked a non-tailnet interface.
         setSelectedAddress(newAddress)
+        const nextIsManual =
+          newAddress !== undefined &&
+          !result.interfaces.some((iface) => iface.address === newAddress)
+        setAddressIsManual(nextIsManual)
       }
       if (newAddress !== selectedAddress && hasGeneratedRef.current && mountedRef.current) {
         void generatePairing(true, newAddress)
@@ -229,7 +246,7 @@ export default function MobilePage(): React.JSX.Element {
         setRefreshingNetworkInterfaces(false)
       }
     }
-  }, [selectedAddress, generatePairing, mountedRef])
+  }, [selectedAddress, generatePairing, mountedRef, addressIsManual])
 
   useEffect(() => {
     if (stage !== 'flow') {
@@ -241,10 +258,15 @@ export default function MobilePage(): React.JSX.Element {
   const handleAddressChange = useCallback(
     (address: string) => {
       setSelectedAddress(address)
+      // Why: if the picked address is not in the OS-enumerated list, it is
+      // a user-typed manual entry — remember that so the next refresh does
+      // not snap it back to a tailnet/LAN fallback.
+      const isManual = !networkInterfaces.some((iface) => iface.address === address)
+      setAddressIsManual(isManual)
       // Switching network must remint so the QR encodes the new endpoint.
       void generatePairing(true, address)
     },
-    [generatePairing]
+    [generatePairing, networkInterfaces]
   )
 
   const copyPairingCode = useCallback(async () => {

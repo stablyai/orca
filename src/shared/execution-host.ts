@@ -56,6 +56,16 @@ export function toRuntimeExecutionHostId(environmentId: string): `runtime:${stri
   return `runtime:${encodeURIComponent(environmentId)}`
 }
 
+// Why: runtime-owned (ephemeral-VM) SSH targets are hidden from user-facing
+// SSH/run-target surfaces. The renderer can't read the target.owner field, so it
+// recognizes them by their deterministic id prefix. getRuntimeOwnedSshTargetId
+// (main) builds on this same prefix to keep the two in sync.
+export const RUNTIME_OWNED_SSH_TARGET_ID_PREFIX = 'runtime-ssh-'
+
+export function isRuntimeOwnedSshTargetId(targetId: string | null | undefined): boolean {
+  return typeof targetId === 'string' && targetId.startsWith(RUNTIME_OWNED_SSH_TARGET_ID_PREFIX)
+}
+
 export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
   const normalized = normalizeHostPart(value)
   if (!normalized) {

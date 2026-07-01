@@ -728,6 +728,31 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
+  async forceDeletePreservedBranch(
+    repoPath: string,
+    branchName: string,
+    expectedHead: string
+  ): Promise<void> {
+    try {
+      await this.runWithDiffDedupeClear(async () => {
+        await this.mux.request('git.forceDeletePreservedBranch', {
+          repoPath,
+          branchName,
+          expectedHead
+        })
+      })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        // Why: older SSH relays predate git.forceDeletePreservedBranch; surface
+        // a reconnect prompt instead of a raw JSON-RPC method-not-found error.
+        throw new Error(
+          'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
+  }
+
   async exec(
     args: string[],
     cwd: string,

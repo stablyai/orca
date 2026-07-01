@@ -1,7 +1,14 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
-import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { createHash, randomUUID } from 'crypto'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 import { escapeRegex } from '../../shared/string-utils'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 

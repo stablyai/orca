@@ -7,13 +7,16 @@ import {
   useRef,
   useState
 } from 'react'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { sendNativeChatMessage, submitNativeChatPrompt } from './native-chat-runtime-send'
+import {
+  sendNativeChatMessage,
+  sendNativeChatMessageWithImageAttachments,
+  submitNativeChatPrompt
+} from './native-chat-runtime-send'
 import { getAgentSlashCommands } from './native-chat-agent-commands'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
@@ -28,7 +31,8 @@ import {
   type HistoryState,
   type SlashCommandSuggestion
 } from './native-chat-composer-state'
-import { resolveImagePaste } from './native-chat-image-paste'
+import { readNativeChatDraftCache } from './native-chat-draft-cache'
+import { useNativeChatDraft } from './use-native-chat-draft'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import {
   nativeChatComposerTargetIsRemote,
@@ -36,6 +40,7 @@ import {
 } from './native-chat-composer-target'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
+import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { dispatchDictationControl } from '../dictation/dictation-control-events'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 
@@ -74,6 +79,17 @@ export type NativeChatComposerProps = {
 export type NativeChatComposerHandle = {
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  /** Handle a paste event captured at the pane root (the OS frequently
+   *  retargets the paste off the focused textarea, so its own onPaste can't be
+   *  relied on). An image is intercepted and attached; text falls through. */
+  handlePasteEvent: (event: {
+    clipboardData: DataTransfer | null
+    preventDefault: () => void
+    defaultPrevented: boolean
+  }) => void
+  /** Paste the clipboard into the composer with no event in hand (menu paste):
+   *  an image becomes an attachment, otherwise text is inserted at the caret. */
+  pasteFromClipboard: () => void
 }
 
 /**
@@ -98,8 +114,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     },
     ref
   ): React.JSX.Element {
-    const [draft, setDraft] = useState('')
-    const [caret, setCaret] = useState(0)
+    // Scope key shared with image attachments so an unsent draft + its attached
+    // images survive the composer unmounting on a TUI/GUI toggle.
+    const draftScopeKey = targetPtyId ?? terminalTabId
+    const { draft, setDraft } = useNativeChatDraft(draftScopeKey)
+    const [caret, setCaret] = useState(draft.length)
     const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY)
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const [notice, setNotice] = useState<string | null>(null)
@@ -115,6 +134,15 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       dictationState === 'starting' ||
       dictationState === 'listening' ||
       dictationState === 'stopping'
+
+    // Place the caret at the end of the (possibly restored) draft when the
+    // composer is reused for a different pane. Adjusted during render (matching
+    // the draft reload) so caret and text stay consistent on the first paint.
+    const lastDraftScopeKey = useRef(draftScopeKey)
+    if (lastDraftScopeKey.current !== draftScopeKey) {
+      lastDraftScopeKey.current = draftScopeKey
+      setCaret(readNativeChatDraftCache(draftScopeKey).length)
+    }
 
     const agentCommands = useMemo(() => getAgentSlashCommands(agent), [agent])
     const autocomplete = useMemo(
@@ -173,7 +201,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         })
         return true
       },
-      [caret, draft]
+      [caret, draft, setDraft]
     )
 
     const focus = useCallback((): boolean => {
@@ -185,7 +213,21 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       return true
     }, [])
 
-    useImperativeHandle(ref, () => ({ focus, insertTypedText }), [focus, insertTypedText])
+    const { handlePaste, pasteFromClipboard } = useNativeChatComposerPaste({
+      agent,
+      disabled,
+      caret,
+      attachLocalPaths,
+      insertTypedText,
+      setCaret,
+      setNotice
+    })
+
+    useImperativeHandle(
+      ref,
+      () => ({ focus, insertTypedText, handlePasteEvent: handlePaste, pasteFromClipboard }),
+      [focus, insertTypedText, handlePaste, pasteFromClipboard]
+    )
 
     useEffect(() => {
       return window.api.ui.onFileDrop((payload) => {
@@ -236,17 +278,24 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       if (!target) {
         return
       }
-      // Images are pasted into the hosted TUI as soon as they are attached, so the
-      // Send action only submits the text body (if any) plus Enter.
-      if (text.trim().length > 0) {
+      // Slash commands are TUI controls, not chat turns — never attach images to
+      // one (the chat turn is suppressed below, so the images would leak into the
+      // runtime with no visible message). Otherwise images are deferred to submit
+      // (like text) so the GUI chips and TUI input stay in sync and removing a
+      // chip needs no TUI un-paste: send images, then text, then Enter atomically.
+      const isSlashCommand = isSlashCommandDraft(text)
+      if (isSlashCommand) {
+        sendNativeChatMessage(target.settings, target.ptyId, text)
+      } else if (imagePaths.length > 0) {
+        sendNativeChatMessageWithImageAttachments(target.settings, target.ptyId, text, imagePaths)
+      } else if (text.trim().length > 0) {
         sendNativeChatMessage(target.settings, target.ptyId, text)
       } else {
         submitNativeChatPrompt(target.settings, target.ptyId)
       }
-      // Slash commands are TUI controls, not chat turns: don't echo a user bubble,
-      // but DO surface a small "Ran /clear" system line so the command leaves a
-      // visible trace instead of seeming to do nothing.
-      if (isSlashCommandDraft(text)) {
+      // Slash commands don't echo a user bubble, but DO surface a small
+      // "Ran /clear" system line so the command leaves a visible trace.
+      if (isSlashCommand) {
         onSlashCommand?.(text.trim())
       } else {
         onOptimisticSend?.(text, imagePaths)
@@ -270,7 +319,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       disabled,
       resolveTarget,
       onOptimisticSend,
-      onSlashCommand
+      onSlashCommand,
+      setDraft
     ])
 
     const interrupt = useCallback(() => {
@@ -285,13 +335,16 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       sendRuntimePtyInput(target.settings, target.ptyId, ESC)
     }, [isWorking, onStop, resolveTarget])
 
-    const chooseSlash = useCallback((command: SlashCommandSuggestion) => {
-      const next = applySlashSuggestion(command)
-      setDraft(next)
-      setCaret(next.length)
-      setActiveSuggestion(0)
-      textareaRef.current?.focus()
-    }, [])
+    const chooseSlash = useCallback(
+      (command: SlashCommandSuggestion) => {
+        const next = applySlashSuggestion(command)
+        setDraft(next)
+        setCaret(next.length)
+        setActiveSuggestion(0)
+        textareaRef.current?.focus()
+      },
+      [setDraft]
+    )
 
     const dispatchSlash = useCallback(
       (command: SlashCommandSuggestion) => {
@@ -314,42 +367,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         setActiveSuggestion(0)
         setNotice(null)
       },
-      [agent, disabled, resolveTarget, onSlashCommand]
-    )
-
-    const handlePaste = useCallback(
-      (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-        const hasImage = Array.from(event.clipboardData.items).some((item) =>
-          item.type.startsWith('image/')
-        )
-        if (!hasImage) {
-          return
-        }
-        event.preventDefault()
-        // Why: snapshot the caret before the async temp-file round-trip — `caret`
-        // state can move (further typing/selection) while the await is in flight.
-        const caretAtPaste = caret
-        void (async () => {
-          const tempPath = await window.api.ui.saveClipboardImageAsTempFile()
-          if (!tempPath) {
-            return
-          }
-          const result = resolveImagePaste(agent, tempPath)
-          if (result.kind === 'unsupported') {
-            setNotice(
-              translate(
-                'components.native-chat.composer.imageUnsupported',
-                'Image paste is not supported for this agent.'
-              )
-            )
-            return
-          }
-          attachLocalPaths([result.path])
-          setCaret(caretAtPaste)
-          setNotice(null)
-        })()
-      },
-      [agent, attachLocalPaths, caret]
+      [agent, disabled, resolveTarget, onSlashCommand, setDraft]
     )
 
     const handleKeyDown = useNativeChatComposerKeyDown({

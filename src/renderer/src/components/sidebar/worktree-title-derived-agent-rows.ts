@@ -5,11 +5,11 @@ import {
   isClaudeManagementTitle
 } from '@/lib/agent-status'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import {
-  type AgentStatusEntry,
-  type AgentStatusOrchestrationContext,
-  type AgentStatusState,
-  type AgentType
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext,
+  AgentStatusState,
+  AgentType
 } from '../../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type {

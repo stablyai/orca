@@ -1330,6 +1330,38 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('forceDeletePreservedBranch sends the preserved-branch delete request', async () => {
+    await provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
+    expect(mux.request).toHaveBeenCalledWith('git.forceDeletePreservedBranch', {
+      repoPath: '/home/user/repo',
+      branchName: 'you/fix-auth',
+      expectedHead: 'abc123'
+    })
+  })
+
+  it('forceDeletePreservedBranch maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.forceDeletePreservedBranch'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('forceDeletePreservedBranch rethrows non-method-not-found errors', async () => {
+    const error = new Error('remote update-ref failed')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
+    ).rejects.toBe(error)
+  })
+
   it('isGitRepo always returns true for remote paths', () => {
     expect(provider.isGitRepo('/any/path')).toBe(true)
   })

@@ -1806,6 +1806,7 @@ describe('setActiveWorktree', () => {
       'pendingInitialCwdByTabId',
       'pendingSetupSplitByTabId',
       'pendingIssueCommandSplitByTabId',
+      'automaticAgentResumeClaimsByTabId',
       'tabBarOrderByWorktree',
       'cacheTimerByKey',
       'activeTabIdByWorktree'
@@ -1844,6 +1845,13 @@ describe('setActiveWorktree', () => {
       pendingStartupByTabId: {
         [orphanId]: { command: 'codex' }
       },
+      automaticAgentResumeClaimsByTabId: {
+        [orphanId]: {
+          worktreeId: wt,
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' }
+        }
+      },
       pendingInitialCwdByTabId: {
         [orphanId]: '/repo/packages/web'
       },
@@ -1867,6 +1875,7 @@ describe('setActiveWorktree', () => {
     expect(s.runtimePaneTitlesByTabId[orphanId]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
+    expect(s.automaticAgentResumeClaimsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingInitialCwdByTabId[orphanId]).toBeUndefined()
     expect(s.cacheTimerByKey[`${orphanId}:seed`]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[replacement.id]).toEqual(makeLayout())

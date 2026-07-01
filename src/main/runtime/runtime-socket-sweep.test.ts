@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { basename, join } from 'path'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   createRuntimeTransportMetadata,

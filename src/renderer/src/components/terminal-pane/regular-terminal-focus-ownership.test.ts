@@ -104,10 +104,185 @@ describe('regular terminal focus ownership', () => {
       syncFocused
     })
 
-    expect(released).toBe(true)
+    expect(released).toBe(helper)
     expect(syncFocused).toHaveBeenCalledWith(false)
     expect(blur).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(helper)
+  })
+
+  it('returns null on renderer blur when this pane did not own the active helper', () => {
+    const pane = appendPane()
+    appendHelper(pane)
+    const syncFocused = vi.fn()
+    document.body.focus()
+
+    const released = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused
+    })
+
+    expect(released).toBeNull()
+    expect(syncFocused).not.toHaveBeenCalled()
+  })
+
+  it('reclaims and refocuses the released helper (next frame) when blur dropped focus to body', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const syncFocused = vi.fn()
+    const focus = vi.spyOn(helper, 'focus')
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    expect(releasedHelper).toBe(helper)
+    syncFocused.mockClear()
+    document.body.focus()
+    focus.mockClear()
+    const scheduled: (() => void)[] = []
+
+    const synced = resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+
+    expect(synced).toBe(true)
+    expect(syncFocused).toHaveBeenCalledWith(true)
+    // Why: reclaim is deferred so a newer focus owner during reactivation wins.
+    expect(focus).not.toHaveBeenCalled()
+    for (const run of scheduled) {
+      run()
+    }
+    expect(focus).toHaveBeenCalledOnce()
+    expect(document.activeElement).toBe(helper)
+  })
+
+  it('reclaims the exact split helper that was released, not the first one in the container', () => {
+    // Why: a single TerminalPane hosts every split as siblings under one
+    // container, so a first-match querySelector would refocus the wrong split.
+    const pane = appendPane()
+    const firstHelper = appendHelper(pane)
+    const secondHelper = appendHelper(pane)
+    const syncFocused = vi.fn()
+    const firstFocus = vi.spyOn(firstHelper, 'focus')
+    const secondFocus = vi.spyOn(secondHelper, 'focus')
+    secondHelper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: secondHelper,
+      syncFocused
+    })
+    expect(releasedHelper).toBe(secondHelper)
+    document.body.focus()
+    firstFocus.mockClear()
+    secondFocus.mockClear()
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(secondFocus).toHaveBeenCalledOnce()
+    expect(firstFocus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(secondHelper)
+  })
+
+  it('does not yank focus back into the terminal if the user clicked elsewhere during reactivation', () => {
+    // Why: the Linux reclaim path must honor the same "newer focus owner wins"
+    // guard the macOS path uses, so a click into the sidebar/dialog isn't stolen.
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    const syncFocused = vi.fn()
+    const focus = vi.spyOn(helper, 'focus')
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    document.body.focus()
+    focus.mockClear()
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    // User clicks into another field before the deferred reclaim runs.
+    outside.focus()
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(focus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(outside)
+  })
+
+  it('does not reclaim a released helper that was detached from the DOM before refocus', () => {
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const syncFocused = vi.fn()
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    // The split that owned focus was closed during the blur.
+    helper.remove()
+    document.body.focus()
+
+    const synced = resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false
+    })
+
+    expect(synced).toBe(false)
+  })
+
+  it('does not reclaim focus on window focus without a prior blur release', () => {
+    const pane = appendPane()
+    appendHelper(pane)
+    const syncFocused = vi.fn()
+    document.body.focus()
+
+    const synced = resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper: null,
+      isMac: false
+    })
+
+    expect(synced).toBe(false)
+    expect(syncFocused).not.toHaveBeenCalled()
   })
 
   it('resyncs terminal ownership on renderer focus when the same helper remains active', () => {

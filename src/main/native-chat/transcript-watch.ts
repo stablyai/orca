@@ -8,9 +8,9 @@
 // the watcher and clears the timer synchronously, and the module tracks the live
 // watcher count so tests can assert no watcher survives teardown.
 
-import { watch, type FSWatcher } from 'fs'
-import { open, stat } from 'fs/promises'
-import type { Readable } from 'stream'
+import { watch, type FSWatcher } from 'node:fs'
+import { open, stat } from 'node:fs/promises'
+import type { Readable } from 'node:stream'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'

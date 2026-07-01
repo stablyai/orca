@@ -703,13 +703,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15
-            platform: mac
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
-            eb_cache_path: |
-              ~/Library/Caches/electron
-              ~/Library/Caches/electron-builder
-          - os: windows-latest
+          # Why: windows-latest moved to the Windows 2025 / VS 2026 image before
+          # node-gyp could detect VS 18, breaking native dependency install.
+          - os: windows-2022
             platform: win
             release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never'
             eb_cache_path: |
@@ -767,8 +763,8 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
-      # Cache the Electron binary + electron-builder tool downloads (notarytool,
-      # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
+      # Cache the Electron binary + electron-builder tool downloads
+      # (winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job.
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
@@ -797,22 +793,6 @@ jobs:
       - name: Install Linux computer-use provider dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
-
-      - name: Verify macOS signing environment
-        if: matrix.platform == 'mac'
-        run: node config/scripts/verify-macos-release-env.mjs
-        env:
-          CSC_LINK: ${{ secrets.MAC_CERTS }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      # Why: `plutil -lint` accepts duplicate plist keys, but `codesign`
-      # rejects duplicate entitlements after the expensive app build.
-      - name: Verify macOS entitlements
-        if: matrix.platform == 'mac'
-        run: pnpm verify:macos-entitlements
 
       # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
       # requires the build identity to be the literal string `stable` or `rc`,
@@ -864,35 +844,6 @@ jobs:
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
-      # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
-      # passed to non-macOS builds. electron-builder uses CSC_LINK as the
-      # code-signing certificate on any platform, so leaking the Apple
-      # Developer ID cert to the Windows build causes the NSIS installer to
-      # be signed with an Apple cert whose chain Windows cannot validate,
-      # breaking the auto-updater with "certificate chain could not be built
-      # to a trusted root authority" (issue #631).
-      #
-      # Why retry: electron-builder downloads NSIS/winCodeSign/squirrel
-      # binaries and the Electron runtime from GitHub release assets during
-      # publish. GitHub's download CDN occasionally returns 504s that fail
-      # the whole release. Retry on failure so transient network errors
-      # don't require a manual re-run.
-      - name: Publish release artifacts (macOS)
-        if: matrix.platform == 'mac'
-        uses: nick-fields/retry@v4
-        with:
-          timeout_minutes: 45
-          max_attempts: 3
-          retry_wait_seconds: 30
-          command: ${{ matrix.release_command }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.MAC_CERTS }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
         uses: nick-fields/retry@v4
@@ -916,6 +867,23 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Windows node-pty ConPTY runtime
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $runtimeDir = 'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
+          $requiredFiles = @(
+            "$runtimeDir/conpty.node",
+            "$runtimeDir/conpty/conpty.dll",
+            "$runtimeDir/conpty/OpenConsole.exe"
+          )
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Missing Windows node-pty runtime file: $file"
+            }
+            Get-Item -LiteralPath $file
+          }
 
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win'
@@ -1129,14 +1097,13 @@ jobs:
             exit 1
           fi
 
-      # Why post-publish for macOS/Linux: electron-builder packs and uploads
-      # in a single `--publish always` invocation, so there is no cheap
-      # insertion point between pack and upload without splitting those steps.
-      # Running verify last still blocks the bad release: the
-      # binary is uploaded to the draft, but a failed matrix job blocks
-      # the `publish-release` job (which depends on `build`) from flipping
-      # the release from draft → published, so users never see it. A human
-      # then deletes the draft and re-cuts.
+      # Why post-publish for Linux: electron-builder packs and uploads in a
+      # single `--publish always` invocation, so there is no cheap insertion
+      # point between pack and upload without splitting those steps. Running
+      # verify last still blocks the bad release: the binary is uploaded to the
+      # draft, but a failed matrix job blocks `publish-release` from flipping
+      # the release from draft → published, so users never see it. A human then
+      # deletes the draft and re-cuts.
       #
       # Why this guards against: a misconfigured CI run where
       # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
@@ -1147,10 +1114,41 @@ jobs:
       - name: Verify telemetry constants present in app.asar
         run: node config/scripts/verify-telemetry-constants.mjs
 
+  build-mac:
+    needs:
+      - cut
+      - create-release
+    if: needs.cut.outputs.should_release == 'true'
+    # Why: SignPath requires every job in this signing workflow to be
+    # GitHub-hosted. The actual mac build runs in release-mac-build.yml so
+    # Blacksmith stays outside Windows artifact provenance.
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Run isolated macOS release build
+        run: node config/scripts/run-release-mac-build-workflow.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
+          RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
+
   publish-release:
     needs:
       - cut
       - build
+      - build-mac
       - terminal-rendering-golden
     runs-on: ubuntu-latest
     permissions:

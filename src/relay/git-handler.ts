@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
 protocol surface so local and SSH git behavior stay in one dispatch table. */
-import { execFile, spawn, type ExecFileOptions } from 'child_process'
-import { promisify } from 'util'
-import * as path from 'path'
+import { execFile, spawn, type ExecFileOptions } from 'node:child_process'
+import { promisify } from 'node:util'
+import * as path from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
@@ -37,6 +37,7 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
@@ -223,6 +224,9 @@ export class GitHandler {
       this.refreshLocalBaseRefForWorktreeCreate(p)
     )
     this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
+    this.dispatcher.onRequest('git.forceDeletePreservedBranch', (p) =>
+      this.forceDeletePreservedBranch(p)
+    )
     this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
     this.dispatcher.onRequest('git.clone', (p, context) => this.clone(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
@@ -1169,6 +1173,28 @@ export class GitHandler {
         throw new Error(normalizeGitErrorMessage(error))
       }
     })
+  }
+
+  private async forceDeletePreservedBranch(params: Record<string, unknown>) {
+    const repoPath = params.repoPath
+    const branchName = params.branchName
+    const expectedHead = params.expectedHead
+    if (
+      typeof repoPath !== 'string' ||
+      typeof branchName !== 'string' ||
+      typeof expectedHead !== 'string'
+    ) {
+      throw new Error('Invalid preserved branch force-delete request.')
+    }
+    // Why: an empty repoPath would resolve `cwd` to the relay's own process
+    // directory, running the destructive update-ref against the wrong repo. NUL
+    // bytes cannot reach git safely either; reject both at the boundary.
+    if (!repoPath || repoPath.includes('\0') || expectedHead.includes('\0')) {
+      throw new Error('Invalid preserved branch force-delete request.')
+    }
+    return this.runWithDiffDedupeClear(() =>
+      forceDeletePreservedRelayBranch(this.git.bind(this), repoPath, branchName, expectedHead)
+    )
   }
 
   private async isGitRepo(params: Record<string, unknown>) {

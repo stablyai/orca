@@ -530,6 +530,29 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
   })
 
+  it('forwards quick-command menu shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'KeyQ',
+      key: 'q',
+      meta: isMac,
+      control: !isMac,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
+  })
+
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
     setupGuestShortcutForwarding({
       browserTabId,

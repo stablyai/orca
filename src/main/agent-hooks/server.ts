@@ -10,10 +10,10 @@
 //     events (see docs/design/agent-status-over-ssh.md §5)
 //   - the on-disk last-status cache (`last-status.json`) that survives
 //     Orca restart so retained dashboard rows reappear on relaunch
-import { createServer, type IncomingMessage, type ServerResponse } from 'http'
-import { createHash, randomBytes, randomUUID } from 'crypto'
-import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'

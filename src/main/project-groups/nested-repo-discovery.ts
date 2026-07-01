@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: scanner traversal, ignore matching, and filesystem
 abstraction stay together so local, SSH, and runtime scans cannot drift. */
-import { readFile, readdir, stat } from 'fs/promises'
-import { basename, join } from 'path'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import type {
   NestedRepoCandidate,
   NestedRepoScanOptions,

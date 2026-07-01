@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: relay filesystem request handling shares
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
-import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
-import { execFile } from 'child_process'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
@@ -17,6 +17,7 @@ import {
 } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
+import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
@@ -189,7 +190,7 @@ export class FsHandler {
 
   private async createFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
-    const { dirname } = await import('path')
+    const { dirname } = await import('node:path')
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
   }
@@ -298,7 +299,18 @@ export class FsHandler {
       )
     })
     if (isGitRepo) {
-      return listFilesWithGit(rootPath, excludePathPrefixes)
+      // Why: a git monorepo parent fills nested-repo subtrees via the readdir
+      // walk, which can exhaust the same cap/deadline. Translate only those
+      // budget errors into install-rg guidance; genuine git failures keep
+      // their own messages.
+      try {
+        return await listFilesWithGit(rootPath, excludePathPrefixes)
+      } catch (err) {
+        if (isQuickOpenReaddirBudgetError(err)) {
+          throw new Error(await buildInstallRgMessage(err))
+        }
+        throw err
+      }
     }
     // Why: the readdir walker rejects on cap/deadline instead of returning a
     // partial list (design doc: silent truncation is worse than an explicit

@@ -10,6 +10,7 @@ import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
+import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import {
@@ -97,7 +98,8 @@ export function BrowserPane({
   const showSearchEngine = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[2]])
   const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
-  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[4]])
+  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[4]])
+  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[5]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
@@ -222,6 +224,13 @@ export function BrowserPane({
           settings={settings}
           linkRoutingDescription={linkRoutingDescription}
           isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showLocalhostLabels ? (
+        <BrowserLocalhostWorktreeLabelsSetting
+          settings={settings}
           updateSettings={updateSettings}
         />
       ) : null}

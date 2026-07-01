@@ -184,6 +184,7 @@ const UiUpdate = z
     workspaceBoardColumnWidth: z.number().finite().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
+    _workspaceStatusesReorderedDefaultRepaired: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
     statusBarItems: z.array(StatusBarItem).optional(),

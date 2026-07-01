@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Session, type SubprocessHandle } from './session'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
 
 function createMockSubprocess(
   options: { startupCommandDeliveredInShellArgs?: boolean } = {}
@@ -350,6 +350,25 @@ describe('TerminalHost', () => {
       const sessions = host.listSessions()
       expect(sessions).toHaveLength(2)
       expect(sessions.map((s) => s.sessionId).sort()).toEqual(['session-1', 'session-2'])
+    })
+
+    it('uses applied size without serializing terminal snapshots', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      host.resize('session-1', 132, 43)
+
+      const getSnapshot = vi.spyOn(Session.prototype, 'getSnapshot')
+
+      expect(host.listSessions()[0]).toMatchObject({
+        sessionId: 'session-1',
+        cols: 132,
+        rows: 43
+      })
+      expect(getSnapshot).not.toHaveBeenCalled()
     })
   })
 

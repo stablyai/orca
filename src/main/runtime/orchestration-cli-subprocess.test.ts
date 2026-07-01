@@ -15,10 +15,10 @@
 // missing) so `pnpm test` works on a fresh checkout without requiring a prior
 // `pnpm run build:cli`. The verification gate explicitly builds the CLI
 // before running this file.
-import { spawn } from 'child_process'
-import { existsSync, mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: SSH config parsing fixtures cover OpenSSH file parsing and ssh -G output together so import and connection resolution stay aligned. */
 import { describe, expect, it, vi } from 'vitest'
-import { join } from 'path'
+import { join } from 'node:path'
 import { parseSshConfig, sshConfigHostsToTargets, parseSshGOutput } from './ssh-config-parser'
 
 vi.mock('os', () => ({

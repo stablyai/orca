@@ -282,6 +282,88 @@ describe('registerGitHubHandlers', () => {
     )
   })
 
+  it('broadcasts mutation notifications by repo id even when the payload path is remote', async () => {
+    const sendMock = vi.fn()
+    getAllWebContentsMock.mockReturnValue([
+      { id: 1, isDestroyed: () => false, send: vi.fn() },
+      { id: 2, isDestroyed: () => false, send: sendMock }
+    ])
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:notifyWorkItemMutated'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/home/runtime/repo',
+        repoId: 'repo-1',
+        type: 'pr',
+        number: 42
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith('gh:workItemMutated', {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      type: 'pr',
+      number: 42
+    })
+  })
+
+  it('broadcasts mutation notifications with resolved repo id when called by repo path', async () => {
+    const sendMock = vi.fn()
+    getAllWebContentsMock.mockReturnValue([
+      { id: 1, isDestroyed: () => false, send: vi.fn() },
+      { id: 2, isDestroyed: () => false, send: sendMock }
+    ])
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:notifyWorkItemMutated'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        type: 'issue',
+        number: 7
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith('gh:workItemMutated', {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      type: 'issue',
+      number: 7
+    })
+  })
+
+  it('broadcasts PR file viewed mutations with repo id for sibling cache invalidation', async () => {
+    const sendMock = vi.fn()
+    getAllWebContentsMock.mockReturnValue([
+      { id: 1, isDestroyed: () => false, send: vi.fn() },
+      { id: 2, isDestroyed: () => false, send: sendMock }
+    ])
+    setPRFileViewedMock.mockResolvedValue(true)
+    registerGitHubHandlers(store as never, stats as never)
+
+    const result = await handlers['gh:setPRFileViewed'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
+        pullRequestId: 'PR_kw',
+        path: 'src/app.ts',
+        viewed: true
+      }
+    )
+
+    expect(result).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith('gh:workItemMutated', {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      type: 'pr',
+      number: 42
+    })
+  })
+
   it('rejects unknown repository paths', async () => {
     registerGitHubHandlers(store as never, stats as never)
 

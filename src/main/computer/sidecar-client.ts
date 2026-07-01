@@ -1,5 +1,5 @@
-import { fork, type ChildProcess } from 'child_process'
-import { join } from 'path'
+import { fork, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -48,16 +48,6 @@ let sidecar: ComputerSidecarProcess | null = null
 // Why: Node treats unhandled child 'error' events as process exceptions, so
 // stale children keep a no-op listener that does not retain the sidecar owner.
 function ignoreStaleChildError(): void {}
-
-export function shouldUseComputerSidecar(): boolean {
-  return (
-    (process.platform === 'darwin' ||
-      process.platform === 'linux' ||
-      process.platform === 'win32') &&
-    typeof process.versions.electron === 'string' &&
-    process.env.ORCA_COMPUTER_SIDECAR !== '1'
-  )
-}
 
 export async function callComputerSidecarListApps(): Promise<ComputerListAppsResult> {
   return (await getComputerSidecar().call('listApps', {})) as ComputerListAppsResult

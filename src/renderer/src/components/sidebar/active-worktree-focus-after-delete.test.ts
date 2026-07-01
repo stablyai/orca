@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-type SeedWorktree = { id: string; repoId: string; isMainWorktree: boolean }
+type SeedWorktree = {
+  id: string
+  repoId: string
+  isMainWorktree: boolean
+  hostId?: string
+}
+type SeedRepo = { id: string; connectionId?: string | null; executionHostId?: string | null }
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -8,6 +14,7 @@ const mocks = vi.hoisted(() => {
     activePendingCreationId: null as string | null,
     activeWorktreeId: null as string | null,
     worktreesByRepo: {} as Record<string, SeedWorktree[]>,
+    repos: [] as SeedRepo[],
     lastVisitedAtByWorktreeId: {} as Record<string, number>,
     deleteStateByWorktreeId: {} as Record<string, { isDeleting?: boolean }>,
     worktreeMap: new Map<string, SeedWorktree>()
@@ -22,7 +29,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/selectors', () => ({
-  getWorktreeMapFromState: () => mocks.state.worktreeMap
+  getWorktreeMapFromState: () => mocks.state.worktreeMap,
+  getRepoMapFromState: () => new Map(mocks.state.repos.map((repo) => [repo.id, repo]))
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -32,11 +40,14 @@ vi.mock('@/lib/worktree-activation', () => ({
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 
-function seed(worktrees: { id: string; repoId?: string; isMainWorktree?: boolean }[]): void {
+function seed(
+  worktrees: { id: string; repoId?: string; isMainWorktree?: boolean; hostId?: string }[]
+): void {
   const normalized: SeedWorktree[] = worktrees.map((worktree) => ({
     id: worktree.id,
     repoId: worktree.repoId ?? 'repo-1',
-    isMainWorktree: worktree.isMainWorktree ?? false
+    isMainWorktree: worktree.isMainWorktree ?? false,
+    ...(worktree.hostId ? { hostId: worktree.hostId } : {})
   }))
   mocks.state.worktreeMap = new Map(normalized.map((worktree) => [worktree.id, worktree]))
   const byRepo: Record<string, SeedWorktree[]> = {}
@@ -44,6 +55,8 @@ function seed(worktrees: { id: string; repoId?: string; isMainWorktree?: boolean
     ;(byRepo[worktree.repoId] ??= []).push(worktree)
   }
   mocks.state.worktreesByRepo = byRepo
+  // A repo per referenced repoId so getRepoMapFromState resolves (host info comes via worktree.hostId).
+  mocks.state.repos = [...new Set(normalized.map((w) => w.repoId))].map((id) => ({ id }))
 }
 
 // Why: mirror the store reducer — once a delete resolves, the removed worktree
@@ -68,6 +81,7 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     mocks.state.activePendingCreationId = null
     mocks.state.activeWorktreeId = null
     mocks.state.worktreesByRepo = {}
+    mocks.state.repos = []
     mocks.state.lastVisitedAtByWorktreeId = {}
     mocks.state.deleteStateByWorktreeId = {}
     mocks.state.worktreeMap = new Map()
@@ -95,6 +109,22 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     commit()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('main')
+  })
+
+  it('does not re-focus a sibling hosted on a torn-down runtime-owned SSH target', () => {
+    // The runtime's main worktree is hosted on the per-workspace-env SSH target, which is
+    // destroyed on delete — re-focusing it would create a blank terminal that can never spawn.
+    seed([
+      { id: 'main', isMainWorktree: true, hostId: 'ssh:runtime-ssh-orca-1' },
+      { id: 'wt-del', hostId: 'ssh:runtime-ssh-orca-1' }
+    ])
+    mocks.state.activeWorktreeId = 'wt-del'
+
+    const commit = prepareActiveWorktreeFocusAfterDelete('wt-del')
+    simulateDelete('wt-del', true)
+    commit()
+
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('stays within the deleted worktree project instead of jumping to another project', () => {

@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'

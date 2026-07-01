@@ -376,7 +376,8 @@ export class PaneManager {
   private createDividerWrapped(isVertical: boolean): HTMLElement {
     return createDivider(isVertical, this.styleOptions, {
       refitPanesUnder: (el) => refitPanesUnder(el, this.panes),
-      onLayoutChanged: this.options.onLayoutChanged
+      onLayoutChanged: this.options.onLayoutChanged,
+      onDragActiveChange: this.options.onPaneDragActiveChange
     })
   }
 

@@ -19,10 +19,10 @@
 // can reconnect by running relay.js --connect, which bridges the new
 // SSH channel's stdin/stdout to the existing relay's socket.
 
-import { createServer, createConnection, type Socket, type Server } from 'net'
-import { homedir } from 'os'
-import { resolve, join } from 'path'
-import { unlinkSync, existsSync, statSync } from 'fs'
+import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { homedir } from 'node:os'
+import { resolve, join } from 'node:path'
+import { unlinkSync, existsSync, statSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -895,12 +895,13 @@ async function main(): Promise<void> {
   function startGrace(reason: string): void {
     const startupEmptyDetached =
       detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
-    const timeoutMs =
-      graceTimeMs === 0
-        ? 0
-        : startupEmptyDetached
-          ? Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
-          : graceTimeMs
+    // Why: "until reset" preserves real PTYs, but a detached relay that never
+    // accepted a client has no terminal state and should not linger forever.
+    const timeoutMs = startupEmptyDetached
+      ? graceTimeMs === 0
+        ? EMPTY_DETACHED_STARTUP_GRACE_MS
+        : Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
+      : graceTimeMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
     process.stderr.write(

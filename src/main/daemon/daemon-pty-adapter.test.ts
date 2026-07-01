@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
@@ -175,6 +175,46 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       await new Promise((r) => setTimeout(r, 50))
       expect(lastSubprocess.resize).toHaveBeenCalledWith(120, 40)
+    })
+  })
+
+  describe('getAppliedSize', () => {
+    it('reports the spawn dims before any resize', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      expect(await adapter.getAppliedSize(id)).toEqual({ cols: 80, rows: 24 })
+    })
+
+    it('reflects the size the daemon actually applied after a resize', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      adapter.resize(id, 120, 40)
+      await waitFor(() => vi.mocked(lastSubprocess.resize).mock.calls.length > 0)
+      expect(await adapter.getAppliedSize(id)).toEqual({ cols: 120, rows: 40 })
+    })
+
+    // Why: this is the regression the fix targets. resize() is a fire-and-forget
+    // notify; a resize that arrives after the session exited is silently dropped
+    // daemon-side. getAppliedSize must keep reporting the last size the PTY
+    // genuinely took (the stale pre-exit dims) rather than the dropped request —
+    // so the renderer can tell its requested size never landed. The old
+    // requested-size cache would have masked the drop.
+    it('does not advance when a resize is dropped after the session exited', async () => {
+      const { id } = await adapter.spawn({ cols: 200, rows: 50 })
+
+      // Simulate the child exiting, then a late narrow resize racing in. The
+      // daemon Session.resize early-returns for an exited session, so the child
+      // is never resized and the applied size never becomes the requested 80×24.
+      lastSubprocess._simulateExit(0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      adapter.resize(id, 80, 24)
+      await new Promise((r) => setTimeout(r, 50))
+
+      // The drop must be visible: the subprocess was never resized to the narrow
+      // dims the renderer requested, and getAppliedSize never reports 80 cols —
+      // it stays wide (or null once reaped), never masking the drop as "applied".
+      expect(lastSubprocess.resize).not.toHaveBeenCalledWith(80, 24)
+      const applied = await adapter.getAppliedSize(id)
+      expect(applied?.cols).not.toBe(80)
     })
   })
 
@@ -890,6 +930,103 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore?.oscLinks).toEqual(oscLinks)
+    })
+
+    it('cold-restores an alt-screen agent snapshot as scrollback on wake (hibernation)', async () => {
+      // Why: agent hibernation force-kills Claude/Codex while still in their
+      // alt-screen TUI, so scrollbackAnsi is empty. The fix falls back to the
+      // saved snapshot so the pane repaints the agent's last frame instead of
+      // coming back blank. (The payload is snapshotAnsi alone — no
+      // rehydrateSequences — so it never re-enters alt-screen.)
+      const sessionId = 'cold-restore-alt-screen'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi: '\x1b[H Claude Code — Opus 4.8\r\n > ',
+          scrollbackAnsi: '',
+          oscLinks: [],
+          rehydrateSequences: '\x1b[?1049h',
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: true
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-04-15T11:00:00Z'
+        })
+      )
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(result.coldRestore).toBeDefined()
+      expect(result.coldRestore!.scrollback).toContain('Claude Code')
+      // The payload must NOT re-enter alt-screen — that would fight the
+      // relaunched agent's repaint and the renderer's POST_REPLAY_MODE_RESET.
+      expect(result.coldRestore!.scrollback).not.toContain('\x1b[?1049h')
+    })
+
+    it('skips cold restore for an alt-screen session with an empty snapshot', async () => {
+      // Why: alt-screen entered before any content → nothing to show. Keep the
+      // no-op (blank) rather than fabricate a payload.
+      const sessionId = 'cold-restore-alt-screen-empty'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi: '',
+          scrollbackAnsi: '',
+          oscLinks: [],
+          rehydrateSequences: '\x1b[?1049h',
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: true
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-04-15T11:00:00Z'
+        })
+      )
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(result.coldRestore).toBeUndefined()
     })
 
     it('re-anchors a cold-restored session with a full checkpoint on the first tick', async () => {

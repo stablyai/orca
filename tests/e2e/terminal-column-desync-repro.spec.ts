@@ -87,6 +87,16 @@ async function readRenderedColsForPty(page: Page, ptyId: string): Promise<number
   }, ptyId)
 }
 
+/** Read the size the main process reports as APPLIED for a PTY (pty:getSize).
+ *  After the applied-size fix this must reflect what the PTY actually took
+ *  (process.stdout.columns), not the renderer's last-requested size. */
+async function readReportedPtyCols(page: Page, ptyId: string): Promise<number> {
+  return page.evaluate(async (ptyId) => {
+    const size = await window.api?.pty?.getSize?.(ptyId)
+    return size?.cols ?? 0
+  }, ptyId)
+}
+
 type ColumnSnapshot = { xtermCols: number; ptyCols: number }
 
 async function readColumnSnapshot(page: Page, ptyId: string): Promise<ColumnSnapshot> {
@@ -148,6 +158,32 @@ test.describe('Terminal column desync repro', () => {
       wide.ptyCols,
       `after widen, PTY cols (${wide.ptyCols}) should equal xterm cols (${wide.xtermCols})`
     ).toBe(wide.xtermCols)
+  })
+
+  // Why: guards the applied-size IPC contract the desync fix relies on. The
+  // renderer's resume/handoff drift-check compares xterm against pty:getSize; if
+  // pty:getSize reports the renderer's last-REQUESTED size (the old intent-only
+  // behavior) instead of the size the PTY actually APPLIED, a dropped resize is
+  // invisible and the TUI stays garbled. So pty:getSize must equal the real
+  // in-PTY process.stdout.columns, not just xterm.
+  test('pty:getSize reports the size the PTY actually applied', async ({ orcaPage }) => {
+    test.setTimeout(120_000)
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await closeRightSidebarAndFeatureTips(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    const ptyId = await settleTerminal(orcaPage)
+
+    await orcaPage.setViewportSize({ width: 900, height: 800 })
+    await orcaPage.waitForTimeout(500)
+
+    const ptyCols = await readPtyCols(orcaPage, ptyId)
+    const reportedCols = await readReportedPtyCols(orcaPage, ptyId)
+    expect(
+      reportedCols,
+      `pty:getSize reported ${reportedCols} but the PTY's process.stdout.columns is ${ptyCols}; ` +
+        `getSize must reflect the APPLIED size so the drift-check can detect a dropped resize`
+    ).toBe(ptyCols)
   })
 
   test('PTY columns re-sync after the terminal is resized while hidden', async ({ orcaPage }) => {
@@ -274,6 +310,81 @@ test.describe('Terminal column desync repro', () => {
         `after split, pane ${ptyId} PTY cols (${ptyCols}) should equal its xterm cols (${xtermCols})`
       ).toBe(xtermCols)
     }
+  })
+
+  // Why: the user-reported case — "start a new worktree with the side split
+  // panel on". A tab that MOUNTS with a split layout already present (two panes
+  // side by side from frame 0) spawns each PTY at the wide window width, then
+  // the split equalize narrows each pane AFTER the post-spawn reconcile window
+  // has closed. The corrective onResize is dropped by the visibility gate during
+  // the mount window, so the PTY stays pinned wide while xterm shows the narrow
+  // split width — only a later manual resize re-syncs it ("resizing fixed it").
+  // We reproduce the fresh split mount by splitting then reloading: the split
+  // layout persists across reload, so the tab remounts with two panes already
+  // present, re-running the first-mount spawn for each.
+  test('both panes stay PTY-synced when a tab MOUNTS with a split layout present', async ({
+    orcaPage
+  }) => {
+    test.setTimeout(240_000)
+
+    // A single mount only trips the race intermittently, so reload-loop the
+    // restored-split first-mount and assert none of the attempts desynced.
+    const MOUNT_ATTEMPTS = 6
+    const desyncs: { attempt: number; ptyId: string; ptyCols: number; xtermCols: number }[] = []
+
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await closeRightSidebarAndFeatureTips(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await orcaPage.setViewportSize({ width: 1440, height: 900 })
+    await orcaPage.waitForTimeout(300)
+    await settleTerminal(orcaPage)
+
+    // Establish the persisted split layout once; reloads below rebuild it.
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneIdentitySnapshot(orcaPage, 2)
+
+    for (let attempt = 0; attempt < MOUNT_ATTEMPTS; attempt += 1) {
+      // Re-run the split first-mount path: a wide window, reload so the tab
+      // remounts and re-spawns both PTYs at the wide width from the restored
+      // split layout, then resize down while the panes are still mounting.
+      await orcaPage.setViewportSize({ width: 1440, height: 900 })
+      await orcaPage.reload()
+      await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      await closeRightSidebarAndFeatureTips(orcaPage)
+      await ensureTerminalVisible(orcaPage)
+
+      // Resize narrower while the split panes are mounting / their PTYs spawn.
+      await orcaPage.setViewportSize({ width: 1180, height: 800 })
+      await orcaPage.waitForTimeout(300)
+
+      const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+      // Let layout equalize and the (current) reconcile window run to completion.
+      await orcaPage.waitForTimeout(900)
+
+      for (const pane of snapshot.panes) {
+        const ptyId = pane.ptyId
+        expect(ptyId, 'restored split pane should be bound to a PTY').toBeTruthy()
+        if (!ptyId) {
+          continue
+        }
+        const ptyCols = await readPtyCols(orcaPage, ptyId)
+        const xtermCols = await readRenderedColsForPty(orcaPage, ptyId)
+        if (ptyCols !== xtermCols) {
+          desyncs.push({ attempt, ptyId, ptyCols, xtermCols })
+        }
+      }
+    }
+
+    expect(
+      desyncs,
+      `PTY columns desynced from xterm on a restored-split mount (${desyncs.length} pane(s) ` +
+        `across ${MOUNT_ATTEMPTS} attempts). A PTY pinned at the wide startup width while xterm ` +
+        `reflowed to the narrower split width is the column-desync bug that garbles interactive ` +
+        `TUIs: ${JSON.stringify(desyncs)}`
+    ).toEqual([])
   })
 
   // Why: this is the tightest isolation of the real bug. A viewport resize that

@@ -1,4 +1,4 @@
-import * as path from 'path'
+import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/types'
 import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'

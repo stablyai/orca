@@ -7,10 +7,10 @@ import {
   copyFileSync,
   renameSync,
   unlinkSync
-} from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { randomUUID } from 'crypto'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 

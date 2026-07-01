@@ -63,6 +63,7 @@ import {
 } from '../../../shared/agent-status-identity'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
@@ -1231,6 +1232,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onToggleQuickCommandsMenu(() => {
+        window.dispatchEvent(new CustomEvent(TOGGLE_QUICK_COMMANDS_MENU_EVENT))
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onOpenNewWorkspace(() => {
         const store = useAppStore.getState()
         openNewWorkspaceFromShortcut(store)
@@ -1556,7 +1563,9 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
-          if (isRuntimeEnvironmentActive()) {
+          // Why: runtime-session requests are host-owned tabs materialized by this
+          // renderer, not ordinary local creates that bypass remote runtime mode.
+          if (isRuntimeEnvironmentActive() && data.source !== 'runtime-session') {
             window.api.ui.replyTerminalCreate({
               requestId: data.requestId,
               error: translate(

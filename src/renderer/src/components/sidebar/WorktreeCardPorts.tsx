@@ -16,6 +16,7 @@ import {
   refreshWorkspacePortScanAfterStop,
   resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
+import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
@@ -101,6 +102,7 @@ function PortAction({
 
 function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
   const runtimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, port.kind === 'workspace' ? port.owner.worktreeId : null)
   )
@@ -138,7 +140,8 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser
+        openInOrcaBrowser,
+        localhostLabelRoute
       }).then((result) => {
         if (!result.ok) {
           toast.error(
@@ -154,6 +157,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     [
       createBrowserTab,
       port,
+      localhostLabelRoute,
       recordFeatureInteraction,
       runtimeTarget,
       setRemoteBrowserPageHandle,

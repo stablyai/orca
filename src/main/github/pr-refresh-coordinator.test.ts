@@ -917,4 +917,65 @@ describe('pr-refresh-coordinator', () => {
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
   })
+
+  describe('pruneWorktreePRRefreshAliases', () => {
+    // Several local worktrees tracking the same linked PR coalesce into one
+    // queue entry (same refreshKey) whose alias map keeps one entry each.
+    const LINKED_PR_KEY = 'local::runtime:host::/repo::pr::42'
+
+    function makeLinkedCandidate(worktreeId: string): GitHubPRRefreshCandidate {
+      return makeCandidate({
+        worktreeId,
+        cacheKey: `/repo::${worktreeId}`,
+        branch: `feature/${worktreeId}`,
+        linkedPRNumber: 42
+      })
+    }
+
+    it('drops a removed worktree alias and deletes the entry when it was the last', async () => {
+      const { enqueuePRRefresh, pruneWorktreePRRefreshAliases, _getPRRefreshAliasCountForTests } =
+        await import('./pr-refresh-coordinator')
+
+      enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
+      enqueuePRRefresh(makeLinkedCandidate('wt-2'), 'visible', 40, 1)
+      enqueuePRRefresh(makeLinkedCandidate('wt-3'), 'visible', 40, 1)
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(3)
+
+      pruneWorktreePRRefreshAliases('wt-2')
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(2)
+
+      pruneWorktreePRRefreshAliases('wt-1')
+      pruneWorktreePRRefreshAliases('wt-3')
+      // Last alias gone -> the whole queue entry is dropped.
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(0)
+    })
+
+    it('keeps the entry alive and rebinds the candidate when other aliases remain', async () => {
+      const {
+        enqueuePRRefresh,
+        pruneWorktreePRRefreshAliases,
+        _getPRRefreshAliasCountForTests,
+        _getPRRefreshQueueSizeForTests
+      } = await import('./pr-refresh-coordinator')
+
+      // wt-1 becomes the entry's representative candidate (enqueued first).
+      enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
+      enqueuePRRefresh(makeLinkedCandidate('wt-2'), 'visible', 40, 1)
+      expect(_getPRRefreshQueueSizeForTests()).toBe(1)
+
+      // Removing the representative worktree must not orphan the entry.
+      pruneWorktreePRRefreshAliases('wt-1')
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
+      expect(_getPRRefreshQueueSizeForTests()).toBe(1)
+    })
+
+    it('is a no-op for a worktree with no queued aliases', async () => {
+      const { enqueuePRRefresh, pruneWorktreePRRefreshAliases, _getPRRefreshAliasCountForTests } =
+        await import('./pr-refresh-coordinator')
+
+      enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
+      pruneWorktreePRRefreshAliases('wt-unknown')
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
+    })
+  })
 })

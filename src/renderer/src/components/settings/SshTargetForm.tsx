@@ -1,6 +1,6 @@
 import { FileKey } from 'lucide-react'
 import {
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../../../shared/ssh-types'
@@ -145,24 +145,21 @@ export function SshTargetForm({
             )}
           </p>
         </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label>
-            {translate(
-              'auto.components.settings.SshTargetForm.92f80edbfd',
-              'Relay Grace Period (seconds)'
-            )}
-          </Label>
-          <Input
-            type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
-            value={form.relayKeepAliveUntilReset ? 'Until reset' : form.relayGracePeriodSeconds}
-            onChange={(e) =>
-              onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
-            }
-            placeholder={String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)}
-            min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
-            max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
-            disabled={form.relayKeepAliveUntilReset}
-          />
+        <div className="col-span-2 space-y-2">
+          <div className="space-y-1">
+            <Label>
+              {translate(
+                'auto.components.settings.SshTargetForm.92f80edbfd',
+                'Remote Terminal Persistence'
+              )}
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.settings.SshTargetForm.137e88ce8d',
+                'Remote terminals keep running after Orca disconnects from this host.'
+              )}
+            </p>
+          </div>
           <label className="flex cursor-pointer items-start gap-2.5 py-1 text-xs">
             <input
               type="checkbox"
@@ -176,24 +173,46 @@ export function SshTargetForm({
               <span className="block font-medium text-foreground">
                 {translate(
                   'auto.components.settings.SshTargetForm.71fc546097',
-                  'Keep alive until reset'
+                  'Keep terminals alive until reset'
                 )}
               </span>
               <span className="block text-muted-foreground">
                 {translate(
                   'auto.components.settings.SshTargetForm.b574994adc',
-                  'Remote terminals stay available until you end them or reset the relay.'
+                  'Use End Remote Terminals or Reset Relay when you want to stop them.'
                 )}
               </span>
             </span>
           </label>
+          <div className="space-y-1.5">
+            <Label htmlFor="ssh-relay-grace-period" className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.SshTargetForm.55c56cf2c7',
+                'Timeout after disconnect (seconds)'
+              )}
+            </Label>
+            <Input
+              id="ssh-relay-grace-period"
+              type={form.relayKeepAliveUntilReset ? 'text' : 'number'}
+              value={
+                form.relayKeepAliveUntilReset
+                  ? translate('auto.components.settings.SshTargetForm.7c13f58c91', 'Until reset')
+                  : form.relayGracePeriodSeconds
+              }
+              onChange={(e) =>
+                onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
+              }
+              placeholder={String(DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS)}
+              min={MIN_SSH_RELAY_GRACE_PERIOD_SECONDS}
+              max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
+              disabled={form.relayKeepAliveUntilReset}
+            />
+          </div>
           <p className="text-[11px] text-muted-foreground">
             {translate(
-              'auto.components.settings.SshTargetForm.137e88ce8d',
-              'How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours). Maximum:'
+              'auto.components.settings.SshTargetForm.1b19b00e93',
+              'Bounded timeouts must be between 60 seconds and 7 days.'
             )}
-            {MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}{' '}
-            {translate('auto.components.settings.SshTargetForm.1b19b00e93', '(7 days).')}
           </p>
         </div>
       </div>
