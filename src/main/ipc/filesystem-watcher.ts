@@ -4,8 +4,8 @@ one module so subscription/cleanup invariants stay auditable from a single
 file. Splitting by transport would scatter the shared debounce/coalesce
 helpers and the common batch-flush path across three files. */
 import { ipcMain, type WebContents } from 'electron'
-import * as path from 'path'
-import { stat } from 'fs/promises'
+import * as path from 'node:path'
+import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
 import { isWslPath } from '../wsl'

@@ -1,8 +1,8 @@
-import { execFile as execFileCb } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
-import { homedir } from 'os'
-import { win32 as pathWin32 } from 'path'
-import { promisify } from 'util'
+import { execFile as execFileCb } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { win32 as pathWin32 } from 'node:path'
+import { promisify } from 'node:util'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -99,7 +99,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   // check+read pair races a concurrent exit anyway, and the catch already
   // falls through to lsof.
   try {
-    const { readlinkSync } = await import('fs')
+    const { readlinkSync } = await import('node:fs')
     return readlinkSync(`/proc/${pid}/cwd`)
   } catch {
     // Fall through

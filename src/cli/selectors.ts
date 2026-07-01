@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve as resolvePath } from 'path'
+import { isAbsolute, relative, resolve as resolvePath } from 'node:path'
 import type {
   ComputerAppQuery,
   RuntimeWorktreeListResult,

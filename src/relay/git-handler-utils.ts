@@ -5,8 +5,8 @@
  * These functions have no side-effects and depend only on their arguments,
  * making them easy to test independently.
  */
-import { existsSync } from 'fs'
-import * as path from 'path'
+import { existsSync } from 'node:fs'
+import * as path from 'node:path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 

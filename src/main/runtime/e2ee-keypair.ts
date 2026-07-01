@@ -1,8 +1,8 @@
 // Why: the E2EE keypair enables application-layer encryption between mobile
 // and desktop over plain ws://. The public key is embedded in the QR pairing
 // offer so the mobile client can derive a shared secret via ECDH.
-import { existsSync, readFileSync, statSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
 import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'

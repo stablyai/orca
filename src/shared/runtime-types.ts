@@ -29,10 +29,16 @@ import type {
 } from './mobile-markdown-document'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
+
+// Why: the access scope a paired device token grants. Lives in shared so
+// pairing offers, status.get, and the device registry use one vocabulary.
+export type DeviceScope = 'mobile' | 'runtime'
 
 // Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
 // checked source so future variants cannot drift silently across layers.
@@ -57,6 +63,9 @@ export type RuntimeStatus = {
   capabilities?: RuntimeCapability[]
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
+  // the server stamps the authenticated token scope here for status.get only.
+  deviceScope?: DeviceScope
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -448,6 +457,30 @@ export type RuntimeTerminalAgentStatus = {
 }
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'
+type RuntimeTerminalCreateBaseRequestPayload = {
+  requestId: string
+  worktreeId?: string
+  afterTabId?: string
+  targetGroupId?: string
+  command?: string
+  env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+  launchAgent?: TuiAgent
+  startupCommandDelivery?: StartupCommandDelivery
+  title?: string
+  activate?: boolean
+  presentation?: RuntimeTerminalPresentation
+}
+
+export type RuntimeTerminalCreateRequestPayload =
+  | (RuntimeTerminalCreateBaseRequestPayload & { source?: undefined })
+  | (RuntimeTerminalCreateBaseRequestPayload & {
+      worktreeId: string
+      // Why: only the host-owned runtime-session bridge may bypass the renderer's
+      // active-runtime local terminal guard; ordinary UI requests must omit this.
+      source: 'runtime-session'
+    })
 
 export type RuntimeTerminalCreate = {
   handle: string

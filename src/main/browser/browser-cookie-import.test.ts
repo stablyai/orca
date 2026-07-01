@@ -347,7 +347,16 @@ describe('detectInstalledBrowsers', () => {
 
   it('each detected browser has a valid family', () => {
     const browsers = detectInstalledBrowsers()
-    const validFamilies = ['chrome', 'edge', 'arc', 'chromium', 'firefox', 'safari', 'comet']
+    const validFamilies = [
+      'chrome',
+      'edge',
+      'arc',
+      'chromium',
+      'firefox',
+      'safari',
+      'comet',
+      'helium'
+    ]
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }

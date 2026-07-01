@@ -1,4 +1,4 @@
-import { readFile, stat } from 'fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type {

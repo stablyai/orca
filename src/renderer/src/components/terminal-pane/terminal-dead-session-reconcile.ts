@@ -12,8 +12,11 @@ const REMOTE_PTY_ID_PREFIX = 'remote:'
  * the full `PanePtyBinding` shape from pty-connection.
  */
 export type ReconcilableBinding = {
-  reconcileIfSessionDead?: (liveSessionIds: Set<string>) => void
+  reconcileIfSessionDead?: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
+  reconcileIfSessionMissing?: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
+
+export type HasPty = (ptyId: string) => Promise<boolean | null>
 
 /**
  * PURE decision: should the pane bound to `ptyId` be reconciled (torn down)
@@ -32,8 +35,10 @@ export function shouldReconcileDeadSession(args: {
   ptyId: string | null | undefined
   connectionId: string | null | undefined
   liveSessionIds: Set<string>
+  ptyBoundAt?: number | null
+  snapshotRequestedAt?: number | null
 }): boolean {
-  const { ptyId, connectionId, liveSessionIds } = args
+  const { ptyId, connectionId, liveSessionIds, ptyBoundAt, snapshotRequestedAt } = args
   if (ptyId === null || ptyId === undefined) {
     return false
   }
@@ -45,7 +50,48 @@ export function shouldReconcileDeadSession(args: {
   if (connectionId !== null && connectionId !== undefined) {
     return false
   }
+  // Why: a snapshot requested before this binding existed can't prove it dead
+  // (newborn-PTY reconcile race). Omitting either timestamp keeps prior
+  // pure-membership behavior (back-compat).
+  if (
+    typeof ptyBoundAt === 'number' &&
+    typeof snapshotRequestedAt === 'number' &&
+    ptyBoundAt >= snapshotRequestedAt
+  ) {
+    return false
+  }
   return !liveSessionIds.has(ptyId)
+}
+
+export function shouldReconcileMissingSession(args: {
+  ptyId: string | null | undefined
+  connectionId: string | null | undefined
+  isLive: boolean | null | undefined
+  ptyBoundAt?: number | null
+  livenessRequestedAt?: number | null
+}): boolean {
+  if (args.isLive !== false) {
+    return false
+  }
+  return shouldReconcileDeadSession({
+    ptyId: args.ptyId,
+    connectionId: args.connectionId,
+    liveSessionIds: new Set(),
+    ptyBoundAt: args.ptyBoundAt,
+    snapshotRequestedAt: args.livenessRequestedAt
+  })
+}
+
+export function reconcileMissingSessions(args: {
+  bindings: Iterable<ReconcilableBinding>
+  hasPty: HasPty
+}): void {
+  // Why: the liveness request time must predate every async response so a
+  // stale response cannot close a PTY that bound after the request started.
+  const requestedAt = performance.now()
+  for (const binding of args.bindings) {
+    binding.reconcileIfSessionMissing?.(args.hasPty, requestedAt)
+  }
 }
 
 /**
@@ -63,6 +109,9 @@ export async function reconcileDeadSessions(args: {
   listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
 }): Promise<void> {
   let sessions: { id: string }[]
+  // Why: capture the request time BEFORE the round-trip so the decision can tell
+  // a snapshot that predates a fresh binding from one that postdates it.
+  const requestedAt = performance.now()
   try {
     sessions = await args.listSessions()
   } catch {
@@ -71,6 +120,6 @@ export async function reconcileDeadSessions(args: {
   }
   const liveSessionIds = new Set(sessions.map((session) => session.id))
   for (const binding of args.bindings) {
-    binding.reconcileIfSessionDead?.(liveSessionIds)
+    binding.reconcileIfSessionDead?.(liveSessionIds, requestedAt)
   }
 }

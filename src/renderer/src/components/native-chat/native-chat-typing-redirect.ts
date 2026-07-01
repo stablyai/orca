@@ -2,6 +2,8 @@ type KeyboardRedirectEvent = {
   key: string
   ctrlKey: boolean
   metaKey: boolean
+  shiftKey?: boolean
+  altKey?: boolean
   defaultPrevented: boolean
   isComposing?: boolean
   target: EventTarget | null
@@ -41,6 +43,26 @@ export function shouldRedirectNativeChatTyping(event: KeyboardRedirectEvent): bo
 
 export function shouldFocusNativeChatPaneFromPointerTarget(target: EventTarget | null): boolean {
   return !isNativeChatInteractiveTarget(target)
+}
+
+/** Unmodified Backspace/Delete pressed outside any input should focus the
+ *  composer, the same way printable typing does — but unlike typing these keys
+ *  are not inserted (their character has no literal form), so the caller only
+ *  focuses. Modified chords (Shift/Alt/Ctrl/Cmd+Delete = cut, delete-word, …)
+ *  are left to the focused target. */
+export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedirectEvent): boolean {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.altKey ||
+    (event.key !== 'Backspace' && event.key !== 'Delete')
+  ) {
+    return false
+  }
+  return !isNativeChatInteractiveTarget(event.target)
 }
 
 function isNativeChatInteractiveTarget(target: EventTarget | null): boolean {

@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 const { existsSyncMock, spawnMock, connectMock, createServerMock } = vi.hoisted(() => ({

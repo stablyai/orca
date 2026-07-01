@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { join } from 'path'
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
+import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { getOpenCodeFamilyPluginSource } from '../opencode/hook-service'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 

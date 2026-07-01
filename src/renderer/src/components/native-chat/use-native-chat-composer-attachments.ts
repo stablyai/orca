@@ -7,7 +7,6 @@ import {
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
-import { sendNativeChatImageAttachments } from './native-chat-runtime-send'
 
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
@@ -38,6 +37,16 @@ export function useNativeChatComposerAttachments({
     () => readNativeChatAttachmentCache(attachmentScopeKey)
   )
   const imageAttachmentCounter = useRef(0)
+
+  // Reload chips from the cache when the composer is reused for a different pane
+  // (scope-key change), adjusting state during render rather than in an effect.
+  // Without this the previous pane's chips would stay live and be submitted to
+  // the new target now that images are deferred to submit.
+  const lastScopeKey = useRef(attachmentScopeKey)
+  if (lastScopeKey.current !== attachmentScopeKey) {
+    lastScopeKey.current = attachmentScopeKey
+    setImageAttachments(readNativeChatAttachmentCache(attachmentScopeKey))
+  }
 
   const updateImageAttachments = useCallback(
     (
@@ -105,9 +114,9 @@ export function useNativeChatComposerAttachments({
       }
       const imagePaths = paths.filter(isNativeChatImageAttachmentPath)
       const filePaths = paths.filter((path) => !isNativeChatImageAttachmentPath(path))
-      if (imagePaths.length > 0) {
-        sendNativeChatImageAttachments(target.settings, target.ptyId, imagePaths)
-      }
+      // Images are NOT sent to the TUI here — they ride along on submit (see
+      // NativeChatComposer.send) so the GUI chips and the TUI input never
+      // diverge and removing a chip needs no TUI un-paste.
       appendImageAttachments(imagePaths)
       insertFileReferences(filePaths)
       if (imagePaths.length > 0) {

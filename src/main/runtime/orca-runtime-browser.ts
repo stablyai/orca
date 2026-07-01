@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this file is a command adapter for one external surface, Agent Browser automation. It stays separate from OrcaRuntimeService so runtime state does not grow further while browser routing remains easy to scan in one place. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { ipcMain, webContents, type BrowserWindow } from 'electron'
 import type {
   BrowserBackResult,
@@ -1795,10 +1795,10 @@ export class RuntimeBrowserCommands {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         reply: { requestId: string; browserPageId?: string; error?: string }
       ): void => {
-        if (reply.requestId !== requestId) {
+        if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
         clearTimeout(timer)

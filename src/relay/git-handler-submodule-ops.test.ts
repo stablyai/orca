@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import * as path from 'path'
+import * as path from 'node:path'
 import type { GitExec } from './git-handler-ops'
 import {
   SUBMODULE_PATHS_CACHE_TTL_MS,

@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines -- Why: history error-logging .catch() chains add ~10 lines of
 safety wiring spread across spawn/event-routing; splitting would scatter tightly coupled
 adapter ↔ history lifecycle logic. */
-import { basename } from 'path'
-import { existsSync } from 'fs'
+import { basename } from 'node:path'
+import { existsSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { HistoryManager } from './history-manager'
@@ -206,19 +206,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // an unclean shutdown → return saved scrollback so the renderer can
     // display the previous terminal content.
     if (result.isNew && restoreInfo) {
-      // Why: if the checkpoint was captured while an alternate-screen app
-      // (vim, less, htop) was active, snapshotAnsi is the alt buffer content.
-      // Replaying that into a fresh shell would show stale TUI content. Use
-      // scrollbackAnsi (rows above the viewport only) which excludes the alt
-      // buffer. For normal sessions, use the full snapshot with rehydrate
-      // sequences to restore terminal modes (colors, cursor position, etc).
-      // Why: scrollbackAnsi may be empty if the emulator hadn't accumulated
-      // scrollback before the alt-screen app launched. In that case, skip
-      // cold restore entirely rather than showing a blank terminal — no
-      // content is better than confusing the user with an empty restore.
+      // Why prefer scrollbackAnsi for alt-screen: snapshotAnsi is the alt buffer
+      // (vim/less/htop); normal sessions use the full snapshot + rehydrate.
+      // Why the snapshotAnsi fallback: a hibernated TUI agent (empty scrollback)
+      // would otherwise get `|| null` → blank pane on wake. snapshotAnsi *alone*
+      // (no rehydrateSequences — they start with \x1b[?1049h, which the
+      // renderer's POST_REPLAY_MODE_RESET does NOT undo) lands the last frame as
+      // normal scrollback. An empty snapshot still yields null → no-op.
       const isAltScreen = restoreInfo.modes.alternateScreen
       const scrollback = isAltScreen
-        ? restoreInfo.scrollbackAnsi || null
+        ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
         : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
       // Why: use registerWriter (not openSession) to avoid deleting the
       // existing checkpoint.json. If the revived daemon crashes again before
@@ -360,6 +357,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async getInitialCwd(id: string): Promise<string> {
     return this.initialCwds.get(id) ?? ''
+  }
+
+  // Why: resize() is a fire-and-forget notify, so a resize can be dropped
+  // daemon-side (session not yet alive, exited, invalid dims, cold-restore
+  // snapshot-col coercion) without the renderer knowing. This reads the size
+  // the daemon actually applied so the renderer can detect that drift on resume
+  // and re-assert. Null (RPC failure / unknown session) means "cannot confirm",
+  // which the renderer treats as a cue to re-forward once.
+  async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
+    try {
+      const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
+        'getSize',
+        { sessionId: id }
+      )
+      return result.size ?? null
+    } catch {
+      return null
+    }
   }
 
   async clearBuffer(id: string): Promise<void> {

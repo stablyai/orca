@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { PNG } from 'pngjs'
 import {
@@ -11,7 +10,7 @@ import {
   squareWithMargin
 } from './trim-windows-icon-source.mjs'
 
-const scriptDir = dirname(fileURLToPath(import.meta.url))
+const scriptDir = import.meta.dirname
 const projectDir = dirname(dirname(scriptDir))
 const buildDir = join(projectDir, 'resources', 'build')
 

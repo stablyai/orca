@@ -1,9 +1,9 @@
-import { join } from 'path'
+import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: the relay-deploy module owns one cohesive
    contract — version detection, install-locked deploy, native-deps probe,
    relay launch, and GC — and splitting risks drift between the install
    sequence and the GC's live-socket invariant. */
-import { existsSync } from 'fs'
+import { existsSync } from 'node:fs'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
 import type { RelayPlatform } from './relay-protocol'

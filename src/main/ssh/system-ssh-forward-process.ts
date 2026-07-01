@@ -1,5 +1,5 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { connect, createServer } from 'net'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { connect, createServer } from 'node:net'
 import { buildSshArgs, findSystemSsh } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
 

@@ -184,25 +184,6 @@ export async function withGitSpan<T>(meta: GitSpanArgs, fn: () => Promise<T>): P
   )
 }
 
-export type IpcSpanArgs = {
-  readonly channel: string
-}
-
-/** Wrap an ipcMain handler invocation in an `ipc.handle` span. Used by
- *  the highest-traffic handlers — `git`, `runtime`, `pty`, `worktree`,
- *  `agent` — not every handler. Tracing every IPC call would explode the
- *  trace tree and obscure the spans that matter. */
-export async function withIpcSpan<T>(meta: IpcSpanArgs, fn: () => Promise<T> | T): Promise<T> {
-  return withSpan(
-    'ipc.handle',
-    async (span) => {
-      span.setAttribute('ipc.channel', meta.channel)
-      return await fn()
-    },
-    { attributes: { kind: 'ipc' } }
-  )
-}
-
 export type WorktreeSpanArgs = {
   readonly stage: 'clone' | 'checkout' | 'install' | 'create' | 'remove'
   readonly path?: string
@@ -249,47 +230,6 @@ export async function withPtySpan<T>(meta: PtySpanArgs, fn: () => Promise<T> | T
       return await fn()
     },
     { attributes: { kind: 'pty' } }
-  )
-}
-
-export type AgentSpanArgs = {
-  readonly stage: 'start' | 'turn' | 'stop' | 'recover'
-  readonly agentKind?: string
-}
-
-export async function withAgentSpan<T>(meta: AgentSpanArgs, fn: () => Promise<T> | T): Promise<T> {
-  return withSpan(
-    `agent.${meta.stage}`,
-    async (span) => {
-      span.setAttribute('agent.stage', meta.stage)
-      if (meta.agentKind) {
-        span.setAttribute('agent.kind', meta.agentKind)
-      }
-      return await fn()
-    },
-    { attributes: { kind: 'agent' } }
-  )
-}
-
-export type ExternalEditorSpanArgs = {
-  readonly editor: string
-  readonly path?: string
-}
-
-export async function withExternalEditorSpan<T>(
-  meta: ExternalEditorSpanArgs,
-  fn: () => Promise<T> | T
-): Promise<T> {
-  return withSpan(
-    'external_editor.launch',
-    async (span) => {
-      span.setAttribute('editor', meta.editor)
-      if (meta.path) {
-        span.setAttribute('path', meta.path)
-      }
-      return await fn()
-    },
-    { attributes: { kind: 'external_editor' } }
   )
 }
 

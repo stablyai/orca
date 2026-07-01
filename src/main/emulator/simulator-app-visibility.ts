@@ -1,5 +1,5 @@
-import { execFile } from 'child_process'
-import { platform } from 'os'
+import { execFile } from 'node:child_process'
+import { platform } from 'node:os'
 
 export async function hideNativeSimulatorApp(): Promise<void> {
   if (platform() !== 'darwin') {

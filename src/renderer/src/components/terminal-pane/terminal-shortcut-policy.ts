@@ -35,11 +35,18 @@ export type TerminalShortcutAction =
   | { type: 'focusPane'; direction: 'next' | 'previous' }
   | { type: 'equalizePaneSizes' }
   | { type: 'toggleExpandActivePane' }
+  | { type: 'setTitle' }
+  | { type: 'clearPaneTitle' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
 
+/**
+ * Resolves terminal keyboard events before xterm receives them.
+ * Keeps configurable Orca shortcuts and terminal byte fallbacks in one
+ * platform-aware policy so renderer handlers do not duplicate key checks.
+ */
 export function resolveTerminalShortcutAction(
   event: TerminalShortcutEvent,
   isMac: boolean,
@@ -76,6 +83,14 @@ export function resolveTerminalShortcutAction(
 
     if (keybindingMatchesAction('terminal.expandPane', event, platform, keybindings)) {
       return { type: 'toggleExpandActivePane' }
+    }
+
+    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
+      return { type: 'setTitle' }
+    }
+
+    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
+      return { type: 'clearPaneTitle' }
     }
 
     if (keybindingMatchesAction('terminal.closePane', event, platform, keybindings)) {

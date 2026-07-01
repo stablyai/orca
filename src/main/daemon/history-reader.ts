@@ -1,5 +1,5 @@
-import { join } from 'path'
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { join } from 'node:path'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import type { SessionMeta } from './history-manager'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'

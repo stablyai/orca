@@ -1,11 +1,13 @@
 /* oxlint-disable max-lines */
-import { execSync } from 'child_process'
-import { existsSync, statSync } from 'fs'
-import { basename } from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, statSync } from 'node:fs'
+import { basename } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { toWindowsWslPath } from '../wsl'
 import {
   buildHostedRemoteCommitUrl,
   buildHostedRemoteFileUrl,
@@ -99,16 +101,25 @@ export function getGitRepoRoot(path: string): string {
       cwd: path
     }).trim()
     if (insideWorkTree === 'true') {
-      return normalizeRuntimePathSeparators(
-        gitExecFileSync(['rev-parse', '--show-toplevel'], {
-          cwd: path
-        }).trim()
-      )
+      const root = gitExecFileSync(['rev-parse', '--show-toplevel'], {
+        cwd: path
+      }).trim()
+      return normalizeGitRepoRootForInputPath(path, root)
     }
   } catch {
     // Fall through to preserving the original path.
   }
   return path
+}
+
+export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
+  const inputWsl = parseWslUncPath(inputPath)
+  if (inputWsl && rootPath.startsWith('/')) {
+    // Why: WSL git reports Linux-native roots; Orca must persist the UNC path so
+    // later local git calls keep routing through the WSL-aware runner.
+    return toWindowsWslPath(rootPath, inputWsl.distro)
+  }
+  return normalizeRuntimePathSeparators(rootPath)
 }
 
 /**

@@ -2,10 +2,10 @@
    it owns app lifecycle, service wiring, window creation, and hook/daemon
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync, statSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import {
@@ -64,6 +64,18 @@ import {
 } from './startup/configure-process'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
+  readActiveGpuFallbackMarker,
+  writeGpuFallbackMarker,
+  type GpuFallbackEnvironment,
+  type WindowsGpuFallbackEnvironment
+} from './startup/gpu-fallback-marker'
+import {
+  DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
+  DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
+  GpuCrashFallbackTracker,
+  isGpuFallbackCrashCandidate
+} from './crash-reporting/gpu-crash-fallback-decision'
+import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './startup/dev-education-suppression'
@@ -81,6 +93,7 @@ import {
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
+import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
@@ -188,6 +201,14 @@ let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
+// Why: GPU child crashes clustered right after launch indicate a broken driver;
+// track them so Orca can move this build onto software rendering.
+const gpuLaunchTimeMs = Date.now()
+const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
+  windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
+  threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
+})
+let gpuFallbackActiveThisLaunch = false
 let localPtyStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
@@ -512,7 +533,10 @@ if (hasSingleInstanceLock) {
     platform: process.platform
   })
   configureElectronNetworkCompatibility()
-  enableMainProcessGpuFeatures()
+  maybeApplyGpuFallbackForThisLaunch()
+  if (!gpuFallbackActiveThisLaunch) {
+    enableMainProcessGpuFeatures()
+  }
   // Why: headless serve backs browser panes with offscreen BrowserWindows, which
   // need an X display on Linux. Ensure one (Xvfb) before whenReady; the result
   // gates whether the offscreen backend is installed so capability stays honest.
@@ -523,23 +547,41 @@ ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
   await firstWindowStartupServicesReady
 })
 
+ipcMain.handle(
+  'app:startupDiagnostic',
+  (_event, event: string, details?: Record<string, unknown>) => {
+    if (!startupDiagnosticsEnabled || !event.startsWith('renderer-')) {
+      return
+    }
+    logStartupMilestone(event, details && typeof details === 'object' ? details : {})
+  }
+)
+
 function startDesktopFirstWindowStartupServices(): Promise<void> {
+  logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({
     // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
     // registers its PTY runtime separately and must not spawn the desktop daemon
     // or hook loopback listener.
-    startDaemonPtyProvider: (signal) => initDaemonPtyProvider(signal),
+    startDaemonPtyProvider: async (signal) => {
+      logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
+      await initDaemonPtyProvider(signal)
+      logStartupMilestone('startup-service-done', { service: 'daemon-pty-provider' })
+    },
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state, so
     // the renderer awaits this barrier before restored terminals reconnect.
-    startAgentHookServer: () =>
-      agentHookServer.start({
+    startAgentHookServer: async () => {
+      logStartupMilestone('startup-service-start', { service: 'agent-hook-server' })
+      await agentHookServer.start({
         env: app.isPackaged ? 'production' : 'development',
         // Why: hooks source this endpoint file at invocation time, so old PTY
         // env still reaches the current Orca process after an app restart.
         // Dev uses a namespace because all worktrees share `orca-dev`.
         userDataPath: app.getPath('userData'),
         endpointNamespace: devAgentHookEndpointNamespace
-      }),
+      })
+      logStartupMilestone('startup-service-done', { service: 'agent-hook-server' })
+    },
     onDaemonError: (error) => {
       console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
     },
@@ -551,7 +593,30 @@ function startDesktopFirstWindowStartupServices(): Promise<void> {
   })
   firstWindowStartupServicesReady = startupServices.firstWindowReady
   localPtyStartupReady = startupServices.localPtyReady
+  void firstWindowStartupServicesReady.then(() => {
+    logStartupMilestone('first-window-startup-services-ready')
+  })
+  void localPtyStartupReady.then(() => {
+    logStartupMilestone('local-pty-startup-ready')
+  })
   return firstWindowStartupServicesReady
+}
+
+async function startServeAgentHookServer(): Promise<void> {
+  if (!isAgentStatusHooksEnabled(store?.getSettings())) {
+    return
+  }
+  try {
+    await agentHookServer.start({
+      env: app.isPackaged ? 'production' : 'development',
+      userDataPath: app.getPath('userData'),
+      endpointNamespace: devAgentHookEndpointNamespace
+    })
+  } catch (error) {
+    // Why: remote hook callbacks enrich agent status only. A headless runtime
+    // should still serve terminals if the loopback receiver cannot bind.
+    console.error('[agent-hooks] Failed to start serve hook server:', error)
+  }
 }
 
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
@@ -694,6 +759,14 @@ function openMainWindow(): BrowserWindow {
         reason: details.reason,
         expectedTeardown: getExpectedTeardownScope(webContentsId)
       }),
+    onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
+      recordCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
+        reason: details.reason,
+        exitCode: details.exitCode ?? null,
+        recentRecoveryCount
+      })
+      void presentRendererRecoveryPrompt(recentRecoveryCount)
+    },
     deferLoad: true,
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
@@ -920,6 +993,110 @@ function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   webContents?.send('ui:openCrashReport')
 }
 
+// Why: when the renderer crash-loops, the breaker stops auto-reloading and the
+// window is left blank. The renderer is dead, so a main-process dialog is the
+// only surface that can offer a retry or a clean quit instead of a silent loop.
+async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promise<void> {
+  if (isQuitting) {
+    return
+  }
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const options = {
+    type: 'error' as const,
+    buttons: ['Reload', 'Quit'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Orca keeps failing to load',
+    message: 'The app window crashed repeatedly and stopped reloading automatically.',
+    detail: `Orca tried to recover ${recentRecoveryCount} times in a row without success. This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.`
+  }
+  const { response } = window
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options)
+  if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
+    recordCrashBreadcrumb('renderer_recovery_manual_retry')
+    loadMainWindow(mainWindow)
+  } else if (response === 1) {
+    isQuitting = true
+    app.quit()
+  }
+}
+
+function getGpuFallbackEnvironment(): GpuFallbackEnvironment {
+  return {
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron ?? '',
+    platform: process.platform
+  }
+}
+
+function getWindowsGpuFallbackEnvironment(): WindowsGpuFallbackEnvironment | null {
+  const environment = getGpuFallbackEnvironment()
+  if (environment.platform !== 'win32') {
+    return null
+  }
+  return { ...environment, platform: 'win32' }
+}
+
+// Why: the GPU-fallback marker must be read before app.whenReady() resolves so
+// app.disableHardwareAcceleration() can take effect. Windows desktop only -
+// headless serve already runs software rendering on the platforms that need it.
+function maybeApplyGpuFallbackForThisLaunch(): void {
+  if (isServeMode || process.platform !== 'win32') {
+    return
+  }
+  const marker = readActiveGpuFallbackMarker(app.getPath('userData'), getGpuFallbackEnvironment())
+  if (!marker) {
+    return
+  }
+  app.disableHardwareAcceleration()
+  app.commandLine.appendSwitch('disable-gpu')
+  gpuFallbackActiveThisLaunch = true
+  recordCrashBreadcrumb('gpu_fallback_applied', {
+    crashesInWindow: marker.crashesInWindow
+  })
+}
+
+// Why: a burst of crash-shaped Windows GPU child failures right after launch
+// means hardware acceleration is unusable on this machine. Persist a build-
+// scoped marker and relaunch into software rendering instead of looping crashes.
+function handleGpuChildCrash(reason: string, exitCode: number | null): void {
+  // Software rendering already active or shutting down: nothing more to do.
+  if (gpuFallbackActiveThisLaunch || isQuitting || isServeMode) {
+    return
+  }
+  const result = gpuCrashFallbackTracker.recordGpuCrash(Date.now() - gpuLaunchTimeMs)
+  if (!result.shouldEngageFallback) {
+    return
+  }
+  recordCrashBreadcrumb('gpu_fallback_engaged', {
+    reason,
+    exitCode,
+    crashesInWindow: result.crashesInWindow
+  })
+  const engagedAt = Date.now()
+  const environment = getWindowsGpuFallbackEnvironment()
+  if (!environment) {
+    return
+  }
+  try {
+    writeGpuFallbackMarker(
+      app.getPath('userData'),
+      {
+        engagedAt,
+        crashesInWindow: result.crashesInWindow
+      },
+      environment
+    )
+  } catch (error) {
+    console.warn('[gpu-fallback] failed to persist marker:', error)
+    return
+  }
+  isQuitting = true
+  app.relaunch()
+  app.exit(0)
+}
+
 function recordProcessGoneCrash(
   source: 'renderer' | 'child',
   processType: string,
@@ -1050,6 +1227,8 @@ type ServeOptions = {
   pairingAddress: string | null
   noPairing: boolean
   mobilePairing: boolean
+  recipeJson: boolean
+  projectRoot: string | null
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -1075,7 +1254,9 @@ function getServeOptions(argv = process.argv): ServeOptions {
     ...(wsPort !== undefined ? { wsPort } : {}),
     pairingAddress: valueAfter('--serve-pairing-address'),
     noPairing: argv.includes('--serve-no-pairing'),
-    mobilePairing: argv.includes('--serve-mobile-pairing')
+    mobilePairing: argv.includes('--serve-mobile-pairing'),
+    recipeJson: argv.includes('--serve-recipe-json'),
+    projectRoot: valueAfter('--serve-project-root')
   }
 }
 
@@ -1100,6 +1281,18 @@ async function printServeReady(options: ServeOptions): Promise<void> {
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
+  if (options.recipeJson) {
+    if (!options.projectRoot) {
+      throw new Error('--serve-recipe-json requires --serve-project-root')
+    }
+    if (!isAbsolute(options.projectRoot)) {
+      throw new Error(`--serve-project-root must be absolute: ${options.projectRoot}`)
+    }
+    const projectRootStats = statSync(options.projectRoot)
+    if (!projectRootStats.isDirectory()) {
+      throw new Error(`--serve-project-root must be a directory: ${options.projectRoot}`)
+    }
+  }
   const endpoint = runtimeRpc.getWebSocketEndpoint()
   const pairing = options.noPairing
     ? ({ available: false } as const)
@@ -1112,6 +1305,19 @@ async function printServeReady(options: ServeOptions): Promise<void> {
     pairing.available && options.mobilePairing
       ? await renderTerminalPairingQr(pairing.pairingUrl)
       : null
+  if (options.recipeJson) {
+    if (!pairing.available) {
+      throw new Error('Recipe JSON output requires runtime pairing to be available')
+    }
+    console.log(
+      JSON.stringify({
+        schemaVersion: 1,
+        pairingCode: pairing.pairingUrl,
+        projectRoot: options.projectRoot
+      })
+    )
+    return
+  }
   if (options.json) {
     console.log(
       JSON.stringify({
@@ -1452,7 +1658,9 @@ app.whenReady().then(async () => {
     },
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
-    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
+    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+    buildAgentHookPtyEnv: () =>
+      isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
   automations = new AutomationService(store, {
@@ -1594,6 +1802,15 @@ app.whenReady().then(async () => {
       serviceName: details.serviceName,
       type: details.type
     })
+    if (
+      isGpuFallbackCrashCandidate({
+        platform: process.platform,
+        processType: details.type,
+        reason: details.reason
+      })
+    ) {
+      handleGpuChildCrash(details.reason, details.exitCode ?? null)
+    }
   })
 
   logStartupMilestone('services-initialized')
@@ -1722,6 +1939,7 @@ app.whenReady().then(async () => {
   }
 
   if (serveOptions) {
+    await startServeAgentHookServer()
     registerHeadlessPtyRuntime(
       runtime,
       prepareCodexRuntimeHomeForLaunch,
@@ -1890,12 +2108,23 @@ app.on('will-quit', (e) => {
 })
 
 app.on('window-all-closed', () => {
+  // Why: headless `orca serve` has no desktop window, and offscreen browser
+  // windows are disposable implementation details. Closing/crashing the last
+  // one must not take down terminal/runtime RPC for the VM workspace — the
+  // policy fn returns false for serve mode so the app stays alive.
+  //
   // Why: on macOS, closing all windows normally keeps the app alive (dock
   // stays active). But when a quit is in progress (Cmd+Q), the window close
   // handler defers to the renderer for buffer capture, which cancels the
   // original quit sequence. Re-trigger quit here so the app actually exits
   // instead of requiring a second Cmd+Q.
-  if (process.platform !== 'darwin' || isQuitting) {
+  if (
+    shouldQuitWhenAllWindowsClosed({
+      platform: process.platform,
+      isQuitting,
+      isServeMode
+    })
+  ) {
     app.quit()
   }
 })

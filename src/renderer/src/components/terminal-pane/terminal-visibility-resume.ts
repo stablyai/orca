@@ -1,12 +1,13 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
-import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
+import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import {
   flushTerminalOutput,
   requestTerminalBacklogRecovery
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
+import { scheduleTerminalWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -61,6 +62,7 @@ export function resumeTerminalVisibility({
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
+      scheduleTerminalWebglAtlasRecovery()
       if (isActive) {
         focusActivePane(manager)
       }
@@ -70,8 +72,8 @@ export function resumeTerminalVisibility({
     enforceTerminalViewportIntents(manager)
     if (!shouldUseLightTabResume) {
       // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; the global reset rebuilds their render models too.
-      resetAllTerminalWebglAtlases()
+      // terminals; refresh after reset so rebuilt atlases repaint from xterm.
+      resetAndRefreshAllTerminalWebglAtlases()
     }
   })
 }
@@ -130,8 +132,7 @@ export function recoverVisibleTerminalWindowWake({
     fitPanes(manager)
   }
   enforceTerminalViewportIntents(manager)
-  resetAllTerminalWebglAtlases()
-  manager.refreshAllPanes?.()
+  resetAndRefreshAllTerminalWebglAtlases()
 }
 
 function requestLightTabBacklogRecovery(manager: PaneManager): void {

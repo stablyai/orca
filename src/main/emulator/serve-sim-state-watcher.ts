@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, readdirSync, watch } from 'fs'
-import { basename, join } from 'path'
-import { tmpdir } from 'os'
-import type { FSWatcher } from 'fs'
+import { existsSync, readFileSync, readdirSync, watch } from 'node:fs'
+import { basename, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { FSWatcher } from 'node:fs'
 
 // Why: terminal-started `serve-sim --detach` writes state under $TMPDIR/serve-sim/ and may
 // print JSON to the PTY. Orca-managed attach (CLI/pane) already registers via EmulatorBridge;

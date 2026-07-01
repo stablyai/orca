@@ -52,15 +52,7 @@ describe('tryDeleteWslUncPath', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
     const [binary, spawnArgs] = execFileMock.mock.calls[0]
     expect(binary).toBe('wsl.exe')
-    expect(spawnArgs).toEqual([
-      '-d',
-      'Ubuntu',
-      '--',
-      'rm',
-      '-f',
-      '--',
-      '/home/me/repo/file.txt'
-    ])
+    expect(spawnArgs).toEqual(['-d', 'Ubuntu', '--', 'rm', '-f', '--', '/home/me/repo/file.txt'])
   })
 
   it('passes -rf for a recursive directory delete', async () => {

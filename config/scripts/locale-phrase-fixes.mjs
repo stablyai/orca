@@ -378,5 +378,13 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' },
     ...ZH_PHRASE_FIXES_ROUND5
   ],
-  ja: JA_PHRASE_FIXES
+  ja: JA_PHRASE_FIXES,
+  es: [
+    // Why: machine translation renders the abbreviation "PR" (pull request) as
+    // "relaciones públicas" (public relations). Unlike the ko/zh glossary fixes whose
+    // patterns are CJK-only, "relaciones públicas" is a real Spanish phrase, so the guard
+    // matches the actual `PR`/`PRs` token (not a loose "pr" substring) to avoid rewriting
+    // English that is genuinely about public relations.
+    { pattern: /relaciones públicas/g, replacement: 'PR', whenEnMatches: /\bPRs?\b/ }
+  ]
 }

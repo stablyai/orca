@@ -1,9 +1,9 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import * as path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getGitRepoRoot, isGitRepo } from './repo'
+import { getGitRepoRoot, isGitRepo, normalizeGitRepoRootForInputPath } from './repo'
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -46,6 +46,15 @@ describe('isGitRepo', () => {
     // the /var tmpdir symlink to /private/var) across all platforms.
     const expectedRoot = git(repoRoot, ['rev-parse', '--show-toplevel']).trim().replace(/\\/g, '/')
     expect(getGitRepoRoot(nestedDir)).toBe(expectedRoot)
+  })
+
+  it('keeps WSL UNC identity when git reports a Linux worktree root', () => {
+    expect(
+      normalizeGitRepoRootForInputPath(
+        String.raw`\\wsl.localhost\Ubuntu\home\alice\repo\packages\web`,
+        '/home/alice/repo'
+      )
+    ).toBe(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)
   })
 
   it('preserves bare repository paths when no worktree root exists', () => {

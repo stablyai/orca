@@ -11,7 +11,10 @@ import type {
   WorkspaceKey,
   WorkspaceSessionState
 } from '../../../../shared/types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
@@ -290,6 +293,12 @@ function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
   return a.every((value) => bSet.has(value))
 }
 
+export type AutomaticAgentResumeClaim = {
+  worktreeId: string
+  launchAgent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+}
+
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -327,6 +336,10 @@ export type TerminalSlice = {
    *  split-button label across sessions. */
   recentQuickCommandIdByGroup: Record<string, string>
   setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
+  /** Runtime-only claim for automatic sleeping-session recovery tabs. It
+   *  bridges the gap after startup payload consumption and before hooks go live. */
+  automaticAgentResumeClaimsByTabId: Record<string, AutomaticAgentResumeClaim>
+  claimAutomaticAgentResume: (tabId: string, claim: AutomaticAgentResumeClaim) => void
   pendingStartupByTabId: Record<
     string,
     {
@@ -337,8 +350,10 @@ export type TerminalSlice = {
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      draftPrompt?: string
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       /** Show the restored-session banner when this startup command mounts. */
@@ -498,8 +513,10 @@ export type TerminalSlice = {
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
+      resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
+      draftPrompt?: string
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
@@ -513,8 +530,10 @@ export type TerminalSlice = {
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
+    draftPrompt?: string
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
@@ -579,6 +598,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingInitialCwdByTabId: {},
   pendingSetupSplitByTabId: {},
   pendingIssueCommandSplitByTabId: {},
+  automaticAgentResumeClaimsByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   defaultTerminalTabsAppliedByWorktreeId: {},
@@ -615,6 +635,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       recentQuickCommandIdByGroup: {
         ...s.recentQuickCommandIdByGroup,
         [groupId]: quickCommandId
+      }
+    }))
+  },
+
+  claimAutomaticAgentResume: (tabId, claim) => {
+    set((s) => ({
+      automaticAgentResumeClaimsByTabId: {
+        ...s.automaticAgentResumeClaimsByTabId,
+        [tabId]: claim
       }
     }))
   },
@@ -1021,6 +1050,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
+      const nextAutomaticAgentResumeClaimsByTabId = { ...s.automaticAgentResumeClaimsByTabId }
+      delete nextAutomaticAgentResumeClaimsByTabId[tabId]
       const nextPendingInitialCwdByTabId = { ...s.pendingInitialCwdByTabId }
       delete nextPendingInitialCwdByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -1097,6 +1128,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
         pendingStartupByTabId: nextPendingStartupByTabId,
+        automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
         pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
@@ -2833,6 +2865,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
         defaultTerminalTabsAppliedByWorktreeId:
           session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+        automaticAgentResumeClaimsByTabId: {},
         sleepingAgentSessionsByPaneKey,
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
@@ -2887,7 +2920,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       pendingReconnectTabByWorktree,
       pendingReconnectPtyIdByTabId,
       terminalLayoutsByTabId,
-      tabsByWorktree
+      tabsByWorktree,
+      ptyIdsByTabId
     } = get()
     const ids = pendingReconnectWorktreeIds ?? []
 
@@ -2911,6 +2945,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // The layout's ptyIdsByLeafId (preserved from shutdown) already has per-leaf
     // mappings. For single-pane tabs without leaf mappings, store the tab-level
     // ptyId as a sentinel so connectPanePty knows to reattach.
+    let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
+    let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
     for (const worktreeId of ids) {
       const tabs = tabsByWorktree[worktreeId] ?? []
       const worktree = Object.values(get().worktreesByRepo)
@@ -2961,33 +2997,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
         if (tabLevelPtyId) {
-          set((s) => {
-            const next = { ...s.tabsByWorktree }
-            if (!next[worktreeId]) {
-              return {}
-            }
+          reconnectedTabsByWorktree ??= { ...tabsByWorktree }
+          const nextTabs = reconnectedTabsByWorktree[worktreeId]
+          if (!nextTabs) {
+            continue
+          }
 
-            // Why: populate ptyIdsByTabId so the sessions status segment
-            // can map daemon session IDs back to tabs (for bound/orphan
-            // detection and click-to-navigate). Without this, all sessions
-            // appear as orphans until the terminal pane mounts.
-            const allPtyIds = hasLeafMappings
-              ? (Object.values(leafPtyMap).filter(Boolean) as string[])
-              : [tabLevelPtyId!]
-            next[worktreeId] = next[worktreeId].map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
-            )
-            return {
-              tabsByWorktree: next,
-              // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
-              // Restored daemon sessions are still running even before their
-              // pane remounts, so background workspaces must advertise them.
-              ptyIdsByTabId: {
-                ...s.ptyIdsByTabId,
-                [tabId]: allPtyIds
-              }
-            }
-          })
+          // Why: populate ptyIdsByTabId so the sessions status segment
+          // can map daemon session IDs back to tabs (for bound/orphan
+          // detection and click-to-navigate). Without this, all sessions
+          // appear as orphans until the terminal pane mounts.
+          const allPtyIds = hasLeafMappings
+            ? (Object.values(leafPtyMap).filter(Boolean) as string[])
+            : [tabLevelPtyId]
+          reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
+            t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+          )
+          // Why: hide-sleeping uses ptyIdsByTabId as the liveness source.
+          // Restored daemon sessions are still running even before their
+          // pane remounts, so background workspaces must advertise them.
+          reconnectedPtyIdsByTabId ??= { ...ptyIdsByTabId }
+          reconnectedPtyIdsByTabId[tabId] = allPtyIds
         }
       }
     }
@@ -3019,6 +3049,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
 
     set({
+      ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
+      ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
       workspaceSessionReady: true,
       pendingReconnectWorktreeIds: [],
       pendingReconnectTabByWorktree: {},

@@ -73,6 +73,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 
+  it('keeps per-workspace environments disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
+  })
+
   it('defaults local Windows projects to the host runtime', () => {
     expect(getDefaultSettings('/tmp').localWindowsRuntimeDefault).toEqual({
       kind: 'windows-host'

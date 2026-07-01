@@ -1,8 +1,8 @@
 import { ArrowLeft, ArrowRight, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
+import { NetworkInterfacePicker } from './NetworkInterfacePicker'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
@@ -197,34 +197,16 @@ export function HeroFlow({
                 <span className="mp-network-label">
                   {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
                 </span>
-                <Select
-                  value={selectedAddress ?? ''}
-                  onValueChange={onSelectedAddressChange}
-                  disabled={networkInterfaces.length === 0}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="mp-network-select"
-                    aria-label={translate(
-                      'auto.components.mobile.MobileHero.79d2f480da',
-                      'Network interface to advertise'
-                    )}
-                  >
-                    <SelectValue
-                      placeholder={translate(
-                        'auto.components.mobile.MobileHero.ca85e595a7',
-                        'No interfaces found'
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {networkInterfaces.map((iface) => (
-                      <SelectItem key={`${iface.name}-${iface.address}`} value={iface.address}>
-                        {iface.address} ({iface.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <NetworkInterfacePicker
+                  networkInterfaces={networkInterfaces}
+                  selectedAddress={selectedAddress}
+                  onSelectedAddressChange={onSelectedAddressChange}
+                  // Why: keep the picker reachable when interface discovery is
+                  // empty — "Add custom address…" is the only path to enter a
+                  // manual Tailscale hostname / static IP.
+                  disabled={false}
+                  className="mp-network-select"
+                />
                 <button
                   type="button"
                   className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}

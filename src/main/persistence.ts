@@ -12,10 +12,10 @@ import {
   copyFileSync,
   statSync,
   realpathSync
-} from 'fs'
-import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
-import { join, dirname, isAbsolute, resolve, sep } from 'path'
-import { homedir } from 'os'
+} from 'node:fs'
+import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
+import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
+import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import type {
   Automation,
@@ -80,7 +80,11 @@ import {
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { hardenExistingSecureFile } from '../shared/secure-file'
-import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
+import {
+  LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshRemotePtyLease,
+  type SshTarget
+} from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
@@ -209,6 +213,7 @@ import {
 } from './terminal-scrollback-snapshots'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -381,6 +386,15 @@ const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceS
   'tabsByWorktree',
   'terminalLayoutsByTabId'
 ])
+
+function logPersistenceStartupMilestone(
+  event: string,
+  details: Record<string, unknown> = {}
+): void {
+  if (isStartupDiagnosticsEnabled()) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
+}
 
 function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
   return Object.keys(patch).some((key) =>
@@ -1000,7 +1014,12 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  if (relayGracePeriodSeconds !== undefined) {
+  // Why: the old SSH form eagerly persisted 10800 even when the user had not
+  // chosen a timeout; treat that legacy default as the new implicit default.
+  if (
+    relayGracePeriodSeconds !== undefined &&
+    relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  ) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
   }
   return normalized
@@ -2617,12 +2636,22 @@ export class Store {
     // social contract we installed them under.
     const dataFile = getDataFile()
     const fileExistedOnLoad = existsSync(dataFile)
+    logPersistenceStartupMilestone('persistence-load-start', {
+      fileExists: fileExistedOnLoad
+    })
 
     let result: PersistedState | null = null
     try {
       if (fileExistedOnLoad) {
+        const readStartedAt = performance.now()
         const raw = readFileSync(dataFile, 'utf-8')
+        logPersistenceStartupMilestone('persistence-read-done', {
+          bytes: Buffer.byteLength(raw),
+          durationMs: Math.round(performance.now() - readStartedAt)
+        })
+        logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secret settings are stored encrypted on disk via safeStorage.
         // Decrypt at the load boundary so the rest of the app sees plaintext.
@@ -2961,8 +2990,11 @@ export class Store {
             }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
-            // Only exact legacy default payloads are migrated; users who
+            // Why: a short-lived default put Done on the left. Repair only
+            // the exact raw payload once; user-authored reorders then survive.
+            const workspaceStatusesReorderedDefaultRepaired =
+              parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
+            // Why: only exact legacy default payloads are migrated; users who
             // customized status labels, colors, icons, or order keep theirs.
             const workspaceStatusesDefaultWorkflowMigrated =
               parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
@@ -2974,12 +3006,13 @@ export class Store {
               parsed.ui?.workspaceStatuses,
               {
                 migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
-                repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
+                repairReorderedDefaultStatuses: !workspaceStatusesReorderedDefaultRepaired,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesReorderedDefaultRepaired ||
               !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
@@ -3077,6 +3110,7 @@ export class Store {
               ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesReorderedDefaultRepaired: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
@@ -3215,7 +3249,12 @@ export class Store {
     }
     result = folderScopeConnectionMigration.state
 
-    return this.migrateTelemetry(result, fileExistedOnLoad)
+    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+    logPersistenceStartupMilestone('persistence-load-done', {
+      repos: migrated.repos.length,
+      workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
+    })
+    return migrated
   }
 
   // One-shot telemetry cohort migration. Runs on every `load()` but is a

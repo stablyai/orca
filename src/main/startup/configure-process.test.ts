@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { homedir, tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => {

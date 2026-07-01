@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionInfo } from './emulator-types'
 

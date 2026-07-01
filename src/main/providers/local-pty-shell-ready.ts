@@ -10,9 +10,9 @@
  * and a data scanner that detects that marker so the command can be written at
  * the right time.
  */
-import { tmpdir } from 'os'
-import { basename, win32 as pathWin32 } from 'path'
-import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'fs'
+import { tmpdir } from 'node:os'
+import { basename, win32 as pathWin32 } from 'node:path'
+import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs'
 import { app } from 'electron'
 import type * as pty from 'node-pty'
 import {

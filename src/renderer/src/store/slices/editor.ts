@@ -61,6 +61,7 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
@@ -297,6 +298,19 @@ type EditorOpenTargetOptions = {
 type GitRuntimeOperationOptions = {
   runtimeTargetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   applyUpstreamStatus?: boolean
+}
+
+function resolveDiffRuntimeEnvironmentId(
+  state: AppState,
+  worktreeId: string,
+  explicitRuntimeEnvironmentId: string | null | undefined
+): string | null | undefined {
+  if (explicitRuntimeEnvironmentId !== undefined) {
+    return explicitRuntimeEnvironmentId
+  }
+  // Why: Source Control callers often know only the worktree. Runtime-host
+  // diffs still need their owner stamped so content loads through runtime RPC.
+  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
 }
 
 export type PendingEditorReveal = {
@@ -2244,7 +2258,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
-      for (const f of [...closingFiles].reverse()) {
+      for (const f of [...closingFiles].toReversed()) {
         // Why: untitled non-dirty files are deleted from disk after close —
         // skip them so the reopen stack doesn't reference vanished paths.
         // Preview tabs are ephemeral views that shouldn't pollute the stack.
@@ -2415,10 +2429,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false
-    const runtimeEnvironmentId = options?.runtimeEnvironmentId
     let editorItemTargetGroupId = options?.targetGroupId
     let editorItemFileId = ''
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
       const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
       editorItemFileId = id
@@ -2459,7 +2477,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId: options?.runtimeEnvironmentId
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2507,6 +2525,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -2519,7 +2542,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          isPreview: updatedPreview
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -2543,7 +2567,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2591,6 +2616,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+        s,
+        worktreeId,
+        options?.runtimeEnvironmentId
+      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -2603,7 +2633,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
-          isPreview: updatedPreview
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -2627,7 +2658,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2708,6 +2740,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -2723,7 +2756,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   combinedAreaFilter: areaFilter,
                   skippedConflicts,
                   conflictReview: undefined,
-                  conflict: undefined
+                  conflict: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -2749,7 +2783,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         combinedAreaFilter: areaFilter,
         skippedConflicts,
         conflictReview: undefined,
-        conflict: undefined
+        conflict: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3181,6 +3216,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -3194,7 +3230,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   combinedAlternate: alternate,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -3218,7 +3255,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         combinedAlternate: alternate,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3244,6 +3282,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       ? `Commit ${commitCompare.compareRef}: ${subject}`
       : `Commit ${commitCompare.compareRef}`
     set((s) => {
+      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -3256,7 +3295,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   commitEntriesSnapshot: entries,
                   conflict: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  runtimeEnvironmentId
                 }
               : f
           ),
@@ -3280,7 +3320,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         commitEntriesSnapshot: entries,
         conflict: undefined,
         skippedConflicts: undefined,
-        conflictReview: undefined
+        conflictReview: undefined,
+        runtimeEnvironmentId
       }
       return {
         openFiles: [...s.openFiles, newFile],
