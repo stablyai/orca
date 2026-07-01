@@ -98,11 +98,11 @@ import {
 import {
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
-  getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -1034,6 +1034,7 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sendLiveTerminalInputRef = useRef<(handle: string, bytes: string) => void>(() => {})
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -1068,6 +1069,7 @@ export default function SessionScreen() {
   // render where client was still null/connecting, silently no-opping the
   // in-app-browser open). Route through a ref kept current every render.
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
+
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
@@ -1094,6 +1096,22 @@ export default function SessionScreen() {
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
 
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
+  const {
+    clearPendingLiveInputCommit,
+    handleLiveInputChange,
+    handleLiveInputKeyPress,
+    handleLiveInputSubmit
+  } = useTerminalLiveInputCommit({
+    activeHandle,
+    activeHandleRef,
+    activeSessionTabType: activeSessionTab?.type,
+    activeSessionTabTypeRef,
+    liveInputRef,
+    liveInputTerminalHandles,
+    liveInputTerminalHandlesRef,
+    sendLiveTerminalInputRef,
+    setLiveInputCapture
+  })
   const canSend =
     connState === 'connected' &&
     activeHandle != null &&
@@ -2680,7 +2698,7 @@ export default function SessionScreen() {
     terminalsRef.current = []
     setSessionTabs([])
     setActiveSessionTabId(null)
-    setLiveInputCapture('')
+    clearPendingLiveInputCommit()
     liveInputTerminalHandlesRef.current = new Set()
     defaultedLiveInputTerminalHandlesRef.current = new Set()
     setLiveInputTerminalHandles(new Set())
@@ -2690,9 +2708,16 @@ export default function SessionScreen() {
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+      clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
-  }, [clearDelayedActionTimers, clearTerminalCache, hostId, worktreeId])
+  }, [
+    clearDelayedActionTimers,
+    clearPendingLiveInputCommit,
+    clearTerminalCache,
+    hostId,
+    worktreeId
+  ])
 
   useEffect(() => {
     if (connState !== 'connected') {
@@ -3151,6 +3176,7 @@ export default function SessionScreen() {
     },
     [showToast]
   )
+  sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
   const focusLiveInput = useCallback(() => {
     if (!canSend || !liveInputEnabled) {
@@ -3387,70 +3413,14 @@ export default function SessionScreen() {
       liveInputTerminalHandlesRef.current = next
       return next
     })
-    setLiveInputCapture('')
+    clearPendingLiveInputCommit()
     if (nextEnabled) {
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
-  }, [activeHandle, liveInputTerminalHandles])
-
-  const handleLiveInputChange = useCallback(
-    (text: string) => {
-      if (!activeHandle) {
-        setLiveInputCapture('')
-        liveInputRef.current?.setNativeProps({ text: '' })
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        setLiveInputCapture('')
-        liveInputRef.current?.setNativeProps({ text: '' })
-        return
-      }
-      const normalizedText = normalizeTerminalTextInput(text)
-      if (normalizedText.length > 0) {
-        sendLiveTerminalInput(activeHandle, normalizedText)
-      }
-      setLiveInputCapture('')
-      // Why: the field is only a keyboard capture surface. Clearing the
-      // native value prevents subsequent phone-keyboard events from replaying
-      // already-sent characters when React state remains the empty string.
-      liveInputRef.current?.setNativeProps({ text: '' })
-    },
-    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
-  )
-
-  const handleLiveInputKeyPress = useCallback(
-    (event: { nativeEvent: { key: string } }) => {
-      if (!activeHandle) {
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        return
-      }
-      const bytes = getTerminalLiveSpecialKeyBytes(event.nativeEvent.key)
-      if (!bytes) {
-        return
-      }
-      sendLiveTerminalInput(activeHandle, bytes)
-      setLiveInputCapture('')
-      liveInputRef.current?.setNativeProps({ text: '' })
-    },
-    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
-  )
-
-  const handleLiveInputSubmit = useCallback(() => {
-    if (!activeHandle) {
-      return
-    }
-    if (!liveInputTerminalHandles.has(activeHandle)) {
-      return
-    }
-    sendLiveTerminalInput(activeHandle, '\r')
-    setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
-  }, [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput])
+  }, [activeHandle, clearPendingLiveInputCommit, liveInputTerminalHandles])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -3673,11 +3643,13 @@ export default function SessionScreen() {
       clearToastHideTimer()
       clearDelayedActionTimers()
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      clearPendingLiveInputCommit()
       sessionTabActionSheetRequestSeqRef.current += 1
       clearSessionTabActionSheetKeyboardListener()
       stopAccessoryRepeat()
     },
     [
+      clearPendingLiveInputCommit,
       clearDelayedActionTimers,
       clearSessionTabActionSheetKeyboardListener,
       clearTerminalCache,
