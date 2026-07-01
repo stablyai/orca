@@ -32,11 +32,13 @@ import type {
   GlobalSettings,
   SetupSplitDirection,
   TerminalTab,
-  TerminalLayoutSnapshot
+  TerminalLayoutSnapshot,
+  TuiAgent
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -173,11 +175,19 @@ type UseTerminalPaneLifecycleDeps = {
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
+    launchAgent?: TuiAgent
+    draftPrompt?: string
+    /** Initial prompt-start status for agents that lack native prompt hooks. */
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
     /** Show the restored-session banner when this startup command mounts. */
     showSessionRestoredBanner?: boolean
+    /** Initial startup may be paired with a setup split that changes its grid. */
+    waitForSetupSplitDirection?: SetupSplitDirection
   } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
@@ -707,11 +717,15 @@ export function useTerminalPaneLifecycle({
       initialLayoutRef.current = hydratedInitialScrollback.layout
     }
     let shouldPersistLayout = false
+    const startupWithSetupSplitWait =
+      startup && setupSplit
+        ? { ...startup, waitForSetupSplitDirection: setupSplit.direction }
+        : startup
     const ptyDeps = {
       tabId,
       worktreeId,
       cwd: startupCwd,
-      startup,
+      startup: startupWithSetupSplitWait,
       paneTransportsRef,
       paneMode2031Ref,
       paneLastThemeModeRef,

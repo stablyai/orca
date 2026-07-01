@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
-import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http'
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'

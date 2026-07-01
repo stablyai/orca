@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { CreateWorktreeResult, GitWorktreeInfo, Worktree } from '../../shared/types'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -521,6 +521,19 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
+  it('prefetches origin for local branch bases containing slashes', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      baseBranch: 'Jinwoo-H/vm-improve-2'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalledWith('/workspace/repo', 'Jinwoo-H')
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
   it('does not prefetch the whole remote for an existing commit SHA base', async () => {
     const sha = 'a'.repeat(40)
 
@@ -597,6 +610,30 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(addWorktreeMock).toHaveBeenCalled()
+  })
+
+  it('fetches origin when creating from a local branch base containing slashes', async () => {
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/slash-base',
+        head: 'created-sha',
+        branch: 'refs/heads/slash-base',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'slash-base',
+      baseBranch: 'Jinwoo-H/vm-improve-2',
+      branchNameOverride: 'slash-base'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalledWith('/workspace/repo', 'Jinwoo-H')
     expect(addWorktreeMock).toHaveBeenCalled()
   })
 

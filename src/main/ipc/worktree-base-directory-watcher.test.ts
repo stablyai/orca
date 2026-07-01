@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join, sep } from 'path'
+import { join, sep } from 'node:path'
 import type { Event as WatcherEvent, SubscribeCallback } from '@parcel/watcher'
 import type { GlobalSettings, Repo } from '../../shared/types'
 

@@ -28,6 +28,7 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
+  registerEphemeralVmHandlersMock,
   registerAiVaultHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
@@ -83,6 +84,7 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
+  registerEphemeralVmHandlersMock: vi.fn(),
   registerAiVaultHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
@@ -259,6 +261,10 @@ vi.mock('./runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
 
+vi.mock('./ephemeral-vm', () => ({
+  registerEphemeralVmHandlers: registerEphemeralVmHandlersMock
+}))
+
 vi.mock('./ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
@@ -347,6 +353,7 @@ describe('registerCoreHandlers', () => {
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
+    registerEphemeralVmHandlersMock.mockReset()
     registerAiVaultHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
@@ -443,6 +450,7 @@ describe('registerCoreHandlers', () => {
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
+    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
       getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
     })

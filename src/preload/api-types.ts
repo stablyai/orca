@@ -195,6 +195,11 @@ import type {
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type {
+  EphemeralVmRecipeDoctorResult,
+  EphemeralVmRecipeResultWarning
+} from '../shared/ephemeral-vm-recipes'
+import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -263,6 +268,7 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
+  RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../shared/runtime-types'
@@ -615,7 +621,9 @@ export type PtyManagementSession = {
 }
 
 export type PtyManagementApi = {
-  listSessions: () => Promise<{ sessions: PtyManagementSession[] }>
+  // `degraded` is true when the daemon is alive but cannot spawn fresh PTYs, so
+  // new terminals run on the local provider without daemon persistence.
+  listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{ killedCount: number; remainingCount: number }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
@@ -817,6 +825,8 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
+  /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
+  startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
   /** Returns the macOS active input mode, or layout ID when no IME mode is
    *  selected (e.g. `com.apple.keylayout.PolishPro`). Used by the
    *  keyboard-layout probe to distinguish CJK IMEs and layouts whose base
@@ -1123,6 +1133,7 @@ export type PreloadApi = {
       // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
+      terminalColorQueryReplies?: { foreground?: string; background?: string }
       // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
       // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
       // pty:spawn returns. Only the renderer's daemon-host path threads these.
@@ -2069,6 +2080,70 @@ export type PreloadApi = {
     }>
     writeIssueCommand: (args: { repoId: string; content: string }) => Promise<void>
   }
+  ephemeralVm: {
+    listRecipes: (args: { repoId: string }) => Promise<{
+      status: 'ok' | 'error'
+      repoPath: string | null
+      recipes: OrcaHooks['environmentRecipes']
+      diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
+      message?: string
+    }>
+    listRecipeCatalog: () => Promise<
+      {
+        repoId: string
+        repoName: string
+        repoPath: string
+        recipes: NonNullable<OrcaHooks['environmentRecipes']>
+        diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
+      }[]
+    >
+    doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>
+    provision: (args: {
+      repoId: string
+      recipeId: string
+      workspaceName?: string
+      projectId?: string
+      workspaceId?: string
+      provisionId?: string
+    }) => Promise<
+      | {
+          ok: true
+          connectionType: 'orca-server'
+          runtime: EphemeralVmRuntimeRecord
+          environment: PublicKnownRuntimeEnvironment
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | {
+          ok: true
+          connectionType: 'ssh'
+          runtime: EphemeralVmRuntimeRecord
+          sshTargetId: string
+          stderr: string
+          warnings: EphemeralVmRecipeResultWarning[]
+        }
+      | { ok: false; error: string; stderr: string; stdout: string }
+    >
+    cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
+    onProvisionEvent: (
+      callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void
+    ) => () => void
+    listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
+    attachWorkspace: (args: {
+      runtimeId: string
+      workspaceId: string
+    }) => Promise<EphemeralVmRuntimeRecord>
+    suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+    resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+    cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+    getCleanupCommand: (args: { runtimeId: string }) => Promise<{
+      runtimeId: string
+      command: string | null
+      payloadJson: string
+      cleanupDisabled: boolean
+      message?: string
+    }>
+  }
   cache: {
     getGitHub: () => Promise<{
       pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
@@ -2473,6 +2548,7 @@ export type PreloadApi = {
       callback: (data: { actionId: KeybindingActionId }) => void
     ) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
+    onToggleQuickCommandsMenu: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
@@ -2550,21 +2626,7 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
-      callback: (data: {
-        requestId: string
-        worktreeId?: string
-        afterTabId?: string
-        targetGroupId?: string
-        command?: string
-        env?: Record<string, string>
-        launchConfig?: SleepingAgentLaunchConfig
-        launchToken?: string
-        launchAgent?: TuiAgent
-        startupCommandDelivery?: StartupCommandDelivery
-        title?: string
-        activate?: boolean
-        presentation?: RuntimeTerminalPresentation
-      }) => void
+      callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string

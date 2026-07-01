@@ -2,8 +2,8 @@
 // If Orca only mirrors files that already exist, /login writes land in a
 // disposable overlay instead of the user's ~/.omp/agent store.
 
-import { closeSync, existsSync, mkdirSync, openSync } from 'fs'
-import { join } from 'path'
+import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs'
+import { join } from 'node:path'
 import { mirrorWritableFileEntry, safeRemoveTree } from './overlay-mirror'
 
 export const OMP_PERSISTENT_SQLITE_FILES = ['agent.db'] as const

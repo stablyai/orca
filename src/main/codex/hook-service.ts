@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
-import { existsSync, readFileSync, unlinkSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {

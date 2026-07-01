@@ -100,7 +100,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       toast.error(
         translate(
           'auto.components.settings.SshPane.3879cbaa52',
-          'Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset',
+          'Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.',
           { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
         )
       )

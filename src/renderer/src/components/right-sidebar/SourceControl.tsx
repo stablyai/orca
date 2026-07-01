@@ -207,9 +207,9 @@ import type {
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
-import {
-  type SourceControlActionRecipe,
-  type SourceControlLaunchActionId
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'

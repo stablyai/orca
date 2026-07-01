@@ -535,6 +535,12 @@
         "distroRequired": "이 스킬을 설치하기 전에 프로젝트의 WSL 배포판을 선택하세요.",
         "distroMissing": "선택한 WSL 배포판을 사용할 수 없습니다. 사용 가능한 배포판을 선택하거나 이 프로젝트를 Windows로 전환하세요.",
         "wslDefault": "WSL 기본값"
+      },
+      "sidebarWorktreeActivation": {
+        "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
+      },
+      "ephemeralVmWorkspaceTarget": {
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
       }
     },
     "hooks": {
@@ -1157,7 +1163,14 @@
         "reuseExistingBranchHint": "기존 브랜치에서 새 브랜치를 만들지 않고 해당 브랜치를 체크아웃합니다.",
         "createMultiple": "더 만들기",
         "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
+        "destroyDisabled": "destroy disabled",
+        "destroyConfigured": "destroy configured",
+        "noDestroyConfigured": "no destroy",
+        "ephemeralVm": "Per-Workspace Environment",
+        "chooseRunTarget": "Choose target",
+        "noRunTargets": "No run targets are ready for this project.",
+        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -1334,7 +1347,9 @@
         "8ff5ae8866": "담당자",
         "82c87eceb9": "담당자 편집",
         "1ff5d979df": "할당된 사람이 없음",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "이 검사는 병합 차단을 해제하기 전에 GitHub에서 수동 작업(예: 워크플로 실행 승인)이 필요합니다.",
+        "dd5d9a4f17": "{{value0}}에 업데이트됨",
+        "71a3c0f9d2": "워크스페이스 시작"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -2206,7 +2221,10 @@
             "ed2a664f8b": "작업 트리를 만들 수 없습니다.",
             "a3346fc6ed": "작업 트리 생성 취소",
             "532aea14ce": "취소",
-            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다."
+            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
+            "vmProvisioningTitle": "Provisioning VM",
+            "cancelProvisioning": "Cancel",
+            "vmProvisioningLogEmpty": "Waiting for recipe output…"
           }
         }
       },
@@ -4332,7 +4350,16 @@
           "host": "호스트",
           "local": "로컬",
           "runtime": "서버",
-          "ssh": "SSH"
+          "ssh": "SSH",
+          "connecting": "Connecting",
+          "connect": "Connect",
+          "addSshHost": "Add SSH host",
+          "addRemoteServer": "Add remote server",
+          "addRemoteHost": "Add remote host",
+          "addRemoteHostTooltip": "Choose SSH for a machine you can log into, or remote server for an Orca server.",
+          "addSshHostDetail": "Use an existing machine over SSH.",
+          "addRemoteServerDetail": "Pair with Orca running on another computer.",
+          "addRemoteHostDetail": "SSH host or Orca server"
         },
         "sidebarHostOptions": {
           "3e102f111c": "모든 호스트",
@@ -4421,6 +4448,48 @@
           "8c0b2e7a41": "Non-Orca 워크트리 설정 열기",
           "5d1c9f0a82": "취소",
           "3b7e4a1c96": "외부 워크트리 숨기기"
+        },
+        "useAddRepoHostSelection": {
+          "connectionFailed": "SSH connection failed."
+        },
+        "AddRemoteHostDialog": {
+          "sshHostRequired": "Host or SSH config alias is required.",
+          "sshPortInvalid": "Port must be between 1 and 65535.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
+          "sshSaved": "SSH host added.",
+          "sshSaveFailed": "Failed to add SSH host.",
+          "serverFieldsRequired": "Server name and pairing code are required.",
+          "serverSaved": "Remote server added.",
+          "serverSaveFailed": "Failed to add remote server.",
+          "serverTitle": "Add remote server",
+          "sshTitle": "Add SSH host",
+          "serverDescription": "Pair with Orca running on another computer.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
+          "cancel": "Cancel",
+          "saving": "Saving...",
+          "save": "Save",
+          "label": "Label",
+          "sshLabelPlaceholder": "Dev box",
+          "sshHost": "Host or alias",
+          "sshHostPlaceholder": "deploy@server:22",
+          "username": "Username",
+          "usernamePlaceholder": "deploy",
+          "port": "Port",
+          "identityFile": "Identity file",
+          "identityFilePlaceholder": "~/.ssh/id_ed25519 (optional)",
+          "serverName": "Server name",
+          "serverNamePlaceholder": "Dev box",
+          "pairingCode": "Pairing code",
+          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingHelpPrefix": "Run",
+          "pairingCommand": "orca serve --pairing-address <host>",
+          "pairingHelpSuffix": "on the server and paste the printed pairing URL.",
+          "sshImportAlreadySynced": "~/.ssh/config already in sync.",
+          "sshImportSynced": "Synced {{value0}} host{{value1}}.",
+          "sshImportFailed": "Failed to import SSH config.",
+          "importing": "Importing...",
+          "importSshConfig": "Import ~/.ssh/config",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
         }
       },
       "shared": {
@@ -6194,7 +6263,7 @@
           "2227ce47b6": "대상을 저장하지 못했습니다.",
           "f602009125": "대상이 추가됨",
           "b4ba0ce33d": "타겟이 업데이트되었습니다.",
-          "3879cbaa52": "릴레이 유예 기간은 60초에서 {{value0}}초 사이여야 하며, 재설정될 때까지 유지를 선택해야 합니다.",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "포트는 1에서 65535 사이여야 합니다.",
           "0e5aa04161": "호스트 또는 SSH 구성 별칭이 필요합니다.",
           "f1fc50dad2": "SSH 대상을 로드하지 못했습니다.",
@@ -6229,7 +6298,9 @@
           "c77f1abfe3": "원격 terminals 종료 중",
           "18968ede9e": "오류",
           "f0871e6bfb": "연결",
-          "47e94bd6ba": "연결됨"
+          "47e94bd6ba": "연결됨",
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset"
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "그러면 이 SSH 대상에서 활성 terminal 세션이 중지됩니다. 다시 연결해도 복원되지 않습니다.",
@@ -6241,11 +6312,11 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "취소",
-          "1b19b00e93": "(7일).",
-          "137e88ce8d": "연결 해제 후 릴레이가 terminals을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:",
-          "b574994adc": "원격 terminals은 종료하거나 릴레이를 재설정할 때까지 계속 사용할 수 있습니다.",
-          "71fc546097": "재설정될 때까지 살아 있음",
-          "92f80edbfd": "릴레이 유예 기간(초)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "선택 사항. ProxyJump / ssh -J와 동일합니다.",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "점프 호스트",
@@ -6265,7 +6336,9 @@
           "9518545cb6": "대상 추가",
           "a62b4cb39a": "변경 사항 저장",
           "29af933cd5": "새로운 SSH 대상",
-          "f2331ce599": "SSH 대상 편집"
+          "f2331ce599": "SSH 대상 편집",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)"
         },
         "TasksPane": {
           "3a72b9745e": "작업 페이지와 사이드바 바로가기에 표시할 작업 제공자를 선택합니다.",
@@ -8558,6 +8631,59 @@
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
           "devOnly": "Dev only"
+        },
+        "EphemeralVmRecipeRow": {
+          "useInWorkspace": "Use in workspace"
+        },
+        "EphemeralVmRuntimesSection": {
+          "cleanupFailed": "Cleanup failed",
+          "cleanupRunning": "Cleanup running",
+          "cleanupDisabled": "Cleanup disabled",
+          "running": "Running",
+          "failed": "Failed",
+          "loadFailed": "Couldn’t load temporary VM runtimes.",
+          "cleanupFailedToast": "Couldn’t clean up temporary VM runtime.",
+          "markedCleaned": "Marked temporary VM runtime as cleaned.",
+          "cleaned": "Cleaned up temporary VM runtime.",
+          "copiedCleanupCommand": "Copied cleanup command.",
+          "copiedCleanupPayload": "Copied cleanup payload.",
+          "copyCleanupFailed": "Couldn’t copy cleanup command.",
+          "title": "Temporary VM runtimes",
+          "description": "Recipe-created runtimes are workspace-owned. Clean up stale entries after crashes, failed creates, or manual recovery.",
+          "refresh": "Refresh temporary VM runtimes",
+          "loading": "Checking temporary VM runtimes…",
+          "empty": "No temporary VM runtimes need cleanup.",
+          "copyCleanup": "Copy command",
+          "retry": "Retry cleanup",
+          "cleanup": "Cleanup"
+        },
+        "ephemeralVms": {
+          "search": {
+            "title": "Per-Workspace Environments",
+            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment."
+          }
+        },
+        "EphemeralVmsPane": {
+          "loadError": "Could not load recipes.",
+          "copyError": "Could not copy the prompt.",
+          "skillTitle": "Per-Workspace Environments skill",
+          "skillDescription": "Sets up, builds, authenticates, and validates repo-owned environment recipes.",
+          "whatTitle": "What the skill does, with you",
+          "whatScaffold": "Writes the recipe & scripts for your provider — connected over an Orca server or SSH.",
+          "whatBuild": "Builds a reusable base image and signs your agent in.",
+          "whatValidate": "Validates it so you can create a workspace on it.",
+          "promptHint": "In any workspace, ask your agent:",
+          "copy": "Copy",
+          "copied": "Copied",
+          "recipes": "Recipes",
+          "recipesHelp": "Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.",
+          "refresh": "Refresh ephemeral VM recipes",
+          "checking": "Checking recipes...",
+          "none": "No recipes found yet."
+        },
+        "ephemeralVmsExperimentalSetting": {
+          "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
+          "toggleLabel": "Toggle per-workspace environments"
         }
       },
       "right": {

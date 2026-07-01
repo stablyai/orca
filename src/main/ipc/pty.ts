@@ -3,8 +3,8 @@ main-process module so spawn-time environment scoping, lifecycle cleanup,
 foreground-process inspection, and renderer IPC stay behind a single audited
 boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
-import { join, delimiter } from 'path'
-import { randomUUID } from 'crypto'
+import { join, delimiter } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import {
   type BrowserWindow,
   type IpcMainEvent,
@@ -89,6 +89,13 @@ import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared
 import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
+  answerStartupTerminalColorQueries,
+  clearStartupTerminalColorQueryReplies,
+  getStartupTerminalColorQueryReplyColors,
+  moveStartupTerminalColorQueryReplies,
+  registerStartupTerminalColorQueryReplies
+} from './terminal-startup-color-query-replies'
+import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus
 } from '../project-groups/folder-workspace-path-status'
@@ -100,6 +107,9 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 // SSH providers will be registered here in Phase 1.
 
 let localProvider: IPtyProvider = new LocalPtyProvider()
+type FreshLocalFallbackProvider = IPtyProvider & {
+  routesFreshSpawnsToLocalProvider?: true
+}
 const sshProviders = new Map<string, IPtyProvider>()
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
@@ -368,6 +378,22 @@ function tryGetProviderForPty(ptyId: string): IPtyProvider | undefined {
   } catch {
     return undefined
   }
+}
+
+function getProviderForStartupTerminalColorReply(ptyId: string): IPtyProvider | undefined {
+  const ownedConnectionId = ptyOwnership.get(ptyId)
+  if (ownedConnectionId !== undefined) {
+    return getProvider(ownedConnectionId)
+  }
+  const parsedSshId = parseAppSshPtyId(ptyId)
+  if (parsedSshId) {
+    return getProvider(parsedSshId.connectionId)
+  }
+  return localProvider
+}
+
+export function answerStartupTerminalColorQueriesForPty(ptyId: string, data: string): string {
+  return answerStartupTerminalColorQueries(ptyId, data, getProviderForStartupTerminalColorReply)
 }
 
 function normalizeNodePtySpawnError(err: unknown): Error {
@@ -921,6 +947,12 @@ function isClaudeLaunchCommand(command: string | undefined): boolean {
   )
 }
 
+function routesFreshSpawnsToLocalProvider(
+  provider: IPtyProvider
+): provider is FreshLocalFallbackProvider {
+  return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
+}
+
 /** Register an SSH PTY provider for a connection. */
 export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
   sshProviders.set(connectionId, provider)
@@ -999,6 +1031,7 @@ export function clearProviderPtyState(id: string): void {
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
   activeRendererPtys.delete(id)
+  clearStartupTerminalColorQueryReplies(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -1445,16 +1478,18 @@ export function registerPtyHandlers(
   function appendPendingPtyData(
     existing: PendingPtyData | undefined,
     data: string,
-    startSeq: number | undefined
+    startSeq: number | undefined,
+    preservesSeq: boolean
   ): PendingPtyData {
+    if (!preservesSeq) {
+      return { data: (existing?.data ?? '') + data }
+    }
     if (!existing) {
       return typeof startSeq === 'number' ? { data, startSeq } : { data }
     }
     const next: PendingPtyData = { data: existing.data + data }
     if (typeof existing.startSeq === 'number') {
       next.startSeq = existing.startSeq
-    } else if (typeof startSeq === 'number') {
-      next.startSeq = startSeq
     }
     return next
   }
@@ -1536,7 +1571,9 @@ export function registerPtyHandlers(
       const outputSeq = isLocalProvider
         ? runtime?.getPtyOutputSequence(payload.id)
         : runtime?.onPtyData(payload.id, payload.data, Date.now())
-      const startSeq = getChunkStartSeq(outputSeq, payload.data)
+      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
+      const preservesSeq = rendererData === payload.data
+      const startSeq = preservesSeq ? getChunkStartSeq(outputSeq, payload.data) : undefined
       if (mainWindow.isDestroyed()) {
         // Why: clear the pending flush timer so it doesn't fire after the window
         // is gone. Without this, macOS app re-activation leaks orphaned timers
@@ -1551,8 +1588,11 @@ export function registerPtyHandlers(
         recordPtyRendererDeliveryPressure()
         return
       }
+      if (rendererData.length === 0) {
+        return
+      }
       const existing = pendingData.get(payload.id)
-      const pending = appendPendingPtyData(existing, payload.data, startSeq)
+      const pending = appendPendingPtyData(existing, rendererData, startSeq, preservesSeq)
       const nextData = pending.data
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
         payload.id,
@@ -1786,7 +1826,10 @@ export function registerPtyHandlers(
         )
       }
 
-      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const isDaemonHostSpawn =
+        !args.connectionId &&
+        !(provider instanceof LocalPtyProvider) &&
+        !routesFreshSpawnsToLocalProvider(provider)
       const requestedSessionId = args.sessionId?.trim()
       const sessionId =
         requestedSessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
@@ -2271,6 +2314,10 @@ export function registerPtyHandlers(
         sessionId?: string
         shellOverride?: string
         projectRuntime?: ProjectExecutionRuntimeResolution
+        terminalColorQueryReplies?: {
+          foreground?: unknown
+          background?: unknown
+        }
         // Why: closes the SIGKILL race documented in INVESTIGATION.md by
         // letting main patch + sync-flush the (worktreeId, tabId, leafId →
         // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -2341,7 +2388,10 @@ export function registerPtyHandlers(
       // local filesystem (OpenCode plugin dir, Pi/OMP extension paths, Codex
       // home, dev CLI bin, attribution shim dir) that would resolve to
       // nothing — or something misleading — on the remote machine.
-      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      const isDaemonHostSpawn =
+        !args.connectionId &&
+        !(provider instanceof LocalPtyProvider) &&
+        !routesFreshSpawnsToLocalProvider(provider)
       // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so
       // provider hooks and legacy Pi overlay cleanup can run in buildPtyHostEnv.
       // DaemonPtyAdapter.doSpawn mints an id the same way when sessionId is
@@ -2367,6 +2417,11 @@ export function registerPtyHandlers(
         effectiveSessionId !== undefined
           ? getRelayPtyId(args.connectionId, effectiveSessionId)
           : undefined
+      const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+      const preSpawnStartupTerminalColorReplyPtyId =
+        startupTerminalColorQueryReplyColors && effectiveSessionId !== undefined
+          ? (effectiveSessionAppId ?? effectiveSessionId)
+          : null
       // Why: the renderer sets pane env for SSH too. Only forward it to the
       // remote when the relay hook path is enabled; otherwise a newer relay
       // could emit statuses this Orca build is not prepared to route.
@@ -2414,10 +2469,13 @@ export function registerPtyHandlers(
           launchConfig: args.launchConfig
         })
       let effectiveLaunchConfig = args.launchConfig
-      const preAllocatedHandle =
-        runtime && (!(provider instanceof LocalPtyProvider) || shouldRefreshAgentTeamsEnv)
-          ? runtime.createPreAllocatedTerminalHandle()
-          : null
+      const shouldPreAllocateTerminalHandle =
+        runtime !== undefined &&
+        ((!(provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(provider)) ||
+          shouldRefreshAgentTeamsEnv)
+      const preAllocatedHandle = shouldPreAllocateTerminalHandle
+        ? runtime.createPreAllocatedTerminalHandle()
+        : null
       if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
         // Why: native Agent Teams team ids/tokens are process-local. A sleeping
         // record preserves the user's native launch shape, but the team env
@@ -2619,10 +2677,21 @@ export function registerPtyHandlers(
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
           }
+          if (preSpawnStartupTerminalColorReplyPtyId && startupTerminalColorQueryReplyColors) {
+            // Why: Codex probes OSC 10/11 with a 100 ms timeout and daemon PTYs
+            // can emit that query before spawn() resolves to the renderer.
+            registerStartupTerminalColorQueryReplies(
+              preSpawnStartupTerminalColorReplyPtyId,
+              startupTerminalColorQueryReplyColors
+            )
+          }
           result = await provider.spawn(spawnOptions)
         } catch (err) {
           const rawMessage = err instanceof Error ? err.message : String(err)
           const spawnError = normalizeNodePtySpawnError(err)
+          if (preSpawnStartupTerminalColorReplyPtyId) {
+            clearStartupTerminalColorQueryReplies(preSpawnStartupTerminalColorReplyPtyId)
+          }
           if (effectiveSessionAppId !== undefined) {
             ptySizes.delete(effectiveSessionAppId)
           }
@@ -2678,6 +2747,20 @@ export function registerPtyHandlers(
           }
         }
         ptyOwnership.set(result.id, args.connectionId ?? null)
+        if (startupTerminalColorQueryReplyColors) {
+          if (result.isReattach) {
+            if (preSpawnStartupTerminalColorReplyPtyId) {
+              clearStartupTerminalColorQueryReplies(preSpawnStartupTerminalColorReplyPtyId)
+            }
+          } else if (preSpawnStartupTerminalColorReplyPtyId) {
+            moveStartupTerminalColorQueryReplies(preSpawnStartupTerminalColorReplyPtyId, result.id)
+          } else {
+            registerStartupTerminalColorQueryReplies(
+              result.id,
+              startupTerminalColorQueryReplyColors
+            )
+          }
+        }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
         if (store && args.connectionId) {
           // Why: remote PTYs live in the SSH relay grace window after Orca

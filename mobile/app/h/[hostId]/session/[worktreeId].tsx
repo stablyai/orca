@@ -83,10 +83,10 @@ import {
   triggerError,
   triggerEdgeBump
 } from '../../../../src/platform/haptics'
-import {
-  type TerminalKeyboardAvoidanceMetrics,
-  type TerminalModes,
-  type TerminalWebViewHandle
+import type {
+  TerminalKeyboardAvoidanceMetrics,
+  TerminalModes,
+  TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
 import { isTerminalOscLinkRanges } from '../../../../src/terminal/terminal-osc-link-ranges'
 import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
@@ -202,6 +202,7 @@ import {
 } from '../../../../src/session/mobile-session-route-helpers'
 import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import { resolveTabStripScrollOffset } from '../../../../src/session/tab-strip-scroll'
+import { activateOpenedSourceControlDiffTab } from '../../../../src/session/opened-mobile-session-tab'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
@@ -3315,6 +3316,48 @@ export default function SessionScreen() {
     [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
   )
 
+  const handleOpenedFileDiffActivationSeqRef = useRef(0)
+  // Active tab captured at tap time (before the openDiff RPC). Capturing it when
+  // the diff finishes opening would misread a tab the user switched to mid-RPC
+  // as the tap-time tab, letting the retry steal focus back to the diff.
+  const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
+  const handleFileOpenStart = useCallback(() => {
+    fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
+  }, [])
+  const handleOpenedFileDiff = useCallback(
+    (relativePath: string) => {
+      const activationSeq = ++handleOpenedFileDiffActivationSeqRef.current
+      const activeTabIdAtTap = fileOpenStartActiveTabIdRef.current
+
+      let activated = false
+      const activateOpenedTab = async (): Promise<void> => {
+        // Route matching through the shared helper so the deterministic repro
+        // test exercises the same logic production runs.
+        const settled = await activateOpenedSourceControlDiffTab<MobileSessionTab>({
+          relativePath,
+          activeTabIdAtTap,
+          fetchSessionTabs,
+          getTabs: () => sessionTabsRef.current,
+          getActiveTabId: () => activeSessionTabIdRef.current,
+          getActivationState: () => ({
+            activated,
+            activationSeq,
+            latestActivationSeq: handleOpenedFileDiffActivationSeqRef.current
+          }),
+          switchSessionTab: (tab) => switchSessionTabRef.current?.(tab)
+        })
+        if (settled) {
+          activated = true
+        }
+      }
+
+      scheduleDelayedAction(() => void activateOpenedTab(), 300)
+      scheduleDelayedAction(() => void activateOpenedTab(), 900)
+      scheduleDelayedAction(() => void activateOpenedTab(), 1800)
+    },
+    [fetchSessionTabs, scheduleDelayedAction]
+  )
+
   const handleTerminalOpenUrl = useCallback(
     (handle: string, url: string) => {
       if (handle !== activeHandleRef.current) {
@@ -5199,6 +5242,8 @@ export default function SessionScreen() {
               branchContextLoaded={prContextLoaded && prRepoContextLoaded}
               availableWidth={sessionContentRowWidth}
               onRequestClose={() => setActivePanel(null)}
+              onFileOpenStart={handleFileOpenStart}
+              onOpenedFileDiff={handleOpenedFileDiff}
             />
           )}
         </View>

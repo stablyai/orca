@@ -8,11 +8,7 @@
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
-import {
-  type BrowserTabSummary,
-  type ExplorerFileSummary,
-  type TerminalTabSummary
-} from './runtime-types'
+import type { BrowserTabSummary, ExplorerFileSummary, TerminalTabSummary } from './runtime-types'
 
 /** Read a value from the Zustand store. Returns the raw JS value. */
 export async function getStoreState<T>(page: Page, selector: string): Promise<T> {

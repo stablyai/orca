@@ -1,8 +1,8 @@
 /* oxlint-disable max-lines -- Why: remote workspace IPC keeps snapshot normalization, relay compatibility, and handler registration together so revision/cache semantics stay auditable. */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
-import { hostname } from 'os'
-import { isDeepStrictEqual } from 'util'
+import { hostname } from 'node:os'
+import { isDeepStrictEqual } from 'node:util'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'

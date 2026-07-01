@@ -4988,7 +4988,16 @@ describe('registerPtyHandlers', () => {
     const env = spawnCall[2].env as Record<string, string>
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD')
+    expect(env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining([
+        'ORCA_TERMINAL_HANDLE/u',
+        'ORCA_AGENT_HOOK_PORT/u',
+        'ORCA_AGENT_HOOK_TOKEN/u',
+        'ORCA_OMP_SOURCE_AGENT_DIR/p',
+        'ORCA_OMP_STATUS_EXTENSION/p',
+        'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
+      ])
+    )
   })
 
   describe('Windows UTF-8 code page', () => {
@@ -5299,7 +5308,7 @@ describe('registerPtyHandlers', () => {
       )
     })
 
-    it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', async () => {
+    it('keeps PowerShell 7 selected when the pwsh availability probe is cold-false', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -5316,13 +5325,14 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_WINDOWS_POWERSHELL,
+        RESOLVED_PWSH7,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
+      expect(isPwshAvailableMock).not.toHaveBeenCalled()
     })
 
-    it('falls back to powershell.exe when shellOverride requests pwsh.exe but pwsh is unavailable', async () => {
+    it('keeps a pwsh.exe shellOverride when the pwsh availability probe is cold-false', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
       isPwshAvailableMock.mockReturnValue(false)
 
@@ -5339,10 +5349,11 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, shellOverride: 'pwsh.exe' })
 
       expect(spawnMock).toHaveBeenCalledWith(
-        RESOLVED_WINDOWS_POWERSHELL,
+        RESOLVED_PWSH7,
         POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
+      expect(isPwshAvailableMock).not.toHaveBeenCalled()
     })
 
     it('ignores the PowerShell implementation setting for cmd.exe', async () => {
@@ -5816,6 +5827,279 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers agent startup OSC color queries before renderer batching', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mockProc.proc.write.mockClear()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready')
+
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers combined agent startup OSC foreground and background color queries', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mockProc.proc.write.mockClear()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('\x1b]10;?;?\x1b\\ready')
+
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not answer ordinary terminal OSC color queries in main', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      mockProc.emitData(`${query}ready`)
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${query}ready`
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not answer agent OSC color commands that only start like startup queries', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mockProc.proc.write.mockClear()
+      mainWindow.webContents.send.mockClear()
+
+      const command = '\x1b]10;?not-a-query\x1b\\'
+      mockProc.emitData(`${command}ready`)
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: `${command}ready`
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('answers daemon agent startup OSC color queries before spawn resolves', async () => {
+    vi.useFakeTimers()
+    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    const write = vi.fn()
+    const spawn = vi.fn(async (options: { sessionId?: string }) => {
+      const id = options.sessionId ?? 'daemon-pty'
+      dataHandler?.({ id, data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\daemon-ready' })
+      return { id }
+    })
+    setLocalPtyProvider({
+      spawn,
+      write,
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        dataHandler = handler
+        return () => {}
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'daemon-ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops renderer sequence metadata when an answered OSC query is batched', async () => {
+    vi.useFakeTimers()
+    const providerEvents: {
+      dataHandler?: (payload: { id: string; data: string }) => void
+    } = {}
+    const write = vi.fn()
+    const spawn = vi.fn(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    setLocalPtyProvider({
+      spawn,
+      write,
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        providerEvents.dataHandler = handler
+        return () => {}
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    let seq = 0
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      onPtyData: vi.fn((_id: string, data: string) => {
+        seq += data.length
+        return seq
+      }),
+      registerPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        launchAgent: 'codex',
+        terminalColorQueryReplies: {
+          foreground: '#eeeeee',
+          background: '#111111'
+        }
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      providerEvents.dataHandler?.({ id: spawnResult.id, data: 'prefix' })
+      providerEvents.dataHandler?.({
+        id: spawnResult.id,
+        data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
+      })
+      vi.advanceTimersByTime(8)
+
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'prefixready'
       })
     } finally {
       vi.useRealTimers()

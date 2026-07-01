@@ -37,7 +37,8 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  answerStartupTerminalColorQueriesForPty
 } from '../ipc/pty'
 import {
   registerSshFilesystemProvider,
@@ -941,11 +942,15 @@ export class SshRelaySession {
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     ptyProvider.onData((payload) => {
       const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
+      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
       const win = this.getMainWindow()
-      if (win && !win.isDestroyed()) {
+      if (win && !win.isDestroyed() && rendererData.length > 0) {
         win.webContents.send('pty:data', {
           ...payload,
-          ...(typeof seq === 'number' ? { seq, rawLength: payload.data.length } : {})
+          data: rendererData,
+          ...(rendererData === payload.data && typeof seq === 'number'
+            ? { seq, rawLength: payload.data.length }
+            : {})
         })
       }
     })

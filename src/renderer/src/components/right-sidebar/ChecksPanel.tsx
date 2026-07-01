@@ -134,9 +134,9 @@ import {
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
-import {
-  type SourceControlActionRecipe,
-  type SourceControlLaunchActionId
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import {
   saveSourceControlActionRecipe,

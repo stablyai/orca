@@ -65,6 +65,7 @@ import type {
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
+  RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../shared/runtime-types'
@@ -447,6 +448,8 @@ document.addEventListener(
   true
 )
 
+const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
+
 // Custom APIs for renderer
 const api = {
   app: {
@@ -469,6 +472,10 @@ const api = {
     reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
+    startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
+      startupDiagnosticsEnabled
+        ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
+        : Promise.resolve(),
     // Why: on macOS this returns the active input mode, or the layout ID when
     // no IME mode is selected, so renderer keyboard workarounds can distinguish
     // CJK IMEs and compose layouts from plain US QWERTY (see issue #1205).
@@ -769,6 +776,7 @@ const api = {
       sessionId?: string
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
+      terminalColorQueryReplies?: { foreground?: string; background?: string }
       // Why: closes the SIGKILL race documented in INVESTIGATION.md by
       // letting main patch + sync-flush the (worktreeId, tabId, leafId →
       // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -2486,6 +2494,28 @@ const api = {
       ipcRenderer.invoke('hooks:writeIssueCommand', args)
   },
 
+  ephemeralVm: {
+    listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
+    listRecipeCatalog: () => ipcRenderer.invoke('ephemeralVm:listRecipeCatalog'),
+    doctor: (args) => ipcRenderer.invoke('ephemeralVm:doctor', args),
+    provision: (args) => ipcRenderer.invoke('ephemeralVm:provision', args),
+    cancelProvision: (args) => ipcRenderer.invoke('ephemeralVm:cancelProvision', args),
+    onProvisionEvent: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }
+      ): void => callback(event)
+      ipcRenderer.on('ephemeralVm:provisionEvent', listener)
+      return () => ipcRenderer.removeListener('ephemeralVm:provisionEvent', listener)
+    },
+    listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
+    attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),
+    suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
+    resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
+    cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
+    getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
+  } satisfies PreloadApi['ephemeralVm'],
+
   cache: {
     getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
     setGitHub: (args) => ipcRenderer.invoke('cache:setGitHub', args)
@@ -2974,6 +3004,11 @@ const api = {
       ipcRenderer.on('ui:openQuickOpen', listener)
       return () => ipcRenderer.removeListener('ui:openQuickOpen', listener)
     },
+    onToggleQuickCommandsMenu: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleQuickCommandsMenu', listener)
+      return () => ipcRenderer.removeListener('ui:toggleQuickCommandsMenu', listener)
+    },
     onOpenNewWorkspace: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openNewWorkspace', listener)
@@ -3252,39 +3287,11 @@ const api = {
       return () => ipcRenderer.removeListener('ui:createTerminal', listener)
     },
     onRequestTerminalCreate: (
-      callback: (data: {
-        requestId: string
-        worktreeId?: string
-        afterTabId?: string
-        targetGroupId?: string
-        command?: string
-        env?: Record<string, string>
-        launchConfig?: SleepingAgentLaunchConfig
-        launchToken?: string
-        launchAgent?: TuiAgent
-        startupCommandDelivery?: StartupCommandDelivery
-        title?: string
-        activate?: boolean
-        presentation?: RuntimeTerminalPresentation
-      }) => void
+      callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: {
-          requestId: string
-          worktreeId?: string
-          afterTabId?: string
-          targetGroupId?: string
-          command?: string
-          env?: Record<string, string>
-          launchConfig?: SleepingAgentLaunchConfig
-          launchToken?: string
-          launchAgent?: TuiAgent
-          startupCommandDelivery?: StartupCommandDelivery
-          title?: string
-          activate?: boolean
-          presentation?: RuntimeTerminalPresentation
-        }
+        data: RuntimeTerminalCreateRequestPayload
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)
       return () => ipcRenderer.removeListener('terminal:requestTabCreate', listener)

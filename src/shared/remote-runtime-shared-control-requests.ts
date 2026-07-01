@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { remoteRuntimeTimeoutError } from './remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import { toRemoteRuntimeClientError } from './remote-runtime-shared-control-protocol'

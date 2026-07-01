@@ -6,9 +6,9 @@
 // relay.ts focused on the daemon-lifecycle wiring and makes the handshake
 // independently unit-testable.
 
-import { dirname, join } from 'path'
-import { existsSync, readFileSync, realpathSync } from 'fs'
-import type { Socket } from 'net'
+import { dirname, join } from 'node:path'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import type { Socket } from 'node:net'
 import {
   RELAY_VERSION,
   MessageType,

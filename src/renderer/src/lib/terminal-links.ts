@@ -329,7 +329,7 @@ function buildLineEndingSpacedPathPrefixRanges(range: DetectedRange): DetectedRa
       })
     }
   }
-  return ranges.reverse()
+  return ranges.toReversed()
 }
 
 function toParsedLink(range: DetectedRange): ParsedTerminalFileLink | null {

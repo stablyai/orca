@@ -34,9 +34,9 @@ import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByUpdatedAt
 } from '../../shared/work-items'
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { sliceCheckLogTail } from './check-job-log-tail-slice'
 import { getPRConflictSummary } from './conflict-summary'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'

@@ -26,6 +26,7 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../../../shared/types'
 import {
+  getProjectIdentityKey,
   projectHostSetupProjectionFromRepos,
   type ProjectHostSetupProjection
 } from '../../../../shared/project-host-setup-projection'
@@ -68,11 +69,13 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkil
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
+  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
+import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 
@@ -714,14 +717,15 @@ function mergeFetchedReposForHost(
   fetched: Repo[],
   hostId: string
 ): Repo[] {
-  const fetchedIdentities = new Set(fetched.map(getRepoHostIdentity))
+  const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
+  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
   const preserved = previous.filter((repo) => {
     const existingHostId = getRepoExecutionHostId(repo)
     return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
   })
   const merged = [...preserved]
   const indexByIdentity = new Map(merged.map((repo, index) => [getRepoHostIdentity(repo), index]))
-  for (const repo of fetched) {
+  for (const repo of fetchedWithProjectGroups) {
     const identity = getRepoHostIdentity(repo)
     const existingIndex = indexByIdentity.get(identity)
     if (existingIndex === undefined) {
@@ -732,6 +736,39 @@ function mergeFetchedReposForHost(
     merged[existingIndex] = repo
   }
   return reconcileFetchedRepos(previous, merged)
+}
+
+function applyInheritedProjectGroups(previous: readonly Repo[], fetched: readonly Repo[]): Repo[] {
+  const projectGroupIdByProject = new Map<string, string | null>()
+  for (const repo of previous) {
+    const projectGroupId =
+      repo.projectGroupId === undefined ? undefined : (repo.projectGroupId ?? null)
+    if (projectGroupId === undefined) {
+      continue
+    }
+    const projectId = getProjectIdentityKey(repo)
+    if (projectId.startsWith('repo:')) {
+      continue
+    }
+    if (!projectGroupIdByProject.has(projectId)) {
+      projectGroupIdByProject.set(projectId, projectGroupId)
+    }
+  }
+  if (projectGroupIdByProject.size === 0) {
+    return [...fetched]
+  }
+  return fetched.map((repo) => {
+    if (repo.projectGroupId !== undefined) {
+      return repo
+    }
+    const inheritedProjectGroupId = projectGroupIdByProject.get(getProjectIdentityKey(repo))
+    if (inheritedProjectGroupId === undefined) {
+      return repo
+    }
+    // Why: project groups are a local organization affordance. Runtime copies
+    // of the same canonical project should appear in the user's existing group.
+    return { ...repo, projectGroupId: inheritedProjectGroupId }
+  })
 }
 
 function mergeProjectCompatibilityForHostRepoChange({
@@ -2334,6 +2371,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
+      // Why: an SSH-mode per-workspace-env's workspace is the repo's main worktree, so deleting it
+      // routes here (project removal) rather than through removeWorktree. Tear down the backing
+      // ephemeral runtime (Docker/VM + hidden SSH target) first so it doesn't leak when the project
+      // is removed. Matches on the repo's runtime-owned connectionId and its known worktree ids.
+      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
+        await cleanupEphemeralVmRuntimesForDeleted({
+          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
+          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
+        })
+      }
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
       await (target.kind === 'local'
         ? window.api.repos.remove({ repoId: projectId })

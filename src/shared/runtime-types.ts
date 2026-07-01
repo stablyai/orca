@@ -29,6 +29,8 @@ import type {
 } from './mobile-markdown-document'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -455,6 +457,30 @@ export type RuntimeTerminalAgentStatus = {
 }
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'
+type RuntimeTerminalCreateBaseRequestPayload = {
+  requestId: string
+  worktreeId?: string
+  afterTabId?: string
+  targetGroupId?: string
+  command?: string
+  env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
+  launchAgent?: TuiAgent
+  startupCommandDelivery?: StartupCommandDelivery
+  title?: string
+  activate?: boolean
+  presentation?: RuntimeTerminalPresentation
+}
+
+export type RuntimeTerminalCreateRequestPayload =
+  | (RuntimeTerminalCreateBaseRequestPayload & { source?: undefined })
+  | (RuntimeTerminalCreateBaseRequestPayload & {
+      worktreeId: string
+      // Why: only the host-owned runtime-session bridge may bypass the renderer's
+      // active-runtime local terminal guard; ordinary UI requests must omit this.
+      source: 'runtime-session'
+    })
 
 export type RuntimeTerminalCreate = {
   handle: string

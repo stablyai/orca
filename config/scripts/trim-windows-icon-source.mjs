@@ -5,7 +5,6 @@
 // ~83% of the frame and looks visibly small next to native apps (issue #5357).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { PNG } from 'pngjs'
 
 // Why: Windows renders the largest ICO frame at small sizes too, so the glyph
@@ -195,7 +194,7 @@ export function buildWindowsIcoFromPng(sourcePngBuffer, sizes = ICO_FRAME_SIZES)
 }
 
 function resolveDefaultPaths() {
-  const scriptDir = dirname(fileURLToPath(import.meta.url))
+  const scriptDir = import.meta.dirname
   const projectDir = dirname(dirname(scriptDir))
   return {
     sourcePng: join(projectDir, 'resources', 'build', 'icon.png'),

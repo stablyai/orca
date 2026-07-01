@@ -1,5 +1,5 @@
-import { fork, type ChildProcess } from 'child_process'
-import { join } from 'path'
+import { fork, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,

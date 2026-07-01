@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { homedir } from 'os'
+import { homedir } from 'node:os'
 import type { GitWorktreeInfo } from '../shared/types'
 import {
   canCleanupUnregisteredOrcaLeftoverDirectory,

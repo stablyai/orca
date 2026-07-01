@@ -20,6 +20,9 @@ Environments:
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
 
+Environment Recipes:
+  vm recipe doctor          Validate a per-workspace environment recipe
+
 Automations:
   automations list          List scheduled Orca automations
   automations show          Show one Orca automation
@@ -186,7 +189,7 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
-  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]

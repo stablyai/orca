@@ -2,9 +2,9 @@
 // (mobile) connections. Each paired device gets its own revocable token so
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
-import { randomBytes, randomUUID } from 'crypto'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { randomBytes, randomUUID } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'

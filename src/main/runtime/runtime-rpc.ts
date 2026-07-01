@@ -4,9 +4,9 @@
 // orchestration so a running runtime is always discoverable via exactly
 // one on-disk file. Method handling lives in `rpc/` and transport specifics
 // live in `rpc/unix-socket-transport.ts` and `rpc/ws-transport.ts`.
-import { randomBytes } from 'crypto'
-import { readdirSync, rmSync } from 'fs'
-import { join } from 'path'
+import { randomBytes } from 'node:crypto'
+import { readdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'

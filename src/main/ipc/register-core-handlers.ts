@@ -23,6 +23,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
 import { registerNotificationHandlers } from './notifications'
@@ -168,6 +169,7 @@ export function registerCoreHandlers(
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers()
+  registerEphemeralVmHandlers(store)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths
   })
