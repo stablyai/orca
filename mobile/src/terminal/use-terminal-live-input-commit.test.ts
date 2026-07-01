@@ -12,6 +12,18 @@ type TerminalLiveInputCommitHarness = {
   readonly unmount: () => void
 }
 
+function suppressReactTestRendererDeprecationWarning(): () => void {
+  const originalConsoleError = console.error
+  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+    const firstArg = args[0]
+    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
+      return
+    }
+    originalConsoleError(...args)
+  })
+  return () => consoleErrorSpy.mockRestore()
+}
+
 function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness {
   const activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
@@ -47,9 +59,14 @@ function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness 
     return null
   }
 
-  act(() => {
-    renderer = create(createElement(Harness))
-  })
+  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
+  try {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+  } finally {
+    restoreConsoleError()
+  }
   if (!handlers || !renderer) {
     throw new Error('terminal live input hook did not render')
   }
