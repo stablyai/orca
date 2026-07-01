@@ -21,10 +21,11 @@ import {
   MYSQL_SCHEMAS_SQL,
   MYSQL_TABLES_SQL
 } from './mysql-introspection-queries'
-import { cancelMysqlQuery, runMysqlQuery } from './mysql-query'
+import { cancelMysqlQuery, runMysqlBatch, runMysqlExecute, runMysqlQuery } from './mysql-query'
 import type {
   DbColumn,
   DbSchemaTree,
+  DbStatement,
   DbTableList,
   DbTableRef,
   QueryHandle,
@@ -183,6 +184,24 @@ export const mysqlDriver: DbDriver = {
     onStart: (handle: QueryHandle) => void
   ): Promise<QueryResult> {
     return runMysqlQuery(conn.raw as Pool, conn.id, sql, opts, onStart)
+  },
+
+  execute(
+    conn: LiveConnection,
+    statement: DbStatement,
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<QueryResult> {
+    return runMysqlExecute(conn.raw as Pool, conn.id, statement, opts, onStart)
+  },
+
+  executeBatch(
+    conn: LiveConnection,
+    statements: DbStatement[],
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<number[]> {
+    return runMysqlBatch(conn.raw as Pool, conn.id, statements, opts, onStart)
   },
 
   async cancel(conn: LiveConnection, handle: QueryHandle): Promise<void> {

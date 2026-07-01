@@ -5,12 +5,14 @@ import { dbConnectionManager } from '../database/db-connection-manager'
 import {
   DB_MAX_ROWS,
   DB_STATEMENT_TIMEOUT_MS,
+  DbBatchError,
   normalizeDbError,
   resolveDbConfig,
   type ResolvedDbConfig
 } from '../database/db-driver'
 import { isTrustedUIRenderer } from './ui'
 import type {
+  DbBatchResult,
   DbColumnListResult,
   DbConnection,
   DbConnectionInput,
@@ -19,8 +21,10 @@ import type {
   DbConnectionUpdate,
   DbEncryptionStatus,
   DbEngine,
+  DbExecuteResult,
   DbIntrospectResult,
   DbQueryResult,
+  DbStatement,
   DbTableListResult,
   DbTableRef,
   DbTestResult
@@ -42,7 +46,9 @@ const DATABASE_IPC_CHANNELS = [
   'database:introspectSchemaTables',
   'database:introspectTableColumns',
   'database:query',
-  'database:cancelQuery'
+  'database:cancelQuery',
+  'database:execute',
+  'database:executeBatch'
 ] as const
 
 const VALID_ENGINES = new Set<DbEngine>(['postgres', 'mysql'])
@@ -313,4 +319,51 @@ export function registerDatabaseHandlers(store: Store): void {
     requireTrusted(event.sender)
     await dbConnectionManager.cancelQuery(args.id)
   })
+
+  // Why: a single parameterized statement (Data-tab select/count or a wrapped
+  // free-form re-query). Like database:query, allowWrite is derived from the
+  // stored readOnly server-side; a missing connection defaults to read-only.
+  ipcMain.handle(
+    'database:execute',
+    async (event, args: { id: string; statement: DbStatement }): Promise<DbExecuteResult> => {
+      requireTrusted(event.sender)
+      try {
+        const connection = store.getDbConnection(args.id)
+        const allowWrite = connection ? !connection.readOnly : false
+        const result = await dbConnectionManager.execute(args.id, args.statement, {
+          rowLimit: DB_MAX_ROWS,
+          timeoutMs: DB_STATEMENT_TIMEOUT_MS,
+          allowWrite
+        })
+        return { ok: true, result }
+      } catch (err) {
+        return { ok: false, error: normalizeDbError(err) }
+      }
+    }
+  )
+
+  // Why: staged edits applied atomically. On a per-statement failure the redacted
+  // error carries the 0-based failedIndex so the grid can flag the offending change.
+  ipcMain.handle(
+    'database:executeBatch',
+    async (event, args: { id: string; statements: DbStatement[] }): Promise<DbBatchResult> => {
+      requireTrusted(event.sender)
+      try {
+        const connection = store.getDbConnection(args.id)
+        const allowWrite = connection ? !connection.readOnly : false
+        const rowCounts = await dbConnectionManager.executeBatch(args.id, args.statements, {
+          rowLimit: DB_MAX_ROWS,
+          timeoutMs: DB_STATEMENT_TIMEOUT_MS,
+          allowWrite
+        })
+        return { ok: true, rowCounts }
+      } catch (err) {
+        // DbBatchError wraps the offending statement's raw driver error; redact
+        // that (never the batch wrapper) and surface which change failed.
+        const failedIndex = err instanceof DbBatchError ? err.failedIndex : -1
+        const raw = err instanceof DbBatchError ? err.cause : err
+        return { ok: false, error: normalizeDbError(raw), failedIndex }
+      }
+    }
+  )
 }

@@ -12,7 +12,13 @@
 
 import type { Readable } from 'node:stream'
 import { isCursorableRead } from '../../shared/sql-statement-classifier'
-import type { QueryHandle, QueryOptions, QueryResult } from '../../shared/database-types'
+import { DbBatchError } from './db-driver'
+import type {
+  DbStatement,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
+} from '../../shared/database-types'
 import type { Connection, Pool, PoolConnection } from 'mysql2/promise'
 
 type BoundedRows = { columns: { name: string }[]; rows: unknown[][]; rowCount: number; truncated: boolean }
@@ -133,6 +139,90 @@ export async function runMysqlQuery(
     } else {
       conn.release()
     }
+  }
+}
+
+// Runs one parameterized statement (Data-tab select/count/mutation or wrapped
+// free-form re-query) inside a transaction — read-only when !allowWrite. The
+// statement's own LIMIT bounds the page; rowLimit is a defensive server-side cap.
+export async function runMysqlExecute(
+  pool: Pool,
+  connectionId: string,
+  statement: DbStatement,
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<QueryResult> {
+  const conn = await pool.getConnection()
+  try {
+    const [pidRows] = await conn.query('SELECT CONNECTION_ID() AS id')
+    onStart({ connectionId, backendPid: Number((pidRows as { id?: number }[])[0]?.id) || null })
+    await conn.query(`SET SESSION max_execution_time = ${Math.trunc(opts.timeoutMs)}`)
+    await conn.query(opts.allowWrite ? 'START TRANSACTION' : 'START TRANSACTION READ ONLY')
+    const startedAt = Date.now()
+    try {
+      const [result, fields] = await conn.query({
+        sql: statement.sql,
+        values: statement.params,
+        rowsAsArray: true,
+        timeout: opts.timeoutMs
+      })
+      await conn.query('COMMIT')
+      if (Array.isArray(result)) {
+        const allRows = result as unknown[][]
+        const truncated = allRows.length > opts.rowLimit
+        const rows = truncated ? allRows.slice(0, opts.rowLimit) : allRows
+        return {
+          columns: normalizeFields(fields as { name: string }[]),
+          rows,
+          rowCount: rows.length,
+          truncated,
+          durationMs: Date.now() - startedAt
+        }
+      }
+      const affected = (result as { affectedRows?: number }).affectedRows ?? 0
+      return { columns: [], rows: [], rowCount: affected, truncated: false, durationMs: Date.now() - startedAt }
+    } catch (err) {
+      await conn.query('ROLLBACK').catch(() => {})
+      throw err
+    }
+  } finally {
+    conn.release()
+  }
+}
+
+// Applies staged writes atomically: START TRANSACTION, run each statement in
+// order, COMMIT. Any failure rolls back and throws DbBatchError(failedIndex).
+export async function runMysqlBatch(
+  pool: Pool,
+  connectionId: string,
+  statements: DbStatement[],
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<number[]> {
+  const conn = await pool.getConnection()
+  try {
+    const [pidRows] = await conn.query('SELECT CONNECTION_ID() AS id')
+    onStart({ connectionId, backendPid: Number((pidRows as { id?: number }[])[0]?.id) || null })
+    await conn.query(`SET SESSION max_execution_time = ${Math.trunc(opts.timeoutMs)}`)
+    await conn.query('START TRANSACTION')
+    const rowCounts: number[] = []
+    for (let i = 0; i < statements.length; i++) {
+      try {
+        const [result] = await conn.query({
+          sql: statements[i].sql,
+          values: statements[i].params,
+          timeout: opts.timeoutMs
+        })
+        rowCounts.push((result as { affectedRows?: number }).affectedRows ?? 0)
+      } catch (err) {
+        await conn.query('ROLLBACK').catch(() => {})
+        throw new DbBatchError(i, err)
+      }
+    }
+    await conn.query('COMMIT')
+    return rowCounts
+  } finally {
+    conn.release()
   }
 }
 

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { QueryOptions } from '../../shared/database-types'
-import { cancelPostgresBackend, runPostgresQuery } from './postgres-query'
+import { DbBatchError } from './db-driver'
+import {
+  cancelPostgresBackend,
+  runPostgresBatch,
+  runPostgresExecute,
+  runPostgresQuery
+} from './postgres-query'
 
 type QueryArg = string | { text: string; rowMode?: string }
 function textOf(arg: QueryArg): string {
@@ -130,6 +136,113 @@ describe('runPostgresQuery', () => {
       runPostgresQuery(makePool(client), 'c1', 'SELECT * FROM missing', opts(), vi.fn())
     ).rejects.toThrow()
     expect(calls).toContain('ROLLBACK')
+    expect(client.release).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Fake client for the parameterized execute/batch paths: records SQL + values.
+function makeParamClient(rows: unknown[][], fields: { name: string }[]) {
+  const calls: { text: string; values?: unknown[] }[] = []
+  const release = vi.fn()
+  const query = vi.fn((arg: QueryArg) => {
+    const text = textOf(arg)
+    const values = typeof arg === 'object' ? (arg as { values?: unknown[] }).values : undefined
+    calls.push({ text, values })
+    if (text.includes('pg_backend_pid')) {
+      return Promise.resolve({ rows: [{ pid: 7 }] })
+    }
+    if (typeof arg === 'object' && 'rowMode' in arg) {
+      return Promise.resolve({ rows, fields, rowCount: rows.length })
+    }
+    return Promise.resolve({ rows: [], rowCount: 1 })
+  })
+  return { calls, client: { query, release } }
+}
+
+describe('runPostgresExecute', () => {
+  it('runs a read in a read-only transaction and threads bind params', async () => {
+    const { calls, client } = makeParamClient([[1], [2]], [{ name: 'n' }])
+    const result = await runPostgresExecute(
+      makePool(client),
+      'c1',
+      { sql: 'SELECT * FROM t WHERE a = $1 LIMIT 100 OFFSET 0', params: [5] },
+      opts({ rowLimit: 1000 }),
+      vi.fn()
+    )
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('BEGIN')
+    expect(texts).toContain('SET TRANSACTION READ ONLY')
+    expect(texts).toContain('COMMIT')
+    const select = calls.find((c) => c.text.startsWith('SELECT * FROM t'))
+    expect(select?.values).toEqual([5])
+    expect(result.rows).toEqual([[1], [2]])
+    expect(result.columns).toEqual([{ name: 'n' }])
+  })
+
+  it('omits READ ONLY on a writable connection', async () => {
+    const { calls, client } = makeParamClient([], [])
+    await runPostgresExecute(
+      makePool(client),
+      'c1',
+      { sql: 'UPDATE t SET a = $1 WHERE id = $2', params: [1, 2] },
+      opts({ allowWrite: true }),
+      vi.fn()
+    )
+    expect(calls.map((c) => c.text)).not.toContain('SET TRANSACTION READ ONLY')
+    expect(calls.map((c) => c.text)).toContain('COMMIT')
+  })
+})
+
+describe('runPostgresBatch', () => {
+  it('applies every statement in one transaction and returns per-statement counts', async () => {
+    const { calls, client } = makeParamClient([], [])
+    const counts = await runPostgresBatch(
+      makePool(client),
+      'c1',
+      [
+        { sql: 'UPDATE t SET a = $1 WHERE id = $2', params: [1, 10] },
+        { sql: 'DELETE FROM t WHERE id = $1', params: [11] }
+      ],
+      opts({ allowWrite: true }),
+      vi.fn()
+    )
+    const texts = calls.map((c) => c.text)
+    expect(texts).toContain('BEGIN')
+    expect(texts).toContain('COMMIT')
+    expect(texts).not.toContain('ROLLBACK')
+    expect(counts).toEqual([1, 1])
+  })
+
+  it('rolls back the whole batch and throws DbBatchError with the failing index', async () => {
+    const calls: string[] = []
+    const client = {
+      release: vi.fn(),
+      query: vi.fn((arg: QueryArg) => {
+        const text = textOf(arg)
+        calls.push(text)
+        if (text.includes('pg_backend_pid')) {
+          return Promise.resolve({ rows: [{ pid: 7 }] })
+        }
+        if (text.startsWith('DELETE')) {
+          return Promise.reject(Object.assign(new Error('fk'), { code: '23503' }))
+        }
+        return Promise.resolve({ rows: [], rowCount: 1 })
+      })
+    }
+    const err = await runPostgresBatch(
+      makePool(client),
+      'c1',
+      [
+        { sql: 'UPDATE t SET a = $1 WHERE id = $2', params: [1, 10] },
+        { sql: 'DELETE FROM t WHERE id = $1', params: [11] }
+      ],
+      opts({ allowWrite: true }),
+      vi.fn()
+    ).catch((e) => e)
+    expect(err).toBeInstanceOf(DbBatchError)
+    expect((err as DbBatchError).failedIndex).toBe(1)
+    expect(calls).toContain('ROLLBACK')
+    expect(calls).not.toContain('COMMIT')
     expect(client.release).toHaveBeenCalledTimes(1)
   })
 })

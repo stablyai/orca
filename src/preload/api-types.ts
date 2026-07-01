@@ -352,14 +352,17 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DbBatchResult,
   DbColumnListResult,
   DbConnectionInput,
   DbConnectionRuntimeState,
   DbConnectionSummary,
   DbConnectionUpdate,
   DbEncryptionStatus,
+  DbExecuteResult,
   DbIntrospectResult,
   DbQueryResult,
+  DbStatement,
   DbTableListResult,
   DbTableRef,
   DbTestResult
@@ -2048,6 +2051,8 @@ export type PreloadApi = {
     introspectTableColumns: (args: { id: string; ref: DbTableRef }) => Promise<DbColumnListResult>
     query: (args: { id: string; sql: string }) => Promise<DbQueryResult>
     cancelQuery: (args: { id: string }) => Promise<void>
+    execute: (args: { id: string; statement: DbStatement }) => Promise<DbExecuteResult>
+    executeBatch: (args: { id: string; statements: DbStatement[] }) => Promise<DbBatchResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>

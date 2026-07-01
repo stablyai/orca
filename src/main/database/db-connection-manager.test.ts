@@ -26,6 +26,28 @@ const { pgDriver, mysqlDriver, state } = vi.hoisted(() => {
         return { columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 }
       }
     ),
+    execute: vi.fn(
+      async (
+        conn: LiveConnection,
+        _statement: unknown,
+        _opts: unknown,
+        onStart: (h: { connectionId: string; backendPid: number | null }) => void
+      ) => {
+        onStart({ connectionId: conn.id, backendPid: 123 })
+        return { columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 }
+      }
+    ),
+    executeBatch: vi.fn(
+      async (
+        conn: LiveConnection,
+        statements: unknown[],
+        _opts: unknown,
+        onStart: (h: { connectionId: string; backendPid: number | null }) => void
+      ) => {
+        onStart({ connectionId: conn.id, backendPid: 123 })
+        return statements.map(() => 1)
+      }
+    ),
     cancel: vi.fn(async () => {}),
     close: vi.fn(async () => {})
   })
@@ -297,6 +319,59 @@ describe('DbConnectionManager', () => {
       await first
       // Once the first completes the connection is free again.
       await manager.query('c1', 'SELECT 3', opts)
+    })
+  })
+
+  describe('execute + executeBatch', () => {
+    const stmt = { sql: 'SELECT * FROM t LIMIT 100 OFFSET 0', params: [] }
+    const opts = { rowLimit: 1000, timeoutMs: 1000, allowWrite: true }
+
+    it('execute delegates a parameterized statement to the engine driver', async () => {
+      await manager.connect(cfg())
+      await manager.execute('c1', stmt, { ...opts, allowWrite: false })
+      expect(pgDriver.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+        stmt,
+        expect.objectContaining({ allowWrite: false }),
+        expect.any(Function)
+      )
+    })
+
+    it('execute throws db_not_connected when no live connection is held', async () => {
+      await expect(manager.execute('missing', stmt, opts)).rejects.toThrow('db_not_connected')
+    })
+
+    it('executeBatch rejects on a read-only connection before touching the driver', async () => {
+      await manager.connect(cfg())
+      await expect(
+        manager.executeBatch('c1', [stmt], { ...opts, allowWrite: false })
+      ).rejects.toThrow('db_read_only_write_blocked')
+      expect(pgDriver.executeBatch).not.toHaveBeenCalled()
+    })
+
+    it('executeBatch applies statements and returns a row count per statement', async () => {
+      await manager.connect(cfg())
+      const counts = await manager.executeBatch('c1', [stmt, stmt], opts)
+      expect(pgDriver.executeBatch).toHaveBeenCalledTimes(1)
+      expect(counts).toEqual([1, 1])
+    })
+
+    it('execute shares the one-op-per-connection guard', async () => {
+      await manager.connect(cfg())
+      let release: (() => void) | undefined
+      pgDriver.execute.mockImplementationOnce(
+        (conn: LiveConnection, _s: unknown, _o: unknown, onStart: (h: QueryHandle) => void) => {
+          onStart({ connectionId: conn.id, backendPid: 5 })
+          return new Promise((resolve) => {
+            release = () =>
+              resolve({ columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 })
+          })
+        }
+      )
+      const first = manager.execute('c1', stmt, opts)
+      await expect(manager.execute('c1', stmt, opts)).rejects.toThrow('db_query_in_progress')
+      release?.()
+      await first
     })
   })
 })

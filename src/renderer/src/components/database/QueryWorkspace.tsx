@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { needsWriteConfirm } from '../../../../shared/sql-statement-classifier'
+import { setColumnFilter } from './data-grid-filters'
 import { QueryEditor } from './QueryEditor'
 import { ResultsGrid } from './ResultsGrid'
 
@@ -25,6 +26,9 @@ export function QueryWorkspace({ connectionId }: { connectionId: string }): Reac
   const setDbQueryText = useAppStore((s) => s.setDbQueryText)
   const runDbQuery = useAppStore((s) => s.runDbQuery)
   const cancelDbQuery = useAppStore((s) => s.cancelDbQuery)
+  const setDbQuerySort = useAppStore((s) => s.setDbQuerySort)
+  const setDbQueryFilters = useAppStore((s) => s.setDbQueryFilters)
+  const setDbQueryPage = useAppStore((s) => s.setDbQueryPage)
 
   const running = queryState?.running ?? false
   const [pendingSql, setPendingSql] = useState<string | null>(null)
@@ -92,7 +96,25 @@ export function QueryWorkspace({ connectionId }: { connectionId: string }): Reac
         />
       </div>
 
-      <ResultsGrid result={queryState?.result} error={queryState?.error} running={running} />
+      <ResultsGrid
+        result={queryState?.result}
+        error={queryState?.error}
+        running={running}
+        refine={
+          queryState?.refine
+            ? {
+                refine: queryState.refine,
+                onSort: (ordinal) => setDbQuerySort(connectionId, ordinal),
+                onFilter: (column, filter) =>
+                  setDbQueryFilters(
+                    connectionId,
+                    setColumnFilter(queryState.refine?.filters ?? [], column, filter)
+                  ),
+                onPage: (delta) => setDbQueryPage(connectionId, delta)
+              }
+            : undefined
+        }
+      />
 
       <Dialog open={pendingSql !== null} onOpenChange={(open) => !open && setPendingSql(null)}>
         <DialogContent>

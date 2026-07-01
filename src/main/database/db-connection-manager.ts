@@ -8,6 +8,7 @@ import type {
   DbConnectionRuntimeState,
   DbEngine,
   DbSchemaTree,
+  DbStatement,
   DbTableList,
   DbTableRef,
   QueryHandle,
@@ -169,6 +170,44 @@ export class DbConnectionManager {
     this.inFlight.set(id, { connectionId: id, backendPid: null })
     try {
       return await getDriver(conn.engine).query(conn, sql, opts, (handle) => {
+        this.inFlight.set(id, handle)
+      })
+    } finally {
+      this.inFlight.delete(id)
+    }
+  }
+
+  // Parameterized single statement (Data-tab select/count or wrapped free-form
+  // re-query). Shares the one-query-per-connection guard so cancel targets the
+  // right backend and a concurrent op can't overwrite the in-flight handle.
+  async execute(id: string, statement: DbStatement, opts: QueryOptions): Promise<QueryResult> {
+    const conn = this.requireLive(id)
+    if (this.inFlight.has(id)) {
+      throw new Error('db_query_in_progress')
+    }
+    this.inFlight.set(id, { connectionId: id, backendPid: null })
+    try {
+      return await getDriver(conn.engine).execute(conn, statement, opts, (handle) => {
+        this.inFlight.set(id, handle)
+      })
+    } finally {
+      this.inFlight.delete(id)
+    }
+  }
+
+  // Atomic staged-edit apply. Writes only: a read-only connection is rejected
+  // here (defense in depth — the UI already disables editing on read-only).
+  async executeBatch(id: string, statements: DbStatement[], opts: QueryOptions): Promise<number[]> {
+    const conn = this.requireLive(id)
+    if (!opts.allowWrite) {
+      throw new Error('db_read_only_write_blocked')
+    }
+    if (this.inFlight.has(id)) {
+      throw new Error('db_query_in_progress')
+    }
+    this.inFlight.set(id, { connectionId: id, backendPid: null })
+    try {
+      return await getDriver(conn.engine).executeBatch(conn, statements, opts, (handle) => {
         this.inFlight.set(id, handle)
       })
     } finally {

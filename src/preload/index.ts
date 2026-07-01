@@ -124,14 +124,17 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DbBatchResult,
   DbColumnListResult,
   DbConnectionInput,
   DbConnectionRuntimeState,
   DbConnectionSummary,
   DbConnectionUpdate,
   DbEncryptionStatus,
+  DbExecuteResult,
   DbIntrospectResult,
   DbQueryResult,
+  DbStatement,
   DbTableListResult,
   DbTableRef,
   DbTestResult
@@ -2038,7 +2041,11 @@ const api = {
     query: (args: { id: string; sql: string }): Promise<DbQueryResult> =>
       ipcRenderer.invoke('database:query', args),
     cancelQuery: (args: { id: string }): Promise<void> =>
-      ipcRenderer.invoke('database:cancelQuery', args)
+      ipcRenderer.invoke('database:cancelQuery', args),
+    execute: (args: { id: string; statement: DbStatement }): Promise<DbExecuteResult> =>
+      ipcRenderer.invoke('database:execute', args),
+    executeBatch: (args: { id: string; statements: DbStatement[] }): Promise<DbBatchResult> =>
+      ipcRenderer.invoke('database:executeBatch', args)
   },
 
   pet: {

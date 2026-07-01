@@ -4,16 +4,10 @@
 // quote or reserved word can't break out of the identifier.
 
 import type { DbEngine } from './database-types'
+import { quoteIdentifier } from './sql-identifier'
 
 // Rows fetched when previewing a table/view via a schema-tree click.
 export const TABLE_PREVIEW_ROW_LIMIT = 100
-
-function quoteIdentifier(engine: DbEngine, identifier: string): string {
-  const quote = engine === 'mysql' ? '`' : '"'
-  // Double the quote char so an identifier holding it can't break out.
-  const escaped = identifier.split(quote).join(`${quote}${quote}`)
-  return `${quote}${escaped}${quote}`
-}
 
 export function buildTablePreviewSql(
   engine: DbEngine,

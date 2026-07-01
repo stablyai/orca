@@ -59,7 +59,15 @@ const { managerMock } = vi.hoisted(() => ({
       truncated: false,
       durationMs: 3
     })),
-    cancelQuery: vi.fn(async () => {})
+    cancelQuery: vi.fn(async () => {}),
+    execute: vi.fn(async () => ({
+      columns: [{ name: 'n' }],
+      rows: [[1]],
+      rowCount: 1,
+      truncated: false,
+      durationMs: 2
+    })),
+    executeBatch: vi.fn(async () => [1])
   }
 }))
 
@@ -76,6 +84,7 @@ vi.mock('./ui', () => ({
 }))
 
 import { registerDatabaseHandlers } from './database'
+import { DbBatchError } from '../database/db-driver'
 
 function makeStore(overrides: Partial<Store> = {}): Store {
   return {
@@ -142,7 +151,9 @@ describe('registerDatabaseHandlers', () => {
         'database:introspectSchemaTables',
         'database:introspectTableColumns',
         'database:query',
-        'database:cancelQuery'
+        'database:cancelQuery',
+        'database:execute',
+        'database:executeBatch'
       ]
       for (const channel of expected) {
         expect(removeHandlerMock).toHaveBeenCalledWith(channel)
@@ -806,6 +817,84 @@ describe('registerDatabaseHandlers', () => {
       await expect(getHandler('database:query')?.(untrusted, { id: 'c1', sql: 'x' })).rejects.toThrow(
         'untrusted_sender'
       )
+    })
+  })
+
+  describe('execute + executeBatch handlers', () => {
+    const trusted = makeEvent({ isTrusted: true })
+    const statement = { sql: 'SELECT * FROM t LIMIT 100 OFFSET 0', params: [] }
+    function getHandler(channel: string) {
+      return handleMock.mock.calls.find(([ch]) => ch === channel)?.[1]
+    }
+
+    it('execute derives allowWrite from readOnly and forwards the statement', async () => {
+      const store = makeStore({
+        getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1', readOnly: true }))
+      })
+      registerDatabaseHandlers(store)
+      const result = await getHandler('database:execute')?.(trusted, { id: 'c1', statement })
+      expect(result.ok).toBe(true)
+      expect(managerMock.execute).toHaveBeenCalledWith(
+        'c1',
+        statement,
+        expect.objectContaining({ allowWrite: false })
+      )
+    })
+
+    it('execute returns a redacted error and never leaks the DSN/password', async () => {
+      const store = makeStore({ getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1' })) })
+      registerDatabaseHandlers(store)
+      managerMock.execute.mockRejectedValueOnce(
+        Object.assign(new Error('boom postgres://admin:s3cr3t@db'), { code: 'ECONNRESET' })
+      )
+      const result = await getHandler('database:execute')?.(trusted, { id: 'c1', statement })
+      expect(result.ok).toBe(false)
+      expect(JSON.stringify(result)).not.toContain('s3cr3t')
+    })
+
+    it('executeBatch derives allowWrite=true on a writable connection and returns rowCounts', async () => {
+      const store = makeStore({
+        getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1', readOnly: false }))
+      })
+      registerDatabaseHandlers(store)
+      const result = await getHandler('database:executeBatch')?.(trusted, {
+        id: 'c1',
+        statements: [statement]
+      })
+      expect(result).toEqual({ ok: true, rowCounts: [1] })
+      expect(managerMock.executeBatch).toHaveBeenCalledWith(
+        'c1',
+        [statement],
+        expect.objectContaining({ allowWrite: true })
+      )
+    })
+
+    it('executeBatch surfaces failedIndex and a redacted error on a DbBatchError', async () => {
+      const store = makeStore({ getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1' })) })
+      registerDatabaseHandlers(store)
+      managerMock.executeBatch.mockRejectedValueOnce(
+        new DbBatchError(1, Object.assign(new Error('fk postgres://admin:s3cr3t@db'), { code: '23503' }))
+      )
+      const result = await getHandler('database:executeBatch')?.(trusted, {
+        id: 'c1',
+        statements: [statement, statement]
+      })
+      expect(result.ok).toBe(false)
+      expect(result.failedIndex).toBe(1)
+      expect(JSON.stringify(result)).not.toContain('s3cr3t')
+    })
+
+    it('rejects untrusted senders on both channels', async () => {
+      registerDatabaseHandlers(makeStore())
+      const untrusted = makeEvent({ isTrusted: false })
+      await expect(
+        getHandler('database:execute')?.(untrusted, { id: 'c1', statement })
+      ).rejects.toThrow('untrusted_sender')
+      await expect(
+        getHandler('database:executeBatch')?.(untrusted, { id: 'c1', statements: [statement] })
+      ).rejects.toThrow('untrusted_sender')
+      expect(managerMock.execute).not.toHaveBeenCalled()
+      expect(managerMock.executeBatch).not.toHaveBeenCalled()
     })
   })
 })

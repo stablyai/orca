@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { ConnectionList } from './ConnectionList'
 import { SchemaTree } from './SchemaTree'
-import { QueryWorkspace } from './QueryWorkspace'
+import { DatabaseWorkspace } from './DatabaseWorkspace'
 
 // Phase 2: connection list + form mount into the body slot below the header.
 export default function DatabasePage(): React.JSX.Element {
@@ -100,7 +100,7 @@ export default function DatabasePage(): React.JSX.Element {
               <SchemaTree key={activeDbConnectionId} connectionId={activeDbConnectionId} />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <QueryWorkspace key={activeDbConnectionId} connectionId={activeDbConnectionId} />
+              <DatabaseWorkspace key={activeDbConnectionId} connectionId={activeDbConnectionId} />
             </div>
           </>
         ) : null}

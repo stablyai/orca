@@ -1,46 +1,39 @@
 import React, { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { DbSafeError, QueryResult } from '../../../../shared/database-types'
+import type { DbColumnFilter, DbSafeError, QueryResult } from '../../../../shared/database-types'
+import type { DbQueryRefine } from '@/store/slices/database'
+import { copyCell, formatCell } from './data-grid-cell-format'
+import { DataGridColumnHeader } from './DataGridColumnHeader'
+import { filterFor } from './data-grid-filters'
+import { ordinalSortDirectionFor } from './data-grid-sort-state'
 
 const ROW_HEIGHT = 24
 const OVERSCAN = 16
 const COL_MIN_PX = 120
 const COL_MAX_PX = 320
 
-// Render a cell for display + copy. NULL is distinct from an empty string.
-function formatCell(value: unknown): { text: string; isNull: boolean } {
-  if (value === null || value === undefined) {
-    return { text: 'NULL', isNull: true }
-  }
-  if (typeof value === 'object') {
-    return { text: JSON.stringify(value), isNull: false }
-  }
-  return { text: String(value), isNull: false }
-}
-
-function copyCell(value: unknown): void {
-  const { text, isNull } = formatCell(value)
-  // Only claim success once the write actually resolves — a rejected clipboard
-  // write (no permission/focus) must not show a false "Copied" toast.
-  navigator.clipboard
-    .writeText(isNull ? '' : text)
-    .then(() => toast.success(translate('auto.components.database.ResultsGrid.copied', 'Copied cell')))
-    .catch(() =>
-      toast.error(translate('auto.components.database.ResultsGrid.copyFailed', 'Copy failed'))
-    )
+// Handlers that turn the free-form results grid into a server-side sort/filter
+// surface (wrapping the last read). Omitted → plain read-only headers.
+export type ResultsGridRefine = {
+  refine: DbQueryRefine
+  onSort: (ordinal: number) => void
+  onFilter: (column: string, filter: DbColumnFilter | null) => void
+  onPage: (delta: number) => void
 }
 
 export function ResultsGrid({
   result,
   error,
-  running
+  running,
+  refine
 }: {
   result?: QueryResult
   error?: DbSafeError
   running: boolean
+  refine?: ResultsGridRefine
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const rows = result?.rows ?? []
@@ -74,25 +67,43 @@ export function ResultsGrid({
     result.columns.length > 0
       ? result.columns.map(() => `minmax(${COL_MIN_PX}px, ${COL_MAX_PX}px)`).join(' ')
       : '1fr'
+  // Filtering a wrapped subquery is by name → ambiguous for duplicate names; only
+  // uniquely-named columns get a filter control.
+  const nameCounts = new Map<string, number>()
+  for (const col of result.columns) {
+    nameCounts.set(col.name, (nameCounts.get(col.name) ?? 0) + 1)
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} className="scrollbar-sleek min-h-0 flex-1 overflow-auto">
         <div className="inline-block min-w-full font-mono text-xs">
-          {/* Sticky header */}
           <div
             className="sticky top-0 z-10 grid border-b border-border bg-muted/90 backdrop-blur"
             style={{ gridTemplateColumns: gridTemplate, height: ROW_HEIGHT }}
           >
-            {result.columns.map((col, i) => (
-              <div
-                key={`${col.name}-${i}`}
-                className="flex items-center truncate border-r border-border/60 px-2 font-medium"
-                title={col.dataType ? `${col.name} · ${col.dataType}` : col.name}
-              >
-                {col.name}
-              </div>
-            ))}
+            {result.columns.map((col, i) =>
+              refine ? (
+                <DataGridColumnHeader
+                  key={`${col.name}-${i}`}
+                  name={col.name}
+                  dataType={col.dataType}
+                  sortDirection={ordinalSortDirectionFor(refine.refine.sort, i + 1)}
+                  onSort={() => refine.onSort(i + 1)}
+                  filter={filterFor(refine.refine.filters, col.name)}
+                  onFilter={(filter) => refine.onFilter(col.name, filter)}
+                  filterable={(nameCounts.get(col.name) ?? 0) === 1}
+                />
+              ) : (
+                <div
+                  key={`${col.name}-${i}`}
+                  className="flex items-center truncate border-r border-border/60 px-2 font-medium"
+                  title={col.dataType ? `${col.name} · ${col.dataType}` : col.name}
+                >
+                  {col.name}
+                </div>
+              )
+            )}
           </div>
           {rows.length === 0 ? (
             <div className="px-2 py-2 text-muted-foreground">
@@ -146,7 +157,40 @@ export function ResultsGrid({
             ms: result.durationMs
           })}
         </span>
-        {result.truncated ? (
+        {refine?.refine.engaged ? (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={refine.refine.offset === 0}
+              onClick={() => refine.onPage(-1)}
+            >
+              <ChevronLeft className="size-3.5" />
+              <span className="sr-only">
+                {translate('auto.components.database.ResultsGrid.prevPage', 'Previous page')}
+              </span>
+            </Button>
+            <span className="tabular-nums">
+              {translate('auto.components.database.ResultsGrid.pageRange', '{{from}}–{{to}}', {
+                from: result.rowCount === 0 ? 0 : refine.refine.offset + 1,
+                to: refine.refine.offset + result.rowCount
+              })}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={!refine.refine.hasNext}
+              onClick={() => refine.onPage(1)}
+            >
+              <ChevronRight className="size-3.5" />
+              <span className="sr-only">
+                {translate('auto.components.database.ResultsGrid.nextPage', 'Next page')}
+              </span>
+            </Button>
+          </div>
+        ) : result.truncated ? (
           <span className="text-amber-600 dark:text-amber-500">
             {translate(
               'auto.components.database.ResultsGrid.truncated',

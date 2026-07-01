@@ -1,7 +1,8 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { QueryOptions } from '../../shared/database-types'
-import { cancelMysqlQuery, runMysqlQuery } from './mysql-query'
+import { DbBatchError } from './db-driver'
+import { cancelMysqlQuery, runMysqlBatch, runMysqlExecute, runMysqlQuery } from './mysql-query'
 
 // Fake core query object: fires 'fields' when the stream starts, then streams
 // each row as a chunk (object mode).
@@ -108,6 +109,122 @@ describe('runMysqlQuery', () => {
     expect(calls).not.toContain('START TRANSACTION READ ONLY')
     expect(core.query).not.toHaveBeenCalled()
     expect(result.rowCount).toBe(3)
+  })
+})
+
+// Fake connection for the parameterized execute/batch paths: SELECT → rows,
+// other DML → an affectedRows header. Records SQL + bind values per call.
+function makeParamConnection(selectRows: unknown[][], fields: { name: string }[]) {
+  const calls: { sql: string; values?: unknown[] }[] = []
+  const conn = {
+    query: vi.fn((arg: string | { sql: string; values?: unknown[] }): Promise<[unknown, unknown]> => {
+      if (typeof arg === 'string') {
+        calls.push({ sql: arg })
+        if (arg.includes('CONNECTION_ID')) {
+          return Promise.resolve([[{ id: 55 }], []])
+        }
+        return Promise.resolve([[], []])
+      }
+      calls.push({ sql: arg.sql, values: arg.values })
+      if (/^\s*SELECT/i.test(arg.sql)) {
+        return Promise.resolve([selectRows, fields])
+      }
+      return Promise.resolve([{ affectedRows: 2 }, []])
+    }),
+    release: vi.fn(),
+    destroy: vi.fn()
+  }
+  return { calls, conn }
+}
+
+describe('runMysqlExecute', () => {
+  it('runs a read in a read-only transaction, threads params, and commits', async () => {
+    const { calls, conn } = makeParamConnection([[1], [2]], [{ name: 'n' }])
+    const result = await runMysqlExecute(
+      makePool(conn),
+      'c1',
+      { sql: 'SELECT * FROM t WHERE a = ? LIMIT 100 OFFSET 0', params: [9] },
+      opts({ rowLimit: 1000 }),
+      vi.fn()
+    )
+    const sqls = calls.map((c) => c.sql)
+    expect(sqls).toContain('START TRANSACTION READ ONLY')
+    expect(sqls).toContain('COMMIT')
+    const select = calls.find((c) => c.sql.startsWith('SELECT * FROM t'))
+    expect(select?.values).toEqual([9])
+    expect(result.rows).toEqual([[1], [2]])
+    expect(result.columns).toEqual([{ name: 'n' }])
+    expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses a plain (writable) transaction when allowWrite', async () => {
+    const { calls, conn } = makeParamConnection([], [])
+    await runMysqlExecute(
+      makePool(conn),
+      'c1',
+      { sql: 'UPDATE t SET a = ? WHERE id = ?', params: [1, 2] },
+      opts({ allowWrite: true }),
+      vi.fn()
+    )
+    const sqls = calls.map((c) => c.sql)
+    expect(sqls).toContain('START TRANSACTION')
+    expect(sqls).not.toContain('START TRANSACTION READ ONLY')
+    expect(sqls).toContain('COMMIT')
+  })
+})
+
+describe('runMysqlBatch', () => {
+  it('applies every statement in one transaction and returns affectedRows per statement', async () => {
+    const { calls, conn } = makeParamConnection([], [])
+    const counts = await runMysqlBatch(
+      makePool(conn),
+      'c1',
+      [
+        { sql: 'UPDATE t SET a = ? WHERE id = ?', params: [1, 10] },
+        { sql: 'DELETE FROM t WHERE id = ?', params: [11] }
+      ],
+      opts({ allowWrite: true }),
+      vi.fn()
+    )
+    const sqls = calls.map((c) => c.sql)
+    expect(sqls).toContain('START TRANSACTION')
+    expect(sqls).toContain('COMMIT')
+    expect(sqls).not.toContain('ROLLBACK')
+    expect(counts).toEqual([2, 2])
+  })
+
+  it('rolls back and throws DbBatchError with the failing index', async () => {
+    const calls: string[] = []
+    const conn = {
+      query: vi.fn((arg: string | { sql: string; values?: unknown[] }): Promise<[unknown, unknown]> => {
+        const sql = typeof arg === 'string' ? arg : arg.sql
+        calls.push(sql)
+        if (sql.includes('CONNECTION_ID')) {
+          return Promise.resolve([[{ id: 55 }], []])
+        }
+        if (sql.startsWith('DELETE')) {
+          return Promise.reject(Object.assign(new Error('fk'), { code: 'ER_ROW_IS_REFERENCED' }))
+        }
+        return Promise.resolve([{ affectedRows: 1 }, []])
+      }),
+      release: vi.fn(),
+      destroy: vi.fn()
+    }
+    const err = await runMysqlBatch(
+      makePool(conn),
+      'c1',
+      [
+        { sql: 'UPDATE t SET a = ? WHERE id = ?', params: [1, 10] },
+        { sql: 'DELETE FROM t WHERE id = ?', params: [11] }
+      ],
+      opts({ allowWrite: true }),
+      vi.fn()
+    ).catch((e) => e)
+    expect(err).toBeInstanceOf(DbBatchError)
+    expect((err as DbBatchError).failedIndex).toBe(1)
+    expect(calls).toContain('ROLLBACK')
+    expect(calls).not.toContain('COMMIT')
+    expect(conn.release).toHaveBeenCalledTimes(1)
   })
 })
 

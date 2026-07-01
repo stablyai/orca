@@ -38,7 +38,7 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
   const loadDbSchemas = useAppStore((s) => s.loadDbSchemas)
   const loadDbSchemaTables = useAppStore((s) => s.loadDbSchemaTables)
   const loadDbTableColumns = useAppStore((s) => s.loadDbTableColumns)
-  const previewDbTable = useAppStore((s) => s.previewDbTable)
+  const openDbTableTab = useAppStore((s) => s.openDbTableTab)
 
   const [expandedSchemas, setExpandedSchemas] = useState<ReadonlySet<string>>(new Set())
   const [expandedTables, setExpandedTables] = useState<ReadonlySet<string>>(new Set())
@@ -142,17 +142,17 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
     [toggleSchema, toggleTable]
   )
 
-  // A row's primary action (click / Enter): schemas expand; a table/view loads
-  // its first rows into the editor and runs them.
+  // A row's primary action (click / Enter): schemas expand; a table/view opens
+  // (or focuses) its Data tab in the workspace.
   const activateRow = useCallback(
     (row: SchemaTreeRow) => {
       if (row.type === 'schema') {
         toggleSchema(row.schema)
       } else if (row.type === 'table') {
-        void previewDbTable(connectionId, row.schema, row.table.name)
+        openDbTableTab(connectionId, row.schema, row.table.name)
       }
     },
-    [connectionId, previewDbTable, toggleSchema]
+    [connectionId, openDbTableTab, toggleSchema]
   )
 
   const moveSelection = useCallback(

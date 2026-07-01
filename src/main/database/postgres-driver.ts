@@ -21,10 +21,16 @@ import {
   PG_SCHEMAS_SQL,
   PG_TABLES_SQL
 } from './postgres-introspection-queries'
-import { cancelPostgresBackend, runPostgresQuery } from './postgres-query'
+import {
+  cancelPostgresBackend,
+  runPostgresBatch,
+  runPostgresExecute,
+  runPostgresQuery
+} from './postgres-query'
 import type {
   DbColumn,
   DbSchemaTree,
+  DbStatement,
   DbTableList,
   DbTableRef,
   QueryHandle,
@@ -152,6 +158,24 @@ export const postgresDriver: DbDriver = {
     onStart: (handle: QueryHandle) => void
   ): Promise<QueryResult> {
     return runPostgresQuery(conn.raw as Pool, conn.id, sql, opts, onStart)
+  },
+
+  execute(
+    conn: LiveConnection,
+    statement: DbStatement,
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<QueryResult> {
+    return runPostgresExecute(conn.raw as Pool, conn.id, statement, opts, onStart)
+  },
+
+  executeBatch(
+    conn: LiveConnection,
+    statements: DbStatement[],
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<number[]> {
+    return runPostgresBatch(conn.raw as Pool, conn.id, statements, opts, onStart)
   },
 
   async cancel(conn: LiveConnection, handle: QueryHandle): Promise<void> {

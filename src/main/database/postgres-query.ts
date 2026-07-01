@@ -16,7 +16,13 @@
 // from a separate short-lived connection.
 
 import { isCursorableRead } from '../../shared/sql-statement-classifier'
-import type { QueryHandle, QueryOptions, QueryResult } from '../../shared/database-types'
+import { DbBatchError } from './db-driver'
+import type {
+  DbStatement,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
+} from '../../shared/database-types'
 import type { Client, Pool, PoolClient } from 'pg'
 
 const CURSOR_NAME = 'orca_query_cursor'
@@ -92,6 +98,88 @@ export async function runPostgresQuery(
       await client.query('ROLLBACK').catch(() => {})
       throw err
     }
+  } finally {
+    client.release()
+  }
+}
+
+// Runs one parameterized statement (Data-tab select/count/mutation or wrapped
+// free-form re-query). Always inside a transaction — read-only when !allowWrite —
+// so a value-bound read on a read-only connection is DB-enforced. The statement's
+// own LIMIT bounds the page; rowLimit is a defensive server-side cap.
+export async function runPostgresExecute(
+  pool: Pool,
+  connectionId: string,
+  statement: DbStatement,
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<QueryResult> {
+  const client = await pool.connect()
+  try {
+    const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
+    onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
+    await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
+    await client.query('BEGIN')
+    if (!opts.allowWrite) {
+      await client.query('SET TRANSACTION READ ONLY')
+    }
+    const startedAt = Date.now()
+    try {
+      const result = await client.query({
+        text: statement.sql,
+        values: statement.params,
+        rowMode: 'array'
+      })
+      await client.query('COMMIT')
+      const allRows = (result.rows ?? []) as unknown[][]
+      const truncated = allRows.length > opts.rowLimit
+      const rows = truncated ? allRows.slice(0, opts.rowLimit) : allRows
+      return {
+        columns: (result.fields ?? []).map((f) => ({ name: f.name })),
+        rows,
+        rowCount: result.rowCount ?? rows.length,
+        truncated,
+        durationMs: Date.now() - startedAt
+      }
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw err
+    }
+  } finally {
+    client.release()
+  }
+}
+
+// Applies staged writes atomically: BEGIN, run each statement in order, COMMIT.
+// Any failure rolls back the whole batch and throws DbBatchError(failedIndex).
+export async function runPostgresBatch(
+  pool: Pool,
+  connectionId: string,
+  statements: DbStatement[],
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<number[]> {
+  const client = await pool.connect()
+  try {
+    const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
+    onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
+    await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
+    await client.query('BEGIN')
+    const rowCounts: number[] = []
+    for (let i = 0; i < statements.length; i++) {
+      try {
+        const result = await client.query({
+          text: statements[i].sql,
+          values: statements[i].params
+        })
+        rowCounts.push(result.rowCount ?? 0)
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw new DbBatchError(i, err)
+      }
+    }
+    await client.query('COMMIT')
+    return rowCounts
   } finally {
     client.release()
   }

@@ -191,3 +191,52 @@ export type QueryHandle = {
 // Query IPC result — returned (not thrown) so a SQL error carries only the
 // redacted error, never a raw driver message with the DSN.
 export type DbQueryResult = { ok: true; result: QueryResult } | { ok: false; error: DbSafeError }
+
+// ── Data grid: parameterized sort / filter / edit (Data tab) ──────────
+//
+// The renderer builds parameterized statements — identifiers are quote-escaped
+// (see src/shared/sql-identifier.ts), every VALUE is a bind parameter, and
+// LIMIT/OFFSET are app-controlled integers. Values are never string-interpolated.
+// These run through database:execute (one statement) / database:executeBatch
+// (staged edits applied atomically), which derive allowWrite server-side.
+
+// A parameterized statement: engine-native placeholders ($1.. / ?) in `sql`,
+// ordered bind values in `params`.
+export type DbStatement = { sql: string; params: unknown[] }
+
+export type DbSortDirection = 'asc' | 'desc'
+
+// Sort a Data-tab table by column name (SELECT * → the column names are unique).
+export type DbColumnSort = { column: string; direction: DbSortDirection }
+
+// Sort wrapped free-form results by 1-based output position — survives duplicate
+// column names, which ORDER BY <name> cannot resolve.
+export type DbOrdinalSort = { ordinal: number; direction: DbSortDirection }
+
+// Column filter operators. `is-null`/`is-not-null` take no value; `like`/`ilike`
+// match a pattern; the rest are scalar comparisons. `ilike` falls back to LIKE on
+// MySQL (whose default collation is already case-insensitive).
+export type DbFilterOperator =
+  | '='
+  | '<>'
+  | '<'
+  | '<='
+  | '>'
+  | '>='
+  | 'like'
+  | 'ilike'
+  | 'is-null'
+  | 'is-not-null'
+
+export type DbColumnFilter = { column: string; operator: DbFilterOperator; value?: unknown }
+
+// database:execute result — a single parameterized statement (Data-tab
+// select/count, or a wrapped free-form re-query). Same shape as a plain query.
+export type DbExecuteResult = DbQueryResult
+
+// database:executeBatch result — staged edits applied atomically in one
+// transaction. On failure, `failedIndex` is the 0-based statement that errored,
+// or -1 when the batch failed before/around statement execution (e.g. not connected).
+export type DbBatchResult =
+  | { ok: true; rowCounts: number[] }
+  | { ok: false; error: DbSafeError; failedIndex: number }

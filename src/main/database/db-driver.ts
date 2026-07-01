@@ -9,6 +9,7 @@ import type {
   DbSafeError,
   DbSchemaTree,
   DbSslMode,
+  DbStatement,
   DbTableList,
   DbTableRef,
   QueryHandle,
@@ -82,11 +83,42 @@ export type DbDriver = {
     opts: QueryOptions,
     onStart: (handle: QueryHandle) => void
   ): Promise<QueryResult>
+  // Runs a single parameterized statement (Data-tab select/count or a wrapped
+  // free-form re-query). Read-only DB transaction when !allowWrite; statement
+  // timeout; rows defensively capped to rowLimit. onStart reports the backend PID.
+  execute(
+    conn: LiveConnection,
+    statement: DbStatement,
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<QueryResult>
+  // Applies staged writes atomically in one transaction (BEGIN … COMMIT; ROLLBACK
+  // + DbBatchError on any failure). Requires opts.allowWrite. Returns the affected
+  // row count per statement, positional to `statements`.
+  executeBatch(
+    conn: LiveConnection,
+    statements: DbStatement[],
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<number[]>
   // Server-side cancel via a short-lived side connection (pg_cancel_backend /
   // KILL QUERY). No-op if the backend PID was never captured.
   cancel(conn: LiveConnection, handle: QueryHandle): Promise<void>
   // Releases the pool.
   close(conn: LiveConnection): Promise<void>
+}
+
+// Thrown by executeBatch when a statement in the transaction fails, carrying the
+// 0-based index so the UI can point at the offending staged change. The original
+// driver error is attached as `cause` for redaction at the IPC boundary.
+export class DbBatchError extends Error {
+  constructor(
+    readonly failedIndex: number,
+    readonly cause: unknown
+  ) {
+    super('db_batch_failed')
+    this.name = 'DbBatchError'
+  }
 }
 
 // Shared cap logic: query with `cap + 1`, then a level is truncated when the
@@ -187,6 +219,7 @@ const SAFE_MESSAGES: Record<string, string> = {
   decrypt_failed: 'The stored password could not be decrypted on this machine.',
   not_connected: 'The connection is not open.',
   read_only_blocked: 'Read-only connection: run one statement at a time.',
+  read_only_write: 'This connection is read-only; changes cannot be saved.',
   busy: 'A query is already running on this connection.',
   unknown: 'Could not connect to the database.'
 }
@@ -198,6 +231,7 @@ const MESSAGE_CODE_MAP: Record<string, keyof typeof SAFE_MESSAGES> = {
   db_secret_encrypt_failed: 'decrypt_failed',
   db_not_connected: 'not_connected',
   db_read_only_multi_statement: 'read_only_blocked',
+  db_read_only_write_blocked: 'read_only_write',
   db_query_in_progress: 'busy'
 }
 

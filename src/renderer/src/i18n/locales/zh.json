@@ -12272,6 +12272,43 @@
         }
       },
       "database": {
+        "TableDataCellEditor": {
+          "setNull": "Set NULL"
+        },
+        "DatabaseWorkspace": {
+          "queryTab": "Query",
+          "closeTab": "Close tab"
+        },
+        "TableDataView": {
+          "closed": "Tab closed",
+          "refresh": "Refresh",
+          "loading": "Loading…",
+          "filterCount": "{{count}} filter",
+          "clearFilters": "Clear filters",
+          "range": "{{from}}–{{to}}",
+          "ofTotal": "of {{total}}",
+          "countRows": "Count rows",
+          "prevPage": "Previous page",
+          "nextPage": "Next page",
+          "readOnlyConn": "Read-only",
+          "noPrimaryKey": "No primary key",
+          "addRow": "Add row",
+          "revert": "Revert",
+          "save": "Save {{count}}",
+          "unsavedHint": "Unsaved edits — save or revert to sort, filter, or page"
+        },
+        "TableDataGrid": {
+          "noRows": "No rows",
+          "deleteRow": "Delete row",
+          "restoreRow": "Restore row",
+          "discardRow": "Discard row"
+        },
+        "DataGridColumnFilter": {
+          "filter": "Filter column",
+          "value": "Value",
+          "clear": "Clear",
+          "apply": "Apply"
+        },
         "DatabasePage": {
           "back": "Back",
           "title": "Database",
@@ -12367,7 +12404,10 @@
           "noRows": "No rows returned",
           "rowCount": "{{count}} rows",
           "truncated": "Truncated — showing the first rows",
-          "durationMs": "{{ms}} ms"
+          "durationMs": "{{ms}} ms",
+          "prevPage": "Previous page",
+          "nextPage": "Next page",
+          "pageRange": "{{from}}–{{to}}"
         },
         "QueryWorkspace": {
           "cancel": "Cancel",
