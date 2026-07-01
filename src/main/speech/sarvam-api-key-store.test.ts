@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -100,4 +100,45 @@ describe('Sarvam speech API key store', () => {
 
     expect(store.hasSarvamSpeechApiKey()).toBe(false)
   })
+
+  it('reads an encrypted key from disk after a restart via the envelope marker', async () => {
+    const first = await loadStoreModule()
+    first.saveSarvamSpeechApiKey('enc-key')
+
+    // A fresh module load drops the in-memory cache, forcing the on-disk read path.
+    const reloaded = await loadStoreModule()
+
+    expect(reloaded.readSarvamSpeechApiKey()).toBe('enc-key')
+    expect(safeStorageMock.decryptString).toHaveBeenCalledOnce()
+  })
+
+  it('reads a plaintext key after restart without decrypting even if safeStorage is now available', async () => {
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    const first = await loadStoreModule()
+    first.saveSarvamSpeechApiKey('plain-key')
+
+    // Simulate a restart where encryption has since become available: the marker
+    // must keep the read path from decrypting plaintext bytes into garbage.
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
+    const reloaded = await loadStoreModule()
+
+    expect(reloaded.readSarvamSpeechApiKey()).toBe('plain-key')
+    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'restricts key file permissions even when overwriting a permissive file',
+    async () => {
+      const orcaDir = join(tempHome, '.orca')
+      mkdirSync(orcaDir, { recursive: true })
+      const keyFile = join(orcaDir, 'sarvam-speech-token.enc')
+      writeFileSync(keyFile, 'legacy')
+      chmodSync(keyFile, 0o644)
+
+      const store = await loadStoreModule()
+      store.saveSarvamSpeechApiKey('new-key')
+
+      expect(statSync(keyFile).mode & 0o777).toBe(0o600)
+    }
+  )
 })

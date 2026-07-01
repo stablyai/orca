@@ -94,7 +94,10 @@ const {
     async stop(): Promise<void> {
       // Why: the cloud session now emits its own final through the sink; the key
       // is read here (not at construction) so the "read only when finishing" test
-      // still holds.
+      // still holds. Mirror production: no audio fed => no final, no key read.
+      if (this.feedCalls.length === 0) {
+        return
+      }
       const text = `${this.modelId}:${this.readApiKey()}`
       if (text) {
         this.sink({ type: 'final', text })

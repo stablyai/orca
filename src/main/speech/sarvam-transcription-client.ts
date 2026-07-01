@@ -174,7 +174,10 @@ export class SarvamTranscriptionSession {
           )
         })
       }
-      this.resolveDrain?.()
+      // Why: once the socket is gone the session is finished — tear down (marks
+      // `closed`, drops the socket, resolves any pending drain) so later
+      // feedAudio() can't keep buffering into a dead connection.
+      this.teardown()
     })
   }
 
@@ -210,6 +213,11 @@ export class SarvamTranscriptionSession {
       return
     }
     if (!force && socket.bufferedAmount > MAX_BUFFERED_BYTES) {
+      // Why: drop the queued frames rather than hold them — otherwise each later
+      // feedAudio() keeps appending while the socket stays backed up, so the
+      // "bounded memory" guard would never actually bound anything.
+      this.pending = []
+      this.pendingLength = 0
       return
     }
     const combined = combineChunks(this.pending)

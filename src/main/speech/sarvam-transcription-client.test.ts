@@ -196,4 +196,38 @@ describe('SarvamTranscriptionSession', () => {
     expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'tail' })
     expect(socket.closedWith).toBe(1000)
   })
+
+  it('tears down and surfaces an error on an abnormal server close', async () => {
+    const sink = vi.fn()
+    const { session, socket } = await openSession(sink)
+
+    socket.emit('close', 1006, Buffer.from('gone'))
+
+    expect(sink).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }))
+    // The session is now closed: feeding more audio must not buffer or send into
+    // the dead connection.
+    const sentBefore = socket.sent.length
+    session.feedAudio(new Float32Array(4000).fill(0.2), 16000)
+    expect(socket.sent.length).toBe(sentBefore)
+  })
+
+  it('drops queued audio under backpressure instead of retaining it', async () => {
+    vi.useFakeTimers()
+    const { session, socket } = await openSession(vi.fn())
+
+    socket.bufferedAmount = 2_000_000
+    session.feedAudio(new Float32Array(4000).fill(0.2), 16000)
+    // Backed up: the frame is dropped, not sent.
+    expect(socket.sent.filter((m) => m.includes('"audio"'))).toHaveLength(0)
+
+    // Relieve backpressure and stop. stop() force-drains; if the queue had been
+    // retained it would resend now, but it was dropped, so no audio flushes.
+    socket.bufferedAmount = 0
+    socket.sent = []
+    const stopPromise = session.stop()
+    await vi.advanceTimersByTimeAsync(3000)
+    await stopPromise
+
+    expect(socket.sent.filter((m) => m.includes('"audio"'))).toHaveLength(0)
+  })
 })
