@@ -47,6 +47,8 @@ describe('orchestration gate RPC lifecycle recovery', () => {
       instance.resolveRun?.()
     }
     coordinatorMock.instances.length = 0
+    // Why: flush microtasks so the handler's `.finally()` callback can clear
+    // the module-scoped active coordinator before the next test starts.
     await Promise.resolve()
     await Promise.resolve()
     db?.close()
@@ -101,6 +103,25 @@ describe('orchestration gate RPC lifecycle recovery', () => {
     expect(result.status).toBe('running')
     expect(result.runId).not.toBe(staleRun.id)
     expect(db.getCoordinatorRun(staleRun.id)?.status).toBe('failed')
+    expect(db.getActiveCoordinatorRun()?.id).toBe(result.runId)
+    expect(coordinatorMock.instances).toHaveLength(1)
+  })
+
+  it('rejects a new run while a live coordinator is active', async () => {
+    db = new OrchestrationDb(':memory:')
+
+    const result = (await call('orchestration.run', { spec: 'active work' })) as {
+      runId: string
+      status: string
+    }
+
+    expect(result.status).toBe('running')
+    expect(db.getActiveCoordinatorRun()?.id).toBe(result.runId)
+    expect(coordinatorMock.instances).toHaveLength(1)
+
+    await expect(call('orchestration.run', { spec: 'new work' })).rejects.toThrow(
+      `Coordinator already running: ${result.runId}`
+    )
     expect(db.getActiveCoordinatorRun()?.id).toBe(result.runId)
     expect(coordinatorMock.instances).toHaveLength(1)
   })
