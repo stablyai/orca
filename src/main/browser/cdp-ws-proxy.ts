@@ -298,6 +298,7 @@ export class CdpWsProxy {
     }
     // Why: agent-browser waits for network idle to detect navigation completion.
     // Electron webview CDP subscriptions silently lapse after cross-process swaps.
+    // Page.reload needs the same priming: forwarding it unprimed closed the tab (#7031).
     if (
       (msg.method === 'Page.navigate' || msg.method === 'Page.reload') &&
       !this.webContents.isDestroyed()
