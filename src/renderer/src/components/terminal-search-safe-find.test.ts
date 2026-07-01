@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { safeFind } from './terminal-search-safe-find'
+
+const mocks = vi.hoisted(() => ({
+  recordRendererCrashBreadcrumb: vi.fn()
+}))
+
+vi.mock('@/lib/crash-diagnostics', () => ({
+  recordRendererCrashBreadcrumb: mocks.recordRendererCrashBreadcrumb
+}))
 
 /**
  * Regression for crash report 0b9ab636-1333-4aac-a7bb-ddb338feb151 (Orca 1.4.104, macOS).
@@ -32,6 +40,10 @@ import { safeFind } from './terminal-search-safe-find'
 const positiveIntegerError = (): Error => new Error('This API only accepts positive integers')
 
 describe('safeFind (TerminalSearch decoration crash guard)', () => {
+  beforeEach(() => {
+    mocks.recordRendererCrashBreadcrumb.mockClear()
+  })
+
   it('swallows the xterm "positive integers" decoration error instead of letting it crash the surface', () => {
     const find = vi.fn(() => {
       throw positiveIntegerError()
@@ -41,6 +53,16 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     expect(() => safeFind(find, 'query')).not.toThrow()
     expect(safeFind(find, 'query')).toBe(false)
     expect(find).toHaveBeenCalledWith('query', undefined)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_search_decoration_error',
+      {
+        errorName: 'Error',
+        errorMessage: 'This API only accepts positive integers',
+        queryLength: 5,
+        caseSensitive: false,
+        regex: false
+      }
+    )
   })
 
   it('returns the addon result and forwards options on the normal path', () => {
@@ -48,6 +70,7 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     const options = { caseSensitive: true }
     expect(safeFind(find, 'q', options)).toBe(true)
     expect(find).toHaveBeenCalledWith('q', options)
+    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
   })
 
   it('re-throws unrelated errors so genuine bugs are not hidden', () => {
@@ -55,5 +78,23 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
       throw new TypeError('something genuinely broken')
     })
     expect(() => safeFind(find, 'q')).toThrow('something genuinely broken')
+    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+  })
+
+  it('keeps focus and input surfaces callable after a contained decoration failure', () => {
+    const focusTerminal = vi.fn()
+    const writeInput = vi.fn()
+    const find = vi.fn(() => {
+      throw positiveIntegerError()
+    })
+
+    expect(safeFind(find, 'query')).toBe(false)
+    expect(() => {
+      focusTerminal()
+      writeInput('a')
+    }).not.toThrow()
+
+    expect(focusTerminal).toHaveBeenCalledOnce()
+    expect(writeInput).toHaveBeenCalledWith('a')
   })
 })

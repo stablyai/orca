@@ -20,7 +20,8 @@ import { buildTerminalKeyboardProtocolOptions } from './terminal-keyboard-protoc
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
   clearTextureAtlas: vi.fn(),
-  dispose: vi.fn()
+  dispose: vi.fn(),
+  recordRendererCrashBreadcrumb: vi.fn()
 }))
 
 vi.mock('@xterm/addon-webgl', () => ({
@@ -35,6 +36,10 @@ vi.mock('@xterm/addon-webgl', () => ({
   })
 }))
 
+vi.mock('@/lib/crash-diagnostics', () => ({
+  recordRendererCrashBreadcrumb: webglMock.recordRendererCrashBreadcrumb
+}))
+
 function createPane(): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
@@ -45,6 +50,9 @@ function createPane(): ManagedPaneInternal {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      focus: vi.fn(),
+      write: vi.fn(),
+      dispose: vi.fn(),
       rows: 24
     } as never,
     container: {} as never,
@@ -181,6 +189,7 @@ describe('attachWebgl', () => {
     webglMock.contextLossHandler = null
     webglMock.clearTextureAtlas.mockClear()
     webglMock.dispose.mockClear()
+    webglMock.recordRendererCrashBreadcrumb.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
     vi.stubGlobal('navigator', {
@@ -210,12 +219,31 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(webglMock.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_webgl_context_loss',
+      { paneId: 1, terminalGpuAcceleration: 'on' }
+    )
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
 
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps later auto panes on DOM after WebGL context loss', () => {
+    const firstPane = createPane()
+    const secondPane = createPane()
+
+    attachWebgl(firstPane)
+    expect(firstPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+
+    webglMock.contextLossHandler?.()
+    attachWebgl(secondPane)
+
+    expect(firstPane.webglAddon).toBeNull()
+    expect(secondPane.webglAddon).toBeNull()
+    expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
   it('repaints the current buffer after WebGL attaches', () => {
@@ -385,6 +413,42 @@ describe('attachWebgl', () => {
     expect(firstPane.webglAddon).toBeNull()
     expect(secondPane.webglAddon).toBeNull()
     expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('contains WebGL attach failures without breaking terminal focus or input surfaces', () => {
+    vi.mocked(WebglAddon).mockImplementationOnce(function WebglAddon() {
+      return {
+        onContextLoss: vi.fn(),
+        clearTextureAtlas: webglMock.clearTextureAtlas,
+        dispose: webglMock.dispose
+      }
+    } as never)
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+    vi.mocked(pane.terminal.loadAddon).mockImplementationOnce(() => {
+      throw new Error('loadAddon failed')
+    })
+
+    expect(() => attachWebgl(pane)).not.toThrow()
+    expect(pane.webglAddon).toBeNull()
+    expect(webglMock.dispose).toHaveBeenCalledOnce()
+    expect(pane.terminal.dispose).not.toHaveBeenCalled()
+    expect(webglMock.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_webgl_attach_error',
+      {
+        paneId: 1,
+        terminalGpuAcceleration: 'on',
+        errorName: 'Error',
+        errorMessage: 'loadAddon failed'
+      }
+    )
+
+    expect(() => {
+      pane.terminal.focus()
+      pane.terminal.write('a')
+    }).not.toThrow()
+    expect(pane.terminal.focus).toHaveBeenCalledOnce()
+    expect(pane.terminal.write).toHaveBeenCalledWith('a')
   })
 
   it('keeps forced WebGL on after complex-script output', () => {

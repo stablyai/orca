@@ -173,30 +173,39 @@
         "https://github.com/stablyai/orca/pull/6855"
       ],
       "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
-      "oracle": "Injected addon throws and invalid dimensions disable or degrade only the affected addon for one pane, emit one structured breadcrumb, and preserve focus plus typed input echo.",
-      "commands": [],
-      "testFiles": [],
+      "oracle": "Injected search-decoration and WebGL addon failures disable or degrade only the affected addon for one pane, emit structured breadcrumbs, and keep focus/input/write surfaces callable at the unit layer.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-lifecycle.test.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-search-safe-find.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-lifecycle.test.ts",
+        "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts"
+      ],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "renderer unit or component test"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Harness not implemented."
+        "status": "unknown",
+        "evidence": "First deterministic renderer-unit command registered; needs soak history before promotion."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs injected addon failure fixture."
+        "status": "partial",
+        "evidence": "Unit tests inject search decoration, link provider, and WebGL attach/context-loss failures and fail if the boundary guards are removed. Needs saved red/green artifact before promotion."
       },
       "performanceBudget": {
         "required": false,
-        "evidence": "Required only if containment adds retry loops, polling, or renderer fallback churn."
+        "evidence": "Containment records a breadcrumb and returns/falls back once; no retry loops, polling, or renderer fallback churn were added."
       },
       "promotionCriteria": [
-        "Add deterministic addon throw injection.",
-        "Prove input/output survives after boundary failure."
+        "Run in soak across required CI platforms.",
+        "Attach saved red/green evidence for the injected addon failures.",
+        "Add an Electron or provider-contract case that proves live PTY echo survives after an addon boundary failure."
       ],
-      "knownGaps": ["No manifest command yet."],
+      "knownGaps": [
+        "Current command proves renderer-unit containment and callable focus/input/write surfaces, not a real PTY echo over local, SSH, daemon, or remote-runtime providers."
+      ],
       "demotionRule": "Cannot promote while it only checks visual rendering."
     },
     {

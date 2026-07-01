@@ -1,4 +1,5 @@
 import type { SearchAddon } from '@xterm/addon-search'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 
 type SearchOptions = Parameters<SearchAddon['findNext']>[1]
 
@@ -27,6 +28,13 @@ export function safeFind(
     return search(term, options)
   } catch (error) {
     if (isDecorationPositiveIntegerError(error)) {
+      recordRendererCrashBreadcrumb('terminal_search_decoration_error', {
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        queryLength: term.length,
+        caseSensitive: options?.caseSensitive ?? false,
+        regex: options?.regex ?? false
+      })
       return false
     }
     throw error
