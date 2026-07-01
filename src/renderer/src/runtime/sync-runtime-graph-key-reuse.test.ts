@@ -11,6 +11,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
+    acceptedPaneTabTitlesByTabId: {} as AppState['acceptedPaneTabTitlesByTabId'],
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -96,6 +97,37 @@ describe('runtime mobile session sync key projection reuse', () => {
     expect(titleTickKey.openFilesProjection).toBe(baseKey.openFilesProjection)
     expect(titleTickKey.editorDraftsProjection).toBe(baseKey.editorDraftsProjection)
     expect(runtimeMobileSessionSyncKeysEqual(baseKey, titleTickKey)).toBe(false)
+  })
+
+  it('tracks accepted pane tab title changes without rebuilding serialized projections', () => {
+    const base = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Run tests', customTitle: null }]
+      } as unknown as AppState['tabsByWorktree'],
+      runtimePaneTitlesByTabId: {
+        'term-1': { 1: 'Claude session title' }
+      } as unknown as AppState['runtimePaneTitlesByTabId'],
+      acceptedPaneTabTitlesByTabId: {
+        'term-1': { 1: { title: 'Claude session title', source: 'legacy-window-fallback' } }
+      } as AppState['acceptedPaneTabTitlesByTabId']
+    })
+    const baseKey = getRuntimeMobileSessionSyncKey(base)
+    const promoted = makeState({
+      ...base,
+      acceptedPaneTabTitlesByTabId: {
+        'term-1': { 1: { title: 'Claude session title', source: 'authoritative-tab' } }
+      } as AppState['acceptedPaneTabTitlesByTabId']
+    })
+
+    const stringifySpy = vi.spyOn(JSON, 'stringify')
+    stringifySpy.mockClear()
+    const promotedKey = getRuntimeMobileSessionSyncKey(promoted, base, baseKey)
+
+    expect(stringifySpy).not.toHaveBeenCalled()
+    expect(promotedKey.tabsProjection).toBe(baseKey.tabsProjection)
+    expect(promotedKey.openFilesProjection).toBe(baseKey.openFilesProjection)
+    expect(promotedKey.editorDraftsProjection).toBe(baseKey.editorDraftsProjection)
+    expect(runtimeMobileSessionSyncKeysEqual(baseKey, promotedKey)).toBe(false)
   })
 
   it('does not rebuild serialized projections when only activeTabId changes', () => {

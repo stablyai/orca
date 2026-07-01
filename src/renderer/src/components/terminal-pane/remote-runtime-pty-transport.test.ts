@@ -1200,6 +1200,167 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onBell).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps raw remote OSC 2 observations while OSC 1 remains the visible tab title', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      onTitleChange,
+      onVisibleTabTitleChange
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    emitOutput(streamId, '\x1b]1;Claude remote session\x07\x1b]2;Remote shell window\x07')
+
+    await vi.waitFor(() => expect(onTitleChange).toHaveBeenCalledTimes(2))
+    expect(onTitleChange).toHaveBeenNthCalledWith(
+      1,
+      'Claude remote session',
+      'Claude remote session'
+    )
+    expect(onTitleChange).toHaveBeenNthCalledWith(2, 'Remote shell window', 'Remote shell window')
+    expect(onVisibleTabTitleChange).toHaveBeenCalledTimes(1)
+    expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+      'Claude remote session',
+      'Claude remote session',
+      'authoritative-tab'
+    )
+  })
+
+  it('uses remote OSC 2 as a legacy visible title fallback', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      onTitleChange,
+      onVisibleTabTitleChange
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    emitOutput(streamId, '\x1b]2;Remote shell window\x07')
+
+    await vi.waitFor(() =>
+      expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+        'Remote shell window',
+        'Remote shell window',
+        'legacy-window-fallback'
+      )
+    )
+    expect(onTitleChange).toHaveBeenCalledWith('Remote shell window', 'Remote shell window')
+  })
+
+  it('preserves remote visible-title reducer state across remounts for the same PTY', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const firstVisibleTitle = vi.fn()
+    const firstTransport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onVisibleTabTitleChange: firstVisibleTitle
+    })
+
+    firstTransport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    let streamId = latestSubscribePayload().streamId
+    emitOutput(streamId, '\x1b]1;Claude remote session\x07')
+    await vi.waitFor(() =>
+      expect(firstVisibleTitle).toHaveBeenCalledWith(
+        'Claude remote session',
+        'Claude remote session',
+        'authoritative-tab'
+      )
+    )
+    firstTransport.detach?.()
+
+    const nextRawTitle = vi.fn()
+    const nextVisibleTitle = vi.fn()
+    const nextTransport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onTitleChange: nextRawTitle,
+      onVisibleTabTitleChange: nextVisibleTitle
+    })
+
+    nextTransport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    streamId = latestSubscribePayload().streamId
+    emitOutput(streamId, '\x1b]2;Remote shell window\x07')
+
+    await vi.waitFor(() =>
+      expect(nextRawTitle).toHaveBeenCalledWith('Remote shell window', 'Remote shell window')
+    )
+    expect(nextVisibleTitle).not.toHaveBeenCalled()
+  })
+
+  it('resets remote visible-title reducer state after a terminal ends', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const firstVisibleTitle = vi.fn()
+    const firstTransport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onVisibleTabTitleChange: firstVisibleTitle
+    })
+
+    firstTransport.attach({
+      existingPtyId: 'remote:env-1@@terminal-ended',
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    let streamId = latestSubscribePayload().streamId
+    emitOutput(streamId, '\x1b]1;Claude remote session\x07')
+    await vi.waitFor(() =>
+      expect(firstVisibleTitle).toHaveBeenCalledWith(
+        'Claude remote session',
+        'Claude remote session',
+        'authoritative-tab'
+      )
+    )
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'end', streamId }
+    })
+
+    const nextVisibleTitle = vi.fn()
+    const nextTransport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onVisibleTabTitleChange: nextVisibleTitle
+    })
+
+    nextTransport.attach({
+      existingPtyId: 'remote:env-1@@terminal-ended',
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    streamId = latestSubscribePayload().streamId
+    emitOutput(streamId, '\x1b]2;Remote shell window\x07')
+
+    await vi.waitFor(() =>
+      expect(nextVisibleTitle).toHaveBeenCalledWith(
+        'Remote shell window',
+        'Remote shell window',
+        'legacy-window-fallback'
+      )
+    )
+  })
+
   it('processes binary remote data chunks through the terminal parser', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onData = vi.fn()

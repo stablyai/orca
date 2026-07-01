@@ -24,6 +24,18 @@ export function singlePaneLayoutSnapshot(
 }
 
 export function clearTransientTerminalState(tab: TerminalTab, index: number): TerminalTab {
+  const hasTransientAgentTitle = detectAgentStatusFromTitle(tab.title) !== null
+  if (hasTransientAgentTitle) {
+    return {
+      ...tab,
+      ptyId: null,
+      title: getResetTitle(tab, index),
+      // Why: the fallback is not an OSC 0/1 observation; keeping authority
+      // would make "Terminal N" outrank generated or quick labels after restore.
+      titleSource: undefined
+    }
+  }
+
   return {
     ...tab,
     ptyId: null,

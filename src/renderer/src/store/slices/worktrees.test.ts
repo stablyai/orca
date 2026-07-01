@@ -5861,6 +5861,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
           providerSession: { key: 'session_id', id: 'sess-3' }
         }
       },
+      acceptedPaneTabTitlesByTabId: {
+        'tab-1': { 1: { title: 'claude', source: 'authoritative-tab' } },
+        'tab-3': { 1: { title: 'bash', source: 'legacy-window-fallback' } }
+      },
       openFiles: [
         {
           id: 'file-1',
@@ -5920,6 +5924,9 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         launchAgent: 'codex',
         providerSession: { key: 'session_id', id: 'sess-3' }
       }
+    })
+    expect(s.acceptedPaneTabTitlesByTabId).toEqual({
+      'tab-3': { 1: { title: 'bash', source: 'legacy-window-fallback' } }
     })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })

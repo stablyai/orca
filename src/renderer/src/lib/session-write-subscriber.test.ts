@@ -439,6 +439,31 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('persists authoritative title-source upgrades when the terminal text is unchanged', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('Claude Session')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.getState().updateTabTitle('tab-1', 'Claude Session', 'authoritative-tab')
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']?.[0]?.titleSource).toBe(
+      'authoritative-tab'
+    )
+    expect(persist.mock.calls[0][0].patch.unifiedTabs?.['wt-1']?.[0]?.labelSource).toBe(
+      'authoritative-tab'
+    )
+    cleanup()
+  })
+
   it('persists real terminal tab changes even when the title also changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

@@ -1763,6 +1763,23 @@ describe('setActiveWorktree', () => {
     expect(replacement.title).toBe('Terminal 1')
   })
 
+  it('clears accepted pane titles when closing a terminal tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+    const tab = store.getState().createTab(wt)
+    store.getState().setAcceptedPaneTabTitle(tab.id, 1, 'Claude session title', 'authoritative-tab')
+
+    store.getState().closeTab(tab.id)
+
+    expect(store.getState().acceptedPaneTabTitlesByTabId[tab.id]).toBeUndefined()
+  })
+
   it('preserves cleanup-owned references when there are no orphan terminals', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -1799,6 +1816,7 @@ describe('setActiveWorktree', () => {
       'tabsByWorktree',
       'ptyIdsByTabId',
       'runtimePaneTitlesByTabId',
+      'acceptedPaneTabTitlesByTabId',
       'expandedPaneByTabId',
       'canExpandPaneByTabId',
       'terminalLayoutsByTabId',
@@ -1839,6 +1857,9 @@ describe('setActiveWorktree', () => {
       runtimePaneTitlesByTabId: {
         [orphanId]: { 1: 'stale' }
       },
+      acceptedPaneTabTitlesByTabId: {
+        [orphanId]: { 1: { title: 'stale', source: 'authoritative-tab' } }
+      },
       terminalLayoutsByTabId: {
         [orphanId]: makeLayout()
       },
@@ -1873,6 +1894,7 @@ describe('setActiveWorktree', () => {
     expect(s.tabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([replacement.id])
     expect(s.ptyIdsByTabId[orphanId]).toBeUndefined()
     expect(s.runtimePaneTitlesByTabId[orphanId]).toBeUndefined()
+    expect(s.acceptedPaneTabTitlesByTabId[orphanId]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
     expect(s.automaticAgentResumeClaimsByTabId[orphanId]).toBeUndefined()

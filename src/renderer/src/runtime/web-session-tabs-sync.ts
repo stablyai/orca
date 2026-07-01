@@ -533,10 +533,18 @@ function buildMirroredTerminalTabs(
       launchAgent ??
       activeSurface.agentStatus?.agentType ??
       surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus?.agentType
+    const titleSurface =
+      (activeSurface.title.trim() ? activeSurface : undefined) ??
+      surfaces.find((surface) => surface.title.trim()) ??
+      activeSurface
     const title = normalizeCompatibleAgentTitleForOwner(
-      activeSurface.title.trim() || surfaces[0]?.title.trim() || 'Terminal',
+      titleSurface.title.trim() || 'Terminal',
       ownerAgent
     )
+    const titleSource =
+      titleSurface.titleSource === 'authoritative-tab' && titleSurface.title.trim()
+        ? titleSurface.titleSource
+        : undefined
     const existing =
       existingById.get(localTabId) ??
       existingById.get(parentTabId) ??
@@ -568,6 +576,7 @@ function buildMirroredTerminalTabs(
         ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? null,
         worktreeId: snapshot.worktree,
         title,
+        ...(titleSource ? { titleSource } : {}),
         defaultTitle: existing?.defaultTitle ?? title,
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         customTitle: existing?.customTitle ?? null,
@@ -722,6 +731,7 @@ function buildTerminalUnifiedTab(
     worktreeId: tab.worktreeId,
     contentType: 'terminal',
     label: tab.title,
+    ...(tab.titleSource ? { labelSource: tab.titleSource } : {}),
     ...(tab.quickCommandLabel?.trim() ? { quickCommandLabel: tab.quickCommandLabel.trim() } : {}),
     ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
     customLabel: tab.customTitle,
@@ -1384,6 +1394,7 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.ptyId === b.ptyId &&
     a.worktreeId === b.worktreeId &&
     a.title === b.title &&
+    a.titleSource === b.titleSource &&
     a.defaultTitle === b.defaultTitle &&
     a.quickCommandLabel === b.quickCommandLabel &&
     a.generatedTitle === b.generatedTitle &&
@@ -1510,6 +1521,7 @@ function tabEqual(a: Tab, b: Tab): boolean {
     a.worktreeId === b.worktreeId &&
     a.contentType === b.contentType &&
     a.label === b.label &&
+    a.labelSource === b.labelSource &&
     a.customLabel === b.customLabel &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

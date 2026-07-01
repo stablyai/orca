@@ -191,6 +191,42 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().terminalLayoutsByTabId['tab-1']?.activeLeafId).toBe(liveLeftLeafId)
   })
 
+  it('does not keep authoritative source when hydration resets stale agent titles', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId,
+            title: '⠋ Claude working',
+            titleSource: 'authoritative-tab'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout()
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().tabsByWorktree[worktreeId]?.[0]).toMatchObject({
+      title: 'Terminal 1'
+    })
+    expect(store.getState().tabsByWorktree[worktreeId]?.[0]?.titleSource).toBeUndefined()
+  })
+
   it('hydrates floating terminal tabs even though they are not repo worktrees', () => {
     const store = createTestStore()
     const session: WorkspaceSessionState = {

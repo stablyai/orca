@@ -2456,6 +2456,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
         const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
+        const nextAcceptedPaneTabTitlesByTabId = { ...s.acceptedPaneTabTitlesByTabId }
         const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
         for (const wId of worktreeIds) {
           delete nextTabs[wId]
@@ -2464,6 +2465,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
+          delete nextAcceptedPaneTabTitlesByTabId[tabId]
         }
         for (const ptyId of killedPtyIds) {
           nextSuppressedPtyExitIds[ptyId] = true
@@ -2516,6 +2518,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+          acceptedPaneTabTitlesByTabId: nextAcceptedPaneTabTitlesByTabId,
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
           terminalLayoutsByTabId: nextLayouts,
           activeTabId: s.activeTabId && killedTabIds.has(s.activeTabId) ? null : s.activeTabId,

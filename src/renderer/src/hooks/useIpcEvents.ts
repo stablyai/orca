@@ -3262,8 +3262,14 @@ function applyResolvedAgentTerminalTitleToTab(
   if (layout?.root && layout.activeLeafId && layout.activeLeafId !== parsed.leafId) {
     return
   }
+  const terminalTab = Object.values(store.tabsByWorktree)
+    .flat()
+    .find((tab) => tab.id === parsed.tabId)
+  if (terminalTab?.titleSource === 'authoritative-tab') {
+    return
+  }
   // Why: hook completion can arrive while the pane transport is unmounted.
-  // Keep the active terminal tab label in sync with the resolved state title.
+  // Keep legacy agent-status labels in sync without replacing OSC 0/1 titles.
   store.updateTabTitle(parsed.tabId, nextTitle)
 }
 

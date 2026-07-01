@@ -40,6 +40,7 @@ import {
 } from '../components/tab-bar/group-tab-order'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import type { TerminalTabTitleSource } from '../../../shared/terminal-tab-title-reducer'
 
 type RegisteredTerminalTab = {
   tabId: string
@@ -67,6 +68,10 @@ type TabsProjectionCache = {
   source: AppState['tabsByWorktree']
   entries: Map<string, TabsProjectionCacheEntry>
   projection: string
+}
+type RuntimeTerminalTitleInput = {
+  title: string
+  source: TerminalTabTitleSource
 }
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
@@ -191,14 +196,15 @@ async function runRuntimeGraphSync(): Promise<void> {
 
 export type RuntimeMobileSessionSyncKey = {
   // Why: large maps the renderer never reshapes are compared by reference.
-  // Reallocating `terminalLayoutsByTabId` / `runtimePaneTitlesByTabId` is the
-  // signal that some pane layout or pane title actually changed; nothing else
-  // in the store rewrites those references. Comparing references avoids
-  // stringifying potentially thousands of accumulated tab entries on every
-  // `setActivePane` / `updateTabTitle` mutation. See
+  // Reallocating `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, or
+  // `acceptedPaneTabTitlesByTabId` is the signal that pane layout or pane title
+  // state actually changed; nothing else in the store rewrites those references.
+  // Comparing references avoids stringifying potentially thousands of
+  // accumulated tab entries on every `setActivePane` / `updateTabTitle`. See
   // docs/agent-working-pane-typing-lag.md.
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
+  acceptedPaneTabTitlesByTabId: AppState['acceptedPaneTabTitlesByTabId']
   groupsByWorktree: AppState['groupsByWorktree']
   activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
   layoutByWorktree: AppState['layoutByWorktree']
@@ -257,6 +263,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.activeTabId === previousState.activeTabId &&
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
+    state.acceptedPaneTabTitlesByTabId === previousState.acceptedPaneTabTitlesByTabId &&
     state.agentStatusEpoch === previousState.agentStatusEpoch &&
     state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
   )
@@ -293,6 +300,7 @@ export function getRuntimeMobileSessionSyncKey(
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+    acceptedPaneTabTitlesByTabId: state.acceptedPaneTabTitlesByTabId,
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
     layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,
@@ -376,6 +384,7 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
               tabs.map((tab) => ({
                 id: tab.id,
                 title: tab.title,
+                titleSource: tab.titleSource,
                 quickCommandLabel: tab.quickCommandLabel,
                 generatedTitle: tab.generatedTitle,
                 customTitle: tab.customTitle,
@@ -396,11 +405,55 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
 }
 
 function resolveRuntimeTerminalTitle(
-  tab: Pick<TerminalTab, 'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title'>,
+  tab: Pick<
+    TerminalTab,
+    'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'titleSource'
+  >,
   generatedTitlesEnabled: boolean,
-  liveTitle = tab.title
+  liveTitle?: RuntimeTerminalTitleInput
 ): string {
-  return resolveTerminalTabTitle({ ...tab, title: liveTitle }, generatedTitlesEnabled, liveTitle)
+  const title = liveTitle?.title ?? tab.title
+  return resolveTerminalTabTitle(
+    { ...tab, title, titleSource: liveTitle?.source ?? tab.titleSource },
+    generatedTitlesEnabled,
+    title
+  )
+}
+
+function resolveRuntimeTerminalTitleSource(
+  tab: Pick<TerminalTab, 'customTitle' | 'title' | 'titleSource'>,
+  liveTitle?: RuntimeTerminalTitleInput
+): TerminalTabTitleSource | undefined {
+  if (tab.customTitle?.trim()) {
+    return undefined
+  }
+  if (liveTitle) {
+    return liveTitle.source === 'authoritative-tab' && liveTitle.title.trim()
+      ? liveTitle.source
+      : undefined
+  }
+  return tab.titleSource === 'authoritative-tab' && tab.title.trim() ? tab.titleSource : undefined
+}
+
+function resolveRuntimePaneVisibleTitle(
+  state: Pick<AppState, 'acceptedPaneTabTitlesByTabId' | 'runtimePaneTitlesByTabId'>,
+  tabId: string,
+  paneId: number
+): RuntimeTerminalTitleInput | null {
+  const acceptedTitle = state.acceptedPaneTabTitlesByTabId[tabId]?.[paneId]
+  if (acceptedTitle?.title.trim()) {
+    return acceptedTitle
+  }
+
+  const runtimeTitle = state.runtimePaneTitlesByTabId[tabId]?.[paneId]
+  if (!runtimeTitle?.trim()) {
+    return null
+  }
+
+  return {
+    title: runtimeTitle,
+    source: 'legacy-window-fallback'
+  }
 }
 
 function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
@@ -502,6 +555,7 @@ export function runtimeMobileSessionSyncKeysEqual(
   return (
     a.terminalLayoutsByTabId === b.terminalLayoutsByTabId &&
     a.runtimePaneTitlesByTabId === b.runtimePaneTitlesByTabId &&
+    a.acceptedPaneTabTitlesByTabId === b.acceptedPaneTabTitlesByTabId &&
     a.groupsByWorktree === b.groupsByWorktree &&
     a.activeGroupIdByWorktree === b.activeGroupIdByWorktree &&
     a.layoutByWorktree === b.layoutByWorktree &&
@@ -589,6 +643,7 @@ async function syncRuntimeGraph(): Promise<void> {
         })
       }
       const paneTitles = state.runtimePaneTitlesByTabId[tabId] ?? {}
+      const paneVisibleTitle = resolveRuntimePaneVisibleTitle(state, tabId, pane.id)
       graph.leaves.push({
         tabId,
         worktreeId: registeredTab.worktreeId,
@@ -599,7 +654,7 @@ async function syncRuntimeGraph(): Promise<void> {
         title: resolveRuntimeTerminalTitle(
           tab,
           generatedTitlesEnabled,
-          state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? tab.title
+          paneVisibleTitle ?? undefined
         )
       })
     }
@@ -1317,19 +1372,25 @@ function buildMobileTerminalSurfaceTabs(
         ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
         : (registered?.getPtyIdForPane(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
-    const paneTitle =
+    const rawPaneTitle =
       numericPaneId !== null
         ? paneTitles[numericPaneId]
         : legacyPaneId
           ? paneTitles[Number(legacyPaneId)]
           : undefined
+    const paneVisibleTitle =
+      numericPaneId !== null
+        ? resolveRuntimePaneVisibleTitle(state, terminal.id, numericPaneId)
+        : legacyPaneId
+          ? resolveRuntimePaneVisibleTitle(state, terminal.id, Number(legacyPaneId))
+          : null
     const paneKey = isTerminalLeafId(leafId) ? makePaneKey(terminal.id, leafId) : null
-    const title = resolveRuntimeTerminalTitle(
-      terminal,
-      generatedTitlesEnabled,
-      paneTitle ?? terminal.title ?? 'Terminal'
-    )
-    const agentStatusTitle = paneTitle ?? terminal.title ?? ''
+    const liveTitle =
+      paneVisibleTitle ??
+      (rawPaneTitle ? { title: rawPaneTitle, source: 'legacy-window-fallback' } : undefined)
+    const title = resolveRuntimeTerminalTitle(terminal, generatedTitlesEnabled, liveTitle)
+    const titleSource = resolveRuntimeTerminalTitleSource(terminal, liveTitle)
+    const agentStatusTitle = rawPaneTitle ?? terminal.title ?? ''
     const agentStatus =
       paneKey && !isClaudeManagementTitle(agentStatusTitle)
         ? state.agentStatusByPaneKey?.[paneKey]
@@ -1338,6 +1399,7 @@ function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      ...(titleSource ? { titleSource } : {}),
       ...(terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),

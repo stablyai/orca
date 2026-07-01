@@ -656,6 +656,8 @@ export default function TerminalPane({
   const initialLayoutRef = useRef(restoredLayout)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
+  const setAcceptedPaneTabTitle = useAppStore((store) => store.setAcceptedPaneTabTitle)
+  const clearAcceptedPaneTabTitle = useAppStore((store) => store.clearAcceptedPaneTabTitle)
   const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
@@ -1310,6 +1312,8 @@ export default function TerminalPane({
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
     setRuntimePaneTitle,
+    setAcceptedPaneTabTitle,
+    clearAcceptedPaneTabTitle,
     clearRuntimePaneTitle,
     updateTabPtyId,
     markWorktreeUnread,
@@ -1531,6 +1535,8 @@ export default function TerminalPane({
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,
         setRuntimePaneTitle,
+        setAcceptedPaneTabTitle,
+        clearAcceptedPaneTabTitle,
         clearRuntimePaneTitle,
         updateTabPtyId,
         markWorktreeUnread,
@@ -1551,6 +1557,7 @@ export default function TerminalPane({
     [
       clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
+      clearAcceptedPaneTabTitle,
       clearRuntimePaneTitle,
       clearTabPtyId,
       cwd,
@@ -1564,6 +1571,7 @@ export default function TerminalPane({
       showRestoredSessionBanner,
       onPtyExitRef,
       setCacheTimerStartedAt,
+      setAcceptedPaneTabTitle,
       setRuntimePaneTitle,
       suppressPtyExit,
       syncPanePtyLayoutBinding,

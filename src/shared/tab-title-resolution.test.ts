@@ -11,29 +11,55 @@ describe('tab title resolution', () => {
     ).toBe('Claude working')
   })
 
-  it('places generated titles between manual and live titles when enabled', () => {
+  it('places generated titles between manual and legacy live titles when enabled', () => {
     expect(
       resolveTerminalTabTitle(
-        { customTitle: null, generatedTitle: 'Refactor auth', title: 'Claude working' },
+        {
+          customTitle: null,
+          generatedTitle: 'Refactor auth',
+          title: 'Claude working',
+          titleSource: 'legacy-window-fallback'
+        },
         true
       )
     ).toBe('Refactor auth')
     expect(
       resolveTerminalTabTitle(
-        { customTitle: 'Payments', generatedTitle: 'Refactor auth', title: 'Claude working' },
+        {
+          customTitle: 'Payments',
+          generatedTitle: 'Refactor auth',
+          title: 'Claude working',
+          titleSource: 'authoritative-tab'
+        },
         true
       )
     ).toBe('Payments')
   })
 
-  it('places quick command labels between manual and generated titles', () => {
+  it('places authoritative terminal titles before quick and generated fallback labels', () => {
     expect(
       resolveTerminalTabTitle(
         {
           customTitle: null,
           quickCommandLabel: 'Run tests',
           generatedTitle: 'Refactor auth',
-          title: 'pnpm test'
+          title: 'Claude session title',
+          titleSource: 'authoritative-tab'
+        },
+        true
+      )
+    ).toBe('Claude session title')
+  })
+
+  it('places quick command labels between manual and generated titles for legacy titles', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          quickCommandLabel: 'Run tests',
+          generatedTitle: 'Refactor auth',
+          title: 'pnpm test',
+          titleSource: 'legacy-window-fallback'
         },
         true
       )
@@ -44,7 +70,8 @@ describe('tab title resolution', () => {
           customTitle: 'Manual label',
           quickCommandLabel: 'Run tests',
           generatedTitle: 'Refactor auth',
-          title: 'pnpm test'
+          title: 'pnpm test',
+          titleSource: 'authoritative-tab'
         },
         true
       )
@@ -54,10 +81,30 @@ describe('tab title resolution', () => {
   it('uses the same priority for unified tab labels', () => {
     expect(
       resolveUnifiedTabLabel(
-        { customLabel: null, generatedLabel: 'Fix flaky tests', label: 'Codex working' },
+        {
+          customLabel: null,
+          generatedLabel: 'Fix flaky tests',
+          label: 'Codex working',
+          labelSource: 'legacy-window-fallback'
+        },
         true
       )
     ).toBe('Fix flaky tests')
+  })
+
+  it('places authoritative unified labels before quick and generated labels', () => {
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          quickCommandLabel: 'Run build',
+          generatedLabel: 'Fix flaky tests',
+          label: 'Claude session title',
+          labelSource: 'authoritative-tab'
+        },
+        true
+      )
+    ).toBe('Claude session title')
   })
 
   it('uses quick command labels before generated unified labels', () => {
@@ -67,7 +114,8 @@ describe('tab title resolution', () => {
           customLabel: null,
           quickCommandLabel: 'Run build',
           generatedLabel: 'Fix flaky tests',
-          label: 'Codex working'
+          label: 'Codex working',
+          labelSource: 'legacy-window-fallback'
         },
         true
       )

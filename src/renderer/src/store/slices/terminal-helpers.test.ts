@@ -73,6 +73,17 @@ describe('clearTransientTerminalState', () => {
     expect(result.title).toBe('Terminal 1')
   })
 
+  it('clears authoritative title source when resetting stale agent titles', () => {
+    const tab = makeTab({
+      title: '⠋ Claude working',
+      customTitle: null,
+      titleSource: 'authoritative-tab'
+    })
+    const result = clearTransientTerminalState(tab, 0)
+    expect(result.title).toBe('Terminal 1')
+    expect(result.titleSource).toBeUndefined()
+  })
+
   it('uses "Terminal {index+1}" when customTitle is whitespace only', () => {
     const tab = makeTab({ title: '⠋ codex running', customTitle: '   ' })
     const result = clearTransientTerminalState(tab, 0)

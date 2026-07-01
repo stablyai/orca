@@ -1969,6 +1969,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
+    acceptedPaneTabTitlesByTabId: omitByTabId(s.acceptedPaneTabTitlesByTabId),
     // Delete state
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
@@ -3055,11 +3056,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextAutomaticAgentResumeClaimsByTabId = {
           ...s.automaticAgentResumeClaimsByTabId
         }
+        const nextAcceptedPaneTabTitlesByTabId = { ...s.acceptedPaneTabTitlesByTabId }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
           delete nextAutomaticAgentResumeClaimsByTabId[tabId]
+          delete nextAcceptedPaneTabTitlesByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -3205,6 +3208,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
+          acceptedPaneTabTitlesByTabId: nextAcceptedPaneTabTitlesByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
           baseStatusByWorktreeId: (() => {

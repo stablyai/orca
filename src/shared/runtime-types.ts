@@ -31,6 +31,7 @@ import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
 import type { SleepingAgentLaunchConfig } from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { TerminalTabTitleSource } from './terminal-tab-title-reducer'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -128,6 +129,7 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  titleSource?: TerminalTabTitleSource
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

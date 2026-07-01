@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   detectAgentStatusFromTitle,
+  extractAllOscTabTitles,
   extractAllOscTitles,
+  extractAllOscTitleUpdates,
   extractLastOscTitle,
   getAgentLabel,
   MAX_OSC_TITLE_CHARS
@@ -27,6 +29,17 @@ describe('OSC title extraction', () => {
       'First',
       'Second'
     ])
+  })
+
+  it('preserves OSC title targets so tab titles can follow icon-title semantics', () => {
+    const data = '\x1b]0;Both\x07\x1b]1;Tab only\x07\x1b]2;Window only\x07'
+
+    expect(extractAllOscTitleUpdates(data)).toEqual([
+      { title: 'Both', target: 'both' },
+      { title: 'Tab only', target: 'icon' },
+      { title: 'Window only', target: 'window' }
+    ])
+    expect(extractAllOscTabTitles(data)).toEqual(['Both', 'Tab only'])
   })
 
   it('ignores incomplete OSC titles until a later chunk supplies the terminator', () => {

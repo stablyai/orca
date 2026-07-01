@@ -4,6 +4,7 @@ import {
   buildMobileSessionTabSnapshots,
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
+  registerRuntimeTerminalTab,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
@@ -15,6 +16,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
+    acceptedPaneTabTitlesByTabId: {} as AppState['acceptedPaneTabTitlesByTabId'],
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -50,6 +52,7 @@ function makeSharedOverrides(): Partial<AppState> {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
+    acceptedPaneTabTitlesByTabId: {} as AppState['acceptedPaneTabTitlesByTabId'],
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -148,6 +151,45 @@ describe('getRuntimeMobileSessionSyncKey', () => {
               id: 'term-1',
               title: 'Codex working',
               generatedTitle: 'Fix remote tabs',
+              customTitle: null,
+              ptyId: 'pty-1'
+            }
+          ]
+        } as unknown as AppState['tabsByWorktree']
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('changes when terminal title source metadata changes', () => {
+    const shared = makeSharedOverrides()
+    const base = makeState({
+      ...shared,
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            title: 'Claude session',
+            titleSource: 'legacy-window-fallback',
+            customTitle: null,
+            ptyId: 'pty-1'
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-1',
+              title: 'Claude session',
+              titleSource: 'authoritative-tab',
               customTitle: null,
               ptyId: 'pty-1'
             }
@@ -1423,6 +1465,75 @@ describe('buildMobileSessionTabSnapshots', () => {
       type: 'terminal',
       title: 'Fix remote tabs'
     })
+  })
+
+  it('publishes accepted pane titles before raw legacy pane titles to mobile snapshots', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const unregister = registerRuntimeTerminalTab({
+      tabId: 'term-1',
+      worktreeId: 'wt-1',
+      getManager: () =>
+        ({
+          getActivePane: () => ({ id: 1, leafId }),
+          getLeafId: () => leafId,
+          getNumericIdForLeaf: () => 1,
+          getPanes: () => [{ id: 1, leafId }]
+        }) as never,
+      getContainer: () => null,
+      getPtyIdForPane: () => 'pty-1'
+    })
+    const base = makeState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            title: 'Claude session title',
+            titleSource: 'authoritative-tab',
+            quickCommandLabel: 'Run tests',
+            generatedTitle: 'Generated title',
+            customTitle: null,
+            ptyId: 'pty-1'
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId'],
+      runtimePaneTitlesByTabId: {
+        'term-1': { 1: 'Shell window title' }
+      } as AppState['runtimePaneTitlesByTabId']
+    })
+
+    try {
+      expect(buildMobileSessionTabSnapshots(base)[0]?.tabs[0]).toMatchObject({
+        type: 'terminal',
+        title: 'Run tests'
+      })
+      expect(buildMobileSessionTabSnapshots(base)[0]?.tabs[0]).not.toHaveProperty('titleSource')
+      expect(
+        buildMobileSessionTabSnapshots({
+          ...base,
+          acceptedPaneTabTitlesByTabId: {
+            'term-1': {
+              1: { title: 'Claude session title', source: 'authoritative-tab' }
+            }
+          }
+        } as AppState)[0]?.tabs[0]
+      ).toMatchObject({
+        type: 'terminal',
+        title: 'Claude session title',
+        titleSource: 'authoritative-tab'
+      })
+    } finally {
+      unregister()
+    }
   })
 
   it('publishes quick command labels to mobile snapshots before generated titles', () => {

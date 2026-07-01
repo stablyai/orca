@@ -6,6 +6,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -933,6 +934,115 @@ describe('applyWebSessionTabsSnapshot', () => {
       patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)
         ?.quickCommandLabel
     ).toBe('Run tests')
+  })
+
+  it('preserves authoritative terminal title sources from host terminal surfaces', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Claude session title',
+          titleSource: 'authoritative-tab',
+          quickCommandLabel: 'Run tests',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    const unifiedTab = patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: mirroredId,
+      title: 'Claude session title',
+      titleSource: 'authoritative-tab',
+      quickCommandLabel: 'Run tests'
+    })
+    expect(unifiedTab).toMatchObject({
+      label: 'Claude session title',
+      labelSource: 'authoritative-tab',
+      quickCommandLabel: 'Run tests'
+    })
+    expect(resolveUnifiedTabLabel(unifiedTab, true, unifiedTab?.label)).toBe('Claude session title')
+  })
+
+  it('updates mirrored unified tabs when only the terminal title source changes', () => {
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const existingTerminalTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'Claude session title',
+      titleSource: 'legacy-window-fallback',
+      quickCommandLabel: 'Run tests',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const existingUnifiedTab: Tab = {
+      id: mirroredId,
+      entityId: mirroredId,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'Claude session title',
+      labelSource: 'legacy-window-fallback',
+      quickCommandLabel: 'Run tests',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const state = makeState({
+      tabsByWorktree: { [WT]: [existingTerminalTab] },
+      unifiedTabsByWorktree: { [WT]: [existingUnifiedTab] },
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'host-group-1',
+            worktreeId: WT,
+            activeTabId: mirroredId,
+            tabOrder: [mirroredId],
+            recentTabIds: [mirroredId]
+          }
+        ]
+      }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Claude session title',
+          titleSource: 'authoritative-tab',
+          quickCommandLabel: 'Run tests',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.unifiedTabsByWorktree?.[WT]?.[0]).toMatchObject({
+      label: 'Claude session title',
+      labelSource: 'authoritative-tab'
+    })
   })
 
   it('removes stale scrollback refs from mirrored terminal layouts', () => {

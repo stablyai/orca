@@ -3,6 +3,7 @@ import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { TerminalTabTitleSource } from '../../../../shared/terminal-tab-title-reducer'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/types'
 import type { PtyDataMeta } from './pty-dispatcher'
@@ -102,6 +103,11 @@ export type IpcPtyTransportOptions = {
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
+  onVisibleTabTitleChange?: (
+    title: string,
+    rawTitle: string,
+    source: TerminalTabTitleSource
+  ) => void
   onPtySpawn?: (ptyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void

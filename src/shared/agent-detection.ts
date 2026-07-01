@@ -22,9 +22,13 @@ import {
 // Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
 export {
+  extractAllOscTabTitles,
   extractAllOscTitles,
+  extractAllOscTitleUpdates,
   extractLastOscTitle,
-  MAX_OSC_TITLE_CHARS
+  MAX_OSC_TITLE_CHARS,
+  type OscTitleTarget,
+  type OscTitleUpdate
 } from './osc-title-extraction'
 export { isShellProcess } from './shell-process-detection'
 
@@ -135,11 +139,6 @@ function containsAgentName(title: string): boolean {
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title)
   )
-}
-
-function containsAny(title: string, words: readonly string[]): boolean {
-  const lower = title.toLowerCase()
-  return words.some((word) => lower.includes(word))
 }
 
 /**
@@ -453,7 +452,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = titleHasAnyLegacyAgentName(title)
   if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
-    if (containsAny(title, ['action required', 'permission', 'waiting'])) {
+    if (/action required|permission|waiting/i.test(title)) {
       return 'permission'
     }
     // Why: hyphen/word-char-aware boundary match (not plain substring, and

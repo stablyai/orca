@@ -11,7 +11,7 @@ import {
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
-import { createPtyOutputProcessor } from './pty-transport'
+import { clearVisibleTitleReducerState, createPtyOutputProcessor } from './pty-transport'
 import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
@@ -72,6 +72,7 @@ export function createRemoteRuntimePtyTransport(
     onPtyExit,
     onPtySpawn,
     onTitleChange,
+    onVisibleTabTitleChange,
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
@@ -91,6 +92,7 @@ export function createRemoteRuntimePtyTransport(
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}`
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
+    onVisibleTabTitleChange,
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
@@ -355,6 +357,7 @@ export function createRemoteRuntimePtyTransport(
     remotePtyId = null
     closeMultiplexedStream()
     if (stalePtyId) {
+      clearVisibleTitleReducerState(stalePtyId)
       onPtyExit?.(stalePtyId)
     }
   }
@@ -376,7 +379,8 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     const subscribedHandle = handle
-    const subscribedPtyId = remotePtyId
+    const subscribedPtyId =
+      remotePtyId ?? toRemoteRuntimePtyId(subscribedHandle, currentRuntimeEnvironmentId)
     const isCurrentSubscription = (): boolean =>
       isCurrentRemoteTerminal(subscribedHandle, subscribedPtyId)
     const nextStream = await getRemoteRuntimeTerminalMultiplexer(
@@ -388,14 +392,15 @@ export function createRemoteRuntimePtyTransport(
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
-            outputProcessor.processData(data, storedCallbacks, undefined, meta)
+            outputProcessor.processData(data, storedCallbacks, { ptyId: subscribedPtyId }, meta)
           }
         },
         onSnapshot: (data) => {
           if (data && isCurrentSubscription()) {
             outputProcessor.processData(data, storedCallbacks, {
               replayingBufferedData: true,
-              suppressAttentionEvents: true
+              suppressAttentionEvents: true,
+              ptyId: subscribedPtyId
             })
           }
         },
@@ -419,6 +424,7 @@ export function createRemoteRuntimePtyTransport(
           storedCallbacks.onExit?.(0)
           storedCallbacks.onDisconnect?.()
           if (subscribedPtyId) {
+            clearVisibleTitleReducerState(subscribedPtyId)
             onPtyExit?.(subscribedPtyId)
           }
         },
@@ -590,6 +596,7 @@ export function createRemoteRuntimePtyTransport(
       remotePtyId = null
       storedCallbacks.onDisconnect?.()
       if (id) {
+        clearVisibleTitleReducerState(id)
         onPtyExit?.(id)
       }
     },

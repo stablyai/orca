@@ -73,6 +73,11 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.quickCommandLabel?.trim())
         .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
     )
+    const titleSourceByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.titleSource)
+        .map((tab) => [tab.id, tab.titleSource!])
+    )
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
@@ -88,6 +93,9 @@ function hydrateUnifiedFormat(
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
         return {
           ...tab,
+          ...(!tab.labelSource && titleSourceByTerminalId.get(tab.entityId)
+            ? { labelSource: titleSourceByTerminalId.get(tab.entityId) }
+            : {}),
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
         }

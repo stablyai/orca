@@ -15,6 +15,10 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
+import type {
+  AcceptedTerminalTabTitle,
+  TerminalTabTitleSource
+} from '../../../../shared/terminal-tab-title-reducer'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
@@ -142,15 +146,23 @@ function getTerminalTabOwnerWorktreeId(
 function updateUnifiedTerminalLabel(
   unifiedTabs: Tab[],
   terminalTabId: string,
-  label: string
+  label: string,
+  labelSource: TerminalTabTitleSource
 ): Tab[] | null {
   const unifiedIndex = unifiedTabs.findIndex(
     (entry) => entry.contentType === 'terminal' && entry.entityId === terminalTabId
   )
-  if (unifiedIndex === -1 || unifiedTabs[unifiedIndex]?.label === label) {
+  if (unifiedIndex === -1) {
     return null
   }
-  return unifiedTabs.map((entry, index) => (index === unifiedIndex ? { ...entry, label } : entry))
+  const current = unifiedTabs[unifiedIndex]
+  const currentLabelSource = current?.labelSource ?? 'legacy-window-fallback'
+  if (!current || (current.label === label && currentLabelSource === labelSource)) {
+    return null
+  }
+  return unifiedTabs.map((entry, index) =>
+    index === unifiedIndex ? { ...entry, label, labelSource } : entry
+  )
 }
 
 function updateUnifiedTerminalGeneratedLabel(
@@ -309,6 +321,9 @@ export type TerminalSlice = {
   /** Live pane titles keyed by tabId then paneId. Unlike the legacy tab title,
    *  this preserves split-pane agent status per pane while TerminalPane is mounted. */
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  /** Accepted visible tab titles keyed by tabId then paneId. These preserve
+   *  iTerm2 OSC 0/1 priority for split-pane focus and close-survivor sync. */
+  acceptedPaneTabTitlesByTabId: Record<string, Record<number, AcceptedTerminalTabTitle>>
   /** Why: per-tab activity indicators. A tab gets flagged unread when terminal
    *  output requests attention (BEL) or an agent-complete notification is
    *  dispatched for one of its panes. The flag clears when the user activates
@@ -448,11 +463,18 @@ export type TerminalSlice = {
   setTabBarOrder: (worktreeId: string, order: string[]) => void
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
-  updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitle: (tabId: string, title: string, source?: TerminalTabTitleSource) => void
   setGeneratedTabTitleFromAgentPrompt: (paneKey: string, prompt: string) => void
   clearTabLaunchAgent: (tabId: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  setAcceptedPaneTabTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    source: TerminalTabTitleSource
+  ) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
+  clearAcceptedPaneTabTitle: (tabId: string, paneId: number) => void
   /** Mark a tab as having unread activity (agent working→idle transition).
    *  Skipped when the tab is currently visible to the user — either as
    *  the global active terminal tab, or as the active tab of any split
@@ -585,6 +607,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   activeTabIdByWorktree: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {},
+  acceptedPaneTabTitlesByTabId: {},
   unreadTerminalTabs: {},
   unreadTerminalPanes: {},
   unreadAgentCompletionPanes: {},
@@ -869,6 +892,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreeId,
         contentType: 'terminal' as const,
         label: tab.title,
+        ...(tab.titleSource ? { labelSource: tab.titleSource } : {}),
         ...(tab.quickCommandLabel?.trim()
           ? { quickCommandLabel: tab.quickCommandLabel.trim() }
           : {}),
@@ -1015,6 +1039,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextLastKnownRelay[tabId]
       const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
       delete nextRuntimePaneTitlesByTabId[tabId]
+      const nextAcceptedPaneTabTitlesByTabId = { ...s.acceptedPaneTabTitlesByTabId }
+      delete nextAcceptedPaneTabTitlesByTabId[tabId]
       // Why: preserve the unreadTerminalTabs reference when the closing tab had
       // no unread flag — avoids a no-op top-level state allocation that would
       // force re-evaluation of full-state selectors on unrelated closeTab calls.
@@ -1111,6 +1137,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        acceptedPaneTabTitlesByTabId: nextAcceptedPaneTabTitlesByTabId,
         // Why: skip writing unreadTerminalTabs when the reference is unchanged —
         // avoids a no-op top-level state allocation that would force re-evaluation
         // of full-state selectors. Mirrors the sibling pattern in tabs.ts.
@@ -1266,7 +1293,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }))
   },
 
-  updateTabTitle: (tabId, title) => {
+  updateTabTitle: (tabId, title, source = 'legacy-window-fallback') => {
     set((s) => {
       // Why: locate the owning worktree and mutate only that entry in
       // tabsByWorktree. Rebuilding every worktree's tab array (even when
@@ -1284,12 +1311,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         return s
       }
       const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
+      const currentTitleSource = currentTab.titleSource ?? 'legacy-window-fallback'
       const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
-      if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
+      if (
+        currentTitleSource === source &&
+        isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)
+      ) {
         const unifiedTabsWithCurrentLabel = updateUnifiedTerminalLabel(
           currentUnifiedTabs,
           tabId,
-          currentTab.title
+          currentTab.title,
+          currentTitleSource
         )
         return unifiedTabsWithCurrentLabel
           ? {
@@ -1303,9 +1335,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
         currentUnifiedTabs,
         tabId,
-        nextTitle
+        nextTitle,
+        source
       )
-      if (currentTab.title === nextTitle) {
+      if (currentTab.title === nextTitle && currentTitleSource === source) {
         return unifiedTabsWithUpdatedLabel
           ? {
               unifiedTabsByWorktree: {
@@ -1322,6 +1355,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               // Why: PTYs can briefly emit an empty title while an agent exits.
               // Keep the stable fallback label instead of rendering a blank tab.
               title: nextTitle,
+              titleSource: source,
               defaultTitle:
                 tab.defaultTitle ??
                 (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
@@ -1466,21 +1500,58 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  setAcceptedPaneTabTitle: (tabId, paneId, title, source) => {
+    set((s) => {
+      const currentByPane = s.acceptedPaneTabTitlesByTabId[tabId] ?? {}
+      const prev = currentByPane[paneId]
+      if (prev?.title === title && prev.source === source) {
+        return s
+      }
+      if (
+        prev?.source === source &&
+        prev.title &&
+        isDecorativeAgentTitleFrameChange(prev.title, title)
+      ) {
+        return s
+      }
+      return {
+        acceptedPaneTabTitlesByTabId: {
+          ...s.acceptedPaneTabTitlesByTabId,
+          [tabId]: { ...currentByPane, [paneId]: { title, source } }
+        }
+      }
+    })
+  },
+
   clearRuntimePaneTitle: (tabId, paneId) => {
     set((s) => {
       const currentByPane = s.runtimePaneTitlesByTabId[tabId]
-      if (!currentByPane || !(paneId in currentByPane)) {
+      const acceptedByPane = s.acceptedPaneTabTitlesByTabId[tabId]
+      const hasRuntimeTitle = Boolean(currentByPane && paneId in currentByPane)
+      const hasAcceptedTitle = Boolean(acceptedByPane && paneId in acceptedByPane)
+      if (!hasRuntimeTitle && !hasAcceptedTitle) {
         return s
       }
-      const prevTitle = currentByPane[paneId]
-      const nextByPane = { ...currentByPane }
-      delete nextByPane[paneId]
-
-      const next = { ...s.runtimePaneTitlesByTabId }
-      if (Object.keys(nextByPane).length > 0) {
-        next[tabId] = nextByPane
-      } else {
-        delete next[tabId]
+      const prevTitle = currentByPane?.[paneId]
+      const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
+      if (currentByPane && hasRuntimeTitle) {
+        const nextByPane = { ...currentByPane }
+        delete nextByPane[paneId]
+        if (Object.keys(nextByPane).length > 0) {
+          nextRuntimePaneTitlesByTabId[tabId] = nextByPane
+        } else {
+          delete nextRuntimePaneTitlesByTabId[tabId]
+        }
+      }
+      const nextAcceptedPaneTabTitlesByTabId = { ...s.acceptedPaneTabTitlesByTabId }
+      if (acceptedByPane && hasAcceptedTitle) {
+        const nextAcceptedByPane = { ...acceptedByPane }
+        delete nextAcceptedByPane[paneId]
+        if (Object.keys(nextAcceptedByPane).length > 0) {
+          nextAcceptedPaneTabTitlesByTabId[tabId] = nextAcceptedByPane
+        } else {
+          delete nextAcceptedPaneTabTitlesByTabId[tabId]
+        }
       }
 
       // Why: clearing a 'working'/'permission'-classified title back to none
@@ -1497,9 +1568,28 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
       const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
       return {
-        runtimePaneTitlesByTabId: next,
+        runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        acceptedPaneTabTitlesByTabId: nextAcceptedPaneTabTitlesByTabId,
         ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
+    })
+  },
+
+  clearAcceptedPaneTabTitle: (tabId, paneId) => {
+    set((s) => {
+      const currentByPane = s.acceptedPaneTabTitlesByTabId[tabId]
+      if (!currentByPane || !(paneId in currentByPane)) {
+        return s
+      }
+      const nextByPane = { ...currentByPane }
+      delete nextByPane[paneId]
+      const next = { ...s.acceptedPaneTabTitlesByTabId }
+      if (Object.keys(nextByPane).length > 0) {
+        next[tabId] = nextByPane
+      } else {
+        delete next[tabId]
+      }
+      return { acceptedPaneTabTitlesByTabId: next }
     })
   },
 
@@ -1947,18 +2037,40 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
 
       let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
+      let nextAcceptedPaneTabTitlesByTabId = s.acceptedPaneTabTitlesByTabId
       const numericPaneId = Number(opts.leafId)
-      if (
+      const runtimeByPane = s.runtimePaneTitlesByTabId[opts.tabId]
+      const acceptedByPane = s.acceptedPaneTabTitlesByTabId[opts.tabId]
+      // Why: empty OSC titles are valid state; cleanup must check key presence
+      // rather than truthiness or stale empty-title entries can survive hibernation.
+      const hasRuntimeTitle =
         Number.isInteger(numericPaneId) &&
-        s.runtimePaneTitlesByTabId[opts.tabId]?.[numericPaneId]
-      ) {
-        const nextByPane = { ...s.runtimePaneTitlesByTabId[opts.tabId] }
-        delete nextByPane[numericPaneId]
-        nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-        if (Object.keys(nextByPane).length > 0) {
-          nextRuntimePaneTitlesByTabId[opts.tabId] = nextByPane
-        } else {
-          delete nextRuntimePaneTitlesByTabId[opts.tabId]
+        runtimeByPane !== undefined &&
+        numericPaneId in runtimeByPane
+      const hasAcceptedTitle =
+        Number.isInteger(numericPaneId) &&
+        acceptedByPane !== undefined &&
+        numericPaneId in acceptedByPane
+      if (hasRuntimeTitle || hasAcceptedTitle) {
+        if (runtimeByPane && hasRuntimeTitle) {
+          const nextByPane = { ...runtimeByPane }
+          delete nextByPane[numericPaneId]
+          nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
+          if (Object.keys(nextByPane).length > 0) {
+            nextRuntimePaneTitlesByTabId[opts.tabId] = nextByPane
+          } else {
+            delete nextRuntimePaneTitlesByTabId[opts.tabId]
+          }
+        }
+        if (acceptedByPane && hasAcceptedTitle) {
+          const nextByPane = { ...acceptedByPane }
+          delete nextByPane[numericPaneId]
+          nextAcceptedPaneTabTitlesByTabId = { ...s.acceptedPaneTabTitlesByTabId }
+          if (Object.keys(nextByPane).length > 0) {
+            nextAcceptedPaneTabTitlesByTabId[opts.tabId] = nextByPane
+          } else {
+            delete nextAcceptedPaneTabTitlesByTabId[opts.tabId]
+          }
         }
       }
 
@@ -1983,6 +2095,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
         ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
           ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
+          : {}),
+        ...(nextAcceptedPaneTabTitlesByTabId !== s.acceptedPaneTabTitlesByTabId
+          ? { acceptedPaneTabTitlesByTabId: nextAcceptedPaneTabTitlesByTabId }
           : {}),
         unreadTerminalPanes: nextUnreadTerminalPanes,
         unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes,
@@ -2145,6 +2260,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextRuntimePaneTitlesByTabId = keepIdentifiers
         ? s.runtimePaneTitlesByTabId
         : { ...s.runtimePaneTitlesByTabId }
+      const nextAcceptedPaneTabTitlesByTabId = keepIdentifiers
+        ? s.acceptedPaneTabTitlesByTabId
+        : { ...s.acceptedPaneTabTitlesByTabId }
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
@@ -2195,6 +2313,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const tab of tabs) {
         if (!keepIdentifiers) {
           delete nextRuntimePaneTitlesByTabId[tab.id]
+          delete nextAcceptedPaneTabTitlesByTabId[tab.id]
         }
         delete nextPendingSetupSplitByTabId[tab.id]
         delete nextPendingIssueCommandSplitByTabId[tab.id]
@@ -2258,6 +2377,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
+        acceptedPaneTabTitlesByTabId: nextAcceptedPaneTabTitlesByTabId,
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
@@ -2644,6 +2764,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .filter((tab) => tab.contentType === 'terminal' && tab.quickCommandLabel?.trim())
                 .map((tab) => [tab.entityId, tab.quickCommandLabel!.trim()])
             )
+            const labelSourceByTerminalId = new Map(
+              (session.unifiedTabs?.[worktreeId] ?? [])
+                .filter((tab) => tab.contentType === 'terminal' && tab.labelSource)
+                .map((tab) => [tab.entityId, tab.labelSource!])
+            )
             return [
               worktreeId,
               [...tabs]
@@ -2656,9 +2781,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
                 .map((tab, index) => {
                   const quickCommandLabel =
                     tab.quickCommandLabel?.trim() || quickCommandLabelByTerminalId.get(tab.id)
+                  const hydratedTab = clearTransientTerminalState(tab, index)
+                  const titleSource =
+                    hydratedTab.title === tab.title
+                      ? (hydratedTab.titleSource ?? labelSourceByTerminalId.get(tab.id))
+                      : undefined
                   return {
-                    ...clearTransientTerminalState(tab, index),
+                    ...hydratedTab,
                     ...(quickCommandLabel ? { quickCommandLabel } : {}),
+                    ...(titleSource ? { titleSource } : {}),
                     sortOrder: index,
                     pendingActivationSpawn: true
                   }

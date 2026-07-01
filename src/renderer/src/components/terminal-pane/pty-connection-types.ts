@@ -6,6 +6,7 @@ import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { TerminalTabTitleSource } from '../../../../shared/terminal-tab-title-reducer'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -44,8 +45,15 @@ export type PtyConnectionDeps = {
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitle: (tabId: string, title: string, source?: TerminalTabTitleSource) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  setAcceptedPaneTabTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    source: TerminalTabTitleSource
+  ) => void
+  clearAcceptedPaneTabTitle: (tabId: string, paneId: number) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void

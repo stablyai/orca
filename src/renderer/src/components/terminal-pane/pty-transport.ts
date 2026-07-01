@@ -7,8 +7,15 @@ import {
   clearWorkingIndicators,
   createAgentStatusTracker,
   normalizeTerminalTitle,
-  extractAllOscTitles
+  extractAllOscTitleUpdates,
+  type OscTitleUpdate
 } from '../../../../shared/agent-detection'
+import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+import {
+  acceptTerminalTabTitleUpdate,
+  createTerminalTabTitleReducerState,
+  type TerminalTabTitleReducerState
+} from '../../../../shared/terminal-tab-title-reducer'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -71,6 +78,7 @@ type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 type PtyOutputProcessorOptions = Pick<
   IpcPtyTransportOptions,
   | 'onTitleChange'
+  | 'onVisibleTabTitleChange'
   | 'onBell'
   | 'onAgentBecameIdle'
   | 'onAgentBecameWorking'
@@ -81,18 +89,36 @@ type PtyOutputProcessorOptions = Pick<
 type ProcessPtyOutputOptions = {
   replayingBufferedData?: boolean
   suppressAttentionEvents?: boolean
+  ptyId?: string
 }
 
 type PendingPtySideEffect = {
   payloads: ProcessedAgentStatusChunk['payloads']
-  titles: string[]
+  titleUpdates: OscTitleUpdate[]
   scannedForTitles: boolean
   containsBell: boolean
   suppressAttentionEvents: boolean
+  ptyId?: string
+}
+
+const visibleTitleReducerStateByPtyId = new Map<string, TerminalTabTitleReducerState>()
+
+function getVisibleTitleReducerState(ptyId: string): TerminalTabTitleReducerState {
+  let state = visibleTitleReducerStateByPtyId.get(ptyId)
+  if (!state) {
+    state = createTerminalTabTitleReducerState()
+    visibleTitleReducerStateByPtyId.set(ptyId, state)
+  }
+  return state
+}
+
+export function clearVisibleTitleReducerState(ptyId: string): void {
+  visibleTitleReducerStateByPtyId.delete(ptyId)
 }
 
 export function createPtyOutputProcessor({
   onTitleChange,
+  onVisibleTabTitleChange,
   onBell,
   onAgentBecameIdle,
   onAgentBecameWorking,
@@ -118,6 +144,8 @@ export function createPtyOutputProcessor({
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
   let pendingWorkingTitleSideEffects = 0
+  let oscTitleScanTail = ''
+  const localVisibleTitleReducerState = createTerminalTabTitleReducerState()
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -133,17 +161,17 @@ export function createPtyOutputProcessor({
     return title !== null && detectAgentStatusFromTitle(title) === 'working'
   }
 
-  function countWorkingTitles(titles: string[]): number {
+  function countWorkingTitles(titleUpdates: OscTitleUpdate[]): number {
     let count = 0
-    for (const title of titles) {
-      if (isWorkingTitle(normalizeTerminalTitle(title))) {
+    for (const update of titleUpdates) {
+      if (isWorkingTitle(normalizeTerminalTitle(update.title))) {
         count += 1
       }
     }
     return count
   }
 
-  function applyObservedTerminalTitle(title: string, suppressAgentTracker = false): void {
+  function normalizeObservedTerminalTitle(title: string): string | null {
     // Why: cursor-agent's native OSC title is the literal string "Cursor Agent"
     // and it re-emits that title many times per turn (on every internal redraw)
     // even while it's actively working. Orca drives the cursor spinner/unread
@@ -157,13 +185,37 @@ export function createPtyOutputProcessor({
     // case-insensitive) so any task/chat title cursor auto-generates still
     // passes through unchanged.
     if (title.trim().toLowerCase() === 'cursor agent') {
+      return null
+    }
+    return normalizeTerminalTitle(title)
+  }
+
+  function applyObservedTerminalTitle(title: string, suppressAgentTracker = false): void {
+    const normalizedTitle = normalizeObservedTerminalTitle(title)
+    if (normalizedTitle === null) {
       return
     }
-    lastEmittedTitle = normalizeTerminalTitle(title)
+    lastEmittedTitle = normalizedTitle
     onTitleChange?.(lastEmittedTitle, title)
     if (!suppressAgentTracker) {
       agentTracker?.handleTitle(title)
     }
+  }
+
+  function applyVisibleTerminalTitle(update: OscTitleUpdate, ptyId?: string): void {
+    if (!onVisibleTabTitleChange) {
+      return
+    }
+    const reducerState = ptyId ? getVisibleTitleReducerState(ptyId) : localVisibleTitleReducerState
+    const accepted = acceptTerminalTabTitleUpdate(reducerState, update)
+    if (!accepted) {
+      return
+    }
+    const normalizedTitle = normalizeObservedTerminalTitle(accepted.title)
+    if (normalizedTitle === null) {
+      return
+    }
+    onVisibleTabTitleChange(normalizedTitle, accepted.title, accepted.source)
   }
 
   function clearStaleTitleTimer(): void {
@@ -183,15 +235,16 @@ export function createPtyOutputProcessor({
   }
 
   function enqueuePtySideEffect(next: PendingPtySideEffect): void {
-    const workingTitleCount = countWorkingTitles(next.titles)
+    const workingTitleCount = countWorkingTitles(next.titleUpdates)
     const prior = pendingSideEffects.at(-1)
     if (
       prior &&
-      prior.titles.length === 0 &&
+      prior.titleUpdates.length === 0 &&
       prior.payloads.length === 0 &&
       !prior.containsBell &&
       prior.suppressAttentionEvents === next.suppressAttentionEvents &&
-      next.titles.length === 0 &&
+      prior.ptyId === next.ptyId &&
+      next.titleUpdates.length === 0 &&
       next.payloads.length === 0 &&
       !next.containsBell
     ) {
@@ -206,10 +259,21 @@ export function createPtyOutputProcessor({
   function schedulePtySideEffects(
     data: string,
     payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
-    suppressAttentionEvents: boolean
+    suppressAttentionEvents: boolean,
+    ptyId?: string
   ): void {
-    const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
-    const titles = scannedForTitles ? extractAllOscTitles(data) : []
+    // Why: ordinary ANSI redraw chunks contain ESC constantly. Only wake the
+    // OSC title scanner for complete OSC introducers or a split ESC boundary.
+    const shouldScanTitles = Boolean(
+      (onTitleChange || onVisibleTabTitleChange) &&
+      (oscTitleScanTail || data.includes('\x1b]') || data.endsWith('\x1b'))
+    )
+    const titleScanInput = shouldScanTitles ? `${oscTitleScanTail}${data}` : data
+    if (shouldScanTitles) {
+      oscTitleScanTail = extractOscTitleScanTail(titleScanInput)
+    }
+    const scannedForTitles = shouldScanTitles && titleScanInput.includes('\x1b]')
+    const titleUpdates = scannedForTitles ? extractAllOscTitleUpdates(titleScanInput) : []
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
@@ -218,7 +282,7 @@ export function createPtyOutputProcessor({
     const needsStaleTitleProbe = Boolean(
       onTitleChange &&
       data.length > 0 &&
-      titles.length === 0 &&
+      titleUpdates.length === 0 &&
       !suppressAttentionEvents &&
       (isWorkingTitle(lastEmittedTitle) || pendingWorkingTitleSideEffects > 0)
     )
@@ -230,49 +294,54 @@ export function createPtyOutputProcessor({
     // Why: keep only compact derived side-effect facts here. Retaining raw
     // PTY chunks duplicates the terminal scheduler backlog while timers are
     // throttled in a backgrounded Electron window.
-    if (deliveredPayloads.length === 0 && titles.length === 0) {
+    if (deliveredPayloads.length === 0 && titleUpdates.length === 0) {
       enqueuePtySideEffect({
         payloads: [],
-        titles: [],
+        titleUpdates: [],
         scannedForTitles: shouldEmitEmptyTitleScan,
         containsBell,
-        suppressAttentionEvents
+        suppressAttentionEvents,
+        ptyId
       })
     } else {
       for (const payload of deliveredPayloads) {
         enqueuePtySideEffect({
           payloads: [payload],
-          titles: [],
+          titleUpdates: [],
           scannedForTitles: false,
           containsBell: false,
-          suppressAttentionEvents
+          suppressAttentionEvents,
+          ptyId
         })
       }
-      if (titles.length === 0 && shouldEmitEmptyTitleScan) {
+      if (titleUpdates.length === 0 && shouldEmitEmptyTitleScan) {
         enqueuePtySideEffect({
           payloads: [],
-          titles: [],
+          titleUpdates: [],
           scannedForTitles: shouldEmitEmptyTitleScan,
           containsBell: false,
-          suppressAttentionEvents
+          suppressAttentionEvents,
+          ptyId
         })
       }
-      for (const title of titles) {
+      for (const update of titleUpdates) {
         enqueuePtySideEffect({
           payloads: [],
-          titles: [title],
+          titleUpdates: [update],
           scannedForTitles,
           containsBell: false,
-          suppressAttentionEvents
+          suppressAttentionEvents,
+          ptyId
         })
       }
       if (containsBell) {
         enqueuePtySideEffect({
           payloads: [],
-          titles: [],
+          titleUpdates: [],
           scannedForTitles: false,
           containsBell: true,
-          suppressAttentionEvents
+          suppressAttentionEvents,
+          ptyId
         })
       }
     }
@@ -302,7 +371,7 @@ export function createPtyOutputProcessor({
   }
 
   function applyPtySideEffect(next: PendingPtySideEffect): void {
-    pendingWorkingTitleSideEffects -= countWorkingTitles(next.titles)
+    pendingWorkingTitleSideEffects -= countWorkingTitles(next.titleUpdates)
     if (pendingWorkingTitleSideEffects < 0) {
       pendingWorkingTitleSideEffects = 0
     }
@@ -311,7 +380,12 @@ export function createPtyOutputProcessor({
         onAgentStatus(payload)
       }
     }
-    processObservedTitles(next.titles, next.scannedForTitles, next.suppressAttentionEvents)
+    processObservedTitles(
+      next.titleUpdates,
+      next.scannedForTitles,
+      next.suppressAttentionEvents,
+      next.ptyId
+    )
     if (onBell && next.containsBell) {
       onBell()
     }
@@ -345,21 +419,23 @@ export function createPtyOutputProcessor({
   }
 
   function processObservedTitles(
-    titles: string[],
+    titleUpdates: OscTitleUpdate[],
     scannedForTitles: boolean,
-    suppressAgentTracker: boolean
+    suppressAgentTracker: boolean,
+    ptyId?: string
   ): void {
-    if (!onTitleChange) {
+    if (!onTitleChange && !onVisibleTabTitleChange) {
       return
     }
     // Why: feed EVERY OSC title in the chunk through the observer, not just
     // the last one. node-pty + the main-process 8ms batch window commonly
     // coalesce multiple title updates into a single IPC payload; processing
     // titles in order preserves working-to-idle transitions.
-    if (titles.length > 0) {
+    if (titleUpdates.length > 0) {
       clearStaleTitleTimer()
-      for (const title of titles) {
-        applyObservedTerminalTitle(title, suppressAgentTracker)
+      for (const update of titleUpdates) {
+        applyObservedTerminalTitle(update.title, suppressAgentTracker)
+        applyVisibleTerminalTitle(update, ptyId)
       }
     } else if (
       scannedForTitles &&
@@ -373,7 +449,7 @@ export function createPtyOutputProcessor({
         if (lastEmittedTitle && detectAgentStatusFromTitle(lastEmittedTitle) === 'working') {
           const cleared = clearWorkingIndicators(lastEmittedTitle)
           lastEmittedTitle = cleared
-          onTitleChange(cleared, cleared)
+          onTitleChange?.(cleared, cleared)
           agentTracker?.handleTitle(cleared)
         }
       }, STALE_TITLE_TIMEOUT)
@@ -406,7 +482,7 @@ export function createPtyOutputProcessor({
         callbacks.onData?.(data)
       }
     }
-    schedulePtySideEffects(data, processed.payloads, suppressAttentionEvents)
+    schedulePtySideEffects(data, processed.payloads, suppressAttentionEvents, options.ptyId)
   }
 
   function clearAccumulatedState(): void {
@@ -414,6 +490,7 @@ export function createPtyOutputProcessor({
     pendingSideEffects.length = 0
     pendingSideEffectIndex = 0
     pendingWorkingTitleSideEffects = 0
+    oscTitleScanTail = ''
     clearStaleTitleTimer()
     agentTracker?.reset()
     bellDetector.reset()
@@ -447,6 +524,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     telemetry,
     onPtyExit,
     onTitleChange,
+    onVisibleTabTitleChange,
     onPtySpawn,
     onBell,
     onAgentBecameIdle,
@@ -467,6 +545,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let inputWriteDrainPromise: Promise<void> | null = null
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
+    onVisibleTabTitleChange,
     onBell,
     onAgentBecameIdle: (title) => {
       if (!suppressAttentionEvents) {
@@ -522,7 +601,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks,
         {
           replayingBufferedData,
-          suppressAttentionEvents
+          suppressAttentionEvents,
+          ptyId: id
         },
         meta
       )
@@ -653,6 +733,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return
       }
       clearAccumulatedState()
+      clearVisibleTitleReducerState(id)
       connected = false
       ptyId = null
       unregisterPtyHandlers(id)
@@ -714,6 +795,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // If destroyed while spawn was in flight, kill the new pty and bail
         if (destroyed) {
           window.api.pty.kill(spawnResult.id)
+          clearVisibleTitleReducerState(spawnResult.id)
           return
         }
 
@@ -893,6 +975,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (ptyId) {
         const id = ptyId
         window.api.pty.kill(id)
+        clearVisibleTitleReducerState(id)
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)

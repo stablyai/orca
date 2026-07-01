@@ -80,6 +80,20 @@ describe('runtimePaneTitle → sortEpoch', () => {
     expect(store.getState().sortEpoch).toBe(sortEpoch)
   })
 
+  it('preserves accepted pane tab title references when only the spinner frame changes', () => {
+    const store = createTestStore()
+    store.getState().setAcceptedPaneTabTitle('tab-1', 1, '⠋ Codex is thinking', 'authoritative-tab')
+    const acceptedPaneTabTitlesByTabId = store.getState().acceptedPaneTabTitlesByTabId
+
+    store.getState().setAcceptedPaneTabTitle('tab-1', 1, '⠙ Codex is thinking', 'authoritative-tab')
+
+    expect(store.getState().acceptedPaneTabTitlesByTabId).toBe(acceptedPaneTabTitlesByTabId)
+    expect(store.getState().acceptedPaneTabTitlesByTabId['tab-1']?.[1]).toEqual({
+      title: '⠋ Codex is thinking',
+      source: 'authoritative-tab'
+    })
+  })
+
   it('preserves tab map references when only the active pane spinner frame changes', () => {
     const store = createTestStore()
     seedStore(store, {

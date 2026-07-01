@@ -82,6 +82,7 @@ import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stabl
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { TerminalTabTitleSource } from '../../../../shared/terminal-tab-title-reducer'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -1156,6 +1157,7 @@ export function connectPanePty(
     // title signal with a neutral terminal label so the existing process tracker
     // can still decide whether an agent TUI is truly alive.
     deps.setRuntimePaneTitle(deps.tabId, pane.id, neutralTitle)
+    deps.clearAcceptedPaneTabTitle(deps.tabId, pane.id)
     if (manager.getActivePane()?.id === pane.id) {
       deps.updateTabTitle(deps.tabId, neutralTitle)
     }
@@ -1619,6 +1621,8 @@ export function connectPanePty(
   // Claude launches also start idle, but they have no prompt cache yet.
   let hasConsideredInitialCacheTimerSeed = false
   let allowInitialIdleCacheSeed = false
+  let acceptedVisibleTabTitle: { title: string; source: TerminalTabTitleSource } | null = null
+  let hasPersistedAuthoritativeTitleForPane = false
 
   const onTitleChange = (title: string, rawTitle: string): void => {
     const paneTitle = normalizeCompatibleAgentTitleForOwner(title, getAuthoritativePaneAgent())
@@ -1636,14 +1640,6 @@ export function connectPanePty(
     if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitle(rawTitle)
     }
-    // Why: only the focused pane should drive the tab title — otherwise two
-    // agents in split panes cause rapid title flickering as each emits OSC
-    // sequences. Only the active split's title propagates to the tab. When
-    // focus changes, onActivePaneChange syncs the newly active pane's stored
-    // title to the tab.
-    if (manager.getActivePane()?.id === pane.id) {
-      deps.updateTabTitle(deps.tabId, paneTitle)
-    }
 
     if (!hasConsideredInitialCacheTimerSeed) {
       hasConsideredInitialCacheTimerSeed = true
@@ -1658,6 +1654,30 @@ export function connectPanePty(
       ) {
         deps.setCacheTimerStartedAt(cacheKey, Date.now())
       }
+    }
+  }
+
+  const onVisibleTabTitleChange = (
+    title: string,
+    _rawTitle: string,
+    source: TerminalTabTitleSource
+  ): void => {
+    if (source === 'legacy-window-fallback') {
+      const state = useAppStore.getState()
+      const paneSource = state.acceptedPaneTabTitlesByTabId[deps.tabId]?.[pane.id]?.source
+      if (paneSource === 'authoritative-tab' || hasPersistedAuthoritativeTitleForPane) {
+        return
+      }
+    }
+    acceptedVisibleTabTitle = { title, source }
+    deps.setAcceptedPaneTabTitle(deps.tabId, pane.id, title, source)
+    // Why: only the focused pane should drive the tab title — otherwise two
+    // agents in split panes cause rapid title flickering as each emits OSC
+    // sequences. Only the active split's title propagates to the tab. When
+    // focus changes, the accepted visible title is the pane-local sync source,
+    // not the raw runtime/status title that may include rejected OSC 2 frames.
+    if (manager.getActivePane()?.id === pane.id) {
+      deps.updateTabTitle(deps.tabId, acceptedVisibleTabTitle.title, acceptedVisibleTabTitle.source)
     }
   }
 
@@ -2058,6 +2078,20 @@ export function connectPanePty(
   const worktree = getWorktreeMapFromState(state).get(deps.worktreeId)
   const connectionId = getConnectionId(deps.worktreeId) ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
+  const layout = state.terminalLayoutsByTabId[deps.tabId]
+  const restoredAuthoritativeTitle = tab?.titleSource === 'authoritative-tab' ? tab.title : null
+  const shouldSeedPersistedAuthoritativeTitle =
+    Boolean(restoredAuthoritativeTitle?.trim()) &&
+    (layout?.activeLeafId ? layout.activeLeafId === pane.leafId : manager.getPanes().length <= 1)
+  if (shouldSeedPersistedAuthoritativeTitle && restoredAuthoritativeTitle) {
+    const title = restoredAuthoritativeTitle.trim()
+    hasPersistedAuthoritativeTitleForPane = true
+    acceptedVisibleTabTitle = { title, source: 'authoritative-tab' }
+    // Why: session restore hydrates tab-level title provenance before pane-local
+    // runtime caches exist. Seed only the persisted active pane so a later OSC 2
+    // cannot demote that same PTY, while sibling panes can still use OSC 2 fallback.
+    deps.setAcceptedPaneTabTitle(deps.tabId, pane.id, title, 'authoritative-tab')
+  }
   const shellOverride = tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
@@ -2140,6 +2174,7 @@ export function connectPanePty(
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onTitleChange,
+    onVisibleTabTitleChange,
     onPtySpawn,
     onBell,
     onAgentBecameIdle,
@@ -3070,6 +3105,9 @@ export function connectPanePty(
         startupOverride && 'launchConfig' in startupOverride
           ? (startupOverride as ColdRestoreAgentResumeStartup)
           : null
+      hasPersistedAuthoritativeTitleForPane = false
+      acceptedVisibleTabTitle = null
+      deps.clearAcceptedPaneTabTitle(deps.tabId, pane.id)
       // Why: pre-signal the main process so its cooperation gate suppresses
       // the daemon-snapshot seed for this paneKey. We issue declare and the
       // spawn back-to-back without awaiting, because Electron's

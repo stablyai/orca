@@ -1853,6 +1853,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               contentType: 'terminal' as const,
               label: tab.title,
+              ...(tab.titleSource ? { labelSource: tab.titleSource } : {}),
               ...(tab.quickCommandLabel?.trim()
                 ? { quickCommandLabel: tab.quickCommandLabel.trim() }
                 : {}),

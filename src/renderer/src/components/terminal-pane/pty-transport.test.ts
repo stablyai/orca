@@ -184,6 +184,208 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('keeps raw OSC 2 observations while OSC 1 remains the visible tab title', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange, onVisibleTabTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: vi.fn() } })
+
+    onData?.({
+      id: 'pty-1',
+      data: '\x1b]1;Claude session title\x07\x1b]2;Shell window title\x07'
+    })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledTimes(2)
+    expect(onTitleChange).toHaveBeenNthCalledWith(1, 'Claude session title', 'Claude session title')
+    expect(onTitleChange).toHaveBeenNthCalledWith(2, 'Shell window title', 'Shell window title')
+    expect(onVisibleTabTitleChange).toHaveBeenCalledTimes(1)
+    expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+      'Claude session title',
+      'Claude session title',
+      'authoritative-tab'
+    )
+    transport.disconnect()
+  })
+
+  it('keeps raw blank OSC titles from becoming visible tab titles', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange, onVisibleTabTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: vi.fn() } })
+
+    onData?.({ id: 'pty-1', data: '\x1b]1;   \x07\x1b]2;Shell window title\x07' })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenNthCalledWith(1, '   ', '   ')
+    expect(onTitleChange).toHaveBeenNthCalledWith(2, 'Shell window title', 'Shell window title')
+    expect(onVisibleTabTitleChange).toHaveBeenCalledOnce()
+    expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+      'Shell window title',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+    transport.disconnect()
+  })
+
+  it('uses OSC 2 as a legacy visible title fallback until an authoritative title arrives', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange, onVisibleTabTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: vi.fn() } })
+
+    onData?.({ id: 'pty-1', data: '\x1b]2;Shell window title\x07' })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('Shell window title', 'Shell window title')
+    expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+      'Shell window title',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+    transport.disconnect()
+  })
+
+  it('lets OSC 2-before-OSC 1 fall back before authoritative titles take over', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onVisibleTabTitleChange = vi.fn()
+    const transport = createIpcPtyTransport({ onVisibleTabTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: vi.fn() } })
+
+    onData?.({
+      id: 'pty-1',
+      data: '\x1b]2;Shell window title\x07\x1b]1;Claude session title\x07'
+    })
+    await flushPtySideEffects()
+
+    expect(onVisibleTabTitleChange).toHaveBeenNthCalledWith(
+      1,
+      'Shell window title',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+    expect(onVisibleTabTitleChange).toHaveBeenNthCalledWith(
+      2,
+      'Claude session title',
+      'Claude session title',
+      'authoritative-tab'
+    )
+    transport.disconnect()
+  })
+
+  it('preserves authoritative visible-title state across transport remounts for the same PTY', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const firstVisibleTitle = vi.fn()
+    const firstTransport = createIpcPtyTransport({ onVisibleTabTitleChange: firstVisibleTitle })
+
+    await firstTransport.connect({ url: '', callbacks: { onData: vi.fn() } })
+    onData?.({ id: 'pty-1', data: '\x1b]1;Claude session title\x07' })
+    await flushPtySideEffects()
+    firstTransport.detach?.()
+
+    const nextRawTitle = vi.fn()
+    const nextVisibleTitle = vi.fn()
+    const nextTransport = createIpcPtyTransport({
+      onTitleChange: nextRawTitle,
+      onVisibleTabTitleChange: nextVisibleTitle
+    })
+
+    nextTransport.attach({ existingPtyId: 'pty-1', callbacks: {} })
+    onData?.({ id: 'pty-1', data: '\x1b]2;Shell window title\x07' })
+    await flushPtySideEffects()
+
+    expect(firstVisibleTitle).toHaveBeenCalledWith(
+      'Claude session title',
+      'Claude session title',
+      'authoritative-tab'
+    )
+    expect(nextRawTitle).toHaveBeenCalledWith('Shell window title', 'Shell window title')
+    expect(nextVisibleTitle).not.toHaveBeenCalled()
+    nextTransport.disconnect()
+  })
+
+  it('resets visible-title reducer state for replacement PTY sessions', async () => {
+    window.api.pty.spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-1' })
+      .mockResolvedValueOnce({ id: 'pty-2' })
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onVisibleTabTitleChange = vi.fn()
+    const firstTransport = createIpcPtyTransport({ onVisibleTabTitleChange })
+
+    await firstTransport.connect({ url: '', callbacks: { onData: vi.fn() } })
+    onData?.({ id: 'pty-1', data: '\x1b]1;Claude session title\x07' })
+    await flushPtySideEffects()
+    firstTransport.disconnect()
+
+    const nextTransport = createIpcPtyTransport({ onVisibleTabTitleChange })
+    await nextTransport.connect({ url: '', callbacks: { onData: vi.fn() } })
+    onData?.({ id: 'pty-2', data: '\x1b]2;New shell window title\x07' })
+    await flushPtySideEffects()
+
+    expect(onVisibleTabTitleChange).toHaveBeenLastCalledWith(
+      'New shell window title',
+      'New shell window title',
+      'legacy-window-fallback'
+    )
+    nextTransport.disconnect()
+  })
+
+  it('completes split OSC tab titles across PTY chunks before emitting side effects', async () => {
+    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const processor = createPtyOutputProcessor({ onTitleChange, onVisibleTabTitleChange })
+    const callbacks = { onData: vi.fn() }
+
+    processor.processData('\x1b]1;Split Claude', callbacks, { ptyId: 'pty-split' })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).not.toHaveBeenCalled()
+    expect(onVisibleTabTitleChange).not.toHaveBeenCalled()
+
+    processor.processData(' title\x07', callbacks, { ptyId: 'pty-split' })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('Split Claude title', 'Split Claude title')
+    expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+      'Split Claude title',
+      'Split Claude title',
+      'authoritative-tab'
+    )
+  })
+
+  it('completes ST-terminated split OSC tab titles across PTY chunks', async () => {
+    const { createPtyOutputProcessor } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onVisibleTabTitleChange = vi.fn()
+    const processor = createPtyOutputProcessor({ onTitleChange, onVisibleTabTitleChange })
+    const callbacks = { onData: vi.fn() }
+
+    processor.processData('\x1b]1;Split ST Claude', callbacks, { ptyId: 'pty-st-split' })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).not.toHaveBeenCalled()
+    expect(onVisibleTabTitleChange).not.toHaveBeenCalled()
+
+    processor.processData(' title\x1b\\', callbacks, { ptyId: 'pty-st-split' })
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('Split ST Claude title', 'Split ST Claude title')
+    expect(onVisibleTabTitleChange).toHaveBeenCalledWith(
+      'Split ST Claude title',
+      'Split ST Claude title',
+      'authoritative-tab'
+    )
+  })
+
   it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
     vi.useFakeTimers()
     try {

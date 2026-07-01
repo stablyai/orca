@@ -106,6 +106,8 @@ import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import { syncPaneVisibleTabTitle } from './pane-visible-tab-title-sync'
+import type { TerminalTabTitleSource } from '../../../../shared/terminal-tab-title-reducer'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -233,8 +235,15 @@ type UseTerminalPaneLifecycleDeps = {
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  updateTabTitle: (tabId: string, title: string) => void
+  updateTabTitle: (tabId: string, title: string, source?: TerminalTabTitleSource) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  setAcceptedPaneTabTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    source: TerminalTabTitleSource
+  ) => void
+  clearAcceptedPaneTabTitle: (tabId: string, paneId: number) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
@@ -522,6 +531,8 @@ export function useTerminalPaneLifecycle({
   consumeSuppressedPtyExit,
   updateTabTitle,
   setRuntimePaneTitle,
+  setAcceptedPaneTabTitle,
+  clearAcceptedPaneTabTitle,
   clearRuntimePaneTitle,
   updateTabPtyId,
   markWorktreeUnread,
@@ -738,6 +749,8 @@ export function useTerminalPaneLifecycle({
       consumeSuppressedPtyExit,
       updateTabTitle,
       setRuntimePaneTitle,
+      setAcceptedPaneTabTitle,
+      clearAcceptedPaneTabTitle,
       clearRuntimePaneTitle,
       updateTabPtyId,
       markWorktreeUnread,
@@ -1237,11 +1250,12 @@ export function useTerminalPaneLifecycle({
         const newActivePane = managerRef.current?.getActivePane()
         if (newActivePane) {
           reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
-          const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          const activeTitle = paneTitles[newActivePane.id]
-          if (activeTitle) {
-            updateTabTitle(tabId, activeTitle)
-          }
+          syncPaneVisibleTabTitle({
+            state: useAppStore.getState(),
+            tabId,
+            paneId: newActivePane.id,
+            updateTabTitle
+          })
         }
         scheduleRuntimeGraphSync()
       },
@@ -1276,11 +1290,12 @@ export function useTerminalPaneLifecycle({
         // tab title to the newly active pane's last-known title so the tab
         // label reflects the focused agent — not a stale title from the
         // previously focused pane.
-        const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-        const paneTitle = paneTitles[pane.id]
-        if (paneTitle) {
-          updateTabTitle(tabId, paneTitle)
-        }
+        syncPaneVisibleTabTitle({
+          state: useAppStore.getState(),
+          tabId,
+          paneId: pane.id,
+          updateTabTitle
+        })
       },
       onLayoutChanged: () => {
         scheduleRuntimeGraphSync()

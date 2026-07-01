@@ -10,7 +10,7 @@ type TerminalTab = TabsByWorktree[string][number]
 type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
 type UnifiedTab = UnifiedTabsByWorktree[string][number]
 
-const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
+const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title', 'titleSource'])
 // Why: this handoff flag is stripped from workspace sessions, so toggling it
 // alone should not rebuild and rewrite the durable session payload.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>(['pendingActivationSpawn'])
@@ -31,7 +31,13 @@ function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boo
       return true
     }
   }
-  return prev.title !== next.title && !isDecorativeAgentTitleFrameChange(prev.title, next.title)
+  const prevSource = prev.titleSource ?? 'legacy-window-fallback'
+  const nextSource = next.titleSource ?? 'legacy-window-fallback'
+  const sourceChanged = prevSource !== nextSource
+  if (prev.title === next.title) {
+    return sourceChanged
+  }
+  return sourceChanged || !isDecorativeAgentTitleFrameChange(prev.title, next.title)
 }
 
 function tabsByWorktreeChangedForSession(prev: TabsByWorktree, next: TabsByWorktree): boolean {
@@ -68,20 +74,23 @@ function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolea
     ...(Object.keys(next) as (keyof UnifiedTab)[])
   ])
   for (const key of keys) {
-    if (key === 'label') {
+    if (key === 'label' || key === 'labelSource') {
       continue
     }
     if (prev[key] !== next[key]) {
       return true
     }
   }
+  const prevSource = prev.labelSource ?? 'legacy-window-fallback'
+  const nextSource = next.labelSource ?? 'legacy-window-fallback'
+  const sourceChanged = prevSource !== nextSource
   if (prev.label === next.label) {
-    return false
+    return sourceChanged
   }
   if (prev.contentType !== 'terminal' || next.contentType !== 'terminal') {
     return true
   }
-  return !isDecorativeAgentTitleFrameChange(prev.label, next.label)
+  return sourceChanged || !isDecorativeAgentTitleFrameChange(prev.label, next.label)
 }
 
 function unifiedTabsByWorktreeChangedForSession(

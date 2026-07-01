@@ -58,7 +58,13 @@ type StoreState = {
   activeWorktreeId: string | null
   tabsByWorktree: Record<
     string,
-    { id: string; ptyId: string | null; title?: string; launchAgent?: string }[]
+    {
+      id: string
+      ptyId: string | null
+      title?: string
+      titleSource?: 'authoritative-tab'
+      launchAgent?: string
+    }[]
   >
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
@@ -119,6 +125,10 @@ type StoreState = {
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  acceptedPaneTabTitlesByTabId: Record<
+    string,
+    Record<number, { title: string; source: 'authoritative-tab' | 'legacy-window-fallback' }>
+  >
   agentStatusByPaneKey: Record<string, unknown>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   agentLaunchConfigByPaneKey: Record<string, { launchConfig: unknown }>
@@ -157,6 +167,15 @@ type MockTransport = {
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
+}
+
+type CreatedTransportOptions = {
+  onTitleChange?: (title: string, rawTitle: string) => void
+  onVisibleTabTitleChange?: (
+    title: string,
+    rawTitle: string,
+    source: 'authoritative-tab' | 'legacy-window-fallback'
+  ) => void
 }
 
 const scheduleRuntimeGraphSync = vi.fn()
@@ -416,6 +435,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     consumeSuppressedPtyExit: vi.fn(() => false),
     updateTabTitle: vi.fn(),
     setRuntimePaneTitle: vi.fn(),
+    setAcceptedPaneTabTitle: vi.fn(),
+    clearAcceptedPaneTabTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn(),
     markWorktreeUnread: vi.fn(),
@@ -620,6 +641,7 @@ describe('connectPanePty', () => {
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
+      acceptedPaneTabTitlesByTabId: {},
       agentStatusByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},
       agentLaunchConfigByPaneKey: {},
@@ -777,6 +799,202 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
       pane.id,
       expect.stringContaining('Terminal has zero dimensions (0×0)')
+    )
+  })
+
+  it('updates runtime titles from raw observations and tab labels from accepted visible titles', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, manager as never, deps as never)
+    await flushAsyncTicks()
+
+    const options = createdTransportOptions.at(-1) as CreatedTransportOptions
+    options.onTitleChange?.('Shell window title', 'Shell window title')
+
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Shell window title')
+    expect(deps.updateTabTitle).not.toHaveBeenCalled()
+
+    options.onVisibleTabTitleChange?.(
+      'Claude session title',
+      'Claude session title',
+      'authoritative-tab'
+    )
+
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Claude session title',
+      'authoritative-tab'
+    )
+    expect(deps.setAcceptedPaneTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      1,
+      'Claude session title',
+      'authoritative-tab'
+    )
+  })
+
+  it('does not let legacy visible titles replace an existing authoritative pane title', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', titleSource: 'authoritative-tab' }]
+      },
+      acceptedPaneTabTitlesByTabId: {
+        'tab-1': { 1: { title: 'Claude session title', source: 'authoritative-tab' } }
+      }
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, manager as never, deps as never)
+    await flushAsyncTicks()
+
+    const options = createdTransportOptions.at(-1) as CreatedTransportOptions
+    options.onVisibleTabTitleChange?.(
+      'Shell window title',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+
+    expect(deps.setAcceptedPaneTabTitle).not.toHaveBeenCalled()
+    expect(deps.updateTabTitle).not.toHaveBeenCalled()
+  })
+
+  it('preserves a restored authoritative title against later same-pane legacy titles', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            ptyId: 'tab-pty',
+            title: 'Claude restored session',
+            titleSource: 'authoritative-tab'
+          }
+        ]
+      },
+      acceptedPaneTabTitlesByTabId: {}
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, manager as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(deps.setAcceptedPaneTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      1,
+      'Claude restored session',
+      'authoritative-tab'
+    )
+    vi.mocked(deps.setAcceptedPaneTabTitle).mockClear()
+
+    const options = createdTransportOptions.at(-1) as CreatedTransportOptions
+    options.onVisibleTabTitleChange?.(
+      'Shell window title',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+
+    expect(deps.setAcceptedPaneTabTitle).not.toHaveBeenCalled()
+    expect(deps.updateTabTitle).not.toHaveBeenCalled()
+  })
+
+  it('accepts a legacy visible title for a pane even when another pane made the tab authoritative', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    manager.getActivePane.mockReturnValue({ id: 2 })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', titleSource: 'authoritative-tab' }]
+      },
+      acceptedPaneTabTitlesByTabId: {
+        'tab-1': { 1: { title: 'Claude session title', source: 'authoritative-tab' } }
+      }
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    await flushAsyncTicks()
+
+    const options = createdTransportOptions.at(-1) as CreatedTransportOptions
+    options.onVisibleTabTitleChange?.(
+      'Shell window title',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+
+    expect(deps.setAcceptedPaneTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      2,
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Shell window title',
+      'legacy-window-fallback'
+    )
+  })
+
+  it('clears stale accepted pane titles when spawning a fresh replacement PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      acceptedPaneTabTitlesByTabId: {
+        'tab-1': { 1: { title: 'Old Claude session', source: 'authoritative-tab' } }
+      }
+    }
+    const deps = createDeps()
+
+    connectPanePty(createPane(1) as never, manager as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(deps.clearAcceptedPaneTabTitle).toHaveBeenCalledWith('tab-1', 1)
+    mockStoreState.acceptedPaneTabTitlesByTabId = {
+      ...mockStoreState.acceptedPaneTabTitlesByTabId,
+      'tab-1': {}
+    }
+
+    const options = createdTransportOptions.at(-1) as CreatedTransportOptions
+    options.onVisibleTabTitleChange?.(
+      'Fresh shell window',
+      'Fresh shell window',
+      'legacy-window-fallback'
+    )
+
+    expect(deps.setAcceptedPaneTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      1,
+      'Fresh shell window',
+      'legacy-window-fallback'
+    )
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Fresh shell window',
+      'legacy-window-fallback'
     )
   })
 
@@ -3857,12 +4075,30 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
     mockStoreState = {
       ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'restored-session' }] },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            ptyId: 'restored-session',
+            title: 'Claude restored session',
+            titleSource: 'authoritative-tab'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_2 },
+          activeLeafId: LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_2]: 'restored-session' }
+        }
+      },
       repos: [{ id: 'repo1', connectionId: 'conn-1' }],
       sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
     } as StoreState
     const pane = createPane(2)
     const manager = createManager(2)
+    manager.getActivePane.mockReturnValue({ id: 2 })
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
@@ -3877,6 +4113,26 @@ describe('connectPanePty', () => {
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-ssh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
+    expect(deps.clearAcceptedPaneTabTitle).toHaveBeenCalledWith('tab-1', 2)
+
+    const options = createdTransportOptions.at(-1) as CreatedTransportOptions
+    options.onVisibleTabTitleChange?.(
+      'Fresh shell window',
+      'Fresh shell window',
+      'legacy-window-fallback'
+    )
+
+    expect(deps.setAcceptedPaneTabTitle).toHaveBeenLastCalledWith(
+      'tab-1',
+      2,
+      'Fresh shell window',
+      'legacy-window-fallback'
+    )
+    expect(deps.updateTabTitle).toHaveBeenCalledWith(
+      'tab-1',
+      'Fresh shell window',
+      'legacy-window-fallback'
+    )
   })
 
   it('submits a cold-restore resume command after SSH expired-session fallback', async () => {
@@ -9998,7 +10254,7 @@ describe('connectPanePty', () => {
     titleHandler('Codex - action required', 'Codex - action required')
 
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Codex - action required')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Codex - action required')
+    expect(deps.updateTabTitle).not.toHaveBeenCalled()
   })
 
   it('normalizes Pi-compatible remote titles to authoritative OMP launch identity', async () => {
@@ -10026,10 +10282,9 @@ describe('connectPanePty', () => {
     }
     titleHandler('\u280b Pi', '\u280b Pi')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
-    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
     titleHandler('π: tmp', 'π: tmp')
     expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP ready')
-    expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'OMP ready')
+    expect(deps.updateTabTitle).not.toHaveBeenCalled()
 
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'working'; prompt: string; agentType: 'pi' }) => void)

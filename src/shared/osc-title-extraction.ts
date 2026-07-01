@@ -6,8 +6,14 @@ const SEMICOLON_CODE_UNIT = 0x3b
 const OSC_TITLE_COMMANDS = new Set([0x30, 0x31, 0x32])
 export const MAX_OSC_TITLE_CHARS = 1024
 
+export type OscTitleTarget = 'icon' | 'window' | 'both'
+export type OscTitleUpdate = {
+  title: string
+  target: OscTitleTarget
+}
+
 type OscTitleParseResult =
-  | { kind: 'title'; title: string; nextIndex: number }
+  | { kind: 'title'; update: OscTitleUpdate; nextIndex: number }
   | { kind: 'invalid'; nextIndex: number }
   | { kind: 'incomplete' }
 
@@ -29,13 +35,17 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
     return { kind: 'invalid', nextIndex: index + 2 }
   }
 
+  const target = getOscTitleTarget(data.charCodeAt(index + 2))
   const titleStart = index + 4
   for (let cursor = titleStart; cursor < data.length; cursor += 1) {
     const code = data.charCodeAt(cursor)
     if (code === BEL_CODE_UNIT) {
       return {
         kind: 'title',
-        title: readBoundedOscTitle(data, titleStart, cursor),
+        update: {
+          title: readBoundedOscTitle(data, titleStart, cursor),
+          target
+        },
         nextIndex: cursor + 1
       }
     }
@@ -45,7 +55,10 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
     if (data.charCodeAt(cursor + 1) === BACKSLASH_CODE_UNIT) {
       return {
         kind: 'title',
-        title: readBoundedOscTitle(data, titleStart, cursor),
+        update: {
+          title: readBoundedOscTitle(data, titleStart, cursor),
+          target
+        },
         nextIndex: cursor + 2
       }
     }
@@ -53,6 +66,16 @@ function parseOscTitleAt(data: string, index: number): OscTitleParseResult {
   }
 
   return { kind: 'incomplete' }
+}
+
+function getOscTitleTarget(command: number): OscTitleTarget {
+  if (command === 0x31) {
+    return 'icon'
+  }
+  if (command === 0x32) {
+    return 'window'
+  }
+  return 'both'
 }
 
 function readBoundedOscTitle(data: string, titleStart: number, titleEnd: number): string {
@@ -71,11 +94,25 @@ function readBoundedOscTitle(data: string, titleStart: number, titleEnd: number)
 }
 
 export function extractLastOscTitle(data: string): string | null {
+  return extractAllOscTitleUpdates(data).at(-1)?.title ?? null
+}
+
+export function extractAllOscTitles(data: string): string[] {
+  return extractAllOscTitleUpdates(data).map((update) => update.title)
+}
+
+export function extractAllOscTabTitles(data: string): string[] {
+  return extractAllOscTitleUpdates(data)
+    .filter((update) => update.target === 'both' || update.target === 'icon')
+    .map((update) => update.title)
+}
+
+export function extractAllOscTitleUpdates(data: string): OscTitleUpdate[] {
   if (!data.includes('\x1b]')) {
-    return null
+    return []
   }
 
-  let last: string | null = null
+  const updates: OscTitleUpdate[] = []
   let searchStart = 0
   // Why: raw PTY chunks can include large pasted content. Parse OSC titles
   // directly instead of running a global regex over the whole chunk.
@@ -89,37 +126,11 @@ export function extractLastOscTitle(data: string): string | null {
       break
     }
     if (parsed.kind === 'title') {
-      last = parsed.title
+      updates.push(parsed.update)
       searchStart = parsed.nextIndex
       continue
     }
     searchStart = parsed.nextIndex
   }
-  return last
-}
-
-export function extractAllOscTitles(data: string): string[] {
-  if (!data.includes('\x1b]')) {
-    return []
-  }
-
-  const titles: string[] = []
-  let searchStart = 0
-  while (searchStart < data.length) {
-    const start = data.indexOf('\x1b]', searchStart)
-    if (start === -1) {
-      break
-    }
-    const parsed = parseOscTitleAt(data, start)
-    if (parsed.kind === 'incomplete') {
-      break
-    }
-    if (parsed.kind === 'title') {
-      titles.push(parsed.title)
-      searchStart = parsed.nextIndex
-      continue
-    }
-    searchStart = parsed.nextIndex
-  }
-  return titles
+  return updates
 }

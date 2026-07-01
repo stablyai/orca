@@ -33,6 +33,7 @@ import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentLaunchConfig, SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
+import type { TerminalTabTitleSource } from './terminal-tab-title-reducer'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
@@ -778,6 +779,7 @@ export type Tab = {
   worktreeId: string
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
+  labelSource?: TerminalTabTitleSource
   generatedLabel?: string | null
   quickCommandLabel?: string | null
   customLabel: string | null
@@ -813,6 +815,7 @@ export type TerminalTab = {
   ptyId: string | null
   worktreeId: string
   title: string
+  titleSource?: TerminalTabTitleSource
   /** Stable fallback label for default-named terminals ("Terminal 1", etc.).
    *  Why: agent CLIs overwrite the live title via OSC updates, but Orca still
    *  needs the original terminal label for numbering and reset behavior. */
