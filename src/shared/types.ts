@@ -3142,6 +3142,10 @@ export type PersistedUIState = {
   markdownTocPanelWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
+  /** Direction applied to `sortBy`. 'asc' is each mode's natural order
+   *  (name A→Z, recent newest-first, …); 'desc' reverses it. Ignored for
+   *  `sortBy: 'manual'`, which is a fixed user-defined order. */
+  sortDirection: 'asc' | 'desc'
   /** Project header ordering in `groupBy: 'repo'`, independent of workspace
    *  `sortBy`. 'manual' (default) uses the persisted repo order and enables
    *  header drag; 'recent' orders by each project's most recent visible

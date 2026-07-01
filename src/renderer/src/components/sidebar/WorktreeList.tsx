@@ -63,7 +63,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
-import { buildWorktreeComparator } from './smart-sort'
+import { applySortDirection, buildWorktreeComparator } from './smart-sort'
 import {
   buildAttentionByWorktree,
   type SmartClass,
@@ -4989,6 +4989,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
+  const sortDirection = useAppStore((s) => s.sortDirection)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
@@ -5219,13 +5220,19 @@ const WorktreeList = React.memo(function WorktreeList({
           )
         : new Map<string, WorktreeAttention>()
     lastAttentionByWorktreeRef.current = sortBy === 'smart' ? attentionByWorktree : null
-    nonArchivedWorktrees.sort(buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree))
+    nonArchivedWorktrees.sort(
+      // Why: 'manual' is a fixed user-defined order, so direction never reverses it.
+      applySortDirection(
+        buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree),
+        sortBy === 'manual' ? 'asc' : sortDirection
+      )
+    )
     return nonArchivedWorktrees.map((w) => w.id)
     // debouncedSortEpoch is an intentional trigger: it's not read inside the
     // memo, but its change signals that the sort order should be recomputed.
     // The debounce prevents jarring mid-interaction position shifts.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSortEpoch, repoMap, sortBy])
+  }, [debouncedSortEpoch, repoMap, sortBy, sortDirection])
 
   // Why a ref of prior class per worktree: smart_sort_class_1_promotion must
   // fire only on transitions INTO Class 1, not on every recompute that keeps

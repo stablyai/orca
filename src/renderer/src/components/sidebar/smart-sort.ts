@@ -8,6 +8,21 @@ import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-
 
 export type SortBy = 'name' | 'smart' | 'recent' | 'repo' | 'manual'
 
+export type SortDirection = 'asc' | 'desc'
+
+/**
+ * Wrap a worktree comparator to honor the chosen sort direction. Each sort
+ * mode defines a natural ("ascending") order in `buildWorktreeComparator`;
+ * `desc` flips it. Manual order has no comparator (user-defined drag order),
+ * so callers skip direction entirely there.
+ */
+export function applySortDirection(
+  comparator: (a: Worktree, b: Worktree) => number,
+  direction: SortDirection
+): (a: Worktree, b: Worktree) => number {
+  return direction === 'desc' ? (a, b) => -comparator(a, b) : comparator
+}
+
 // Why: a newly-created worktree's lastActivityAt is stamped at the moment
 // createLocalWorktree finishes git + setup-runner prep (often several seconds
 // after the user clicked Create). During and after that window, ambient PTY
