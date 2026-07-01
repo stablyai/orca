@@ -3,16 +3,11 @@ import type { TextInput } from 'react-native'
 import {
   TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS,
   getTerminalLiveAccessoryBytesDecision,
-  getTerminalLiveAccessoryLocalEditText,
-  type TerminalLiveAccessoryLocalEdit
+  getTerminalLiveAccessoryLocalEditText
 } from './terminal-live-text-commit'
+import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
-
-export type TerminalLiveAccessoryInput = {
-  readonly bytes: string
-  readonly localEdit?: TerminalLiveAccessoryLocalEdit
-}
 
 export type TerminalLiveAccessoryInputCommitResult =
   | { readonly kind: 'allow-raw' }

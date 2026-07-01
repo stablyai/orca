@@ -6,12 +6,12 @@ import {
   getTerminalLiveTextChangeDecision
 } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
+import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
   useTerminalLiveAccessoryInputCommit,
-  type TerminalLiveAccessoryInput,
   type TerminalLiveAccessoryInputCommitResult
 } from './use-terminal-live-accessory-input-commit'
 

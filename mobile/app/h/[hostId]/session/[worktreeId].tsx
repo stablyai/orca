@@ -96,6 +96,7 @@ import {
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
 import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
+import { getTerminalLiveAccessoryRawSendTarget } from '../../../../src/terminal/terminal-live-accessory-raw-send-target'
 import {
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
@@ -105,7 +106,6 @@ import {
 } from '../../../../src/terminal/terminal-live-input'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
-import type { TerminalLiveAccessoryInput } from '../../../../src/terminal/use-terminal-live-accessory-input-commit'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
@@ -237,9 +237,10 @@ import type {
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
 
+type TerminalLiveAccessoryInput = ReturnType<typeof createTerminalLiveAccessoryInput>
+
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
-
 // Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
 // photos can exceed the upload byte budget; resize the raster down to fit before upload.
 // The image is staged to a temp file first because the iOS ImageManipulator loader
@@ -3128,29 +3129,29 @@ export default function SessionScreen() {
   }
 
   async function handleAccessoryKey(input: TerminalLiveAccessoryInput) {
-    const { bytes } = input
     if (!client || !activeHandle || !canSend) {
       return
     }
+    const targetHandle = activeHandle
     const accessoryCommit = await handleLiveInputAccessoryBytes(input)
     if (accessoryCommit.kind !== 'allow-raw') {
       return
     }
 
     const currentClient = clientRef.current
-    const currentHandle = activeHandleRef.current
-    if (
-      !currentClient ||
-      !currentHandle ||
-      connStateRef.current !== 'connected' ||
-      activeSessionTabTypeRef.current !== 'terminal'
-    ) {
+    const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
+      targetHandle,
+      activeHandle: activeHandleRef.current,
+      activeSessionTabType: activeSessionTabTypeRef.current,
+      liveInputTerminalHandles: liveInputTerminalHandlesRef.current
+    })
+    if (!currentClient || !rawSendTarget || connStateRef.current !== 'connected') {
       return
     }
     await currentClient
       .sendRequest('terminal.send', {
-        terminal: currentHandle,
-        text: bytes,
+        terminal: rawSendTarget,
+        text: input.bytes,
         enter: false,
         ...(deviceTokenRef.current
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }

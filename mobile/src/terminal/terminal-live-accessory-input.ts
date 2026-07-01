@@ -1,4 +1,9 @@
-import type { TerminalLiveAccessoryInput } from './use-terminal-live-accessory-input-commit'
+import type { TerminalLiveAccessoryLocalEdit } from './terminal-live-text-commit'
+
+export type TerminalLiveAccessoryInput = {
+  readonly bytes: string
+  readonly localEdit?: TerminalLiveAccessoryLocalEdit
+}
 
 type TerminalLiveAccessoryKey = {
   readonly bytes: string
