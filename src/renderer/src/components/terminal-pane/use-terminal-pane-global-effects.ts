@@ -46,6 +46,8 @@ function reportRendererPtyVisibility(
   for (const transport of paneTransports.values()) {
     const ptyId = transport.getPtyId()
     if (!ptyId || ptyId.startsWith('remote:')) {
+      // Why: remote-runtime PTYs use a relay path outside main's local
+      // renderer-visibility registry, so reporting them here is misleading.
       continue
     }
     window.api.pty.setRendererPtyVisible?.(ptyId, visible)
@@ -110,7 +112,7 @@ export function useTerminalPaneGlobalEffects({
     const paneTransports = paneTransportsRef.current
     reportRendererPtyVisibility(paneTransports, rendererVisible)
     return () => reportRendererPtyVisibility(paneTransports, false)
-  }, [rendererVisible, paneCount, paneTransportsRef])
+  }, [rendererVisible, paneTransportsRef])
 
   useEffect(() => {
     const manager = managerRef.current

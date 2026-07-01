@@ -1761,6 +1761,8 @@ export function connectPanePty(
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   const reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
+      // Why: remote-runtime PTYs use a relay path outside main's local
+      // renderer-visibility registry, so reporting them here is misleading.
       return
     }
     window.api.pty.setRendererPtyVisible?.(ptyId, visible)

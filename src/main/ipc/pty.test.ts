@@ -304,6 +304,7 @@ describe('registerPtyHandlers', () => {
     clearPaneKeyAliasesForPtyMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
+    mainWindow.webContents.removeListener.mockReset()
 
     // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel
     // unless removeHandler cleared it first. This catches a re-registration
@@ -566,6 +567,16 @@ describe('registerPtyHandlers', () => {
       throw new Error('missing pty:setRendererPtyVisible listener')
     }
     return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
+  }
+
+  function getMainWindowWebContentsListener(eventName: string): (...args: unknown[]) => void {
+    const listenerCall = mainWindow.webContents.on.mock.calls.find(
+      (call: unknown[]) => call[0] === eventName
+    )
+    if (!listenerCall) {
+      throw new Error(`missing ${eventName} listener`)
+    }
+    return listenerCall[1] as (...args: unknown[]) => void
   }
 
   function getPtyResizeListener(): (
@@ -5893,6 +5904,47 @@ describe('registerPtyHandlers', () => {
         id: spawnResult.id,
         data: '\x1b[2Khidden-width redraw',
         background: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks visible renderer PTYs hidden while the renderer lifecycle resets', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      handleRendererLoading()
+      mockProc.emitData('reload-gap output')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'reload-gap output',
+        background: true
+      })
+
+      mainWindow.webContents.send.mockClear()
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      mockProc.emitData('visible output')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible output'
       })
     } finally {
       vi.useRealTimers()

@@ -1117,6 +1117,8 @@ let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
+let rendererLifecycleResetWebContents: WebContents | null = null
+let rendererLifecycleResetHandler: (() => void) | null = null
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
 // against the freshly-created adapter after replaceDaemonProvider swaps the
@@ -1183,6 +1185,42 @@ function clearDidFinishLoadHandler(): void {
   didFinishLoadWebContents = null
 }
 
+function markRendererPtysHiddenForRendererLifecycleReset(): void {
+  // Why: renderer-owned hints die with the page; keep known-visibility state so
+  // surviving daemon/SSH PTYs fail closed until the new renderer reports again.
+  activeRendererPtys.clear()
+  visibleRendererPtys.clear()
+}
+
+function clearRendererLifecycleResetHandlers(): void {
+  if (!rendererLifecycleResetWebContents) {
+    return
+  }
+  if (rendererLifecycleResetHandler) {
+    rendererLifecycleResetWebContents.removeListener(
+      'did-start-loading',
+      rendererLifecycleResetHandler
+    )
+    rendererLifecycleResetWebContents.removeListener(
+      'render-process-gone',
+      rendererLifecycleResetHandler
+    )
+    rendererLifecycleResetWebContents.removeListener('destroyed', rendererLifecycleResetHandler)
+  }
+  rendererLifecycleResetWebContents = null
+  rendererLifecycleResetHandler = null
+}
+
+function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
+  clearRendererLifecycleResetHandlers()
+  markRendererPtysHiddenForRendererLifecycleReset()
+  rendererLifecycleResetWebContents = webContents
+  rendererLifecycleResetHandler = markRendererPtysHiddenForRendererLifecycleReset
+  webContents.on('did-start-loading', rendererLifecycleResetHandler)
+  webContents.on('render-process-gone', rendererLifecycleResetHandler)
+  webContents.on('destroyed', rendererLifecycleResetHandler)
+}
+
 // Why: the "Restart daemon" flow needs to detach listeners from the current
 // adapter *after* synthetic pty:exit events fan out (so the renderer receives
 // them) but *before* replaceDaemonProvider swaps in the new adapter (so the
@@ -1208,6 +1246,8 @@ export function registerPtyHandlers(
     awaitLocalPtyStartup?: () => Promise<void>
   }
 ): void {
+  registerRendererLifecycleResetHandlers(mainWindow.webContents)
+
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
       return undefined
