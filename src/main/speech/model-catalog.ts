@@ -157,6 +157,20 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'sarvam-saaras-v3',
+    label: 'Sarvam Saaras v3',
+    description:
+      'Real-time cloud transcription for 23 Indian languages + English with auto-detect. Requires a Sarvam API key.',
+    type: 'sarvam',
+    provider: 'sarvam',
+    language: 'multilingual',
+    // Why: Sarvam streams over a WebSocket, emitting finalized segments as you
+    // speak — so it behaves like the local streaming models, not the buffered
+    // OpenAI cloud path.
+    sampleRate: 16000,
+    streaming: true
   }
 ]
 
@@ -166,4 +180,8 @@ export function getCatalogModel(id: string): SpeechModelManifest | undefined {
 
 export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {
   return manifest.provider === 'local'
+}
+
+export function isCloudSpeechModel(manifest: SpeechModelManifest): boolean {
+  return manifest.provider !== 'local'
 }

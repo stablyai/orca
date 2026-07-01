@@ -10,6 +10,11 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearSarvamSpeechApiKey,
+  hasSarvamSpeechApiKey,
+  saveSarvamSpeechApiKey
+} from '../speech/sarvam-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -32,6 +37,20 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
+    return { configured: false }
+  })
+
+  ipcMain.handle('speech:getSarvamApiKeyStatus', async () => {
+    return { configured: hasSarvamSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveSarvamApiKey', async (_event, apiKey: string) => {
+    saveSarvamSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearSarvamApiKey', async () => {
+    clearSarvamSpeechApiKey()
     return { configured: false }
   })
 

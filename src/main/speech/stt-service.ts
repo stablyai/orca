@@ -4,10 +4,12 @@ import { Worker } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { getCatalogModel } from './model-catalog'
+import { getCatalogModel, isCloudSpeechModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
-import { OpenAiTranscriptionSession } from './openai-transcription-client'
-import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import {
+  createCloudTranscriptionSession,
+  type CloudTranscriptionSession
+} from './cloud-transcription-session'
 
 export const START_DICTATION_TIMEOUT_MS = 60_000
 const STOP_DICTATION_TIMEOUT_MS = 60_000
@@ -24,7 +26,7 @@ export type SttEventSink = (event: SttEvent) => void
 
 export class SttService {
   private worker: Worker | null = null
-  private cloudSession: OpenAiTranscriptionSession | null = null
+  private cloudSession: CloudTranscriptionSession | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
   private activeHotwordsFilePath: string | undefined
@@ -89,8 +91,12 @@ export class SttService {
       throw new Error(`Unknown model: ${modelId}`)
     }
 
-    if (manifest.provider === 'openai') {
-      if (this.worker) {
+    if (isCloudSpeechModel(manifest)) {
+      // Tear down whichever session kind is currently active before switching to
+      // a (possibly different) cloud provider so no socket or worker leaks.
+      if (this.cloudSession) {
+        await this.stopDictation(owner, { cancelStarting: false })
+      } else if (this.worker) {
         await this.stopDictation(owner, { cancelStarting: false })
         await this.teardownIdleWorker()
       }
@@ -100,10 +106,25 @@ export class SttService {
         throw new Error(`Model not ready: ${modelState.status}`)
       }
 
-      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+      const session = createCloudTranscriptionSession(manifest, sink)
+      this.cloudSession = session
       this.activeModelId = modelId
       this.activeHotwordsFilePath = undefined
       this.eventSink = sink
+      try {
+        await this.startCloudSession(session)
+      } catch (error) {
+        // Why: a streaming session may have a half-open socket; release it and
+        // clear state before surfacing the start failure.
+        await session.stop().catch(() => undefined)
+        if (this.cloudSession === session) {
+          this.cloudSession = null
+          this.activeModelId = null
+          this.activeHotwordsFilePath = undefined
+          this.eventSink = null
+        }
+        throw error
+      }
       sink({ type: 'ready' })
       return
     }
@@ -258,6 +279,25 @@ export class SttService {
     }
   }
 
+  private async startCloudSession(session: CloudTranscriptionSession): Promise<void> {
+    // Why: a cloud handshake (e.g. Sarvam's WebSocket) can stall without
+    // resolving; bound it so the UI's Starting state cannot hang forever.
+    let startupTimeout: ReturnType<typeof setTimeout> | null = null
+    const timeout = new Promise<never>((_, reject) => {
+      startupTimeout = setTimeout(() => {
+        reject(new Error('Cloud transcription timed out while starting.'))
+      }, START_DICTATION_TIMEOUT_MS)
+      startupTimeout.unref?.()
+    })
+    try {
+      await Promise.race([session.start(), timeout])
+    } finally {
+      if (startupTimeout) {
+        clearTimeout(startupTimeout)
+      }
+    }
+  }
+
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {
     const currentOwner = this.activeOwner ?? this.startingOwner
     if (!currentOwner) {
@@ -292,15 +332,9 @@ export class SttService {
       const session = this.cloudSession
       this.cloudSession = null
       try {
-        const text = await session.finish()
-        if (text) {
-          this.eventSink?.({ type: 'final', text })
-        }
-      } catch (error) {
-        this.eventSink?.({
-          type: 'error',
-          error: error instanceof Error ? error.message : String(error)
-        })
+        // The session emits any trailing `final`/`error` through the sink; we
+        // only bracket the lifecycle with `stopped` once it has drained.
+        await session.stop()
       } finally {
         this.eventSink?.({ type: 'stopped' })
         this.activeModelId = null

@@ -7,11 +7,16 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
+import { SarvamTranscriptionKeyDialog } from './SarvamTranscriptionKeyDialog'
+import { SarvamTranscriptionSettingsRow } from './SarvamTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from './settings-search'
-import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
+import {
+  getOpenaiTranscriptionSearchEntry,
+  getSarvamTranscriptionSearchEntry
+} from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
 
 export { handleVoiceDictationToggle }
@@ -32,6 +37,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
   const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
+  const [sarvamDialogOpen, setSarvamDialogOpen] = useState(false)
+  const [sarvamApiKeyDraft, setSarvamApiKeyDraft] = useState('')
+  const [sarvamKeyPending, setSarvamKeyPending] = useState(false)
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
@@ -71,10 +79,24 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         }
       })
       .catch(() => {})
+    void window.api.speech
+      .getSarvamApiKeyStatus()
+      .then((status) => {
+        if (!cancelled && status.configured !== voiceSettings.sarvamApiKeyConfigured) {
+          updateVoiceSettings({ sarvamApiKeyConfigured: status.configured })
+          refreshModelStates()
+        }
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+  }, [
+    refreshModelStates,
+    updateVoiceSettings,
+    voiceSettings.openAiApiKeyConfigured,
+    voiceSettings.sarvamApiKeyConfigured
+  ])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -129,11 +151,31 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     selectedModel?.provider === 'openai' ||
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
+  const showSarvamSettingsRow =
+    voiceSettings.sarvamApiKeyConfigured ||
+    selectedModel?.provider === 'sarvam' ||
+    (settingsSearchQuery.trim() !== '' &&
+      matchesSettingsSearch(settingsSearchQuery, getSarvamTranscriptionSearchEntry()))
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
     setOpenAiApiKeyDraft('')
     setOpenAiDialogOpen(true)
+  }
+
+  const openSarvamDialog = (modelId: string | null = null): void => {
+    setPendingCloudModelId(modelId)
+    setSarvamApiKeyDraft('')
+    setSarvamDialogOpen(true)
+  }
+
+  // Route a cloud model's key prompt to the dialog for its provider.
+  const openCloudKeyDialog = (manifest: SpeechModelManifest): void => {
+    if (manifest.provider === 'sarvam') {
+      openSarvamDialog(manifest.id)
+    } else {
+      openOpenAiDialog(manifest.id)
+    }
   }
 
   const saveOpenAiApiKey = async (): Promise<void> => {
@@ -198,6 +240,68 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     }
   }
 
+  const saveSarvamApiKey = async (): Promise<void> => {
+    setSarvamKeyPending(true)
+    try {
+      await window.api.speech.saveSarvamApiKey(sarvamApiKeyDraft)
+      updateVoiceSettings({
+        sarvamApiKeyConfigured: true,
+        sttModel: pendingCloudModelId ?? voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      setSarvamDialogOpen(false)
+      setSarvamApiKeyDraft('')
+      setPendingCloudModelId(null)
+      toast.success(
+        translate('auto.components.settings.VoicePane.sarvamKeySaved', 'Sarvam API key saved')
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.sarvamKeySaveFailed',
+              'Failed to save Sarvam API key'
+            )
+      )
+    } finally {
+      if (mountedRef.current) {
+        setSarvamKeyPending(false)
+      }
+    }
+  }
+
+  const clearSarvamApiKey = async (): Promise<void> => {
+    setSarvamKeyPending(true)
+    try {
+      await window.api.speech.clearSarvamApiKey()
+      updateVoiceSettings({
+        sarvamApiKeyConfigured: false,
+        sttModel: selectedModel?.provider === 'sarvam' ? '' : voiceSettings.sttModel
+      })
+      await refreshModelStates()
+      setSarvamDialogOpen(false)
+      setSarvamApiKeyDraft('')
+      setPendingCloudModelId(null)
+      toast.success(
+        translate('auto.components.settings.VoicePane.sarvamKeyCleared', 'Sarvam API key cleared')
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.VoicePane.sarvamKeyClearFailed',
+              'Failed to clear Sarvam API key'
+            )
+      )
+    } finally {
+      if (mountedRef.current) {
+        setSarvamKeyPending(false)
+      }
+    }
+  }
+
   return (
     <div ref={handlePaneRef} className="space-y-1">
       <VoiceDictationSettingsSection
@@ -212,7 +316,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
-        onOpenOpenAiDialog={openOpenAiDialog}
+        onOpenCloudKeyDialog={openCloudKeyDialog}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -228,6 +332,18 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         </>
       )}
 
+      {showSarvamSettingsRow && (
+        <>
+          <Separator />
+          <SarvamTranscriptionSettingsRow
+            configured={voiceSettings.sarvamApiKeyConfigured}
+            disabled={sarvamKeyPending}
+            onConfigure={() => openSarvamDialog(null)}
+            onClear={() => void clearSarvamApiKey()}
+          />
+        </>
+      )}
+
       <OpenAiTranscriptionKeyDialog
         open={openAiDialogOpen}
         configured={voiceSettings.openAiApiKeyConfigured}
@@ -237,6 +353,17 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onApiKeyDraftChange={setOpenAiApiKeyDraft}
         onSave={() => void saveOpenAiApiKey()}
         onClear={() => void clearOpenAiApiKey()}
+      />
+
+      <SarvamTranscriptionKeyDialog
+        open={sarvamDialogOpen}
+        configured={voiceSettings.sarvamApiKeyConfigured}
+        apiKeyDraft={sarvamApiKeyDraft}
+        pending={sarvamKeyPending}
+        onOpenChange={setSarvamDialogOpen}
+        onApiKeyDraftChange={setSarvamApiKeyDraft}
+        onSave={() => void saveSarvamApiKey()}
+        onClear={() => void clearSarvamApiKey()}
       />
     </div>
   )

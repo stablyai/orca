@@ -5994,7 +5994,9 @@ export class OrcaRuntimeService {
       return {
         id: manifest.id,
         label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
+        // Why: pass every provider through explicitly so a new cloud provider
+        // (e.g. sarvam) is not silently mislabeled as a downloadable local model.
+        provider: manifest.provider,
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',

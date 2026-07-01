@@ -6683,7 +6683,11 @@
           "f9a9cf6928": "音声ディクテーションを有効にする前に、マイクの許可が必要です。",
           "1eac933202": "macOS のプライバシーとセキュリティを開きました。アクセスを許可した後、ディクテーションを再度有効にします。",
           "cd9fe37556": "マイクの許可が与えられました",
-          "6fa734ed95": "{{value0}} を削除"
+          "6fa734ed95": "{{value0}} を削除",
+          "sarvamKeySaved": "Sarvam API key saved",
+          "sarvamKeySaveFailed": "Failed to save Sarvam API key",
+          "sarvamKeyCleared": "Sarvam API key cleared",
+          "sarvamKeyClearFailed": "Failed to clear Sarvam API key"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",
@@ -8285,7 +8289,9 @@
               "20574cbc72": "音声ディクテーションを有効にする",
               "322d457a0d": "転写",
               "dcc7846641": "クラウド音声テキスト変換モデルに使用される OpenAI API キーを構成します。",
-              "ebfd0b32e5": "OpenAI 文字起こし"
+              "ebfd0b32e5": "OpenAI 文字起こし",
+              "sarvamTitle": "Sarvam Transcription",
+              "sarvamDescription": "Configure the Sarvam API key used for cloud speech-to-text models."
             }
           }
         },
@@ -8694,6 +8700,25 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "repo が所有するオンデマンド環境のセットアップ コントロールとワークスペース実行ターゲットを示します。",
           "toggleLabel": "ワークスペースごとの環境を切り替える"
+        },
+        "SarvamTranscriptionKeyDialog": {
+          "title": "Sarvam Transcription",
+          "description": "Audio streams to Sarvam only when a Sarvam speech model is selected. Supports 23 Indian languages and English with auto-detect.",
+          "apiKey": "API Key",
+          "placeholderConfigured": "API key configured",
+          "placeholder": "Sarvam API subscription key",
+          "storage": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "clear": "Clear Key",
+          "save": "Save Key"
+        },
+        "SarvamTranscriptionSettingsRow": {
+          "title": "Sarvam Transcription",
+          "connected": "Connected",
+          "configured": "API key configured for cloud speech-to-text models.",
+          "prompt": "Add a Sarvam API key before selecting cloud speech-to-text models.",
+          "replace": "Replace key",
+          "disconnect": "Disconnect Sarvam API key",
+          "add": "Add API key"
         }
       },
       "right": {

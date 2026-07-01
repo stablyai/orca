@@ -55,6 +55,9 @@ function installWindowApi(
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
         clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
+        getSarvamApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveSarvamApiKey: vi.fn(async () => ({ configured: true })),
+        clearSarvamApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
         downloadModel: vi.fn()
       }

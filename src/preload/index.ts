@@ -4073,6 +4073,12 @@ const api = {
       ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
     clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+    getSarvamApiKeyStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:getSarvamApiKeyStatus'),
+    saveSarvamApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:saveSarvamApiKey', apiKey),
+    clearSarvamApiKey: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('speech:clearSarvamApiKey'),
     downloadModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('speech:downloadModel', modelId),
     cancelDownload: (modelId: string): Promise<void> =>
