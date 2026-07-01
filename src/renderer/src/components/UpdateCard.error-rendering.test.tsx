@@ -73,9 +73,7 @@ describe('UpdateCard signature-verification error rendering', () => {
     root = null
     container?.remove()
     container = null
-  })
 
-  afterEach(() => {
     useAppStore.setState({
       updateStatus: { state: 'idle' },
       updateChangelog: null,

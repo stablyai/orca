@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { UpdateStatus } from '../../../shared/types'
+import { shouldShowUpdateCard, type UpdateCardVisibilityInput } from './update-card-visibility'
 
 const RICH_CHANGELOG = {
   release: {
@@ -11,44 +11,29 @@ const RICH_CHANGELOG = {
   releasesBehind: 3
 }
 
-type VisibilityInput = {
-  status: UpdateStatus
-  dismissedVersion: string | null
-  cachedVersion: string | null
-  hasStartedDownload: boolean
-  updateUserInitiatedCycle?: boolean
-}
+type VisibilityInput = Omit<
+  UpdateCardVisibilityInput,
+  'updateUserInitiatedCycle' | 'autoDismissed' | 'errorDismissed' | 'collapsed'
+> &
+  Partial<
+    Pick<
+      UpdateCardVisibilityInput,
+      'updateUserInitiatedCycle' | 'autoDismissed' | 'errorDismissed' | 'collapsed'
+    >
+  >
 
 type VisibilityResult = 'hidden' | 'visible'
 
 function computeVisibility(input: VisibilityInput): VisibilityResult {
-  const { status, dismissedVersion, cachedVersion, hasStartedDownload } = input
-  const isUserInitiated = 'userInitiated' in status && status.userInitiated
-  const updateUserInitiatedCycle = input.updateUserInitiatedCycle ?? false
-  const shouldShowDetailedErrorCard =
-    status.state === 'error' && (hasStartedDownload || cachedVersion !== null)
-
-  if (status.state === 'checking' && !isUserInitiated) {
-    return 'hidden'
-  }
-  if (status.state === 'not-available' && !isUserInitiated) {
-    return 'hidden'
-  }
-  if (status.state === 'idle') {
-    return 'hidden'
-  }
-  if (status.state === 'error' && !shouldShowDetailedErrorCard && !isUserInitiated) {
-    return 'hidden'
-  }
-
-  const effectiveVersion = 'version' in status ? status.version : cachedVersion
-  if (effectiveVersion && dismissedVersion === effectiveVersion && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
-      return 'hidden'
-    }
-  }
-
-  return 'visible'
+  return shouldShowUpdateCard({
+    ...input,
+    updateUserInitiatedCycle: input.updateUserInitiatedCycle ?? false,
+    autoDismissed: input.autoDismissed ?? false,
+    errorDismissed: input.errorDismissed ?? false,
+    collapsed: input.collapsed ?? false
+  })
+    ? 'visible'
+    : 'hidden'
 }
 
 describe('UpdateCard visibility gates', () => {
@@ -105,6 +90,18 @@ describe('UpdateCard visibility gates', () => {
         hasStartedDownload: false
       })
     ).toBe('visible')
+  })
+
+  it('hides user-initiated not-available after auto-dismiss', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'not-available', userInitiated: true },
+        dismissedVersion: null,
+        cachedVersion: null,
+        hasStartedDownload: false,
+        autoDismissed: true
+      })
+    ).toBe('hidden')
   })
 
   it('shows available update (simple mode)', () => {
@@ -196,6 +193,18 @@ describe('UpdateCard visibility gates', () => {
     ).toBe('visible')
   })
 
+  it('hides errors explicitly closed from the error card', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'error', message: 'network', userInitiated: true },
+        dismissedVersion: null,
+        cachedVersion: null,
+        hasStartedDownload: false,
+        errorDismissed: true
+      })
+    ).toBe('hidden')
+  })
+
   it('shows card-initiated download errors', () => {
     expect(
       computeVisibility({
@@ -227,6 +236,18 @@ describe('UpdateCard visibility gates', () => {
         hasStartedDownload: true
       })
     ).toBe('visible')
+  })
+
+  it('hides in-progress update states while collapsed to the status bar', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'downloading', percent: 42, version: '1.2.0' },
+        dismissedVersion: null,
+        cachedVersion: '1.2.0',
+        hasStartedDownload: true,
+        collapsed: true
+      })
+    ).toBe('hidden')
   })
 
   it('re-shows card for a newer version even if an older version was dismissed', () => {

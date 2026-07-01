@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
+import { shouldShowUpdateCard } from './update-card-visibility'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
@@ -240,56 +241,18 @@ export function UpdateCard() {
 
   // ── Visibility gates ──────────────────────────────────────────────
 
-  const isUserInitiated = 'userInitiated' in status && status.userInitiated
   const cachedVersion = versionRef.current
-  const shouldShowDetailedErrorCard =
-    status.state === 'error' && (hasStartedDownload.current || cachedVersion !== null)
-
-  // Compact transient states: only show for user-initiated checks.
-  if (status.state === 'checking' && !isUserInitiated) {
-    return null
-  }
-  if (status.state === 'not-available' && !isUserInitiated) {
-    return null
-  }
-  if (status.state === 'not-available' && autoDismissed) {
-    return null
-  }
-
-  // Background states that never show the card.
-  if (status.state === 'idle') {
-    return null
-  }
-
-  // Error: show card for user-initiated check failures or for failures tied to
-  // a concrete cached update version (card-initiated and Settings-initiated
-  // download/install flows). Background check failures stay silent.
-  if (status.state === 'error' && !shouldShowDetailedErrorCard && !isUserInitiated) {
-    return null
-  }
-
-  // Why: the version-based dismiss gate below intentionally keeps error cards
-  // visible, but when the user explicitly clicks X on the error card itself
-  // the card must disappear. This gate handles that case.
-  if (status.state === 'error' && errorDismissed) {
-    return null
-  }
-
-  // Dismiss gate: if the user previously dismissed this version, hide the card
-  // for passive reminder states. Keep active in-progress/error states visible so
-  // explicit install actions can still surface progress and failures.
-  // Why: bypass the gate when the current cycle was user-initiated — the user
-  // explicitly asked to check, so they expect to see the result even if they
-  // dismissed the same version earlier.
-  if (versionRef.current && dismissedVersion === versionRef.current && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
-      return null
-    }
-  }
-
   if (
-    collapsed &&
-    (status.state === 'downloading' || status.state === 'downloaded' || status.state === 'error')
+    !shouldShowUpdateCard({
+      status,
+      cachedVersion,
+      dismissedVersion,
+      hasStartedDownload: hasStartedDownload.current,
+      updateUserInitiatedCycle,
+      autoDismissed,
+      errorDismissed,
+      collapsed
+    })
   ) {
     return null
   }

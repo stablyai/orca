@@ -10,6 +10,8 @@
 // save/discard instead of being silently vetoed by a beforeunload handler.
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
+// Why: App uses close-cancel notifications to reopen the shutdown buffer
+// capture gate after a synthetic beforeunload from an abandoned close attempt.
 export const ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT = 'orca:window-close-request-canceled'
 
 /** Returns true to allow the close to proceed, false to cancel it (e.g. the user
