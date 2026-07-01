@@ -3,10 +3,16 @@ import type { TextInput } from 'react-native'
 import {
   TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS,
   getTerminalLiveAccessoryBytesDecision,
-  getTerminalLiveAccessoryLocalEditText
+  getTerminalLiveAccessoryLocalEditText,
+  type TerminalLiveAccessoryLocalEdit
 } from './terminal-live-text-commit'
 
 export type TerminalLiveInputSender = (handle: string, bytes: string) => void
+
+export type TerminalLiveAccessoryInput = {
+  readonly bytes: string
+  readonly localEdit?: TerminalLiveAccessoryLocalEdit
+}
 
 type TerminalLiveInputCommitScheduler = (handle: string, text: string, delayMs: number) => void
 
@@ -34,9 +40,9 @@ export function useTerminalLiveAccessoryInputCommit({
   schedulePendingLiveInputCommit,
   sendLiveTerminalInputRef,
   setLiveInputCapture
-}: TerminalLiveAccessoryInputCommitOptions): (bytes: string) => boolean {
+}: TerminalLiveAccessoryInputCommitOptions): (input: TerminalLiveAccessoryInput) => boolean {
   return useCallback(
-    (bytes: string): boolean => {
+    (input: TerminalLiveAccessoryInput): boolean => {
       if (!activeHandle) {
         return false
       }
@@ -48,16 +54,17 @@ export function useTerminalLiveAccessoryInputCommit({
       if (pendingLiveInputHandleRef.current && pendingLiveInputHandleRef.current !== activeHandle) {
         clearPendingLiveInputCommit()
       }
-      const decision = getTerminalLiveAccessoryBytesDecision({ bytes, pendingText })
+      const decision = getTerminalLiveAccessoryBytesDecision({ ...input, pendingText })
       switch (decision.kind) {
-        case 'ignore':
-          return false
         case 'send-now':
           sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           clearPendingLiveInputCommit()
           return true
         case 'local-edit': {
-          const editedText = getTerminalLiveAccessoryLocalEditText({ bytes, pendingText })
+          const editedText = getTerminalLiveAccessoryLocalEditText({
+            localEdit: decision.localEdit,
+            pendingText
+          })
           if (editedText.length === 0) {
             clearPendingLiveInputCommit()
             return true

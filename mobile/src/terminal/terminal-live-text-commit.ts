@@ -4,12 +4,6 @@ import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
 // IME text gets a short settle window before being sent to the PTY.
 export const TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS = 150
 
-const TERMINAL_LIVE_ACCESSORY_LOCAL_EDIT_BYTES: ReadonlySet<string> = new Set([
-  '\x7f',
-  '\b',
-  '\x1b[3~'
-])
-
 export type TerminalLiveTextChangeDecision =
   | { readonly kind: 'ignore' }
   | { readonly kind: 'send-now'; readonly text: string }
@@ -26,8 +20,16 @@ export type TerminalLiveSpecialKeyDecisionInput = {
   readonly pendingText: string
 }
 
+export type TerminalLiveAccessoryLocalEdit = 'backspace' | 'delete'
+
+export type TerminalLiveAccessoryBytesDecision =
+  | { readonly kind: 'local-edit'; readonly localEdit: TerminalLiveAccessoryLocalEdit }
+  | { readonly kind: 'send-now'; readonly bytes: string }
+  | { readonly kind: 'flush-then-send'; readonly pendingText: string; readonly bytes: string }
+
 export type TerminalLiveAccessoryBytesDecisionInput = {
   readonly bytes: string
+  readonly localEdit?: TerminalLiveAccessoryLocalEdit
   readonly pendingText: string
 }
 
@@ -75,10 +77,11 @@ export function getTerminalLiveSpecialKeyDecision({
 
 export function getTerminalLiveAccessoryBytesDecision({
   bytes,
+  localEdit,
   pendingText
-}: TerminalLiveAccessoryBytesDecisionInput): TerminalLiveSpecialKeyDecision {
-  if (pendingText.length > 0 && TERMINAL_LIVE_ACCESSORY_LOCAL_EDIT_BYTES.has(bytes)) {
-    return { kind: 'local-edit' }
+}: TerminalLiveAccessoryBytesDecisionInput): TerminalLiveAccessoryBytesDecision {
+  if (pendingText.length > 0 && localEdit) {
+    return { kind: 'local-edit', localEdit }
   }
 
   if (pendingText.length > 0) {
@@ -89,23 +92,24 @@ export function getTerminalLiveAccessoryBytesDecision({
 }
 
 export function getTerminalLiveAccessoryLocalEditText({
-  bytes,
+  localEdit,
   pendingText
-}: TerminalLiveAccessoryBytesDecisionInput): string {
-  if (bytes === '\x1b[3~') {
+}: {
+  readonly localEdit: TerminalLiveAccessoryLocalEdit
+  readonly pendingText: string
+}): string {
+  if (localEdit === 'delete') {
     // Why: accessory Delete mirrors forward-delete at the hidden input's end;
     // it stays local but does not remove the pending IME text.
-    return pendingText
-  }
-
-  if (bytes !== '\x7f' && bytes !== '\b') {
     return pendingText
   }
 
   return Array.from(pendingText).slice(0, -1).join('')
 }
 
-export function getTerminalLiveSubmitSequence(pendingText: string): readonly string[] {
+export type TerminalLiveSubmitSequence = readonly ['\r'] | readonly [string, '\r']
+
+export function getTerminalLiveSubmitSequence(pendingText: string): TerminalLiveSubmitSequence {
   if (pendingText.length === 0) {
     return ['\r']
   }

@@ -120,23 +120,41 @@ describe('terminal live text commit', () => {
     // When
     const backspaceDecision = getTerminalLiveAccessoryBytesDecision({
       bytes: '\x7f',
+      localEdit: 'backspace',
       pendingText
     })
     const ctrlBackspaceDecision = getTerminalLiveAccessoryBytesDecision({
       bytes: '\b',
+      localEdit: 'backspace',
       pendingText
     })
     const deleteDecision = getTerminalLiveAccessoryBytesDecision({
       bytes: '\x1b[3~',
+      localEdit: 'delete',
       pendingText
     })
-    const backspaceText = getTerminalLiveAccessoryLocalEditText({ bytes: '\x7f', pendingText })
-    const deleteText = getTerminalLiveAccessoryLocalEditText({ bytes: '\x1b[3~', pendingText })
+    const customDeleteByteDecision = getTerminalLiveAccessoryBytesDecision({
+      bytes: '\x7f',
+      pendingText
+    })
+    const backspaceText = getTerminalLiveAccessoryLocalEditText({
+      localEdit: 'backspace',
+      pendingText
+    })
+    const deleteText = getTerminalLiveAccessoryLocalEditText({
+      localEdit: 'delete',
+      pendingText
+    })
 
     // Then
-    expect(backspaceDecision).toEqual({ kind: 'local-edit' })
-    expect(ctrlBackspaceDecision).toEqual({ kind: 'local-edit' })
-    expect(deleteDecision).toEqual({ kind: 'local-edit' })
+    expect(backspaceDecision).toEqual({ kind: 'local-edit', localEdit: 'backspace' })
+    expect(ctrlBackspaceDecision).toEqual({ kind: 'local-edit', localEdit: 'backspace' })
+    expect(deleteDecision).toEqual({ kind: 'local-edit', localEdit: 'delete' })
+    expect(customDeleteByteDecision).toEqual({
+      kind: 'flush-then-send',
+      pendingText,
+      bytes: '\x7f'
+    })
     expect(backspaceText).toBe('한')
     expect(deleteText).toBe('한글')
   })

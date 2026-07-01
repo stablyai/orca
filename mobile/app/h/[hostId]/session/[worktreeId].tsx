@@ -102,6 +102,7 @@ import {
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import type { TerminalLiveAccessoryInput } from '../../../../src/terminal/use-terminal-live-accessory-input-commit'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
@@ -235,6 +236,17 @@ import type {
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
+
+function createTerminalLiveAccessoryInput(key: {
+  readonly bytes: string
+  readonly id: string
+}): TerminalLiveAccessoryInput {
+  if (key.id === 'backspace' || key.id === 'delete') {
+    return { bytes: key.bytes, localEdit: key.id }
+  }
+
+  return { bytes: key.bytes }
+}
 
 // Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
 // photos can exceed the upload byte budget; resize the raster down to fit before upload.
@@ -3123,11 +3135,12 @@ export default function SessionScreen() {
     }
   }
 
-  async function handleAccessoryKey(bytes: string) {
+  async function handleAccessoryKey(input: TerminalLiveAccessoryInput) {
+    const { bytes } = input
     if (!client || !activeHandle || !canSend) {
       return
     }
-    if (handleLiveInputAccessoryBytes(bytes)) {
+    if (handleLiveInputAccessoryBytes(input)) {
       return
     }
 
@@ -3624,11 +3637,11 @@ export default function SessionScreen() {
     }
   }, [])
   const startAccessoryRepeat = useCallback(
-    (bytes: string) => {
+    (input: TerminalLiveAccessoryInput) => {
       stopAccessoryRepeat()
       repeatTimeoutRef.current = setTimeout(() => {
         repeatIntervalRef.current = setInterval(() => {
-          void handleAccessoryKeyRef.current(bytes)
+          void handleAccessoryKeyRef.current(input)
         }, 45)
       }, 400)
     },
@@ -5022,8 +5035,9 @@ export default function SessionScreen() {
                           if (!key.repeatable) {
                             return
                           }
-                          void handleAccessoryKey(key.bytes)
-                          startAccessoryRepeat(key.bytes)
+                          const input = createTerminalLiveAccessoryInput(key)
+                          void handleAccessoryKey(input)
+                          startAccessoryRepeat(input)
                         }}
                         onPressOut={() => {
                           if (key.repeatable) {
@@ -5034,7 +5048,7 @@ export default function SessionScreen() {
                           if (key.repeatable) {
                             return
                           }
-                          void handleAccessoryKey(key.bytes)
+                          void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
                         }}
                         accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
                       >
@@ -5058,7 +5072,7 @@ export default function SessionScreen() {
                           !canSend && styles.accessoryKeyDisabled
                         ]}
                         disabled={!canSend}
-                        onPress={() => void handleAccessoryKey(key.bytes)}
+                        onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
                         onLongPress={() => {
                           triggerMediumImpact()
                           setDeleteKeyTarget(key)

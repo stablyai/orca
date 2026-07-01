@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import {
   getTerminalLiveSpecialKeyDecision,
+  getTerminalLiveSubmitSequence,
   getTerminalLiveTextChangeDecision
 } from './terminal-live-text-commit'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import {
   useTerminalLiveAccessoryInputCommit,
+  type TerminalLiveAccessoryInput,
   type TerminalLiveInputSender
 } from './use-terminal-live-accessory-input-commit'
 
@@ -30,7 +32,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
 
 type TerminalLiveInputCommitHandlers = {
   readonly clearPendingLiveInputCommit: () => void
-  readonly handleLiveInputAccessoryBytes: (bytes: string) => boolean
+  readonly handleLiveInputAccessoryBytes: (input: TerminalLiveAccessoryInput) => boolean
   readonly handleLiveInputChange: (text: string) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => void
@@ -237,15 +239,16 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     }
     const pendingText =
       pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
-    if (pendingText.length > 0) {
+    const sequence = getTerminalLiveSubmitSequence(pendingText)
+    if (sequence.length === 2) {
       if (!flushPendingLiveInputText(activeHandle)) {
         return
       }
-      sendLiveTerminalInputRef.current(activeHandle, '\r')
+      sendLiveTerminalInputRef.current(activeHandle, sequence[1])
       return
     }
     clearPendingLiveInputCommit()
-    sendLiveTerminalInputRef.current(activeHandle, '\r')
+    sendLiveTerminalInputRef.current(activeHandle, sequence[0])
   }, [
     activeHandle,
     clearPendingLiveInputCommit,
