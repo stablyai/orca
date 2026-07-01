@@ -31,21 +31,22 @@ export type ClassifiedRefreshBaseRefError = {
   message: string
 }
 
-// Why: short single-line descriptions are clearer as comment-style captions
-// for these regex constants than as JSDoc blocks above each one — the JSDoc
-// tool counts them via the function/export scan above.
+// Why: pattern -> code mapping for `detectRefreshBaseRefErrorCode`.
+// Each pattern is anchored against either the full stderr (auth only,
+// since SSH publickey rejections can land on any line) or the first
+// fatal: line (everything else) — see `detectRefreshBaseRefErrorCode`.
 
-// git fetch on DNS failure or network unreachable
+/** Matches stderr from `git fetch` on DNS failure or unreachable network. */
 const REFRESH_NETWORK_PATTERN =
   /Could not resolve host|Network is unreachable|Connection (reset|timed out|refused)/i
-// SSH publickey auth or HTTPS auth failure
+/** Matches SSH publickey denials and HTTPS credential prompts. */
 const REFRESH_AUTH_PATTERN =
   /Authentication failed|Permission denied \(publickey\)|could not read Username/i
-// git fetch when no upstream tracking info is configured
+/** Matches stderr from `git fetch` when no upstream tracking branch is configured. */
 const REFRESH_NO_UPSTREAM_PATTERN = /no tracking information|no upstream/i
-// git fetch when the requested ref does not exist on the remote
+/** Matches stderr from `git fetch` when the requested ref is absent on the remote. */
 const REMOTE_REF_MISSING_PATTERN = /couldn't find remote ref|remote ref does not exist/i
-// git fetch when the remote returns 401/403/404 or 'Repository not found'
+/** Matches stderr when the remote returns 401/403/404 or reports the repo as not found. */
 const REMOTE_FORBIDDEN_PATTERN =
   /repository .* not found|requested url returned error: (401|403|404)/i
 
@@ -62,6 +63,12 @@ const REMOTE_FORBIDDEN_PATTERN =
  * trailing fatal noise can't hide the real cause from the classify step.
  */
 function detectRefreshBaseRefErrorCode(rawStderr: string): RefreshBaseRefErrorCode {
+  /**
+   * First `'fatal:'`-prefixed line in stderr, or the full stderr when no
+   * such line exists. Used as the scope for pattern checks below so a
+   * benign help-text mention of "no upstream" in later lines can't
+   * override the real failure cause.
+   */
   const scoped = (() => {
     const fatalLine = rawStderr.split(/\r?\n/).find((line) => /^fatal:\s/.test(line))
     return fatalLine ?? rawStderr
@@ -153,6 +160,16 @@ export function throwRefreshBaseRefError(opts: {
   remote: string
   cause: unknown
 }): never {
+  /**
+   * Cause value safe to log: same shape as `opts.cause` but with any
+   * credentials embedded in the message scrubbed, so `console.error`
+   * never writes secrets to log sinks (file, captured bug report, etc.).
+   *
+   * Why: scrub before logging so credentials embedded in the original
+   * stderr never reach console. Both Error and non-Error rejections get
+   * scrubbed — a thrown string/object can still carry credentials in
+   * serialized form.
+   */
   const safeCause = (() => {
     if (opts.cause instanceof Error) {
       return new Error(stripCredentialsFromMessage(opts.cause.message))
