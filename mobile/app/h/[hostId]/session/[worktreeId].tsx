@@ -102,7 +102,10 @@ import {
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
-import type { TerminalLiveAccessoryInput } from '../../../../src/terminal/use-terminal-live-accessory-input-commit'
+import type {
+  TerminalLiveAccessoryInput,
+  TerminalLiveInputSender
+} from '../../../../src/terminal/use-terminal-live-accessory-input-commit'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
@@ -1046,7 +1049,7 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sendLiveTerminalInputRef = useRef<(handle: string, bytes: string) => void>(() => {})
+  const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -1275,7 +1278,7 @@ export default function SessionScreen() {
         if (!insertHandle) {
           return
         }
-        sendLiveTerminalInput(insertHandle, route.text)
+        void sendLiveTerminalInput(insertHandle, route.text)
         showToast('Dictation inserted')
         return
       }
@@ -3140,12 +3143,12 @@ export default function SessionScreen() {
     if (!client || !activeHandle || !canSend) {
       return
     }
-    if (handleLiveInputAccessoryBytes(input)) {
+    if (await handleLiveInputAccessoryBytes(input)) {
       return
     }
 
-    try {
-      await client.sendRequest('terminal.send', {
+    await client
+      .sendRequest('terminal.send', {
         terminal: activeHandle,
         text: bytes,
         enter: false,
@@ -3153,21 +3156,22 @@ export default function SessionScreen() {
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
-    } catch {
-      // Transient failure
-    }
+      .then(
+        () => undefined,
+        () => undefined
+      )
   }
 
   const sendLiveTerminalInput = useCallback(
-    (handle: string, bytes: string) => {
+    async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
       if (text.length === 0) {
-        return
+        return false
       }
       if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
-        return
+        return false
       }
       const rpc = clientRef.current
       if (
@@ -3176,9 +3180,9 @@ export default function SessionScreen() {
         handle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
-        return
+        return false
       }
-      void rpc
+      return rpc
         .sendRequest('terminal.send', {
           terminal: handle,
           text,
@@ -3187,9 +3191,10 @@ export default function SessionScreen() {
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
             : {})
         })
-        .catch(() => {
-          // Transient failure
-        })
+        .then(
+          () => true,
+          () => false
+        )
     },
     [showToast]
   )

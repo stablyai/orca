@@ -6,8 +6,9 @@ import {
   getTerminalLiveAccessoryLocalEditText,
   type TerminalLiveAccessoryLocalEdit
 } from './terminal-live-text-commit'
+import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 
-export type TerminalLiveInputSender = (handle: string, bytes: string) => void
+export type TerminalLiveInputSender = (handle: string, bytes: string) => Promise<boolean>
 
 export type TerminalLiveAccessoryInput = {
   readonly bytes: string
@@ -19,7 +20,7 @@ type TerminalLiveInputCommitScheduler = (handle: string, text: string, delayMs: 
 type TerminalLiveAccessoryInputCommitOptions = {
   readonly activeHandle: string | null
   readonly clearPendingLiveInputCommit: () => void
-  readonly flushPendingLiveInputText: (expectedHandle: string | null) => boolean
+  readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
@@ -40,9 +41,11 @@ export function useTerminalLiveAccessoryInputCommit({
   schedulePendingLiveInputCommit,
   sendLiveTerminalInputRef,
   setLiveInputCapture
-}: TerminalLiveAccessoryInputCommitOptions): (input: TerminalLiveAccessoryInput) => boolean {
+}: TerminalLiveAccessoryInputCommitOptions): (
+  input: TerminalLiveAccessoryInput
+) => Promise<boolean> {
   return useCallback(
-    (input: TerminalLiveAccessoryInput): boolean => {
+    async (input: TerminalLiveAccessoryInput): Promise<boolean> => {
       if (!activeHandle) {
         return false
       }
@@ -57,9 +60,7 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, pendingText })
       switch (decision.kind) {
         case 'send-now':
-          sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          clearPendingLiveInputCommit()
-          return true
+          return false
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
             localEdit: decision.localEdit,
@@ -81,10 +82,10 @@ export function useTerminalLiveAccessoryInputCommit({
           return true
         }
         case 'flush-then-send':
-          if (!flushPendingLiveInputText(activeHandle)) {
-            return true
-          }
-          sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          await sendTerminalLiveControlAfterPendingFlush(
+            () => flushPendingLiveInputText(activeHandle),
+            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          )
           return true
         default:
           decision satisfies never
