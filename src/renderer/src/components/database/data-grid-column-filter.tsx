@@ -28,11 +28,19 @@ export function DataGridColumnFilter({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [operator, setOperator] = useState<DbFilterOperator>(filter?.operator ?? '=')
-  const [value, setValue] = useState(filter?.value != null ? String(filter.value) : '')
+  const [value, setValue] = useState(
+    filter && 'value' in filter && filter.value != null ? String(filter.value) : ''
+  )
   const active = !!filter
 
   const apply = (): void => {
-    onApply({ column, operator, value: operatorTakesValue(operator) ? value : undefined })
+    // is-null/is-not-null carry no value; the discriminated DbColumnFilter type
+    // requires a value for every other operator, so build each variant explicitly.
+    onApply(
+      operatorTakesValue(operator)
+        ? { column, operator: operator as Exclude<DbFilterOperator, 'is-null' | 'is-not-null'>, value }
+        : { column, operator: operator as 'is-null' | 'is-not-null' }
+    )
     setOpen(false)
   }
   const clear = (): void => {

@@ -39,7 +39,7 @@ describe('setColumnFilter', () => {
 describe('filterFor', () => {
   it('finds the predicate for a column', () => {
     const filters: DbColumnFilter[] = [{ column: 'x', operator: '=', value: 5 }]
-    expect(filterFor(filters, 'x')?.value).toBe(5)
+    expect(filterFor(filters, 'x')).toEqual({ column: 'x', operator: '=', value: 5 })
     expect(filterFor(filters, 'y')).toBeUndefined()
   })
 })

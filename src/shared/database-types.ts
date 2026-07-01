@@ -228,7 +228,16 @@ export type DbFilterOperator =
   | 'is-null'
   | 'is-not-null'
 
-export type DbColumnFilter = { column: string; operator: DbFilterOperator; value?: unknown }
+// is-null/is-not-null take no value; every other operator requires one — the
+// union forces a value to be present exactly when the operator needs it, so a
+// comparison/pattern filter can never bind an accidental `undefined`.
+export type DbColumnFilter =
+  | { column: string; operator: 'is-null' | 'is-not-null' }
+  | {
+      column: string
+      operator: Exclude<DbFilterOperator, 'is-null' | 'is-not-null'>
+      value: unknown
+    }
 
 // database:execute result — a single parameterized statement (Data-tab
 // select/count, or a wrapped free-form re-query). Same shape as a plain query.

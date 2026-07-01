@@ -16,7 +16,14 @@ export function formatCell(value: unknown): { text: string; isNull: boolean } {
     return { text: `[${value.length} bytes]`, isNull: false }
   }
   if (typeof value === 'object') {
-    return { text: JSON.stringify(value), isNull: false }
+    // JSON.stringify throws on a BigInt (possible inside a JSON column now that
+    // the MySQL driver enables supportBigNumbers) or a circular ref — fall back
+    // to String() so one bad value can't crash the whole grid row render.
+    try {
+      return { text: JSON.stringify(value), isNull: false }
+    } catch {
+      return { text: String(value), isNull: false }
+    }
   }
   return { text: String(value), isNull: false }
 }
