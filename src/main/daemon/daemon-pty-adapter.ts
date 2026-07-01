@@ -69,6 +69,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   private removeEventListener: (() => void) | null = null
+  private removeDisconnectedListener: (() => void) | null = null
   private initialCwds = new Map<string, string>()
   // Why: React re-renders and StrictMode double-mounts can call createOrAttach
   // for a session the user just killed. Without tombstones, the daemon would
@@ -81,6 +82,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // second mount until the renderer explicitly acknowledges it.
   private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private activeSessionIds = new Set<string>()
+  private sessionSizes = new Map<string, { cols: number; rows: number }>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
   // log belong to the pre-crash session. Incremental appends would land on
@@ -90,6 +92,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private sessionsNeedingFullCheckpoint = new Set<string>()
   private checkpointTimer: ReturnType<typeof setTimeout> | null = null
   private checkpointInFlight: Promise<void> | null = null
+  private isDisposed = false
+  private disconnectReconcileGeneration = 0
   // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
   // Legacy daemons reject it, causing noisy log spam every 5 seconds.
   private supportsCheckpoints: boolean
@@ -112,6 +116,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.respawnFn = opts.respawn ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
     this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
+    this.removeDisconnectedListener = this.client.onDisconnected(() => {
+      void this.reconcileAfterDaemonDisconnect()
+    })
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -181,6 +188,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (effectiveCwd) {
       this.initialCwds.set(sessionId, effectiveCwd)
     }
+    this.sessionSizes.set(sessionId, { cols: effectiveCols, rows: effectiveRows })
 
     // Why: the daemon RPC returns the shell pid of the backing subprocess.
     // Surfacing it through PtySpawnResult lets ipc/pty register with the
@@ -274,6 +282,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       cols: 80,
       rows: 24
     })
+    this.sessionSizes.set(id, { cols: 80, rows: 24 })
   }
 
   hasPty(id: string): boolean {
@@ -287,6 +296,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   resize(id: string, cols: number, rows: number): void {
     this.markSessionDirty(id)
+    this.sessionSizes.set(id, { cols, rows })
     this.client.notify('resize', { sessionId: id, cols, rows })
   }
 
@@ -298,6 +308,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
     this.activeSessionIds.delete(id)
+    this.sessionSizes.delete(id)
     this.dirtySessionVersions.delete(id)
     this.coldRestoreCache.delete(id)
     // Why: the !keepHistory close path doesn't take a final checkpoint, so a
@@ -501,20 +512,117 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // path so downstream cleanup (clearProviderPtyState, markClaudePtyExited,
   // renderer pty:exit) runs exactly as it does on natural exit.
   fanoutSyntheticExits(code: number): void {
-    const ids = [...this.activeSessionIds]
-    this.activeSessionIds.clear()
-    this.dirtySessionVersions.clear()
-    this.stopCheckpointTimer()
-    for (const id of ids) {
+    this.fanoutSyntheticExitIds([...this.activeSessionIds], code)
+  }
+
+  private fanoutSyntheticExitIds(ids: string[], code: number): void {
+    const activeExitIds = [...new Set(ids)].filter((id) => this.activeSessionIds.has(id))
+    for (const id of activeExitIds) {
+      this.activeSessionIds.delete(id)
+      this.sessionSizes.delete(id)
+      this.dirtySessionVersions.delete(id)
       this.coldRestoreCache.delete(id)
-      // Why: listener throws are intentionally *not* caught — matches the
-      // natural onExit fanout in setupEventRouting, so synthetic exits don't
-      // diverge in error semantics from real ones. A throwing listener is a
-      // bug that should surface loudly, not be silently swallowed.
+      this.sessionsNeedingFullCheckpoint.delete(id)
+    }
+    this.stopCheckpointTimerIfIdle()
+    for (const id of activeExitIds) {
+      // Why: cleanup must finish before notification because listener throws
+      // intentionally propagate, matching natural onExit fanout semantics.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
         listener({ id, code })
       }
+    }
+  }
+
+  private async reconcileAfterDaemonDisconnect(): Promise<void> {
+    const generation = ++this.disconnectReconcileGeneration
+    const idsAtDisconnect = [...this.activeSessionIds]
+    if (this.isDisposed || idsAtDisconnect.length === 0) {
+      return
+    }
+
+    let aliveSessionIds: Set<string>
+    try {
+      aliveSessionIds = await this.probeAliveSessionIds()
+    } catch {
+      if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
+        return
+      }
+      // Why: if reconnect/listSessions fails, the adapter cannot know whether
+      // daemon-backed PTYs still exist. Prefer visible exits over dropped input.
+      this.fanoutSyntheticExitIds(idsAtDisconnect, -1)
+      return
+    }
+
+    if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
+      return
+    }
+
+    const exitedIds = idsAtDisconnect.filter((id) => !aliveSessionIds.has(id))
+    const survivedIds = idsAtDisconnect.filter((id) => aliveSessionIds.has(id))
+    let syntheticExitIds = exitedIds
+
+    if (survivedIds.length > 0) {
+      // Why: if the probe can see live sessions but the primary client still
+      // cannot reconnect, keeping those sessions "active" would black-hole input.
+      try {
+        await this.client.ensureConnected()
+        syntheticExitIds = [...exitedIds, ...(await this.reattachSurvivedSessions(survivedIds))]
+      } catch {
+        if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
+          return
+        }
+        syntheticExitIds = [...exitedIds, ...survivedIds]
+      }
+      if (this.isDisposed || generation !== this.disconnectReconcileGeneration) {
+        // Why: a newer disconnect/dispose won the race while reconnecting; undo
+        // this stale reconnect so it cannot keep sockets alive behind teardown.
+        this.client.disconnect()
+        return
+      }
+    }
+
+    this.fanoutSyntheticExitIds(syntheticExitIds, -1)
+  }
+
+  private async reattachSurvivedSessions(sessionIds: string[]): Promise<string[]> {
+    const failedIds: string[] = []
+    for (const sessionId of sessionIds) {
+      const size = this.sessionSizes.get(sessionId) ?? { cols: 80, rows: 24 }
+      try {
+        // Why: reconnecting the sockets is not enough. The daemon Session still
+        // holds callbacks that close over the old stream client until reattach.
+        const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
+          sessionId,
+          cols: size.cols,
+          rows: size.rows
+        })
+        if (result.isNew) {
+          failedIds.push(sessionId)
+          await this.client.request('kill', { sessionId, immediate: true }).catch(() => {})
+        }
+      } catch {
+        failedIds.push(sessionId)
+      }
+    }
+    return failedIds
+  }
+
+  private async probeAliveSessionIds(): Promise<Set<string>> {
+    const probeClient = new DaemonClient({
+      socketPath: this.socketPath,
+      tokenPath: this.tokenPath,
+      protocolVersion: this.protocolVersion
+    })
+    try {
+      await probeClient.ensureConnected()
+      const result = await probeClient.request<ListSessionsResult>('listSessions', undefined)
+      return new Set(
+        result.sessions.filter((session) => session.isAlive).map((session) => session.sessionId)
+      )
+    } finally {
+      probeClient.disconnect()
     }
   }
 
@@ -561,11 +669,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   dispose(): void {
+    this.isDisposed = true
+    this.disconnectReconcileGeneration++
     this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
     this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
+    this.removeDisconnectedListener?.()
+    this.removeDisconnectedListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
     // which has direct access to sessions. The adapter only marks sessions as
     // cleanly ended here so they don't trigger false cold restores.
@@ -584,6 +696,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // We write a final checkpoint before disconnecting so that if the daemon
   // later crashes while Orca is closed, checkpoint.json has recovery data.
   async disconnectOnly(): Promise<void> {
+    this.isDisposed = true
+    this.disconnectReconcileGeneration++
     this.stopCheckpointTimer()
     // Why: wait for any in-flight timer pass to finish before starting
     // the final checkpoint. Otherwise both passes race on the shared tmp
@@ -601,6 +715,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.coldRestoreCache.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
+    this.removeDisconnectedListener?.()
+    this.removeDisconnectedListener = null
     this.client.disconnect()
   }
 
@@ -910,6 +1026,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
+        this.sessionSizes.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         this.coldRestoreCache.delete(event.sessionId)
         // Why: an exited session can never be checkpointed again, so its pending
