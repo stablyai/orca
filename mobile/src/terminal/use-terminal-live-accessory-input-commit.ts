@@ -61,6 +61,8 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, pendingText })
       switch (decision.kind) {
         case 'send-now':
+          // Why: raw accessory bytes must wait behind any in-flight IME text
+          // flush so composed Hangul reaches the PTY before follow-up controls.
           return (await waitForPendingLiveInputFlush())
             ? { kind: 'allow-raw' }
             : { kind: 'suppress-raw' }
