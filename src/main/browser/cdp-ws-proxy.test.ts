@@ -462,6 +462,48 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
+  it('returns the replay error when the stored DOM.focus fails before Input.insertText', async () => {
+    let domFocusAttempt = 0
+    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
+      const [method] = args as [string]
+      if (method === 'DOM.focus') {
+        domFocusAttempt += 1
+        if (domFocusAttempt === 2) {
+          throw new Error('Focus target went stale')
+        }
+      }
+      return {}
+    })
+
+    const client = await connect()
+
+    const focusResponse = await sendAndReceive(client, {
+      id: 23,
+      method: 'DOM.focus',
+      params: { backendNodeId: 77 }
+    })
+    const insertResponse = await sendAndReceive(client, {
+      id: 24,
+      method: 'Input.insertText',
+      params: { text: 'blocked' }
+    })
+
+    expect(focusResponse.id).toBe(23)
+    expect(focusResponse.result).toEqual({})
+    expect(insertResponse).toEqual({
+      id: 24,
+      error: { code: -32000, message: 'Focus target went stale' }
+    })
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(getSendCommandCalls()).toEqual([
+      ['Page.enable', {}],
+      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['DOM.focus', { backendNodeId: 77 }, undefined],
+      ['DOM.focus', { backendNodeId: 77 }, undefined]
+    ])
+    client.close()
+  })
+
   // ── Page.frameNavigated interception ──
 
   // ── Cleanup ──
