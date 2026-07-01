@@ -166,11 +166,18 @@ describe('Electron runtime package contract', () => {
       name === 'Install SignPath PowerShell module' ? [index] : []
     )
     const buildIndex = stepNames.indexOf('Build Windows release artifacts')
+    const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
     const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
     const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
 
-    expect(installStepIndexes).toEqual([buildIndex + 1])
+    expect(verifyNodePtyIndex).toBe(buildIndex + 1)
+    expect(installStepIndexes).toEqual([verifyNodePtyIndex + 1])
     expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
+
+    expect(steps[verifyNodePtyIndex].run).toContain(
+      'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
+    )
+    expect(steps[verifyNodePtyIndex].run).toContain('conpty/conpty.dll')
 
     const uploadThroughDownloadScript = steps
       .slice(uploadIndex, downloadIndex + 1)

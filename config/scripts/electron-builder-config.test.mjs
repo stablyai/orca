@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -168,6 +168,31 @@ describe('electron-builder config', () => {
       await expect(
         readdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps'))
       ).resolves.toEqual([])
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-conpty-runtime-'))
+    try {
+      const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+      const releaseDir = join(nodePtyDir, 'build', 'Release')
+      const sourceDir = join(nodePtyDir, 'third_party', 'conpty', '0.1.0', 'win10-x64')
+      await mkdir(releaseDir, { recursive: true })
+      await mkdir(sourceDir, { recursive: true })
+      await writeFile(join(releaseDir, 'conpty.node'), 'native addon placeholder', 'utf8')
+      await writeFile(join(sourceDir, 'conpty.dll'), 'dll payload', 'utf8')
+      await writeFile(join(sourceDir, 'OpenConsole.exe'), 'console payload', 'utf8')
+
+      prunePackagedNodePty(resourcesDir, 'win32', 'x64')
+
+      await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
+        'dll payload'
+      )
+      await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
+        'console payload'
+      )
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }
