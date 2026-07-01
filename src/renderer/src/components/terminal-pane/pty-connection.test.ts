@@ -58,7 +58,13 @@ type StoreState = {
   activeWorktreeId: string | null
   tabsByWorktree: Record<
     string,
-    { id: string; ptyId: string | null; title?: string; launchAgent?: string }[]
+    {
+      id: string
+      ptyId: string | null
+      title?: string
+      launchAgent?: string
+      shellOverride?: string
+    }[]
   >
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
@@ -87,7 +93,18 @@ type StoreState = {
       | { kind: 'windows-host' }
       | { kind: 'wsl'; distro: string }
   }[]
-  sshConnectionStates: Map<string, { status: string }>
+  folderWorkspaces?: {
+    id: string
+    projectGroupId: string
+    folderPath: string
+    connectionId?: string | null
+  }[]
+  projectGroups?: {
+    id: string
+    connectionId?: string | null
+    executionHostId?: string | null
+  }[]
+  sshConnectionStates: Map<string, { status: string; remotePlatform?: NodeJS.Platform }>
   cacheTimerByKey: Record<string, number | null>
   settings: {
     theme?: 'system' | 'dark' | 'light'
@@ -576,6 +593,23 @@ function sendTerminalInputThroughPane(pane: ReturnType<typeof createPane>, data:
   terminalInputHandler?.(data)
 }
 
+type TerminalOscHandler = (data: string) => boolean | void
+type TerminalReplyScenario = {
+  name: string
+  arrange: () => { cwd: string; worktreeId?: string }
+}
+
+function captureTerminalOscHandlers(
+  pane: ReturnType<typeof createPane>
+): Map<number, TerminalOscHandler> {
+  const handlers = new Map<number, TerminalOscHandler>()
+  pane.terminal.parser.registerOscHandler = vi.fn((id: number, cb: TerminalOscHandler) => {
+    handlers.set(id, cb)
+    return { dispose: vi.fn() }
+  }) as typeof pane.terminal.parser.registerOscHandler
+  return handlers
+}
+
 describe('connectPanePty', () => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
@@ -808,6 +842,488 @@ describe('connectPanePty', () => {
         cacheKey: 'repo1:windows-host'
       }
     })
+  })
+
+  it('does not pass startup OSC color replies to native Windows ConPTY spawns', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: 'wt-1',
+              repoId: 'repo1',
+              path: 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan',
+              displayName: 'feat/notis'
+            }
+          ]
+        }
+      }
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({
+          cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan',
+          startup: {
+            command: 'codex',
+            telemetry: {
+              agent_kind: 'codex',
+              launch_source: 'tab_bar_quick_launch',
+              request_kind: 'new'
+            }
+          }
+        }) as never
+      )
+      await flushAsyncTicks()
+
+      expect(createdTransportOptions[0]).not.toHaveProperty('terminalColorQueryReplies')
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it('uses project Windows-host runtime when deciding whether ConPTY startup OSC replies are safe', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', shellOverride: 'wsl.exe' }]
+        },
+        projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'windows-host' } }],
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+        }
+      }
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({ cwd }) as never
+      )
+      await flushAsyncTicks()
+
+      expect(createdTransportOptions[0]).toMatchObject({
+        projectRuntime: expect.objectContaining({
+          runtime: expect.objectContaining({ kind: 'windows-host' })
+        })
+      })
+      expect(createdTransportOptions[0]).not.toHaveProperty('terminalColorQueryReplies')
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it.each([
+    {
+      name: 'WSL UNC cwd',
+      arrange: () => {
+        const cwd = '\\\\wsl.localhost\\Ubuntu\\home\\neil\\orca\\seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'project WSL runtime',
+      arrange: () => {
+        const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          projects: [
+            { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+          ],
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'global WSL runtime default',
+      arrange: () => {
+        const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          settings: {
+            ...mockStoreState.settings,
+            localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+          },
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'legacy WSL terminal shell',
+      arrange: () => {
+        const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          settings: {
+            ...mockStoreState.settings,
+            terminalWindowsShell: 'wsl.exe',
+            terminalWindowsWslDistro: 'Ubuntu'
+          },
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'Linux SSH pane',
+      arrange: () => {
+        const cwd = '/home/neil/orca/seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          repos: [{ id: 'repo1', connectionId: 'ssh-conn-1', displayName: 'orca' }],
+          sshConnectionStates: new Map([
+            ['ssh-conn-1', { status: 'connected', remotePlatform: 'linux' }]
+          ]),
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'remote runtime pane with stale Windows SSH metadata',
+      arrange: () => {
+        const cwd = '/workspaces/orca/seafan'
+        const worktreeId = 'folder:folder-1'
+        mockStoreState = {
+          ...mockStoreState,
+          repos: [],
+          folderWorkspaces: [
+            {
+              id: 'folder-1',
+              projectGroupId: 'group-1',
+              folderPath: cwd,
+              connectionId: 'ssh-conn-1'
+            }
+          ],
+          projectGroups: [
+            {
+              id: 'group-1',
+              connectionId: 'ssh-conn-1',
+              executionHostId: 'runtime:runtime-env-1'
+            }
+          ],
+          sshConnectionStates: new Map([
+            ['ssh-conn-1', { status: 'connected', remotePlatform: 'win32' }]
+          ]),
+          tabsByWorktree: {
+            [worktreeId]: [{ id: 'tab-1', ptyId: 'tab-pty' }]
+          }
+        }
+        return { cwd, worktreeId }
+      }
+    }
+  ] satisfies TerminalReplyScenario[])(
+    'passes startup OSC color replies for $name on Windows clients',
+    async ({ arrange }: TerminalReplyScenario) => {
+      const restoreNavigator = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      try {
+        const { cwd, worktreeId } = arrange()
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport()
+        transportFactoryQueue.push(transport)
+
+        connectPanePty(
+          createPane(1) as never,
+          createManager(1) as never,
+          createDeps({ cwd, ...(worktreeId ? { worktreeId } : {}) }) as never
+        )
+        await flushAsyncTicks()
+
+        expect(createdTransportOptions[0]?.terminalColorQueryReplies).toEqual({
+          foreground: '#eeeeee',
+          background: '#111111'
+        })
+      } finally {
+        restoreNavigator()
+      }
+    }
+  )
+
+  it('does not pass startup OSC color replies to known Windows SSH ConPTY spawns', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+      mockStoreState = {
+        ...mockStoreState,
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1', displayName: 'orca' }],
+        sshConnectionStates: new Map([
+          ['ssh-conn-1', { status: 'connected', remotePlatform: 'win32' }]
+        ]),
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+        }
+      }
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({ cwd }) as never
+      )
+      await flushAsyncTicks()
+
+      expect(createdTransportOptions[0]).not.toHaveProperty('terminalColorQueryReplies')
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it('passes startup OSC color replies to Windows SSH panes that explicitly launch WSL', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+      mockStoreState = {
+        ...mockStoreState,
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1', displayName: 'orca' }],
+        sshConnectionStates: new Map([
+          ['ssh-conn-1', { status: 'connected', remotePlatform: 'win32' }]
+        ]),
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', shellOverride: 'wsl.exe' }]
+        },
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+        }
+      }
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({ cwd }) as never
+      )
+      await flushAsyncTicks()
+
+      expect(createdTransportOptions[0]?.terminalColorQueryReplies).toEqual({
+        foreground: '#eeeeee',
+        background: '#111111'
+      })
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it('consumes visible OSC color queries without replying on native Windows ConPTY', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: 'wt-1',
+              repoId: 'repo1',
+              path: 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan',
+              displayName: 'feat/notis'
+            }
+          ]
+        }
+      }
+      const pane = createPane(1)
+      const oscHandlers = captureTerminalOscHandlers(pane)
+
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        createDeps({ cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan' }) as never
+      )
+      await flushAsyncTicks()
+
+      expect(oscHandlers.get(10)?.('?')).toBe(true)
+      expect(transport.sendInput).not.toHaveBeenCalled()
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it.each([
+    {
+      name: 'project WSL runtime',
+      arrange: () => {
+        const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          projects: [
+            { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+          ],
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'Linux SSH pane',
+      arrange: () => {
+        const cwd = '/home/neil/orca/seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          repos: [{ id: 'repo1', connectionId: 'ssh-conn-1', displayName: 'orca' }],
+          sshConnectionStates: new Map([
+            ['ssh-conn-1', { status: 'connected', remotePlatform: 'linux' }]
+          ]),
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'remote runtime pane',
+      arrange: () => {
+        const cwd = '/workspaces/orca/seafan'
+        mockStoreState = {
+          ...mockStoreState,
+          settings: {
+            ...mockStoreState.settings,
+            activeRuntimeEnvironmentId: 'runtime-env-1'
+          },
+          worktreesByRepo: {
+            repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+          }
+        }
+        return { cwd }
+      }
+    },
+    {
+      name: 'remote runtime pane with stale Windows SSH metadata',
+      arrange: () => {
+        const cwd = '/workspaces/orca/seafan'
+        const worktreeId = 'folder:folder-1'
+        mockStoreState = {
+          ...mockStoreState,
+          repos: [],
+          folderWorkspaces: [
+            {
+              id: 'folder-1',
+              projectGroupId: 'group-1',
+              folderPath: cwd,
+              connectionId: 'ssh-conn-1'
+            }
+          ],
+          projectGroups: [
+            {
+              id: 'group-1',
+              connectionId: 'ssh-conn-1',
+              executionHostId: 'runtime:runtime-env-1'
+            }
+          ],
+          sshConnectionStates: new Map([
+            ['ssh-conn-1', { status: 'connected', remotePlatform: 'win32' }]
+          ]),
+          tabsByWorktree: {
+            [worktreeId]: [{ id: 'tab-1', ptyId: 'tab-pty' }]
+          }
+        }
+        return { cwd, worktreeId }
+      }
+    }
+  ] satisfies TerminalReplyScenario[])(
+    'answers visible OSC color queries for $name on Windows clients',
+    async ({ arrange }: TerminalReplyScenario) => {
+      const restoreNavigator = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      try {
+        const { cwd, worktreeId } = arrange()
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('pty-id')
+        transportFactoryQueue.push(transport)
+        const pane = createPane(1)
+        const oscHandlers = captureTerminalOscHandlers(pane)
+
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          createDeps({ cwd, ...(worktreeId ? { worktreeId } : {}) }) as never
+        )
+        await flushAsyncTicks()
+
+        expect(oscHandlers.get(10)?.('?')).toBe(true)
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      } finally {
+        restoreNavigator()
+      }
+    }
+  )
+
+  it('consumes visible OSC color queries without replying on known Windows SSH ConPTY panes', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      transportFactoryQueue.push(transport)
+      const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+      mockStoreState = {
+        ...mockStoreState,
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1', displayName: 'orca' }],
+        sshConnectionStates: new Map([
+          ['ssh-conn-1', { status: 'connected', remotePlatform: 'win32' }]
+        ]),
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+        }
+      }
+      const pane = createPane(1)
+      const oscHandlers = captureTerminalOscHandlers(pane)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps({ cwd }) as never)
+      await flushAsyncTicks()
+
+      expect(oscHandlers.get(10)?.('?')).toBe(true)
+      expect(transport.sendInput).not.toHaveBeenCalled()
+    } finally {
+      restoreNavigator()
+    }
   })
 
   it('observes live terminal GitHub PR URLs before agent completion', async () => {
@@ -5955,6 +6471,173 @@ describe('connectPanePty', () => {
     )
 
     binding.dispose()
+  })
+
+  it('does not answer hidden Codex OSC color queries through native Windows ConPTY', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: 'wt-1',
+              repoId: 'repo1',
+              path: 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan',
+              displayName: 'feat/notis'
+            }
+          ]
+        }
+      }
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        createDeps({
+          cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan',
+          isVisibleRef: { current: false },
+          startup: { command: 'codex' }
+        }) as never
+      )
+      await flushAsyncTicks(6)
+
+      const queries = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      capturedDataCallback.current?.(`${queries}startup frame\r\n`)
+
+      expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(queries, expect.any(Function))
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        `${queries}startup frame\r\n`,
+        expect.any(Function)
+      )
+
+      binding.dispose()
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it('does not answer hidden Codex OSC color queries through known Windows SSH ConPTY', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+      mockStoreState = {
+        ...mockStoreState,
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1', displayName: 'orca' }],
+        sshConnectionStates: new Map([
+          ['ssh-conn-1', { status: 'connected', remotePlatform: 'win32' }]
+        ]),
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+        }
+      }
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        createDeps({
+          cwd,
+          isVisibleRef: { current: false },
+          startup: { command: 'codex' }
+        }) as never
+      )
+      await flushAsyncTicks(6)
+
+      const queries = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      capturedDataCallback.current?.(`${queries}startup frame\r\n`)
+
+      expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(queries, expect.any(Function))
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        `${queries}startup frame\r\n`,
+        expect.any(Function)
+      )
+
+      binding.dispose()
+    } finally {
+      restoreNavigator()
+    }
+  })
+
+  it('answers hidden Codex OSC color queries for project WSL runtime on Windows cwd', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const cwd = 'C:\\Users\\neil\\orca\\workspaces\\orca\\seafan'
+      mockStoreState = {
+        ...mockStoreState,
+        projects: [
+          { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+        ],
+        worktreesByRepo: {
+          repo1: [{ id: 'wt-1', repoId: 'repo1', path: cwd, displayName: 'feat/notis' }]
+        }
+      }
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const binding = connectPanePty(
+        pane as never,
+        manager as never,
+        createDeps({
+          cwd,
+          isVisibleRef: { current: false },
+          startup: { command: 'codex' }
+        }) as never
+      )
+      await flushAsyncTicks(6)
+
+      capturedDataCallback.current?.('\x1b]10;?\x1b\\startup frame\r\n')
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        '\x1b]10;?\x1b\\startup frame\r\n',
+        expect.any(Function)
+      )
+
+      binding.dispose()
+    } finally {
+      restoreNavigator()
+    }
   })
 
   it('keeps split hidden Codex terminal queries on the live xterm path', async () => {

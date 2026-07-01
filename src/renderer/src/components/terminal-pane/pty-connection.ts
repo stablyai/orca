@@ -11,6 +11,10 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  isWslShellName,
+  resolveLocalWindowsTerminalShellOverrideForTab
+} from '../../../../shared/local-windows-terminal-runtime'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
@@ -2059,23 +2063,6 @@ export function connectPanePty(
   const connectionId = getConnectionId(deps.worktreeId) ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
-  // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
-  // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
-  // enables ConPTY synchronized-output protection, which strips an agent's
-  // transient cursor-show (?25h) and leaves the cursor invisible. The execution
-  // host is the authoritative signal: only a 'local' host is a local native PTY.
-  const executionHostId = getExecutionHostIdForWorktree(state, deps.worktreeId)
-  const isNativeWindowsConpty = isLocalNativeWindowsConpty({
-    userAgent: navigator.userAgent,
-    connectionId,
-    cwd: deps.cwd,
-    shellOverride,
-    executionHostId
-  })
-  const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
-  const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
-  const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
-
   const restoredPtyIdForTransport =
     deps.restoredLeafId && deps.restoredPtyIdByLeafId
       ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
@@ -2096,6 +2083,40 @@ export function connectPanePty(
           availableWslDistros: localWindowsTerminalCapabilities?.wslDistros ?? null
         })
       : undefined
+  const isWslWorktree = isWslUncPath(deps.cwd ?? '') || isWslUncPath(worktree?.path ?? '')
+  // Why: spawn may enter WSL through an explicit shell or project/global runtime
+  // settings even when the renderer cwd is a Windows path.
+  const effectiveWindowsShellOverride = resolveLocalWindowsTerminalShellOverrideForTab({
+    explicitShellOverride: shellOverride,
+    defaultWindowsShell: state.settings?.terminalWindowsShell,
+    isWslWorktree,
+    projectRuntime
+  })
+  // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
+  // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
+  // enables ConPTY synchronized-output protection, which strips an agent's
+  // transient cursor-show (?25h) and leaves the cursor invisible. The execution
+  // host is the authoritative signal: only a 'local' host is a local native PTY.
+  const executionHostId = getExecutionHostIdForWorktree(state, deps.worktreeId)
+  const isNativeWindowsConpty = isLocalNativeWindowsConpty({
+    userAgent: navigator.userAgent,
+    connectionId,
+    cwd: deps.cwd,
+    shellOverride: effectiveWindowsShellOverride,
+    executionHostId
+  })
+  const sshRemotePlatform = connectionId
+    ? (state.sshConnectionStates.get(connectionId)?.remotePlatform ?? null)
+    : null
+  // Why: SSH relay panes run node-pty on the remote host. A known Windows
+  // remote has the same ConPTY input-reply hazard, but runtime-owned panes use
+  // the runtime transport even if stale SSH metadata is still present.
+  const isSshWindowsConpty =
+    runtimeEnvironmentId === null && sshRemotePlatform === 'win32' && !isWslShellName(shellOverride)
+  const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
+  const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
+  const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
+
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
@@ -2112,9 +2133,13 @@ export function connectPanePty(
     recordAcceptedTerminalInputForHibernation()
   }
   const terminalTheme = pane.terminal.options.theme
-  const terminalColorQueryReplies = terminalTheme
-    ? { foreground: terminalTheme.foreground, background: terminalTheme.background }
-    : undefined
+  // Why: ConPTY can turn OSC color replies written as PTY input into visible
+  // prompt text by swallowing ESC and echoing the printable remainder.
+  const shouldSendOscColorQueryReplies = !isNativeWindowsConpty && !isSshWindowsConpty
+  const terminalColorQueryReplies =
+    shouldSendOscColorQueryReplies && terminalTheme
+      ? { foreground: terminalTheme.foreground, background: terminalTheme.background }
+      : undefined
   const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
@@ -2220,6 +2245,7 @@ export function connectPanePty(
     parser: pane.terminal.parser,
     sendInput: (data) => transport.sendInput(data),
     isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id),
+    disableOscColorReplies: !shouldSendOscColorQueryReplies,
     ...(isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   const respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
@@ -3608,7 +3634,7 @@ export function connectPanePty(
         hiddenStartupRendererQueryPending
       )
       hiddenStartupRendererQueryPending = extracted.pending
-      if (extracted.oscColorQueryData) {
+      if (extracted.oscColorQueryData && shouldSendOscColorQueryReplies) {
         // Why: Codex's startup palette probe has a 100 ms budget. Answer
         // hidden color queries directly so renderer scheduling cannot miss it.
         sendTerminalOscColorQueryReplies(extracted.oscColorQueryData, pane.terminal, (reply) =>
@@ -4241,7 +4267,7 @@ export function connectPanePty(
           hiddenStartupRendererQuery: true
         })
       }
-      if (pendingForegroundQuery?.oscColorQueryData) {
+      if (pendingForegroundQuery?.oscColorQueryData && shouldSendOscColorQueryReplies) {
         sendTerminalOscColorQueryReplies(
           pendingForegroundQuery.oscColorQueryData,
           pane.terminal,

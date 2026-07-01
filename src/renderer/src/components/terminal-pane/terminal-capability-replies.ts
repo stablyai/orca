@@ -15,6 +15,7 @@ type TerminalCapabilityRepliesDeps = {
   sendInput: (data: string) => boolean | void
   isReplaying: () => boolean
   da1Response?: string
+  disableOscColorReplies?: boolean
 }
 
 function isPrimaryDeviceAttributesQuery(params: (number | number[])[]): boolean {
@@ -75,6 +76,21 @@ function sendTerminalOscColorQueryRepliesForSlots(
   return true
 }
 
+function handleTerminalOscColorQuery(
+  slot: TerminalOscColorQuerySlot,
+  data: string,
+  deps: TerminalCapabilityRepliesDeps
+): boolean {
+  const slots = terminalOscColorQuerySlotsForBody(slot, data.trim())
+  if (!slots) {
+    return false
+  }
+  if (deps.disableOscColorReplies || deps.isReplaying()) {
+    return true
+  }
+  return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+}
+
 export function createTerminalPixelSizeQueryResponder(
   terminal: Pick<Terminal, 'cols' | 'rows' | 'element'>,
   sendInput: (data: string) => boolean | void
@@ -130,24 +146,10 @@ export function installTerminalCapabilityReplyHandlers(
       return true
     }),
     deps.parser.registerOscHandler(10, (data) => {
-      const slots = terminalOscColorQuerySlotsForBody(10, data.trim())
-      if (!slots) {
-        return false
-      }
-      if (deps.isReplaying()) {
-        return true
-      }
-      return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+      return handleTerminalOscColorQuery(10, data, deps)
     }),
     deps.parser.registerOscHandler(11, (data) => {
-      const slots = terminalOscColorQuerySlotsForBody(11, data.trim())
-      if (!slots) {
-        return false
-      }
-      if (deps.isReplaying()) {
-        return true
-      }
-      return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+      return handleTerminalOscColorQuery(11, data, deps)
     })
   ]
 
