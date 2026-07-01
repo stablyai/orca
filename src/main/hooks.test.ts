@@ -1439,6 +1439,31 @@ describe('createSetupRunnerScript', () => {
 })
 
 describe('resolveSetupRunnerShell', () => {
+  it('maps git-bash to POSIX setup launch metadata on Windows', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(resolveSetupRunnerShell({ terminalWindowsShell: 'git-bash' }, 'win32')).toEqual({
+      family: 'posix'
+    })
+  })
+
+  it('maps the configured PowerShell implementation into setup launch metadata', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell(
+        {
+          terminalWindowsShell: 'powershell',
+          terminalWindowsPowerShellImplementation: 'pwsh.exe'
+        },
+        'win32'
+      )
+    ).toEqual({
+      family: 'powershell',
+      executable: 'pwsh.exe'
+    })
+  })
+
   it('preserves wsl.exe for Windows setup launch metadata', async () => {
     const { resolveSetupRunnerShell } = await import('./hooks')
 
