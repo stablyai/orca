@@ -191,11 +191,17 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
               'You’re on the latest version.'
             )}
           {updateStatus.state === 'downloading' &&
-            translate(
-              'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',
-              'Downloading v{{value0}}... {{value1}}%',
-              { value0: updateStatus.version, value1: updateStatus.percent }
-            )}
+            (updateStatus.percent >= 100
+              ? translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.finalizing',
+                  'Finalizing v{{value0}}...',
+                  { value0: updateStatus.version }
+                )
+              : translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',
+                  'Downloading v{{value0}}... {{value1}}%',
+                  { value0: updateStatus.version, value1: updateStatus.percent }
+                ))}
           {updateStatus.state === 'downloaded' && (
             <>
               {translate(

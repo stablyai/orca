@@ -266,6 +266,10 @@ async function prepareRendererForAppRestart({
   window.dispatchEvent(new Event('beforeunload'))
 }
 
+ipcRenderer.on(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT, () => {
+  window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT))
+})
+
 const onNativeFileDrop = (_event: Electron.IpcRendererEvent, data: NativeFileDropPayload): void => {
   for (const callback of Array.from(nativeFileDropCallbacks)) {
     callback(data)

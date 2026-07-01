@@ -24,19 +24,36 @@ export function UpdateStatusSegment({
   const segment = (() => {
     if (status.state === 'downloading') {
       const pct = Math.max(0, Math.min(100, Math.round(status.percent)))
+      const isFinalizing = pct >= 100
       return {
         icon: <Download className="size-3 text-muted-foreground" />,
-        label: `${pct}%`,
-        tooltip: translate(
-          'auto.components.status.bar.UpdateStatusSegment.248ee5d8ef',
-          'Orca v{{value0}} downloading… {{value1}}%',
-          { value0: status.version, value1: pct }
-        ),
-        ariaLabel: translate(
-          'auto.components.status.bar.UpdateStatusSegment.fd1d3b3a1d',
-          'Update downloading, {{value0}} percent. Click to expand.',
-          { value0: pct }
-        )
+        label: isFinalizing
+          ? translate(
+              'auto.components.status.bar.UpdateStatusSegment.finalizingLabel',
+              'Finalizing'
+            )
+          : `${pct}%`,
+        tooltip: isFinalizing
+          ? translate(
+              'auto.components.status.bar.UpdateStatusSegment.finalizingTooltip',
+              'Orca v{{value0}} finalizing update',
+              { value0: status.version }
+            )
+          : translate(
+              'auto.components.status.bar.UpdateStatusSegment.248ee5d8ef',
+              'Orca v{{value0}} downloading… {{value1}}%',
+              { value0: status.version, value1: pct }
+            ),
+        ariaLabel: isFinalizing
+          ? translate(
+              'auto.components.status.bar.UpdateStatusSegment.finalizingAria',
+              'Update finalizing. Click to expand.'
+            )
+          : translate(
+              'auto.components.status.bar.UpdateStatusSegment.fd1d3b3a1d',
+              'Update downloading, {{value0}} percent. Click to expand.',
+              { value0: pct }
+            )
       }
     }
     if (status.state === 'downloaded') {

@@ -1,8 +1,12 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
-import type { NsisUpdater } from 'electron-updater'
+import type { UpdateDownloadedEvent } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
+import { win32 as pathWin32 } from 'node:path'
 import type { UpdateStatus } from '../shared/types'
+import type { UpdateErrorReason } from '../shared/updater-error-reasons'
+import { UPDATE_ERROR_REASON_SIGNATURE_VERIFICATION } from '../shared/updater-error-reasons'
+import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -25,10 +29,25 @@ import {
   getReleaseDownloadUrl
 } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
+import {
+  createWindowsUpdaterSignatureVerificationError,
+  hashWindowsUpdaterInstaller,
+  installWindowsUpdaterSignatureVerification,
+  isWindowsUpdaterSignatureVerificationError,
+  readWindowsUpdaterExpectedSha512,
+  readWindowsUpdaterInstallerPath,
+  verifyWindowsUpdaterInstaller,
+  WINDOWS_UPDATER_SIGNATURE_VERIFICATION_ERROR_MESSAGE
+} from './windows-updater-signature-verification'
 
 type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 type PrimaryEventSuppression = { failureKey: string; error: unknown }
+type VerifiedWindowsUpdateInstaller = {
+  installerPath: string
+  version: string
+  sha512: string
+}
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -98,6 +117,8 @@ let _setDismissedUpdateNudgeId: ((id: string | null) => void) | null = null
 // Settings trigger a download before the first download-progress event
 // flips the status to 'downloading'.
 let downloadInFlight = false
+let verifiedWindowsUpdateInstaller: VerifiedWindowsUpdateInstaller | null = null
+let windowsDownloadedVerificationSequence = 0
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
 let quittingForUpdate = false
@@ -113,6 +134,15 @@ function getAutoUpdater(): ElectronAutoUpdater {
 function clearAvailableUpdateContext(): void {
   availableVersion = null
   availableReleaseUrl = null
+  clearVerifiedWindowsUpdateInstaller()
+}
+
+function clearVerifiedWindowsUpdateInstaller(): void {
+  verifiedWindowsUpdateInstaller = null
+}
+
+function invalidateWindowsDownloadedVerifications(): void {
+  windowsDownloadedVerificationSequence += 1
 }
 
 function clearPrereleaseFallbackContext(): void {
@@ -356,6 +386,9 @@ function armUpdateCheckStallTimer(attemptId: number): void {
 
 function beginUpdateCheckAttempt(): number {
   finishActiveUpdateCheckAttempt()
+  // Why: a new check can launch while the UI still says "downloading"; any
+  // pending verification belongs to the previous installer and must be stale.
+  invalidateWindowsDownloadedVerifications()
   updateAvailableEventPendingAttemptId = null
   updateCheckAttemptSequence += 1
   activeUpdateCheckAttemptId = updateCheckAttemptSequence
@@ -467,15 +500,24 @@ function shouldHandleUpdaterErrorEvent(): boolean {
   )
 }
 
-function sendErrorStatus(message: string, userInitiated?: boolean): void {
+function sendErrorStatus(
+  message: string,
+  userInitiated?: boolean,
+  reason?: UpdateErrorReason
+): void {
   if (
     currentStatus.state === 'error' &&
     currentStatus.message === message &&
-    currentStatus.userInitiated === userInitiated
+    currentStatus.userInitiated === userInitiated &&
+    currentStatus.reason === reason
   ) {
     return
   }
-  sendStatus({ state: 'error', message, userInitiated })
+  const status: UpdateStatus =
+    reason === undefined
+      ? { state: 'error', message, userInitiated }
+      : { state: 'error', message, userInitiated, reason }
+  sendStatus(status)
 }
 
 function getKnownReleaseUrl(): string | undefined {
@@ -494,6 +536,166 @@ function getPendingInstallVersion(): string {
     return currentStatus.version
   }
   return ''
+}
+
+function getUpdaterErrorReason(error: unknown): UpdateErrorReason | undefined {
+  return isWindowsUpdaterSignatureVerificationError(error)
+    ? UPDATE_ERROR_REASON_SIGNATURE_VERIFICATION
+    : undefined
+}
+
+function getUpdaterErrorStatusMessage(error: unknown): string {
+  return getUpdaterErrorReason(error) === UPDATE_ERROR_REASON_SIGNATURE_VERIFICATION
+    ? WINDOWS_UPDATER_SIGNATURE_VERIFICATION_ERROR_MESSAGE
+    : String((error as { message?: unknown })?.message ?? error)
+}
+
+function sendWindowsUpdaterSignatureVerificationFailure(
+  error: unknown,
+  userInitiated?: boolean
+): void {
+  console.warn('[updater] Windows update signature verification failed:', error)
+  sendErrorStatus(
+    WINDOWS_UPDATER_SIGNATURE_VERIFICATION_ERROR_MESSAGE,
+    userInitiated,
+    UPDATE_ERROR_REASON_SIGNATURE_VERIFICATION
+  )
+}
+
+function notifyUpdaterQuitAndInstallAborted(): void {
+  mainWindowRef?.webContents.send(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT)
+}
+
+async function verifyDownloadedWindowsUpdate(info: UpdateDownloadedEvent): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return true
+  }
+
+  invalidateWindowsDownloadedVerifications()
+  const verificationId = windowsDownloadedVerificationSequence
+  if (isCurrentWindowsDownloadedVerification(info, verificationId)) {
+    clearVerifiedWindowsUpdateInstaller()
+  }
+
+  try {
+    const installerPath =
+      typeof info.downloadedFile === 'string' && info.downloadedFile.trim()
+        ? info.downloadedFile
+        : null
+    if (installerPath === null) {
+      throw createWindowsUpdaterSignatureVerificationError(
+        'The downloaded Windows installer path is missing.'
+      )
+    }
+
+    const expectedSha512 = readWindowsUpdaterExpectedSha512(info)
+    if (expectedSha512 === null) {
+      throw createWindowsUpdaterSignatureVerificationError(
+        'The Windows update metadata is missing the installer SHA512.'
+      )
+    }
+
+    await verifyWindowsUpdaterInstallerHash(installerPath, expectedSha512)
+    await verifyWindowsUpdaterInstallerSignature(installerPath)
+    if (!isCurrentWindowsDownloadedVerification(info, verificationId)) {
+      return false
+    }
+    verifiedWindowsUpdateInstaller = {
+      installerPath,
+      version: info.version,
+      sha512: expectedSha512
+    }
+    return true
+  } catch (error) {
+    if (isCurrentWindowsDownloadedVerification(info, verificationId)) {
+      clearVerifiedWindowsUpdateInstaller()
+      sendWindowsUpdaterSignatureVerificationFailure(error)
+    }
+    return false
+  }
+}
+
+function isCurrentWindowsDownloadedVerification(
+  info: UpdateDownloadedEvent,
+  verificationId: number
+): boolean {
+  return (
+    windowsDownloadedVerificationSequence === verificationId &&
+    currentStatus.state === 'downloading' &&
+    currentStatus.version === info.version
+  )
+}
+
+async function verifyWindowsUpdateInstallGate(): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return true
+  }
+
+  try {
+    await assertWindowsUpdateInstallerStillVerified()
+    return true
+  } catch (error) {
+    clearVerifiedWindowsUpdateInstaller()
+    sendWindowsUpdaterSignatureVerificationFailure(error)
+    return false
+  }
+}
+
+async function assertWindowsUpdateInstallerStillVerified(): Promise<void> {
+  const verifiedInstaller = verifiedWindowsUpdateInstaller
+  if (verifiedInstaller === null) {
+    throw createWindowsUpdaterSignatureVerificationError(
+      'No verified Windows update installer is pending.'
+    )
+  }
+
+  const installerPath = readWindowsUpdaterInstallerPath(getAutoUpdater())
+  if (installerPath === null) {
+    throw createWindowsUpdaterSignatureVerificationError(
+      'The pending Windows installer path could not be read.'
+    )
+  }
+
+  if (
+    normalizeWindowsUpdateInstallerPath(installerPath) !==
+    normalizeWindowsUpdateInstallerPath(verifiedInstaller.installerPath)
+  ) {
+    throw createWindowsUpdaterSignatureVerificationError(
+      'The pending Windows installer path changed after verification.'
+    )
+  }
+
+  if (getPendingInstallVersion() !== verifiedInstaller.version) {
+    throw createWindowsUpdaterSignatureVerificationError(
+      'The pending Windows installer version changed after verification.'
+    )
+  }
+
+  await verifyWindowsUpdaterInstallerHash(installerPath, verifiedInstaller.sha512)
+  await verifyWindowsUpdaterInstallerSignature(installerPath)
+}
+
+async function verifyWindowsUpdaterInstallerHash(
+  installerPath: string,
+  expectedSha512: string
+): Promise<void> {
+  const actualSha512 = await hashWindowsUpdaterInstaller(installerPath)
+  if (actualSha512 !== expectedSha512) {
+    throw createWindowsUpdaterSignatureVerificationError(
+      'The Windows update installer hash does not match its metadata.'
+    )
+  }
+}
+
+async function verifyWindowsUpdaterInstallerSignature(installerPath: string): Promise<void> {
+  const verificationFailure = await verifyWindowsUpdaterInstaller(getAutoUpdater(), installerPath)
+  if (verificationFailure !== null) {
+    throw createWindowsUpdaterSignatureVerificationError(verificationFailure)
+  }
+}
+
+function normalizeWindowsUpdateInstallerPath(installerPath: string): string {
+  return pathWin32.normalize(installerPath.trim()).toLowerCase()
 }
 
 function getCheckFailureKey(message: string, userInitiated?: boolean): string {
@@ -523,17 +725,27 @@ async function performQuitAndInstall(): Promise<void> {
     pendingQuitAndInstallTimer = null
   }
 
-  markMacQuitAndInstallInFlight()
-
-  // Set this BEFORE anything else so the `activate` handler in index.ts
-  // won't re-open the old version while Squirrel's ShipIt is replacing
-  // the .app bundle.  Without this guard the quit triggers window
-  // destruction → BrowserWindow.getAllWindows().length === 0 → activate
-  // fires → openMainWindow() resurrects the old process and ShipIt
-  // either can't replace it or the user ends up on the old version.
-  quittingForUpdate = true
+  if (!(await verifyWindowsUpdateInstallGate())) {
+    quitAndInstallInProgress = false
+    notifyUpdaterQuitAndInstallAborted()
+    return
+  }
 
   await runBeforeUpdateQuitCleanup()
+
+  if (!(await verifyWindowsUpdateInstallGate())) {
+    quitAndInstallInProgress = false
+    notifyUpdaterQuitAndInstallAborted()
+    return
+  }
+
+  markMacQuitAndInstallInFlight()
+
+  // Set this before the updater quits so the `activate` handler in index.ts
+  // won't re-open the old version while Squirrel's ShipIt is replacing
+  // the .app bundle.
+  quittingForUpdate = true
+
   killAllPty()
 
   for (const win of BrowserWindow.getAllWindows()) {
@@ -1162,7 +1374,7 @@ export function setupAutoUpdater(
 
   const autoUpdater = getAutoUpdater()
   autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.autoInstallOnAppQuit = process.platform !== 'win32'
 
   // Why: the only on-machine window we have into electron-updater. Without
   // this, an unexpected `update-not-available` (e.g. RC user not offered
@@ -1177,15 +1389,9 @@ export function setupAutoUpdater(
     debug: (m: unknown) => console.debug('[autoUpdater]', m)
   } as never
 
-  // Why: older Windows installs either have no publisherName or have the
-  // stale macOS Apple Developer ID publisherName from issue #631. Keep the
-  // migration path open while SignPath-signed builds roll out.
-  //
-  // TODO: re-enable after SignPath-signed builds with the explicit Windows
-  // publisherName have been the minimum supported updater source for a while.
-  if (process.platform === 'win32') {
-    ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
-  }
+  // Why: old Windows installs can have missing/stale publisher metadata, so
+  // verify the actual installer with Orca's expected SignPath publisher instead.
+  installWindowsUpdaterSignatureVerification(autoUpdater)
 
   // Use the generic provider with GitHub's /releases/latest/download/ URL as
   // the startup fallback so electron-updater can fetch the manifest
@@ -1218,6 +1424,9 @@ export function setupAutoUpdater(
     getPendingInstallVersion,
     getUserInitiatedCheck: () => userInitiatedCheck,
     hasNewerDownloadedVersion,
+    getUpdaterErrorReason,
+    getUpdaterErrorStatusMessage,
+    verifyDownloadedWindowsUpdate,
     shouldHandleUpdaterErrorEvent,
     performQuitAndInstall,
     clearUpdateAvailableEventPending,
@@ -1294,11 +1503,12 @@ export function downloadUpdate(): void {
     return
   }
   downloadInFlight = true
+  clearVerifiedWindowsUpdateInstaller()
   beginMacUpdateDownload()
   getAutoUpdater()
     .downloadUpdate()
     .catch((err) => {
       downloadInFlight = false
-      sendErrorStatus(String(err?.message ?? err))
+      sendErrorStatus(getUpdaterErrorStatusMessage(err), undefined, getUpdaterErrorReason(err))
     })
 }

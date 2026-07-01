@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 
 const {
   appMock,
@@ -51,6 +52,9 @@ const {
     autoUpdaterMock.updateConfigPath = undefined
     autoUpdaterMock.allowPrerelease = false
     delete (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
+    delete (autoUpdaterMock as Record<string, unknown>).verifySignature
+    delete (autoUpdaterMock as Record<string, unknown>).installerPath
+    delete (autoUpdaterMock as Record<string, unknown>).install
   }
 
   const autoUpdaterMock = {
@@ -145,6 +149,51 @@ vi.mock('./updater-prerelease-feed', () => ({
     `https://github.com/stablyai/orca/releases/download/${tag}`
 }))
 
+const {
+  createWindowsUpdaterSignatureVerificationErrorMock,
+  hashWindowsUpdaterInstallerMock,
+  installWindowsUpdaterSignatureVerificationMock,
+  isWindowsUpdaterSignatureVerificationErrorMock,
+  readWindowsUpdaterExpectedSha512Mock,
+  readWindowsUpdaterInstallerPathMock,
+  verifyWindowsUpdaterInstallerMock
+} = vi.hoisted(() => {
+  const errorCode = 'ERR_ORCA_WINDOWS_UPDATER_SIGNATURE_VERIFICATION'
+  const upstreamErrorCode = 'ERR_UPDATER_INVALID_SIGNATURE'
+  const createError = vi.fn((detail?: string) =>
+    Object.assign(new Error(detail ?? 'signature verification failed'), { code: errorCode })
+  )
+  const isSignatureError = vi.fn((error: unknown) => {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : null
+    return code === errorCode || code === upstreamErrorCode
+  })
+  return {
+    createWindowsUpdaterSignatureVerificationErrorMock: createError,
+    hashWindowsUpdaterInstallerMock: vi.fn(),
+    installWindowsUpdaterSignatureVerificationMock: vi.fn(),
+    isWindowsUpdaterSignatureVerificationErrorMock: isSignatureError,
+    readWindowsUpdaterExpectedSha512Mock: vi.fn(),
+    readWindowsUpdaterInstallerPathMock: vi.fn(),
+    verifyWindowsUpdaterInstallerMock: vi.fn()
+  }
+})
+
+vi.mock('./windows-updater-signature-verification', () => ({
+  createWindowsUpdaterSignatureVerificationError:
+    createWindowsUpdaterSignatureVerificationErrorMock,
+  hashWindowsUpdaterInstaller: hashWindowsUpdaterInstallerMock,
+  installWindowsUpdaterSignatureVerification: installWindowsUpdaterSignatureVerificationMock,
+  isWindowsUpdaterSignatureVerificationError: isWindowsUpdaterSignatureVerificationErrorMock,
+  readWindowsUpdaterExpectedSha512: readWindowsUpdaterExpectedSha512Mock,
+  readWindowsUpdaterInstallerPath: readWindowsUpdaterInstallerPathMock,
+  verifyWindowsUpdaterInstaller: verifyWindowsUpdaterInstallerMock,
+  WINDOWS_UPDATER_SIGNATURE_VERIFICATION_ERROR_MESSAGE:
+    'Orca could not verify the update publisher.'
+}))
+
 describe('updater', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -164,6 +213,23 @@ describe('updater', () => {
     fetchChangelogMock.mockReset().mockResolvedValue(null)
     fetchNewerReleaseTagsMock.mockReset().mockResolvedValue([])
     vi.unstubAllGlobals()
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    installWindowsUpdaterSignatureVerificationMock
+      .mockReset()
+      .mockImplementation((updater: unknown) => {
+        if (process.platform === 'win32') {
+          ;(
+            updater as { verifySignature?: (installerPath: string) => Promise<string | null> }
+          ).verifySignature = (installerPath: string) =>
+            verifyWindowsUpdaterInstallerMock(updater, installerPath)
+        }
+      })
+    readWindowsUpdaterExpectedSha512Mock.mockReset().mockReturnValue('expected-sha512')
+    hashWindowsUpdaterInstallerMock.mockReset().mockResolvedValue('expected-sha512')
+    readWindowsUpdaterInstallerPathMock.mockReset().mockReturnValue('C:\\cache\\orca.exe')
+    verifyWindowsUpdaterInstallerMock.mockReset().mockResolvedValue(null)
+    createWindowsUpdaterSignatureVerificationErrorMock.mockClear()
+    isWindowsUpdaterSignatureVerificationErrorMock.mockClear()
     vi.useRealTimers()
   })
 
@@ -1067,6 +1133,345 @@ describe('updater', () => {
     )
   })
 
+  it('verifies a Windows downloaded installer before sending downloaded status', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+
+    const downloadedInfo = {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    }
+    autoUpdaterMock.emit('update-downloaded', downloadedInfo)
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 100,
+      version: '1.0.61'
+    })
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'downloaded',
+        version: '1.0.61',
+        releaseUrl: undefined
+      })
+    })
+    expect(readWindowsUpdaterExpectedSha512Mock).toHaveBeenCalledWith(downloadedInfo)
+    expect(hashWindowsUpdaterInstallerMock).toHaveBeenCalledWith('C:\\cache\\orca.exe')
+    expect(verifyWindowsUpdaterInstallerMock).toHaveBeenCalledWith(
+      autoUpdaterMock,
+      'C:\\cache\\orca.exe'
+    )
+  })
+
+  it('rejects a Windows downloaded installer when signature verification fails', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    verifyWindowsUpdaterInstallerMock.mockResolvedValue('wrong publisher')
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: 'Orca could not verify the update publisher.',
+        reason: 'signature-verification',
+        userInitiated: undefined
+      })
+    })
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'downloaded' }))
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('does not let a stale Windows downloaded verification failure overwrite a newer check', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    let rejectSignatureVerification: (error: Error) => void = () => {}
+    verifyWindowsUpdaterInstallerMock.mockReturnValue(
+      new Promise<string | null>((_resolve, reject) => {
+        rejectSignatureVerification = reject
+      })
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(verifyWindowsUpdaterInstallerMock).toHaveBeenCalledWith(
+        autoUpdaterMock,
+        'C:\\cache\\orca.exe'
+      )
+    })
+
+    checkForUpdatesFromMenu()
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+
+    rejectSignatureVerification(new Error('old verification failed'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).not.toContainEqual(
+      expect.objectContaining({ state: 'error', reason: 'signature-verification' })
+    )
+  })
+
+  it('invalidates stale Windows downloaded verification when a background check starts', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock.mockImplementation(
+      () =>
+        new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+          resolveTags = resolve
+        })
+    )
+    let rejectSignatureVerification: (error: Error) => void = () => {}
+    verifyWindowsUpdaterInstallerMock.mockReturnValue(
+      new Promise<string | null>((_resolve, reject) => {
+        rejectSignatureVerification = reject
+      })
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => new Promise(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdates } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(verifyWindowsUpdaterInstallerMock).toHaveBeenCalledWith(
+        autoUpdaterMock,
+        'C:\\cache\\orca.exe'
+      )
+    })
+
+    checkForUpdates()
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(1)
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    rejectSignatureVerification(new Error('old verification failed'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).not.toContainEqual(
+      expect.objectContaining({ state: 'error', reason: 'signature-verification' })
+    )
+
+    resolveTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not let a stale Windows downloaded verification success replace a newer installer record', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    let resolveOldVerification: (result: string | null) => void = () => {}
+    let resolveNewVerification: (result: string | null) => void = () => {}
+    verifyWindowsUpdaterInstallerMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveOldVerification = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveNewVerification = resolve
+          })
+      )
+      .mockResolvedValue(null)
+    readWindowsUpdaterInstallerPathMock.mockReturnValue('C:\\cache\\new-orca.exe')
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\old-orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(verifyWindowsUpdaterInstallerMock).toHaveBeenCalledWith(
+        autoUpdaterMock,
+        'C:\\cache\\old-orca.exe'
+      )
+    })
+
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\new-orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(verifyWindowsUpdaterInstallerMock).toHaveBeenCalledWith(
+        autoUpdaterMock,
+        'C:\\cache\\new-orca.exe'
+      )
+    })
+
+    resolveNewVerification(null)
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+    resolveOldVerification(null)
+    await vi.advanceTimersByTimeAsync(0)
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'error', reason: 'signature-verification' })
+    )
+  })
+
+  it('classifies upstream invalid-signature download rejections', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockRejectedValue(
+      Object.assign(new Error('New version is not signed'), {
+        code: 'ERR_UPDATER_INVALID_SIGNATURE'
+      })
+    )
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    downloadUpdate()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: 'Orca could not verify the update publisher.',
+        reason: 'signature-verification',
+        userInitiated: undefined
+      })
+    })
+  })
+
+  it('classifies upstream invalid-signature error events while downloading', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
+      autoUpdaterMock.emit(
+        'error',
+        Object.assign(new Error('New version is not signed'), {
+          code: 'ERR_UPDATER_INVALID_SIGNATURE'
+        })
+      )
+      return new Promise(() => {})
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    downloadUpdate()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'error',
+      message: 'Orca could not verify the update publisher.',
+      reason: 'signature-verification',
+      userInitiated: undefined
+    })
+  })
+
   it('defers quitAndInstall through the shared main-process entrypoint', async () => {
     vi.useFakeTimers()
 
@@ -1147,6 +1552,198 @@ describe('updater', () => {
 
     expect(onBeforeQuit).toHaveBeenCalledTimes(1)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs Windows quitAndInstall only after pre-cleanup and final installer gates pass', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const onBeforeQuit = vi.fn()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      onBeforeQuit
+    })
+    readWindowsUpdaterInstallerPathMock.mockReturnValue('C:/cache/./orca.exe')
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+    hashWindowsUpdaterInstallerMock.mockClear()
+    verifyWindowsUpdaterInstallerMock.mockClear()
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+    })
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(hashWindowsUpdaterInstallerMock).toHaveBeenCalledTimes(2)
+    expect(verifyWindowsUpdaterInstallerMock).toHaveBeenCalledTimes(2)
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not run the Windows installer on ordinary app quit after a verified download', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const internalInstallMock = vi.fn()
+    ;(autoUpdaterMock as { install?: typeof internalInstallMock }).install = internalInstallMock
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+
+    const beforeQuitEvent = { preventDefault: vi.fn() }
+    appMock.emit('before-quit', beforeQuitEvent)
+    appMock.emit('quit', {}, 0)
+
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+    expect(beforeQuitEvent.preventDefault).not.toHaveBeenCalled()
+    expect(internalInstallMock).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+  })
+
+  it('fails Windows quitAndInstall when the pending installer path cannot be read', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const onBeforeQuit = vi.fn()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      onBeforeQuit
+    })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+
+    readWindowsUpdaterInstallerPathMock.mockReturnValue(null)
+    sendMock.mockClear()
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'error',
+      message: 'Orca could not verify the update publisher.',
+      reason: 'signature-verification',
+      userInitiated: undefined
+    })
+    expect(sendMock).toHaveBeenCalledWith(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT)
+  })
+
+  it('restores Windows quitAndInstall retry state after a final gate failure', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const onBeforeQuit = vi.fn()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      onBeforeQuit
+    })
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+    hashWindowsUpdaterInstallerMock
+      .mockResolvedValueOnce('expected-sha512')
+      .mockResolvedValueOnce('tampered-sha512')
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: 'Orca could not verify the update publisher.',
+        reason: 'signature-verification',
+        userInitiated: undefined
+      })
+    })
+    expect(sendMock).toHaveBeenCalledWith(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT)
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+
+    hashWindowsUpdaterInstallerMock.mockResolvedValue('expected-sha512')
+    verifyWindowsUpdaterInstallerMock.mockResolvedValue(null)
+    autoUpdaterMock.emit('update-downloaded', {
+      version: '1.0.61',
+      downloadedFile: 'C:\\cache\\orca.exe',
+      files: [{ url: 'orca-1.0.61.exe', sha512: 'expected-sha512' }],
+      path: '',
+      sha512: '',
+      releaseDate: ''
+    })
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+    })
+
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+    })
   })
 
   it('runs a startup check immediately when the last background check is stale', async () => {
@@ -1675,11 +2272,9 @@ describe('updater', () => {
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith(null)
   })
 
-  // Why: issue #631 — the Windows auto-updater fails because installed
-  // versions signed with the wrong certificate have a stale publisherName
-  // in app-update.yml. verifyUpdateCodeSignature must be overridden on
-  // Windows so electron-updater skips Authenticode verification.
-  it('overrides verifyUpdateCodeSignature on Windows to skip signing verification', async () => {
+  // Why: old Windows installs can have missing/stale publisher metadata; setup
+  // must bypass that metadata while still verifying the actual installer.
+  it('installs strict Windows signature verification during setup', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
 
     const { setupAutoUpdater } = await import('./updater')
@@ -1689,15 +2284,13 @@ describe('updater', () => {
 
     setupAutoUpdater(mainWindow as never)
 
-    // The override should be set on the autoUpdater mock
-    const override = (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
-    expect(override).toBeTypeOf('function')
-    // Calling it should resolve to null (meaning "signature valid, skip check")
-    await expect((override as () => Promise<string | null>)()).resolves.toBeNull()
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+    expect(installWindowsUpdaterSignatureVerificationMock).toHaveBeenCalledWith(autoUpdaterMock)
+    expect((autoUpdaterMock as Record<string, unknown>).verifySignature).toBeTypeOf('function')
   })
 
-  it('does not override verifyUpdateCodeSignature on non-Windows platforms', async () => {
-    vi.stubGlobal('process', { ...process, platform: 'darwin' })
+  it('keeps auto-install-on-app-quit enabled on non-Windows platforms', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
 
     const { setupAutoUpdater } = await import('./updater')
 
@@ -1706,7 +2299,8 @@ describe('updater', () => {
 
     setupAutoUpdater(mainWindow as never)
 
-    expect((autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature).toBeUndefined()
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+    expect((autoUpdaterMock as Record<string, unknown>).verifySignature).toBeUndefined()
   })
 
   // Why: a prerelease user (e.g. 1.3.17-rc.1) must be able to upgrade to BOTH

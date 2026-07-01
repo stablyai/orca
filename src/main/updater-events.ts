@@ -1,5 +1,7 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
+import type { UpdateDownloadedEvent } from 'electron-updater'
 import type { UpdateStatus } from '../shared/types'
+import type { UpdateErrorReason } from '../shared/updater-error-reasons'
 import {
   consumeMacInstallGuardBypass,
   deferMacQuitUntilInstallerReady,
@@ -27,6 +29,8 @@ type UpdaterHandlerContext = {
   getKnownReleaseUrl: () => string | undefined
   getPendingInstallVersion: () => string
   getUserInitiatedCheck: () => boolean
+  getUpdaterErrorReason: (error: unknown) => UpdateErrorReason | undefined
+  getUpdaterErrorStatusMessage: (error: unknown) => string
   hasNewerDownloadedVersion: () => boolean
   shouldHandleUpdaterErrorEvent: () => boolean
   clearUpdateAvailableEventPending: (attemptId: number | null) => void
@@ -42,7 +46,7 @@ type UpdaterHandlerContext = {
     source?: 'event' | 'promise' | 'fallback-promise',
     sourceError?: unknown
   ) => Promise<void>
-  sendErrorStatus: (message: string, userInitiated?: boolean) => void
+  sendErrorStatus: (message: string, userInitiated?: boolean, reason?: UpdateErrorReason) => void
   sendStatus: (status: UpdateStatus) => void
   scheduleAutomaticUpdateCheck: (delayMs: number) => void
   shouldSuppressMissingManifestPrereleaseFallbackEvent: (message: string, error: unknown) => boolean
@@ -50,6 +54,7 @@ type UpdaterHandlerContext = {
   setAvailableReleaseUrl: (releaseUrl: string | null) => void
   setAvailableVersion: (version: string | null) => void
   setUserInitiatedCheck: (value: boolean) => void
+  verifyDownloadedWindowsUpdate: (info: UpdateDownloadedEvent) => Promise<boolean>
 }
 
 export function registerAutoUpdaterHandlers({
@@ -64,6 +69,8 @@ export function registerAutoUpdaterHandlers({
   getKnownReleaseUrl,
   getPendingInstallVersion,
   getUserInitiatedCheck,
+  getUpdaterErrorReason,
+  getUpdaterErrorStatusMessage,
   hasNewerDownloadedVersion,
   shouldHandleUpdaterErrorEvent,
   clearUpdateAvailableEventPending,
@@ -81,7 +88,8 @@ export function registerAutoUpdaterHandlers({
   suppressMissingManifestPrereleaseFallbackPromiseFailure,
   setAvailableReleaseUrl,
   setAvailableVersion,
-  setUserInitiatedCheck
+  setUserInitiatedCheck,
+  verifyDownloadedWindowsUpdate
 }: UpdaterHandlerContext): void {
   // On macOS, electron-updater's MacUpdater downloads the ZIP from GitHub,
   // then serves it to Squirrel.Mac via a localhost proxy. The electron-updater
@@ -264,11 +272,30 @@ export function registerAutoUpdaterHandlers({
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
       return
     }
-    sendStatus({ state: 'downloaded', version: info.version, releaseUrl: getKnownReleaseUrl() })
+    const sendDownloadedStatus = () => {
+      sendStatus({ state: 'downloaded', version: info.version, releaseUrl: getKnownReleaseUrl() })
+    }
+    if (process.platform === 'win32') {
+      sendStatus({ state: 'downloading', percent: 100, version: info.version })
+      void (async () => {
+        if (!(await verifyDownloadedWindowsUpdate(info))) {
+          return
+        }
+        const currentStatus = getCurrentStatus()
+        if (currentStatus.state !== 'downloading' || currentStatus.version !== info.version) {
+          return
+        }
+        sendDownloadedStatus()
+      })()
+      return
+    }
+    sendDownloadedStatus()
   })
 
   autoUpdater.on('error', (err) => {
     const message = err?.message ?? 'Unknown error'
+    const statusMessage = getUpdaterErrorStatusMessage(err)
+    const reason = getUpdaterErrorReason(err)
     // Why: primary/fallback promise handlers may already own this failure; do
     // not let their delayed paired error event consume fallback context.
     if (shouldSuppressMissingManifestPrereleaseFallbackEvent(message, err)) {
@@ -283,10 +310,14 @@ export function registerAutoUpdaterHandlers({
     const missingManifestFallback = consumeMissingManifestPrereleaseFallbackResult()
     const wasUserInitiated = missingManifestFallback?.userInitiated ?? getUserInitiatedCheck()
     setUserInitiatedCheck(false)
+    if (reason !== undefined) {
+      sendErrorStatus(statusMessage, wasUserInitiated || undefined, reason)
+      return
+    }
     if (getCurrentStatus().state === 'checking') {
       void sendCheckFailureStatus(message, wasUserInitiated || undefined, 'event', err)
       return
     }
-    sendErrorStatus(message, wasUserInitiated || undefined)
+    sendErrorStatus(statusMessage, wasUserInitiated || undefined)
   })
 }

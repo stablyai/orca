@@ -8,7 +8,8 @@ import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
 import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, X } from 'lucide-react'
-import type { ChangelogData } from '../../../shared/types'
+import type { ChangelogData, UpdateStatus } from '../../../shared/types'
+import { UPDATE_ERROR_REASON_SIGNATURE_VERIFICATION } from '../../../shared/updater-error-reasons'
 import { translate } from '@/i18n/i18n'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -36,12 +37,17 @@ export function isHttp2ProtocolError(message: string): boolean {
   )
 }
 
+export function shouldShowManualDownloadForUpdateError(status: UpdateStatus): boolean {
+  return status.state !== 'error' || status.reason !== UPDATE_ERROR_REASON_SIGNATURE_VERIFICATION
+}
+
 type ErrorCardModel = {
   variant?: 'default' | 'http1Compatibility'
   title: string
   summary: string
   message: string
   releaseUrl: string
+  showManualDownload?: boolean
   primaryAction?: {
     label: string
     pendingLabel?: string
@@ -338,6 +344,8 @@ export function UpdateCard() {
   }
 
   const isHttp2UpdateError = status.state === 'error' && isHttp2ProtocolError(status.message)
+  const showManualDownload =
+    status.state === 'error' ? shouldShowManualDownloadForUpdateError(status) : true
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
       ? isHttp2UpdateError
@@ -347,6 +355,7 @@ export function UpdateCard() {
             summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
             message: compatibilitySetupError ?? status.message,
             releaseUrl: releaseUrlForVersion(cachedVersion),
+            showManualDownload,
             primaryAction: {
               label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
               pendingLabel: 'Restarting...',
@@ -357,12 +366,19 @@ export function UpdateCard() {
         : {
             // Why: title is scoped to the operation that failed so check-time
             // failures (commonly GitHub-side) don't read as a bug in Orca.
-            title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-            summary: cachedVersion
-              ? 'Could not complete the update.'
-              : 'Could not check for updates.',
+            title: showManualDownload
+              ? cachedVersion
+                ? 'Update Error'
+                : 'Update Check Failed'
+              : 'Update Verification Failed',
+            summary: showManualDownload
+              ? cachedVersion
+                ? 'Could not complete the update.'
+                : 'Could not check for updates.'
+              : 'Orca could not verify the update publisher.',
             message: status.message,
             releaseUrl: releaseUrlForVersion(cachedVersion),
+            showManualDownload,
             // Why: check-time failures are often transient (offline, GitHub
             // hiccup), so offer a Re-check next to "Download Manually" instead
             // of forcing the user into the manual fallback.
@@ -497,6 +513,7 @@ export function UpdateCard() {
           message={errorCard.message}
           releaseUrl={errorCard.releaseUrl}
           variant={errorCard.variant}
+          showManualDownload={errorCard.showManualDownload}
           primaryAction={errorCard.primaryAction}
           onClose={handleCollapseWithAnimation}
         />
@@ -809,6 +826,7 @@ function DownloadingContent({
   onCollapse: () => void
 }) {
   const release = changelog?.release
+  const isFinalizing = percent >= 100
   const showMedia =
     release?.mediaUrl && !mediaFailed && !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
 
@@ -858,9 +876,21 @@ function DownloadingContent({
       <p className="text-sm text-muted-foreground">
         {release
           ? release.description
-          : translate('auto.components.UpdateCard.93794ea932', 'Orca v{{value0}} is downloading.', {
-              value0: version
-            })}
+          : isFinalizing
+            ? translate(
+                'auto.components.UpdateCard.finalizing',
+                'Orca v{{value0}} is being verified.',
+                {
+                  value0: version
+                }
+              )
+            : translate(
+                'auto.components.UpdateCard.93794ea932',
+                'Orca v{{value0}} is downloading.',
+                {
+                  value0: version
+                }
+              )}
       </p>
 
       <button
@@ -879,7 +909,9 @@ function DownloadingContent({
       <div className="flex flex-col gap-2 mt-1">
         <Progress value={percent} className="h-1.5" />
         <p className="text-xs text-muted-foreground">
-          {translate('auto.components.UpdateCard.6e45bfa2e0', 'Downloading...')} {percent}%
+          {isFinalizing
+            ? translate('auto.components.UpdateCard.finalizingProgress', 'Finalizing update...')
+            : `${translate('auto.components.UpdateCard.6e45bfa2e0', 'Downloading...')} ${percent}%`}
         </p>
       </div>
     </div>
@@ -894,6 +926,7 @@ function ErrorCardContent({
   summary,
   message,
   releaseUrl,
+  showManualDownload = true,
   primaryAction,
   onClose
 }: {
@@ -902,6 +935,7 @@ function ErrorCardContent({
   summary: string
   message: string
   releaseUrl: string
+  showManualDownload?: boolean
   primaryAction?: {
     label: string
     pendingLabel?: string
@@ -960,7 +994,7 @@ function ErrorCardContent({
             size="sm"
             onClick={primaryAction.onClick}
             disabled={primaryAction.isPending}
-            className="flex-1 gap-1.5"
+            className={`${showManualDownload ? 'flex-1' : 'w-full'} gap-1.5`}
           >
             {primaryAction.isPending ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -972,14 +1006,16 @@ function ErrorCardContent({
               : primaryAction.label}
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void window.api.shell.openUrl(releaseUrl)}
-          className={primaryAction ? 'flex-1' : 'w-full'}
-        >
-          {translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
-        </Button>
+        {showManualDownload && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void window.api.shell.openUrl(releaseUrl)}
+            className={primaryAction ? 'flex-1' : 'w-full'}
+          >
+            {translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
+          </Button>
+        )}
       </div>
     </div>
   )

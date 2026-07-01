@@ -106,6 +106,8 @@ import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
+import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../../shared/updater-renderer-events'
+import { createShutdownBufferCaptureGate } from './lib/shutdown-buffer-capture-gate'
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
@@ -1248,9 +1250,9 @@ function App(): React.JSX.Element {
     // two firings, PTY exit events can arrive and unmount TerminalPanes,
     // emptying shutdownBufferCaptures. The guard prevents the second call
     // from overwriting the good session data with an empty snapshot.
-    let shutdownBuffersCaptured = false
+    const shutdownCaptureGate = createShutdownBufferCaptureGate()
     const captureAndFlush = (): void => {
-      if (shutdownBuffersCaptured) {
+      if (!shutdownCaptureGate.canCapture()) {
         return
       }
       if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
@@ -1277,10 +1279,17 @@ function App(): React.JSX.Element {
         buildWorkspaceSessionPayload(freshState),
         freshState
       )
-      shutdownBuffersCaptured = true
+      shutdownCaptureGate.markCaptured()
     }
     window.addEventListener('beforeunload', captureAndFlush)
-    return () => window.removeEventListener('beforeunload', captureAndFlush)
+    window.addEventListener(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT, shutdownCaptureGate.reset)
+    return () => {
+      window.removeEventListener('beforeunload', captureAndFlush)
+      window.removeEventListener(
+        ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+        shutdownCaptureGate.reset
+      )
+    }
   }, [])
 
   // Own the single window-close-request subscription at the always-mounted App
