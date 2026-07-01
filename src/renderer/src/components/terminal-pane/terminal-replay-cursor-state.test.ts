@@ -13,6 +13,7 @@ const OLD_REATTACH_RESET_WITHOUT_CURSOR_STYLE = '\x1b[?25h\x1b[?1004l'
 type DecPrivateCursorState = {
   cursorStyle?: string
   cursorBlink?: boolean
+  sendFocus?: boolean
 }
 
 type KittyKeyboardState = {
@@ -28,10 +29,12 @@ type XtermWithCoreService = Terminal & {
     coreService?: {
       decPrivateModes?: DecPrivateCursorState
       kittyKeyboard?: KittyKeyboardState
+      isCursorHidden?: boolean
     }
     _coreService?: {
       decPrivateModes?: DecPrivateCursorState
       kittyKeyboard?: KittyKeyboardState
+      isCursorHidden?: boolean
     }
   }
 }
@@ -40,6 +43,15 @@ function readDecPrivateCursorState(term: Terminal): DecPrivateCursorState {
   const core = (term as XtermWithCoreService)._core
   const cursorState = core?.coreService?.decPrivateModes ?? core?._coreService?.decPrivateModes
   return cursorState ? { ...cursorState } : {}
+}
+
+function readCursorHidden(term: Terminal): boolean | undefined {
+  const core = (term as XtermWithCoreService)._core
+  return core?.coreService?.isCursorHidden ?? core?._coreService?.isCursorHidden
+}
+
+function readSendFocus(term: Terminal): boolean | undefined {
+  return readDecPrivateCursorState(term).sendFocus
 }
 
 function readKittyKeyboardState(term: Terminal): KittyKeyboardState | null {
@@ -175,6 +187,66 @@ describe('terminal replay state reset', () => {
         mainFlags: 0,
         mainStack: []
       })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves hidden cursor visibility after live reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[?25l')
+      expect(readCursorHidden(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      // Why: live agent TUIs often park the real terminal cursor off-input and
+      // hide it while drawing their own input caret. Reattach must not reveal it.
+      expect(readCursorHidden(term)).toBe(true)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves live focus reporting after live reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+    try {
+      await writeTerminal(term, '\x1b[?1004h')
+      expect(readSendFocus(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      // Why: live TUIs such as cursor-agent can rely on focus events to repaint
+      // their own hidden-cursor input caret after renderer reattach.
+      expect(readSendFocus(term)).toBe(true)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('shows the cursor after cold-restore replay reset', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[?25l')
+      expect(readCursorHidden(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_MODE_RESET)
+
+      expect(readCursorHidden(term)).toBe(false)
     } finally {
       term.dispose()
     }

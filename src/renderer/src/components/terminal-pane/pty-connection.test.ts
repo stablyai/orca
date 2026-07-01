@@ -4023,7 +4023,7 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledTimes(1)
   })
 
-  it('resets reattach cursor/focus state after daemon snapshot replay without applying the full mode reset', async () => {
+  it('resets reattach renderer state after daemon snapshot replay without applying the full mode reset', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -4066,6 +4066,124 @@ describe('connectPanePty', () => {
       POST_REPLAY_MODE_RESET,
       expect.any(Function)
     )
+  })
+
+  it('injects focus-in after reattach when focus reporting is enabled and the terminal owns focus', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    // Why: focus reporting on + the pane owning DOM focus is the observable
+    // signal of a live focus-driven TUI (e.g. cursor-agent) — no agent identity.
+    Object.assign(pane.terminal, {
+      textarea,
+      _core: {
+        coreService: {
+          decPrivateModes: {
+            sendFocus: true
+          }
+        }
+      }
+    })
+    pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { activeElement: textarea }
+    })
+    try {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+    } finally {
+      if (originalDocument) {
+        Object.defineProperty(globalThis, 'document', originalDocument)
+      } else {
+        Reflect.deleteProperty(globalThis, 'document')
+      }
+    }
+  })
+
+  it('does not inject focus-in after reattach when the terminal does not own DOM focus', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    Object.assign(pane.terminal, {
+      textarea,
+      _core: {
+        coreService: {
+          decPrivateModes: {
+            sendFocus: true
+          }
+        }
+      }
+    })
+    pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    // Why: a different element owns focus, so the reattach must not send a stray
+    // focus-in to a background pane.
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { activeElement: {} }
+    })
+    try {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+    } finally {
+      if (originalDocument) {
+        Object.defineProperty(globalThis, 'document', originalDocument)
+      } else {
+        Reflect.deleteProperty(globalThis, 'document')
+      }
+    }
   })
 
   it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {

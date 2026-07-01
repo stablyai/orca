@@ -59,25 +59,24 @@ export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Four exceptions are safe to reset:
+// rely on mouse, bracketed-paste, focus, or cursor-visibility modes. Only the
+// two always-safe renderer-owned bits are reset unconditionally here:
 //
 //   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
 //          steady cursor override, while SerializeAddon does not preserve an
 //          authoritative current cursor style. Reset to the user's configured
 //          xterm cursor; the post-reattach SIGWINCH lets live TUIs repaint if
 //          they need a different cursor.
-//   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
-//          snapshot when the cursor was hidden at capture time. Without `?25h`
-//          here the cursor stays invisible after reattach. If a TUI is still
-//          running and wants the cursor hidden, the SIGWINCH sent immediately
-//          after restore triggers a repaint that re-hides it — a brief flash
-//          that is far less harmful than a permanently invisible cursor.
-//   1004 — focus event reporting: preserving `?1004h` makes restored shells
-//          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
-//          as unbound key input).
 //   <99u/=0u — Kitty keyboard mode is renderer-side xterm state; stale copies
 //              can make the next Ctrl+C encode as CSI-u after reattach.
-export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
+//
+// Focus reporting (?1004) and cursor visibility (?25) are NOT reset here: a
+// still-running TUI legitimately owns them, and resetting ?1004h re-parks a
+// live agent's cursor away from its input caret (the IME-offset bug). Instead,
+// pty-connection.ts injects a single focus-in after reattach for the focused,
+// focus-reporting pane, nudging the live agent (e.g. cursor-agent) to move the
+// real cursor back onto its caret so the IME anchors correctly.
+export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
