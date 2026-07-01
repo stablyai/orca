@@ -3807,7 +3807,8 @@
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
           "82594419ba": "フィルター",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "automationCreated": "自動化で作成されたワークスペースを非表示",
+          "showArchived": "Show archived"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -4030,7 +4031,9 @@
           "setParentWorkspace": "親ワークツリーを設定...",
           "workspaceSection": "ワークスペース",
           "primaryDeleteDisabled": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
-          "deleteWorktree": "ワークツリーを削除"
+          "deleteWorktree": "ワークツリーを削除",
+          "unarchiveWorkspace": "Unarchive",
+          "archiveWorkspace": "Archive"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",

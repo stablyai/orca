@@ -163,6 +163,32 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([manual.id])
   })
 
+  it('hides archived worktrees by default', () => {
+    const active = makeWorktree('active')
+    const archived = { ...makeWorktree('archived'), isArchived: true }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [active, archived] },
+      [active.id, archived.id],
+      visibleOptions()
+    )
+
+    expect(result).toEqual([active.id])
+  })
+
+  it('shows archived worktrees when show archived is on', () => {
+    const active = makeWorktree('active')
+    const archived = { ...makeWorktree('archived'), isArchived: true }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [active, archived] },
+      [active.id, archived.id],
+      visibleOptions({ showArchivedWorkspaces: true })
+    )
+
+    expect(result).toEqual([active.id, archived.id])
+  })
+
   it('does not treat slept wake-hint tabs as live surfaces', () => {
     const wt = makeWorktree('wt-slept')
 

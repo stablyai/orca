@@ -3841,7 +3841,8 @@
           "c3fa13dc2e": "Hide default branch",
           "ed1611b65b": "Hide sleeping",
           "82594419ba": "Filters",
-          "automationCreated": "Hide automation-created"
+          "automationCreated": "Hide automation-created",
+          "showArchived": "Show archived"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -4072,7 +4073,9 @@
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
-          "deleteWorktree": "Delete Worktree"
+          "deleteWorktree": "Delete Worktree",
+          "unarchiveWorkspace": "Unarchive",
+          "archiveWorkspace": "Archive"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

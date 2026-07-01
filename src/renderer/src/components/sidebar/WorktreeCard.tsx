@@ -1889,7 +1889,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
         ],
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        (isSshDisconnected || isRuntimeDisconnected) && !isDeleting && 'opacity-60'
+        (isSshDisconnected || isRuntimeDisconnected) && !isDeleting && 'opacity-60',
+        // Why: archived rows only appear under the "Show archived" filter; dim
+        // them so they read as put-away without hiding their content.
+        worktree.isArchived && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
       data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}

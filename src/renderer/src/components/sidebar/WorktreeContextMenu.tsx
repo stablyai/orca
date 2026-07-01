@@ -16,6 +16,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Copy,
+  Archive,
+  ArchiveRestore,
   Bell,
   BellOff,
   CircleX,
@@ -487,6 +489,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [activeContextWorktrees, setMenuOpenState, updateWorktreeMeta, workspaceStatuses]
   )
 
+  // Why: archive is non-destructive removal — it hides the row (surfaced again
+  // via the sidebar "Show archived" filter) instead of deleting anything.
+  const allContextArchived =
+    activeContextWorktrees.length > 0 &&
+    activeContextWorktrees.every((item) => item.isArchived === true)
+
+  const handleToggleArchive = useCallback(() => {
+    const nextArchived = !allContextArchived
+    setMenuOpenState(false)
+    void Promise.all(
+      activeContextWorktrees.map((item) =>
+        item.isArchived === nextArchived
+          ? Promise.resolve()
+          : updateWorktreeMeta(item.id, { isArchived: nextArchived })
+      )
+    )
+  }, [activeContextWorktrees, allContextArchived, setMenuOpenState, updateWorktreeMeta])
+
   const handleRename = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
@@ -852,6 +872,25 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             </>
           ) : null}
 
+          <DropdownMenuItem
+            onSelect={handleToggleArchive}
+            disabled={deletingContext || activeContextWorktrees.length === 0}
+          >
+            {allContextArchived ? (
+              <ArchiveRestore className="size-3.5" />
+            ) : (
+              <Archive className="size-3.5" />
+            )}
+            {allContextArchived
+              ? translate(
+                  'auto.components.sidebar.WorktreeContextMenu.unarchiveWorkspace',
+                  'Unarchive'
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeContextMenu.archiveWorkspace',
+                  'Archive'
+                )}
+          </DropdownMenuItem>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem

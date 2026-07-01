@@ -603,6 +603,7 @@ function App(): React.JSX.Element {
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const showArchivedWorkspaces = useAppStore((s) => s.showArchivedWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
@@ -1324,6 +1325,7 @@ function App(): React.JSX.Element {
         showActiveOnly: false,
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
+        showArchivedWorkspaces,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
         showDotfilesByWorktree,
@@ -1350,6 +1352,7 @@ function App(): React.JSX.Element {
     sortBy,
     projectOrderBy,
     showSleepingWorkspaces,
+    showArchivedWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,

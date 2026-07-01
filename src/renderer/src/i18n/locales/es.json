@@ -3826,7 +3826,8 @@
           "c3fa13dc2e": "Ocultar rama predeterminada",
           "ed1611b65b": "Ocultar durmiendo",
           "82594419ba": "Filtros",
-          "automationCreated": "Ocultar creados por automatizaciones"
+          "automationCreated": "Ocultar creados por automatizaciones",
+          "showArchived": "Show archived"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",
@@ -4049,7 +4050,9 @@
           "setParentWorkspace": "Establecer árbol de trabajo padre...",
           "workspaceSection": "Espacio de trabajo",
           "primaryDeleteDisabled": "El árbol de trabajo principal no se puede eliminar. Elimina el proyecto en su lugar.",
-          "deleteWorktree": "Eliminar árbol de trabajo"
+          "deleteWorktree": "Eliminar árbol de trabajo",
+          "unarchiveWorkspace": "Unarchive",
+          "archiveWorkspace": "Archive"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
