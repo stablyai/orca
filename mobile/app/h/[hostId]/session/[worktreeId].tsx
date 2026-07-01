@@ -3138,8 +3138,8 @@ export default function SessionScreen() {
     if (accessoryCommit.kind !== 'allow-raw') {
       return
     }
-
     const currentClient = clientRef.current
+    // Why: async IME flushing can outlive the original terminal selection.
     const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
       targetHandle,
       activeHandle: activeHandleRef.current,
@@ -3175,6 +3175,7 @@ export default function SessionScreen() {
         return false
       }
       const rpc = clientRef.current
+      // Why: callers suppress follow-up controls/toasts when this live send is stale.
       if (
         !rpc ||
         connStateRef.current !== 'connected' ||
