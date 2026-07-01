@@ -14,6 +14,11 @@ export type TerminalLiveAccessoryInput = {
   readonly localEdit?: TerminalLiveAccessoryLocalEdit
 }
 
+export type TerminalLiveAccessoryInputCommitResult =
+  | { readonly kind: 'allow-raw' }
+  | { readonly kind: 'handled' }
+  | { readonly kind: 'suppress-raw' }
+
 type TerminalLiveInputCommitScheduler = (handle: string, text: string, delayMs: number) => void
 
 type TerminalLiveAccessoryInputCommitOptions = {
@@ -44,14 +49,14 @@ export function useTerminalLiveAccessoryInputCommit({
   waitForPendingLiveInputFlush
 }: TerminalLiveAccessoryInputCommitOptions): (
   input: TerminalLiveAccessoryInput
-) => Promise<boolean> {
+) => Promise<TerminalLiveAccessoryInputCommitResult> {
   return useCallback(
-    async (input: TerminalLiveAccessoryInput): Promise<boolean> => {
+    async (input: TerminalLiveAccessoryInput): Promise<TerminalLiveAccessoryInputCommitResult> => {
       if (!activeHandle) {
-        return false
+        return { kind: 'allow-raw' }
       }
       if (!liveInputTerminalHandles.has(activeHandle)) {
-        return false
+        return { kind: 'allow-raw' }
       }
       const pendingText =
         pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
@@ -61,7 +66,9 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, pendingText })
       switch (decision.kind) {
         case 'send-now':
-          return !(await waitForPendingLiveInputFlush())
+          return (await waitForPendingLiveInputFlush())
+            ? { kind: 'allow-raw' }
+            : { kind: 'suppress-raw' }
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
             localEdit: decision.localEdit,
@@ -69,7 +76,7 @@ export function useTerminalLiveAccessoryInputCommit({
           })
           if (editedText.length === 0) {
             clearPendingLiveInputCommit()
-            return true
+            return { kind: 'handled' }
           }
           // Why: accessory buttons do not emit native TextInput edits, so the
           // pending IME buffer must be edited and rescheduled here.
@@ -80,17 +87,17 @@ export function useTerminalLiveAccessoryInputCommit({
             editedText,
             TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
           )
-          return true
+          return { kind: 'handled' }
         }
         case 'flush-then-send':
           await sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
-          return true
+          return { kind: 'handled' }
         default:
           decision satisfies never
-          return true
+          return { kind: 'handled' }
       }
     },
     [

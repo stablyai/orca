@@ -11,7 +11,8 @@ import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
   useTerminalLiveAccessoryInputCommit,
-  type TerminalLiveAccessoryInput
+  type TerminalLiveAccessoryInput,
+  type TerminalLiveAccessoryInputCommitResult
 } from './use-terminal-live-accessory-input-commit'
 
 type TerminalLiveInputKeyPressEvent = {
@@ -34,7 +35,9 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
 
 type TerminalLiveInputCommitHandlers = {
   readonly clearPendingLiveInputCommit: () => void
-  readonly handleLiveInputAccessoryBytes: (input: TerminalLiveAccessoryInput) => Promise<boolean>
+  readonly handleLiveInputAccessoryBytes: (
+    input: TerminalLiveAccessoryInput
+  ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (text: string) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => void

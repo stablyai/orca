@@ -3132,7 +3132,8 @@ export default function SessionScreen() {
     if (!client || !activeHandle || !canSend) {
       return
     }
-    if (await handleLiveInputAccessoryBytes(input)) {
+    const accessoryCommit = await handleLiveInputAccessoryBytes(input)
+    if (accessoryCommit.kind !== 'allow-raw') {
       return
     }
 

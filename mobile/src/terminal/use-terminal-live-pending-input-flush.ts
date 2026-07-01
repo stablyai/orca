@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import {
-  trackTerminalLivePendingFlush,
+  queueTerminalLivePendingFlush,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
 
@@ -54,10 +54,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
 
   const flushPendingLiveInputText = useCallback(
     async (expectedHandle: string | null): Promise<boolean> => {
-      const currentFlush = pendingLiveInputFlushRef.current
-      if (currentFlush) {
-        return currentFlush
-      }
+      const existingFlush = pendingLiveInputFlushRef.current
       if (liveInputCommitTimerRef.current) {
         clearTimeout(liveInputCommitTimerRef.current)
         liveInputCommitTimerRef.current = null
@@ -70,9 +67,10 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       setLiveInputCapture('')
       liveInputRef.current?.setNativeProps({ text: '' })
 
+      if (!handle || text.length === 0) {
+        return existingFlush ?? false
+      }
       if (
-        !handle ||
-        text.length === 0 ||
         (expectedHandle !== null && handle !== expectedHandle) ||
         handle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal' ||
@@ -81,7 +79,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         return false
       }
 
-      return trackTerminalLivePendingFlush(pendingLiveInputFlushRef, () =>
+      return queueTerminalLivePendingFlush(pendingLiveInputFlushRef, () =>
         sendLiveTerminalInputRef.current(handle, text)
       )
     },

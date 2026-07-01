@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import {
-  trackTerminalLivePendingFlush,
+  queueTerminalLivePendingFlush,
   waitForTerminalLivePendingFlush,
   type TerminalLivePendingFlushState
 } from './terminal-live-pending-flush-state'
@@ -65,15 +65,15 @@ describe('terminal live pending flush state', () => {
     expect(events).toEqual([])
   })
 
-  it('Given a tracked pending flush When it resolves or rejects Then clears the barrier', async () => {
+  it('Given a queued pending flush When it resolves or rejects Then clears the barrier', async () => {
     // Given
     const resolvedState: TerminalLivePendingFlushState = { current: null }
     const rejectedState: TerminalLivePendingFlushState = { current: null }
 
     // When
-    await expect(trackTerminalLivePendingFlush(resolvedState, async () => true)).resolves.toBe(true)
+    await expect(queueTerminalLivePendingFlush(resolvedState, async () => true)).resolves.toBe(true)
     await expect(
-      trackTerminalLivePendingFlush(rejectedState, async () => {
+      queueTerminalLivePendingFlush(rejectedState, async () => {
         throw new Error('send failed')
       })
     ).resolves.toBe(false)
@@ -82,5 +82,65 @@ describe('terminal live pending flush state', () => {
     // Then
     expect(resolvedState.current).toBeNull()
     expect(rejectedState.current).toBeNull()
+  })
+
+  it('Given a current pending snapshot while another flush is in flight When queued Then sends current text after prior success', async () => {
+    // Given
+    const events: string[] = []
+    let resolveFirstFlush: (value: boolean) => void = () => {}
+    const firstFlush = new Promise<boolean>((resolve) => {
+      resolveFirstFlush = resolve
+    })
+    const state: TerminalLivePendingFlushState = { current: firstFlush }
+
+    // When
+    const secondFlush = queueTerminalLivePendingFlush(state, async () => {
+      events.push('second-flush')
+      return true
+    })
+    const controlSend = sendTerminalLiveControlAfterPendingFlush(
+      () => waitForTerminalLivePendingFlush(state),
+      async () => {
+        events.push('control')
+        return true
+      }
+    )
+    await Promise.resolve()
+
+    // Then
+    expect(events).toEqual([])
+    resolveFirstFlush(true)
+    await expect(secondFlush).resolves.toBe(true)
+    await expect(controlSend).resolves.toBe(true)
+    expect(events).toEqual(['second-flush', 'control'])
+  })
+
+  it('Given a prior pending flush fails When another snapshot is queued Then skips the current text and control', async () => {
+    // Given
+    const events: string[] = []
+    let resolveFirstFlush: (value: boolean) => void = () => {}
+    const firstFlush = new Promise<boolean>((resolve) => {
+      resolveFirstFlush = resolve
+    })
+    const state: TerminalLivePendingFlushState = { current: firstFlush }
+
+    // When
+    const secondFlush = queueTerminalLivePendingFlush(state, async () => {
+      events.push('second-flush')
+      return true
+    })
+    const controlSend = sendTerminalLiveControlAfterPendingFlush(
+      () => waitForTerminalLivePendingFlush(state),
+      async () => {
+        events.push('control')
+        return true
+      }
+    )
+    resolveFirstFlush(false)
+
+    // Then
+    await expect(secondFlush).resolves.toBe(false)
+    await expect(controlSend).resolves.toBe(false)
+    expect(events).toEqual([])
   })
 })
