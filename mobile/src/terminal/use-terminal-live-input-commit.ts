@@ -116,6 +116,17 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   )
 
   useEffect(() => {
+    return () => {
+      if (liveInputCommitTimerRef.current) {
+        clearTimeout(liveInputCommitTimerRef.current)
+        liveInputCommitTimerRef.current = null
+      }
+      pendingLiveInputHandleRef.current = null
+      pendingLiveInputTextRef.current = ''
+    }
+  }, [])
+
+  useEffect(() => {
     const pendingHandle = pendingLiveInputHandleRef.current
     if (!pendingHandle) {
       return
@@ -132,11 +143,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputChange = useCallback(
     (text: string) => {
-      if (!activeHandle) {
-        clearPendingLiveInputCommit()
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
+      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return
       }
@@ -172,10 +179,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputKeyPress = useCallback(
     (event: TerminalLiveInputKeyPressEvent) => {
-      if (!activeHandle) {
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
+      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         return
       }
       const pendingText =
@@ -228,10 +232,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   })
 
   const handleLiveInputSubmit = useCallback(() => {
-    if (!activeHandle) {
-      return
-    }
-    if (!liveInputTerminalHandles.has(activeHandle)) {
+    if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
       return
     }
     const pendingText =

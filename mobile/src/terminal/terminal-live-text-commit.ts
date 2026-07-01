@@ -92,6 +92,12 @@ export function getTerminalLiveAccessoryLocalEditText({
   bytes,
   pendingText
 }: TerminalLiveAccessoryBytesDecisionInput): string {
+  if (bytes === '\x1b[3~') {
+    // Why: accessory Delete mirrors forward-delete at the hidden input's end;
+    // it stays local but does not remove the pending IME text.
+    return pendingText
+  }
+
   if (bytes !== '\x7f' && bytes !== '\b') {
     return pendingText
   }
