@@ -161,6 +161,34 @@ describe('refreshWorktreeSidebarDragSession', () => {
     ).toEqual({ ...SESSION, rects })
   })
 
+  it('keeps a child drag source when it belongs to a refreshed lineage unit', () => {
+    const childSession: WorktreeSidebarDragSession = {
+      ...SESSION,
+      draggingWorktreeId: 'child',
+      draggedIds: ['child'],
+      reorderDraggedIds: ['child'],
+      reorderUnitDraggedIds: ['child']
+    }
+
+    expect(
+      refreshWorktreeSidebarDragSession({
+        session: childSession,
+        groups: [{ key: 'repo:one', worktreeIds: ['parent', 'child', 'sibling'] }],
+        unitGroups: [
+          {
+            key: 'repo:one',
+            worktreeIds: ['parent', 'sibling'],
+            units: [
+              { worktreeId: 'parent', worktreeIds: ['parent', 'child'] },
+              { worktreeId: 'sibling', worktreeIds: ['sibling'] }
+            ]
+          }
+        ],
+        rects: []
+      })
+    ).toEqual({ ...childSession, rects: [] })
+  })
+
   it('clears when the source group is missing', () => {
     expect(
       refreshWorktreeSidebarDragSession({
