@@ -5,10 +5,12 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import type { FileExplorerRoot } from './file-explorer-types'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
   activeWorktreeId: string | null
+  getRootForPath?: (path: string) => FileExplorerRoot | null
   refreshDir: (dirPath: string) => Promise<void>
   clearNativeDragState: () => void
   setSelectedPath: (path: string | null) => void
@@ -26,6 +28,7 @@ type UseFileExplorerImportParams = {
 export function useFileExplorerImport({
   worktreePath,
   activeWorktreeId,
+  getRootForPath,
   refreshDir,
   clearNativeDragState,
   setSelectedPath
@@ -35,6 +38,8 @@ export function useFileExplorerImport({
   worktreePathRef.current = worktreePath
   const activeWorktreeIdRef = useRef(activeWorktreeId)
   activeWorktreeIdRef.current = activeWorktreeId
+  const getRootForPathRef = useRef(getRootForPath)
+  getRootForPathRef.current = getRootForPath
   const refreshDirRef = useRef(refreshDir)
   refreshDirRef.current = refreshDir
   const clearNativeDragStateRef = useRef(clearNativeDragState)
@@ -49,7 +54,11 @@ export function useFileExplorerImport({
       }
 
       const wtId = activeWorktreeIdRef.current
-      if (!wtId || !worktreePathRef.current) {
+      const { paths, destinationDir } = data
+      const root = getRootForPathRef.current?.(destinationDir) ?? null
+      const targetWorktreeId = root?.worktreeId ?? wtId
+      const targetWorktreePath = root?.path ?? worktreePathRef.current
+      if (!targetWorktreeId || !targetWorktreePath) {
         // Why: the preload stops propagation of the native drop event, so
         // React onDrop handlers never fire. We must clear the drag highlight
         // ourselves even when we bail out, otherwise the explorer stays stuck
@@ -58,16 +67,15 @@ export function useFileExplorerImport({
         return
       }
 
-      const { paths, destinationDir } = data
-      const connectionId = getConnectionId(wtId) ?? undefined
+      const connectionId = root?.connectionId ?? getConnectionId(targetWorktreeId) ?? undefined
 
       void (async () => {
         try {
           const { results } = await importExternalPathsToRuntime(
             {
-              settings: getRightSidebarWorktreeRuntimeSettings(wtId),
-              worktreeId: wtId,
-              worktreePath: worktreePathRef.current,
+              settings: getRightSidebarWorktreeRuntimeSettings(targetWorktreeId),
+              worktreeId: targetWorktreeId,
+              worktreePath: targetWorktreePath,
               connectionId
             },
             paths,

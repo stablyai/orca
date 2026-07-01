@@ -5,6 +5,7 @@ import {
   getEffectiveFileExplorerIgnoredPaths,
   getFileExplorerIgnoredQueryRelativePaths
 } from './useFileExplorerVisibleRowProjection'
+import { FILE_EXPLORER_MULTI_ROOT_CACHE_KEY } from './useFileExplorerTree'
 import {
   FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES,
   getFileExplorerNameFilterExpandedPaths,
@@ -46,6 +47,45 @@ afterEach(() => {
 })
 
 describe('file explorer visible row projection', () => {
+  it('keeps virtual workspace roots visible in multi-root mode', () => {
+    const rootNode: TreeNode = {
+      name: 'api',
+      path: '/srv/api',
+      relativePath: '',
+      isDirectory: true,
+      depth: 0,
+      isWorkspaceRoot: true,
+      rootPath: '/srv/api',
+      rootWorktreeId: 'api::/srv/api'
+    }
+    const childNode: TreeNode = {
+      name: '.env',
+      path: '/srv/api/.env',
+      relativePath: '.env',
+      isDirectory: false,
+      depth: 1,
+      rootPath: '/srv/api',
+      rootWorktreeId: 'api::/srv/api'
+    }
+    const projection = createVisibleFileExplorerRowProjection(
+      {
+        dirCache: cache({
+          [FILE_EXPLORER_MULTI_ROOT_CACHE_KEY]: [rootNode],
+          '/srv/api': [childNode]
+        }),
+        expanded: new Set(['/srv/api']),
+        worktreePath: FILE_EXPLORER_MULTI_ROOT_CACHE_KEY
+      },
+      {
+        ignoredSet: new Set(['']),
+        showDotfiles: false,
+        showGitIgnoredFiles: false
+      }
+    )
+
+    expect(projection.getVisibleSlice(0, 10).map((entry) => entry.path)).toEqual(['/srv/api'])
+  })
+
   it('keeps dotfiles and ignored files visible when toggles are on', () => {
     const projection = createVisibleFileExplorerRowProjection(
       input({

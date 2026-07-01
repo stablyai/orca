@@ -7,15 +7,17 @@ import { dirname, joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
 import type { InlineInput } from './FileExplorerRow'
-import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerRoot, TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import { getFileExplorerRootForPath } from './file-explorer-workspace-roots'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
+  roots: readonly FileExplorerRoot[]
   expanded: Set<string>
   rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -34,6 +36,7 @@ type UseFileExplorerInlineInputResult = {
 export function useFileExplorerInlineInput({
   activeWorktreeId,
   worktreePath,
+  roots,
   expanded,
   rowProjection,
   scrollRef,
@@ -109,19 +112,26 @@ export function useFileExplorerInlineInput({
         return
       }
       const run = async (): Promise<void> => {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const inlineRoot = getFileExplorerRootForPath(roots, inlineInput.parentPath)
+        const inlineWorktreeId = inlineRoot?.worktreeId ?? activeWorktreeId
+        const inlineWorktreePath = inlineRoot?.path ?? worktreePath
+        if (!inlineWorktreeId || !inlineWorktreePath) {
+          return
+        }
+        const connectionId =
+          inlineRoot?.connectionId ?? getConnectionId(inlineWorktreeId ?? null) ?? undefined
         const fileContext = {
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
-          worktreeId: activeWorktreeId,
-          worktreePath,
+          settings: getRightSidebarWorktreeRuntimeSettings(inlineWorktreeId),
+          worktreeId: inlineWorktreeId,
+          worktreePath: inlineWorktreePath,
           connectionId
         }
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
           await renameFileOnDisk({
             oldPath: inlineInput.existingPath,
             newName: name,
-            worktreeId: activeWorktreeId,
-            worktreePath,
+            worktreeId: inlineWorktreeId,
+            worktreePath: inlineWorktreePath,
             refreshDir
           })
         } else {
@@ -163,8 +173,10 @@ export function useFileExplorerInlineInput({
               openFile(
                 {
                   filePath: fullPath,
-                  relativePath: worktreePath ? fullPath.slice(worktreePath.length + 1) : name,
-                  worktreeId: activeWorktreeId,
+                  relativePath: inlineWorktreePath
+                    ? fullPath.slice(inlineWorktreePath.length + 1)
+                    : name,
+                  worktreeId: inlineWorktreeId,
                   runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
                   language: detectLanguage(name),
                   mode: 'edit'
@@ -183,7 +195,7 @@ export function useFileExplorerInlineInput({
       setInlineInput(null)
       scheduleScrollFocus()
     },
-    [inlineInput, activeWorktreeId, worktreePath, refreshDir, openFile, scheduleScrollFocus]
+    [inlineInput, activeWorktreeId, worktreePath, roots, refreshDir, openFile, scheduleScrollFocus]
   )
 
   return {

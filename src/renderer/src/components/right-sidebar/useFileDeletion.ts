@@ -20,6 +20,7 @@ import {
   writeRuntimeFile
 } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -61,15 +62,17 @@ export function useFileDeletion({
       }
       inFlightRef.current.add(node.path)
 
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      const nodeWorktreeId = node.rootWorktreeId ?? activeWorktreeId
+      const connectionId =
+        node.rootConnectionId ?? getConnectionId(nodeWorktreeId ?? null) ?? undefined
       const state = useAppStore.getState()
-      const worktree = activeWorktreeId
-        ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
+      const worktree = nodeWorktreeId
+        ? findWorktreeById(state.worktreesByRepo, nodeWorktreeId)
         : null
       const fileContext = {
-        settings: state.settings,
-        worktreeId: activeWorktreeId,
-        worktreePath: worktree?.path ?? null,
+        settings: getRightSidebarWorktreeRuntimeSettings(nodeWorktreeId),
+        worktreeId: nodeWorktreeId,
+        worktreePath: node.rootPath ?? worktree?.path ?? null,
         connectionId
       }
       const isRemote =
@@ -131,7 +134,7 @@ export function useFileDeletion({
               settings: fileContext.settings,
               filePath: node.path,
               relativePath: node.relativePath,
-              worktreeId: activeWorktreeId ?? undefined,
+              worktreeId: nodeWorktreeId ?? undefined,
               connectionId
             })
             if (!rf.isBinary) {

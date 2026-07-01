@@ -24,10 +24,13 @@ type FileExplorerVirtualRowsProps = {
   dirCache: Record<string, DirCache>
   selectedPaths: Set<string>
   activeFileId: string | null
+  activeWorktreeId?: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
   connectionId?: string | null
+  getConnectionId?: (node: TreeNode) => string | null | undefined
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
+  getRuntimeDownloadContext?: (node: TreeNode) => RuntimeFileOperationArgs | null
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
   onViewFile: (node: TreeNode) => void
@@ -69,10 +72,13 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     dirCache,
     selectedPaths,
     activeFileId,
+    activeWorktreeId,
     flashingPath,
     deleteShortcutLabel,
     connectionId,
+    getConnectionId,
     runtimeDownloadContext,
+    getRuntimeDownloadContext,
     onClick,
     onDoubleClick,
     onViewFile,
@@ -139,12 +145,16 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
 
         const n = node!
         const normalizedRelativePath = normalizeRelativePath(n.relativePath)
-        const nodeStatus = n.isDirectory
-          ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
-          : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+        const canShowGitStatus =
+          !n.isWorkspaceRoot && (!n.rootWorktreeId || n.rootWorktreeId === activeWorktreeId)
+        const nodeStatus = canShowGitStatus
+          ? n.isDirectory
+            ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
+            : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+          : null
         const isIgnored = shouldShowIgnoredDecoration(
           nodeStatus,
-          ignoredByRelativePath,
+          canShowGitStatus ? ignoredByRelativePath : new Set<string>(),
           normalizedRelativePath
         )
 
@@ -174,8 +184,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
-              connectionId={connectionId}
-              runtimeDownloadContext={runtimeDownloadContext}
+              connectionId={getConnectionId?.(n) ?? connectionId}
+              runtimeDownloadContext={getRuntimeDownloadContext?.(n) ?? runtimeDownloadContext}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}

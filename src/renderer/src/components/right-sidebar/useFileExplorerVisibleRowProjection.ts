@@ -16,6 +16,7 @@ import {
   getFileExplorerNameFilterIgnoredQueryRelativePaths,
   type FileExplorerNameFilterProjectionSource
 } from './file-explorer-name-filter-projection'
+import { FILE_EXPLORER_MULTI_ROOT_CACHE_KEY } from './useFileExplorerTree'
 
 const EMPTY_IGNORED_PATHS: readonly string[] = []
 const EMPTY_RELATIVE_PATHS: string[] = []
@@ -70,6 +71,10 @@ export function getFileExplorerIgnoredQueryRelativePaths(
   return relativePaths
 }
 
+function isVirtualWorkspaceRoot(row: TreeNode, worktreePath: string): boolean {
+  return worktreePath === FILE_EXPLORER_MULTI_ROOT_CACHE_KEY && row.isWorkspaceRoot === true
+}
+
 export function createVisibleFileExplorerRowProjection(
   input: VisibleFileExplorerRowProjectionInput,
   options: VisibleFileExplorerRowProjectionOptions
@@ -92,6 +97,9 @@ export function createVisibleFileExplorerRowProjection(
   }
 
   const shouldHideRow = (row: TreeNode): boolean => {
+    if (isVirtualWorkspaceRoot(row, worktreePath)) {
+      return false
+    }
     if (!options.showDotfiles && isDotfileRelativePath(row.relativePath)) {
       return true
     }

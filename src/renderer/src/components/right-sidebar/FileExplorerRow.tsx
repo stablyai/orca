@@ -447,6 +447,7 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const rowWorktreeId = node.rootWorktreeId ?? activeWorktreeId
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
@@ -471,14 +472,14 @@ export function FileExplorerRow({
       onMoveDrop
     })
   const handleOpenInOrcaBrowser = useCallback(() => {
-    if (!activeWorktreeId) {
+    if (!rowWorktreeId) {
       return
     }
-    const result = openFileInBrowserTab({ filePath: node.path, worktreeId: activeWorktreeId })
+    const result = openFileInBrowserTab({ filePath: node.path, worktreeId: rowWorktreeId })
     if (result.status === 'unsupported') {
       toast.error(result.message)
     }
-  }, [activeWorktreeId, node.path])
+  }, [node.path, rowWorktreeId])
   const handleDownload = useCallback(() => {
     const downloadTarget = connectionId || runtimeDownloadContext
     if (!downloadTarget) {
@@ -724,7 +725,7 @@ export function FileExplorerRow({
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && (
+        {!node.isDirectory && rowWorktreeId && (
           <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
             <Globe />
             {translate(
@@ -733,13 +734,14 @@ export function FileExplorerRow({
             )}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
+        {!node.isDirectory && rowWorktreeId && detectLanguage(node.path) === 'markdown' && (
           <ContextMenuItem
             onSelect={() =>
               openMarkdownPreview({
                 filePath: node.path,
                 relativePath: node.relativePath,
-                worktreeId: activeWorktreeId,
+                worktreeId: rowWorktreeId,
+                runtimeEnvironmentId: node.rootRuntimeEnvironmentId ?? undefined,
                 language: 'markdown'
               })
             }
@@ -781,15 +783,9 @@ export function FileExplorerRow({
         <ContextMenuItem
           onSelect={() => {
             const state = useAppStore.getState()
-            const activeWorktree = Object.values(state.worktreesByRepo)
-              .flat()
-              .find((worktree) => worktree.id === activeWorktreeId)
-            const activeRepo = activeWorktree
-              ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
-              : null
             if (
               isLocalPathOpenBlocked(state.settings, {
-                connectionId: activeRepo?.connectionId ?? null
+                connectionId: node.rootConnectionId ?? null
               })
             ) {
               showLocalPathOpenBlockedToast()

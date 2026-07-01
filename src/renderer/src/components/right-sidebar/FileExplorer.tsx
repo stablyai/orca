@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: FileExplorer coordinates tree data, selection, drag/drop, and virtual rows; splitting it during this merge would obscure the interaction invariants. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
@@ -41,13 +42,18 @@ import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
-import { useFileExplorerTree } from './useFileExplorerTree'
+import { FILE_EXPLORER_MULTI_ROOT_CACHE_KEY, useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 import {
   buildAddProjectFromFolderModalData,
   canShowAddAsProjectAction
 } from './file-explorer-add-project-action'
 import type { TreeNode } from './file-explorer-types'
+import {
+  getFileExplorerRootForPath,
+  getFileExplorerWorkspaceRoots,
+  getNodeFileExplorerRoot
+} from './file-explorer-workspace-roots'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { translate } from '@/i18n/i18n'
@@ -55,6 +61,17 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+
+function getExpandedDirectoryDepth(
+  rootPath: string,
+  dirPath: string,
+  hasMultipleWorkspaceRoots: boolean
+): number {
+  const relativePath = relativePathInsideRoot(rootPath, dirPath) ?? ''
+  const segmentCount = splitPathSegments(relativePath).length
+  return hasMultipleWorkspaceRoots ? segmentCount : segmentCount - 1
+}
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -80,6 +97,27 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const workspaceRootState = useAppStore(
+    useShallow((s) => ({
+      projectGroups: s.projectGroups,
+      repos: s.repos,
+      settings: s.settings,
+      worktreesByRepo: s.worktreesByRepo
+    }))
+  )
+  const workspaceRoots = useMemo(
+    () => getFileExplorerWorkspaceRoots(workspaceRootState, activeWorktreeId),
+    [activeWorktreeId, workspaceRootState]
+  )
+  const hasMultipleWorkspaceRoots = workspaceRoots.length > 1
+  const activeWorkspaceRoot = useMemo(
+    () => workspaceRoots.find((root) => root.isActive) ?? workspaceRoots[0] ?? null,
+    [workspaceRoots]
+  )
+  const getRootForPath = useCallback(
+    (path: string) => getFileExplorerRootForPath(workspaceRoots, path, activeWorkspaceRoot),
+    [activeWorkspaceRoot, workspaceRoots]
+  )
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
   )
@@ -104,6 +142,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
   const worktreePath = activeWorktree?.path ?? null
+  const fileExplorerTreeRootPath = hasMultipleWorkspaceRoots
+    ? FILE_EXPLORER_MULTI_ROOT_CACHE_KEY
+    : worktreePath
   const runtimeDownloadContext = useMemo(
     () =>
       activeRuntimeEnvironmentId && activeWorktreeId && worktreePath
@@ -116,13 +157,50 @@ function FileExplorerFiles(): React.JSX.Element {
         : null,
     [activeRepo?.connectionId, activeRuntimeEnvironmentId, activeWorktreeId, worktreePath]
   )
+  const getNodeRuntimeDownloadContext = useCallback(
+    (node: TreeNode) => {
+      const root = getNodeFileExplorerRoot(workspaceRoots, node)
+      const nodeWorktreeId = root?.worktreeId ?? activeWorktreeId
+      const nodeWorktreePath = root?.path ?? worktreePath
+      const runtimeEnvironmentId = root?.runtimeEnvironmentId ?? activeRuntimeEnvironmentId
+      if (!nodeWorktreeId || !nodeWorktreePath) {
+        return null
+      }
+      return {
+        settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
+        worktreeId: nodeWorktreeId,
+        worktreePath: nodeWorktreePath,
+        connectionId: root?.connectionId ?? activeRepo?.connectionId ?? undefined
+      }
+    },
+    [
+      activeRepo?.connectionId,
+      activeRuntimeEnvironmentId,
+      activeWorktreeId,
+      worktreePath,
+      workspaceRoots
+    ]
+  )
+  const getNodeConnectionId = useCallback(
+    (node: TreeNode) => {
+      const root = getNodeFileExplorerRoot(workspaceRoots, node)
+      return root?.connectionId ?? activeRepo?.connectionId ?? null
+    },
+    [activeRepo?.connectionId, workspaceRoots]
+  )
   const isFilesViewActive = explorerView === 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView,
     rightSidebarOpen,
-    worktreePath
+    worktreePath: fileExplorerTreeRootPath
   })
-  const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  const activeProjectGroup = activeRepo?.projectGroupId
+    ? workspaceRootState.projectGroups.find((group) => group.id === activeRepo.projectGroupId)
+    : null
+  const repoName =
+    hasMultipleWorkspaceRoots && activeProjectGroup
+      ? activeProjectGroup.name
+      : (activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : ''))
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(
@@ -142,7 +220,7 @@ function FileExplorerFiles(): React.JSX.Element {
     refreshTree,
     refreshDir,
     resetAndLoad
-  } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
+  } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId, workspaceRoots)
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
   const nameFilterQueryTooLarge = useMemo(
     () => isFileExplorerNameFilterQueryTooLarge(nameFilterQuery),
@@ -189,7 +267,7 @@ function FileExplorerFiles(): React.JSX.Element {
     visibleFilesWorktreePath,
     dirCache,
     expanded,
-    activeRepoSupportsGit && isFilesViewActive,
+    activeRepoSupportsGit && isFilesViewActive && !hasMultipleWorkspaceRoots,
     showDotfiles,
     nameFilterSource,
     hasNameFilter ? nameFilterCollapsedPaths : null
@@ -228,10 +306,14 @@ function FileExplorerFiles(): React.JSX.Element {
       }
       event.preventDefault()
       window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+      if (hasMultipleWorkspaceRoots) {
+        setBgMenuOpen(false)
+        return
+      }
       setBgMenuPoint({ x: event.clientX, y: event.clientY })
       setBgMenuOpen(true)
     },
-    []
+    [hasMultipleWorkspaceRoots]
   )
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
@@ -289,6 +371,7 @@ function FileExplorerFiles(): React.JSX.Element {
   } = useFileExplorerDragDrop({
     worktreePath,
     activeWorktreeId,
+    getRootForPath,
     expanded,
     toggleDir,
     refreshDir,
@@ -296,8 +379,17 @@ function FileExplorerFiles(): React.JSX.Element {
   })
 
   const lastResetWorktreePathRef = useRef<string | null>(null)
-  useEffect(() => {
+  const visibleExplorerResetKey = useMemo(() => {
     if (!visibleFilesWorktreePath) {
+      return null
+    }
+    if (!hasMultipleWorkspaceRoots) {
+      return visibleFilesWorktreePath
+    }
+    return `multi:${workspaceRoots.map((root) => `${root.worktreeId}:${root.path}`).join('|')}`
+  }, [hasMultipleWorkspaceRoots, visibleFilesWorktreePath, workspaceRoots])
+  useEffect(() => {
+    if (!visibleExplorerResetKey) {
       return
     }
     // Why: the sidebar remains mounted while closed to preserve caches, but
@@ -305,17 +397,17 @@ function FileExplorerFiles(): React.JSX.Element {
     if (
       !shouldResetFileExplorerForVisibleWorktree(
         lastResetWorktreePathRef.current,
-        visibleFilesWorktreePath
+        visibleExplorerResetKey
       )
     ) {
       return
     }
-    lastResetWorktreePathRef.current = visibleFilesWorktreePath
+    lastResetWorktreePathRef.current = visibleExplorerResetKey
     resetSelection()
     setNameFilterQuery('')
     resetAndLoad()
     clearFileExplorerUndoHistory()
-  }, [visibleFilesWorktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visibleExplorerResetKey, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Why: on app startup the file explorer loads before SSH providers are
   // registered, so readDir fails for remote worktrees. When the SSH
@@ -338,12 +430,16 @@ function FileExplorerFiles(): React.JSX.Element {
     }
     for (const dirPath of expanded) {
       if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
-        const depth =
-          splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+        const root = getRootForPath(dirPath)
+        const rootPath = root?.path ?? worktreePath
+        if (!rootPath) {
+          continue
+        }
+        const depth = getExpandedDirectoryDepth(rootPath, dirPath, hasMultipleWorkspaceRoots)
         void loadDir(dirPath, depth)
       }
     }
-  }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expanded, visibleFilesWorktreePath, getRootForPath, worktreePath, hasMultipleWorkspaceRoots]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     inlineInput,
@@ -354,7 +450,8 @@ function FileExplorerFiles(): React.JSX.Element {
     handleInlineSubmit
   } = useFileExplorerInlineInput({
     activeWorktreeId,
-    worktreePath: visibleFilesWorktreePath,
+    worktreePath,
+    roots: workspaceRoots,
     expanded,
     rowProjection,
     scrollRef,
@@ -362,7 +459,7 @@ function FileExplorerFiles(): React.JSX.Element {
   })
   const handleExplorerBackgroundDoubleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!worktreePath || inlineInput) {
+      if (!worktreePath || inlineInput || hasMultipleWorkspaceRoots) {
         return
       }
       const target = event.target as HTMLElement
@@ -371,11 +468,11 @@ function FileExplorerFiles(): React.JSX.Element {
       }
       startNew('file', worktreePath, 0)
     },
-    [inlineInput, startNew, worktreePath]
+    [hasMultipleWorkspaceRoots, inlineInput, startNew, worktreePath]
   )
 
   useFileExplorerWatch({
-    worktreePath: visibleFilesWorktreePath,
+    worktreePath: hasMultipleWorkspaceRoots ? null : visibleFilesWorktreePath,
     activeWorktreeId,
     dirCache,
     setDirCache,
@@ -389,8 +486,9 @@ function FileExplorerFiles(): React.JSX.Element {
   })
 
   useFileExplorerImport({
-    worktreePath: visibleFilesWorktreePath,
+    worktreePath,
     activeWorktreeId,
+    getRootForPath,
     refreshDir,
     clearNativeDragState,
     setSelectedPath: setSingleSelectedPath
@@ -556,7 +654,7 @@ function FileExplorerFiles(): React.JSX.Element {
   )
   const handleFindInFolder = useCallback(
     (node: TreeNode) => {
-      if (!activeWorktreeId || !node.isDirectory) {
+      if (!activeWorktreeId || !node.isDirectory || node.rootWorktreeId !== activeWorktreeId) {
         return
       }
       showRightSidebarSearch({
@@ -568,7 +666,11 @@ function FileExplorerFiles(): React.JSX.Element {
 
   const handleAddFolderAsProject = useCallback(
     (node: TreeNode) => {
-      if (!activeRepo || !canShowAddAsProjectAction(node, activeRepo)) {
+      if (
+        !activeRepo ||
+        (node.rootWorktreeId && node.rootWorktreeId !== activeWorktreeId) ||
+        !canShowAddAsProjectAction(node, activeRepo)
+      ) {
         return
       }
       openModal(
@@ -576,14 +678,15 @@ function FileExplorerFiles(): React.JSX.Element {
         buildAddProjectFromFolderModalData(node, activeRepo)
       )
     },
-    [activeRepo, openModal]
+    [activeRepo, activeWorktreeId, openModal]
   )
   const handleOpenInTerminal = useCallback(
     (node: TreeNode) => {
-      if (!activeWorktreeId || !node.isDirectory) {
+      const rowWorktreeId = node.rootWorktreeId ?? activeWorktreeId
+      if (!rowWorktreeId || !node.isDirectory) {
         return
       }
-      createNewTerminalTab(activeWorktreeId, undefined, { startupCwd: node.path })
+      createNewTerminalTab(rowWorktreeId, undefined, { startupCwd: node.path })
     },
     [activeWorktreeId]
   )
@@ -641,7 +744,7 @@ function FileExplorerFiles(): React.JSX.Element {
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
-          showGitIgnoredFilesToggle={activeRepoSupportsGit}
+          showGitIgnoredFilesToggle={activeRepoSupportsGit && !hasMultipleWorkspaceRoots}
           showGitIgnoredFiles={showGitIgnoredFiles}
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
           showDotfiles={showDotfiles}
@@ -701,7 +804,11 @@ function FileExplorerFiles(): React.JSX.Element {
             viewportTabIndex={-1}
             viewportClassName="h-full min-h-0 py-2"
             data-native-file-drop-target={isFilesViewActive ? 'file-explorer' : undefined}
-            data-native-file-drop-dir={visibleFilesWorktreePath ?? undefined}
+            data-native-file-drop-dir={
+              isFilesViewActive && !hasMultipleWorkspaceRoots
+                ? (visibleFilesWorktreePath ?? undefined)
+                : undefined
+            }
             onWheelCapture={handleWheelCapture}
             onDragOver={rootDragHandlers.onDragOver}
             onDragEnter={rootDragHandlers.onDragEnter}
@@ -740,10 +847,13 @@ function FileExplorerFiles(): React.JSX.Element {
                 dirCache={dirCache}
                 selectedPaths={selectedPaths}
                 activeFileId={activeFileId}
+                activeWorktreeId={activeWorktreeId}
                 flashingPath={flashingPath}
                 deleteShortcutLabel={deleteShortcutLabel}
                 connectionId={activeRepo?.connectionId ?? null}
+                getConnectionId={getNodeConnectionId}
                 runtimeDownloadContext={runtimeDownloadContext}
+                getRuntimeDownloadContext={getNodeRuntimeDownloadContext}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onViewFile={handleClick}
@@ -753,7 +863,10 @@ function FileExplorerFiles(): React.JSX.Element {
                 onStartRename={startRename}
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
-                canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
+                canAddFolderAsProject={(node) =>
+                  (!node.rootWorktreeId || node.rootWorktreeId === activeWorktreeId) &&
+                  canShowAddAsProjectAction(node, activeRepo)
+                }
                 onOpenInTerminal={handleOpenInTerminal}
                 onRequestDelete={handleContextMenuDelete}
                 onCollapseFolderSubtree={handleCollapseFolderSubtree}
