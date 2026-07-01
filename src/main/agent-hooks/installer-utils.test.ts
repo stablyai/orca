@@ -9,10 +9,10 @@ import {
   statSync,
   writeFileSync,
   chmodSync
-} from 'fs'
-import { homedir, tmpdir } from 'os'
-import { join } from 'path'
-import { spawnSync } from 'child_process'
+} from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import {
   buildWindowsAgentHookPostCommand,
   buildWindowsAgentHookCurlPostCommand,

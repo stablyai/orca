@@ -273,4 +273,41 @@ describe('buildParentPrChecksProjection', () => {
     expect(projection.rows[0]?.detailNames).toEqual(['build'])
     expect(projection.rows[0]?.status).toBe('failing')
   })
+
+  it('prioritizes action-required check detail names before truncating the preview', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ id: 'repo-1::/feature' })
+    const review = makeReview({ status: 'failure', headSha: 'abc123' })
+    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+    const checksKey = getGitHubRepoCacheKey(
+      repo.path,
+      repo.id,
+      prChecksCacheSuffix(12, null, 'abc123'),
+      settings
+    )
+
+    const projection = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: { [hostedKey]: { data: review, fetchedAt: 1 } },
+      checksCache: {
+        [checksKey]: {
+          data: [
+            { name: 'build', status: 'completed', conclusion: 'failure', url: null },
+            { name: 'lint', status: 'in_progress', conclusion: null, url: null },
+            {
+              name: 'GitHub Actions #1001',
+              status: 'completed',
+              conclusion: 'action_required',
+              url: null
+            }
+          ],
+          fetchedAt: 1,
+          headSha: 'abc123'
+        }
+      }
+    })
+
+    expect(projection.rows[0]?.detailNames).toEqual(['GitHub Actions #1001', 'build'])
+  })
 })

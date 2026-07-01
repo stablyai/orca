@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: this suite covers runtime environment
    management, secret redaction, one-shot RPC, and streaming cleanup contracts. */
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
@@ -197,6 +197,27 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+  })
+
+  it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
+    registerRuntimeEnvironmentHandlers()
+
+    // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
+    // on the environment record (ephemeral-vm.ts), so the public list reads it
+    // straight from the record rather than cross-referencing the VM runtime store.
+    const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+      name: 'orca VM abc12345',
+      pairingCode: pairingCode(),
+      source: 'ephemeral-vm'
+    })
+
+    const list = handler<undefined, { id: string; name: string; source?: string }[]>(
+      'runtimeEnvironments:list'
+    )
+
+    expect(await list(null, undefined)).toMatchObject([
+      { id: added.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
+    ])
   })
 
   it('checks a saved remote runtime and records the runtime id on success', async () => {

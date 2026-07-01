@@ -1,5 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
-import path from 'path'
+import path from 'node:path'
 import { z } from 'zod'
 
 // Minimal schemas for emulator commands (loose for initial testing; can be tightened like browser-schemas).

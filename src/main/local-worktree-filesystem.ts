@@ -73,6 +73,16 @@ function runWslLoginShellCommand(distro: string, command: string): Promise<ExecF
   )
 }
 
+function isWslMissingPathError(error: unknown): boolean {
+  // Why: the WSL stat probe exits 2 for its explicit "missing path" branch;
+  // normalize that shell-specific result so callers can handle it like fs.lstat.
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as NodeJS.ErrnoException).code)
+      : ''
+  return code === '2'
+}
+
 export function toLocalWorktreeRuntimePath(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {}
@@ -100,7 +110,12 @@ export function getLocalWorktreePathAccess(
           `target=${target}`,
           'if [ -L "$target" ]; then printf symlink; elif [ -f "$target" ]; then printf file; elif [ -d "$target" ]; then printf directory; else exit 2; fi'
         ].join('\n')
-      )
+      ).catch((error) => {
+        if (isWslMissingPathError(error)) {
+          throw Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
+        }
+        throw error
+      })
       return { type: stdout.trim() }
     },
     readPath: async (path) => {

@@ -357,7 +357,7 @@ describe('Cmd+J project and repo-group search', () => {
     ])
   })
 
-  it('uses setup-specific project header keys for multi-setup projects on one host', () => {
+  it('uses project header keys for multi-setup projects on one host', () => {
     const results = searchCmdJProjectResults({
       query: 'platform',
       projectGroups: [],
@@ -369,10 +369,7 @@ describe('Cmd+J project and repo-group search', () => {
       ]
     })
 
-    expect(results.map((result) => result.rowKey)).toEqual([
-      'project:project-1::setup:repo-1',
-      'project:project-1::setup:repo-2'
-    ])
+    expect(results.map((result) => result.rowKey)).toEqual(['project:project-1'])
   })
 
   it('suppresses raw Project records without renderable repo header targets', () => {

@@ -10,8 +10,8 @@
 //
 // See: docs/ssh-relay-versioned-install-dirs.md
 
-import { join } from 'path'
-import { existsSync, readFileSync } from 'fs'
+import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'

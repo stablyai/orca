@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: local Antigravity install, Windows wrapper
    generation, status cleanup, and SSH remote install must share one event list
    and managed-command matcher so stale hook cleanup cannot drift by platform. */
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {

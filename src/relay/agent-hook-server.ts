@@ -11,10 +11,10 @@
 // last-tool caches) lives on `HookListenerState`. The cache is bounded to one
 // entry per paneKey — see docs/design/agent-status-over-ssh.md §5 (Path 3,
 // request-driven replay) for the rationale.
-import { createServer, type IncomingMessage, type ServerResponse } from 'http'
-import { randomUUID } from 'crypto'
-import { basename, dirname, join } from 'path'
-import { homedir } from 'os'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { randomUUID } from 'node:crypto'
+import { basename, dirname, join } from 'node:path'
+import { homedir } from 'node:os'
 
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
 import {

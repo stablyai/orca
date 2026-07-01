@@ -1,4 +1,4 @@
-import { createServer, type Server, type Socket } from 'net'
+import { createServer, type Server, type Socket } from 'node:net'
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import type {

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this file keeps git worktree create/remove behavior together so local cleanup and creation invariants stay in one place. */
-import { stat } from 'fs/promises'
-import { join, posix, win32 } from 'path'
+import { stat } from 'node:fs/promises'
+import { join, posix, win32 } from 'node:path'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
   getBranchCleanupTargetRefs,

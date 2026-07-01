@@ -84,15 +84,11 @@ export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET
 // harmless on other platforms (the browser skips them), while Cascadia Mono /
 // Consolas cover Windows and DejaVu Sans Mono / Liberation Mono cover Linux.
 //
-// Why Nerd Fonts are listed just before `monospace`: Powerline prompts (p10k,
-// starship, oh-my-zsh) and many shell plugins emit glyphs in the Unicode
-// Private Use Area (U+E000–U+F8FF) that no standard monospace font contains.
-// When the user's primary font (e.g. SF Mono) is missing those code points
-// the browser walks the fallback chain character-by-character, so adding
-// commonly-installed Nerd Fonts here lets PUA glyphs render correctly without
-// forcing the user to override their terminal font. Placed AFTER the regular
-// system fonts so ASCII text still renders in the user's chosen font rather
-// than being substituted by a Nerd Font variant.
+// Why Nerd Fonts are listed after the regular monospace fonts: OMP, Powerline
+// prompts, and many shell plugins emit glyphs in the Unicode Private Use Area
+// (U+E000–U+F8FF) that no standard monospace font contains. The bundled symbol
+// font gives Orca a known-good fallback even on clean systems, while the
+// installed-font fallbacks keep users' existing terminal setups working.
 const FALLBACK_FONTS = [
   'SF Mono', // macOS 10.12+
   'Menlo', // macOS (older)
@@ -101,6 +97,7 @@ const FALLBACK_FONTS = [
   'Consolas', // Windows Vista+
   'DejaVu Sans Mono', // Linux (common)
   'Liberation Mono', // Linux (common)
+  'Orca Nerd Font Symbols', // bundled PUA fallback for OMP/Powerline glyphs
   'Symbols Nerd Font Mono', // purpose-built Nerd Fonts symbols-only fallback
   'MesloLGS Nerd Font', // p10k's recommended font; very common on zsh setups
   'JetBrainsMono Nerd Font', // widely installed; Ghostty ships a JBM-derived font

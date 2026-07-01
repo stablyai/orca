@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'

@@ -29,6 +29,12 @@ function completeExecFile(stdout = ''): void {
   })
 }
 
+function failExecFile(error: Error & { code?: number | string }): void {
+  execFileMock.mockImplementation((_file, _args, _options, callback) => {
+    callback(error, '', '')
+  })
+}
+
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -165,6 +171,17 @@ describe('local worktree filesystem runtime access', () => {
         String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
       )
       expect(rmMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('reports missing WSL stat targets with an ENOENT-shaped error', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(Object.assign(new Error('missing'), { code: 2 }))
+      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+
+      await expect(access.statPath('/mnt/c/repo/missing/.git')).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
     })
   })
 })

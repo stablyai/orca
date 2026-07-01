@@ -127,7 +127,7 @@ module.exports = {
     if (!existsSync(resourcesDir)) {
       return
     }
-    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
+    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)

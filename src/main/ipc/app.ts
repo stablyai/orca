@@ -172,7 +172,7 @@ function readSelectedInputSourceIdFromJson(stdout: string): string | null {
     return null
   }
 
-  for (const record of records.slice().reverse()) {
+  for (const record of records.slice().toReversed()) {
     if (!record || typeof record !== 'object') {
       continue
     }

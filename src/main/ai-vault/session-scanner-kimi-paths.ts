@@ -1,8 +1,8 @@
-import { stat } from 'fs/promises'
-import { createReadStream } from 'fs'
-import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
-import { createInterface } from 'readline'
+import { stat } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { homedir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
 import { asRecord, extractString } from './session-scanner-values'
 
 // Why: Kimi Code stores sessions under <KIMI_CODE_HOME>/sessions/, mirroring the

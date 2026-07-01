@@ -12,6 +12,7 @@ import {
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
@@ -26,15 +27,18 @@ import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
 } from './terminal-url-link-hit-testing'
+import { resolveLocalhostHttpLinkDisplayUrl } from '@/lib/http-link-routing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
   TerminalTab,
-  TerminalLayoutSnapshot
+  TerminalLayoutSnapshot,
+  TuiAgent
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -147,6 +151,19 @@ function reportActiveRendererPtyForPane(
   }
 }
 
+async function formatTerminalUrlTooltip(url: string, openLinkHint: string): Promise<string | null> {
+  const labeledUrl = await resolveLocalhostHttpLinkDisplayUrl(url)
+  if (!labeledUrl) {
+    return null
+  }
+  try {
+    const originalHost = new URL(url).host
+    return `${labeledUrl} (${originalHost}; ${openLinkHint})`
+  } catch {
+    return `${labeledUrl} (${openLinkHint})`
+  }
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -158,11 +175,19 @@ type UseTerminalPaneLifecycleDeps = {
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
+    launchAgent?: TuiAgent
+    draftPrompt?: string
+    /** Initial prompt-start status for agents that lack native prompt hooks. */
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
     /** Show the restored-session banner when this startup command mounts. */
     showSessionRestoredBanner?: boolean
+    /** Initial startup may be paired with a setup split that changes its grid. */
+    waitForSetupSplitDirection?: SetupSplitDirection
   } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
@@ -420,15 +445,41 @@ export function shouldDetachPaneTransportOnUnmount(args: {
 /**
  * Self-gating dead-session reconcile pass scheduled from the isVisible effect.
  * Why self-gate: the effect fires on BOTH isVisible true and false, but we only
- * reconcile on resume (becoming visible), never on hide. Returns true when the
- * pass was scheduled so the resume-unit test can assert the gate.
+ * reconcile on resume (hidden to visible), never on hide or initial mount.
+ * Returns true when the pass was scheduled so the resume-unit test can assert
+ * the gate.
  */
+export function isTerminalPaneVisibilityResume(args: {
+  previousIsVisible: boolean | null
+  isVisible: boolean
+}): boolean {
+  return args.previousIsVisible === false && args.isVisible
+}
+
+type TerminalPaneVisibilitySnapshot = {
+  tabId: string
+  cwd: string | null | undefined
+  isVisible: boolean
+}
+
+export function getPreviousVisibleForTerminalPane(args: {
+  previous: TerminalPaneVisibilitySnapshot | null
+  tabId: string
+  cwd: string | null | undefined
+}): boolean | null {
+  if (args.previous?.tabId !== args.tabId || args.previous.cwd !== args.cwd) {
+    return null
+  }
+  return args.previous.isVisible
+}
+
 export function scheduleVisibilityReconcilePass(args: {
+  previousIsVisible: boolean | null
   isVisible: boolean
   bindings: Iterable<ReconcilableBinding>
   listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
 }): boolean {
-  if (!args.isVisible) {
+  if (!isTerminalPaneVisibilityResume(args)) {
     return false
   }
   // Why: fire-and-forget so the async listSessions IPC never blocks the
@@ -500,6 +551,7 @@ export function useTerminalPaneLifecycle({
   )
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
+  const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   const fileLinkClickFallbackDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -665,11 +717,15 @@ export function useTerminalPaneLifecycle({
       initialLayoutRef.current = hydratedInitialScrollback.layout
     }
     let shouldPersistLayout = false
+    const startupWithSetupSplitWait =
+      startup && setupSplit
+        ? { ...startup, waitForSetupSplitDirection: setupSplit.direction }
+        : startup
     const ptyDeps = {
       tabId,
       worktreeId,
       cwd: startupCwd,
-      startup,
+      startup: startupWithSetupSplitWait,
       paneTransportsRef,
       paneMode2031Ref,
       paneLastThemeModeRef,
@@ -967,6 +1023,9 @@ export function useTerminalPaneLifecycle({
           const mouseHideDisposable = installMouseHideWhileTyping(pane.terminal, pane.container)
           mouseHideDisposablesRef.current.set(pane.id, mouseHideDisposable)
         }
+        // Why: async tooltip formatting can resolve after hover changes, so a
+        // stale result must not overwrite the tooltip for a newer hover/leave.
+        let oscTooltipHoverToken = 0
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
@@ -990,10 +1049,18 @@ export function useTerminalPaneLifecycle({
           // GitHub owner/repo#issue references emitted by CLI tools) — same
           // behaviour as the WebLinksAddon provides for plain-text URLs.
           hover: (_event, text) => {
+            oscTooltipHoverToken += 1
+            const hoverToken = oscTooltipHoverToken
             pane.linkTooltip.textContent = `${text} (${urlOpenLinkHint})`
             pane.linkTooltip.style.display = ''
+            void formatTerminalUrlTooltip(text, urlOpenLinkHint).then((nextText) => {
+              if (hoverToken === oscTooltipHoverToken && nextText) {
+                pane.linkTooltip.textContent = nextText
+              }
+            })
           },
           leave: () => {
+            oscTooltipHoverToken += 1
             pane.linkTooltip.style.display = 'none'
           }
         }
@@ -1244,16 +1311,23 @@ export function useTerminalPaneLifecycle({
           (candidate) => candidate.id === tabId
         )
         const platformInfo = window.api.platform?.get?.()
-        const windowsPtyCompatibilityOptions = buildWindowsPtyCompatibilityOptions({
+        const ptyBackendContext = {
           userAgent: navigator.userAgent,
           osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
           shellOverride: currentTab?.shellOverride,
           executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId)
-        })
+        }
+        const windowsPtyCompatibilityOptions =
+          buildWindowsPtyCompatibilityOptions(ptyBackendContext)
+        // Why: local Windows ConPTY CLIs read the Kitty keyboard advertisement but
+        // do not decode CSI-u, so withhold it there to restore Enter/Up/Down nav
+        // (issue #2434); SSH and macOS/Linux panes keep enhanced reporting.
+        const keyboardProtocolOptions = buildTerminalKeyboardProtocolOptions(ptyBackendContext)
         return {
           ...windowsPtyCompatibilityOptions,
+          ...keyboardProtocolOptions,
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,
@@ -1299,6 +1373,7 @@ export function useTerminalPaneLifecycle({
         // SelectionService._removeMouseDownListeners).
         managerRef.current?.getActivePane()?.terminal.clearSelection()
       },
+      formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
@@ -1605,7 +1680,14 @@ export function useTerminalPaneLifecycle({
   }, [tabId, cwd])
 
   useEffect(() => {
+    const previousIsVisible = getPreviousVisibleForTerminalPane({
+      previous: previousVisibleForReconcileRef.current,
+      tabId,
+      cwd
+    })
+    previousVisibleForReconcileRef.current = { tabId, cwd, isVisible }
     isVisibleRef.current = isVisible
+    const resumedFromHidden = isTerminalPaneVisibilityResume({ previousIsVisible, isVisible })
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
         syncProcessTracking?: () => void
@@ -1615,21 +1697,22 @@ export function useTerminalPaneLifecycle({
       // Why: re-arm the once-per-resume input liveness re-check so the typing
       // hot path stays off the listSessions IPC between resumes (the re-check
       // is only useful right after a hidden→visible flip).
-      if (isVisible) {
+      if (resumedFromHidden) {
         bindingWithVisibility.noteVisibilityResume?.()
       }
     }
     // Why: the reconcile pass self-gates on becoming visible (resume) — the
-    // effect also fires on hide — and runs fire-and-forget alongside
-    // syncProcessTracking. reconcileDeadSessions re-validates identity at apply
-    // time so a racing reattach is not clobbered.
+    // effect also fires on hide and initial mount. Initial visible mounts are
+    // fresh PTY startup, so an early listSessions snapshot must not close the
+    // newborn tab before the daemon lists it.
     scheduleVisibilityReconcilePass({
+      previousIsVisible,
       isVisible,
       bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
       listSessions: () => window.api.pty.listSessions()
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
-  }, [isVisible, isVisibleRef, panePtyBindingsRef])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility and terminal identity changes must refresh existing PTY process tracking even though the ref object identity is stable.
+  }, [cwd, isVisible, isVisibleRef, panePtyBindingsRef, tabId])
 
   useEffect(() => {
     const manager = managerRef.current

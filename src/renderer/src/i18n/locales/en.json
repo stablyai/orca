@@ -133,7 +133,8 @@
         "7a566540de": "Pairing URL or code",
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
-        "e3bcd082ac": "Connect to Orca"
+        "e3bcd082ac": "Connect to Orca",
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
       },
       "web": {
         "preload": {
@@ -228,7 +229,9 @@
           "2e17f825d4": "Worktree deleted, branch kept",
           "78e08cd877": "Git could not safely delete branch \"{{value0}}\", so Orca kept it to avoid losing local commits.",
           "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
-          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits."
+          "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
+          "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
+          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -537,6 +540,12 @@
         "distroRequired": "Select a WSL distro for this project before installing this skill.",
         "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
         "wslDefault": "WSL default"
+      },
+      "sidebarWorktreeActivation": {
+        "wakeEphemeralVmFailed": "Failed to wake ephemeral VM workspace"
+      },
+      "ephemeralVmWorkspaceTarget": {
+        "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
       }
     },
     "hooks": {
@@ -643,7 +652,17 @@
         "b1c2f8b0ac": "Optional account switching for Claude, Codex, Gemini, and OpenCode Go.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
-        "b49abbd2f7": "Agents"
+        "b49abbd2f7": "Agents",
+        "dev": "Dev Tools",
+        "devDescription": "Dev-only tools for exercising UI states.",
+        "devBadge": "Dev",
+        "devSearchNotificationPlayground": "Notification playground",
+        "devSearchNotificationPlaygroundDescription": "Trigger representative toast and notification UI states.",
+        "devSearchKeywordDev": "dev",
+        "devSearchKeywordToast": "toast",
+        "devSearchKeywordSonner": "sonner",
+        "devSearchKeywordError": "error",
+        "devSearchKeywordNotification": "notification"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -715,6 +734,7 @@
         "d23bbb6416": "{{value0}} skipped",
         "18f80e1329": "{{value0}} pending",
         "b1ac991806": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
         "311d0cee55": "{{value0}} passing",
         "e52bed9264": "No checks reported yet",
         "90020cc1f3": "This pull request has no reported checks yet.",
@@ -863,7 +883,8 @@
           "to": "to",
           "activity": "Activity",
           "noActivity": "No activity yet."
-        }
+        },
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1147,7 +1168,14 @@
         "notConnected": "Not connected",
         "notePasteTooLarge": "Paste is too large for the note field.",
         "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
+        "destroyDisabled": "destroy disabled",
+        "destroyConfigured": "destroy configured",
+        "noDestroyConfigured": "no destroy",
+        "ephemeralVm": "Per-Workspace Environment",
+        "chooseRunTarget": "Choose target",
+        "noRunTargets": "No run targets are ready for this project.",
+        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -1162,6 +1190,8 @@
         "94d95cf1f7": "Checks",
         "9e8d45700e": "Conversation",
         "e6996f4024": "· updated",
+        "dd5d9a4f17": "updated {{value0}}",
+        "71a3c0f9d2": "Start workspace",
         "00b7b82329": "head branch",
         "e1f3641bfd": "from",
         "c44b70352b": "base branch",
@@ -1188,6 +1218,7 @@
         "e6ad0a8d06": "{{value0}} skipped",
         "88267924d5": "{{value0}} pending",
         "ae2a34c7b8": "{{value0}} failing",
+        "checksNeedActionChip": "{{value0}} action required",
         "7c5035931a": "{{value0}} passing",
         "a18d01cda3": "No checks reported yet",
         "3912daf310": "This pull request has no reported checks yet.",
@@ -1322,7 +1353,8 @@
         "commentTooLarge": "Comment is too large to submit safely.",
         "8ff5ae8866": "Assignees",
         "82c87eceb9": "Edit assignees",
-        "1ff5d979df": "No one assigned"
+        "1ff5d979df": "No one assigned",
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -2194,7 +2226,10 @@
             "ed2a664f8b": "Couldn’t create worktree",
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
-            "767951265d": "Something went wrong while creating the worktree."
+            "767951265d": "Something went wrong while creating the worktree.",
+            "vmProvisioningTitle": "Provisioning VM",
+            "cancelProvisioning": "Cancel",
+            "vmProvisioningLogEmpty": "Waiting for recipe output…"
           }
         }
       },
@@ -2408,6 +2443,7 @@
             "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "Copy Pane ID",
             "39809d152f": "Set Title…",
+            "clearPaneTitle": "Clear Pane Title",
             "06c2b0f043": "Equalize Pane Sizes",
             "98bccf4fa2": "Split Terminal Down",
             "20e565d865": "Split Terminal Right",
@@ -2518,6 +2554,17 @@
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
             "c337c9d75c": "Close"
+          },
+          "TerminalSshReconnectOverlay": {
+            "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
+            "reconnectFailed": "The SSH connection to {{value0}} failed. Connect again to continue this terminal session.",
+            "connecting": "Connecting to {{value0}}. This terminal will resume after the host is available.",
+            "connected": "SSH is connected.",
+            "disconnected": "This terminal is waiting for {{value0}}. Connect to continue this SSH session.",
+            "connectFailed": "SSH connection failed",
+            "title": "SSH connection required",
+            "connectingButton": "Connecting...",
+            "connectButton": "Connect"
           }
         }
       },
@@ -3448,7 +3495,16 @@
           "host": "Host",
           "local": "Local",
           "runtime": "Server",
-          "ssh": "SSH"
+          "ssh": "SSH",
+          "connecting": "Connecting",
+          "connect": "Connect",
+          "addSshHost": "Add SSH host",
+          "addRemoteServer": "Add remote server",
+          "addRemoteHost": "Add remote host",
+          "addRemoteHostTooltip": "Choose SSH for a machine you can log into, or remote server for an Orca server.",
+          "addSshHostDetail": "Use an existing machine over SSH.",
+          "addRemoteServerDetail": "Pair with Orca running on another computer.",
+          "addRemoteHostDetail": "SSH host or Orca server"
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -4019,7 +4075,9 @@
           "250de158fd": "Remove Workspace",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
-          "workspaceSection": "Workspace"
+          "workspaceSection": "Workspace",
+          "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
+          "deleteWorktree": "Delete Worktree"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -4405,6 +4463,48 @@
           "8c0b2e7a41": "Open Non-Orca worktrees settings",
           "5d1c9f0a82": "Cancel",
           "3b7e4a1c96": "Hide external worktrees"
+        },
+        "useAddRepoHostSelection": {
+          "connectionFailed": "SSH connection failed."
+        },
+        "AddRemoteHostDialog": {
+          "sshHostRequired": "Host or SSH config alias is required.",
+          "sshPortInvalid": "Port must be between 1 and 65535.",
+          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
+          "sshSaved": "SSH host added.",
+          "sshSaveFailed": "Failed to add SSH host.",
+          "serverFieldsRequired": "Server name and pairing code are required.",
+          "serverSaved": "Remote server added.",
+          "serverSaveFailed": "Failed to add remote server.",
+          "serverTitle": "Add remote server",
+          "sshTitle": "Add SSH host",
+          "serverDescription": "Pair with Orca running on another computer.",
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
+          "cancel": "Cancel",
+          "saving": "Saving...",
+          "save": "Save",
+          "label": "Label",
+          "sshLabelPlaceholder": "Dev box",
+          "sshHost": "Host or alias",
+          "sshHostPlaceholder": "deploy@server:22",
+          "username": "Username",
+          "usernamePlaceholder": "deploy",
+          "port": "Port",
+          "identityFile": "Identity file",
+          "identityFilePlaceholder": "~/.ssh/id_ed25519 (optional)",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay.",
+          "serverName": "Server name",
+          "serverNamePlaceholder": "Dev box",
+          "pairingCode": "Pairing code",
+          "pairingCodePlaceholder": "orca://pair?code=...",
+          "pairingHelpPrefix": "Run",
+          "pairingCommand": "orca serve --pairing-address <host>",
+          "pairingHelpSuffix": "on the server and paste the printed pairing URL.",
+          "sshImportAlreadySynced": "~/.ssh/config already in sync.",
+          "sshImportSynced": "Synced {{value0}} host{{value1}}.",
+          "sshImportFailed": "Failed to import SSH config.",
+          "importing": "Importing...",
+          "importSshConfig": "Import ~/.ssh/config"
         }
       },
       "shared": {
@@ -6008,7 +6108,14 @@
           "2752126f3e": "Runtime pairing is unavailable.",
           "95b8be4cea": "Failed to refresh network interfaces.",
           "1b4e0bbcc5": "Failed to load shared access grants.",
-          "b91e36a986": "web"
+          "b91e36a986": "web",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…",
+          "custom-title": "Custom connection address",
+          "custom-description": "Advertise an address another device can reach — a LAN or Tailscale host, or a full ws(s):// URL.",
+          "custom-hint": "Enter a host, host:port, or a ws(s):// URL.",
+          "custom-cancel": "Cancel",
+          "custom-use": "Use address"
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",
@@ -6081,7 +6188,9 @@
           "9abb9be3bc": "Set Up",
           "23c6874fdf": "AI Capabilities",
           "2309068a6f": "destructive",
-          "65358016ea": "Discard"
+          "65358016ea": "Discard",
+          "dev": "Dev Tools",
+          "devDescription": "Dev-only tools for exercising UI states."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -6227,7 +6336,7 @@
           "2227ce47b6": "Failed to save target",
           "f602009125": "Target added",
           "b4ba0ce33d": "Target updated",
-          "3879cbaa52": "Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset",
+          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "Port must be between 1 and 65535",
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
@@ -6249,6 +6358,8 @@
           "106bd57f4a": "SSH Password"
         },
         "SshTargetCard": {
+          "a883f5a00f": "terminal timeout: {{value0}}",
+          "8ce71262f4": "terminals until reset",
           "ec6543cee9": "Connect",
           "0e53e9f8e8": "Test",
           "1810b51482": "Connecting",
@@ -6274,11 +6385,13 @@
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancel",
-          "1b19b00e93": "(7 days).",
-          "137e88ce8d": "How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours). Maximum:",
-          "b574994adc": "Remote terminals stay available until you end them or reset the relay.",
-          "71fc546097": "Keep alive until reset",
-          "92f80edbfd": "Relay Grace Period (seconds)",
+          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
+          "7c13f58c91": "Until reset",
+          "55c56cf2c7": "Timeout after disconnect (seconds)",
+          "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
+          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
+          "71fc546097": "Keep terminals alive until reset",
+          "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "Optional. Equivalent to ProxyJump / ssh -J.",
           "11bcb4507a": "bastion.example.com",
           "b2ab248ded": "Jump Host",
@@ -6972,7 +7085,9 @@
             "0dbb1eaf4e": "homepage",
             "291f480a5e": "home",
             "a942905148": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
-            "c3903322d2": "Default Home Page"
+            "c3903322d2": "Default Home Page",
+            "19ea5607cf": "Localhost Worktree Labels",
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
           },
           "use": {
             "search": {
@@ -8476,6 +8591,10 @@
           "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
           "2a9588b1c2": "Remove this binding"
         },
+        "BrowserLocalhostWorktreeLabelsSetting": {
+          "8ac8c3ad19": "Localhost Worktree Labels",
+          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+        },
         "AgentRuntimeSetting": {
           "label": "Agent runtime",
           "wsl": "WSL",
@@ -8503,6 +8622,89 @@
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Advanced"
+        },
+        "DevToolsPane": {
+          "nativeActionLayoutCheck": "Native action layout check",
+          "secondary": "Secondary",
+          "secondaryActionClicked": "Secondary action clicked",
+          "primaryAction": "Primary action",
+          "primaryActionClicked": "Primary action clicked",
+          "branchHasChanges": "branch has changes",
+          "viewChangesClicked": "View Changes clicked",
+          "forceDeleteClicked": "Force Delete clicked",
+          "devOnlyCallback": "Dev-only callback.",
+          "infoToast": "Info toast",
+          "infoToastDescription": "Long informational copy with no explicit action.",
+          "localCanaryBehind": "Local canary is behind origin/canary",
+          "successToast": "Success toast",
+          "successToastDescription": "Short confirmation state.",
+          "settingsSaved": "Settings saved",
+          "shortSuccessCopy": "Short success copy.",
+          "errorToast": "Error toast",
+          "errorToastDescription": "Long error copy without recovery actions.",
+          "failedToSyncWorkspaceMetadata": "Failed to sync workspace metadata",
+          "nativeActionToast": "Native action toast",
+          "nativeActionToastDescription": "Uses Sonner action and cancel slots.",
+          "deleteFailureToast": "Delete failure toast",
+          "deleteFailureToastDescription": "Custom footer with View and Force Delete.",
+          "behindBaseRefToast": "Behind base ref toast",
+          "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
+          "notificationPlayground": "Notification playground",
+          "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
+          "devOnly": "Dev only"
+        },
+        "EphemeralVmRecipeRow": {
+          "useInWorkspace": "Use in workspace"
+        },
+        "EphemeralVmRuntimesSection": {
+          "cleanupFailed": "Cleanup failed",
+          "cleanupRunning": "Cleanup running",
+          "cleanupDisabled": "Cleanup disabled",
+          "running": "Running",
+          "failed": "Failed",
+          "loadFailed": "Couldn’t load temporary VM runtimes.",
+          "cleanupFailedToast": "Couldn’t clean up temporary VM runtime.",
+          "markedCleaned": "Marked temporary VM runtime as cleaned.",
+          "cleaned": "Cleaned up temporary VM runtime.",
+          "copiedCleanupCommand": "Copied cleanup command.",
+          "copiedCleanupPayload": "Copied cleanup payload.",
+          "copyCleanupFailed": "Couldn’t copy cleanup command.",
+          "title": "Temporary VM runtimes",
+          "description": "Recipe-created runtimes are workspace-owned. Clean up stale entries after crashes, failed creates, or manual recovery.",
+          "refresh": "Refresh temporary VM runtimes",
+          "loading": "Checking temporary VM runtimes…",
+          "empty": "No temporary VM runtimes need cleanup.",
+          "copyCleanup": "Copy command",
+          "retry": "Retry cleanup",
+          "cleanup": "Cleanup"
+        },
+        "ephemeralVms": {
+          "search": {
+            "title": "Per-Workspace Environments",
+            "description": "Learn how repo-owned recipes give each workspace its own on-demand, disposable environment."
+          }
+        },
+        "EphemeralVmsPane": {
+          "loadError": "Could not load recipes.",
+          "copyError": "Could not copy the prompt.",
+          "skillTitle": "Per-Workspace Environments skill",
+          "skillDescription": "Sets up, builds, authenticates, and validates repo-owned environment recipes.",
+          "whatTitle": "What the skill does, with you",
+          "whatScaffold": "Writes the recipe & scripts for your provider — connected over an Orca server or SSH.",
+          "whatBuild": "Builds a reusable base image and signs your agent in.",
+          "whatValidate": "Validates it so you can create a workspace on it.",
+          "promptHint": "In any workspace, ask your agent:",
+          "copy": "Copy",
+          "copied": "Copied",
+          "recipes": "Recipes",
+          "recipesHelp": "Recipes your agent adds to orca.yaml show up here, ready to launch a workspace on.",
+          "refresh": "Refresh ephemeral VM recipes",
+          "checking": "Checking recipes...",
+          "none": "No recipes found yet."
+        },
+        "ephemeralVmsExperimentalSetting": {
+          "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
+          "toggleLabel": "Toggle per-workspace environments"
         }
       },
       "right": {
@@ -9116,7 +9318,8 @@
                 "8a621a2c4f": "Grouped",
                 "b13f85d75c": "Timeline",
                 "f5cf324efa": "Comment display options",
-                "5e6e5a13fa": "View"
+                "5e6e5a13fa": "View",
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
               },
               "empty": {
                 "state": {
@@ -10004,6 +10207,20 @@
             "cefd048225": "Back",
             "c5ad56786d": "spinner"
           }
+        },
+        "CustomNetworkAddressDialog": {
+          "title": "Custom network address",
+          "description": "Advertise an address your phone can reach when it is not on the same Wi-Fi — for example a Tailscale hostname or a static IP.",
+          "label": "Address",
+          "placeholder": "my-mac.ts.net or 192.168.1.50",
+          "hint": "Enter an IP address or a Tailscale hostname (ends in .ts.net).",
+          "cancel": "Cancel",
+          "use": "Use address"
+        },
+        "NetworkInterfacePicker": {
+          "trigger-label": "Network address to advertise",
+          "custom-option": "{{address}} (custom)",
+          "add-custom": "Add custom address…"
         }
       },
       "gitlab": {
@@ -11196,7 +11413,8 @@
           "b3e7f9a1c2": "Check fix context unavailable",
           "d5a8c2f1b9": "Start the default AI agent to fix this check",
           "e2b4d7c8a1": "Choose an agent for this check",
-          "f1c9e3a6d4": "Choose agent to fix check"
+          "f1c9e3a6d4": "Choose agent to fix check",
+          "actionRequired": "Action required"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "succeeded",
@@ -12104,7 +12322,8 @@
         "stopDictation": "Stop dictation",
         "noSkills": "No matching skills",
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
-        "removeAttachment": "Remove attachment"
+        "removeAttachment": "Remove attachment",
+        "pastedImageLabel": "Pasted image"
       },
       "tool": {
         "running": "Running…",

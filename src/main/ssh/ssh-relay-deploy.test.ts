@@ -161,7 +161,7 @@ describe('deployAndLaunchRelay', () => {
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
   })
 
-  it('defaults fresh relays to the three-hour SSH disconnect grace window', async () => {
+  it('defaults fresh relays to keep-alive-until-reset', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
     mockExecCommand.mockResolvedValueOnce('Linux x86_64')

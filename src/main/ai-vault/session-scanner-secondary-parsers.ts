@@ -1,7 +1,7 @@
-import { createReadStream } from 'fs'
-import { readFile, readdir } from 'fs/promises'
-import { join } from 'path'
-import { createInterface } from 'readline'
+import { createReadStream } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import {

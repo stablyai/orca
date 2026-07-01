@@ -489,14 +489,15 @@ describe('launchWorkItemDirect', () => {
       isRemote: true,
       allowEmptyPromptLaunch: true
     })
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      content: 'https://github.com/acme/repo/issues/77',
-      agent: 'cursor',
-      submit: false,
-      forcePaste: false,
-      onTimeout: expect.any(Function)
-    })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'wt-ssh',
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          draftPrompt: 'https://github.com/acme/repo/issues/77'
+        })
+      })
+    )
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
   it('does not launch a disabled saved agent even when another agent is available', async () => {

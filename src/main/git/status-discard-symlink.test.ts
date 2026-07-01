@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { execFileSync } from 'child_process'
-import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'fs/promises'
-import * as path from 'path'
-import { tmpdir } from 'os'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
 import { bulkDiscardChanges, discardChanges } from './status'
 
 const tempRoots: string[] = []

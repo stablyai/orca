@@ -39,10 +39,10 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
-import { createHash, randomUUID } from 'crypto'
-import { homedir } from 'os'
-import { isAbsolute, join, resolve } from 'path'
-import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
+import { isAbsolute, join, resolve } from 'node:path'
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
@@ -185,6 +185,7 @@ import {
 } from '../../shared/tui-agent-launch-defaults'
 import { resolveTuiAgentBaseAgent } from '../../shared/tui-agent-profiles'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
   markCodexProjectTrusted,
@@ -615,6 +616,11 @@ import {
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
 } from '../ipc/worktree-remote'
+import {
+  getBranchNameOverrideCandidate,
+  getWorktreeCreateCandidate,
+  WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
+} from '../worktree-create-candidates'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -636,9 +642,11 @@ import {
 } from '../ipc/worktree-logic'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
+  canCleanupUnregisteredOrcaLeftoverDirectory,
   canCleanupUnregisteredOrcaWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
+  isDangerousWorktreeRemovalPath,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   stripOrcaProvenanceMetaUpdates,
@@ -1067,8 +1075,6 @@ function getAgentLaunchPlatformForRepo(
 
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
-const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
-const CODEX_COMPOSER_PROMPT = '›'
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
@@ -1248,6 +1254,37 @@ async function isRuntimeWorktreePathMissing(
     return false
   }
   return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
+}
+
+async function isLocalRuntimeGitRepository(
+  runtimeWorktreePath: string,
+  localWorktreeGitOptions: { wslDistro?: string } = {}
+): Promise<boolean> {
+  try {
+    await gitExecFileAsync(['status', '--short'], {
+      cwd: runtimeWorktreePath,
+      ...localWorktreeGitOptions
+    })
+    return true
+  } catch (error) {
+    return !gitStatusErrorMeansNotRepository(error)
+  }
+}
+
+function gitStatusErrorMeansNotRepository(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : typeof error === 'string'
+          ? error
+          : ''
+  const stderr =
+    error && typeof error === 'object' && 'stderr' in error
+      ? String((error as { stderr: unknown }).stderr)
+      : ''
+  return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
 type RuntimeWorktreeRemovalTarget = {
@@ -1659,6 +1696,14 @@ type LinearCreateFieldIntent = {
   labelIds?: string[]
   projectId?: string
 }
+
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 function sameStringSet(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
@@ -2136,6 +2181,7 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2162,6 +2208,7 @@ export class OrcaRuntimeService {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      buildAgentHookPtyEnv?: () => Record<string, string>
     }
   ) {
     this.store = store
@@ -2179,6 +2226,7 @@ export class OrcaRuntimeService {
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
+    this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
   }
 
   getLocalProvider(): IPtyProvider | null {
@@ -3115,7 +3163,13 @@ export class OrcaRuntimeService {
     if (tab.type === 'terminal') {
       // Why: split terminal leaves share one parent tab; merge dedup must stay
       // leaf-scoped or preserved siblings collapse into a single surface.
-      return [tab.id, `${tab.parentTabId}::${tab.leafId}`]
+      const keys = [tab.id, `${tab.parentTabId}::${tab.leafId}`]
+      if (typeof tab.ptyId === 'string' && tab.ptyId.length > 0) {
+        // Why: renderer and headless sources can derive different leafIds for the same
+        // terminal; real PTYs collapse those duplicates without merging pending splits.
+        keys.push(`${tab.parentTabId}::pty:${tab.ptyId}`)
+      }
+      return keys
     }
     if (tab.type === 'browser') {
       return [tab.id, tab.browserWorkspaceId]
@@ -9213,15 +9267,12 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-    if (!existingProject) {
-      throw new Error(`Project not found: ${args.projectId}`)
-    }
     let repo = await this.addRepo(args.path, args.kind === 'folder' ? 'folder' : 'git')
     let setup = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
     if (setup.projectId !== args.projectId) {
+      const existingProject = this.listProjects().find((project) => project.id === args.projectId)
       if (
-        !existingProject.providerIdentity ||
+        !existingProject?.providerIdentity ||
         existingProject.providerIdentity.provider !== 'github'
       ) {
         throw new Error('Imported folder does not match the selected project identity.')
@@ -9608,7 +9659,7 @@ export class OrcaRuntimeService {
     const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
     const failedCount = results.filter((entry) => entry.status === 'failed').length
     if (importedCount + alreadyKnownCount === 0) {
-      for (const group of groupResolver.getCreatedGroups().reverse()) {
+      for (const group of groupResolver.getCreatedGroups().toReversed()) {
         this.store.deleteProjectGroup?.(group.id)
       }
     }
@@ -11809,6 +11860,13 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
 
+    if (opts.notifyClients === false && this.store?.getWorktreeMeta(worktree.id)?.isUnread) {
+      // Why: mobile/web session activation intentionally bypasses renderer
+      // selection, so the runtime must acknowledge the unread state itself.
+      this.store.setWorktreeMeta(worktree.id, { isUnread: false })
+      this.notifyWorktreesChanged(repo.id)
+    }
+
     if (opts.notifyClients !== false) {
       // Why: inactive worktree terminal panes are renderer-owned and may not have
       // live PTYs until the desktop activates the worktree and mounts them.
@@ -12272,9 +12330,7 @@ export class OrcaRuntimeService {
       : 'render-quiet-after-bracketed-paste'
     return new Promise<string | null>((resolve) => {
       let settled = false
-      let recent = ''
-      let postHandshakeRecent = ''
-      let saw2004 = false
+      const scanner = createDraftPasteReadyScanner(readySignal)
       let quietTimer: NodeJS.Timeout | null = null
       let hardTimer: NodeJS.Timeout | null = null
       let unsubscribe: (() => void) | null = null
@@ -12302,36 +12358,12 @@ export class OrcaRuntimeService {
       }
 
       const observeData = (data: string): void => {
-        const combined = recent + data
-        recent = combined.slice(-512)
-        if (!saw2004) {
-          const markerIndex = combined.indexOf(DECSET_BRACKETED_PASTE)
-          if (markerIndex === -1) {
-            return
-          }
-          saw2004 = true
-          const postHandshakeChunk = combined.slice(markerIndex + DECSET_BRACKETED_PASTE.length)
-          if (readySignal === 'codex-composer-prompt') {
-            if (postHandshakeChunk.includes(CODEX_COMPOSER_PROMPT)) {
-              finish(ptyId)
-              return
-            }
-            postHandshakeRecent = postHandshakeChunk.slice(-512)
-            return
-          }
-          postHandshakeRecent = postHandshakeChunk.slice(-512)
-        } else {
-          if (
-            readySignal === 'codex-composer-prompt' &&
-            (data.includes(CODEX_COMPOSER_PROMPT) ||
-              (postHandshakeRecent + data).includes(CODEX_COMPOSER_PROMPT))
-          ) {
-            finish(ptyId)
-            return
-          }
-          postHandshakeRecent = (postHandshakeRecent + data).slice(-512)
+        const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
+        if (ready) {
+          finish(ptyId)
+          return
         }
-        if (readySignal !== 'codex-composer-prompt' && saw2004) {
+        if (shouldArm) {
           armQuietTimer()
         }
       }
@@ -12599,14 +12631,6 @@ export class OrcaRuntimeService {
     const sanitizedName = sanitizeWorktreeName(args.name)
     let effectiveSanitizedName = sanitizedName
     const username = getGitUsername(repo.path)
-    const branchName = await resolveCreateBranchName(
-      repo.path,
-      args.branchNameOverride,
-      sanitizedName,
-      settings,
-      username,
-      localWorktreeGitOptions
-    )
 
     const baseBranch =
       args.baseBranch ||
@@ -12624,32 +12648,93 @@ export class OrcaRuntimeService {
       )
     }
 
-    const checkoutExistingBranch = await canCheckoutExistingLocalBranch(
-      repo.path,
-      branchName,
-      baseBranch,
-      ...localWorktreeGitOptionArgs
-    )
-    let branchConflictKind = checkoutExistingBranch
-      ? null
-      : await getBranchConflictKind(
-          repo.path,
-          branchName,
-          baseBranch,
-          ...localWorktreeGitOptionArgs
-        )
-    const allowedPushTargetRemoteConflict =
-      branchConflictKind && isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args)
-    if (branchConflictKind && !allowedPushTargetRemoteConflict) {
-      throw new Error(
-        `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
+    const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
+    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
+    // distro filesystem through computeWorkspaceRoot. If home lookup fails,
+    // still validate against the effective workspace dir.
+    let branchName = ''
+    let checkoutExistingBranch = false
+    let selectedExistingLocalBranchName: string | null = null
+    let branchConflictKind: 'local' | 'remote' | null = null
+    let worktreePath = ''
+    let worktreePathResolved = false
+    // Why: runtime/mobile create-from-review callers should get a new workspace
+    // even when the PR branch or review branch name is already in use.
+    for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
+      effectiveSanitizedName = getWorktreeCreateCandidate(sanitizedName, suffix)
+      effectiveRequestedName = args.name.trim()
+        ? getWorktreeCreateCandidate(args.name, suffix)
+        : effectiveSanitizedName
+      branchName = await resolveCreateBranchName(
+        repo.path,
+        selectedExistingLocalBranchName ??
+          getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
+        effectiveSanitizedName,
+        settings,
+        username,
+        localWorktreeGitOptions
       )
-    }
+      checkoutExistingBranch = await canCheckoutExistingLocalBranch(
+        repo.path,
+        branchName,
+        baseBranch,
+        ...localWorktreeGitOptionArgs
+      )
+      if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+        // Why: once a user-selected branch is safe to reuse, path retries should
+        // keep that branch exact instead of creating a sibling branch.
+        selectedExistingLocalBranchName = branchName
+      }
+      branchConflictKind = checkoutExistingBranch
+        ? null
+        : await getBranchConflictKind(
+            repo.path,
+            branchName,
+            baseBranch,
+            ...localWorktreeGitOptionArgs
+          )
+      const allowedPushTargetRemoteConflict =
+        branchConflictKind &&
+        isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args)
+      let selectedReviewConflictMatched = false
+      if (branchConflictKind) {
+        if (allowedPushTargetRemoteConflict) {
+          let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
+          const selectedReview = getSelectedReviewBranch(args)
+          if (selectedReview?.provider === 'github') {
+            try {
+              existingPR = await getLocalGitHubPrForBranch(
+                repo.path,
+                branchName,
+                localWorktreeGitOptions
+              )
+            } catch {
+              // Retry with a suffixed branch when selected review verification is unavailable.
+            }
+            if (isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+              branchConflictKind = null
+              selectedReviewConflictMatched = true
+            }
+          } else if (selectedReview) {
+            const hostedReview = await getSelectedHostedReviewForBranch(
+              repo,
+              branchName,
+              args,
+              hostedReviewExecutionContext
+            ).catch(() => null)
+            if (hostedReview?.matchesSelected) {
+              branchConflictKind = null
+              selectedReviewConflictMatched = true
+            }
+          }
+        }
+        if (branchConflictKind) {
+          continue
+        }
+      }
 
-    if (!checkoutExistingBranch) {
-      let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
-      const selectedReview = getSelectedReviewBranch(args)
-      if (selectedReview?.provider === 'github' || !allowedPushTargetRemoteConflict) {
+      if (!checkoutExistingBranch && !selectedReviewConflictMatched) {
+        let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
         try {
           existingPR = await getLocalGitHubPrForBranch(
             repo.path,
@@ -12657,66 +12742,28 @@ export class OrcaRuntimeService {
             localWorktreeGitOptions
           )
         } catch {
-          if (allowedPushTargetRemoteConflict) {
-            throw new Error(`Could not verify selected PR branch "${branchName}". Try again.`)
-          }
-          // Why: worktree creation should not hard-fail on transient GitHub reachability
-          // issues because git state is still the source of truth for whether the
-          // worktree can be created locally.
+          // Why: GitHub reachability should not block creating a suffixed
+          // workspace; git conflicts still decide whether this candidate works.
+        }
+        if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+          continue
         }
       }
-      if (allowedPushTargetRemoteConflict) {
-        if (selectedReview?.provider === 'github') {
-          if (!isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
-            if (existingPR) {
-              throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
-            }
-            throw new Error(`Branch "${branchName}" already exists on a remote.`)
-          }
-        } else if (selectedReview) {
-          const hostedReview = await getSelectedHostedReviewForBranch(
-            repo,
-            branchName,
-            args,
-            hostedReviewExecutionContext
-          ).catch(() => null)
-          if (!hostedReview?.matchesSelected) {
-            if (hostedReview) {
-              throw new Error(`Branch "${branchName}" already has PR #${hostedReview.number}.`)
-            }
-            throw new Error(`Branch "${branchName}" already exists on a remote.`)
-          }
-        }
-      }
-      if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
-        throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
-      }
-    }
-
-    const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
-    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem through computeWorkspaceRoot. If home lookup fails,
-    // still validate against the effective workspace dir.
-    let worktreePath = ''
-    let worktreePathResolved = !args.branchNameOverride
-    for (let suffix = 1; suffix < 100; suffix += 1) {
-      effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
-      effectiveRequestedName =
-        suffix === 1
-          ? args.name
-          : args.name.trim()
-            ? `${args.name}-${suffix}`
-            : effectiveSanitizedName
       worktreePath = ensurePathWithinWorkspace(
         computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
         workspaceRoot
       )
-      if (!args.branchNameOverride || !(await pathExists(worktreePath))) {
+      if (!(await pathExists(worktreePath))) {
         worktreePathResolved = true
         break
       }
     }
     if (!worktreePathResolved) {
+      if (branchConflictKind) {
+        throw new Error(
+          `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
+        )
+      }
       throw new Error(
         `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`
       )
@@ -12753,11 +12800,10 @@ export class OrcaRuntimeService {
         throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
       }
     } else if (!(await hasLocalCommitObject(repo.path, baseBranch))) {
-      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
       try {
-        await this.fetchRemoteWithCache(repo.path, remote, ...localWorktreeGitOptionArgs)
+        await this.fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
       } catch {
         // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
         // not throw; the outer try/catch guarantees create-path tolerance even
@@ -14579,11 +14625,13 @@ export class OrcaRuntimeService {
 
     if (repo.connectionId) {
       const provider = requireSshGitProvider(repo.connectionId)
-      await forceDeleteLocalBranch(
+      // Why: SSH must use the write-capable relay RPC; the shared exec-based
+      // helper routes through the read-only git.exec allowlist, which rejects
+      // the worktree/update-ref/config writes this delete needs.
+      await provider.forceDeletePreservedBranch(
         repo.path,
         cleanupTarget.branchName,
-        cleanupTarget.head,
-        (argv, cwd) => provider.exec(argv, cwd)
+        cleanupTarget.head
       )
       await cleanupUnusedWorktreePushTargetRemoteSsh(
         provider,
@@ -14709,19 +14757,18 @@ export class OrcaRuntimeService {
             )
           } else {
             const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-            canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
-              toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
-              toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-              access.statPath,
-              access.readPath
-            )
+            canCleanOrphanedDirectory =
+              !isDangerousWorktreeRemovalPath(removalTarget.path, repo.path) &&
+              (await canSafelyRemoveOrphanedWorktreeDirectory(
+                toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
+                toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                access.statPath,
+                access.readPath
+              ))
           }
         }
         if (canCleanOrphanedDirectory) {
-          assertWorktreeDoesNotContainRegisteredWorktree(
-            toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
-            registeredWorktrees
-          )
+          assertWorktreeDoesNotContainRegisteredWorktree(removalTarget.path, registeredWorktrees)
           if (!force) {
             throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
           }
@@ -14751,6 +14798,48 @@ export class OrcaRuntimeService {
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
+        }
+        if (!repo.connectionId) {
+          const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+          const runtimeWorktreePath = toLocalWorktreeRuntimePath(
+            removalTarget.path,
+            localWorktreeGitOptions
+          )
+          if (
+            await canCleanupUnregisteredOrcaLeftoverDirectory({
+              meta: removedMeta,
+              worktreePath: removalTarget.path,
+              runtimeWorktreePath,
+              repo,
+              runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+              knownOrcaLayouts,
+              registeredWorktrees,
+              statPath: access.statPath,
+              isGitRepository: (path) => isLocalRuntimeGitRepository(path, localWorktreeGitOptions)
+            })
+          ) {
+            if (!force) {
+              throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+            }
+            await closeLocalWatcherForWorktreePath(removalTarget.path).catch((err) => {
+              console.warn(`[filesystem-watcher] failed to close ${removalTarget.path}:`, err)
+            })
+            await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            return {}
+          }
         }
         if (await isRuntimeWorktreePathMissing(repo, removalTarget.path, localWorktreeGitOptions)) {
           if (!force && !removedMeta) {
@@ -15304,10 +15393,10 @@ export class OrcaRuntimeService {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         r: { requestId: string; tabId?: string; title?: string; error?: string }
       ): void => {
-        if (r.requestId !== requestId) {
+        if (event.sender !== win.webContents || r.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -15468,10 +15557,10 @@ export class OrcaRuntimeService {
       }, 10_000)
 
       const handler = (
-        _event: Electron.IpcMainEvent,
+        event: Electron.IpcMainEvent,
         r: { requestId: string; tabId?: string; title?: string; error?: string }
       ): void => {
-        if (r.requestId !== requestId) {
+        if (event.sender !== win.webContents || r.requestId !== requestId) {
           return
         }
         clearTimeout(timer)
@@ -15493,6 +15582,7 @@ export class OrcaRuntimeService {
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
         ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
         startupCommandDelivery: startupCommand.startupCommandDelivery,
+        source: 'runtime-session',
         activate: opts.activate
       })
     })
@@ -16552,9 +16642,14 @@ export class OrcaRuntimeService {
     tabId: string,
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string> {
+    const cleanBaseEnv = { ...baseEnv }
+    for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
+      delete cleanBaseEnv[key]
+    }
     const env = {
-      ...baseEnv,
+      ...cleanBaseEnv,
       ...agentTeamsEnv,
+      ...this.buildAgentHookPtyEnv?.(),
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: tabId,
       ORCA_WORKTREE_ID: scope.id

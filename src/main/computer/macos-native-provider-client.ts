@@ -1,5 +1,5 @@
-import { rmSync } from 'fs'
-import type net from 'net'
+import { rmSync } from 'node:fs'
+import type net from 'node:net'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,

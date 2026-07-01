@@ -13,7 +13,7 @@ vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (s: string) => `'${s}'`
 }))
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'node:fs'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,

@@ -1,5 +1,5 @@
-import { lstat, readFile } from 'fs/promises'
-import * as path from 'path'
+import { lstat, readFile } from 'node:fs/promises'
+import * as path from 'node:path'
 import { isBinaryBuffer } from './binary-buffer'
 import { decodeGitCQuotedPath } from './git-cquoted-path'
 

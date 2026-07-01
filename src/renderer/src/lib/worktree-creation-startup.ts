@@ -28,6 +28,7 @@ export function buildWorktreeCreationStartupPayload(
     launchConfig: plan.launchConfig,
     ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
     ...(request.agent ? { launchAgent: request.agent } : {}),
+    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
       ? {

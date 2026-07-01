@@ -1,5 +1,5 @@
-import { EventEmitter } from 'events'
-import { createServer } from 'net'
+import { EventEmitter } from 'node:events'
+import { createServer } from 'node:net'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPortForwardManager } from './ssh-port-forward'
 

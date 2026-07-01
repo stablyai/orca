@@ -139,6 +139,40 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('skip')
   })
 
+  it('prompts for VM recipes using the recipe lifecycle declarations', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        environmentRecipes: [
+          {
+            id: 'cloud-sandbox',
+            name: 'Cloud Sandbox',
+            description: 'Starts a per-workspace VM.',
+            create: './scripts/start-vm.sh',
+            suspend: './scripts/suspend-vm.sh',
+            resume: './scripts/resume-vm.sh',
+            destroy: './scripts/destroy-vm.sh'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'vmRecipe')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptKind).toBe('vmRecipe')
+    expect(pending[0].data.scriptContent).toContain('# environmentRecipes.cloud-sandbox')
+    expect(pending[0].data.scriptContent).toContain('create: ./scripts/start-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('suspend: ./scripts/suspend-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('resume: ./scripts/resume-vm.sh')
+    expect(pending[0].data.scriptContent).toContain('destroy: ./scripts/destroy-vm.sh')
+
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {

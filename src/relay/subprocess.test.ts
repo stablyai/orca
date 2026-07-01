@@ -1,10 +1,10 @@
 /* oxlint-disable max-lines -- Why: subprocess coverage shares one bundled relay artifact; splitting this file would rebuild the same daemon bundle across suites and make these lifecycle tests slower/flakier. */
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { rm } from 'fs/promises'
-import * as path from 'path'
-import { tmpdir } from 'os'
-import { execFileSync, spawn as spawnChild } from 'child_process'
+import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import * as path from 'node:path'
+import { tmpdir } from 'node:os'
+import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener'
@@ -370,6 +370,22 @@ describe('Subprocess: Relay entry point', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'uses a short startup grace for unlimited empty detached relays before any client connects',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-empty-unlimited-'))
+      relay = spawn(
+        ['--detached', '--grace-time', '0', '--sock-path', path.join(tmpDir, 'relay.sock')],
+        { ...process.env, ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '100' }
+      )
+      await relay.sentinelReceived
+
+      await relay.waitForExit(3000)
+      expect(relay.proc.exitCode).toBe(0)
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'uses configured grace after a detached relay has accepted a socket client',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-connected-'))
@@ -457,7 +473,7 @@ describe('Subprocess: Relay entry point', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
     writeFileSync(path.join(outsideDir, 'data.txt'), 'symlinked-target')
-    const { symlinkSync } = require('fs')
+    const { symlinkSync } = require('node:fs')
     symlinkSync(outsideDir, path.join(tmpDir, 'link'))
 
     relay = spawn()
@@ -478,7 +494,7 @@ describe('Subprocess: Relay entry point', () => {
     relay = spawn()
     await relay.sentinelReceived
 
-    const homeDir = require('os').homedir()
+    const homeDir = require('node:os').homedir()
 
     const id1 = relay.send('session.resolveHome', { path: '~' })
     const id2 = relay.send('session.resolveHome', { path: '~/projects' })
