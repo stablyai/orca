@@ -10,6 +10,7 @@
 // save/discard instead of being silently vetoed by a beforeunload handler.
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
+export const ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT = 'orca:window-close-request-canceled'
 
 /** Returns true to allow the close to proceed, false to cancel it (e.g. the user
  *  picked "Cancel" in an unsaved-changes prompt). */
@@ -39,6 +40,10 @@ export function registerWindowCloseGuard(guard: WindowCloseGuard): () => void {
   }
 }
 
+export function dispatchWindowCloseRequestCanceled(): void {
+  window.dispatchEvent(new Event(ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT))
+}
+
 async function runWindowCloseGuards(): Promise<boolean> {
   for (const guard of closeGuards) {
     if (!(await guard())) {
@@ -60,6 +65,7 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
   closeInFlight = true
   try {
     if (!(await runWindowCloseGuards())) {
+      dispatchWindowCloseRequestCanceled()
       return
     }
   } finally {

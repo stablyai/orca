@@ -49,7 +49,10 @@ import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
-import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
+import {
+  dispatchWindowCloseRequest,
+  ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT
+} from './components/window-close-request-coordinator'
 import {
   getSystemPrefersDarkSnapshot,
   useSystemPrefersDark
@@ -1283,10 +1286,17 @@ function App(): React.JSX.Element {
     }
     window.addEventListener('beforeunload', captureAndFlush)
     window.addEventListener(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT, shutdownCaptureGate.reset)
+    // Why: canceling the running-process close dialog happens after Terminal's
+    // synthetic beforeunload, so the next close attempt must capture again.
+    window.addEventListener(ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT, shutdownCaptureGate.reset)
     return () => {
       window.removeEventListener('beforeunload', captureAndFlush)
       window.removeEventListener(
         ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+        shutdownCaptureGate.reset
+      )
+      window.removeEventListener(
+        ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT,
         shutdownCaptureGate.reset
       )
     }

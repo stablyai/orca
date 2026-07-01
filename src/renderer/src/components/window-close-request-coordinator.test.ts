@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   dispatchWindowCloseRequest,
+  ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT,
   getWindowCloseRequestHandler,
   registerWindowCloseGuard,
   setWindowCloseRequestHandler
@@ -18,14 +19,17 @@ describe('window-close-request-coordinator', () => {
     confirmWindowClose.mockClear()
     // Why: dispatch falls back to the preload bridge when no rich handler is
     // registered; stub just the surface it touches.
-    ;(
-      globalThis as unknown as { window: { api: { ui: { confirmWindowClose: () => void } } } }
-    ).window = { api: { ui: { confirmWindowClose } } }
+    const windowTarget = new EventTarget() as EventTarget & {
+      api: { ui: { confirmWindowClose: () => void } }
+    }
+    windowTarget.api = { ui: { confirmWindowClose } }
+    vi.stubGlobal('window', windowTarget)
   })
 
   afterEach(() => {
     setWindowCloseRequestHandler(null)
     unregisterFns.splice(0).forEach((fn) => fn())
+    vi.unstubAllGlobals()
   })
 
   it('has no handler by default, so the App root falls back to confirming the close', () => {
@@ -75,6 +79,16 @@ describe('window-close-request-coordinator', () => {
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('announces cancellation when a guard vetoes', async () => {
+    const onCanceled = vi.fn()
+    window.addEventListener(ORCA_WINDOW_CLOSE_REQUEST_CANCELED_EVENT, onCanceled)
+    addGuard(() => false)
+
+    await dispatchWindowCloseRequest({ isQuitting: true })
+
+    expect(onCanceled).toHaveBeenCalledTimes(1)
   })
 
   it('proceeds to confirm when all guards allow the close', async () => {

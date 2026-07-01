@@ -75,6 +75,7 @@ describe('windows updater signature verification', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
   })
 
   it('installs a Windows verifySignature hook using Orca Authenticode checks', async () => {

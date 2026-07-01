@@ -66,7 +66,10 @@ import {
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
-import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
+import {
+  dispatchWindowCloseRequestCanceled,
+  setWindowCloseRequestHandler
+} from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
 import {
   findActivityTerminalPortal,
@@ -664,9 +667,13 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     isClosingRef.current = true
+    const hadPendingWindowClose = windowCloseAfterDirtyRef.current !== null
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
+    if (hadPendingWindowClose) {
+      dispatchWindowCloseRequestCanceled()
+    }
     releaseCloseDialogGuardAfterDebounce()
   }, [releaseCloseDialogGuardAfterDebounce])
 
@@ -1642,6 +1649,11 @@ function Terminal(): React.JSX.Element | null {
     return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
 
+  const cancelWindowCloseDialog = useCallback(() => {
+    setWindowCloseDialogOpen(false)
+    dispatchWindowCloseRequestCanceled()
+  }, [])
+
   // Why: browser page state can disappear through store-only paths (CLI tab
   // close, worktree deletion). The store cannot call destroyPersistentWebview
   // because that function owns renderer DOM nodes, so this subscriber tears down
@@ -2023,7 +2035,7 @@ function Terminal(): React.JSX.Element | null {
         open={windowCloseDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setWindowCloseDialogOpen(false)
+            cancelWindowCloseDialog()
           }
         }}
       >
@@ -2040,12 +2052,7 @@ function Terminal(): React.JSX.Element | null {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setWindowCloseDialogOpen(false)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={cancelWindowCloseDialog}>
               {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>
             <Button
