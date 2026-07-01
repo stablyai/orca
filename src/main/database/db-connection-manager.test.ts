@@ -216,5 +216,48 @@ describe('DbConnectionManager', () => {
       await manager.cancelQuery('c1')
       expect(pgDriver.cancel).not.toHaveBeenCalled()
     })
+
+    it('rejects multi-statement input on a read-only connection (H1)', async () => {
+      await manager.connect(cfg())
+      await expect(
+        manager.query('c1', 'SET TRANSACTION READ WRITE; DELETE FROM t', {
+          rowLimit: 100,
+          timeoutMs: 1000,
+          allowWrite: false
+        })
+      ).rejects.toThrow('db_read_only_multi_statement')
+      expect(pgDriver.query).not.toHaveBeenCalled()
+    })
+
+    it('allows multi-statement on a writable connection', async () => {
+      await manager.connect(cfg())
+      await manager.query('c1', 'INSERT INTO t VALUES (1); INSERT INTO t VALUES (2)', {
+        rowLimit: 100,
+        timeoutMs: 1000,
+        allowWrite: true
+      })
+      expect(pgDriver.query).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects a second concurrent query on the same connection (L3)', async () => {
+      await manager.connect(cfg())
+      let release: (() => void) | undefined
+      pgDriver.query.mockImplementationOnce(
+        (conn: LiveConnection, _sql: string, _opts: unknown, onStart: (h: QueryHandle) => void) => {
+          onStart({ connectionId: conn.id, backendPid: 1 })
+          return new Promise((resolve) => {
+            release = () =>
+              resolve({ columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 })
+          })
+        }
+      )
+      const opts = { rowLimit: 100, timeoutMs: 1000, allowWrite: false }
+      const first = manager.query('c1', 'SELECT 1', opts)
+      await expect(manager.query('c1', 'SELECT 2', opts)).rejects.toThrow('db_query_in_progress')
+      release?.()
+      await first
+      // Once the first completes the connection is free again.
+      await manager.query('c1', 'SELECT 3', opts)
+    })
   })
 })

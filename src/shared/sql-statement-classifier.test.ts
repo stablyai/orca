@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { isCursorableRead, needsWriteConfirm } from './sql-statement-classifier'
+import { isCursorableRead, isMultiStatement, needsWriteConfirm } from './sql-statement-classifier'
+
+describe('isMultiStatement', () => {
+  it.each([
+    ['SELECT 1', false],
+    ['SELECT 1;', false],
+    ['  SELECT 1 ;  ', false],
+    ['SELECT 1; DROP TABLE x', true],
+    ['SET TRANSACTION READ WRITE; DELETE FROM t', true],
+    ["SELECT ';' AS semi", false],
+    ['-- a; b\nSELECT 1', false]
+  ])('classifies %j as multi-statement=%s', (sql, expected) => {
+    expect(isMultiStatement(sql)).toBe(expected)
+  })
+})
 
 describe('isCursorableRead', () => {
   it.each([

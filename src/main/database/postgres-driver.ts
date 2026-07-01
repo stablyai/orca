@@ -6,6 +6,7 @@
 import {
   applyCap,
   DB_CONNECT_TIMEOUT_MS,
+  DB_STATEMENT_TIMEOUT_MS,
   raceWithTimeout,
   type DbDriver,
   type LiveConnection,
@@ -56,7 +57,10 @@ export function buildPgClientConfig(cfg: ResolvedDbConfig): ClientConfig {
     user: cfg.user,
     password: cfg.password,
     ssl: buildPgSsl(cfg.ssl),
-    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS
+    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    // Red-team M2: bound every statement on the connection (introspection +
+    // validate), not just connect. The query path re-SETs this per transaction.
+    statement_timeout: DB_STATEMENT_TIMEOUT_MS
   }
 }
 

@@ -19,9 +19,17 @@ function sanitize(sql: string): string {
 // True when, after trimming trailing separators, another statement separator
 // remains — i.e. the input is multiple statements. Semicolons inside string
 // literals are ignored (conservative: would over-detect, never under-detect).
-function isMultiStatement(body: string): boolean {
+function containsStatementSeparator(body: string): boolean {
   const trimmed = body.replace(/;\s*$/, '').trim()
   return trimmed.includes(';')
+}
+
+// Public: does the raw SQL contain more than one statement? Used by the manager
+// to reject multi-statement input on read-only connections — a Postgres simple
+// query runs every statement, so `SET TRANSACTION READ WRITE; DELETE …` would
+// otherwise flip the read-only transaction back before any query is executed.
+export function isMultiStatement(sql: string): boolean {
+  return containsStatementSeparator(sanitize(sql))
 }
 
 function firstKeyword(body: string): string {
@@ -49,7 +57,7 @@ const WRITE_KEYWORD_RE =
 
 export function isCursorableRead(sql: string): boolean {
   const body = sanitize(sql)
-  if (isMultiStatement(body)) {
+  if (containsStatementSeparator(body)) {
     return false
   }
   return CURSORABLE_KEYWORDS.has(firstKeyword(body))
@@ -64,7 +72,7 @@ export function needsWriteConfirm(sql: string): boolean {
   if (!body.trim()) {
     return false
   }
-  if (isMultiStatement(body)) {
+  if (containsStatementSeparator(body)) {
     return true
   }
   if (!PURE_READ_KEYWORDS.has(firstKeyword(body))) {

@@ -70,9 +70,10 @@ function streamBounded(
 }
 
 // Non-cursorable statements (writes/DDL) run directly; they return a header, not
-// rows. rowsAsArray keeps any returned rows positional.
-async function runDirect(conn: PoolConnection, sql: string): Promise<BoundedRows> {
-  const [result, fields] = await conn.query({ sql, rowsAsArray: true })
+// rows. rowsAsArray keeps any returned rows positional. A client-side `timeout`
+// bounds writes (red-team L1) — `max_execution_time` only covers SELECT.
+async function runDirect(conn: PoolConnection, sql: string, timeoutMs: number): Promise<BoundedRows> {
+  const [result, fields] = await conn.query({ sql, rowsAsArray: true, timeout: timeoutMs })
   if (Array.isArray(result)) {
     const rows = result as unknown[][]
     return { columns: normalizeFields(fields as { name: string }[]), rows, rowCount: rows.length, truncated: false }
@@ -110,8 +111,15 @@ export async function runMysqlQuery(
               poisoned = true
             }
           )
-        : await runDirect(conn, sql)
-      await conn.query('COMMIT')
+        : await runDirect(conn, sql, opts.timeoutMs)
+      // H2 (red-team): a stream torn down early leaves undrained packets on the
+      // socket — COMMIT here would either desync (losing the valid truncated
+      // rows behind a spurious error) or drain the full result (defeating the
+      // bound). Skip it: the read-only transaction is abandoned when `finally`
+      // destroys the poisoned connection.
+      if (!poisoned) {
+        await conn.query('COMMIT')
+      }
       return { ...bounded, durationMs: Date.now() - startedAt }
     } catch (err) {
       await conn.query('ROLLBACK').catch(() => {})

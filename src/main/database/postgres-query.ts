@@ -3,7 +3,9 @@
 //
 // Read-only enforcement (red-team F3): reads run inside `BEGIN` +
 // `SET TRANSACTION READ ONLY`, so the database — not a keyword check — rejects
-// writes, multi-statement writes, and writing CTEs.
+// single-statement writes and writing CTEs. Multi-statement input is rejected
+// up-front for read-only connections by the manager (a simple query runs every
+// statement, so it could otherwise flip the txn back to read-write first).
 // Result bounding (red-team F9): a SELECT runs through a server-side cursor,
 // fetching only rowLimit+1 rows; the user's SQL is never rewritten (no appended
 // LIMIT), so trailing semicolons / existing LIMIT / multi-statement stay intact.

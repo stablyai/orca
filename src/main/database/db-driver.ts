@@ -180,6 +180,8 @@ const SAFE_MESSAGES: Record<string, string> = {
   tls_error: 'TLS/SSL negotiation failed.',
   decrypt_failed: 'The stored password could not be decrypted on this machine.',
   not_connected: 'The connection is not open.',
+  read_only_blocked: 'Read-only connection: run one statement at a time.',
+  busy: 'A query is already running on this connection.',
   unknown: 'Could not connect to the database.'
 }
 
@@ -188,7 +190,9 @@ const SAFE_MESSAGES: Record<string, string> = {
 const MESSAGE_CODE_MAP: Record<string, keyof typeof SAFE_MESSAGES> = {
   db_secret_unknown_format: 'decrypt_failed',
   db_secret_encrypt_failed: 'decrypt_failed',
-  db_not_connected: 'not_connected'
+  db_not_connected: 'not_connected',
+  db_read_only_multi_statement: 'read_only_blocked',
+  db_query_in_progress: 'busy'
 }
 
 // Driver error code → safe code. Covers pg (SQLSTATE + libpq errno) and mysql2

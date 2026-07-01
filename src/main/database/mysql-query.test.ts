@@ -19,13 +19,20 @@ function makeCoreQuery(rows: unknown[][], fields: { name: string }[]) {
   }
 }
 
-function makeConnection(rows: unknown[][], fields: { name: string }[]) {
+function makeConnection(
+  rows: unknown[][],
+  fields: { name: string }[],
+  options: { commitRejects?: boolean } = {}
+) {
   const calls: string[] = []
   const core = { query: vi.fn(() => makeCoreQuery(rows, fields)) }
   const conn = {
-    query: vi.fn((arg: string | { sql: string }) => {
+    query: vi.fn((arg: string | { sql: string }): Promise<[unknown, unknown]> => {
       if (typeof arg === 'string') {
         calls.push(arg)
+        if (arg === 'COMMIT' && options.commitRejects) {
+          return Promise.reject(new Error('commands out of sync'))
+        }
         if (arg.includes('CONNECTION_ID')) {
           return Promise.resolve([[{ id: 55 }], []])
         }
@@ -57,7 +64,8 @@ describe('runMysqlQuery', () => {
 
     expect(calls).toContain('START TRANSACTION READ ONLY')
     expect(calls).toContain('SET SESSION max_execution_time = 30000')
-    expect(calls).toContain('COMMIT')
+    // H2: COMMIT must NOT run on a poisoned (early-torn-down) stream connection.
+    expect(calls).not.toContain('COMMIT')
     // The user's SQL streams verbatim — no appended LIMIT.
     expect(core.query).toHaveBeenCalledWith({ sql: 'SELECT * FROM t', rowsAsArray: true })
     expect(result.rows).toEqual([[1], [2]])
@@ -66,6 +74,16 @@ describe('runMysqlQuery', () => {
     // A truncated stream poisons the connection → dropped, not returned to the pool.
     expect(conn.destroy).toHaveBeenCalledTimes(1)
     expect(conn.release).not.toHaveBeenCalled()
+  })
+
+  it('does not lose truncated rows even if COMMIT would fail (H2)', async () => {
+    // If COMMIT were issued on the poisoned connection it would reject; the fix
+    // skips it, so the valid truncated rows still come back.
+    const { conn } = makeConnection([[1], [2], [3]], [{ name: 'n' }], { commitRejects: true })
+    const result = await runMysqlQuery(makePool(conn), 'c1', 'SELECT * FROM t', opts(), vi.fn())
+    expect(result.rows).toEqual([[1], [2]])
+    expect(result.truncated).toBe(true)
+    expect(conn.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('returns all rows and releases the connection when under the cap', async () => {

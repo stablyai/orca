@@ -6,6 +6,7 @@
 import {
   applyCap,
   DB_CONNECT_TIMEOUT_MS,
+  DB_STATEMENT_TIMEOUT_MS,
   raceWithTimeout,
   type DbDriver,
   type LiveConnection,
@@ -135,9 +136,12 @@ export const mysqlDriver: DbDriver = {
 
   async introspectSchemas(conn: LiveConnection, maxSchemas: number): Promise<DbSchemaTree> {
     // Query cap+1 so an overflow beyond the cap is detectable (red-team F9).
-    const [rows] = await (conn.raw as Pool).query<RowDataPacket[]>(MYSQL_SCHEMAS_SQL, [
-      maxSchemas + 1
-    ])
+    const [rows] = await (conn.raw as Pool).query<RowDataPacket[]>({
+      sql: MYSQL_SCHEMAS_SQL,
+      values: [maxSchemas + 1],
+      // Red-team M2: bound introspection runtime (client-side timeout).
+      timeout: DB_STATEMENT_TIMEOUT_MS
+    })
     const { kept, truncated } = applyCap(mapSchemaRows(rows as { name: string }[]), maxSchemas)
     return { schemas: kept, truncated }
   },
@@ -147,10 +151,11 @@ export const mysqlDriver: DbDriver = {
     schema: string,
     maxTables: number
   ): Promise<DbTableList> {
-    const [rows] = await (conn.raw as Pool).query<RowDataPacket[]>(MYSQL_TABLES_SQL, [
-      schema,
-      maxTables + 1
-    ])
+    const [rows] = await (conn.raw as Pool).query<RowDataPacket[]>({
+      sql: MYSQL_TABLES_SQL,
+      values: [schema, maxTables + 1],
+      timeout: DB_STATEMENT_TIMEOUT_MS
+    })
     const { kept, truncated } = applyCap(
       mapTableRows(rows as { name: string; type: string }[]),
       maxTables
@@ -159,10 +164,11 @@ export const mysqlDriver: DbDriver = {
   },
 
   async introspectColumns(conn: LiveConnection, ref: DbTableRef): Promise<DbColumn[]> {
-    const [rows] = await (conn.raw as Pool).query<RowDataPacket[]>(MYSQL_COLUMNS_SQL, [
-      ref.schema,
-      ref.table
-    ])
+    const [rows] = await (conn.raw as Pool).query<RowDataPacket[]>({
+      sql: MYSQL_COLUMNS_SQL,
+      values: [ref.schema, ref.table],
+      timeout: DB_STATEMENT_TIMEOUT_MS
+    })
     return mapColumnRows(
       rows as { name: string; data_type: string; is_nullable: string; column_key: string }[]
     )

@@ -22,6 +22,7 @@ import {
   type LiveConnection,
   type ResolvedDbConfig
 } from './db-driver'
+import { isMultiStatement } from '../../shared/sql-statement-classifier'
 import { postgresDriver } from './postgres-driver'
 import { mysqlDriver } from './mysql-driver'
 
@@ -139,6 +140,22 @@ export class DbConnectionManager {
 
   async query(id: string, sql: string, opts: QueryOptions): Promise<QueryResult> {
     const conn = this.requireLive(id)
+    // L3: one query per connection at a time — a second concurrent query would
+    // overwrite the in-flight handle and make cancel target the wrong query.
+    if (this.inFlight.has(id)) {
+      throw new Error('db_query_in_progress')
+    }
+    // H1 (red-team): a read-only connection must reject multi-statement input.
+    // A Postgres simple query runs every statement, so a multi-statement string
+    // could flip `SET TRANSACTION READ WRITE` before any query and defeat the
+    // read-only transaction. The DB read-only txn covers single-statement writes
+    // and writing CTEs; this closes the multi-statement gap.
+    if (!opts.allowWrite && isMultiStatement(sql)) {
+      throw new Error('db_read_only_multi_statement')
+    }
+    // Reserve synchronously so the concurrency guard holds before the driver's
+    // async backend-PID capture; onStart replaces this with the real handle.
+    this.inFlight.set(id, { connectionId: id, backendPid: null })
     try {
       return await getDriver(conn.engine).query(conn, sql, opts, (handle) => {
         this.inFlight.set(id, handle)

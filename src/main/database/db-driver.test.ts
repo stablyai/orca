@@ -89,6 +89,12 @@ describe('normalizeDbError (no credential leak)', () => {
     expect(normalizeDbError(new Error('db_secret_unknown_format')).code).toBe('decrypt_failed')
   })
 
+  it('maps internal guard errors to their safe codes', () => {
+    expect(normalizeDbError(new Error('db_read_only_multi_statement')).code).toBe('read_only_blocked')
+    expect(normalizeDbError(new Error('db_query_in_progress')).code).toBe('busy')
+    expect(normalizeDbError(new Error('db_not_connected')).code).toBe('not_connected')
+  })
+
   it('falls back to unknown for unrecognized errors', () => {
     expect(normalizeDbError({ code: 'WAT' }).code).toBe('unknown')
     expect(normalizeDbError('a string').code).toBe('unknown')
