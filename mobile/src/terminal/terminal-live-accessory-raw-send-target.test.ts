@@ -10,8 +10,22 @@ describe('terminal live accessory raw send target', () => {
     const sendTarget = getTerminalLiveAccessoryRawSendTarget({
       targetHandle,
       activeHandle: targetHandle,
-      activeSessionTabType: 'terminal',
-      liveInputTerminalHandles: new Set([targetHandle])
+      activeSessionTabType: 'terminal'
+    })
+
+    // Then
+    expect(sendTarget).toBe(targetHandle)
+  })
+
+  it('Given live input is disabled When raw fallback resumes Then preserves buffered accessory sends', () => {
+    // Given
+    const targetHandle = 'terminal-a'
+
+    // When
+    const sendTarget = getTerminalLiveAccessoryRawSendTarget({
+      targetHandle,
+      activeHandle: targetHandle,
+      activeSessionTabType: 'terminal'
     })
 
     // Then
@@ -26,15 +40,14 @@ describe('terminal live accessory raw send target', () => {
     const sendTarget = getTerminalLiveAccessoryRawSendTarget({
       targetHandle,
       activeHandle: 'terminal-b',
-      activeSessionTabType: 'terminal',
-      liveInputTerminalHandles: new Set([targetHandle, 'terminal-b'])
+      activeSessionTabType: 'terminal'
     })
 
     // Then
     expect(sendTarget).toBeNull()
   })
 
-  it('Given the target is not a live active terminal When raw fallback resumes Then suppresses the send', () => {
+  it('Given the target is not an active terminal tab When raw fallback resumes Then suppresses the send', () => {
     // Given
     const targetHandle = 'terminal-a'
 
@@ -42,18 +55,10 @@ describe('terminal live accessory raw send target', () => {
     const inactiveTabTarget = getTerminalLiveAccessoryRawSendTarget({
       targetHandle,
       activeHandle: targetHandle,
-      activeSessionTabType: 'browser',
-      liveInputTerminalHandles: new Set([targetHandle])
-    })
-    const detachedTarget = getTerminalLiveAccessoryRawSendTarget({
-      targetHandle,
-      activeHandle: targetHandle,
-      activeSessionTabType: 'terminal',
-      liveInputTerminalHandles: new Set()
+      activeSessionTabType: 'browser'
     })
 
     // Then
     expect(inactiveTabTarget).toBeNull()
-    expect(detachedTarget).toBeNull()
   })
 })

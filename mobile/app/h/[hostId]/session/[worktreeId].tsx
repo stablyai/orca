@@ -3142,8 +3142,7 @@ export default function SessionScreen() {
     const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
       targetHandle,
       activeHandle: activeHandleRef.current,
-      activeSessionTabType: activeSessionTabTypeRef.current,
-      liveInputTerminalHandles: liveInputTerminalHandlesRef.current
+      activeSessionTabType: activeSessionTabTypeRef.current
     })
     if (!currentClient || !rawSendTarget || connStateRef.current !== 'connected') {
       return
