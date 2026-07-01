@@ -110,7 +110,7 @@ export function useAddRepoNestedImportFlow({
       folderPath: nestedScan.selectedPath,
       ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
       ...(activeRuntimeEnvironmentId?.trim()
-        ? { runtimeEnvironmentId: activeRuntimeEnvironmentId }
+        ? { runtimeEnvironmentId: activeRuntimeEnvironmentId.trim() }
         : {})
     })
   }, [

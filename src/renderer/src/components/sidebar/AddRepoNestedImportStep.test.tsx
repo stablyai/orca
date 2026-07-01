@@ -60,6 +60,11 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   return button
 }
 
+// The escape button renders a leading FolderPlus <svg> before its label, so the
+// disabled-state matcher must tolerate the icon between the tag and the text.
+const ADD_FOLDER_DISABLED =
+  /<button[^>]*disabled=""[^>]*>(?:<svg[\s\S]*?<\/svg>)?\s*Add folder as-is<\/button>/
+
 describe('AddRepoNestedImportStep', () => {
   let root: Root | null = null
   let container: HTMLDivElement | null = null
@@ -103,23 +108,31 @@ describe('AddRepoNestedImportStep', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
   })
 
-  it('offers an escape to add the folder as-is even with no repos selected', () => {
-    // Why: the import buttons disable at zero selection, so this must stay the
-    // one enabled action for a user who wanted the plain folder.
+  it('shows only the add-folder escape when no repos are selected', () => {
+    // Why: with nothing selected, importing is meaningless — surface only the
+    // folder escape and hide the import actions entirely (not just disable).
     const html = renderStepMarkup({ selectedPaths: new Set() })
 
     expect(html).toContain('Add folder as-is')
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
-    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Add folder as-is<\/button>/)
+    expect(html).not.toContain('No, import separately')
+    expect(html).not.toContain('Yes, import as group')
+    expect(html).not.toMatch(ADD_FOLDER_DISABLED)
+  })
+
+  it('hides the add-folder escape once repositories are selected', () => {
+    const html = renderStepMarkup()
+
+    expect(html).not.toContain('Add folder as-is')
+    expect(html).toContain('No, import separately')
+    expect(html).toContain('Yes, import as group')
   })
 
   it('disables the add-folder escape while scanning or adding', () => {
-    expect(renderStepMarkup({ scanInProgress: true })).toMatch(
-      /<button[^>]*disabled=""[^>]*>Add folder as-is<\/button>/
+    expect(renderStepMarkup({ selectedPaths: new Set(), scanInProgress: true })).toMatch(
+      ADD_FOLDER_DISABLED
     )
-    expect(renderStepMarkup({ isAdding: true })).toMatch(
-      /<button[^>]*disabled=""[^>]*>Add folder as-is<\/button>/
+    expect(renderStepMarkup({ selectedPaths: new Set(), isAdding: true })).toMatch(
+      ADD_FOLDER_DISABLED
     )
   })
 

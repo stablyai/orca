@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react'
-import { CircleStop, Loader2 } from 'lucide-react'
+import { CircleStop, FolderPlus, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -139,39 +139,44 @@ export function AddRepoNestedImportStep({
             placeholder={folderName}
           />
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          {/* Why: the review appears for a non-git parent folder, so users who
-              wanted the folder itself (not its nested repos) need an explicit
-              escape that stays enabled even with zero repos selected. */}
-          <Button onClick={onAddFolderAsIs} disabled={isAdding || scanInProgress} variant="ghost">
-            {translate(
-              'auto.components.sidebar.AddRepoNestedImportStep.addFolderAsIs',
-              'Add folder as-is'
-            )}
-          </Button>
-          <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {selectedPaths.size === 0 ? (
+            // Why: the review appears for a non-git parent folder; with nothing
+            // selected the only meaningful action is adding the folder itself,
+            // so surface just that instead of dead disabled import buttons.
             <Button
-              onClick={() => handleImport('separate')}
-              disabled={isAdding || scanInProgress || selectedPaths.size === 0}
+              onClick={onAddFolderAsIs}
+              disabled={isAdding || scanInProgress}
               variant="outline"
             >
-              {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              <FolderPlus className="size-3.5" />
               {translate(
-                'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
-                'No, import separately'
+                'auto.components.sidebar.AddRepoNestedImportStep.addFolderAsIs',
+                'Add folder as-is'
               )}
             </Button>
-            <Button
-              onClick={() => handleImport('group')}
-              disabled={isAdding || scanInProgress || selectedPaths.size === 0}
-            >
-              {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {translate(
-                'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
-                'Yes, import as group'
-              )}
-            </Button>
-          </div>
+          ) : (
+            <>
+              <Button
+                onClick={() => handleImport('separate')}
+                disabled={isAdding || scanInProgress}
+                variant="outline"
+              >
+                {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {translate(
+                  'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
+                  'No, import separately'
+                )}
+              </Button>
+              <Button onClick={() => handleImport('group')} disabled={isAdding || scanInProgress}>
+                {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {translate(
+                  'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
+                  'Yes, import as group'
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </>
