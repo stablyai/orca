@@ -2788,6 +2788,13 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
+  /** One-shot migration guard for the SSH relay grace-period default flip. The
+   *  old SSH form eagerly persisted 10800 (3h) even when the user never chose a
+   *  timeout, so a persisted 10800 could be that stale default OR a deliberate
+   *  bounded choice. On first launch after upgrade, if this flag is false, we
+   *  strip a persisted 10800 (treating it as the old implicit default) and flip
+   *  this flag true. Once set, a user-entered 10800 survives every later launch. */
+  sshRelayGraceLegacyStripMigrated?: boolean
   /** Controls whether macOS terminal input translates the physical JIS Yen (¥)
    *  key to a backslash, matching the common terminal expectation for that key. */
   terminalJISYenToBackslash: boolean

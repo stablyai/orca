@@ -1014,13 +1014,27 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  // Why: the old SSH form eagerly persisted 10800 even when the user had not
-  // chosen a timeout; treat that legacy default as the new implicit default.
-  if (
-    relayGracePeriodSeconds !== undefined &&
-    relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-  ) {
+  if (relayGracePeriodSeconds !== undefined) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  return normalized
+}
+
+// Why: the old SSH form eagerly persisted 10800 even when the user had not
+// chosen a timeout. Treat that legacy default as the new implicit default —
+// but ONLY as a one-time migration of already-persisted state, gated by the
+// sshRelayGraceLegacyStripMigrated flag. Once a profile has been migrated the
+// strip must never run again, or a user who deliberately picks a 3-hour
+// (10800s) bounded timeout has it silently discarded on the next launch.
+function migrateLegacySshTargetOnLoad(t: SshTarget, alreadyMigrated: boolean): SshTarget {
+  const normalized = normalizeSshTarget(t)
+  if (
+    !alreadyMigrated &&
+    normalized.relayGracePeriodSeconds === LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  ) {
+    const { relayGracePeriodSeconds: _legacyDefault, ...rest } = normalized
+    void _legacyDefault
+    return rest
   }
   return normalized
 }
@@ -2877,6 +2891,15 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        // Why: one-time strip of the legacy auto-persisted 10800 SSH relay
+        // grace default. Run only on unmigrated profiles; stamping the flag
+        // below (and persisting via loadNeedsSave) ensures a user-entered
+        // 10800 written after this launch is never re-stripped.
+        const sshRelayGraceLegacyStripMigrated =
+          parsed.settings?.sshRelayGraceLegacyStripMigrated === true
+        if (!sshRelayGraceLegacyStripMigrated) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -2924,6 +2947,9 @@ export class Store {
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            // Why: after the one-time legacy-default strip above, flip the flag
+            // so subsequent launches never re-strip a user-entered 10800.
+            sshRelayGraceLegacyStripMigrated: true,
             localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
@@ -3150,7 +3176,9 @@ export class Store {
             parsed.workspaceSessionsByHostId,
             defaults.workspaceSession
           ),
-          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          sshTargets: (parsed.sshTargets ?? []).map((t) =>
+            migrateLegacySshTargetOnLoad(t, sshRelayGraceLegacyStripMigrated)
+          ),
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),

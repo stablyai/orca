@@ -335,6 +335,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
+    // Why: fresh profiles have no legacy auto-persisted 10800 to strip, so they
+    // start already-migrated; only pre-existing profiles run the one-time strip.
+    sshRelayGraceLegacyStripMigrated: true,
     terminalJISYenToBackslash: false,
     experimentalMobile: false,
     mobileEmulatorEnabled: true,

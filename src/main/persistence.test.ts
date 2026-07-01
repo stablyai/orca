@@ -1122,6 +1122,89 @@ describe('Store', () => {
     expect(onDisk?.port).toBe(2222)
   })
 
+  it('preserves a user-entered 3-hour bounded timeout across add, disk round-trip, and restart', async () => {
+    // Why: the legacy-default (10800s) strip is a one-time load migration gated
+    // by sshRelayGraceLegacyStripMigrated. A user who deliberately picks a
+    // bounded 3-hour timeout via the form must keep it — dropping it silently
+    // converts it to unlimited (until reset). Crucially it must survive a
+    // RESTART: a fresh store re-reading disk must not re-strip the value.
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-explicit-3h',
+      label: 'explicit-3h',
+      configHost: 'explicit-3h',
+      host: '10.0.0.9',
+      port: 22,
+      username: 'dev',
+      relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    })
+
+    expect(store.getSshTarget('ssh-explicit-3h')?.relayGracePeriodSeconds).toBe(
+      LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    )
+
+    store.flush()
+    const persisted = readDataFile() as {
+      sshTargets?: Record<string, unknown>[]
+      settings?: { sshRelayGraceLegacyStripMigrated?: boolean }
+    }
+    const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-explicit-3h')
+    expect(onDisk?.relayGracePeriodSeconds).toBe(LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
+    expect(persisted.settings?.sshRelayGraceLegacyStripMigrated).toBe(true)
+
+    // Restart: a second store re-reads disk and must keep the bounded timeout.
+    const reloaded = await createStore()
+    expect(reloaded.getSshTarget('ssh-explicit-3h')?.relayGracePeriodSeconds).toBe(
+      LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    )
+  })
+
+  it('strips a legacy auto-persisted 10800 once, then flips the migration flag so it never re-strips', async () => {
+    // Why: a pre-existing profile with no migration flag has its stale 10800
+    // stripped exactly once. After the flag is stamped, a value re-added on the
+    // migrated profile survives the next restart.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {},
+      sshTargets: [
+        {
+          id: 'ssh-legacy-default',
+          label: 'legacy-default',
+          host: 'legacy.example.com',
+          port: 22,
+          username: 'dev',
+          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+        }
+      ]
+    })
+
+    // First launch on an unmigrated profile: the stale default is stripped.
+    const store = await createStore()
+    expect(store.getSshTarget('ssh-legacy-default')).not.toHaveProperty('relayGracePeriodSeconds')
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: { sshRelayGraceLegacyStripMigrated?: boolean } }).settings
+        ?.sshRelayGraceLegacyStripMigrated
+    ).toBe(true)
+
+    // The user now deliberately re-enters 10800 on the migrated profile.
+    store.updateSshTarget('ssh-legacy-default', {
+      relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    })
+    store.flush()
+
+    // Restart: the migrated flag must prevent a second strip.
+    const reloaded = await createStore()
+    expect(reloaded.getSshTarget('ssh-legacy-default')?.relayGracePeriodSeconds).toBe(
+      LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+    )
+  })
+
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
     loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
     const candidate = (port: number, id: string) => [
