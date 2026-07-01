@@ -7,6 +7,7 @@ import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 export class CdpWsProxy {
+  private pendingDomFocusBySession = new Map<string | undefined, Record<string, unknown>>()
   private httpServer: Server | null = null
   private wss: WebSocketServer | null = null
   private client: WebSocket | null = null
@@ -276,15 +277,22 @@ export class CdpWsProxy {
       )
       return
     }
+    const effectiveSessionId = this.getEffectiveSessionId(msg.sessionId)
     if (msg.method === 'Page.bringToFront') {
+      this.pendingDomFocusBySession.delete(effectiveSessionId)
       if (!this.webContents.isDestroyed()) {
         this.webContents.focus()
       }
       this.sendResult(clientId, {}, client)
       return
     }
+    if (msg.method === 'DOM.focus') {
+      void this.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
+      return
+    }
     // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
     if (msg.method === 'Page.captureScreenshot') {
+      this.pendingDomFocusBySession.delete(effectiveSessionId)
       this.handleScreenshot(client, clientId, msg.params)
       return
     }
@@ -295,7 +303,10 @@ export class CdpWsProxy {
     // is running.
     if (msg.method === 'Input.insertText' && !this.webContents.isDestroyed()) {
       this.webContents.focus()
+      void this.forwardInsertText(client, clientId, msg.params ?? {}, effectiveSessionId)
+      return
     }
+    this.pendingDomFocusBySession.delete(effectiveSessionId)
     // Why: agent-browser waits for network idle to detect navigation completion.
     // Electron webview CDP subscriptions silently lapse after cross-process swaps.
     if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
@@ -303,6 +314,10 @@ export class CdpWsProxy {
       return
     }
     this.forwardCommand(client, clientId, msg.method, msg.params ?? {}, msg.sessionId)
+  }
+
+  private getEffectiveSessionId(msgSessionId?: string): string | undefined {
+    return msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
   }
 
   private forwardCommand(
@@ -316,8 +331,7 @@ export class CdpWsProxy {
       this.sendError(clientId, 'Browser tab is no longer available', client)
       return
     }
-    const sessionId =
-      msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
+    const sessionId = this.getEffectiveSessionId(msgSessionId)
     try {
       Promise.resolve(this.webContents.debugger.sendCommand(method, params, sessionId))
         .then((result) => {
@@ -346,6 +360,57 @@ export class CdpWsProxy {
       /* best-effort */
     }
     this.forwardCommand(client, clientId, 'Page.navigate', params)
+  }
+
+  private async forwardDomFocus(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>,
+    effectiveSessionId?: string
+  ): Promise<void> {
+    this.pendingDomFocusBySession.delete(effectiveSessionId)
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    try {
+      const result = await this.webContents.debugger.sendCommand(
+        'DOM.focus',
+        params,
+        effectiveSessionId
+      )
+      this.pendingDomFocusBySession.set(effectiveSessionId, { ...params })
+      this.sendResult(clientId, result, client)
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
+  }
+
+  private async forwardInsertText(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>,
+    effectiveSessionId?: string
+  ): Promise<void> {
+    const pendingFocusParams = this.pendingDomFocusBySession.get(effectiveSessionId)
+    this.pendingDomFocusBySession.delete(effectiveSessionId)
+    if (pendingFocusParams) {
+      if (this.webContents.isDestroyed()) {
+        this.sendError(clientId, 'Browser tab is no longer available', client)
+        return
+      }
+      try {
+        await this.webContents.debugger.sendCommand(
+          'DOM.focus',
+          pendingFocusParams,
+          effectiveSessionId
+        )
+      } catch (err) {
+        this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+        return
+      }
+    }
+    this.forwardCommand(client, clientId, 'Input.insertText', params, effectiveSessionId)
   }
 
   private handleScreenshot(

@@ -89,6 +89,18 @@ describe('CdpWsProxy', () => {
     })
   }
 
+  function getSendCommandMethods(): string[] {
+    const calls = getSendCommandCalls()
+    return calls.map((call) => call[0])
+  }
+
+  function getSendCommandCalls(): [string, Record<string, unknown>?, string?][] {
+    return mock.webContents.debugger.sendCommand.mock.calls as unknown as [
+      string,
+      Record<string, unknown>?,
+      string?
+    ][]
+  }
   it('starts on a random port and returns ws:// URL', () => {
     expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
     expect(proxy.getPort()).toBeGreaterThan(0)
@@ -308,6 +320,145 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Input.insertText'
+    ])
+    client.close()
+  })
+
+  it('replays DOM.focus before Input.insertText in the root session', async () => {
+    const client = await connect()
+
+    const focusResponse = await sendAndReceive(client, {
+      id: 14,
+      method: 'DOM.focus',
+      params: { backendNodeId: 99 }
+    })
+    const insertResponse = await sendAndReceive(client, {
+      id: 15,
+      method: 'Input.insertText',
+      params: { text: 'hello' }
+    })
+
+    expect(focusResponse.id).toBe(14)
+    expect(insertResponse.id).toBe(15)
+    expect(insertResponse.result).toEqual({})
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(getSendCommandCalls()).toEqual([
+      ['Page.enable', {}],
+      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['DOM.focus', { backendNodeId: 99 }, undefined],
+      ['DOM.focus', { backendNodeId: 99 }, undefined],
+      ['Input.insertText', { text: 'hello' }, undefined]
+    ])
+    client.close()
+  })
+
+  it('replays DOM.focus before Input.insertText for OOPIF sessions', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 16,
+      method: 'DOM.focus',
+      params: { backendNodeId: 123 },
+      sessionId: 'oopif-session-123'
+    })
+    const insertResponse = await sendAndReceive(client, {
+      id: 17,
+      method: 'Input.insertText',
+      params: { text: 'frame text' },
+      sessionId: 'oopif-session-123'
+    })
+
+    expect(insertResponse.id).toBe(17)
+    expect(insertResponse.result).toEqual({})
+    expect(getSendCommandCalls()).toEqual([
+      ['Page.enable', {}],
+      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
+      ['DOM.focus', { backendNodeId: 123 }, 'oopif-session-123'],
+      ['Input.insertText', { text: 'frame text' }, 'oopif-session-123']
+    ])
+    client.close()
+  })
+
+  it('does not replay DOM.focus after adjacent eval traffic', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 18,
+      method: 'DOM.focus',
+      params: { backendNodeId: 44 }
+    })
+    await sendAndReceive(client, {
+      id: 19,
+      method: 'Runtime.callFunctionOn',
+      params: { functionDeclaration: '() => document.activeElement?.id' }
+    })
+    const insertResponse = await sendAndReceive(client, {
+      id: 20,
+      method: 'Input.insertText',
+      params: { text: 'after eval' }
+    })
+
+    expect(insertResponse.id).toBe(20)
+    expect(insertResponse.result).toEqual({})
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(getSendCommandCalls()).toEqual([
+      ['Page.enable', {}],
+      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['DOM.focus', { backendNodeId: 44 }, undefined],
+      [
+        'Runtime.callFunctionOn',
+        { functionDeclaration: '() => document.activeElement?.id' },
+        undefined
+      ],
+      ['Input.insertText', { text: 'after eval' }, undefined]
+    ])
+    client.close()
+  })
+
+  it('does not replay a failed DOM.focus on the next Input.insertText', async () => {
+    let domFocusAttempt = 0
+    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
+      const [method] = args as [string]
+      if (method === 'DOM.focus') {
+        domFocusAttempt += 1
+        if (domFocusAttempt === 1) {
+          throw new Error('Node not found')
+        }
+      }
+      return {}
+    })
+
+    const client = await connect()
+
+    const focusResponse = await sendAndReceive(client, {
+      id: 21,
+      method: 'DOM.focus',
+      params: { backendNodeId: 55 }
+    })
+    const insertResponse = await sendAndReceive(client, {
+      id: 22,
+      method: 'Input.insertText',
+      params: { text: 'fallback' }
+    })
+
+    expect(focusResponse).toEqual({
+      id: 21,
+      error: { code: -32000, message: 'Node not found' }
+    })
+    expect(insertResponse.id).toBe(22)
+    expect(insertResponse.result).toEqual({})
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    expect(getSendCommandCalls()).toEqual([
+      ['Page.enable', {}],
+      ['Page.addScriptToEvaluateOnNewDocument', expect.any(Object)],
+      ['DOM.focus', { backendNodeId: 55 }, undefined],
+      ['Input.insertText', { text: 'fallback' }, undefined]
+    ])
     client.close()
   })
 
