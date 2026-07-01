@@ -51,7 +51,15 @@ const { managerMock } = vi.hoisted(() => ({
     introspectTables: vi.fn(async () => ({ tables: [{ name: 'users', kind: 'table' }], truncated: false })),
     introspectColumns: vi.fn(async () => [
       { name: 'id', dataType: 'int', nullable: false, isPrimaryKey: true }
-    ])
+    ]),
+    query: vi.fn(async () => ({
+      columns: [{ name: 'n' }],
+      rows: [[1]],
+      rowCount: 1,
+      truncated: false,
+      durationMs: 3
+    })),
+    cancelQuery: vi.fn(async () => {})
   }
 }))
 
@@ -132,7 +140,9 @@ describe('registerDatabaseHandlers', () => {
         'database:statuses',
         'database:introspect',
         'database:introspectSchemaTables',
-        'database:introspectTableColumns'
+        'database:introspectTableColumns',
+        'database:query',
+        'database:cancelQuery'
       ]
       for (const channel of expected) {
         expect(removeHandlerMock).toHaveBeenCalledWith(channel)
@@ -662,6 +672,92 @@ describe('registerDatabaseHandlers', () => {
         'untrusted_sender'
       )
       expect(managerMock.introspectSchemas).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('query handlers', () => {
+    const trusted = makeEvent({ isTrusted: true })
+    function getHandler(channel: string) {
+      return handleMock.mock.calls.find(([ch]) => ch === channel)?.[1]
+    }
+
+    it('derives allowWrite=false from a read-only stored connection', async () => {
+      const store = makeStore({
+        getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1', readOnly: true }))
+      })
+      registerDatabaseHandlers(store)
+      await getHandler('database:query')?.(trusted, { id: 'c1', sql: 'SELECT 1' })
+      expect(managerMock.query).toHaveBeenCalledWith(
+        'c1',
+        'SELECT 1',
+        expect.objectContaining({ allowWrite: false })
+      )
+    })
+
+    it('derives allowWrite=true from a writable stored connection', async () => {
+      const store = makeStore({
+        getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1', readOnly: false }))
+      })
+      registerDatabaseHandlers(store)
+      await getHandler('database:query')?.(trusted, { id: 'c1', sql: 'SELECT 1' })
+      expect(managerMock.query).toHaveBeenCalledWith(
+        'c1',
+        'SELECT 1',
+        expect.objectContaining({ allowWrite: true })
+      )
+    })
+
+    it('ignores any allowWrite the renderer tries to send (server uses readOnly)', async () => {
+      const store = makeStore({
+        getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1', readOnly: true }))
+      })
+      registerDatabaseHandlers(store)
+      // Renderer attempts to force writes; handler must not honor it.
+      await getHandler('database:query')?.(trusted, {
+        id: 'c1',
+        sql: 'DROP TABLE x',
+        allowWrite: true
+      })
+      expect(managerMock.query).toHaveBeenCalledWith(
+        'c1',
+        'DROP TABLE x',
+        expect.objectContaining({ allowWrite: false })
+      )
+    })
+
+    it('treats a missing connection as read-only', async () => {
+      const store = makeStore({ getDbConnection: vi.fn(() => undefined) })
+      registerDatabaseHandlers(store)
+      await getHandler('database:query')?.(trusted, { id: 'missing', sql: 'SELECT 1' })
+      expect(managerMock.query).toHaveBeenCalledWith(
+        'missing',
+        'SELECT 1',
+        expect.objectContaining({ allowWrite: false })
+      )
+    })
+
+    it('returns a redacted error when the query fails', async () => {
+      const store = makeStore({
+        getDbConnection: vi.fn(() => makeDbConnection({ id: 'c1' }))
+      })
+      registerDatabaseHandlers(store)
+      managerMock.query.mockRejectedValueOnce(
+        Object.assign(new Error('boom postgres://admin:s3cr3t@db'), { code: 'ECONNRESET' })
+      )
+      const result = await getHandler('database:query')?.(trusted, { id: 'c1', sql: 'SELECT 1' })
+      expect(result.ok).toBe(false)
+      expect(JSON.stringify(result)).not.toContain('s3cr3t')
+    })
+
+    it('cancelQuery delegates to the manager and rejects untrusted senders', async () => {
+      registerDatabaseHandlers(makeStore())
+      await getHandler('database:cancelQuery')?.(trusted, { id: 'c1' })
+      expect(managerMock.cancelQuery).toHaveBeenCalledWith('c1')
+
+      const untrusted = makeEvent({ isTrusted: false })
+      await expect(getHandler('database:query')?.(untrusted, { id: 'c1', sql: 'x' })).rejects.toThrow(
+        'untrusted_sender'
+      )
     })
   })
 })

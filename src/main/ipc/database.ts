@@ -2,7 +2,13 @@ import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { decryptDbSecret, getDbEncryptionStatus } from '../database/db-credential-store'
 import { dbConnectionManager } from '../database/db-connection-manager'
-import { normalizeDbError, resolveDbConfig, type ResolvedDbConfig } from '../database/db-driver'
+import {
+  DB_MAX_ROWS,
+  DB_STATEMENT_TIMEOUT_MS,
+  normalizeDbError,
+  resolveDbConfig,
+  type ResolvedDbConfig
+} from '../database/db-driver'
 import { isTrustedUIRenderer } from './ui'
 import type {
   DbColumnListResult,
@@ -14,6 +20,7 @@ import type {
   DbEncryptionStatus,
   DbEngine,
   DbIntrospectResult,
+  DbQueryResult,
   DbTableListResult,
   DbTableRef,
   DbTestResult
@@ -33,7 +40,9 @@ const DATABASE_IPC_CHANNELS = [
   'database:statuses',
   'database:introspect',
   'database:introspectSchemaTables',
-  'database:introspectTableColumns'
+  'database:introspectTableColumns',
+  'database:query',
+  'database:cancelQuery'
 ] as const
 
 const VALID_ENGINES = new Set<DbEngine>(['postgres', 'mysql'])
@@ -246,4 +255,31 @@ export function registerDatabaseHandlers(store: Store): void {
       }
     }
   )
+
+  ipcMain.handle(
+    'database:query',
+    async (event, args: { id: string; sql: string }): Promise<DbQueryResult> => {
+      requireTrusted(event.sender)
+      try {
+        // Why (red-team F3): allowWrite is derived from the stored connection's
+        // readOnly server-side — never trusted from the renderer. A missing
+        // connection is treated as read-only (safe default).
+        const connection = store.getDbConnection(args.id)
+        const allowWrite = connection ? !connection.readOnly : false
+        const result = await dbConnectionManager.query(args.id, args.sql, {
+          rowLimit: DB_MAX_ROWS,
+          timeoutMs: DB_STATEMENT_TIMEOUT_MS,
+          allowWrite
+        })
+        return { ok: true, result }
+      } catch (err) {
+        return { ok: false, error: normalizeDbError(err) }
+      }
+    }
+  )
+
+  ipcMain.handle('database:cancelQuery', async (event, args: { id: string }): Promise<void> => {
+    requireTrusted(event.sender)
+    await dbConnectionManager.cancelQuery(args.id)
+  })
 }

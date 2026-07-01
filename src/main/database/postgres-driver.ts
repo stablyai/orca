@@ -20,8 +20,17 @@ import {
   PG_SCHEMAS_SQL,
   PG_TABLES_SQL
 } from './postgres-introspection-queries'
-import type { DbColumn, DbSchemaTree, DbTableList, DbTableRef } from '../../shared/database-types'
-import type { Pool, PoolConfig } from 'pg'
+import { cancelPostgresBackend, runPostgresQuery } from './postgres-query'
+import type {
+  DbColumn,
+  DbSchemaTree,
+  DbTableList,
+  DbTableRef,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
+} from '../../shared/database-types'
+import type { Client, ClientConfig, Pool, PoolConfig } from 'pg'
 
 // Why: 1 query connection + 1 introspection connection so introspect (P4) and
 // query (P5) don't serialize on a single socket (red-team F11). Kept small to
@@ -38,7 +47,8 @@ export function buildPgSsl(ssl: ResolvedSslMode): PoolConfig['ssl'] {
   return { rejectUnauthorized: ssl === 'verify-full' }
 }
 
-export function buildPgPoolConfig(cfg: ResolvedDbConfig): PoolConfig {
+// Connection-level config, shared by the pool and the short-lived cancel client.
+export function buildPgClientConfig(cfg: ResolvedDbConfig): ClientConfig {
   return {
     host: cfg.host,
     port: cfg.port,
@@ -46,14 +56,23 @@ export function buildPgPoolConfig(cfg: ResolvedDbConfig): PoolConfig {
     user: cfg.user,
     password: cfg.password,
     ssl: buildPgSsl(cfg.ssl),
-    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS
+  }
+}
+
+export function buildPgPoolConfig(cfg: ResolvedDbConfig): PoolConfig {
+  return {
+    ...buildPgClientConfig(cfg),
     max: POOL_MAX,
     idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS
   }
 }
 
 // pg is CommonJS; interop may hand back the module under `.default`.
-type PgModule = { Pool: new (config?: PoolConfig) => Pool }
+type PgModule = {
+  Pool: new (config?: PoolConfig) => Pool
+  Client: new (config?: ClientConfig) => Client
+}
 async function loadPg(): Promise<PgModule> {
   const mod = (await import('pg')) as unknown as PgModule & { default?: PgModule }
   return mod.default ?? mod
@@ -97,7 +116,7 @@ export const postgresDriver: DbDriver = {
       await pool.end().catch(() => {})
       throw err
     }
-    return { id: cfg.id, engine: 'postgres', raw: pool }
+    return { id: cfg.id, engine: 'postgres', raw: pool, config: cfg }
   },
 
   async introspectSchemas(conn: LiveConnection, maxSchemas: number): Promise<DbSchemaTree> {
@@ -120,6 +139,26 @@ export const postgresDriver: DbDriver = {
   async introspectColumns(conn: LiveConnection, ref: DbTableRef): Promise<DbColumn[]> {
     const result = await (conn.raw as Pool).query(PG_COLUMNS_SQL, [ref.schema, ref.table])
     return mapColumnRows(result.rows)
+  },
+
+  query(
+    conn: LiveConnection,
+    sql: string,
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<QueryResult> {
+    return runPostgresQuery(conn.raw as Pool, conn.id, sql, opts, onStart)
+  },
+
+  async cancel(conn: LiveConnection, handle: QueryHandle): Promise<void> {
+    if (handle.backendPid == null) {
+      return
+    }
+    const pg = await loadPg()
+    await cancelPostgresBackend(
+      new pg.Client(buildPgClientConfig(conn.config)),
+      handle.backendPid
+    )
   },
 
   async close(conn: LiveConnection): Promise<void> {

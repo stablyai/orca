@@ -12230,6 +12230,25 @@
           "overflow": "Too many objects — refine the connection",
           "noItems": "Empty",
           "notNull": "not null"
+        },
+        "ResultsGrid": {
+          "copied": "Copied cell",
+          "running": "Running…",
+          "empty": "Run a query to see results",
+          "noRows": "No rows returned",
+          "rowCount": "{{count}} rows",
+          "truncated": "Truncated — showing the first rows",
+          "durationMs": "{{ms}} ms"
+        },
+        "QueryWorkspace": {
+          "cancel": "Cancel",
+          "run": "Run",
+          "readOnly": "Read-only",
+          "runHint": "⌘/Ctrl + Enter to run",
+          "confirmTitle": "Run this statement?",
+          "confirmBody": "This looks like it may modify data or schema. Run it against a writable connection?",
+          "confirmCancel": "Cancel",
+          "confirmRun": "Run statement"
         }
       }
     },

@@ -353,6 +353,7 @@ import type {
   DbConnectionUpdate,
   DbEncryptionStatus,
   DbIntrospectResult,
+  DbQueryResult,
   DbTableListResult,
   DbTableRef,
   DbTestResult
@@ -2034,6 +2035,8 @@ export type PreloadApi = {
     introspect: (args: { id: string }) => Promise<DbIntrospectResult>
     introspectSchemaTables: (args: { id: string; schema: string }) => Promise<DbTableListResult>
     introspectTableColumns: (args: { id: string; ref: DbTableRef }) => Promise<DbColumnListResult>
+    query: (args: { id: string; sql: string }) => Promise<DbQueryResult>
+    cancelQuery: (args: { id: string }) => Promise<void>
   }
   pet: {
     import: () => Promise<CustomPet | null>

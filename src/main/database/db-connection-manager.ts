@@ -9,7 +9,10 @@ import type {
   DbEngine,
   DbSchemaTree,
   DbTableList,
-  DbTableRef
+  DbTableRef,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
 } from '../../shared/database-types'
 import {
   DB_MAX_SCHEMAS,
@@ -31,6 +34,9 @@ type StatusListener = (state: DbConnectionRuntimeState) => void
 export class DbConnectionManager {
   private connections = new Map<string, LiveConnection>()
   private statuses = new Map<string, DbConnectionRuntimeState>()
+  // Backend PID of the query currently running on each connection, so a cancel
+  // request can target the right server-side query.
+  private inFlight = new Map<string, QueryHandle>()
   // Why: two concurrent connect(sameId) calls would both create a pool and orphan
   // the first — this guard rejects the second while one is in progress (SSH F12).
   private connectingTargets = new Set<string>()
@@ -129,6 +135,28 @@ export class DbConnectionManager {
   async introspectColumns(id: string, ref: DbTableRef): Promise<DbColumn[]> {
     const conn = this.requireLive(id)
     return getDriver(conn.engine).introspectColumns(conn, ref)
+  }
+
+  async query(id: string, sql: string, opts: QueryOptions): Promise<QueryResult> {
+    const conn = this.requireLive(id)
+    try {
+      return await getDriver(conn.engine).query(conn, sql, opts, (handle) => {
+        this.inFlight.set(id, handle)
+      })
+    } finally {
+      this.inFlight.delete(id)
+    }
+  }
+
+  // Cancel the in-flight query on a connection via the driver's side connection.
+  // No-op if nothing is running or the backend PID was never captured.
+  async cancelQuery(id: string): Promise<void> {
+    const handle = this.inFlight.get(id)
+    const conn = this.connections.get(id)
+    if (!handle || !conn) {
+      return
+    }
+    await getDriver(conn.engine).cancel(conn, handle)
   }
 
   async disconnect(id: string): Promise<void> {

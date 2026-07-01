@@ -157,3 +157,37 @@ export type DbTableListResult =
 export type DbColumnListResult =
   | { ok: true; columns: DbColumn[] }
   | { ok: false; error: DbSafeError }
+
+// ── Query execution (Phase 5) ────────────────────────────────────────
+//
+// Results are transported as column metadata + row arrays (positional, so
+// duplicate column names survive). A server-side cursor bounds the row count;
+// `truncated` marks that the query produced more than the cap.
+export type QueryColumn = { name: string; dataType?: string }
+
+export type QueryResult = {
+  columns: QueryColumn[]
+  rows: unknown[][]
+  rowCount: number
+  truncated: boolean
+  durationMs: number
+}
+
+// Server-controlled execution options. `allowWrite` is derived from the stored
+// connection's `readOnly` in the main process — never trusted from the renderer.
+export type QueryOptions = {
+  rowLimit: number
+  timeoutMs: number
+  allowWrite: boolean
+}
+
+// Identifies a running query so it can be cancelled server-side. `backendPid` is
+// the Postgres backend PID / MySQL connection id captured at query start.
+export type QueryHandle = {
+  connectionId: string
+  backendPid: number | null
+}
+
+// Query IPC result — returned (not thrown) so a SQL error carries only the
+// redacted error, never a raw driver message with the DSN.
+export type DbQueryResult = { ok: true; result: QueryResult } | { ok: false; error: DbSafeError }

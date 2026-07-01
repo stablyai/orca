@@ -2600,7 +2600,9 @@ function createDatabaseApi(): NonNullable<Partial<PreloadApi>['database']> {
     onStatusChanged: () => () => {},
     introspect: () => Promise.resolve({ ok: false as const, error: unavailable }),
     introspectSchemaTables: () => Promise.resolve({ ok: false as const, error: unavailable }),
-    introspectTableColumns: () => Promise.resolve({ ok: false as const, error: unavailable })
+    introspectTableColumns: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    query: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    cancelQuery: () => Promise.resolve()
   }
 }
 

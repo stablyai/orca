@@ -10,7 +10,10 @@ import type {
   DbSchemaTree,
   DbSslMode,
   DbTableList,
-  DbTableRef
+  DbTableRef,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
 } from '../../shared/database-types'
 
 // Mirrors SSH's readyTimeout (ssh-connection-utils CONNECT_TIMEOUT_MS): a dead
@@ -21,6 +24,11 @@ export const DB_CONNECT_TIMEOUT_MS = 30_000
 // returned truncated rather than buffering the whole catalog into main + IPC.
 export const DB_MAX_SCHEMAS = 500
 export const DB_MAX_TABLES_PER_SCHEMA = 2_000
+
+// Query caps (red-team F9): a server-side cursor fetches at most DB_MAX_ROWS + 1
+// so a huge result never buffers whole; the statement timeout bounds runtime.
+export const DB_MAX_ROWS = 1_000
+export const DB_STATEMENT_TIMEOUT_MS = 30_000
 
 // SSL after smart-by-host resolution — always a concrete mode, never unset.
 export type ResolvedSslMode = 'disable' | 'verify-full' | 'insecure-no-verify'
@@ -42,10 +50,13 @@ export type ResolvedDbConfig = {
 // Opaque live handle held by the manager. `raw` is the driver-native pool; the
 // driver attaches an 'error' listener (forwarding to the manager) before this is
 // returned, so a dropped connection degrades to `lost` instead of crashing.
+// `config` is retained so cancel can open a short-lived side connection to issue
+// pg_cancel_backend / KILL QUERY without competing for a pooled slot.
 export type LiveConnection = {
   id: string
   engine: DbEngine
   raw: unknown
+  config: ResolvedDbConfig
 }
 
 export type DbDriver = {
@@ -62,6 +73,18 @@ export type DbDriver = {
     maxTables: number
   ): Promise<DbTableList>
   introspectColumns(conn: LiveConnection, ref: DbTableRef): Promise<DbColumn[]>
+  // Runs SQL on a dedicated pooled connection: read-only DB transaction when
+  // !allowWrite, statement timeout, cursor bounded to rowLimit+1. `onStart`
+  // reports the backend PID so the query can be cancelled while running.
+  query(
+    conn: LiveConnection,
+    sql: string,
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<QueryResult>
+  // Server-side cancel via a short-lived side connection (pg_cancel_backend /
+  // KILL QUERY). No-op if the backend PID was never captured.
+  cancel(conn: LiveConnection, handle: QueryHandle): Promise<void>
   // Releases the pool.
   close(conn: LiveConnection): Promise<void>
 }

@@ -130,6 +130,7 @@ import type {
   DbConnectionUpdate,
   DbEncryptionStatus,
   DbIntrospectResult,
+  DbQueryResult,
   DbTableListResult,
   DbTableRef,
   DbTestResult
@@ -2025,7 +2026,11 @@ const api = {
     introspectSchemaTables: (args: { id: string; schema: string }): Promise<DbTableListResult> =>
       ipcRenderer.invoke('database:introspectSchemaTables', args),
     introspectTableColumns: (args: { id: string; ref: DbTableRef }): Promise<DbColumnListResult> =>
-      ipcRenderer.invoke('database:introspectTableColumns', args)
+      ipcRenderer.invoke('database:introspectTableColumns', args),
+    query: (args: { id: string; sql: string }): Promise<DbQueryResult> =>
+      ipcRenderer.invoke('database:query', args),
+    cancelQuery: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('database:cancelQuery', args)
   },
 
   pet: {

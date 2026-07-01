@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DbConnectionRuntimeState } from '../../shared/database-types'
+import type { DbConnectionRuntimeState, QueryHandle } from '../../shared/database-types'
 import type { LiveConnection, ResolvedDbConfig } from './db-driver'
 
 // Controllable fake drivers so the manager's lifecycle can be exercised without
@@ -15,6 +15,18 @@ const { pgDriver, mysqlDriver, state } = vi.hoisted(() => {
     introspectSchemas: vi.fn(async () => ({ schemas: ['public'], truncated: false })),
     introspectTables: vi.fn(async () => ({ tables: [], truncated: false })),
     introspectColumns: vi.fn(async () => []),
+    query: vi.fn(
+      async (
+        conn: LiveConnection,
+        _sql: string,
+        _opts: unknown,
+        onStart: (h: { connectionId: string; backendPid: number | null }) => void
+      ) => {
+        onStart({ connectionId: conn.id, backendPid: 123 })
+        return { columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 }
+      }
+    ),
+    cancel: vi.fn(async () => {}),
     close: vi.fn(async () => {})
   })
   return { pgDriver: makeDriver('postgres'), mysqlDriver: makeDriver('mysql'), state: shared }
@@ -158,6 +170,51 @@ describe('DbConnectionManager', () => {
         schema: 'public',
         table: 'users'
       })
+    })
+  })
+
+  describe('query + cancel', () => {
+    it('runs a query via the driver and returns its result', async () => {
+      await manager.connect(cfg())
+      const result = await manager.query('c1', 'SELECT 1', {
+        rowLimit: 100,
+        timeoutMs: 1000,
+        allowWrite: false
+      })
+      expect(pgDriver.query).toHaveBeenCalledTimes(1)
+      expect(result.truncated).toBe(false)
+    })
+
+    it('cancels the in-flight query with the captured backend handle', async () => {
+      await manager.connect(cfg())
+      let release: (() => void) | undefined
+      pgDriver.query.mockImplementationOnce(
+        (conn: LiveConnection, _sql: string, _opts: unknown, onStart: (h: QueryHandle) => void) => {
+          onStart({ connectionId: conn.id, backendPid: 456 })
+          return new Promise((resolve) => {
+            release = () =>
+              resolve({ columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 })
+          })
+        }
+      )
+      const running = manager.query('c1', 'SELECT 1', {
+        rowLimit: 100,
+        timeoutMs: 1000,
+        allowWrite: false
+      })
+      await manager.cancelQuery('c1')
+      expect(pgDriver.cancel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+        { connectionId: 'c1', backendPid: 456 }
+      )
+      release?.()
+      await running
+    })
+
+    it('cancelQuery is a no-op when nothing is running', async () => {
+      await manager.connect(cfg())
+      await manager.cancelQuery('c1')
+      expect(pgDriver.cancel).not.toHaveBeenCalled()
     })
   })
 })

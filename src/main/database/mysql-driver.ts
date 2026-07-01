@@ -20,8 +20,17 @@ import {
   MYSQL_SCHEMAS_SQL,
   MYSQL_TABLES_SQL
 } from './mysql-introspection-queries'
-import type { DbColumn, DbSchemaTree, DbTableList, DbTableRef } from '../../shared/database-types'
-import type { Pool, PoolOptions, RowDataPacket } from 'mysql2/promise'
+import { cancelMysqlQuery, runMysqlQuery } from './mysql-query'
+import type {
+  DbColumn,
+  DbSchemaTree,
+  DbTableList,
+  DbTableRef,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
+} from '../../shared/database-types'
+import type { Connection, ConnectionOptions, Pool, PoolOptions, RowDataPacket } from 'mysql2/promise'
 
 // 1 query + 1 introspection connection (red-team F11); small to bound backends.
 const POOL_MAX = 2
@@ -36,7 +45,8 @@ export function buildMysqlSsl(ssl: ResolvedSslMode): PoolOptions['ssl'] {
   return { rejectUnauthorized: ssl === 'verify-full' }
 }
 
-export function buildMysqlPoolConfig(cfg: ResolvedDbConfig): PoolOptions {
+// Connection-level config shared by the pool and the short-lived cancel session.
+export function buildMysqlClientConfig(cfg: ResolvedDbConfig): ConnectionOptions {
   return {
     host: cfg.host,
     port: cfg.port,
@@ -45,8 +55,6 @@ export function buildMysqlPoolConfig(cfg: ResolvedDbConfig): PoolOptions {
     password: cfg.password,
     ssl: buildMysqlSsl(cfg.ssl),
     connectTimeout: DB_CONNECT_TIMEOUT_MS,
-    connectionLimit: POOL_MAX,
-    idleTimeout: POOL_IDLE_TIMEOUT_MS,
     // Red-team F7: mysql2 keeps LOCAL INFILE (client file-read) disabled unless a
     // stream factory is supplied — pin it undefined so the vector stays closed.
     infileStreamFactory: undefined,
@@ -56,10 +64,21 @@ export function buildMysqlPoolConfig(cfg: ResolvedDbConfig): PoolOptions {
   }
 }
 
+export function buildMysqlPoolConfig(cfg: ResolvedDbConfig): PoolOptions {
+  return {
+    ...buildMysqlClientConfig(cfg),
+    connectionLimit: POOL_MAX,
+    idleTimeout: POOL_IDLE_TIMEOUT_MS
+  }
+}
+
 // mysql2/promise is CommonJS; interop may hand back the module under `.default`.
 // The core (callback) pool is reachable via `.pool` for the 'connection' event.
 type MysqlPool = Pool & { pool?: { on(event: 'connection', cb: (c: unknown) => void): void } }
-type MysqlModule = { createPool: (config: PoolOptions) => MysqlPool }
+type MysqlModule = {
+  createPool: (config: PoolOptions) => MysqlPool
+  createConnection: (config: ConnectionOptions) => Promise<Connection>
+}
 async function loadMysql(): Promise<MysqlModule> {
   const mod = (await import('mysql2/promise')) as unknown as MysqlModule & {
     default?: MysqlModule
@@ -111,7 +130,7 @@ export const mysqlDriver: DbDriver = {
       await pool.end().catch(() => {})
       throw err
     }
-    return { id: cfg.id, engine: 'mysql', raw: pool }
+    return { id: cfg.id, engine: 'mysql', raw: pool, config: cfg }
   },
 
   async introspectSchemas(conn: LiveConnection, maxSchemas: number): Promise<DbSchemaTree> {
@@ -147,6 +166,23 @@ export const mysqlDriver: DbDriver = {
     return mapColumnRows(
       rows as { name: string; data_type: string; is_nullable: string; column_key: string }[]
     )
+  },
+
+  query(
+    conn: LiveConnection,
+    sql: string,
+    opts: QueryOptions,
+    onStart: (handle: QueryHandle) => void
+  ): Promise<QueryResult> {
+    return runMysqlQuery(conn.raw as Pool, conn.id, sql, opts, onStart)
+  },
+
+  async cancel(conn: LiveConnection, handle: QueryHandle): Promise<void> {
+    if (handle.backendPid == null) {
+      return
+    }
+    const mysql = await loadMysql()
+    await cancelMysqlQuery(await mysql.createConnection(buildMysqlClientConfig(conn.config)), handle.backendPid)
   },
 
   async close(conn: LiveConnection): Promise<void> {
