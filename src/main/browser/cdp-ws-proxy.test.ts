@@ -504,6 +504,108 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
+  it('still replays DOM.focus when Input.insertText is dispatched while DOM.focus is still in flight', async () => {
+    let resolveFocus: (v: Record<string, unknown>) => void
+    const focusPromise = new Promise<Record<string, unknown>>((r) => {
+      resolveFocus = r
+    })
+    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
+      const [method] = args as [string]
+      if (method === 'DOM.focus') {
+        return focusPromise
+      }
+      return {}
+    })
+
+    const client = await connect()
+    const responses: Record<string, unknown>[] = []
+    client.on('message', (data) => {
+      responses.push(JSON.parse(data.toString()))
+    })
+
+    client.send(JSON.stringify({ id: 25, method: 'DOM.focus', params: { backendNodeId: 66 } }))
+    await new Promise((r) => setTimeout(r, 10))
+    // Why: dispatch the next message before the in-flight DOM.focus sendCommand
+    // resolves, reproducing the pipelining race the fix closes.
+    client.send(
+      JSON.stringify({ id: 26, method: 'Input.insertText', params: { text: 'pipelined' } })
+    )
+
+    await new Promise((r) => setTimeout(r, 20))
+    resolveFocus!({})
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(responses).toHaveLength(2)
+    const focusResponse = responses.find((r) => r.id === 25)
+    const insertResponse = responses.find((r) => r.id === 26)
+    expect(focusResponse?.result).toEqual({})
+    expect(insertResponse?.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'DOM.focus',
+      'DOM.focus',
+      'Input.insertText'
+    ])
+    client.close()
+  })
+
+  it('clears the pending DOM.focus replay when Page.bringToFront intervenes', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 27,
+      method: 'DOM.focus',
+      params: { backendNodeId: 88 }
+    })
+    await sendAndReceive(client, { id: 28, method: 'Page.bringToFront', params: {} })
+    const insertResponse = await sendAndReceive(client, {
+      id: 29,
+      method: 'Input.insertText',
+      params: { text: 'no replay' }
+    })
+
+    expect(insertResponse.id).toBe(29)
+    expect(insertResponse.result).toEqual({})
+    // Why: both Page.bringToFront and Input.insertText natively call focus(),
+    // independent of the (now-cleared) DOM.focus replay.
+    expect(mock.webContents.focus).toHaveBeenCalledTimes(2)
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'DOM.focus',
+      'Input.insertText'
+    ])
+    client.close()
+  })
+
+  it('clears the pending DOM.focus replay when Page.captureScreenshot intervenes', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 30,
+      method: 'DOM.focus',
+      params: { backendNodeId: 91 }
+    })
+    await sendAndReceive(client, { id: 31, method: 'Page.captureScreenshot', params: {} })
+    const insertResponse = await sendAndReceive(client, {
+      id: 32,
+      method: 'Input.insertText',
+      params: { text: 'no replay after screenshot' }
+    })
+
+    expect(insertResponse.id).toBe(32)
+    expect(insertResponse.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'DOM.focus',
+      'Page.captureScreenshot',
+      'Input.insertText'
+    ])
+    client.close()
+  })
+
   // ── Page.frameNavigated interception ──
 
   // ── Cleanup ──

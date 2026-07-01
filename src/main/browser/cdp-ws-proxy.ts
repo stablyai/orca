@@ -7,7 +7,14 @@ import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 export class CdpWsProxy {
-  private pendingDomFocusBySession = new Map<string | undefined, Record<string, unknown>>()
+  // Why: DOM.focus is only replayed for the immediately next Input.insertText.
+  // Page.bringToFront, Page.captureScreenshot, and the catch-all fallthrough in
+  // handleClientMessage all delete this entry, because the stored focus target
+  // may no longer be relevant once another command has intervened.
+  private pendingDomFocusBySession = new Map<
+    string | undefined,
+    Promise<Record<string, unknown> | undefined>
+  >()
   private httpServer: Server | null = null
   private wss: WebSocketServer | null = null
   private client: WebSocket | null = null
@@ -287,7 +294,7 @@ export class CdpWsProxy {
       return
     }
     if (msg.method === 'DOM.focus') {
-      void this.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
+      this.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
       return
     }
     // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
@@ -362,16 +369,28 @@ export class CdpWsProxy {
     this.forwardCommand(client, clientId, 'Page.navigate', params)
   }
 
-  private async forwardDomFocus(
+  // Why: this must stay synchronous up to the `.set()` call so the pending-focus
+  // entry exists before the event loop can dispatch a pipelined Input.insertText
+  // message, closing the race where the replay would otherwise be silently skipped.
+  private forwardDomFocus(
     client: WebSocket,
     clientId: number,
     params: Record<string, unknown>,
     effectiveSessionId?: string
-  ): Promise<void> {
-    this.pendingDomFocusBySession.delete(effectiveSessionId)
+  ): void {
+    const focused = this.sendDomFocus(client, clientId, params, effectiveSessionId)
+    this.pendingDomFocusBySession.set(effectiveSessionId, focused)
+  }
+
+  private async sendDomFocus(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>,
+    effectiveSessionId?: string
+  ): Promise<Record<string, unknown> | undefined> {
     if (this.webContents.isDestroyed()) {
       this.sendError(clientId, 'Browser tab is no longer available', client)
-      return
+      return undefined
     }
     try {
       const result = await this.webContents.debugger.sendCommand(
@@ -379,10 +398,11 @@ export class CdpWsProxy {
         params,
         effectiveSessionId
       )
-      this.pendingDomFocusBySession.set(effectiveSessionId, { ...params })
       this.sendResult(clientId, result, client)
+      return { ...params }
     } catch (err) {
       this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+      return undefined
     }
   }
 
@@ -392,8 +412,9 @@ export class CdpWsProxy {
     params: Record<string, unknown>,
     effectiveSessionId?: string
   ): Promise<void> {
-    const pendingFocusParams = this.pendingDomFocusBySession.get(effectiveSessionId)
+    const pendingFocus = this.pendingDomFocusBySession.get(effectiveSessionId)
     this.pendingDomFocusBySession.delete(effectiveSessionId)
+    const pendingFocusParams = pendingFocus ? await pendingFocus : undefined
     if (pendingFocusParams) {
       if (this.webContents.isDestroyed()) {
         this.sendError(clientId, 'Browser tab is no longer available', client)
