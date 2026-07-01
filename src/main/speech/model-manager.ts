@@ -81,9 +81,14 @@ export class ModelManager {
 
     if (isCloudSpeechModel(manifest)) {
       // Why: cloud models have nothing to download; readiness is purely whether
-      // the matching provider's API key is configured.
-      const keyConfigured =
-        manifest.provider === 'sarvam' ? hasSarvamSpeechApiKey() : hasOpenAiSpeechApiKey()
+      // the matching provider's API key is configured. Match providers explicitly
+      // so an unknown provider isn't reported ready off the wrong (OpenAI) key.
+      let keyConfigured = false
+      if (manifest.provider === 'sarvam') {
+        keyConfigured = hasSarvamSpeechApiKey()
+      } else if (manifest.provider === 'openai') {
+        keyConfigured = hasOpenAiSpeechApiKey()
+      }
       return {
         id: modelId,
         status: keyConfigured ? 'ready' : 'not-downloaded'

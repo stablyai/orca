@@ -9,6 +9,7 @@ import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { SarvamTranscriptionKeyDialog } from './SarvamTranscriptionKeyDialog'
 import { SarvamTranscriptionSettingsRow } from './SarvamTranscriptionSettingsRow'
+import { useCloudApiKeyActions } from './useCloudApiKeyActions'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
@@ -34,12 +35,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
   const [permissionPending, setPermissionPending] = useState(false)
-  const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
-  const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
-  const [openAiKeyPending, setOpenAiKeyPending] = useState(false)
-  const [sarvamDialogOpen, setSarvamDialogOpen] = useState(false)
-  const [sarvamApiKeyDraft, setSarvamApiKeyDraft] = useState('')
-  const [sarvamKeyPending, setSarvamKeyPending] = useState(false)
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
   const mountedRef = useRef(true)
 
@@ -157,148 +152,75 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getSarvamTranscriptionSearchEntry()))
 
-  const openOpenAiDialog = (modelId: string | null = null): void => {
-    setPendingCloudModelId(modelId)
-    setOpenAiApiKeyDraft('')
-    setOpenAiDialogOpen(true)
+  const cloudKeyDeps = {
+    updateVoiceSettings,
+    refreshModelStates,
+    mountedRef,
+    currentSttModel: voiceSettings.sttModel,
+    selectedProvider: selectedModel?.provider,
+    pendingCloudModelId,
+    setPendingCloudModelId
   }
 
-  const openSarvamDialog = (modelId: string | null = null): void => {
-    setPendingCloudModelId(modelId)
-    setSarvamApiKeyDraft('')
-    setSarvamDialogOpen(true)
-  }
+  const openAiKey = useCloudApiKeyActions(
+    {
+      provider: 'openai',
+      configuredField: 'openAiApiKeyConfigured',
+      saveKey: (apiKey) => window.api.speech.saveOpenAiApiKey(apiKey),
+      clearKey: () => window.api.speech.clearOpenAiApiKey(),
+      messages: {
+        saved: translate('auto.components.settings.VoicePane.506df81ba6', 'OpenAI API key saved'),
+        saveFailed: translate(
+          'auto.components.settings.VoicePane.8572bbb537',
+          'Failed to save OpenAI API key'
+        ),
+        cleared: translate(
+          'auto.components.settings.VoicePane.37aba8bb63',
+          'OpenAI API key cleared'
+        ),
+        clearFailed: translate(
+          'auto.components.settings.VoicePane.62d2a84d31',
+          'Failed to clear OpenAI API key'
+        )
+      }
+    },
+    cloudKeyDeps
+  )
+
+  const sarvamKey = useCloudApiKeyActions(
+    {
+      provider: 'sarvam',
+      configuredField: 'sarvamApiKeyConfigured',
+      saveKey: (apiKey) => window.api.speech.saveSarvamApiKey(apiKey),
+      clearKey: () => window.api.speech.clearSarvamApiKey(),
+      messages: {
+        saved: translate(
+          'auto.components.settings.VoicePane.sarvamKeySaved',
+          'Sarvam API key saved'
+        ),
+        saveFailed: translate(
+          'auto.components.settings.VoicePane.sarvamKeySaveFailed',
+          'Failed to save Sarvam API key'
+        ),
+        cleared: translate(
+          'auto.components.settings.VoicePane.sarvamKeyCleared',
+          'Sarvam API key cleared'
+        ),
+        clearFailed: translate(
+          'auto.components.settings.VoicePane.sarvamKeyClearFailed',
+          'Failed to clear Sarvam API key'
+        )
+      }
+    },
+    cloudKeyDeps
+  )
 
   // Route a cloud model's key prompt to the dialog for its provider.
   const openCloudKeyDialog = (manifest: SpeechModelManifest): void => {
     if (manifest.provider === 'sarvam') {
-      openSarvamDialog(manifest.id)
+      sarvamKey.openDialog(manifest.id)
     } else {
-      openOpenAiDialog(manifest.id)
-    }
-  }
-
-  const saveOpenAiApiKey = async (): Promise<void> => {
-    setOpenAiKeyPending(true)
-    try {
-      await window.api.speech.saveOpenAiApiKey(openAiApiKeyDraft)
-      updateVoiceSettings({
-        openAiApiKeyConfigured: true,
-        sttModel: pendingCloudModelId ?? voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setOpenAiDialogOpen(false)
-      setOpenAiApiKeyDraft('')
-      setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.506df81ba6', 'OpenAI API key saved')
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.8572bbb537',
-              'Failed to save OpenAI API key'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setOpenAiKeyPending(false)
-      }
-    }
-  }
-
-  const clearOpenAiApiKey = async (): Promise<void> => {
-    setOpenAiKeyPending(true)
-    try {
-      await window.api.speech.clearOpenAiApiKey()
-      updateVoiceSettings({
-        openAiApiKeyConfigured: false,
-        sttModel: selectedModel?.provider === 'openai' ? '' : voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setOpenAiDialogOpen(false)
-      setOpenAiApiKeyDraft('')
-      setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.37aba8bb63', 'OpenAI API key cleared')
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.62d2a84d31',
-              'Failed to clear OpenAI API key'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setOpenAiKeyPending(false)
-      }
-    }
-  }
-
-  const saveSarvamApiKey = async (): Promise<void> => {
-    setSarvamKeyPending(true)
-    try {
-      await window.api.speech.saveSarvamApiKey(sarvamApiKeyDraft)
-      updateVoiceSettings({
-        sarvamApiKeyConfigured: true,
-        sttModel: pendingCloudModelId ?? voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setSarvamDialogOpen(false)
-      setSarvamApiKeyDraft('')
-      setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.sarvamKeySaved', 'Sarvam API key saved')
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.sarvamKeySaveFailed',
-              'Failed to save Sarvam API key'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setSarvamKeyPending(false)
-      }
-    }
-  }
-
-  const clearSarvamApiKey = async (): Promise<void> => {
-    setSarvamKeyPending(true)
-    try {
-      await window.api.speech.clearSarvamApiKey()
-      updateVoiceSettings({
-        sarvamApiKeyConfigured: false,
-        sttModel: selectedModel?.provider === 'sarvam' ? '' : voiceSettings.sttModel
-      })
-      await refreshModelStates()
-      setSarvamDialogOpen(false)
-      setSarvamApiKeyDraft('')
-      setPendingCloudModelId(null)
-      toast.success(
-        translate('auto.components.settings.VoicePane.sarvamKeyCleared', 'Sarvam API key cleared')
-      )
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.sarvamKeyClearFailed',
-              'Failed to clear Sarvam API key'
-            )
-      )
-    } finally {
-      if (mountedRef.current) {
-        setSarvamKeyPending(false)
-      }
+      openAiKey.openDialog(manifest.id)
     }
   }
 
@@ -325,9 +247,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
           <Separator />
           <OpenAiTranscriptionSettingsRow
             configured={voiceSettings.openAiApiKeyConfigured}
-            disabled={openAiKeyPending}
-            onConfigure={() => openOpenAiDialog(null)}
-            onClear={() => void clearOpenAiApiKey()}
+            disabled={openAiKey.pending}
+            onConfigure={() => openAiKey.openDialog()}
+            onClear={() => void openAiKey.clear()}
           />
         </>
       )}
@@ -337,33 +259,33 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
           <Separator />
           <SarvamTranscriptionSettingsRow
             configured={voiceSettings.sarvamApiKeyConfigured}
-            disabled={sarvamKeyPending}
-            onConfigure={() => openSarvamDialog(null)}
-            onClear={() => void clearSarvamApiKey()}
+            disabled={sarvamKey.pending}
+            onConfigure={() => sarvamKey.openDialog()}
+            onClear={() => void sarvamKey.clear()}
           />
         </>
       )}
 
       <OpenAiTranscriptionKeyDialog
-        open={openAiDialogOpen}
+        open={openAiKey.dialogOpen}
         configured={voiceSettings.openAiApiKeyConfigured}
-        apiKeyDraft={openAiApiKeyDraft}
-        pending={openAiKeyPending}
-        onOpenChange={setOpenAiDialogOpen}
-        onApiKeyDraftChange={setOpenAiApiKeyDraft}
-        onSave={() => void saveOpenAiApiKey()}
-        onClear={() => void clearOpenAiApiKey()}
+        apiKeyDraft={openAiKey.apiKeyDraft}
+        pending={openAiKey.pending}
+        onOpenChange={openAiKey.setDialogOpen}
+        onApiKeyDraftChange={openAiKey.setApiKeyDraft}
+        onSave={() => void openAiKey.save()}
+        onClear={() => void openAiKey.clear()}
       />
 
       <SarvamTranscriptionKeyDialog
-        open={sarvamDialogOpen}
+        open={sarvamKey.dialogOpen}
         configured={voiceSettings.sarvamApiKeyConfigured}
-        apiKeyDraft={sarvamApiKeyDraft}
-        pending={sarvamKeyPending}
-        onOpenChange={setSarvamDialogOpen}
-        onApiKeyDraftChange={setSarvamApiKeyDraft}
-        onSave={() => void saveSarvamApiKey()}
-        onClear={() => void clearSarvamApiKey()}
+        apiKeyDraft={sarvamKey.apiKeyDraft}
+        pending={sarvamKey.pending}
+        onOpenChange={sarvamKey.setDialogOpen}
+        onApiKeyDraftChange={sarvamKey.setApiKeyDraft}
+        onSave={() => void sarvamKey.save()}
+        onClear={() => void sarvamKey.clear()}
       />
     </div>
   )

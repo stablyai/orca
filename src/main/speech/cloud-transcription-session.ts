@@ -23,8 +23,13 @@ export function createCloudTranscriptionSession(
   manifest: SpeechModelManifest,
   sink: SttEventSink
 ): CloudTranscriptionSession {
+  // Why: dispatch explicitly per provider so a future cloud provider fails fast
+  // here instead of silently transcribing against the wrong (OpenAI) API.
   if (manifest.provider === 'sarvam') {
     return new SarvamTranscriptionSession(manifest.id, readSarvamSpeechApiKey, sink)
   }
-  return new OpenAiTranscriptionSession(manifest.id, readOpenAiSpeechApiKey, sink)
+  if (manifest.provider === 'openai') {
+    return new OpenAiTranscriptionSession(manifest.id, readOpenAiSpeechApiKey, sink)
+  }
+  throw new Error(`Unsupported cloud transcription provider: ${manifest.provider}`)
 }
