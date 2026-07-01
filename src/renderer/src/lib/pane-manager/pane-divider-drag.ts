@@ -74,6 +74,8 @@ export function attachDividerDrag(
   let totalSize = 0
   let prevEl: HTMLElement | null = null
   let nextEl: HTMLElement | null = null
+  let prevInitialFlex = ''
+  let nextInitialFlex = ''
   let activePointerId: number | null = null
   let releasePtyResizeHold: { flush: () => void; cancel: () => void } | null = null
   let windowListenersAttached = false
@@ -139,6 +141,10 @@ export function attachDividerDrag(
       flexScheduler.flush()
     } else {
       flexScheduler.cancel()
+      if (didMove && prevEl && nextEl) {
+        prevEl.style.flex = prevInitialFlex
+        nextEl.style.flex = nextInitialFlex
+      }
     }
 
     releasePointerCaptureIfHeld(pointerId)
@@ -160,6 +166,8 @@ export function attachDividerDrag(
     releasePtyResizeHold = null
     prevEl = null
     nextEl = null
+    prevInitialFlex = ''
+    nextInitialFlex = ''
 
     if (didMove && commitLayout) {
       callbacks.onLayoutChanged?.()
@@ -186,6 +194,9 @@ export function attachDividerDrag(
     if (!prevEl || !nextEl) {
       return
     }
+    prevInitialFlex = prevEl.style.flex
+    nextInitialFlex = nextEl.style.flex
+
     // Why: shells redraw prompts on every PTY SIGWINCH. During a divider drag
     // we still fit xterm locally, but forward only the final PTY size on drop.
     releasePtyResizeHold = holdPtyResizesForPaneSubtrees([prevEl, nextEl])
