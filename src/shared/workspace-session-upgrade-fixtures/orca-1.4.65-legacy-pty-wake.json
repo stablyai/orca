@@ -1,0 +1,82 @@
+{
+  "_fixtureProvenance": {
+    "sourceVersion": "1.4.65 production persisted workspaceSession shape",
+    "minimizedAt": "2026-07-01",
+    "notes": [
+      "Pre-current fixture intentionally omits sleepingAgentSessionsByPaneKey.",
+      "Tab-level ptyId values are the legacy wake hints consumed after startup restore."
+    ]
+  },
+  "activeRepoId": "repo-upgrade",
+  "activeWorktreeId": "repo-upgrade::C:\\Users\\user\\orca\\upgrade-worktree",
+  "activeTabId": "agent-tab",
+  "tabsByWorktree": {
+    "repo-upgrade::C:\\Users\\user\\orca\\upgrade-worktree": [
+      {
+        "id": "agent-tab",
+        "ptyId": "daemon-session-agent-legacy",
+        "worktreeId": "repo-upgrade::C:\\Users\\user\\orca\\upgrade-worktree",
+        "title": "Agent working",
+        "defaultTitle": "Terminal 1",
+        "generatedTitle": "Agent working",
+        "customTitle": null,
+        "color": null,
+        "sortOrder": 0,
+        "createdAt": 1717444800000,
+        "launchAgent": "codex"
+      },
+      {
+        "id": "shell-tab",
+        "ptyId": "daemon-session-shell-legacy",
+        "worktreeId": "repo-upgrade::C:\\Users\\user\\orca\\upgrade-worktree",
+        "title": "pwsh",
+        "customTitle": null,
+        "color": null,
+        "sortOrder": 1,
+        "createdAt": 1717444860000
+      }
+    ],
+    "global-floating-terminal": [
+      {
+        "id": "floating-shell-tab",
+        "ptyId": "daemon-session-floating-legacy",
+        "worktreeId": "global-floating-terminal",
+        "title": "PowerShell",
+        "customTitle": null,
+        "color": null,
+        "sortOrder": 0,
+        "createdAt": 1717444920000
+      }
+    ]
+  },
+  "terminalLayoutsByTabId": {
+    "agent-tab": {
+      "root": {
+        "type": "split",
+        "direction": "horizontal",
+        "first": { "type": "leaf", "leafId": "pane:agent" },
+        "second": { "type": "leaf", "leafId": "pane:shell" }
+      },
+      "activeLeafId": "pane:agent",
+      "expandedLeafId": null,
+      "ptyIdsByLeafId": {
+        "pane:agent": "daemon-session-agent-legacy",
+        "pane:shell": "daemon-session-agent-sidecar"
+      },
+      "titlesByLeafId": {
+        "pane:agent": "Agent working",
+        "pane:shell": "Shell"
+      }
+    },
+    "shell-tab": {
+      "root": { "type": "leaf", "leafId": "pane:shell-tab" },
+      "activeLeafId": "pane:shell-tab",
+      "expandedLeafId": null
+    },
+    "floating-shell-tab": {
+      "root": { "type": "leaf", "leafId": "pane:floating" },
+      "activeLeafId": "pane:floating",
+      "expandedLeafId": null
+    }
+  }
+}

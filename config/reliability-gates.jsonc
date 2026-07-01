@@ -214,31 +214,41 @@
         "https://github.com/stablyai/orca/pull/5240"
       ],
       "invariant": "Startup and restore fixes must preserve or explicitly recover sessions from the last affected production persisted-state schema, not only from state written by current code.",
-      "oracle": "Boot current Orca against immutable copied user-data fixtures from affected versions and reject blank replacement panes, duplicate resume tabs, silent session loss, or works-only-after-current-write behavior.",
-      "commands": [],
-      "testFiles": [],
+      "oracle": "Parse and restore immutable old-version session fixtures through the current hydration contract, rejecting blank replacement panes, duplicate tabs, silent PTY/session evidence loss, eager startup spawns, or works-only-after-current-write behavior.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/persisted-session-upgrade-fixture.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/store/slices/persisted-session-upgrade-fixture.test.ts",
+        "src/shared/workspace-session-upgrade-fixtures/orca-1.4.65-legacy-pty-wake.json",
+        "src/shared/workspace-session-upgrade-fixtures/README.md"
+      ],
       "runtimeBudget": {
-        "p95Seconds": 120,
-        "scope": "focused Electron upgrade fixture"
+        "p95Seconds": 15,
+        "scope": "focused renderer-state upgrade fixture"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Fixture corpus not implemented."
+        "status": "unknown",
+        "evidence": "First deterministic lower-layer fixture command registered; needs soak history before any promotion."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs immutable pre-fix persisted-state fixture."
+        "status": "partial",
+        "evidence": "Immutable 1.4.65-shaped fixture fails if the schema rejects old session JSON or hydration drops legacy PTY wake hints; needs saved intentional-break evidence and full Electron boot coverage."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Startup fixture must record startup latency and avoid adding blocking migration scans."
+        "evidence": "Current fixture command reads one small text JSON file in Vitest and adds no startup migration scan, user-data copy, Electron boot, IPC round trip, or binary fixture overhead."
       },
       "promotionCriteria": [
         "Land immutable old-version fixture with documented source version.",
         "Run second restart after current code writes upgraded state.",
         "Record startup timing and failure artifact."
       ],
-      "knownGaps": ["No fixture corpus or command yet."],
+      "knownGaps": [
+        "Current command proves schema parse plus renderer restore behavior, not a full Electron boot against copied user-data.",
+        "Current fixture covers local/daemon and floating-terminal legacy PTY wake hints; SSH, WSL, explicit unrecoverable marking, and second restart after current write still need coverage.",
+        "Needs saved red/green evidence from intentionally breaking the old-shape hydration contract."
+      ],
       "demotionRule": "Cannot promote without old production fixture provenance."
     }
   ]
