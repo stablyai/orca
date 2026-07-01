@@ -7,8 +7,7 @@ import {
   type TerminalLiveAccessoryLocalEdit
 } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
-
-export type TerminalLiveInputSender = (handle: string, bytes: string) => Promise<boolean>
+import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 
 export type TerminalLiveAccessoryInput = {
   readonly bytes: string
@@ -28,6 +27,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
   readonly schedulePendingLiveInputCommit: TerminalLiveInputCommitScheduler
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
+  readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
 
 export function useTerminalLiveAccessoryInputCommit({
@@ -40,7 +40,8 @@ export function useTerminalLiveAccessoryInputCommit({
   pendingLiveInputTextRef,
   schedulePendingLiveInputCommit,
   sendLiveTerminalInputRef,
-  setLiveInputCapture
+  setLiveInputCapture,
+  waitForPendingLiveInputFlush
 }: TerminalLiveAccessoryInputCommitOptions): (
   input: TerminalLiveAccessoryInput
 ) => Promise<boolean> {
@@ -60,7 +61,7 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, pendingText })
       switch (decision.kind) {
         case 'send-now':
-          return false
+          return !(await waitForPendingLiveInputFlush())
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
             localEdit: decision.localEdit,
@@ -102,7 +103,8 @@ export function useTerminalLiveAccessoryInputCommit({
       pendingLiveInputTextRef,
       schedulePendingLiveInputCommit,
       sendLiveTerminalInputRef,
-      setLiveInputCapture
+      setLiveInputCapture,
+      waitForPendingLiveInputFlush
     ]
   )
 }

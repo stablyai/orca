@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import {
   getTerminalLiveSpecialKeyDecision,
@@ -6,11 +6,12 @@ import {
   getTerminalLiveTextChangeDecision
 } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
+import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
+import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
   useTerminalLiveAccessoryInputCommit,
-  type TerminalLiveAccessoryInput,
-  type TerminalLiveInputSender
+  type TerminalLiveAccessoryInput
 } from './use-terminal-live-accessory-input-commit'
 
 type TerminalLiveInputKeyPressEvent = {
@@ -50,83 +51,21 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   sendLiveTerminalInputRef,
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
-  const liveInputCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingLiveInputTextRef = useRef('')
-  const pendingLiveInputHandleRef = useRef<string | null>(null)
-
-  const clearPendingLiveInputCommit = useCallback(() => {
-    if (liveInputCommitTimerRef.current) {
-      clearTimeout(liveInputCommitTimerRef.current)
-      liveInputCommitTimerRef.current = null
-    }
-    pendingLiveInputTextRef.current = ''
-    pendingLiveInputHandleRef.current = null
-    setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
-  }, [liveInputRef, setLiveInputCapture])
-
-  const flushPendingLiveInputText = useCallback(
-    async (expectedHandle: string | null): Promise<boolean> => {
-      if (liveInputCommitTimerRef.current) {
-        clearTimeout(liveInputCommitTimerRef.current)
-        liveInputCommitTimerRef.current = null
-      }
-
-      const handle = pendingLiveInputHandleRef.current
-      const text = pendingLiveInputTextRef.current
-      pendingLiveInputHandleRef.current = null
-      pendingLiveInputTextRef.current = ''
-      setLiveInputCapture('')
-      liveInputRef.current?.setNativeProps({ text: '' })
-
-      if (
-        !handle ||
-        text.length === 0 ||
-        (expectedHandle !== null && handle !== expectedHandle) ||
-        handle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal' ||
-        !liveInputTerminalHandlesRef.current.has(handle)
-      ) {
-        return false
-      }
-
-      return sendLiveTerminalInputRef.current(handle, text)
-    },
-    [
-      activeHandleRef,
-      activeSessionTabTypeRef,
-      liveInputRef,
-      liveInputTerminalHandlesRef,
-      sendLiveTerminalInputRef,
-      setLiveInputCapture
-    ]
-  )
-
-  const schedulePendingLiveInputCommit = useCallback(
-    (handle: string, text: string, delayMs: number) => {
-      if (liveInputCommitTimerRef.current) {
-        clearTimeout(liveInputCommitTimerRef.current)
-      }
-      pendingLiveInputHandleRef.current = handle
-      pendingLiveInputTextRef.current = text
-      liveInputCommitTimerRef.current = setTimeout(() => {
-        liveInputCommitTimerRef.current = null
-        void flushPendingLiveInputText(handle)
-      }, delayMs)
-    },
-    [flushPendingLiveInputText]
-  )
-
-  useEffect(() => {
-    return () => {
-      if (liveInputCommitTimerRef.current) {
-        clearTimeout(liveInputCommitTimerRef.current)
-        liveInputCommitTimerRef.current = null
-      }
-      pendingLiveInputHandleRef.current = null
-      pendingLiveInputTextRef.current = ''
-    }
-  }, [])
+  const {
+    clearPendingLiveInputCommit,
+    flushPendingLiveInputText,
+    pendingLiveInputHandleRef,
+    pendingLiveInputTextRef,
+    schedulePendingLiveInputCommit,
+    waitForPendingLiveInputFlush
+  } = useTerminalLivePendingInputFlush({
+    activeHandleRef,
+    activeSessionTabTypeRef,
+    liveInputRef,
+    liveInputTerminalHandlesRef,
+    sendLiveTerminalInputRef,
+    setLiveInputCapture
+  })
 
   useEffect(() => {
     const pendingHandle = pendingLiveInputHandleRef.current
@@ -157,7 +96,9 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
           return
         case 'send-now':
           clearPendingLiveInputCommit()
-          void sendLiveTerminalInputRef.current(activeHandle, decision.text)
+          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
+            sendLiveTerminalInputRef.current(activeHandle, decision.text)
+          )
           return
         case 'defer':
           // Why: React Native does not expose composition events here, so keep
@@ -175,7 +116,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       liveInputTerminalHandles,
       schedulePendingLiveInputCommit,
       sendLiveTerminalInputRef,
-      setLiveInputCapture
+      setLiveInputCapture,
+      waitForPendingLiveInputFlush
     ]
   )
 
@@ -198,8 +140,10 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         case 'local-edit':
           return
         case 'send-now':
-          void sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           clearPendingLiveInputCommit()
+          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
+            sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          )
           return
         case 'flush-then-send':
           void sendTerminalLiveControlAfterPendingFlush(
@@ -216,7 +160,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
       liveInputTerminalHandles,
-      sendLiveTerminalInputRef
+      sendLiveTerminalInputRef,
+      waitForPendingLiveInputFlush
     ]
   )
 
@@ -230,7 +175,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     pendingLiveInputTextRef,
     schedulePendingLiveInputCommit,
     sendLiveTerminalInputRef,
-    setLiveInputCapture
+    setLiveInputCapture,
+    waitForPendingLiveInputFlush
   })
 
   const handleLiveInputSubmit = useCallback(() => {
@@ -248,13 +194,16 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       return
     }
     clearPendingLiveInputCommit()
-    void sendLiveTerminalInputRef.current(activeHandle, sequence[0])
+    void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
+      sendLiveTerminalInputRef.current(activeHandle, sequence[0])
+    )
   }, [
     activeHandle,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
     liveInputTerminalHandles,
-    sendLiveTerminalInputRef
+    sendLiveTerminalInputRef,
+    waitForPendingLiveInputFlush
   ])
 
   return {

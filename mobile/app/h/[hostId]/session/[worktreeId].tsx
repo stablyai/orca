@@ -95,6 +95,7 @@ import {
   getVisibleTerminalAccessoryKeys,
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
+import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
 import {
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
@@ -102,10 +103,9 @@ import {
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
-import type {
-  TerminalLiveAccessoryInput,
-  TerminalLiveInputSender
-} from '../../../../src/terminal/use-terminal-live-accessory-input-commit'
+import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
+import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
+import type { TerminalLiveAccessoryInput } from '../../../../src/terminal/use-terminal-live-accessory-input-commit'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
@@ -239,17 +239,6 @@ import type {
 
 const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
-
-function createTerminalLiveAccessoryInput(key: {
-  readonly bytes: string
-  readonly id: string
-}): TerminalLiveAccessoryInput {
-  if (key.id === 'backspace' || key.id === 'delete') {
-    return { bytes: key.bytes, localEdit: key.id }
-  }
-
-  return { bytes: key.bytes }
-}
 
 // Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
 // photos can exceed the upload byte budget; resize the raster down to fit before upload.
@@ -3147,9 +3136,19 @@ export default function SessionScreen() {
       return
     }
 
-    await client
+    const currentClient = clientRef.current
+    const currentHandle = activeHandleRef.current
+    if (
+      !currentClient ||
+      !currentHandle ||
+      connStateRef.current !== 'connected' ||
+      activeSessionTabTypeRef.current !== 'terminal'
+    ) {
+      return
+    }
+    await currentClient
       .sendRequest('terminal.send', {
-        terminal: activeHandle,
+        terminal: currentHandle,
         text: bytes,
         enter: false,
         ...(deviceTokenRef.current
@@ -3191,10 +3190,7 @@ export default function SessionScreen() {
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
             : {})
         })
-        .then(
-          () => true,
-          () => false
-        )
+        .then(isTerminalSendRpcAccepted, () => false)
     },
     [showToast]
   )
