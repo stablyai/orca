@@ -99,6 +99,7 @@ describe('CodeWhaleHookService', () => {
 
     const installed = readFileSync(configPath(), 'utf-8')
     expect(installed).toContain('command = "echo mine"')
+    expect(existsSync(`${configPath()}.bak`)).toBe(false)
 
     service.install()
     const reinstalled = readFileSync(configPath(), 'utf-8')

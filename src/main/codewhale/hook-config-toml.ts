@@ -32,12 +32,36 @@ function tomlBasicString(value: string): string {
 }
 
 function unescapeTomlBasicString(value: string): string {
-  return value
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\r')
-    .replace(/\\t/g, '\t')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\')
+  let result = ''
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]
+    if (char !== '\\' || index === value.length - 1) {
+      result += char
+      continue
+    }
+
+    index += 1
+    switch (value[index]) {
+      case 'n':
+        result += '\n'
+        break
+      case 'r':
+        result += '\r'
+        break
+      case 't':
+        result += '\t'
+        break
+      case '"':
+        result += '"'
+        break
+      case '\\':
+        result += '\\'
+        break
+      default:
+        result += `\\${value[index]}`
+    }
+  }
+  return result
 }
 
 function tomlBoolean(value: boolean): string {

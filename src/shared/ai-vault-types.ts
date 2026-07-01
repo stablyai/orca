@@ -209,6 +209,8 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
     return 'acli'
   }
   if (agent === 'codewhale') {
+    // Why: CodeWhale resumes need the launch command so `--mouse-capture`
+    // stays attached; the default detectCmd path would drop that behavior.
     return TUI_AGENT_CONFIG.codewhale.launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd

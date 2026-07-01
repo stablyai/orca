@@ -28,7 +28,14 @@ export async function parseCodeWhaleSessionFile(
   platform: NodeJS.Platform = process.platform,
   codeWhaleHome: string | null = null
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  const text = await readFile(file.path, 'utf-8')
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
+  const record = asRecord(parsed)
   if (!record) {
     return null
   }

@@ -161,7 +161,7 @@ function quotePowerShellString(value: string): string {
 }
 
 function assertSafeWindowsFormName(value: string): void {
-  if (!/^[A-Za-z0-9_.-]+$/.test(value)) {
+  if (!/^(?!\.{1,2}$)[A-Za-z0-9_.-]+$/.test(value)) {
     throw new Error(`Unsafe Windows hook form field name: ${value}`)
   }
 }

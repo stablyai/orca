@@ -17,7 +17,7 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => void]
+export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 type ManagedHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 type ManagedHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
@@ -84,7 +84,14 @@ export function isAgentStatusHooksEnabled(
 export function installManagedAgentHooks(): void {
   for (const [agent, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
     try {
-      install()
+      const status = install()
+      if (status.state === 'error') {
+        console.warn(
+          `[agent-hooks] Failed to install ${agent} managed hooks for ${status.configPath}: ${
+            status.detail ?? 'unknown error'
+          }`
+        )
+      }
     } catch (error) {
       console.warn(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     }

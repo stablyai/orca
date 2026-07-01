@@ -107,8 +107,12 @@ function uniqueSessionSources(
   const seen = new Set<string>()
   const unique: CodeWhaleSessionSource[] = []
   for (const source of sources) {
-    const sessionsDir = source.sessionsDir.trim()
-    if (!sessionsDir || seen.has(sessionsDir)) {
+    const trimmedSessionsDir = source.sessionsDir.trim()
+    if (!trimmedSessionsDir) {
+      continue
+    }
+    const sessionsDir = join(trimmedSessionsDir, '.')
+    if (seen.has(sessionsDir)) {
       continue
     }
     seen.add(sessionsDir)

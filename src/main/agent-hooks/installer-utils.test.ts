@@ -480,6 +480,14 @@ describe('buildWindowsAgentHookPostCommand', () => {
     expect(fieldWriter).toContain("'deepseekToolArgs' = 'DEEPSEEK_TOOL_ARGS'")
     expect(fieldWriter).toContain('Join-Path $env:ORCA_CODEWHALE_FORM_DIR "payload"')
   })
+
+  it('rejects Windows form field path sentinels', () => {
+    expect(() =>
+      buildWindowsAgentHookPostCommand('codewhale', {
+        extraEnvFileFields: [['..', 'DEEPSEEK_TOOL_ARGS']]
+      })
+    ).toThrow('Unsafe Windows hook form field name')
+  })
 })
 
 describe('buildWindowsAgentHookCurlPostCommand', () => {

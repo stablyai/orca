@@ -76,4 +76,17 @@ describe('CodeWhale managed hook TOML block', () => {
 
     expect([...present].sort()).toEqual([...CODEWHALE_HOOK_EVENTS].sort())
   })
+
+  it('keeps doubled backslashes intact before TOML control escapes', () => {
+    const installed = applyManagedCodeWhaleHooks(
+      '',
+      (event) =>
+        `set "ORCA_CODEWHALE_HOOK_EVENT=${event}" && "C:\\Users\\tom\\.orca\\agent-hooks\\codewhale-hook.cmd"`
+    )
+    const present = readManagedCodeWhaleHookEvents(installed, (command) =>
+      Boolean(command?.includes('C:\\Users\\tom\\.orca\\agent-hooks\\codewhale-hook.cmd'))
+    )
+
+    expect([...present].sort()).toEqual([...CODEWHALE_HOOK_EVENTS].sort())
+  })
 })

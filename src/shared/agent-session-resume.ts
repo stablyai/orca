@@ -162,6 +162,7 @@ export function extractAgentProviderSession(
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
     case 'kimi':
+    // Why: CodeWhale hooks post a plain `session_id` string field as well.
     case 'codewhale': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null

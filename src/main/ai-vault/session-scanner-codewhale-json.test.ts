@@ -117,10 +117,7 @@ describe('parseCodeWhaleSessionFile', () => {
       messageCount: 4,
       filePath: sessionPath,
       codeWhaleHome,
-      resumeCommand:
-        "cd '/tmp/codewhale' && CODEWHALE_HOME='" +
-        codeWhaleHome +
-        "' codewhale --mouse-capture resume 'cw-thread'"
+      resumeCommand: `cd '/tmp/codewhale' && CODEWHALE_HOME='${codeWhaleHome}' codewhale --mouse-capture resume 'cw-thread'`
     })
     expect(session!.previewMessages.map((message) => message.text)).toEqual([
       'Plan CodeWhale Vault',
@@ -140,5 +137,13 @@ describe('parseCodeWhaleSessionFile', () => {
     const session = await parseCodeWhaleSessionFile(fileWithMtime(sessionPath), 'darwin', root)
 
     expect(session?.title).toBe('Use this as title')
+  })
+
+  it('returns null for malformed saved-session JSON', async () => {
+    const root = makeRoot()
+    const sessionPath = join(root, 'broken.json')
+    writeFileSync(sessionPath, '{not-json', 'utf-8')
+
+    await expect(parseCodeWhaleSessionFile(fileWithMtime(sessionPath), 'darwin', root)).resolves.toBeNull()
   })
 })

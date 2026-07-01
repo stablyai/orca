@@ -1968,6 +1968,7 @@ export type PreloadApi = {
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
     devinStatus: () => Promise<AgentHookInstallStatus>
+    kimiStatus: () => Promise<AgentHookInstallStatus>
     codeWhaleStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {

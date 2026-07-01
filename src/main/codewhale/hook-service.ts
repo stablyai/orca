@@ -1,12 +1,4 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { homedir } from 'os'
 import { dirname, join, posix as pathPosix } from 'path'
@@ -143,9 +135,6 @@ function writeConfigToml(configPath: string, text: string): void {
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
     writeFileSync(tmpPath, text, 'utf-8')
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
-    }
     renameSync(tmpPath, configPath)
   } finally {
     if (existsSync(tmpPath)) {

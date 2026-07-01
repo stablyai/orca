@@ -1,9 +1,12 @@
-import { mkdtemp, mkdir, rm } from 'fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { dirname, join, sep } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { resolveCodeWhaleSessionSources } from './session-scanner-codewhale-sources'
+import {
+  codeWhaleDiscoveries,
+  resolveCodeWhaleSessionSources
+} from './session-scanner-codewhale-sources'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
@@ -80,6 +83,24 @@ describe('CodeWhale AI Vault source discovery', () => {
         codeWhaleHome: dirname(explicitSessionsDir)
       }
     ])
+  })
+
+  it('normalizes explicit CodeWhale session paths with trailing separators', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codewhale-trailing-'))
+    tempRoots.push(root)
+    const sessionsDir = join(root, 'explicit-home', 'sessions')
+    await mkdir(sessionsDir, { recursive: true })
+    const sessionPath = join(sessionsDir, 'thread.json')
+    await writeFile(sessionPath, '{}', 'utf-8')
+    const issues: AiVaultScanIssue[] = []
+
+    const [discovery] = await Promise.all(
+      codeWhaleDiscoveries({ codeWhaleSessionsDir: `${sessionsDir}${sep}` }, [], 10, issues)
+    )
+
+    expect(issues).toEqual([])
+    expect(discovery.files.map((file) => file.path)).toEqual([sessionPath])
+    expect(discovery.rootDir).toBe(sessionsDir)
   })
 
   it('prefers CODEWHALE_HOME over the local default path', () => {
