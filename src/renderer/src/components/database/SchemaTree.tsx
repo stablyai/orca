@@ -38,6 +38,7 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
   const loadDbSchemas = useAppStore((s) => s.loadDbSchemas)
   const loadDbSchemaTables = useAppStore((s) => s.loadDbSchemaTables)
   const loadDbTableColumns = useAppStore((s) => s.loadDbTableColumns)
+  const previewDbTable = useAppStore((s) => s.previewDbTable)
 
   const [expandedSchemas, setExpandedSchemas] = useState<ReadonlySet<string>>(new Set())
   const [expandedTables, setExpandedTables] = useState<ReadonlySet<string>>(new Set())
@@ -127,7 +128,10 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
     getItemKey: (index) => rows[index]?.key ?? index
   })
 
-  const activateRow = useCallback(
+  // Expand/collapse a schema or table (tables/columns lazy-load on first open).
+  // Bound to the chevron and the Arrow keys so it stays separate from a row's
+  // primary action.
+  const toggleExpand = useCallback(
     (row: SchemaTreeRow) => {
       if (row.type === 'schema') {
         toggleSchema(row.schema)
@@ -136,6 +140,19 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
       }
     },
     [toggleSchema, toggleTable]
+  )
+
+  // A row's primary action (click / Enter): schemas expand; a table/view loads
+  // its first rows into the editor and runs them.
+  const activateRow = useCallback(
+    (row: SchemaTreeRow) => {
+      if (row.type === 'schema') {
+        toggleSchema(row.schema)
+      } else if (row.type === 'table') {
+        void previewDbTable(connectionId, row.schema, row.table.name)
+      }
+    },
+    [connectionId, previewDbTable, toggleSchema]
   )
 
   const moveSelection = useCallback(
@@ -164,13 +181,13 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
         case 'ArrowRight':
           if (row && (row.type === 'schema' || row.type === 'table') && !row.expanded) {
             event.preventDefault()
-            activateRow(row)
+            toggleExpand(row)
           }
           break
         case 'ArrowLeft':
           if (row && (row.type === 'schema' || row.type === 'table') && row.expanded) {
             event.preventDefault()
-            activateRow(row)
+            toggleExpand(row)
           }
           break
         case 'Enter':
@@ -183,7 +200,7 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
           break
       }
     },
-    [rows, selectedIndex, moveSelection, activateRow]
+    [rows, selectedIndex, moveSelection, activateRow, toggleExpand]
   )
 
   if (status !== 'connected') {
@@ -240,6 +257,7 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
                     selected={virtualItem.index === selectedIndex}
                     onSelect={() => setSelectedIndex(virtualItem.index)}
                     onActivate={() => activateRow(row)}
+                    onToggleExpand={() => toggleExpand(row)}
                   />
                 </div>
               )
@@ -283,12 +301,14 @@ function SchemaRowView({
   row,
   selected,
   onSelect,
-  onActivate
+  onActivate,
+  onToggleExpand
 }: {
   row: SchemaTreeRow
   selected: boolean
   onSelect: () => void
   onActivate: () => void
+  onToggleExpand: () => void
 }): React.JSX.Element {
   const padLeft = BASE_PAD_PX + row.depth * INDENT_PX
   const selectedClass = selected ? 'bg-accent' : 'hover:bg-accent/50'
@@ -301,16 +321,22 @@ function SchemaRowView({
       style={{ paddingLeft: padLeft }}
       className={`flex h-full cursor-default items-center gap-1.5 pr-3 text-xs ${selectedClass}`}
     >
-      <RowContent row={row} />
+      <RowContent row={row} onToggleExpand={onToggleExpand} />
     </div>
   )
 }
 
-function RowContent({ row }: { row: SchemaTreeRow }): React.JSX.Element {
+function RowContent({
+  row,
+  onToggleExpand
+}: {
+  row: SchemaTreeRow
+  onToggleExpand: () => void
+}): React.JSX.Element {
   if (row.type === 'schema') {
     return (
       <>
-        <Chevron expanded={row.expanded} />
+        <Chevron expanded={row.expanded} onToggle={onToggleExpand} />
         <Database className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate font-medium">{row.schema}</span>
       </>
@@ -320,7 +346,7 @@ function RowContent({ row }: { row: SchemaTreeRow }): React.JSX.Element {
     const Icon = row.table.kind === 'view' ? Eye : Table2
     return (
       <>
-        <Chevron expanded={row.expanded} />
+        <Chevron expanded={row.expanded} onToggle={onToggleExpand} />
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate">{row.table.name}</span>
       </>
@@ -372,12 +398,29 @@ function MessageRow({
   return <span className="pl-5 italic text-muted-foreground">{text}</span>
 }
 
-function Chevron({ expanded }: { expanded: boolean }): React.JSX.Element {
+function Chevron({
+  expanded,
+  onToggle
+}: {
+  expanded: boolean
+  onToggle: () => void
+}): React.JSX.Element {
   return (
-    <ChevronRight
-      className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${
-        expanded ? 'rotate-90' : ''
-      }`}
-    />
+    <span
+      // Toggle expansion without firing the row's primary action (a table row
+      // previews its rows on click, so its chevron must own expand/collapse).
+      onClick={(event) => {
+        event.stopPropagation()
+        onToggle()
+      }}
+      className="flex size-3.5 shrink-0 items-center justify-center"
+      aria-hidden="true"
+    >
+      <ChevronRight
+        className={`size-3.5 text-muted-foreground transition-transform ${
+          expanded ? 'rotate-90' : ''
+        }`}
+      />
+    </span>
   )
 }

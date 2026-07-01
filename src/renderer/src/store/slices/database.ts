@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { buildTablePreviewSql } from '../../../../shared/table-preview-query'
 import type {
   DbColumn,
   DbColumnListResult,
@@ -83,9 +84,12 @@ export type DatabaseSlice = {
   setDbQueryText: (id: string, text: string) => void
   runDbQuery: (id: string, sql: string) => Promise<DbQueryResult>
   cancelDbQuery: (id: string) => Promise<void>
+  // Load the first rows of a table/view into the editor and run them (schema
+  // tree click). No-op if the connection is gone.
+  previewDbTable: (id: string, schema: string, table: string) => Promise<void>
 }
 
-export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> = (set) => {
+export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> = (set, get) => {
   // A non-live status (lost/idle/error) invalidates the cached schema so a
   // reconnect re-introspects fresh instead of showing stale structure.
   const dropCacheForNonLive = (state: DbConnectionRuntimeState): void => {
@@ -173,10 +177,11 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
 
     disconnectDbConnection: async (id) => {
       await window.api.database.disconnect({ id })
-      set((s) => ({
-        dbStatuses: { ...s.dbStatuses, [id]: { id, status: 'idle' } },
-        dbSchemaCache: withoutKey(s.dbSchemaCache, id)
-      }))
+      // A disconnect is a non-live transition; reuse the shared helper so stale
+      // schema AND query state are both dropped (idle can hold no running query).
+      const idleState: DbConnectionRuntimeState = { id, status: 'idle' }
+      set((s) => ({ dbStatuses: { ...s.dbStatuses, [id]: idleState } }))
+      dropCacheForNonLive(idleState)
     },
 
     applyDbStatus: (state) => {
@@ -276,6 +281,18 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
 
     cancelDbQuery: async (id) => {
       await window.api.database.cancelQuery({ id })
+    },
+
+    previewDbTable: async (id, schema, table) => {
+      const connection = get().dbConnections.find((c) => c.id === id)
+      if (!connection) {
+        return
+      }
+      // Mirror the generated query in the editor so the user sees (and can
+      // tweak/re-run) exactly what produced the preview.
+      const sql = buildTablePreviewSql(connection.engine, schema, table)
+      set((s) => ({ dbQueryText: { ...s.dbQueryText, [id]: sql } }))
+      await get().runDbQuery(id, sql)
     }
   }
 }
