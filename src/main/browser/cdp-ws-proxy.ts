@@ -1,10 +1,82 @@
 /* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
-import type { WebContents } from 'electron'
+import type { PrintToPDFOptions, WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+
+const PDF_INCH_TO_CSS_PIXEL = 96
+const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
+
+type PdfStream = {
+  data: Buffer
+  offset: number
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function buildPrintToPdfOptions(params: Record<string, unknown>): PrintToPDFOptions {
+  const options: PrintToPDFOptions = {}
+
+  if (typeof params.landscape === 'boolean') {
+    options.landscape = params.landscape
+  }
+  if (typeof params.displayHeaderFooter === 'boolean') {
+    options.displayHeaderFooter = params.displayHeaderFooter
+  }
+  if (typeof params.printBackground === 'boolean') {
+    options.printBackground = params.printBackground
+  }
+  if (typeof params.preferCSSPageSize === 'boolean') {
+    options.preferCSSPageSize = params.preferCSSPageSize
+  }
+  if (typeof params.generateTaggedPDF === 'boolean') {
+    options.generateTaggedPDF = params.generateTaggedPDF
+  }
+  if (typeof params.generateDocumentOutline === 'boolean') {
+    options.generateDocumentOutline = params.generateDocumentOutline
+  }
+
+  const scale = finiteNumber(params.scale)
+  if (scale !== null && scale > 0) {
+    options.scale = scale
+  }
+
+  const paperWidth = finiteNumber(params.paperWidth)
+  const paperHeight = finiteNumber(params.paperHeight)
+  if (paperWidth !== null && paperHeight !== null && paperWidth > 0 && paperHeight > 0) {
+    options.pageSize = { width: paperWidth, height: paperHeight }
+  }
+
+  const marginTop = finiteNumber(params.marginTop)
+  const marginBottom = finiteNumber(params.marginBottom)
+  const marginLeft = finiteNumber(params.marginLeft)
+  const marginRight = finiteNumber(params.marginRight)
+  if ([marginTop, marginBottom, marginLeft, marginRight].some((margin) => margin !== null)) {
+    options.margins = {
+      marginType: 'custom',
+      top: (marginTop ?? 0) * PDF_INCH_TO_CSS_PIXEL,
+      bottom: (marginBottom ?? 0) * PDF_INCH_TO_CSS_PIXEL,
+      left: (marginLeft ?? 0) * PDF_INCH_TO_CSS_PIXEL,
+      right: (marginRight ?? 0) * PDF_INCH_TO_CSS_PIXEL
+    }
+  }
+
+  if (typeof params.pageRanges === 'string') {
+    options.pageRanges = params.pageRanges
+  }
+  if (typeof params.headerTemplate === 'string') {
+    options.headerTemplate = params.headerTemplate
+  }
+  if (typeof params.footerTemplate === 'string') {
+    options.footerTemplate = params.footerTemplate
+  }
+
+  return options
+}
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -18,6 +90,8 @@ export class CdpWsProxy {
   private attached = false
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
+  private readonly pdfStreams = new Map<string, PdfStream>()
+  private nextPdfStreamId = 0
 
   constructor(private readonly webContents: WebContents) {}
 
@@ -79,6 +153,7 @@ export class CdpWsProxy {
 
   async stop(): Promise<void> {
     this.detachDebugger()
+    this.pdfStreams.clear()
     this.closeClient()
     if (this.wss) {
       this.wss.close()
@@ -288,6 +363,20 @@ export class CdpWsProxy {
       this.handleScreenshot(client, clientId, msg.params)
       return
     }
+    // Why: CDP Page.printToPDF is not available for Electron webview guests.
+    // Electron's native printToPDF path is the reliable equivalent.
+    if (msg.method === 'Page.printToPDF') {
+      void this.handlePrintToPdf(client, clientId, msg.params ?? {})
+      return
+    }
+    if (msg.method === 'IO.read') {
+      this.handleStreamRead(client, clientId, msg.params ?? {})
+      return
+    }
+    if (msg.method === 'IO.close') {
+      this.handleStreamClose(client, clientId, msg.params ?? {})
+      return
+    }
     // Why: Input.insertText can still require native focus in Electron webviews.
     // Do not auto-focus generic Runtime.evaluate/callFunctionOn traffic: wait
     // polling and read-only JS probes use those methods heavily, and focusing on
@@ -346,6 +435,77 @@ export class CdpWsProxy {
       /* best-effort */
     }
     this.forwardCommand(client, clientId, 'Page.navigate', params)
+  }
+
+  private async handlePrintToPdf(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>
+  ): Promise<void> {
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
+    try {
+      const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
+      if (params.transferMode === 'ReturnAsStream') {
+        const handle = `orca-pdf-${++this.nextPdfStreamId}`
+        this.pdfStreams.set(handle, { data: buffer, offset: 0 })
+        this.sendResult(clientId, { data: '', stream: handle }, client)
+        return
+      }
+      this.sendResult(clientId, { data: buffer.toString('base64') }, client)
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
+  }
+
+  private handleStreamRead(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>
+  ): void {
+    const handle = typeof params.handle === 'string' ? params.handle : ''
+    const stream = this.pdfStreams.get(handle)
+    if (!stream) {
+      this.sendError(clientId, 'Invalid stream handle', client)
+      return
+    }
+
+    const offset = finiteNumber(params.offset)
+    if (offset !== null) {
+      stream.offset = Math.max(0, Math.floor(offset))
+    }
+    const requestedSize = finiteNumber(params.size)
+    const size =
+      requestedSize !== null && requestedSize > 0
+        ? Math.floor(requestedSize)
+        : PDF_STREAM_CHUNK_BYTES
+    const start = Math.min(stream.offset, stream.data.length)
+    const end = Math.min(start + size, stream.data.length)
+    const chunk = stream.data.subarray(start, end)
+    stream.offset = end
+
+    this.sendResult(
+      clientId,
+      {
+        base64Encoded: true,
+        data: chunk.toString('base64'),
+        eof: end >= stream.data.length
+      },
+      client
+    )
+  }
+
+  private handleStreamClose(
+    client: WebSocket,
+    clientId: number,
+    params: Record<string, unknown>
+  ): void {
+    const handle = typeof params.handle === 'string' ? params.handle : ''
+    this.pdfStreams.delete(handle)
+    this.sendResult(clientId, {}, client)
   }
 
   private handleScreenshot(

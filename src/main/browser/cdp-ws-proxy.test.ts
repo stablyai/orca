@@ -41,6 +41,7 @@ function createMockWebContents() {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
       focus: vi.fn(),
+      printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       getTitle: vi.fn(() => 'Example'),
       getURL: vi.fn(() => 'https://example.com')
     },
@@ -308,6 +309,95 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    client.close()
+  })
+
+  it('prints PDF data through native webContents printToPDF', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 11,
+      method: 'Page.printToPDF',
+      params: {
+        landscape: true,
+        printBackground: true,
+        paperWidth: 8.5,
+        paperHeight: 11,
+        marginTop: 0.25,
+        marginBottom: 0.5,
+        marginLeft: 0.75,
+        marginRight: 1,
+        pageRanges: '1-2',
+        preferCSSPageSize: true
+      }
+    })
+
+    expect(response).toEqual({
+      id: 11,
+      result: { data: Buffer.from('%PDF-test').toString('base64') }
+    })
+    expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
+      landscape: true,
+      printBackground: true,
+      pageSize: { width: 8.5, height: 11 },
+      margins: {
+        marginType: 'custom',
+        top: 24,
+        bottom: 48,
+        left: 72,
+        right: 96
+      },
+      pageRanges: '1-2',
+      preferCSSPageSize: true
+    })
+    expect(mock.webContents.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Page.printToPDF',
+      expect.anything(),
+      expect.anything()
+    )
+    client.close()
+  })
+
+  it('supports streamed Page.printToPDF results for Playwright page.pdf', async () => {
+    mock.webContents.printToPDF.mockResolvedValueOnce(Buffer.from('abcdef'))
+    const client = await connect()
+
+    const printResponse = await sendAndReceive(client, {
+      id: 12,
+      method: 'Page.printToPDF',
+      params: { transferMode: 'ReturnAsStream' }
+    })
+
+    expect(printResponse).toEqual({
+      id: 12,
+      result: { data: '', stream: 'orca-pdf-1' }
+    })
+
+    const firstRead = await sendAndReceive(client, {
+      id: 13,
+      method: 'IO.read',
+      params: { handle: 'orca-pdf-1', size: 2 }
+    })
+    const secondRead = await sendAndReceive(client, {
+      id: 14,
+      method: 'IO.read',
+      params: { handle: 'orca-pdf-1' }
+    })
+    const closeResponse = await sendAndReceive(client, {
+      id: 15,
+      method: 'IO.close',
+      params: { handle: 'orca-pdf-1' }
+    })
+
+    expect(firstRead).toEqual({
+      id: 13,
+      result: { base64Encoded: true, data: Buffer.from('ab').toString('base64'), eof: false }
+    })
+    expect(secondRead).toEqual({
+      id: 14,
+      result: { base64Encoded: true, data: Buffer.from('cdef').toString('base64'), eof: true }
+    })
+    expect(closeResponse).toEqual({ id: 15, result: {} })
     client.close()
   })
 
