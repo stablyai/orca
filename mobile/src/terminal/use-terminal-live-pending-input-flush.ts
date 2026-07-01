@@ -20,7 +20,11 @@ type TerminalLivePendingInputFlush = {
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
   readonly pendingLiveInputTextRef: RefObject<string>
-  readonly schedulePendingLiveInputCommit: (handle: string, text: string, delayMs: number) => void
+  readonly schedulePendingLiveInputCommit: (
+    handle: string,
+    text: string,
+    delayMs: number | null
+  ) => void
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
 
@@ -94,12 +98,16 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   )
 
   const schedulePendingLiveInputCommit = useCallback(
-    (handle: string, text: string, delayMs: number) => {
+    (handle: string, text: string, delayMs: number | null) => {
       if (liveInputCommitTimerRef.current) {
         clearTimeout(liveInputCommitTimerRef.current)
       }
       pendingLiveInputHandleRef.current = handle
       pendingLiveInputTextRef.current = text
+      if (delayMs === null) {
+        liveInputCommitTimerRef.current = null
+        return
+      }
       liveInputCommitTimerRef.current = setTimeout(() => {
         liveInputCommitTimerRef.current = null
         void flushPendingLiveInputText(handle)

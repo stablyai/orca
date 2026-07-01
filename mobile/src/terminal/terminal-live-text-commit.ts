@@ -1,13 +1,13 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
 
-// Why: React Native does not expose portable composition events here, so probable
-// IME text gets a short settle window before being sent to the PTY.
+// Why: React Native does not expose portable composition events here, so
+// non-Hangul IME text gets a short settle window before being sent to the PTY.
 export const TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS = 150
 
 export type TerminalLiveTextChangeDecision =
   | { readonly kind: 'ignore' }
   | { readonly kind: 'send-now'; readonly text: string }
-  | { readonly kind: 'defer'; readonly text: string; readonly delayMs: number }
+  | { readonly kind: 'defer'; readonly text: string; readonly delayMs: number | null }
 
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }
@@ -43,9 +43,32 @@ export function isTerminalLiveTextImeCandidate(text: string): boolean {
   return false
 }
 
+function isHangulCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0x3130 && codePoint <= 0x318f) ||
+    (codePoint >= 0xa960 && codePoint <= 0xa97f) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7af)
+  )
+}
+
+export function isTerminalLiveTextHangulCandidate(text: string): boolean {
+  for (const character of text) {
+    const codePoint = character.codePointAt(0)
+    if (codePoint !== undefined && isHangulCodePoint(codePoint)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function getTerminalLiveTextChangeDecision(text: string): TerminalLiveTextChangeDecision {
   if (text.length === 0) {
     return { kind: 'ignore' }
+  }
+
+  if (isTerminalLiveTextHangulCandidate(text)) {
+    return { kind: 'defer', text, delayMs: null }
   }
 
   if (isTerminalLiveTextImeCandidate(text)) {

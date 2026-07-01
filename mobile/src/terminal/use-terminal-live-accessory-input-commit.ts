@@ -14,7 +14,17 @@ export type TerminalLiveAccessoryInputCommitResult =
   | { readonly kind: 'handled' }
   | { readonly kind: 'suppress-raw' }
 
-type TerminalLiveInputCommitScheduler = (handle: string, text: string, delayMs: number) => void
+type TerminalLiveInputCommitScheduler = (
+  handle: string,
+  text: string,
+  delayMs: number | null
+) => void
+
+export async function getTerminalLiveAccessoryInactiveInputCommitResult(
+  waitForPendingLiveInputFlush: () => Promise<boolean>
+): Promise<TerminalLiveAccessoryInputCommitResult> {
+  return (await waitForPendingLiveInputFlush()) ? { kind: 'allow-raw' } : { kind: 'suppress-raw' }
+}
 
 type TerminalLiveAccessoryInputCommitOptions = {
   readonly activeHandle: string | null
@@ -51,7 +61,7 @@ export function useTerminalLiveAccessoryInputCommit({
         return { kind: 'allow-raw' }
       }
       if (!liveInputTerminalHandles.has(activeHandle)) {
-        return { kind: 'allow-raw' }
+        return getTerminalLiveAccessoryInactiveInputCommitResult(waitForPendingLiveInputFlush)
       }
       const pendingText =
         pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''

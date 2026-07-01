@@ -6,6 +6,7 @@ import {
   getTerminalLiveSpecialKeyDecision,
   getTerminalLiveSubmitSequence,
   getTerminalLiveTextChangeDecision,
+  isTerminalLiveTextHangulCandidate,
   isTerminalLiveTextImeCandidate
 } from './terminal-live-text-commit'
 
@@ -23,18 +24,32 @@ describe('terminal live text commit', () => {
 
     // Then
     expect(decisions).toEqual([
-      { kind: 'defer', text: 'ㅎ', delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS },
-      { kind: 'defer', text: '하', delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS },
-      { kind: 'defer', text: '한', delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS }
+      { kind: 'defer', text: 'ㅎ', delayMs: null },
+      { kind: 'defer', text: '하', delayMs: null },
+      { kind: 'defer', text: '한', delayMs: null }
     ])
     expect(sentImmediately).toEqual([])
+    expect(isTerminalLiveTextHangulCandidate('ㅎ')).toBe(true)
     expect(submitSequence).toEqual(['한', '\r'])
     expect(composedWordDecision).toEqual({
       kind: 'defer',
       text: '한글',
-      delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
+      delayMs: null
     })
     expect(composedWordSubmitSequence).toEqual(['한글', '\r'])
+  })
+
+  it('Given non-Hangul IME text When live text changes Then keeps the bounded settle timer', () => {
+    // Given
+    const text = 'あ'
+
+    // When
+    const decision = getTerminalLiveTextChangeDecision(text)
+
+    // Then
+    expect(isTerminalLiveTextImeCandidate(text)).toBe(true)
+    expect(isTerminalLiveTextHangulCandidate(text)).toBe(false)
+    expect(decision).toEqual({ kind: 'defer', text, delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS })
   })
 
   it('Given ASCII text When live text changes Then sends immediately', () => {
