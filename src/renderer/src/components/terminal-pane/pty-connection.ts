@@ -23,7 +23,11 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
-import { shouldReconcileDeadSession } from './terminal-dead-session-reconcile'
+import {
+  shouldReconcileDeadSession,
+  shouldReconcileMissingSession,
+  type HasPty
+} from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
@@ -542,6 +546,7 @@ type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
   noteVisibilityResume: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
+  reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
@@ -1449,7 +1454,7 @@ export function connectPanePty(
     pane.container.dataset.ptyId = ptyId
   }
   let activePanePtyBinding: string | null = null
-  // Why: bind time so reconcile can ignore a listSessions snapshot requested
+  // Why: bind time lets async liveness reconcile ignore a request started
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   let activePanePtyBindingBoundAt: number | null = null
   const clearPanePtyFitBinding = (): void => {
@@ -5078,6 +5083,52 @@ export function connectPanePty(
     onExit(currentPtyId)
   }
 
+  const reconcileIfSessionMissing = (
+    hasPty: HasPty,
+    livenessRequestedAt = performance.now()
+  ): void => {
+    const requestedPtyId = transport.getPtyId()
+    if (
+      !requestedPtyId ||
+      requestedPtyId === handledExitPtyId ||
+      requestedPtyId.startsWith(REMOTE_PTY_ID_PREFIX) ||
+      transport.getConnectionId?.() != null
+    ) {
+      return
+    }
+
+    let livenessPromise: Promise<boolean | null>
+    try {
+      livenessPromise = Promise.resolve(hasPty(requestedPtyId))
+    } catch {
+      return
+    }
+
+    void livenessPromise
+      .then((isLive) => {
+        if (disposed) {
+          return
+        }
+        const currentPtyId = transport.getPtyId()
+        if (
+          !currentPtyId ||
+          currentPtyId !== requestedPtyId ||
+          handledExitPtyId === currentPtyId ||
+          !shouldReconcileMissingSession({
+            ptyId: currentPtyId,
+            connectionId: transport.getConnectionId?.(),
+            isLive,
+            ptyBoundAt: activePanePtyBindingBoundAt,
+            livenessRequestedAt
+          })
+        ) {
+          return
+        }
+        onExit(currentPtyId)
+      })
+      .catch(() => {})
+  }
+
   return {
     syncProcessTracking() {
       agentCompletionCoordinator.startProcessTracking()
@@ -5089,6 +5140,7 @@ export function connectPanePty(
       ptySizeReassertion.request({ fit: false })
     },
     reconcileIfSessionDead,
+    reconcileIfSessionMissing,
     dispose() {
       disposed = true
       // Why: the post-spawn reconcile polls across frames; cancel its pending

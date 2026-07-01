@@ -58,6 +58,54 @@ Fix direction:
 - The focused regression now asserts that repeated warm resumes plus typing
   produce zero `listSessions()` calls from the input handler.
 
+### 2026-07-01 follow-up: preserved old daemon after input fix
+
+After the input-handler fix, the main packaged profile still reproduced the
+warm-switch lag because the live v18 daemon was preserved from an older build:
+
+- Fresh main-profile repro:
+  `.tmp/terminal-main-app-typing-lag/result-2026-07-01T09-59-08-111Z.json`
+- Direct daemon writes after switching took 661, 982, 998, 980, and 1000 ms.
+- Receipt latency after the daemon write returned stayed low at 77-85 ms.
+- No-switch control:
+  `.tmp/terminal-main-app-typing-lag/result-2026-07-01T09-59-28-346Z.json`
+  ended with fast direct daemon writes once the probe terminal settled.
+
+The remaining source hot path was the visibility-resume dead-session sweep:
+
+1. Switching a warm terminal hidden→visible ran the lifecycle visibility effect.
+2. The effect scheduled `reconcileDeadSessions`.
+3. `reconcileDeadSessions` invoked `window.api.pty.listSessions()`.
+4. A preserved old daemon still implemented `listSessions` by snapshotting every
+   live session, so the user's next daemon `write` queued behind that work.
+
+Fix:
+
+- Replace the automatic visibility-resume `listSessions()` sweep with a targeted
+  single-session liveness check.
+- Main exposes `pty:hasPty(id)`, which reads provider-owned in-memory PTY state
+  and returns `null` when the provider cannot answer authoritatively.
+- Renderer visible-resume asks only about each mounted pane's current PTY id.
+  The pane tears down only on an authoritative `false`; `true`, `null`, rejected
+  checks, remote-runtime ids, SSH ids, and stale/newborn races all fail open.
+- Keep visibility resume process tracking and PTY-size reassertion intact.
+- This preserves the recovery added by `a9ef6f916` for panes that missed
+  `pty:exit` while hidden, without putting a daemon-wide session enumeration on
+  the warm-switch/input path.
+
+Verification:
+
+- Focused vitest suite: `508` tests passed across terminal lifecycle,
+  pty-connection, dead-session reconcile, and PTY IPC.
+- Headful fullscreen E2E harness:
+  `tests/e2e/terminal-warm-switch-no-list-sessions.tmp.spec.ts`
+  wraps main-process `pty:listSessions` with an 800 ms stall and then switches
+  warm workspaces and types into the terminal.
+- Latest E2E artifact:
+  `.tmp/terminal-warm-switch-no-list-sessions/result-1782929853828.json`
+  showed `fullscreen: true`, `listSessionCallCount: 0`, and
+  `postTypeEchoLatencyMs: 10`.
+
 ### CLI `terminal-send`, switch away/back
 
 Result file: `.tmp/terminal-main-app-typing-lag/result-2026-07-01T06-59-45-098Z.json`
@@ -211,21 +259,38 @@ Source cause:
 - It is probably not queueing only on Orca's normal daemon client socket. The direct-daemon harness uses a separate socket and still sees the delay.
 - It is not caused by typing itself. A ping loop with no write showed the daemon stall during switching.
 - It is unlikely to be a single normal `getSnapshot` or `resize` call, because direct controls for those operations are much cheaper than the observed stall.
-- It is not necessary to remove the resume-time liveness check to fix the hot path. The daemon list can be made cheap by using already-applied session size instead of serializing snapshots.
+- The resume-time dead-pane recovery is still necessary; the hot path should
+  use single-PTY liveness, not a global session list.
 
 ## Current Conclusion
 
-Switching workspaces or terminals creates a short busy window in the daemon/main runtime. During that window, even a direct terminal `write` request waits about one second before the daemon services it. Once the daemon services the write, the shell receives and processes the bytes quickly.
+Switching workspaces or terminals can create a short daemon/main busy window
+when warm resume triggers global session enumeration. During that window, even a
+direct terminal `write` request waits before the daemon services it. Once the
+daemon services the write, the shell receives and processes the bytes quickly.
 
-The likely root is switch/resume-triggered terminal work starving the daemon event loop or the runtime path that handles daemon requests.
+The confirmed root for the remaining warm-switch lag is the visibility-resume
+dead-session reconciliation path calling global `listSessions()` in profiles
+with many preserved daemon sessions. The original dead-session recovery is valid;
+the expensive primitive was the problem.
 
 ## Leading Hypotheses
 
-1. Confirmed: resume-time dead-session reconciliation calls daemon `listSessions`, and daemon `listSessions` synchronously snapshots every live session to return cols/rows.
-2. Possible secondary contributor: switching to certain old or output-rich workspaces may also reattach existing daemon-backed PTYs. The daemon `createOrAttach` path synchronously calls `existing.getSnapshot()` before responding.
-3. Possible secondary contributor: hidden-output recovery, pending-output draining, or another snapshot-like serialization path runs synchronously on resume and delays request handling.
-4. Less likely: workspace or terminal resume triggers visible-terminal resize/SIGWINCH or TUI repaint output. The unchanged `lastOutputAt` observation currently makes this less likely than `listSessions`.
-5. Recent terminal width-flicker fixes may be related only because they made resume-time liveness/size checks more visible in the hot path.
+1. Confirmed: resume-time dead-session reconciliation called daemon
+   `listSessions`, and older daemons synchronously snapshot every live session
+   to return cols/rows.
+2. Confirmed: avoiding global `listSessions()` on warm resume removes the
+   request that queued ahead of first post-switch input.
+3. Possible secondary contributor: switching to certain old or output-rich
+   workspaces may also reattach existing daemon-backed PTYs. The daemon
+   `createOrAttach` path synchronously calls `existing.getSnapshot()` before
+   responding.
+4. Possible secondary contributor: hidden-output recovery, pending-output
+   draining, or another snapshot-like serialization path runs synchronously on
+   resume and delays request handling.
+5. Less likely: workspace or terminal resume triggers visible-terminal
+   resize/SIGWINCH or TUI repaint output. The unchanged `lastOutputAt`
+   observation currently makes this less likely than `listSessions`.
 
 ## Relevant Code Areas
 
@@ -246,14 +311,18 @@ The likely root is switch/resume-triggered terminal work starving the daemon eve
 
 ## Current Root-Cause Theory
 
-The root cause is synchronous full-session snapshotting inside daemon `listSessions`:
+The root cause is using global session enumeration as a per-pane liveness check:
 
 1. Workspace switching makes a terminal pane visible again.
 2. The renderer schedules dead-session reconciliation on hidden-to-visible resume.
-3. Reconciliation calls `window.api.pty.listSessions()`, which reaches the daemon `listSessions` RPC.
-4. Daemon `TerminalHost.listSessions()` calls `session.getSnapshot()` for every live session.
-5. With a heavy profile, those snapshot serializations block the daemon event loop for about 550 ms per list.
-6. A switch away/back can put a `write` behind two resume-time lists, yielding about 1.0-1.6 seconds of delayed input.
+3. The old reconcile path called `window.api.pty.listSessions()`, which reaches
+   the daemon `listSessions` RPC.
+4. Older preserved daemons implement `TerminalHost.listSessions()` by calling
+   `session.getSnapshot()` for every live session.
+5. With a heavy profile, those snapshot serializations block the daemon event
+   loop for about 550 ms per list.
+6. A switch away/back can put a `write` behind two resume-time lists, yielding
+   about 1.0-1.6 seconds of delayed input.
 
 This theory fits the current evidence:
 
@@ -264,7 +333,15 @@ This theory fits the current evidence:
 - `lastOutputAt` does not advance, so the child process probably is not generating the expensive work.
 - Synthetic fresh heavy output did not reproduce reliably, which points toward retained old session/state, request fanout, or workspace-specific resume behavior rather than simple line count.
 
-The correct fix is to keep `listSessions` as metadata-only: use `Session.getAppliedSize()` for `cols`/`rows` instead of `Session.getSnapshot()`. Snapshot RPCs should stay on explicit snapshot/reattach/checkpoint paths, not liveness lists.
+The correct fix is two-layered:
+
+1. Keep daemon `listSessions` metadata-only for builds where callers genuinely
+   need the global session list.
+2. Do not use `listSessions` for warm-resume dead-pane recovery. Use
+   `pty:hasPty(id)` to ask about the pane's own PTY id, backed by provider
+   in-memory state. Close only on authoritative `false`; fail open on `true`,
+   `null`, unsupported providers, remote-runtime/SSH ids, and stale/newborn
+   races.
 
 ## Investigation Constraints
 
@@ -273,10 +350,13 @@ The correct fix is to keep `listSessions` as metadata-only: use `Session.getAppl
 - Keep temp harnesses and screenshots out of commits unless explicitly requested.
 - Reproduce in the real main-app flow when possible; lighter dev profiles may not show the problem.
 
-## Next Steps
+## Verification Plan
 
-1. Patch `TerminalHost.listSessions()` to read `Session.getAppliedSize()` instead of `Session.getSnapshot()`.
-2. Add a daemon-level regression test proving `listSessions()` does not call `Session.getSnapshot()`.
-3. Re-run focused unit tests.
-4. Re-run the direct-daemon list queue test. Expected result: `listSessions` and a ping queued behind it should both be near-immediate.
-5. Re-run the direct-daemon switch/no-switch harness and the normal `terminal-send` harness as verification.
+1. Unit-test that `pty:hasPty(id)` does not call provider `listProcesses()`.
+2. Unit-test that targeted liveness still closes a missing local PTY and fails
+   open for live/unknown/stale cases.
+3. Unit-test that terminal input and warm resume do not call `listSessions()`.
+4. Re-run the headful fullscreen warm-switch E2E with `pty:listSessions`
+   artificially delayed and assert the count stays zero.
+5. Re-run the main-app direct-daemon switch/no-switch harness when validating
+   against the user's heavy profile.
