@@ -31,7 +31,7 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
     return 'Set ORCA_AZURE_DEVOPS_TOKEN'
   }
   if (provider === 'gitea') {
-    return 'Set ORCA_GITEA_TOKEN'
+    return 'Set ORCA_GITEA_TOKEN or add .orca/gitea.json'
   }
   return 'Run gh auth login'
 }

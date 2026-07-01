@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGiteaPullRequest, isGiteaReviewCreationAuthenticated } from './pull-request-creation'
 import { _resetGiteaRepoRefCache } from './repository-ref'
+import { _resetProjectConfigCache } from './project-config'
 
 const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
@@ -32,18 +33,20 @@ describe('Gitea pull request creation', () => {
       stderr: ''
     })
     _resetGiteaRepoRefCache()
+    _resetProjectConfigCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetGiteaRepoRefCache()
+    _resetProjectConfigCache()
   })
 
-  it('requires a token for repo-scoped creation', () => {
-    expect(isGiteaReviewCreationAuthenticated()).toBe(true)
+  it('requires a token for repo-scoped creation', async () => {
+    await expect(isGiteaReviewCreationAuthenticated()).resolves.toBe(true)
     delete process.env.ORCA_GITEA_TOKEN
-    expect(isGiteaReviewCreationAuthenticated()).toBe(false)
+    await expect(isGiteaReviewCreationAuthenticated()).resolves.toBe(false)
   })
 
   it('posts a pull request create body to the repository REST endpoint', async () => {

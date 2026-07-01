@@ -215,7 +215,7 @@ function reviewCopy(provider: HostedReviewProvider): {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
       providerName: 'Gitea',
-      authInstruction: 'Set ORCA_GITEA_TOKEN'
+      authInstruction: 'Set ORCA_GITEA_TOKEN or add .orca/gitea.json'
     }
   }
   return {
@@ -239,7 +239,7 @@ async function isProviderAuthenticated(
     return isAzureDevOpsReviewCreationAuthenticated()
   }
   if (provider === 'gitea') {
-    return isGiteaReviewCreationAuthenticated()
+    return isGiteaReviewCreationAuthenticated(repoPath)
   }
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }
