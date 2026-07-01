@@ -17,21 +17,6 @@ describe('terminal live accessory raw send target', () => {
     expect(sendTarget).toBe(targetHandle)
   })
 
-  it('Given live input is disabled When raw fallback resumes Then preserves buffered accessory sends', () => {
-    // Given
-    const targetHandle = 'terminal-a'
-
-    // When
-    const sendTarget = getTerminalLiveAccessoryRawSendTarget({
-      targetHandle,
-      activeHandle: targetHandle,
-      activeSessionTabType: 'terminal'
-    })
-
-    // Then
-    expect(sendTarget).toBe(targetHandle)
-  })
-
   it('Given the active terminal changed while waiting When raw fallback resumes Then suppresses the send', () => {
     // Given
     const targetHandle = 'terminal-a'
