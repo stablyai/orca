@@ -57,6 +57,7 @@ export function resolveSetupRunnerCommand(
       }
     }
     if (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath)) {
+      // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
       if (isWslExecutable(shell?.executable)) {
         const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
         const executable = shell?.executable?.trim() || 'wsl.exe'
@@ -66,6 +67,7 @@ export function resolveSetupRunnerCommand(
           shell: 'posix'
         }
       }
+      // Why: queued setup launches can outlive the process that generated them, so convert native paths before handing off to POSIX shells.
       const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
       return {
         command: `bash ${quotePosixArg(posixPath)}`,

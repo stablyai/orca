@@ -1472,6 +1472,20 @@ describe('resolveSetupRunnerShell', () => {
       executable: 'wsl.exe'
     })
   })
+
+  it('preserves a configured Git Bash executable for Windows setup launch metadata', async () => {
+    const { resolveSetupRunnerShell } = await import('./hooks')
+
+    expect(
+      resolveSetupRunnerShell(
+        { terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe' },
+        'win32'
+      )
+    ).toEqual({
+      family: 'posix',
+      executable: 'C:\\Program Files\\Git\\bin\\bash.exe'
+    })
+  })
 })
 
 describe('shouldRunSetupForCreate', () => {

@@ -588,7 +588,8 @@ export function resolveSetupRunnerShell(
   const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const family = resolveWindowsShellStartupFamily(configuredShell)
   if (family === 'posix') {
-    return shellBasename === 'wsl.exe' || shellBasename === 'wsl'
+    // Why: deferred setup launches may happen outside PATH resolution, so keep explicit WSL and Git Bash executables.
+    return shellBasename === 'wsl.exe' || shellBasename === 'wsl' || shellBasename === 'bash.exe'
       ? { family: 'posix', executable: configuredShell }
       : { family: 'posix' }
   }
