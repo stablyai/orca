@@ -3,6 +3,7 @@ import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants }
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'
+import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -225,8 +226,9 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   if (!primaryError) {
     try {
+      const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(shellPath, shellArgs, {
+        process: ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
           rows,
@@ -260,7 +262,12 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
         Object.assign(env, fallbackReady?.env ?? {})
-        const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
+        const wrapped = wrapShellSpawnForMacosTccAttribution(
+          fallback,
+          fallbackReady?.args ?? ['-l'],
+          env
+        )
+        const proc = ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
           rows,
