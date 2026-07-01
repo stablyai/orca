@@ -119,6 +119,28 @@ describe('repo slice runtime routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('drops a stale repos fetch that resolves after a newer one (#7020)', async () => {
+    const store = createTestStore()
+    let resolveStale!: (repos: Repo[]) => void
+    const stalePromise = new Promise<Repo[]>((resolve) => {
+      resolveStale = resolve
+    })
+    // Why: mirrors the delete-project-group burst — the first fetch reads
+    // pre-removal state (both repos) but resolves LAST; the second reads
+    // post-removal state (remoteRepo gone) and resolves first.
+    reposList.mockReturnValueOnce(stalePromise).mockResolvedValueOnce([localRepo])
+
+    const stale = store.getState().fetchRepos()
+    const fresh = store.getState().fetchRepos()
+    await fresh
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo'])
+
+    resolveStale([localRepo, remoteRepo])
+    await stale
+    // The superseded fetch must not resurrect the removed repo.
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo'])
+  })
+
   it('fetches repos from the active remote runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
