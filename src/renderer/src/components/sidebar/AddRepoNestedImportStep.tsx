@@ -20,6 +20,7 @@ type AddRepoNestedImportStepProps = {
   onGroupNameChange: (value: string) => void
   onSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   onImport: (mode: 'group' | 'separate') => void
+  onAddFolderAsIs: () => void
   onStopScan: () => void
 }
 
@@ -32,6 +33,7 @@ export function AddRepoNestedImportStep({
   onGroupNameChange,
   onSelectedPathsChange,
   onImport,
+  onAddFolderAsIs,
   onStopScan
 }: AddRepoNestedImportStepProps): React.JSX.Element {
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
@@ -137,28 +139,39 @@ export function AddRepoNestedImportStep({
             placeholder={folderName}
           />
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <Button
-            onClick={() => handleImport('separate')}
-            disabled={isAdding || scanInProgress || selectedPaths.size === 0}
-            variant="outline"
-          >
-            {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+          {/* Why: the review appears for a non-git parent folder, so users who
+              wanted the folder itself (not its nested repos) need an explicit
+              escape that stays enabled even with zero repos selected. */}
+          <Button onClick={onAddFolderAsIs} disabled={isAdding || scanInProgress} variant="ghost">
             {translate(
-              'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
-              'No, import separately'
+              'auto.components.sidebar.AddRepoNestedImportStep.addFolderAsIs',
+              'Add folder as-is'
             )}
           </Button>
-          <Button
-            onClick={() => handleImport('group')}
-            disabled={isAdding || scanInProgress || selectedPaths.size === 0}
-          >
-            {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {translate(
-              'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
-              'Yes, import as group'
-            )}
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              onClick={() => handleImport('separate')}
+              disabled={isAdding || scanInProgress || selectedPaths.size === 0}
+              variant="outline"
+            >
+              {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {translate(
+                'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
+                'No, import separately'
+              )}
+            </Button>
+            <Button
+              onClick={() => handleImport('group')}
+              disabled={isAdding || scanInProgress || selectedPaths.size === 0}
+            >
+              {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {translate(
+                'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
+                'Yes, import as group'
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </>

@@ -41,6 +41,7 @@ function renderStepMarkup(
           onGroupNameChange={vi.fn()}
           onSelectedPathsChange={vi.fn()}
           onImport={vi.fn()}
+          onAddFolderAsIs={vi.fn()}
           onStopScan={vi.fn()}
           {...overrides}
         />
@@ -102,6 +103,61 @@ describe('AddRepoNestedImportStep', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
   })
 
+  it('offers an escape to add the folder as-is even with no repos selected', () => {
+    // Why: the import buttons disable at zero selection, so this must stay the
+    // one enabled action for a user who wanted the plain folder.
+    const html = renderStepMarkup({ selectedPaths: new Set() })
+
+    expect(html).toContain('Add folder as-is')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Add folder as-is<\/button>/)
+  })
+
+  it('disables the add-folder escape while scanning or adding', () => {
+    expect(renderStepMarkup({ scanInProgress: true })).toMatch(
+      /<button[^>]*disabled=""[^>]*>Add folder as-is<\/button>/
+    )
+    expect(renderStepMarkup({ isAdding: true })).toMatch(
+      /<button[^>]*disabled=""[^>]*>Add folder as-is<\/button>/
+    )
+  })
+
+  it('invokes the add-folder escape on click', () => {
+    const onAddFolderAsIs = vi.fn()
+    const host = document.createElement('div')
+    container = host
+    document.body.appendChild(host)
+    root = createRoot(host)
+
+    act(() => {
+      root?.render(
+        <TooltipProvider>
+          <Dialog open>
+            <AddRepoNestedImportStep
+              scan={scan}
+              groupName=""
+              selectedPaths={new Set()}
+              isAdding={false}
+              scanInProgress={false}
+              onGroupNameChange={vi.fn()}
+              onSelectedPathsChange={vi.fn()}
+              onImport={vi.fn()}
+              onAddFolderAsIs={onAddFolderAsIs}
+              onStopScan={vi.fn()}
+            />
+          </Dialog>
+        </TooltipProvider>
+      )
+    })
+
+    act(() => {
+      findButton(host, 'Add folder as-is').click()
+    })
+
+    expect(onAddFolderAsIs).toHaveBeenCalledTimes(1)
+  })
+
   it('maps the group choice to grouped import and the separate choice to separate import', () => {
     const onImport = vi.fn()
     const host = document.createElement('div')
@@ -122,6 +178,7 @@ describe('AddRepoNestedImportStep', () => {
               onGroupNameChange={vi.fn()}
               onSelectedPathsChange={vi.fn()}
               onImport={onImport}
+              onAddFolderAsIs={vi.fn()}
               onStopScan={vi.fn()}
             />
           </Dialog>
@@ -162,6 +219,7 @@ describe('AddRepoNestedImportStep', () => {
                 onImport(mode)
                 setIsAdding(true)
               }}
+              onAddFolderAsIs={vi.fn()}
               onStopScan={vi.fn()}
             />
           </Dialog>

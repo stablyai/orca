@@ -52,6 +52,7 @@ export function useAddRepoNestedImportFlow({
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
   resetNestedImportFlow: () => void
   trackNestedBackAction: () => void
+  handleAddFolderAsIs: () => void
 } {
   const nestedImportGenRef = useRef(0)
 
@@ -75,6 +76,45 @@ export function useAddRepoNestedImportFlow({
       })
     )
   }, [
+    getNestedRepoRuntimeKind,
+    nestedAttemptId,
+    nestedConnectionId,
+    nestedRuntimeKind,
+    nestedScan,
+    nestedSelectedPaths.size
+  ])
+
+  const handleAddFolderAsIs = useCallback((): void => {
+    if (!nestedScan) {
+      return
+    }
+    if (nestedAttemptId) {
+      track(
+        'add_repo_nested_import_action',
+        buildNestedRepoImportActionTelemetry({
+          attemptId: nestedAttemptId,
+          surface: 'sidebar',
+          runtimeKind: nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId),
+          action: 'add_folder',
+          foundCount: nestedScan.repos.length,
+          selectedCount: nestedSelectedPaths.size
+        })
+      )
+    }
+    // Why: reuse the shared non-git confirmation path (local/runtime/SSH) so the
+    // parent folder is added as a plain folder with the standard "no Git
+    // features" warning, instead of forcing the nested-repo import.
+    const { openModal, closeModal } = useAppStore.getState()
+    closeModal()
+    openModal('confirm-non-git-folder', {
+      folderPath: nestedScan.selectedPath,
+      ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
+      ...(activeRuntimeEnvironmentId?.trim()
+        ? { runtimeEnvironmentId: activeRuntimeEnvironmentId }
+        : {})
+    })
+  }, [
+    activeRuntimeEnvironmentId,
     getNestedRepoRuntimeKind,
     nestedAttemptId,
     nestedConnectionId,
@@ -236,5 +276,10 @@ export function useAddRepoNestedImportFlow({
     ]
   )
 
-  return { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction }
+  return {
+    handleImportNestedRepos,
+    resetNestedImportFlow,
+    trackNestedBackAction,
+    handleAddFolderAsIs
+  }
 }

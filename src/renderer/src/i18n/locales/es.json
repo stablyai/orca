@@ -3493,7 +3493,8 @@
           "8401a7a0d0": "1 repositorio",
           "d4f1df62ef": "{{value0}} repositorios",
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
-          "24eda6c8b2": "Explorando... {{value0}}"
+          "24eda6c8b2": "Explorando... {{value0}}",
+          "addFolderAsIs": "Agregar carpeta tal cual"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",

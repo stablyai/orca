@@ -3505,6 +3505,7 @@
           "39d51212cc": "Group name",
           "aa0247680d": "No, import separately",
           "a0bc4d1f8e": "Yes, import as group",
+          "addFolderAsIs": "Add folder as-is",
           "8401a7a0d0": "1 repository",
           "d4f1df62ef": "{{value0}} repositories",
           "b4263a2ac4": "Found {{value0}} in {{value1}}.",
