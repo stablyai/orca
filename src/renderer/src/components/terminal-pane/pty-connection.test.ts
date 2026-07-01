@@ -140,7 +140,7 @@ type StoreState = {
 }
 
 type ConnectCallbacks = {
-  onData?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+  onData?: (data: string, meta?: { seq?: number; rawLength?: number; background?: boolean }) => void
   onReplayData?: (data: string, meta?: { clearBeforeReplay?: boolean }) => void
   onError?: (msg: string) => void
 }
@@ -369,6 +369,21 @@ function createPane(paneId: number) {
       fit: vi.fn()
     }
   }
+}
+
+function captureCallbackTerminalWrites(pane: ReturnType<typeof createPane>): {
+  writes: string[]
+  parseCallbacks: (() => void)[]
+} {
+  const writes: string[] = []
+  const parseCallbacks: (() => void)[] = []
+  pane.terminal.write = function write(data: string, callback?: () => void): void {
+    writes.push(data)
+    if (callback) {
+      parseCallbacks.push(callback)
+    }
+  } as typeof pane.terminal.write
+  return { writes, parseCallbacks }
 }
 
 function createManager(paneCount = 1, initialActivePaneId: number | null = null) {
@@ -5374,6 +5389,269 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('schedules WebGL atlas recovery after hidden synchronized output parses', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        isVisibleRef: { current: false }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    try {
+      const startChunk = '\x1b[?2026h'
+      const plainRowChunk = '| hidden Claude row |\r\n'
+      const endChunk = '\x1b[?2026l'
+
+      capturedDataCallback.current?.(startChunk)
+      capturedDataCallback.current?.(plainRowChunk)
+      capturedDataCallback.current?.(endChunk)
+
+      expect(writes).toEqual([])
+      vi.advanceTimersByTime(50)
+
+      expect(writes).toEqual([`${startChunk}${plainRowChunk}${endChunk}`])
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+
+      parseCallbacks[0]?.()
+
+      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recognizes hidden synchronized output markers split across PTY chunks', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        isVisibleRef: { current: false }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.('\x1b[?202')
+      capturedDataCallback.current?.('6hbody row\r\n')
+      capturedDataCallback.current?.('tail\x1b[?20')
+      capturedDataCallback.current?.('26l')
+
+      vi.advanceTimersByTime(50)
+
+      expect(writes.join('')).toBe('\x1b[?2026hbody row\r\ntail\x1b[?2026l')
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+
+      parseCallbacks[0]?.()
+
+      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not schedule hidden atlas recovery for ordinary rich text or metadata output', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const { parseCallbacks } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        isVisibleRef: { current: false }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.('plain hidden emoji 😀 and CJK 没改什么\r\n')
+      capturedDataCallback.current?.('\x1b[48;2;52;52;52mcolored shell text\x1b[0m\r\n')
+      capturedDataCallback.current?.('\x1b]0;hidden title\x07\x1b]133;A\x07')
+
+      vi.advanceTimersByTime(50)
+      for (const callback of parseCallbacks) {
+        callback()
+      }
+
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('schedules hidden atlas recovery for high-confidence TUI redraw controls', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const { parseCallbacks } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        isVisibleRef: { current: false }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.('\x1b[2J\x1b[Hredrawn hidden table\x1b[K')
+
+      vi.advanceTimersByTime(50)
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+
+      parseCallbacks[0]?.()
+
+      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('advances hidden rewrite state when synchronized output already requests recovery', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        isVisibleRef: { current: false }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.('prompt rewrite\r')
+      vi.advanceTimersByTime(50)
+      expect(writes).toEqual(['prompt rewrite\r'])
+      parseCallbacks.shift()?.()
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+
+      capturedDataCallback.current?.('\x1b[?2026hredraw frame\x1b[?2026l')
+      vi.advanceTimersByTime(50)
+      expect(writes).toEqual(['prompt rewrite\r', '\x1b[?2026hredraw frame\x1b[?2026l'])
+      parseCallbacks.shift()?.()
+      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+      scheduleTerminalWebglAtlasRecovery.mockClear()
+
+      capturedDataCallback.current?.('plain after frame')
+      vi.advanceTimersByTime(50)
+      parseCallbacks.shift()?.()
+
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets hidden synchronized state when hidden renderer output is skipped', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { background?: boolean }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+    const isVisibleRef = { current: false }
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        isVisibleRef
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.('\x1b[?2026h')
+      vi.advanceTimersByTime(50)
+      parseCallbacks.shift()?.()
+      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+      scheduleTerminalWebglAtlasRecovery.mockClear()
+      writes.length = 0
+
+      isVisibleRef.current = true
+      ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'alternate'
+      capturedDataCallback.current?.('\x1b[?2026l', { background: true })
+      expect(writes).toEqual([])
+
+      isVisibleRef.current = false
+      ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'normal'
+      capturedDataCallback.current?.('plain after skipped close\r\n')
+      vi.advanceTimersByTime(50)
+      parseCallbacks.shift()?.()
+
+      expect(writes).toEqual(['plain after skipped close\r\n'])
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('queues visible split-pane PTY bytes when the pane is not active', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -8260,6 +8538,39 @@ describe('connectPanePty', () => {
     parseCallback?.()
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
     expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not schedule WebGL atlas recovery for plain synchronized foreground frames', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      let parseCallback: (() => void) | undefined
+      pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        parseCallback = callback
+      })
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      capturedDataCallback.current?.('\x1b[?2026hplain claude frame\x1b[?2026l')
+
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+      parseCallback?.()
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
+    } finally {
+      restoreNavigator()
+    }
   })
 
   it('forces a viewport refresh when foreground background SGR is split across PTY chunks', async () => {

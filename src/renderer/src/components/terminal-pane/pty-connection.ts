@@ -177,6 +177,9 @@ const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
 const HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS = 750
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
+const SYNCHRONIZED_OUTPUT_START_SEQUENCE = '\x1b[?2026h'
+const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
+const SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS = SYNCHRONIZED_OUTPUT_START_SEQUENCE.length - 1
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
@@ -791,16 +794,16 @@ function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
 }
 
 function containsSynchronizedOutputStart(data: string): boolean {
-  return data.includes('\x1b[?2026h')
+  return data.includes(SYNCHRONIZED_OUTPUT_START_SEQUENCE)
 }
 
 function containsSynchronizedOutputEnd(data: string): boolean {
-  return data.includes('\x1b[?2026l')
+  return data.includes(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
 }
 
 function shouldSynchronizedOutputRemainActive(data: string, wasActive: boolean): boolean {
-  const lastStartIndex = data.lastIndexOf('\x1b[?2026h')
-  const lastEndIndex = data.lastIndexOf('\x1b[?2026l')
+  const lastStartIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_START_SEQUENCE)
+  const lastEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
   if (lastStartIndex === -1 && lastEndIndex === -1) {
     return wasActive
   }
@@ -3244,6 +3247,96 @@ export function connectPanePty(
       return prefersRefresh
     }
 
+    function resetHiddenRendererRiskState(ptyId: string | null = null): void {
+      hiddenRiskPtyId = ptyId
+      hiddenSynchronizedOutputActive = false
+      hiddenSynchronizedOutputMarkerTail = ''
+      hiddenRewriteChunkEndedWithCarriageReturn = false
+      hiddenRewriteCsiScanTail = ''
+    }
+
+    function ensureHiddenRendererRiskStateForCurrentPty(): void {
+      const ptyId = transport.getPtyId()
+      if (hiddenRiskPtyId === ptyId) {
+        return
+      }
+      resetHiddenRendererRiskState(ptyId)
+    }
+
+    function resetSkippedHiddenRendererRiskState(): void {
+      // Why: skipped/backlog bytes were not parsed by xterm; reset any live hidden
+      // frame instead of letting dropped DEC starts make later plain bytes risky.
+      resetHiddenRendererRiskState(transport.getPtyId())
+    }
+
+    function hiddenSynchronizedOutputTouchesParsedFrame(data: string): boolean {
+      const scanData = hiddenSynchronizedOutputMarkerTail
+        ? `${hiddenSynchronizedOutputMarkerTail}${data}`
+        : data
+      const currentChunkStartIndex = scanData.length - data.length
+      let active = hiddenSynchronizedOutputActive
+      let touchesParsedFrame = active && data.length > 0
+      let offset = 0
+
+      while (offset < scanData.length) {
+        const startIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_START_SEQUENCE, offset)
+        const endIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE, offset)
+        if (startIndex === -1 && endIndex === -1) {
+          break
+        }
+        if (endIndex !== -1 && (startIndex === -1 || endIndex < startIndex)) {
+          if (
+            active &&
+            endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length > currentChunkStartIndex
+          ) {
+            touchesParsedFrame = true
+          }
+          active = false
+          offset = endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
+          continue
+        }
+        if (startIndex !== -1) {
+          active = true
+          if (startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length > currentChunkStartIndex) {
+            touchesParsedFrame = true
+          }
+          offset = startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length
+          continue
+        }
+      }
+
+      if (active && data.length > 0) {
+        touchesParsedFrame = true
+      }
+      hiddenSynchronizedOutputActive = active
+      hiddenSynchronizedOutputMarkerTail = scanData.slice(-SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
+      return touchesParsedFrame
+    }
+
+    function hiddenTuiRedrawOutputPrefersAtlasRecovery(data: string): boolean {
+      if (!data) {
+        return false
+      }
+      const scanData = hiddenRewriteCsiScanTail ? `${hiddenRewriteCsiScanTail}${data}` : data
+      const decision = terminalRewriteOutputRenderRefreshDecision(data, {
+        previousChunkEndsWithCarriageReturn: hiddenRewriteChunkEndedWithCarriageReturn,
+        previousRewriteCsiScanTail: hiddenRewriteCsiScanTail
+      })
+      hiddenRewriteChunkEndedWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
+      hiddenRewriteCsiScanTail = decision.nextRewriteCsiScanTail
+      return decision.prefersRenderRefresh || containsCursorPositionSequence(scanData)
+    }
+
+    function hiddenOutputNeedsAtlasRecoveryAfterParse(data: string): boolean {
+      if (!data) {
+        return false
+      }
+      ensureHiddenRendererRiskStateForCurrentPty()
+      const synchronizedOutputTouchesParsedFrame = hiddenSynchronizedOutputTouchesParsedFrame(data)
+      const tuiRedrawOutputPrefersAtlasRecovery = hiddenTuiRedrawOutputPrefersAtlasRecovery(data)
+      return synchronizedOutputTouchesParsedFrame || tuiRedrawOutputPrefersAtlasRecovery
+    }
+
     // The replay path uses the guard so xterm auto-replies to embedded query
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
@@ -3345,6 +3438,11 @@ export function connectPanePty(
     const shouldSnapshotHiddenCodexOutput = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
     let hiddenStartupRendererQueryPending = ''
     let hiddenRendererStateDirty = false
+    let hiddenRiskPtyId: string | null = null
+    let hiddenSynchronizedOutputActive = false
+    let hiddenSynchronizedOutputMarkerTail = ''
+    let hiddenRewriteChunkEndedWithCarriageReturn = false
+    let hiddenRewriteCsiScanTail = ''
 
     function canUseMainBufferSnapshot(ptyId: string | null): ptyId is string {
       return Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
@@ -3519,6 +3617,7 @@ export function connectPanePty(
     ): void {
       if (foreground) {
         resetHiddenOutputRestoreIfPtyChanged()
+        resetHiddenRendererRiskState()
       }
       const parseHiddenStartupOutput =
         !foreground &&
@@ -3552,6 +3651,10 @@ export function connectPanePty(
       const renderRefreshDecision = foregroundOutput
         ? shouldForceForegroundRenderRefresh(data)
         : { refresh: false, inPlaceRewrite: false, recoverWebglAtlasAfterParse: false }
+      const recoverHiddenWebglAtlasAfterParse =
+        !foregroundOutput && hiddenOutputNeedsAtlasRecoveryAfterParse(data)
+      const recoverWebglAtlasAfterParse =
+        renderRefreshDecision.recoverWebglAtlasAfterParse || recoverHiddenWebglAtlasAfterParse
       const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
       // Why: see nativeWindowsRewriteNeedsFollowupRenderRefresh — Claude Code's
       // in-place prompt redraws on Windows ConPTY can paint one frame late, so a
@@ -3600,9 +3703,7 @@ export function connectPanePty(
           nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
         // Why: atlas recovery must repaint from the parsed xterm buffer, not
         // a pre-write snapshot that a late TUI redraw can immediately stale.
-        onForegroundParsed: renderRefreshDecision.recoverWebglAtlasAfterParse
-          ? scheduleTerminalWebglAtlasRecovery
-          : undefined,
+        onParsed: recoverWebglAtlasAfterParse ? scheduleTerminalWebglAtlasRecovery : undefined,
         stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
         coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
         holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
@@ -3620,6 +3721,7 @@ export function connectPanePty(
     }
 
     function markHiddenOutputRestoreNeeded(): void {
+      resetSkippedHiddenRendererRiskState()
       const ptyId = transport.getPtyId()
       if (!canUseHiddenOutputSnapshot(ptyId)) {
         return
@@ -3932,6 +4034,7 @@ export function connectPanePty(
       hiddenOutputRestoreScheduled = false
       hiddenStartupRendererQueryPending = ''
       hiddenRendererStateDirty = false
+      resetHiddenRendererRiskState()
       cancelScheduledHiddenOutputRestore(pane.terminal)
       clearHiddenOutputRestoreDeferredRetryTimer()
       clearHiddenOutputRestoreForegroundDeadlineTimer()
@@ -3982,6 +4085,7 @@ export function connectPanePty(
       clearPendingLiveChunksDuringRestore()
       hiddenStartupRendererQueryPending = ''
       hiddenRendererStateDirty = false
+      resetHiddenRendererRiskState()
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
       hiddenOutputRestoreGeneration += 1
@@ -4014,6 +4118,7 @@ export function connectPanePty(
     function skipBackgroundAlternateScreenOutput(data: string): void {
       writeHiddenStartupRendererQueries(data)
       respondToSkippedMode2031Subscribe(data)
+      resetSkippedHiddenRendererRiskState()
       hiddenRendererStateDirty = true
       recordHiddenRendererSkip(data.length)
       const ptyId = transport.getPtyId()
@@ -4089,6 +4194,7 @@ export function connectPanePty(
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       hiddenRendererStateDirty = false
+      resetHiddenRendererRiskState()
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
       if (currentPtyId && !getFitOverrideForPty(currentPtyId)) {
@@ -4350,6 +4456,7 @@ export function connectPanePty(
           queueLiveChunkDuringRestore(rendererData, rendererMeta)
           requestHiddenOutputRestoreIfNeeded()
         } else if (hiddenOutputRestoreInFlight) {
+          resetSkippedHiddenRendererRiskState()
           hiddenOutputRestoreNeeded = true
           hiddenOutputRestoreFreshSnapshotNeeded = true
         }
