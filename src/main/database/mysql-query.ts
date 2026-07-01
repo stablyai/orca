@@ -138,7 +138,11 @@ export async function runMysqlQuery(
       }
       return { ...bounded, durationMs: Date.now() - startedAt }
     } catch (err) {
-      await conn.query('ROLLBACK').catch(() => {})
+      // A failed ROLLBACK leaves the transaction state unknown — poison the
+      // connection so `finally` drops it instead of returning it to the pool.
+      await conn.query('ROLLBACK').catch(() => {
+        poisoned = true
+      })
       throw err
     }
   } finally {
@@ -192,7 +196,11 @@ export async function runMysqlExecute(
       }
       return { ...bounded, durationMs: Date.now() - startedAt }
     } catch (err) {
-      await conn.query('ROLLBACK').catch(() => {})
+      // A failed ROLLBACK leaves the transaction state unknown — poison the
+      // connection so `finally` drops it instead of returning it to the pool.
+      await conn.query('ROLLBACK').catch(() => {
+        poisoned = true
+      })
       throw err
     }
   } finally {
@@ -214,6 +222,7 @@ export async function runMysqlBatch(
   onStart: (handle: QueryHandle) => void
 ): Promise<number[]> {
   const conn = await pool.getConnection()
+  let poisoned = false
   try {
     const [pidRows] = await conn.query('SELECT CONNECTION_ID() AS id')
     onStart({ connectionId, backendPid: Number((pidRows as { id?: number }[])[0]?.id) || null })
@@ -231,14 +240,29 @@ export async function runMysqlBatch(
         })
         rowCounts.push((result as { affectedRows?: number }).affectedRows ?? 0)
       } catch (err) {
-        await conn.query('ROLLBACK').catch(() => {})
+        await conn.query('ROLLBACK').catch(() => {
+          poisoned = true
+        })
         throw new DbBatchError(i, err)
       }
     }
-    await conn.query('COMMIT')
+    // A failing COMMIT leaves the transaction in an unknown state — roll back and
+    // poison the connection on failure rather than returning it to the pool.
+    try {
+      await conn.query('COMMIT')
+    } catch (err) {
+      await conn.query('ROLLBACK').catch(() => {
+        poisoned = true
+      })
+      throw err
+    }
     return rowCounts
   } finally {
-    conn.release()
+    if (poisoned) {
+      conn.destroy()
+    } else {
+      conn.release()
+    }
   }
 }
 

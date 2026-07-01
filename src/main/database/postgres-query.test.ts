@@ -295,6 +295,33 @@ describe('runPostgresBatch', () => {
     expect(calls).not.toContain('COMMIT')
     expect(client.release).toHaveBeenCalledTimes(1)
   })
+
+  it('evicts the client when COMMIT fails', async () => {
+    const client = {
+      release: vi.fn(),
+      query: vi.fn((arg: QueryArg) => {
+        const text = textOf(arg)
+        if (text.includes('pg_backend_pid')) {
+          return Promise.resolve({ rows: [{ pid: 7 }] })
+        }
+        // COMMIT and its recovery ROLLBACK both fail → unknown txn state → evict.
+        if (text === 'COMMIT' || text === 'ROLLBACK') {
+          return Promise.reject(new Error('boom'))
+        }
+        return Promise.resolve({ rows: [], rowCount: 1 })
+      })
+    }
+    await expect(
+      runPostgresBatch(
+        makePool(client),
+        'c1',
+        [{ sql: 'UPDATE t SET a = 1', params: [] }],
+        opts({ allowWrite: true }),
+        vi.fn()
+      )
+    ).rejects.toThrow()
+    expect(client.release).toHaveBeenCalledWith(true)
+  })
 })
 
 describe('cancelPostgresBackend', () => {

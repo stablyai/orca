@@ -193,7 +193,16 @@ export async function runPostgresBatch(
         throw new DbBatchError(i, err)
       }
     }
-    await client.query('COMMIT')
+    // A failing COMMIT leaves the transaction in an unknown state — roll back and
+    // evict on failure rather than returning the client to the pool.
+    try {
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {
+        evict = true
+      })
+      throw err
+    }
     return rowCounts
   } finally {
     client.release(evict)

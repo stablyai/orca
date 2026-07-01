@@ -191,6 +191,38 @@ describe('runMysqlExecute', () => {
     expect(result.truncated).toBe(true)
     expect(conn.destroy).toHaveBeenCalledTimes(1)
   })
+
+  it('destroys the connection when ROLLBACK fails after a write error', async () => {
+    const conn = {
+      query: vi.fn((arg: string | { sql: string; values?: unknown[] }): Promise<[unknown, unknown]> => {
+        const sql = typeof arg === 'string' ? arg : arg.sql
+        if (sql.includes('CONNECTION_ID')) {
+          return Promise.resolve([[{ id: 55 }], []])
+        }
+        if (sql === 'ROLLBACK') {
+          return Promise.reject(new Error('rollback boom'))
+        }
+        // The write statement (object arg) itself fails.
+        if (typeof arg !== 'string') {
+          return Promise.reject(new Error('write boom'))
+        }
+        return Promise.resolve([[], []])
+      }),
+      release: vi.fn(),
+      destroy: vi.fn()
+    }
+    await expect(
+      runMysqlExecute(
+        makePool(conn),
+        'c1',
+        { sql: 'UPDATE t SET a = ?', params: [1] },
+        opts({ allowWrite: true }),
+        vi.fn()
+      )
+    ).rejects.toThrow()
+    expect(conn.destroy).toHaveBeenCalledTimes(1)
+    expect(conn.release).not.toHaveBeenCalled()
+  })
 })
 
 describe('runMysqlBatch', () => {
@@ -257,6 +289,35 @@ describe('runMysqlBatch', () => {
     expect(calls).toContain('ROLLBACK')
     expect(calls).not.toContain('COMMIT')
     expect(conn.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('destroys the connection when COMMIT fails', async () => {
+    const conn = {
+      query: vi.fn((arg: string | { sql: string; values?: unknown[] }): Promise<[unknown, unknown]> => {
+        const sql = typeof arg === 'string' ? arg : arg.sql
+        if (sql.includes('CONNECTION_ID')) {
+          return Promise.resolve([[{ id: 55 }], []])
+        }
+        // COMMIT and its recovery ROLLBACK both fail → unknown txn state → drop it.
+        if (sql === 'COMMIT' || sql === 'ROLLBACK') {
+          return Promise.reject(new Error('boom'))
+        }
+        return Promise.resolve([{ affectedRows: 1 }, []])
+      }),
+      release: vi.fn(),
+      destroy: vi.fn()
+    }
+    await expect(
+      runMysqlBatch(
+        makePool(conn),
+        'c1',
+        [{ sql: 'UPDATE t SET a = ? WHERE id = ?', params: [1, 10] }],
+        opts({ allowWrite: true }),
+        vi.fn()
+      )
+    ).rejects.toThrow()
+    expect(conn.destroy).toHaveBeenCalledTimes(1)
+    expect(conn.release).not.toHaveBeenCalled()
   })
 })
 
