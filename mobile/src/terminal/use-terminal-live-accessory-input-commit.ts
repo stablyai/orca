@@ -1,9 +1,9 @@
 import { useCallback, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import {
-  TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS,
   getTerminalLiveAccessoryBytesDecision,
-  getTerminalLiveAccessoryLocalEditText
+  getTerminalLiveAccessoryLocalEditText,
+  getTerminalLiveDeferredTextDelayMs
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
@@ -92,7 +92,7 @@ export function useTerminalLiveAccessoryInputCommit({
           schedulePendingLiveInputCommit(
             activeHandle,
             editedText,
-            TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
+            getTerminalLiveDeferredTextDelayMs(editedText)
           )
           return { kind: 'handled' }
         }

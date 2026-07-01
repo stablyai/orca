@@ -3,6 +3,7 @@ import {
   TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS,
   getTerminalLiveAccessoryBytesDecision,
   getTerminalLiveAccessoryLocalEditText,
+  getTerminalLiveDeferredTextDelayMs,
   getTerminalLiveSpecialKeyDecision,
   getTerminalLiveSubmitSequence,
   getTerminalLiveTextChangeDecision,
@@ -30,6 +31,7 @@ describe('terminal live text commit', () => {
     ])
     expect(sentImmediately).toEqual([])
     expect(isTerminalLiveTextHangulCandidate('ㅎ')).toBe(true)
+    expect(getTerminalLiveDeferredTextDelayMs('ㅎ')).toBeNull()
     expect(submitSequence).toEqual(['한', '\r'])
     expect(composedWordDecision).toEqual({
       kind: 'defer',
@@ -49,6 +51,7 @@ describe('terminal live text commit', () => {
     // Then
     expect(isTerminalLiveTextImeCandidate(text)).toBe(true)
     expect(isTerminalLiveTextHangulCandidate(text)).toBe(false)
+    expect(getTerminalLiveDeferredTextDelayMs(text)).toBe(TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS)
     expect(decision).toEqual({ kind: 'defer', text, delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS })
   })
 
@@ -172,6 +175,8 @@ describe('terminal live text commit', () => {
     })
     expect(backspaceText).toBe('한')
     expect(deleteText).toBe('한글')
+    expect(getTerminalLiveDeferredTextDelayMs(backspaceText)).toBeNull()
+    expect(getTerminalLiveDeferredTextDelayMs(deleteText)).toBeNull()
   })
 
   it('Given no pending text When accessory bytes are requested Then sends terminal bytes', () => {

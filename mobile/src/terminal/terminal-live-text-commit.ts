@@ -78,6 +78,10 @@ export function getTerminalLiveTextChangeDecision(text: string): TerminalLiveTex
   return { kind: 'send-now', text }
 }
 
+export function getTerminalLiveDeferredTextDelayMs(text: string): number | null {
+  return isTerminalLiveTextHangulCandidate(text) ? null : TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
+}
+
 export function getTerminalLiveSpecialKeyDecision({
   key,
   pendingText
