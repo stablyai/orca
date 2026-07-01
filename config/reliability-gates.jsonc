@@ -119,7 +119,7 @@
       "title": "Visible desktop terminals converge across xterm, fit, PTY, and shell size",
       "maturity": "experimental",
       "owner": "terminal-rendering",
-      "layer": "renderer-provider-contract",
+      "layer": "renderer-unit",
       "surfaces": ["PTY sizing", "split layout", "restore", "hidden-to-visible transitions"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
@@ -132,30 +132,40 @@
         "https://github.com/stablyai/orca/pull/6939"
       ],
       "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, and shell-visible size must converge or enter explicit degraded state.",
-      "oracle": "Fault injection forces 0x0 first fit, delayed layout settle, dropped resize ack, and hidden-to-visible activation, then asserts xterm cols/rows, provider-applied size, stty size, and echo-wrap behavior converge.",
-      "commands": [],
-      "testFiles": [],
+      "oracle": "Deterministic renderer-unit fault injection drives the post-spawn reconcile frame scheduler through first 0x0 measurement, delayed hidden-to-visible layout settle, and dropped provider resize application, then asserts xterm, fit/proposed size, and provider-applied PTY size converge. The unit oracle records shell-visible stty/echo-wrap as an explicit degraded gap instead of claiming live-shell coverage.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-geometry-visible-convergence.test.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-geometry-visible-convergence.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
+        "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts"
+      ],
       "runtimeBudget": {
         "p95Seconds": 60,
-        "scope": "provider-contract or focused Electron test"
+        "scope": "renderer-unit deterministic harness"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Harness not implemented."
+        "status": "unknown",
+        "evidence": "First deterministic harness added with a controlled frame scheduler and no wall-clock sleeps; needs soak history before blocking promotion."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs deterministic broken variant or old regression fixture."
+        "status": "partial",
+        "evidence": "Renderer-unit tests fail when the reconcile trusts 0x0/stale measurements or handed-off requested size without applied-size confirmation. Needs saved intentional-break artifact before blocking promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Must include resize/throughput budget so convergence loops do not add frame or SIGWINCH churn."
+        "evidence": "The harness asserts convergence stops before the hard frame cap and keeps monotonic settles to bounded resize calls; parked/hidden paths retain intentional caps so this does not add redundant hidden SIGWINCH or frame loops."
       },
       "promotionCriteria": [
         "Build deterministic fault hooks before adding broad E2E coverage.",
         "Keep stress variants non-blocking until runtime and flake history are known."
       ],
-      "knownGaps": ["No manifest command yet."],
+      "knownGaps": [
+        "The renderer-unit oracle cannot execute a real shell, so stty size and echo-wrap behavior remain provider-contract/Electron follow-up coverage.",
+        "Providers without applied-size readback can only be treated as unconfirmed at this layer; remote-runtime readback still needs a provider-contract seam.",
+        "This first harness is local deterministic coverage only and has no CI soak history yet."
+      ],
       "demotionRule": "Cannot promote without deterministic oracle and runtime history."
     },
     {
