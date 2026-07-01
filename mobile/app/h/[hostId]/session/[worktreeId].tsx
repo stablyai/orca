@@ -1098,6 +1098,7 @@ export default function SessionScreen() {
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
   const {
     clearPendingLiveInputCommit,
+    handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
@@ -3124,6 +3125,9 @@ export default function SessionScreen() {
 
   async function handleAccessoryKey(bytes: string) {
     if (!client || !activeHandle || !canSend) {
+      return
+    }
+    if (handleLiveInputAccessoryBytes(bytes)) {
       return
     }
 

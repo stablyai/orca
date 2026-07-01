@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS,
+  getTerminalLiveAccessoryBytesDecision,
+  getTerminalLiveAccessoryLocalEditText,
   getTerminalLiveSpecialKeyDecision,
   getTerminalLiveSubmitSequence,
   getTerminalLiveTextChangeDecision,
@@ -16,6 +18,8 @@ describe('terminal live text commit', () => {
     const decisions = koreanCompositionSteps.map(getTerminalLiveTextChangeDecision)
     const sentImmediately = decisions.filter((decision) => decision.kind === 'send-now')
     const submitSequence = getTerminalLiveSubmitSequence('한')
+    const composedWordDecision = getTerminalLiveTextChangeDecision('한글')
+    const composedWordSubmitSequence = getTerminalLiveSubmitSequence('한글')
 
     // Then
     expect(decisions).toEqual([
@@ -25,6 +29,12 @@ describe('terminal live text commit', () => {
     ])
     expect(sentImmediately).toEqual([])
     expect(submitSequence).toEqual(['한', '\r'])
+    expect(composedWordDecision).toEqual({
+      kind: 'defer',
+      text: '한글',
+      delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
+    })
+    expect(composedWordSubmitSequence).toEqual(['한글', '\r'])
   })
 
   it('Given ASCII text When live text changes Then sends immediately', () => {
@@ -86,6 +96,60 @@ describe('terminal live text commit', () => {
 
     // Then
     expect(decision).toEqual({ kind: 'flush-then-send', pendingText, bytes: '\t' })
+  })
+
+  it('Given pending text When accessory control bytes are requested Then flushes pending text before bytes', () => {
+    // Given
+    const pendingText = '한글'
+
+    // When
+    const tabDecision = getTerminalLiveAccessoryBytesDecision({ bytes: '\t', pendingText })
+    const escapeDecision = getTerminalLiveAccessoryBytesDecision({ bytes: '\x1b', pendingText })
+    const enterDecision = getTerminalLiveAccessoryBytesDecision({ bytes: '\r', pendingText })
+
+    // Then
+    expect(tabDecision).toEqual({ kind: 'flush-then-send', pendingText, bytes: '\t' })
+    expect(escapeDecision).toEqual({ kind: 'flush-then-send', pendingText, bytes: '\x1b' })
+    expect(enterDecision).toEqual({ kind: 'flush-then-send', pendingText, bytes: '\r' })
+  })
+
+  it('Given pending text When accessory Backspace or Delete bytes are requested Then keeps edits local', () => {
+    // Given
+    const pendingText = '한글'
+
+    // When
+    const backspaceDecision = getTerminalLiveAccessoryBytesDecision({
+      bytes: '\x7f',
+      pendingText
+    })
+    const ctrlBackspaceDecision = getTerminalLiveAccessoryBytesDecision({
+      bytes: '\b',
+      pendingText
+    })
+    const deleteDecision = getTerminalLiveAccessoryBytesDecision({
+      bytes: '\x1b[3~',
+      pendingText
+    })
+    const backspaceText = getTerminalLiveAccessoryLocalEditText({ bytes: '\x7f', pendingText })
+    const deleteText = getTerminalLiveAccessoryLocalEditText({ bytes: '\x1b[3~', pendingText })
+
+    // Then
+    expect(backspaceDecision).toEqual({ kind: 'local-edit' })
+    expect(ctrlBackspaceDecision).toEqual({ kind: 'local-edit' })
+    expect(deleteDecision).toEqual({ kind: 'local-edit' })
+    expect(backspaceText).toBe('한')
+    expect(deleteText).toBe('한글')
+  })
+
+  it('Given no pending text When accessory bytes are requested Then sends terminal bytes', () => {
+    // Given
+    const pendingText = ''
+
+    // When
+    const tabDecision = getTerminalLiveAccessoryBytesDecision({ bytes: '\t', pendingText })
+
+    // Then
+    expect(tabDecision).toEqual({ kind: 'send-now', bytes: '\t' })
   })
 
   it('Given a non-special key When key decision is requested Then ignores it', () => {

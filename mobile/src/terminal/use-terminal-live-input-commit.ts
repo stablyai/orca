@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import {
   getTerminalLiveSpecialKeyDecision,
-  getTerminalLiveSubmitSequence,
   getTerminalLiveTextChangeDecision
 } from './terminal-live-text-commit'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
-
-type TerminalLiveInputSender = (handle: string, bytes: string) => void
+import {
+  useTerminalLiveAccessoryInputCommit,
+  type TerminalLiveInputSender
+} from './use-terminal-live-accessory-input-commit'
 
 type TerminalLiveInputKeyPressEvent = {
   readonly nativeEvent: {
@@ -29,6 +30,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
 
 type TerminalLiveInputCommitHandlers = {
   readonly clearPendingLiveInputCommit: () => void
+  readonly handleLiveInputAccessoryBytes: (bytes: string) => boolean
   readonly handleLiveInputChange: (text: string) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => void
@@ -194,7 +196,9 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
           clearPendingLiveInputCommit()
           return
         case 'flush-then-send':
-          flushPendingLiveInputText(activeHandle)
+          if (!flushPendingLiveInputText(activeHandle)) {
+            return
+          }
           sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           return
         default:
@@ -210,6 +214,19 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     ]
   )
 
+  const handleLiveInputAccessoryBytes = useTerminalLiveAccessoryInputCommit({
+    activeHandle,
+    clearPendingLiveInputCommit,
+    flushPendingLiveInputText,
+    liveInputRef,
+    liveInputTerminalHandles,
+    pendingLiveInputHandleRef,
+    pendingLiveInputTextRef,
+    schedulePendingLiveInputCommit,
+    sendLiveTerminalInputRef,
+    setLiveInputCapture
+  })
+
   const handleLiveInputSubmit = useCallback(() => {
     if (!activeHandle) {
       return
@@ -219,18 +236,15 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     }
     const pendingText =
       pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
-    const sequence = getTerminalLiveSubmitSequence(pendingText)
     if (pendingText.length > 0) {
-      flushPendingLiveInputText(activeHandle)
-      for (const bytes of sequence.slice(1)) {
-        sendLiveTerminalInputRef.current(activeHandle, bytes)
+      if (!flushPendingLiveInputText(activeHandle)) {
+        return
       }
+      sendLiveTerminalInputRef.current(activeHandle, '\r')
       return
     }
     clearPendingLiveInputCommit()
-    for (const bytes of sequence) {
-      sendLiveTerminalInputRef.current(activeHandle, bytes)
-    }
+    sendLiveTerminalInputRef.current(activeHandle, '\r')
   }, [
     activeHandle,
     clearPendingLiveInputCommit,
@@ -241,6 +255,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   return {
     clearPendingLiveInputCommit,
+    handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
     handleLiveInputSubmit

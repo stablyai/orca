@@ -1,6 +1,14 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
 
+// Why: React Native does not expose portable composition events here, so probable
+// IME text gets a short settle window before being sent to the PTY.
 export const TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS = 150
+
+const TERMINAL_LIVE_ACCESSORY_LOCAL_EDIT_BYTES: ReadonlySet<string> = new Set([
+  '\x7f',
+  '\b',
+  '\x1b[3~'
+])
 
 export type TerminalLiveTextChangeDecision =
   | { readonly kind: 'ignore' }
@@ -15,6 +23,11 @@ export type TerminalLiveSpecialKeyDecision =
 
 export type TerminalLiveSpecialKeyDecisionInput = {
   readonly key: string
+  readonly pendingText: string
+}
+
+export type TerminalLiveAccessoryBytesDecisionInput = {
+  readonly bytes: string
   readonly pendingText: string
 }
 
@@ -58,6 +71,32 @@ export function getTerminalLiveSpecialKeyDecision({
   }
 
   return { kind: 'send-now', bytes }
+}
+
+export function getTerminalLiveAccessoryBytesDecision({
+  bytes,
+  pendingText
+}: TerminalLiveAccessoryBytesDecisionInput): TerminalLiveSpecialKeyDecision {
+  if (pendingText.length > 0 && TERMINAL_LIVE_ACCESSORY_LOCAL_EDIT_BYTES.has(bytes)) {
+    return { kind: 'local-edit' }
+  }
+
+  if (pendingText.length > 0) {
+    return { kind: 'flush-then-send', pendingText, bytes }
+  }
+
+  return { kind: 'send-now', bytes }
+}
+
+export function getTerminalLiveAccessoryLocalEditText({
+  bytes,
+  pendingText
+}: TerminalLiveAccessoryBytesDecisionInput): string {
+  if (bytes !== '\x7f' && bytes !== '\b') {
+    return pendingText
+  }
+
+  return Array.from(pendingText).slice(0, -1).join('')
 }
 
 export function getTerminalLiveSubmitSequence(pendingText: string): readonly string[] {

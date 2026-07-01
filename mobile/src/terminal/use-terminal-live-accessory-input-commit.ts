@@ -1,0 +1,100 @@
+import { useCallback, type RefObject } from 'react'
+import type { TextInput } from 'react-native'
+import {
+  TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS,
+  getTerminalLiveAccessoryBytesDecision,
+  getTerminalLiveAccessoryLocalEditText
+} from './terminal-live-text-commit'
+
+export type TerminalLiveInputSender = (handle: string, bytes: string) => void
+
+type TerminalLiveInputCommitScheduler = (handle: string, text: string, delayMs: number) => void
+
+type TerminalLiveAccessoryInputCommitOptions = {
+  readonly activeHandle: string | null
+  readonly clearPendingLiveInputCommit: () => void
+  readonly flushPendingLiveInputText: (expectedHandle: string | null) => boolean
+  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputTerminalHandles: ReadonlySet<string>
+  readonly pendingLiveInputHandleRef: RefObject<string | null>
+  readonly pendingLiveInputTextRef: RefObject<string>
+  readonly schedulePendingLiveInputCommit: TerminalLiveInputCommitScheduler
+  readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
+  readonly setLiveInputCapture: (text: string) => void
+}
+
+export function useTerminalLiveAccessoryInputCommit({
+  activeHandle,
+  clearPendingLiveInputCommit,
+  flushPendingLiveInputText,
+  liveInputRef,
+  liveInputTerminalHandles,
+  pendingLiveInputHandleRef,
+  pendingLiveInputTextRef,
+  schedulePendingLiveInputCommit,
+  sendLiveTerminalInputRef,
+  setLiveInputCapture
+}: TerminalLiveAccessoryInputCommitOptions): (bytes: string) => boolean {
+  return useCallback(
+    (bytes: string): boolean => {
+      if (!activeHandle) {
+        return false
+      }
+      if (!liveInputTerminalHandles.has(activeHandle)) {
+        return false
+      }
+      const pendingText =
+        pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
+      if (pendingLiveInputHandleRef.current && pendingLiveInputHandleRef.current !== activeHandle) {
+        clearPendingLiveInputCommit()
+      }
+      const decision = getTerminalLiveAccessoryBytesDecision({ bytes, pendingText })
+      switch (decision.kind) {
+        case 'ignore':
+          return false
+        case 'send-now':
+          sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          clearPendingLiveInputCommit()
+          return true
+        case 'local-edit': {
+          const editedText = getTerminalLiveAccessoryLocalEditText({ bytes, pendingText })
+          if (editedText.length === 0) {
+            clearPendingLiveInputCommit()
+            return true
+          }
+          // Why: accessory buttons do not emit native TextInput edits, so the
+          // pending IME buffer must be edited and rescheduled here.
+          setLiveInputCapture(editedText)
+          liveInputRef.current?.setNativeProps({ text: editedText })
+          schedulePendingLiveInputCommit(
+            activeHandle,
+            editedText,
+            TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
+          )
+          return true
+        }
+        case 'flush-then-send':
+          if (!flushPendingLiveInputText(activeHandle)) {
+            return true
+          }
+          sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          return true
+        default:
+          decision satisfies never
+          return true
+      }
+    },
+    [
+      activeHandle,
+      clearPendingLiveInputCommit,
+      flushPendingLiveInputText,
+      liveInputRef,
+      liveInputTerminalHandles,
+      pendingLiveInputHandleRef,
+      pendingLiveInputTextRef,
+      schedulePendingLiveInputCommit,
+      sendLiveTerminalInputRef,
+      setLiveInputCapture
+    ]
+  )
+}
