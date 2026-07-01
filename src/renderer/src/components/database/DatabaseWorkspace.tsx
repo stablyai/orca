@@ -86,6 +86,14 @@ export function DatabaseWorkspace({ connectionId }: { connectionId: string }): R
                       event.stopPropagation()
                       handleCloseTab(tab.tabId)
                     }}
+                    onKeyDown={(event) => {
+                      // Stop Enter/Space bubbling to the tab wrapper, whose handler
+                      // preventDefaults the button's native click — otherwise the
+                      // keyboard path re-selects the tab instead of closing it.
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.stopPropagation()
+                      }
+                    }}
                     aria-label={translate('auto.components.database.DatabaseWorkspace.closeTab', 'Close tab')}
                     className="opacity-0 hover:text-foreground group-hover:opacity-100"
                   >
