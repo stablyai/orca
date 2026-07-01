@@ -2981,8 +2981,11 @@ export class Store {
             }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
-            // Only exact legacy default payloads are migrated; users who
+            // Why: a short-lived default put Done on the left. Repair only
+            // the exact raw payload once; user-authored reorders then survive.
+            const workspaceStatusesReorderedDefaultRepaired =
+              parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
+            // Why: only exact legacy default payloads are migrated; users who
             // customized status labels, colors, icons, or order keep theirs.
             const workspaceStatusesDefaultWorkflowMigrated =
               parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
@@ -2994,12 +2997,13 @@ export class Store {
               parsed.ui?.workspaceStatuses,
               {
                 migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
-                repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
+                repairReorderedDefaultStatuses: !workspaceStatusesReorderedDefaultRepaired,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesReorderedDefaultRepaired ||
               !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
@@ -3097,6 +3101,7 @@ export class Store {
               ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesReorderedDefaultRepaired: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,

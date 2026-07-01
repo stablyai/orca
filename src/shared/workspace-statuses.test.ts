@@ -162,6 +162,30 @@ describe('workspace status visuals', () => {
     expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
   })
 
+  it('repairs the exact reordered default status payload with the Done label', () => {
+    const statuses = normalizePersistedWorkspaceStatuses(
+      [
+        { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
+        {
+          id: 'in-review',
+          label: 'In review',
+          color: 'conductor-review',
+          icon: 'conductor-review'
+        },
+        {
+          id: 'in-progress',
+          label: 'In progress',
+          color: 'conductor-progress',
+          icon: 'conductor-progress'
+        },
+        { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+      ],
+      { repairReorderedDefaultStatuses: true }
+    )
+
+    expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
+  })
+
   it('does not repair reordered default-label statuses with a different raw shape', () => {
     const statuses = normalizePersistedWorkspaceStatuses(
       [

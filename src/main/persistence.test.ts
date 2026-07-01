@@ -70,6 +70,17 @@ const REORDERED_DEFAULT_WORKSPACE_STATUSES = [
   },
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
 ]
+const REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
 const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
   { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
@@ -4992,24 +5003,45 @@ describe('Store', () => {
     expect(ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
 
     store.flush()
-    const persisted = readDataFile() as {
-      ui?: {
-        workspaceStatuses?: typeof REORDERED_DEFAULT_WORKSPACE_STATUSES
-        _workspaceStatusesDefaultOrderMigrated?: boolean
-        _workspaceStatusesDefaultWorkflowMigrated?: boolean
-        _workspaceStatusesDefaultVisualsMigrated?: boolean
-      }
-    }
-    expect(persisted.ui?._workspaceStatusesDefaultOrderMigrated).toBe(true)
-    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
-    expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
-    expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(persisted.ui._workspaceStatusesReorderedDefaultRepaired).toBe(true)
+    expect(persisted.ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
+    expect(persisted.ui._workspaceStatusesDefaultVisualsMigrated).toBe(true)
+    expect(persisted.ui.workspaceStatuses?.map((status) => status.id)).toEqual([
       'todo',
       'in-progress',
       'in-review',
       'completed'
     ])
-    expect(persisted.ui?.workspaceStatuses?.at(-1)?.label).toBe('Done')
+    expect(persisted.ui.workspaceStatuses?.at(-1)?.label).toBe('Done')
+  })
+
+  it('repairs the known-bad reordered default statuses after old migration flags are set', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        workspaceStatuses: REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES,
+        _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true,
+        _workspaceStatusesDefaultVisualsMigrated: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
+      'in-progress',
+      'in-review',
+      'completed'
+    ])
+    expect(store.getUI().workspaceStatuses?.at(-1)?.label).toBe('Done')
+    expect(store.getUI()._workspaceStatusesReorderedDefaultRepaired).toBe(true)
   })
 
   it('migrates legacy default workspace status visuals and workflow once on load', async () => {
@@ -5074,6 +5106,7 @@ describe('Store', () => {
       ui: {
         workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES,
         _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesReorderedDefaultRepaired: true,
         _workspaceStatusesDefaultWorkflowMigrated: true
       },
       githubCache: { pr: {}, issue: {} },
