@@ -193,6 +193,18 @@ describe('runMysqlBatch', () => {
     expect(counts).toEqual([2, 2])
   })
 
+  it('uses a read-only transaction when allowWrite is false', async () => {
+    const { calls, conn } = makeParamConnection([], [])
+    await runMysqlBatch(
+      makePool(conn),
+      'c1',
+      [{ sql: 'UPDATE t SET a = ? WHERE id = ?', params: [1, 2] }],
+      opts({ allowWrite: false }),
+      vi.fn()
+    )
+    expect(calls.map((c) => c.sql)).toContain('START TRANSACTION READ ONLY')
+  })
+
   it('rolls back and throws DbBatchError with the failing index', async () => {
     const calls: string[] = []
     const conn = {

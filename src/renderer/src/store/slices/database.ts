@@ -67,6 +67,9 @@ export type DbTableDataState = {
   edit: DbEditBuffer
   // Redacted error from the last Save attempt (kept while the buffer survives).
   saveError?: DbSafeError
+  // Monotonic load id — a response only commits if it's still the latest, so a
+  // slow earlier fetch can't overwrite a newer sort/filter/page result.
+  loadSeq: number
 }
 
 // Client-only id sequence for not-yet-inserted rows (never reaches the DB).
@@ -94,6 +97,9 @@ export type DbQueryState = {
   // Present only when the last Run was a single read (isCursorableRead) — enables
   // the results grid's sortable/filterable headers + pagination.
   refine?: DbQueryRefine
+  // Monotonic run/refine id — a response only commits if it's still the latest,
+  // so a stale in-flight run or refine can't overwrite a newer result.
+  querySeq?: number
 }
 
 // Tables/views cached for one schema (lazy-loaded on schema expand).
@@ -251,8 +257,9 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
     if (!connection || !refine) {
       return
     }
+    const seq = (get().dbQueryState[id]?.querySeq ?? 0) + 1
     set((s) => ({
-      dbQueryState: { ...s.dbQueryState, [id]: { ...s.dbQueryState[id], running: true } }
+      dbQueryState: { ...s.dbQueryState, [id]: { ...s.dbQueryState[id], running: true, querySeq: seq } }
     }))
     const statement = buildWrappedQuerySql(connection.engine, refine.baseSql, {
       filters: refine.filters,
@@ -263,7 +270,8 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
     const res = await window.api.database.execute({ id, statement })
     set((s) => {
       const prev = s.dbQueryState[id]
-      if (!prev?.refine) {
+      // Drop a stale refine superseded by a newer run/refine.
+      if (!prev?.refine || prev.querySeq !== seq) {
         return {}
       }
       if (!res.ok) {
@@ -462,33 +470,41 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
     },
 
     runDbQuery: async (id, sql) => {
-      set((s) => ({ dbQueryState: { ...s.dbQueryState, [id]: { running: true } } }))
+      const seq = (get().dbQueryState[id]?.querySeq ?? 0) + 1
+      set((s) => ({ dbQueryState: { ...s.dbQueryState, [id]: { running: true, querySeq: seq } } }))
       // A cancel resolves this same promise as ok:false (the DB errors out the
       // running query), so both paths land in the finally-style state update.
       const result = await window.api.database.query({ id, sql })
-      set((s) => ({
-        dbQueryState: {
-          ...s.dbQueryState,
-          [id]: result.ok
-            ? {
-                running: false,
-                result: result.result,
-                // Only a single read can be wrapped for server-side sort/filter.
-                refine: isCursorableRead(sql)
-                  ? {
-                      baseSql: sql,
-                      sort: null,
-                      filters: [],
-                      offset: 0,
-                      pageSize: DB_TABLE_PAGE_SIZE,
-                      hasNext: false,
-                      engaged: false
-                    }
-                  : undefined
-              }
-            : { running: false, error: result.error }
+      set((s) => {
+        // Drop a stale run superseded by a newer run/refine on this connection.
+        if (s.dbQueryState[id]?.querySeq !== seq) {
+          return {}
         }
-      }))
+        return {
+          dbQueryState: {
+            ...s.dbQueryState,
+            [id]: result.ok
+              ? {
+                  running: false,
+                  querySeq: seq,
+                  result: result.result,
+                  // Only a single read can be wrapped for server-side sort/filter.
+                  refine: isCursorableRead(sql)
+                    ? {
+                        baseSql: sql,
+                        sort: null,
+                        filters: [],
+                        offset: 0,
+                        pageSize: DB_TABLE_PAGE_SIZE,
+                        hasNext: false,
+                        engaged: false
+                      }
+                    : undefined
+                }
+              : { running: false, querySeq: seq, error: result.error }
+          }
+        }
+      })
       return result
     },
 
@@ -546,7 +562,8 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
                   pageSize: DB_TABLE_PAGE_SIZE,
                   hasNext: false,
                   loading: true,
-                  edit: emptyEditBuffer()
+                  edit: emptyEditBuffer(),
+                  loadSeq: 0
                 }
               }
             }
@@ -592,8 +609,13 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       if (!connection || !view) {
         return
       }
+      const seq = view.loadSeq + 1
       set((s) => ({
-        dbTableData: patchTableDataState(s.dbTableData, id, tabId, { loading: true, error: undefined })
+        dbTableData: patchTableDataState(s.dbTableData, id, tabId, {
+          loading: true,
+          error: undefined,
+          loadSeq: seq
+        })
       }))
       // Fetch pageSize+1 so a trailing row signals a next page without COUNT(*).
       const statement = buildSelectSql(connection.engine, {
@@ -606,6 +628,10 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       })
       const res = await window.api.database.execute({ id, statement })
       set((s) => {
+        // Drop a stale response superseded by a newer load for this tab.
+        if (s.dbTableData[id]?.[tabId]?.loadSeq !== seq) {
+          return {}
+        }
         if (!res.ok) {
           return {
             dbTableData: patchTableDataState(s.dbTableData, id, tabId, {
@@ -773,11 +799,26 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       for (const row of view.result.rows) {
         rowsByKey[rowKeyFor(keyColumns, columnNames, row)] = row
       }
-      const statements = bufferToStatements(
-        connection.engine,
-        { schema: view.schema, table: view.table, keyColumns, columnNames, rowsByKey },
-        view.edit
-      )
+      let statements
+      try {
+        statements = bufferToStatements(
+          connection.engine,
+          { schema: view.schema, table: view.table, keyColumns, columnNames, rowsByKey },
+          view.edit
+        )
+      } catch {
+        // A staged row could not be keyed (e.g. its page was reloaded underneath).
+        // Surface a save error and keep the buffer rather than issuing a bad write.
+        set((s) => ({
+          dbTableData: patchTableDataState(s.dbTableData, id, tabId, {
+            saveError: {
+              code: 'edit_state',
+              safeMessage: 'Could not match staged changes to rows — refresh and try again.'
+            }
+          })
+        }))
+        return false
+      }
       if (statements.length === 0) {
         return false
       }

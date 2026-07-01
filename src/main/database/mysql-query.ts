@@ -204,7 +204,9 @@ export async function runMysqlBatch(
     const [pidRows] = await conn.query('SELECT CONNECTION_ID() AS id')
     onStart({ connectionId, backendPid: Number((pidRows as { id?: number }[])[0]?.id) || null })
     await conn.query(`SET SESSION max_execution_time = ${Math.trunc(opts.timeoutMs)}`)
-    await conn.query('START TRANSACTION')
+    // Defense in depth: keep a read-only connection DB-enforced on this write path
+    // too (the manager already rejects !allowWrite before reaching here).
+    await conn.query(opts.allowWrite ? 'START TRANSACTION' : 'START TRANSACTION READ ONLY')
     const rowCounts: number[] = []
     for (let i = 0; i < statements.length; i++) {
       try {

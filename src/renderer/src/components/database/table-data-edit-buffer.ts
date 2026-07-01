@@ -141,8 +141,20 @@ export function bufferToStatements(
   buffer: DbEditBuffer
 ): DbStatement[] {
   const keyValuesFor = (rowKey: string): unknown[] => {
-    const row = ctx.rowsByKey[rowKey] ?? []
-    return ctx.keyColumns.map((k) => row[ctx.columnNames.indexOf(k)])
+    const row = ctx.rowsByKey[rowKey]
+    // Fail closed: a missing row or unresolved PK column would otherwise bind
+    // `undefined` and produce an invalid / no-op UPDATE/DELETE. The caller
+    // surfaces this as a save error instead of silently issuing a wrong write.
+    if (!row) {
+      throw new Error('db_edit_row_unresolved')
+    }
+    return ctx.keyColumns.map((k) => {
+      const index = ctx.columnNames.indexOf(k)
+      if (index === -1) {
+        throw new Error('db_edit_key_column_missing')
+      }
+      return row[index]
+    })
   }
   const statements: DbStatement[] = []
 

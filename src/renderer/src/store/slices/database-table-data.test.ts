@@ -110,4 +110,40 @@ describe('table Data tab store flow', () => {
     const last = execute.mock.calls.at(-1)?.[0].statement
     expect(last?.sql).toContain('ORDER BY "id" ASC')
   })
+
+  it('drops a stale response so a slow earlier load cannot overwrite a newer one', async () => {
+    // Deferred execute: each call parks a resolver so the test controls ordering.
+    const resolvers: Array<(rows: unknown[][]) => void> = []
+    const execute = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push((rows) =>
+            resolve({
+              ok: true,
+              result: { columns: [{ name: 'id' }], rows, rowCount: rows.length, truncated: false, durationMs: 1 }
+            })
+          )
+        })
+    )
+    ;(globalThis as { window?: unknown }).window = {
+      api: {
+        database: { execute, introspectTableColumns: vi.fn(async () => ({ ok: true, columns: [] })) }
+      }
+    }
+    const store = createTestStore()
+    store.setState({ dbConnections: [connection()] })
+    store.getState().openDbTableTab('c1', 'public', 'users') // load #1
+    const tabId = dbColumnKey('public', 'users')
+    await flush()
+    store.getState().setDbTableSort('c1', tabId, 'id') // load #2 (newer)
+    await flush()
+
+    // Newer load resolves first and commits; the older (stale) one is ignored.
+    resolvers[1]([[2]])
+    await flush()
+    resolvers[0]([[1]])
+    await flush()
+
+    expect(store.getState().dbTableData.c1[tabId].result?.rows).toEqual([[2]])
+  })
 })

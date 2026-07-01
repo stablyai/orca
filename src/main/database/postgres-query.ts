@@ -165,6 +165,11 @@ export async function runPostgresBatch(
     onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
     await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
     await client.query('BEGIN')
+    // Defense in depth: a read-only connection stays DB-enforced even if this
+    // write path is somehow reached (the manager already rejects !allowWrite).
+    if (!opts.allowWrite) {
+      await client.query('SET TRANSACTION READ ONLY')
+    }
     const rowCounts: number[] = []
     for (let i = 0; i < statements.length; i++) {
       try {

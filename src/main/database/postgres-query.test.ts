@@ -213,6 +213,18 @@ describe('runPostgresBatch', () => {
     expect(counts).toEqual([1, 1])
   })
 
+  it('downgrades the batch transaction to READ ONLY when allowWrite is false', async () => {
+    const { calls, client } = makeParamClient([], [])
+    await runPostgresBatch(
+      makePool(client),
+      'c1',
+      [{ sql: 'UPDATE t SET a = $1 WHERE id = $2', params: [1, 2] }],
+      opts({ allowWrite: false }),
+      vi.fn()
+    )
+    expect(calls.map((c) => c.text)).toContain('SET TRANSACTION READ ONLY')
+  })
+
   it('rolls back the whole batch and throws DbBatchError with the failing index', async () => {
     const calls: string[] = []
     const client = {

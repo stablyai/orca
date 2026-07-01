@@ -116,4 +116,9 @@ describe('bufferToStatements', () => {
     expect(stmts[0].sql).toBe('UPDATE "public"."users" SET "id" = $1 WHERE "id" = $2')
     expect(stmts[0].params).toEqual([99, 7])
   })
+
+  it('throws (rather than binding undefined) when a staged row cannot be keyed', () => {
+    const b = stageCellEdit(emptyEditBuffer(), '[999]', 'name', 'X', 'Al')
+    expect(() => bufferToStatements('postgres', ctx, b)).toThrow()
+  })
 })
