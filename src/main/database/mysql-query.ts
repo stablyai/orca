@@ -26,7 +26,7 @@ type BoundedRows = { columns: { name: string }[]; rows: unknown[][]; rowCount: n
 // Minimal shape of the core (callback) connection reachable via `.connection`,
 // used only for row-by-row streaming (the promise API buffers whole results).
 type StreamingCore = {
-  query(opts: { sql: string; rowsAsArray: boolean }): {
+  query(opts: { sql: string; values?: unknown[]; rowsAsArray: boolean }): {
     on(event: 'fields', cb: (fields: { name: string }[]) => void): unknown
     on(event: 'error', cb: (err: unknown) => void): unknown
     stream(): Readable
@@ -43,7 +43,8 @@ function streamBounded(
   core: StreamingCore,
   sql: string,
   rowLimit: number,
-  onEarlyStop: () => void
+  onEarlyStop: () => void,
+  values?: unknown[]
 ): Promise<BoundedRows> {
   return new Promise<BoundedRows>((resolve, reject) => {
     let columns: { name: string }[] = []
@@ -55,7 +56,7 @@ function streamBounded(
         ;(fn as (v: unknown) => void)(value)
       }
     }
-    const q = core.query({ sql, rowsAsArray: true })
+    const q = core.query(values ? { sql, values, rowsAsArray: true } : { sql, rowsAsArray: true })
     q.on('fields', (fields) => {
       columns = normalizeFields(fields)
     })
@@ -78,8 +79,17 @@ function streamBounded(
 // Non-cursorable statements (writes/DDL) run directly; they return a header, not
 // rows. rowsAsArray keeps any returned rows positional. A client-side `timeout`
 // bounds writes (red-team L1) — `max_execution_time` only covers SELECT.
-async function runDirect(conn: PoolConnection, sql: string, timeoutMs: number): Promise<BoundedRows> {
-  const [result, fields] = await conn.query({ sql, rowsAsArray: true, timeout: timeoutMs })
+async function runDirect(
+  conn: PoolConnection,
+  sql: string,
+  timeoutMs: number,
+  values?: unknown[]
+): Promise<BoundedRows> {
+  const [result, fields] = await conn.query(
+    values
+      ? { sql, values, rowsAsArray: true, timeout: timeoutMs }
+      : { sql, rowsAsArray: true, timeout: timeoutMs }
+  )
   if (Array.isArray(result)) {
     const rows = result as unknown[][]
     return { columns: normalizeFields(fields as { name: string }[]), rows, rowCount: rows.length, truncated: false }
@@ -153,6 +163,7 @@ export async function runMysqlExecute(
   onStart: (handle: QueryHandle) => void
 ): Promise<QueryResult> {
   const conn = await pool.getConnection()
+  let poisoned = false
   try {
     const [pidRows] = await conn.query('SELECT CONNECTION_ID() AS id')
     onStart({ connectionId, backendPid: Number((pidRows as { id?: number }[])[0]?.id) || null })
@@ -160,33 +171,36 @@ export async function runMysqlExecute(
     await conn.query(opts.allowWrite ? 'START TRANSACTION' : 'START TRANSACTION READ ONLY')
     const startedAt = Date.now()
     try {
-      const [result, fields] = await conn.query({
-        sql: statement.sql,
-        values: statement.params,
-        rowsAsArray: true,
-        timeout: opts.timeoutMs
-      })
-      await conn.query('COMMIT')
-      if (Array.isArray(result)) {
-        const allRows = result as unknown[][]
-        const truncated = allRows.length > opts.rowLimit
-        const rows = truncated ? allRows.slice(0, opts.rowLimit) : allRows
-        return {
-          columns: normalizeFields(fields as { name: string }[]),
-          rows,
-          rowCount: rows.length,
-          truncated,
-          durationMs: Date.now() - startedAt
-        }
+      // Row-producing statements stream bounded to rowLimit+1 so a statement that
+      // ever ships without its own LIMIT can't materialize the whole result set;
+      // writes/DDL run directly (they return a header, not rows).
+      const bounded = isCursorableRead(statement.sql)
+        ? await streamBounded(
+            (conn as unknown as { connection: StreamingCore }).connection,
+            statement.sql,
+            opts.rowLimit,
+            () => {
+              poisoned = true
+            },
+            statement.params
+          )
+        : await runDirect(conn, statement.sql, opts.timeoutMs, statement.params)
+      // H2: skip COMMIT on a stream torn down early (undrained packets); the txn
+      // is abandoned when `finally` destroys the poisoned connection.
+      if (!poisoned) {
+        await conn.query('COMMIT')
       }
-      const affected = (result as { affectedRows?: number }).affectedRows ?? 0
-      return { columns: [], rows: [], rowCount: affected, truncated: false, durationMs: Date.now() - startedAt }
+      return { ...bounded, durationMs: Date.now() - startedAt }
     } catch (err) {
       await conn.query('ROLLBACK').catch(() => {})
       throw err
     }
   } finally {
-    conn.release()
+    if (poisoned) {
+      conn.destroy()
+    } else {
+      conn.release()
+    }
   }
 }
 

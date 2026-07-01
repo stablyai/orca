@@ -138,6 +138,28 @@ describe('runPostgresQuery', () => {
     expect(calls).toContain('ROLLBACK')
     expect(client.release).toHaveBeenCalledTimes(1)
   })
+
+  it('evicts the client from the pool when ROLLBACK also fails', async () => {
+    const client = {
+      release: vi.fn(),
+      query: vi.fn((arg: QueryArg) => {
+        const text = textOf(arg)
+        if (text.includes('pg_backend_pid')) {
+          return Promise.resolve({ rows: [{ pid: 7 }] })
+        }
+        // Fail the query and its ROLLBACK: the client may still hold an open
+        // transaction and must be evicted, not returned to the pool.
+        if (text.startsWith('DECLARE') || text === 'ROLLBACK') {
+          return Promise.reject(new Error('boom'))
+        }
+        return Promise.resolve({ rows: [], rowCount: 0 })
+      })
+    }
+    await expect(
+      runPostgresQuery(makePool(client), 'c1', 'SELECT * FROM missing', opts(), vi.fn())
+    ).rejects.toThrow()
+    expect(client.release).toHaveBeenCalledWith(true)
+  })
 })
 
 // Fake client for the parameterized execute/batch paths: records SQL + values.
@@ -173,8 +195,11 @@ describe('runPostgresExecute', () => {
     expect(texts).toContain('BEGIN')
     expect(texts).toContain('SET TRANSACTION READ ONLY')
     expect(texts).toContain('COMMIT')
-    const select = calls.find((c) => c.text.startsWith('SELECT * FROM t'))
-    expect(select?.values).toEqual([5])
+    // A read is bounded through a cursor; the bind params attach to the DECLARE.
+    const declare = calls.find((c) => c.text.startsWith('DECLARE'))
+    expect(declare?.text).toContain('SELECT * FROM t WHERE a = $1')
+    expect(declare?.values).toEqual([5])
+    expect(texts.some((t) => t.startsWith('FETCH FORWARD'))).toBe(true)
     expect(result.rows).toEqual([[1], [2]])
     expect(result.columns).toEqual([{ name: 'n' }])
   })
@@ -190,6 +215,19 @@ describe('runPostgresExecute', () => {
     )
     expect(calls.map((c) => c.text)).not.toContain('SET TRANSACTION READ ONLY')
     expect(calls.map((c) => c.text)).toContain('COMMIT')
+  })
+
+  it('bounds a read through the cursor even if the statement lacks its own LIMIT', async () => {
+    const { client } = makeParamClient([[1], [2], [3]], [{ name: 'n' }])
+    const result = await runPostgresExecute(
+      makePool(client),
+      'c1',
+      { sql: 'SELECT * FROM t', params: [] },
+      opts({ rowLimit: 2 }),
+      vi.fn()
+    )
+    expect(result.rows).toEqual([[1], [2]])
+    expect(result.truncated).toBe(true)
   })
 })
 

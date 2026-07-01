@@ -116,6 +116,13 @@ describe('runMysqlQuery', () => {
 // other DML → an affectedRows header. Records SQL + bind values per call.
 function makeParamConnection(selectRows: unknown[][], fields: { name: string }[]) {
   const calls: { sql: string; values?: unknown[] }[] = []
+  // Core (callback) connection used by the bounded streaming read path.
+  const core = {
+    query: vi.fn((arg: { sql: string; values?: unknown[]; rowsAsArray: boolean }) => {
+      calls.push({ sql: arg.sql, values: arg.values })
+      return makeCoreQuery(selectRows, fields)
+    })
+  }
   const conn = {
     query: vi.fn((arg: string | { sql: string; values?: unknown[] }): Promise<[unknown, unknown]> => {
       if (typeof arg === 'string') {
@@ -125,12 +132,11 @@ function makeParamConnection(selectRows: unknown[][], fields: { name: string }[]
         }
         return Promise.resolve([[], []])
       }
+      // Non-cursorable statements (writes/DDL) run directly and return a header.
       calls.push({ sql: arg.sql, values: arg.values })
-      if (/^\s*SELECT/i.test(arg.sql)) {
-        return Promise.resolve([selectRows, fields])
-      }
       return Promise.resolve([{ affectedRows: 2 }, []])
     }),
+    connection: core,
     release: vi.fn(),
     destroy: vi.fn()
   }
@@ -170,6 +176,20 @@ describe('runMysqlExecute', () => {
     expect(sqls).toContain('START TRANSACTION')
     expect(sqls).not.toContain('START TRANSACTION READ ONLY')
     expect(sqls).toContain('COMMIT')
+  })
+
+  it('bounds a streamed read to rowLimit and drops the poisoned connection', async () => {
+    const { conn } = makeParamConnection([[1], [2], [3]], [{ name: 'n' }])
+    const result = await runMysqlExecute(
+      makePool(conn),
+      'c1',
+      { sql: 'SELECT * FROM t', params: [] },
+      opts({ rowLimit: 2 }),
+      vi.fn()
+    )
+    expect(result.rows).toEqual([[1], [2]])
+    expect(result.truncated).toBe(true)
+    expect(conn.destroy).toHaveBeenCalledTimes(1)
   })
 })
 

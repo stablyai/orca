@@ -29,12 +29,18 @@ const CURSOR_NAME = 'orca_query_cursor'
 
 type BoundedRows = { columns: { name: string }[]; rows: unknown[][]; rowCount: number; truncated: boolean }
 
-async function fetchBounded(client: PoolClient, sql: string, rowLimit: number): Promise<BoundedRows> {
+async function fetchBounded(
+  client: PoolClient,
+  sql: string,
+  rowLimit: number,
+  params?: unknown[]
+): Promise<BoundedRows> {
   if (isCursorableRead(sql)) {
-    // DECLARE the user's query as a cursor, then FETCH one more than the cap to
-    // detect overflow. The SQL is embedded verbatim (a cursor query can't be
-    // parameterized) — safe here since it is the user's own SQL on their own DB.
-    await client.query(`DECLARE ${CURSOR_NAME} NO SCROLL CURSOR FOR ${sql}`)
+    // DECLARE the query as a cursor, then FETCH one more than the cap to detect
+    // overflow. Any bind params attach to the cursor's query via the extended
+    // protocol; the SQL text is embedded verbatim (the cursor query itself can't
+    // be otherwise parameterized) — safe: it's the user's own SQL on their own DB.
+    await client.query({ text: `DECLARE ${CURSOR_NAME} NO SCROLL CURSOR FOR ${sql}`, values: params })
     const fetched = await client.query({
       text: `FETCH FORWARD ${rowLimit + 1} FROM ${CURSOR_NAME}`,
       rowMode: 'array'
@@ -50,7 +56,7 @@ async function fetchBounded(client: PoolClient, sql: string, rowLimit: number): 
     }
   }
   // Writes / non-cursorable statements: run directly (they return few/no rows).
-  const result = await client.query({ text: sql, rowMode: 'array' })
+  const result = await client.query({ text: sql, values: params, rowMode: 'array' })
   const rows = (result.rows ?? []) as unknown[][]
   return {
     columns: (result.fields ?? []).map((f) => ({ name: f.name })),
@@ -68,6 +74,9 @@ export async function runPostgresQuery(
   onStart: (handle: QueryHandle) => void
 ): Promise<QueryResult> {
   const client = await pool.connect()
+  // Evict the client from the pool if ROLLBACK fails (it may still hold an open
+  // transaction) rather than returning a poisoned connection.
+  let evict = false
   try {
     const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
     const backendPid = Number(pidResult.rows[0]?.pid) || null
@@ -95,11 +104,13 @@ export async function runPostgresQuery(
       await client.query('COMMIT')
       return { ...bounded, durationMs: Date.now() - startedAt }
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => {
+        evict = true
+      })
       throw err
     }
   } finally {
-    client.release()
+    client.release(evict)
   }
 }
 
@@ -115,6 +126,9 @@ export async function runPostgresExecute(
   onStart: (handle: QueryHandle) => void
 ): Promise<QueryResult> {
   const client = await pool.connect()
+  // Evict the client from the pool if ROLLBACK fails (it may still hold an open
+  // transaction) rather than returning a poisoned connection.
+  let evict = false
   try {
     const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
     onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
@@ -125,28 +139,19 @@ export async function runPostgresExecute(
     }
     const startedAt = Date.now()
     try {
-      const result = await client.query({
-        text: statement.sql,
-        values: statement.params,
-        rowMode: 'array'
-      })
+      // Bound the fetch (cursor for row-producing reads) so a statement that ever
+      // ships without its own LIMIT still can't materialize the whole result set.
+      const bounded = await fetchBounded(client, statement.sql, opts.rowLimit, statement.params)
       await client.query('COMMIT')
-      const allRows = (result.rows ?? []) as unknown[][]
-      const truncated = allRows.length > opts.rowLimit
-      const rows = truncated ? allRows.slice(0, opts.rowLimit) : allRows
-      return {
-        columns: (result.fields ?? []).map((f) => ({ name: f.name })),
-        rows,
-        rowCount: result.rowCount ?? rows.length,
-        truncated,
-        durationMs: Date.now() - startedAt
-      }
+      return { ...bounded, durationMs: Date.now() - startedAt }
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => {
+        evict = true
+      })
       throw err
     }
   } finally {
-    client.release()
+    client.release(evict)
   }
 }
 
@@ -160,6 +165,9 @@ export async function runPostgresBatch(
   onStart: (handle: QueryHandle) => void
 ): Promise<number[]> {
   const client = await pool.connect()
+  // Evict the client from the pool if ROLLBACK fails (it may still hold an open
+  // transaction) rather than returning a poisoned connection.
+  let evict = false
   try {
     const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
     onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
@@ -179,14 +187,16 @@ export async function runPostgresBatch(
         })
         rowCounts.push(result.rowCount ?? 0)
       } catch (err) {
-        await client.query('ROLLBACK').catch(() => {})
+        await client.query('ROLLBACK').catch(() => {
+          evict = true
+        })
         throw new DbBatchError(i, err)
       }
     }
     await client.query('COMMIT')
     return rowCounts
   } finally {
-    client.release()
+    client.release(evict)
   }
 }
 
