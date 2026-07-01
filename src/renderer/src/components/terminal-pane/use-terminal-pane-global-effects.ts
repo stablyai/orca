@@ -39,6 +39,19 @@ type UseTerminalPaneGlobalEffectsArgs = {
   toggleExpandPane: (paneId: number) => void
 }
 
+function reportRendererPtyVisibility(
+  paneTransports: ReadonlyMap<number, PtyTransport>,
+  visible: boolean
+): void {
+  for (const transport of paneTransports.values()) {
+    const ptyId = transport.getPtyId()
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      continue
+    }
+    window.api.pty.setRendererPtyVisible?.(ptyId, visible)
+  }
+}
+
 export function useTerminalPaneGlobalEffects({
   tabId,
   worktreeId,
@@ -68,6 +81,7 @@ export function useTerminalPaneGlobalEffects({
   const hasCompletedVisibleResumeRef = useRef(false)
   const renderingSuspendedByVisibilityRef = useRef(false)
   const hiddenReasonRef = useRef<TerminalHiddenReason | null>(null)
+  const rendererVisible = isVisible && isWorktreeActive
   const {
     captureViewportPositions,
     withSuppressedScrollTracking,
@@ -79,8 +93,24 @@ export function useTerminalPaneGlobalEffects({
     visibleResumeCompleteRef: wasVisibleRef,
     paneCount
   })
-  useTerminalContainerFitSync({ isVisible, isSyncFitEnabled, managerRef, containerRef })
-  useTerminalWindowWakeRecovery({ isVisible, managerRef, isActiveRef, isVisibleRef })
+  useTerminalContainerFitSync({
+    isVisible: rendererVisible,
+    isSyncFitEnabled,
+    managerRef,
+    containerRef
+  })
+  useTerminalWindowWakeRecovery({
+    isVisible: rendererVisible,
+    managerRef,
+    isActiveRef,
+    isVisibleRef
+  })
+
+  useEffect(() => {
+    const paneTransports = paneTransportsRef.current
+    reportRendererPtyVisibility(paneTransports, rendererVisible)
+    return () => reportRendererPtyVisibility(paneTransports, false)
+  }, [rendererVisible, paneCount, paneTransportsRef])
 
   useEffect(() => {
     const manager = managerRef.current
@@ -90,8 +120,8 @@ export function useTerminalPaneGlobalEffects({
     const wasVisible = wasVisibleRef.current
     const wasWorktreeActive = wasWorktreeActiveRef.current
     isActiveRef.current = isActive
-    isVisibleRef.current = isVisible
-    if (isVisible) {
+    isVisibleRef.current = rendererVisible
+    if (rendererVisible) {
       const shouldUseLightTabResume =
         isWorktreeActive &&
         hasCompletedVisibleResumeRef.current &&
@@ -127,11 +157,11 @@ export function useTerminalPaneGlobalEffects({
     wasVisibleRef.current = false
     wasWorktreeActiveRef.current = isWorktreeActive
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isVisible, isWorktreeActive])
+  }, [isActive, isWorktreeActive, rendererVisible])
 
   useEffect(() => {
     const manager = managerRef.current
-    const activePane = isActive && isVisible ? manager?.getActivePane() : null
+    const activePane = isActive && isVisible && isWorktreeActive ? manager?.getActivePane() : null
     const ptyId = activePane
       ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
       : null
@@ -142,7 +172,7 @@ export function useTerminalPaneGlobalEffects({
     // renderer output gets first chance at the bounded ACK reserve.
     window.api.pty.setActiveRendererPty?.(ptyId, true)
     return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
-  }, [isActive, isVisible, managerRef, paneTransportsRef])
+  }, [isActive, isVisible, isWorktreeActive, managerRef, paneTransportsRef])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {

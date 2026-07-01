@@ -938,6 +938,7 @@ export function connectPanePty(
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
+  let alternateScreenBackgroundRepaintTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
   // Why: tracks the keystroke proximity captured when the current synchronized
   // foreground frame opened, so a split end marker that lands after the redraw
@@ -1758,12 +1759,22 @@ export function connectPanePty(
     onDone: scheduleCommandCodeOutputDoneStatus
   })
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
+  const reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
+      return
+    }
+    window.api.pty.setRendererPtyVisible?.(ptyId, visible)
+  }
   const bindActivePanePty = (
     ptyId: string,
     options: { seedInitialAgentStatus?: boolean; updateTabPtyId?: 'always' | 'if-missing' } = {}
   ): void => {
+    if (activePanePtyBinding && activePanePtyBinding !== ptyId) {
+      reportPanePtyVisibility(activePanePtyBinding, false)
+    }
     setPanePtyFitBinding(ptyId)
     activePanePtyBinding = ptyId
+    reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
     // Why: record bind time on the spawn/attach chokepoint so the reconcile
     // guard knows this binding is newer than any pre-bind snapshot.
     activePanePtyBindingBoundAt = performance.now()
@@ -3947,6 +3958,40 @@ export function connectPanePty(
       deps.paneLastThemeModeRef.current.delete(pane.id)
     }
 
+    function pulseVisibleLocalPtySizeForTuiRepaint(ptyId: string): void {
+      if (
+        !isRendererPtyResizeAuthoritative() ||
+        shouldSuppressDesktopPtyResize() ||
+        isRemoteRuntimePtyId(ptyId)
+      ) {
+        return
+      }
+      const cols = pane.terminal.cols
+      const rows = pane.terminal.rows
+      if (cols <= 2 || rows <= 0) {
+        return
+      }
+      // Why: a hidden alternate-screen TUI can miss the same-size restore
+      // SIGWINCH. A one-column pulse makes the repaint observable to the child.
+      transport.resize(cols - 1, rows)
+      transport.resize(cols, rows)
+    }
+
+    function skipBackgroundAlternateScreenOutput(data: string): void {
+      writeHiddenStartupRendererQueries(data)
+      respondToSkippedMode2031Subscribe(data)
+      hiddenRendererStateDirty = true
+      recordHiddenRendererSkip(data.length)
+      const ptyId = transport.getPtyId()
+      if (!ptyId || alternateScreenBackgroundRepaintTimer !== null) {
+        return
+      }
+      pulseVisibleLocalPtySizeForTuiRepaint(ptyId)
+      alternateScreenBackgroundRepaintTimer = setTimeout(() => {
+        alternateScreenBackgroundRepaintTimer = null
+      }, 100)
+    }
+
     function resetHiddenOutputRestoreIfPtyChanged(): void {
       if (hiddenOutputRestorePtyId === null) {
         return
@@ -4222,7 +4267,8 @@ export function connectPanePty(
       // Why: split-pane layouts have multiple visible-but-inactive panes whose
       // output the user is watching. Throttle only when the pane or whole
       // Electron document is hidden.
-      const foreground = shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      const foreground =
+        shouldWritePtyOutputForeground(deps.isVisibleRef.current) && meta?.background !== true
       if (foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
@@ -4250,7 +4296,14 @@ export function connectPanePty(
       }
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
-      if (shouldSkipHiddenRendererOutput(foreground, data)) {
+      const skipBackgroundAlternateScreenFrame =
+        meta?.background === true &&
+        shouldWritePtyOutputForeground(deps.isVisibleRef.current) &&
+        pane.terminal.buffer.active.type === 'alternate' &&
+        !containsStatefulRendererQuery(data)
+      if (skipBackgroundAlternateScreenFrame) {
+        skipBackgroundAlternateScreenOutput(data)
+      } else if (shouldSkipHiddenRendererOutput(foreground, data)) {
         skipHiddenRendererOutput(data)
       } else if (
         (hiddenOutputRestoreNeeded || hiddenOutputRestoreInFlight) &&
@@ -4337,6 +4390,7 @@ export function connectPanePty(
         return
       }
       setPanePtyFitBinding(ptyId)
+      reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
       agentCompletionCoordinator.startProcessTracking()
@@ -5050,10 +5104,10 @@ export function connectPanePty(
     // keeps the typing hot path off the listSessions IPC between resumes.
     noteVisibilityResume() {
       livenessRecheckArmedForResume = true
-      // Why: re-assert the PTY size on resume so a resize that was dropped while
-      // this pane was hidden self-heals on show, instead of waiting for a manual
-      // resize that may never change xterm's column count.
-      ptySizeReassertion.request()
+      // Why: the visibility-resume path reattaches WebGL before doing the
+      // authoritative fit. Fitting here can measure xterm's hidden DOM fallback
+      // and send a transient narrow SIGWINCH before the renderer is restored.
+      ptySizeReassertion.request({ fit: false })
     },
     reconcileIfSessionDead,
     dispose() {
@@ -5098,12 +5152,17 @@ export function connectPanePty(
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       clearReattachIdleAgentCursorResetTimer()
+      if (alternateScreenBackgroundRepaintTimer !== null) {
+        clearTimeout(alternateScreenBackgroundRepaintTimer)
+        alternateScreenBackgroundRepaintTimer = null
+      }
       cleanupHiddenOutputRestoreDeferredRetry()
       cleanupHiddenOutputRestoreForegroundDeadline()
       unregisterBacklogRecovery?.()
       unregisterBacklogRecovery = null
       unregisterDocumentVisibilityRecovery?.()
       unregisterDocumentVisibilityRecovery = null
+      reportPanePtyVisibility(activePanePtyBinding ?? transport.getPtyId(), false)
       clearPanePtyFitBinding()
       discardTerminalOutput(pane.terminal)
       unregisterE2ePtyDataInjection()

@@ -555,6 +555,33 @@ describe('registerPtyHandlers', () => {
     return activeCall[1] as (event: unknown, args: { id: string; active: boolean }) => void
   }
 
+  function getPtySetRendererPtyVisibleListener(): (
+    event: unknown,
+    args: { id: string; visible: boolean }
+  ) => void {
+    const visibleCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:setRendererPtyVisible'
+    )
+    if (!visibleCall) {
+      throw new Error('missing pty:setRendererPtyVisible listener')
+    }
+    return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
+  }
+
+  function getPtyResizeListener(): (
+    event: unknown,
+    args: { id: string; cols: number; rows: number }
+  ) => void {
+    const resizeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:resize')
+    if (!resizeCall) {
+      throw new Error('missing pty:resize listener')
+    }
+    return resizeCall[1] as (
+      event: unknown,
+      args: { id: string; cols: number; rows: number }
+    ) => void
+  }
+
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
@@ -5827,6 +5854,120 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves background-origin metadata when hidden output flushes after resume', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      mockProc.emitData('visible output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible output'
+      })
+
+      mainWindow.webContents.send.mockClear()
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      mockProc.emitData('\x1b[2Khidden-width redraw')
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '\x1b[2Khidden-width redraw',
+        background: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves background-origin metadata for repaint output caused by a hidden resize', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const resizePty = getPtyResizeListener()
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      mockProc.emitData('\x1b[2Khidden-resize redraw')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '\x1b[2Khidden-resize redraw',
+        background: true
+      })
+
+      mainWindow.webContents.send.mockClear()
+      resizePty(null, { id: spawnResult.id, cols: 80, rows: 24 })
+      mockProc.emitData('visible repaint')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible repaint'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not keep hidden resize metadata after visible user input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const resizePty = getPtyResizeListener()
+      const writePty = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      writePty(mainWindowIpcEvent, { id: spawnResult.id, data: 'x' })
+      mockProc.emitData('x')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'x'
       })
     } finally {
       vi.useRealTimers()

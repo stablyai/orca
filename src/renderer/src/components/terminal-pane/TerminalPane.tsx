@@ -281,8 +281,9 @@ export default function TerminalPane({
   const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const isVisibleRef = useRef(isVisible)
-  isVisibleRef.current = isVisible
+  const isRendererVisible = isVisible && isWorktreeActive
+  const isVisibleRef = useRef(isRendererVisible)
+  isVisibleRef.current = isRendererVisible
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
@@ -1284,7 +1285,7 @@ export default function TerminalPane({
     setupSplit,
     issueCommandSplit,
     isActive,
-    isVisible,
+    isVisible: isRendererVisible,
     systemPrefersDark,
     settings,
     settingsRef,
@@ -1637,7 +1638,7 @@ export default function TerminalPane({
     isWorktreeActive,
     // Why: hidden startup probes are opacity-hidden but measurable; ordinary
     // hidden tabs are display:none and refit on visibility resume instead.
-    isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
+    isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
     containerRef,

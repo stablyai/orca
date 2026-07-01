@@ -7655,6 +7655,57 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  it('skips a background-origin alternate-screen frame and pulses a PTY repaint', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current:
+        | ((
+            data: string,
+            meta?: { seq?: number; rawLength?: number; background?: boolean }
+          ) => void)
+        | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const signalPty = window.api.pty.signal as unknown as ReturnType<typeof vi.fn>
+    const staleHiddenTuiFrame = '\x1b[2Khidden-width codex composer\r\n'
+
+    const pane = createPane(1)
+    pane.terminal.cols = 133
+    pane.terminal.rows = 40
+    ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'alternate'
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: true }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+    getMainBufferSnapshot.mockClear()
+    transport.resize.mockClear()
+    signalPty.mockClear()
+
+    capturedDataCallback.current?.(staleHiddenTuiFrame, {
+      seq: staleHiddenTuiFrame.length,
+      rawLength: staleHiddenTuiFrame.length,
+      background: true
+    })
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(staleHiddenTuiFrame, expect.any(Function))
+    expect(transport.resize).toHaveBeenCalledWith(132, 40)
+    expect(transport.resize).toHaveBeenCalledWith(133, 40)
+    expect(signalPty).not.toHaveBeenCalledWith('pty-id', 'SIGWINCH')
+    disposable.dispose()
+  })
+
   it('does not forward terminal resizes while the pane is hidden', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
@@ -11581,8 +11632,8 @@ describe('connectPanePty', () => {
     // diverged. The renderer dedupes on what it *thinks* it sent, so a later
     // same-cols layout never re-forwards — "resizing sometimes doesn't fix it".
     // On resume the binding reads the PTY's ACTUAL size and re-asserts only on
-    // real drift. The mock pane's fitAddon has no proposeDimensions, so safeFit
-    // is a no-op and pane.terminal stays at its createPane() default (120x40).
+    // real drift. The visibility-resume path owns the post-WebGL fit, so this
+    // check verifies the current grid without fitting first.
     async function connectResumablePane(depsOverrides: Record<string, unknown> = {}): Promise<{
       binding: { noteVisibilityResume: () => void }
       transport: MockTransport
@@ -11666,6 +11717,31 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       // xterm is 120x40 (createPane default), PTY reports 80x24 → re-assert.
+      expect(transport.resize).toHaveBeenCalledWith(120, 40)
+    })
+
+    it('does not fit during visibility-resume reassertion', async () => {
+      vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 80, rows: 24 })
+      const { binding, transport, pane } = await connectResumablePane()
+      const fit = vi.fn(() => {
+        pane.terminal.cols = 132
+        pane.terminal.rows = 40
+      })
+      pane.fitAddon = {
+        ...pane.fitAddon,
+        fit,
+        proposeDimensions: vi.fn(() => ({ cols: 132, rows: 40 }))
+      } as never
+      Object.defineProperty(pane.container, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: 1130, height: 688 })
+      })
+      transport.resize.mockClear()
+
+      binding.noteVisibilityResume()
+      await flushAsyncTicks()
+
+      expect(fit).not.toHaveBeenCalled()
       expect(transport.resize).toHaveBeenCalledWith(120, 40)
     })
 

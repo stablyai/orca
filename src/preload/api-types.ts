@@ -1152,6 +1152,7 @@ export type PreloadApi = {
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number) => void
     setActiveRendererPty: (id: string, active: boolean) => void
+    setRendererPtyVisible: (id: string, visible: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -1186,7 +1187,13 @@ export type PreloadApi = {
     }>
     resetRendererDeliveryDebug: () => Promise<void>
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+      }) => void
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void

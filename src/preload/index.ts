@@ -821,6 +821,9 @@ const api = {
     setActiveRendererPty: (id: string, active: boolean): void => {
       ipcRenderer.send('pty:setActiveRendererPty', { id, active })
     },
+    setRendererPtyVisible: (id: string, visible: boolean): void => {
+      ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
+    },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
@@ -880,11 +883,23 @@ const api = {
       ipcRenderer.invoke('pty:getSize', { id }),
 
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { id: string; data: string; seq?: number; rawLength?: number }
+        data: {
+          id: string
+          data: string
+          seq?: number
+          rawLength?: number
+          background?: boolean
+        }
       ) => callback(data)
       ipcRenderer.on('pty:data', listener)
       return () => ipcRenderer.removeListener('pty:data', listener)
