@@ -71,12 +71,15 @@ describe('buildMysqlSsl', () => {
     expect(buildMysqlSsl('disable')).toBeUndefined()
   })
 
-  it('verifies certs for ssl=verify-full', () => {
-    expect(buildMysqlSsl('verify-full')).toEqual({ rejectUnauthorized: true })
+  it('verifies certs and hostname for ssl=verify-full', () => {
+    expect(buildMysqlSsl('verify-full')).toEqual({ rejectUnauthorized: true, verifyIdentity: true })
   })
 
-  it('does not verify certs for ssl=insecure-no-verify', () => {
-    expect(buildMysqlSsl('insecure-no-verify')).toEqual({ rejectUnauthorized: false })
+  it('does not verify certs or hostname for ssl=insecure-no-verify', () => {
+    expect(buildMysqlSsl('insecure-no-verify')).toEqual({
+      rejectUnauthorized: false,
+      verifyIdentity: false
+    })
   })
 })
 
@@ -92,7 +95,7 @@ describe('buildMysqlPoolConfig', () => {
     const config = buildMysqlPoolConfig(cfg())
     expect(config.connectTimeout).toBeGreaterThan(0)
     expect(config.connectionLimit).toBe(2)
-    expect(config.ssl).toEqual({ rejectUnauthorized: true })
+    expect(config.ssl).toEqual({ rejectUnauthorized: true, verifyIdentity: true })
   })
 })
 

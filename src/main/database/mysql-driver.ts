@@ -44,7 +44,14 @@ export function buildMysqlSsl(ssl: ResolvedSslMode): PoolOptions['ssl'] {
   if (ssl === 'disable') {
     return undefined
   }
-  return { rejectUnauthorized: ssl === 'verify-full' }
+  // mysql2 only runs the TLS hostname check when `verifyIdentity` is set; with
+  // `rejectUnauthorized` alone it validates the chain but NOT the hostname, so a
+  // CA-signed cert issued for any other host would pass. verify-full must verify
+  // both (matches pg, which sets `servername` so Node checks the hostname).
+  return {
+    rejectUnauthorized: ssl === 'verify-full',
+    verifyIdentity: ssl === 'verify-full'
+  }
 }
 
 // Connection-level config shared by the pool and the short-lived cancel session.
@@ -62,7 +69,13 @@ export function buildMysqlClientConfig(cfg: ResolvedDbConfig): ConnectionOptions
     infileStreamFactory: undefined,
     // Red-team F3/F7: single-statement only — the write guard and cancel logic
     // both assume one statement per query; multi-statement would bypass them.
-    multipleStatements: false
+    multipleStatements: false,
+    // BIGINT/DECIMAL exceed JS number precision (> 2^53); return them as strings
+    // so large values round-trip exactly — otherwise a PK-keyed edit could bind a
+    // rounded value and update the wrong row (or none). pg already returns bigint
+    // as a string.
+    supportBigNumbers: true,
+    bigNumberStrings: true
   }
 }
 
