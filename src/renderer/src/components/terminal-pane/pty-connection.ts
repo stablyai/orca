@@ -48,6 +48,7 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
+  RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
@@ -948,11 +949,12 @@ export function connectPanePty(
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
-  let queueAgentIdleCursorReset = (): void => {
+  let idleAgentTerminalModeReset = RESET_TERMINAL_CURSOR_STYLE
+  let queueAgentIdleTerminalModeReset = (): void => {
     if (disposed) {
       return
     }
-    writeTerminalOutput(pane.terminal, RESET_TERMINAL_CURSOR_STYLE, {
+    writeTerminalOutput(pane.terminal, idleAgentTerminalModeReset, {
       foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
     })
   }
@@ -1235,7 +1237,7 @@ export function connectPanePty(
       // Why: restored idle agent TUIs can repaint after reattach SIGWINCH and
       // reapply DECSCUSR steady-bar; the normal working→idle reset will not
       // fire because the agent was already idle before Orca restarted.
-      queueAgentIdleCursorReset()
+      queueAgentIdleTerminalModeReset()
     }, REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS)
   }
   const interruptInference = createAgentInterruptInference({
@@ -2012,9 +2014,9 @@ export function connectPanePty(
     if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
-    // Why: some agent TUIs leave xterm in DECSCUSR steady-cursor mode when
-    // they become idle. Reset to Orca's configured cursor once the turn ends.
-    queueAgentIdleCursorReset()
+    // Why: some agent TUIs leave xterm renderer modes active after a turn.
+    // Reset cursor everywhere, and Kitty keyboard state on native Windows.
+    queueAgentIdleTerminalModeReset()
   }
   const onAgentBecameWorking = (): void => {
     if (syncAgentTaskCompleteTrackingEnabled()) {
@@ -2085,9 +2087,25 @@ export function connectPanePty(
     shellOverride,
     executionHostId
   })
+  if (isNativeWindowsConpty) {
+    // Why: completed Windows ConPTY agent turns can leave xterm's renderer-side
+    // Kitty encoder enabled; clearing it restores plain Backspace/Enter input.
+    idleAgentTerminalModeReset = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+  }
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
   const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
+  let lastAgentStatusState = state.agentStatusByPaneKey[cacheKey]?.state
+  let unsubscribeWindowsDoneTerminalModeReset: (() => void) | null = null
+  if (isNativeWindowsConpty) {
+    unsubscribeWindowsDoneTerminalModeReset = useAppStore.subscribe((nextState) => {
+      const nextAgentStatusState = nextState.agentStatusByPaneKey[cacheKey]?.state
+      if (lastAgentStatusState !== 'done' && nextAgentStatusState === 'done') {
+        queueAgentIdleTerminalModeReset()
+      }
+      lastAgentStatusState = nextAgentStatusState
+    })
+  }
 
   const restoredPtyIdForTransport =
     deps.restoredLeafId && deps.restoredPtyIdByLeafId
@@ -3577,12 +3595,12 @@ export function connectPanePty(
       })
     }
 
-    queueAgentIdleCursorReset = (): void => {
+    queueAgentIdleTerminalModeReset = (): void => {
       if (disposed) {
         return
       }
       writePtyOutputToXterm(
-        RESET_TERMINAL_CURSOR_STYLE,
+        idleAgentTerminalModeReset,
         shouldWritePtyOutputForeground(deps.isVisibleRef.current)
       )
     }
@@ -5171,6 +5189,10 @@ export function connectPanePty(
       if (agentTaskCompleteSettingsUnsubscribe !== null) {
         agentTaskCompleteSettingsUnsubscribe()
         agentTaskCompleteSettingsUnsubscribe = null
+      }
+      if (unsubscribeWindowsDoneTerminalModeReset !== null) {
+        unsubscribeWindowsDoneTerminalModeReset()
+        unsubscribeWindowsDoneTerminalModeReset = null
       }
       if (connectFrame !== null) {
         // Why: StrictMode and split-group remounts can dispose a pane binding
