@@ -1,9 +1,7 @@
 import React, { useState } from 'react'
-import { Database, KeyRound, Pencil, Plug, PlugZap, Plus, Trash2 } from 'lucide-react'
+import { Database, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ConnectionStatusIndicator } from './connection-status-indicator'
 import {
   Dialog,
   DialogContent,
@@ -16,12 +14,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { DbConnectionSummary } from '../../../../shared/database-types'
 import { ConnectionForm } from './ConnectionForm'
-
-function engineLabel(engine: DbConnectionSummary['engine']): string {
-  return engine === 'postgres'
-    ? translate('auto.components.database.ConnectionList.postgres', 'Postgres')
-    : translate('auto.components.database.ConnectionList.mysql', 'MySQL')
-}
+import { ConnectionRow } from './connection-row'
 
 function EmptyConnectionState({ onAddClick }: { onAddClick: () => void }): React.JSX.Element {
   return (
@@ -137,128 +130,20 @@ export function ConnectionList(): React.JSX.Element {
             </Button>
           </div>
           <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
-            <div className="divide-y divide-border px-5">
-              {dbConnections.map((connection) => {
-                const status = dbStatuses[connection.id]?.status ?? 'idle'
-                const isConnected = status === 'connected'
-                const isBusy = status === 'connecting' || status === 'testing'
-                const isActive = activeDbConnectionId === connection.id
-                return (
-                  <div key={connection.id} className="flex items-center gap-3 py-3">
-                    <div
-                      role="button"
-                      tabIndex={isConnected ? 0 : -1}
-                      aria-disabled={!isConnected}
-                      onClick={() => {
-                        if (isConnected) { setActiveDbConnection(connection.id) }
-                      }}
-                      onKeyDown={(e) => {
-                        if (isConnected && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault()
-                          setActiveDbConnection(connection.id)
-                        }
-                      }}
-                      className={`min-w-0 flex-1 space-y-1 rounded-md px-2 py-1 text-left ${
-                        isConnected ? 'cursor-pointer hover:bg-accent/50' : 'cursor-default'
-                      } ${isActive ? 'bg-accent/60' : ''}`}
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">{connection.name}</span>
-                        <Badge variant="secondary" className="h-5 text-[10px]">
-                          {engineLabel(connection.engine)}
-                        </Badge>
-                        {connection.readOnly ? (
-                          <Badge variant="outline" className="h-5 text-[10px]">
-                            {translate(
-                              'auto.components.database.ConnectionList.readOnly',
-                              'Read-only'
-                            )}
-                          </Badge>
-                        ) : null}
-                        <ConnectionStatusIndicator status={status} />
-                        {connection.hasPassword ? (
-                          <KeyRound
-                            className="size-3 text-muted-foreground"
-                            aria-label={translate(
-                              'auto.components.database.ConnectionList.passwordStored',
-                              'Password stored'
-                            )}
-                          />
-                        ) : null}
-                      </div>
-                      <p className="truncate font-mono text-xs text-muted-foreground">
-                        {connection.user}@{connection.host}:{connection.port}/{connection.database}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {isConnected ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => void handleDisconnect(connection.id)}
-                        >
-                          <PlugZap className="size-3.5" />
-                          {translate(
-                            'auto.components.database.ConnectionList.disconnect',
-                            'Disconnect'
-                          )}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          disabled={isBusy}
-                          onClick={() => void handleConnect(connection.id)}
-                        >
-                          <Plug className="size-3.5" />
-                          {status === 'lost'
-                            ? translate(
-                                'auto.components.database.ConnectionList.reconnect',
-                                'Reconnect'
-                              )
-                            : translate(
-                                'auto.components.database.ConnectionList.connect',
-                                'Connect'
-                              )}
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openEdit(connection)}
-                      >
-                        <Pencil className="size-3.5" />
-                        <span className="sr-only">
-                          {translate(
-                            'auto.components.database.ConnectionList.editAction',
-                            'Edit'
-                          )}
-                        </span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeletingId(connection.id)}
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span className="sr-only">
-                          {translate(
-                            'auto.components.database.ConnectionList.deleteAction',
-                            'Delete'
-                          )}
-                        </span>
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="divide-y divide-border px-3 py-1">
+              {dbConnections.map((connection) => (
+                <ConnectionRow
+                  key={connection.id}
+                  connection={connection}
+                  status={dbStatuses[connection.id]?.status ?? 'idle'}
+                  isActive={activeDbConnectionId === connection.id}
+                  onOpen={setActiveDbConnection}
+                  onConnect={(id) => void handleConnect(id)}
+                  onDisconnect={(id) => void handleDisconnect(id)}
+                  onEdit={openEdit}
+                  onDelete={setDeletingId}
+                />
+              ))}
             </div>
           </div>
         </div>

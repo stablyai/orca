@@ -12333,7 +12333,9 @@
           "disconnect": "Disconnect",
           "reconnect": "Reconnect",
           "errorConnect": "Failed to connect",
-          "errorDisconnect": "Failed to disconnect"
+          "errorDisconnect": "Failed to disconnect",
+          "open": "Open",
+          "moreActions": "More actions"
         },
         "status": {
           "idle": "Not connected",

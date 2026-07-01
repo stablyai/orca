@@ -1,10 +1,10 @@
 import React from 'react'
-import { Badge } from '@/components/ui/badge'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import type { DbConnectionStatus } from '../../../../shared/database-types'
 
-// Maps a live connection status to a dot color + label. `lost` and `error` read
-// as destructive; `connected` as success; transitional states are muted.
+// Maps a live connection status to a dot color. `lost` and `error` read as
+// destructive; `connected` as success; transitional states pulse amber.
 // Why: the destructive class is hoisted to a const so the `error`/`lost` values
 // are identifiers, not string literals under the localization-audited `error` key.
 const DESTRUCTIVE_DOT = 'bg-destructive'
@@ -17,7 +17,7 @@ const STATUS_DOT: Record<DbConnectionStatus, string> = {
   lost: DESTRUCTIVE_DOT
 }
 
-function statusLabel(status: DbConnectionStatus): string {
+export function statusLabel(status: DbConnectionStatus): string {
   switch (status) {
     case 'idle':
       return translate('auto.components.database.status.idle', 'Not connected')
@@ -34,15 +34,27 @@ function statusLabel(status: DbConnectionStatus): string {
   }
 }
 
-export function ConnectionStatusIndicator({
-  status
+// Connected/idle read clearly from the dot plus the connect/disconnect button, so
+// only mid-flight and failed states earn a visible text label next to the name.
+export function isNoteworthyStatus(status: DbConnectionStatus): boolean {
+  return status !== 'connected' && status !== 'idle'
+}
+
+export function statusTextClass(status: DbConnectionStatus): string {
+  return status === 'error' || status === 'lost' ? 'text-destructive' : 'text-muted-foreground'
+}
+
+export function ConnectionStatusDot({
+  status,
+  className
 }: {
   status: DbConnectionStatus
+  className?: string
 }): React.JSX.Element {
   return (
-    <Badge variant="outline" className="h-5 gap-1.5 text-[10px] font-normal">
-      <span className={`size-1.5 rounded-full ${STATUS_DOT[status]}`} aria-hidden="true" />
-      {statusLabel(status)}
-    </Badge>
+    <span
+      className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status], className)}
+      aria-hidden="true"
+    />
   )
 }
