@@ -47,6 +47,138 @@ describe('createDividerFlexFrameScheduler', () => {
 })
 
 describe('disposeDivider', () => {
+  it('finishes an active resize from a window-level pointerup', () => {
+    const dividerListeners = new Map<string, EventListener>()
+    const windowListeners = new Map<string, EventListener>()
+    const capturedPointerIds = new Set<number>()
+    const previousPane = createSizedPaneElement({ width: 100, height: 200 })
+    const nextPane = createSizedPaneElement({ width: 300, height: 200 })
+    const divider = {
+      style: {
+        setProperty: vi.fn()
+      },
+      classList: {
+        add: vi.fn(),
+        remove: vi.fn()
+      },
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        dividerListeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn((event: string, listener: EventListener) => {
+        if (dividerListeners.get(event) === listener) {
+          dividerListeners.delete(event)
+        }
+      }),
+      setPointerCapture: vi.fn((pointerId: number) => {
+        capturedPointerIds.add(pointerId)
+      }),
+      hasPointerCapture: vi.fn((pointerId: number) => capturedPointerIds.has(pointerId)),
+      releasePointerCapture: vi.fn((pointerId: number) => {
+        capturedPointerIds.delete(pointerId)
+      }),
+      previousElementSibling: previousPane,
+      nextElementSibling: nextPane
+    } as unknown as HTMLElement
+    const refitPanesUnder = vi.fn()
+    const onLayoutChanged = vi.fn()
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => divider)
+    })
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        windowListeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn((event: string, listener: EventListener) => {
+        if (windowListeners.get(event) === listener) {
+          windowListeners.delete(event)
+        }
+      })
+    })
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 7)
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    dividerListeners.get('pointerdown')?.(
+      createPointerEvent({ pointerId: 9, clientX: 100, clientY: 0 })
+    )
+    windowListeners.get('pointermove')?.(
+      createPointerEvent({ pointerId: 9, clientX: 180, clientY: 0 })
+    )
+
+    const windowPointerUp = windowListeners.get('pointerup')
+    expect(windowPointerUp).toBeTypeOf('function')
+    windowPointerUp?.(createPointerEvent({ pointerId: 9, clientX: 180, clientY: 0 }))
+
+    expect(previousPane.style.flex).toBe('180 1 0%')
+    expect(nextPane.style.flex).toBe('220 1 0%')
+    expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
+    expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
+    expect(onLayoutChanged).toHaveBeenCalledTimes(1)
+    expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
+    expect(divider.releasePointerCapture).toHaveBeenCalledWith(9)
+    expect(windowListeners.has('pointermove')).toBe(false)
+    expect(windowListeners.has('pointerup')).toBe(false)
+  })
+
+  it('keeps flex bases nonnegative when panes are smaller than combined minimums', () => {
+    const dividerListeners = new Map<string, EventListener>()
+    const windowListeners = new Map<string, EventListener>()
+    const capturedPointerIds = new Set<number>()
+    const previousPane = createSizedPaneElement({ width: 30, height: 200 })
+    const nextPane = createSizedPaneElement({ width: 40, height: 200 })
+    const divider = {
+      style: {
+        setProperty: vi.fn()
+      },
+      classList: {
+        add: vi.fn(),
+        remove: vi.fn()
+      },
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        dividerListeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn(),
+      setPointerCapture: vi.fn((pointerId: number) => {
+        capturedPointerIds.add(pointerId)
+      }),
+      hasPointerCapture: vi.fn((pointerId: number) => capturedPointerIds.has(pointerId)),
+      releasePointerCapture: vi.fn((pointerId: number) => {
+        capturedPointerIds.delete(pointerId)
+      }),
+      previousElementSibling: previousPane,
+      nextElementSibling: nextPane
+    } as unknown as HTMLElement
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => divider)
+    })
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        windowListeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn()
+    })
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 7)
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    createDivider(true, {}, { refitPanesUnder: vi.fn(), onLayoutChanged: vi.fn() })
+    dividerListeners.get('pointerdown')?.(
+      createPointerEvent({ pointerId: 9, clientX: 0, clientY: 0 })
+    )
+    windowListeners.get('pointermove')?.(
+      createPointerEvent({ pointerId: 9, clientX: 200, clientY: 0 })
+    )
+    windowListeners.get('pointerup')?.(createPointerEvent({ pointerId: 9, clientX: 200 }))
+
+    expect(previousPane.style.flex).toBe('35 1 0%')
+    expect(nextPane.style.flex).toBe('35 1 0%')
+  })
+
   it('removes divider-local drag listeners and releases active pointer capture', () => {
     const listeners = new Map<string, EventListener>()
     const divider = {
@@ -96,3 +228,34 @@ describe('disposeDivider', () => {
     expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
   })
 })
+
+function createPointerEvent(args: Partial<PointerEvent>): PointerEvent {
+  return {
+    preventDefault: vi.fn(),
+    pointerId: 1,
+    clientX: 0,
+    clientY: 0,
+    ...args
+  } as unknown as PointerEvent
+}
+
+function createSizedPaneElement(rect: {
+  width: number
+  height: number
+}): HTMLElement & { style: Record<string, string> } {
+  return {
+    style: {},
+    classList: {
+      contains: vi.fn(() => false)
+    },
+    getBoundingClientRect: vi.fn(() => ({
+      left: 0,
+      top: 0,
+      right: rect.width,
+      bottom: rect.height,
+      width: rect.width,
+      height: rect.height
+    })),
+    querySelectorAll: vi.fn(() => [])
+  } as unknown as HTMLElement & { style: Record<string, string> }
+}
