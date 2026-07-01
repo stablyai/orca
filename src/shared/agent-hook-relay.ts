@@ -49,6 +49,7 @@ export type AgentHookSource =
   | 'hermes'
   | 'devin'
   | 'kimi'
+  | 'codewhale'
 
 /** Env marker used by the remote relay. It is a transport/location marker, not
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */

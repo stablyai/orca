@@ -271,7 +271,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialAgentTabViewModeProps(store.settings)
+    ...initialAgentTabViewModeProps(store.settings, agent)
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,

@@ -337,6 +337,28 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
+  it('launches CodeWhale as a long-lived TUI before injecting the prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codewhale',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('codewhale', null),
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'codewhale',
+      launchCommand: "codewhale --mouse-capture '--yolo'",
+      expectedProcess: 'codewhale-tui',
+      followupPrompt: 'fix it',
+      launchConfig: {
+        agentCommand: "codewhale --mouse-capture '--yolo'",
+        agentArgs: '--yolo',
+        agentEnv: {}
+      }
+    })
+  })
+
   it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
     expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
       'render-cursor-after-bracketed-paste'

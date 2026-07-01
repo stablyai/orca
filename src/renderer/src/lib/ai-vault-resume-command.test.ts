@@ -48,8 +48,8 @@ function makeState(args: {
     settings: {
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
-      agentDefaultArgs: { claude: '', codex: '' },
-      agentDefaultEnv: { claude: {}, codex: {} }
+      agentDefaultArgs: { claude: '', codex: '', codewhale: '' },
+      agentDefaultEnv: { claude: {}, codex: {}, codewhale: {} }
     },
     worktreesByRepo: {
       'repo-1': [
@@ -293,5 +293,57 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
+  })
+
+  it('includes CodeWhale home for saved-session resume commands and queued env', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codewhale',
+          sessionId: 'thread one',
+          cwd: '/home/alice/repo',
+          codexHome: null,
+          codeWhaleHome: '/home/alice/.codewhale-alt'
+        }
+      })
+    ).toEqual({
+      command:
+        "cd '/home/alice/repo' && CODEWHALE_HOME='/home/alice/.codewhale-alt' codewhale --mouse-capture 'resume' 'thread one'",
+      env: { CODEWHALE_HOME: '/home/alice/.codewhale-alt' },
+      launchConfig: {
+        agentCommand: 'codewhale --mouse-capture',
+        agentArgs: '',
+        agentEnv: {}
+      }
+    })
+  })
+
+  it('converts WSL UNC CodeWhale homes before building Linux resume commands', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })
+
+    expect(
+      buildAiVaultResumeCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codewhale',
+          sessionId: 'thread one',
+          cwd: '/home/alice/repo',
+          codexHome: null,
+          codeWhaleHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codewhale'
+        }
+      })
+    ).toBe(
+      "cd '/home/alice/repo' && CODEWHALE_HOME='/home/alice/.codewhale' codewhale --mouse-capture 'resume' 'thread one'"
+    )
   })
 })

@@ -27,6 +27,7 @@ describe('tuiAgentToAgentKind', () => {
 
   it('uses the product id for Claude and the TuiAgent id for Pi', () => {
     expect(tuiAgentToAgentKind('claude')).toBe('claude-code')
+    expect(tuiAgentToAgentKind('codewhale')).toBe('codewhale')
     expect(tuiAgentToAgentKind('pi')).toBe('pi')
   })
 })

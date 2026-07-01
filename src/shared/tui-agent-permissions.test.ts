@@ -60,6 +60,17 @@ describe('tui agent permissions', () => {
     ).toBe('yolo')
   })
 
+  it('resolves CodeWhale yolo launch args', () => {
+    expect(YOLO_TUI_AGENT_ARGS.codewhale).toBe('--yolo')
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'codewhale',
+        agentArgs: '--yolo',
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+  })
+
   it('resolves one empty Codex launch as manual', () => {
     expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '', agentEnv: {} })).toBe(
       'manual'

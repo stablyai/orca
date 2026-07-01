@@ -3,6 +3,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
+import { codeWhaleHookService } from '../codewhale/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
@@ -30,7 +31,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['grok', (sftp, remoteHome) => grokHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
-  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
+  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
+  ['codewhale', (sftp, remoteHome) => codeWhaleHookService.installRemote(sftp, remoteHome)]
 ]
 
 export async function installRemoteManagedAgentHooks(

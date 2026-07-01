@@ -178,4 +178,22 @@ describe('runQuickCommandInNewTab', () => {
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
     expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
   })
+
+  it('does not launch CodeWhale agent quick commands', () => {
+    const result = runQuickCommandInNewTab({
+      command: {
+        id: 'agent-codewhale',
+        label: 'CodeWhale',
+        action: 'agent-prompt',
+        agent: 'codewhale',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(result).toBeNull()
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
+  })
 })

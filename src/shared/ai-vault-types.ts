@@ -20,7 +20,8 @@ export const AI_VAULT_AGENTS = [
   'openclaw',
   'devin',
   'droid',
-  'kimi'
+  'kimi',
+  'codewhale'
 ] as const satisfies readonly TuiAgent[]
 
 export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
@@ -42,7 +43,8 @@ export const AI_VAULT_AGENT_LABELS = {
   openclaw: 'OpenClaw',
   devin: 'Devin',
   droid: 'Droid',
-  kimi: 'Kimi'
+  kimi: 'Kimi',
+  codewhale: 'CodeWhale'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -61,6 +63,7 @@ export type AiVaultSession = {
   model: string | null
   filePath: string
   codexHome: string | null
+  codeWhaleHome?: string | null
   createdAt: string | null
   updatedAt: string | null
   modifiedAt: string
@@ -97,13 +100,20 @@ export function buildAiVaultResumeCommand(args: {
   platform: NodeJS.Platform
   commandOverride?: string | null
   codexHome?: string | null
+  codeWhaleHome?: string | null
 }): string {
-  const { agent, sessionId, cwd, platform, commandOverride, codexHome } = args
+  const { agent, sessionId, cwd, platform, commandOverride, codexHome, codeWhaleHome } = args
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
   const sessionArg = quoteShellArg(sessionId, platform)
   const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
-  return buildAiVaultResumeShellCommand({ resumeCommand, cwd, platform, codexHome })
+  return buildAiVaultResumeShellCommand({
+    resumeCommand,
+    cwd,
+    platform,
+    codexHome,
+    codeWhaleHome
+  })
 }
 
 export function buildAiVaultResumeShellCommand(args: {
@@ -111,12 +121,15 @@ export function buildAiVaultResumeShellCommand(args: {
   cwd: string | null
   platform: NodeJS.Platform
   codexHome?: string | null
+  codeWhaleHome?: string | null
   // Why: the QUEUED resume command is typed into the live tab shell, so its
   // cd/env prefix must match that shell. The copy-to-clipboard string omits this
   // and keeps the self-contained `cmd /d /s /c` wrapper (its documented purpose).
   shell?: AgentStartupShell
 }): string {
-  const { cwd, platform, codexHome, shell } = args
+  const { cwd, platform, codexHome, codeWhaleHome, shell } = args
+  const normalizedCodexHome = codexHome?.trim() || null
+  const normalizedCodeWhaleHome = codeWhaleHome?.trim() || null
 
   // Why: on Windows the queued command must target the configured live shell
   // (default PowerShell). PowerShell mis-parses the cmd `""`-doubled wrapper and
@@ -126,14 +139,16 @@ export function buildAiVaultResumeShellCommand(args: {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,
       cwd,
-      codexHome: codexHome?.trim() || null,
+      codexHome: normalizedCodexHome,
+      codeWhaleHome: normalizedCodeWhaleHome,
       shell
     })
   }
 
-  const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
-    args.resumeCommand
-  }`
+  const resumeCommand = `${codexHomeEnvPrefix(
+    normalizedCodexHome,
+    platform
+  )}${codeWhaleHomeEnvPrefix(normalizedCodeWhaleHome, platform)}${args.resumeCommand}`
   if (!cwd) {
     return resumeCommand
   }
@@ -150,13 +165,16 @@ function buildResumeShellCommandForShell(args: {
   resumeCommand: string
   cwd: string | null
   codexHome: string | null
+  codeWhaleHome: string | null
   shell: Exclude<AgentStartupShell, 'cmd'>
 }): string {
-  const { cwd, codexHome, shell } = args
+  const { cwd, codexHome, codeWhaleHome, shell } = args
   if (shell === 'posix') {
     // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
     // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
-    const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
+    const envPrefix = `${codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''}${
+      codeWhaleHome ? `CODEWHALE_HOME=${quoteStartupArg(codeWhaleHome, shell)} ` : ''
+    }`
     const command = `${envPrefix}${args.resumeCommand}`
     return cwd ? `cd ${quoteStartupArg(cwd, shell)} && ${command}` : command
   }
@@ -168,6 +186,9 @@ function buildResumeShellCommandForShell(args: {
   }
   if (codexHome) {
     segments.push(`$env:CODEX_HOME=${quoteStartupArg(codexHome, shell)}`)
+  }
+  if (codeWhaleHome) {
+    segments.push(`$env:CODEWHALE_HOME=${quoteStartupArg(codeWhaleHome, shell)}`)
   }
   segments.push(args.resumeCommand)
   return segments.join(separator)
@@ -187,6 +208,9 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'rovo') {
     return 'acli'
   }
+  if (agent === 'codewhale') {
+    return TUI_AGENT_CONFIG.codewhale.launchCmd
+  }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
 
@@ -197,6 +221,8 @@ function buildAgentResumeInvocation(
 ): string {
   switch (agent) {
     case 'codex':
+      return `${baseCommand} resume ${sessionArg}`
+    case 'codewhale':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
       return `${baseCommand} rovodev run --restore ${sessionArg}`
@@ -229,6 +255,19 @@ function codexHomeEnvPrefix(codexHome: string | null, platform: NodeJS.Platform)
     return `set ${quoteWindowsCmdArg(`CODEX_HOME=${codexHome}`)} && `
   }
   return `CODEX_HOME=${quoteShellArg(codexHome, platform)} `
+}
+
+function codeWhaleHomeEnvPrefix(
+  codeWhaleHome: string | null,
+  platform: NodeJS.Platform
+): string {
+  if (!codeWhaleHome) {
+    return ''
+  }
+  if (platform === 'win32') {
+    return `set ${quoteWindowsCmdArg(`CODEWHALE_HOME=${codeWhaleHome}`)} && `
+  }
+  return `CODEWHALE_HOME=${quoteShellArg(codeWhaleHome, platform)} `
 }
 
 function quoteShellArg(value: string, platform: NodeJS.Platform): string {

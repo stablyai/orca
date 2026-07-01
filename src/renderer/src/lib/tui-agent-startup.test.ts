@@ -64,6 +64,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('starts CodeWhale as a long-lived TUI instead of using one-shot prompt mode', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codewhale',
+        prompt: 'Investigate this regression',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'codewhale',
+      launchCommand: 'codewhale --mouse-capture',
+      expectedProcess: 'codewhale-tui',
+      followupPrompt: 'Investigate this regression',
+      launchConfig: emptyLaunchConfig('codewhale --mouse-capture')
+    })
+  })
+
   it('launches aider first and injects the draft prompt after startup', () => {
     expect(
       buildAgentStartupPlan({

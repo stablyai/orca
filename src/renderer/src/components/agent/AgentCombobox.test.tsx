@@ -27,4 +27,13 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('https://github.com/Gitlawb.png')
     expect(markup).not.toContain('<svg')
   })
+
+  it('renders CodeWhale as a selectable value', () => {
+    const markup = renderToStaticMarkup(
+      <AgentCombobox agents={AGENT_CATALOG} value="codewhale" onValueChange={vi.fn()} />
+    )
+
+    expect(markup).toContain('CodeWhale')
+    expect(markup).toContain('codewhale.net')
+  })
 })

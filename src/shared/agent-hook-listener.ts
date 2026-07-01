@@ -724,6 +724,18 @@ function parseJsonObjectString(value: unknown): Record<string, unknown> | undefi
   }
 }
 
+function readFirstDefined(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): unknown | undefined {
+  for (const key of keys) {
+    if (hasOwnField(record, key)) {
+      return record[key]
+    }
+  }
+  return undefined
+}
+
 function extractToolResponseText(toolResponse: unknown): string | undefined {
   if (typeof toolResponse === 'string' && toolResponse.length > 0) {
     return toolResponse
@@ -1955,6 +1967,152 @@ function extractHermesToolFields(
   return {}
 }
 
+function isCodeWhaleEvent(eventName: unknown, ...expected: readonly string[]): boolean {
+  const normalized = normalizeHookEventName(eventName)
+  return expected.includes(normalized)
+}
+
+function parseCodeWhaleToolValue(value: unknown): unknown {
+  return parseJsonObjectString(value) ?? value
+}
+
+function stringifyCodeWhaleResult(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value.trim().length > 0 ? value : undefined
+  }
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  try {
+    const text = JSON.stringify(value)
+    return text && text !== '{}' ? text : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function readCodeWhaleToolName(hookPayload: Record<string, unknown>): string | undefined {
+  return readFirstString(hookPayload, [
+    'tool_name',
+    'toolName',
+    'name',
+    'deepseekToolName',
+    'DEEPSEEK_TOOL_NAME'
+  ])
+}
+
+function extractCodeWhaleToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (!isCodeWhaleEvent(eventName, 'tool_call_after')) {
+    return {}
+  }
+  const toolName = readCodeWhaleToolName(hookPayload)
+  const inputSource = parseCodeWhaleToolValue(
+    readFirstDefined(hookPayload, [
+      'tool_input',
+      'toolInput',
+      'tool_args',
+      'toolArgs',
+      'args',
+      'input',
+      'arguments',
+      'deepseekToolArgs',
+      'DEEPSEEK_TOOL_ARGS'
+    ])
+  )
+  const update: ToolSnapshot = toolUpdate(
+    {
+      toolName,
+      toolInput:
+        deriveToolInputPreview(toolName, inputSource) ??
+        deriveFallbackToolInputPreview(inputSource) ??
+        (typeof inputSource === 'string' ? inputSource : undefined)
+    },
+    {
+      hasToolInputField: hasAnyOwnField(hookPayload, [
+        'tool_input',
+        'toolInput',
+        'tool_args',
+        'toolArgs',
+        'args',
+        'input',
+        'arguments',
+        'deepseekToolArgs',
+        'DEEPSEEK_TOOL_ARGS'
+      ])
+    }
+  )
+  if (isCodeWhaleEvent(eventName, 'tool_call_after')) {
+    const resultSource = parseCodeWhaleToolValue(
+      readFirstDefined(hookPayload, [
+        'tool_result',
+        'toolResult',
+        'result',
+        'output',
+        'tool_output',
+        'toolOutput',
+        'deepseekToolResult',
+        'DEEPSEEK_TOOL_RESULT'
+      ])
+    )
+    const responseText =
+      extractToolResponseText(resultSource) ??
+      readCodeWhaleErrorText(hookPayload) ??
+      stringifyCodeWhaleResult(resultSource)
+    if (responseText) {
+      update.lastAssistantMessage = responseText
+    }
+  }
+  return update
+}
+
+function readCodeWhaleErrorText(hookPayload: Record<string, unknown>): string | undefined {
+  return readFirstString(hookPayload, ['error', 'error_message', 'errorMessage'])
+}
+
+function isCodeWhaleFailureStatus(hookPayload: Record<string, unknown>): boolean {
+  if (readCodeWhaleErrorText(hookPayload)) {
+    return true
+  }
+  const status = readString(hookPayload, 'status')?.trim().toLowerCase()
+  return status
+    ? status.includes('fail') ||
+        status.includes('error') ||
+        status.includes('cancel') ||
+        status.includes('abort')
+    : false
+}
+
+function mergeCodeWhaleEnvMirrorFields(
+  record: Record<string, unknown>,
+  hookPayload: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...hookPayload }
+  const copyFirst = (target: string, keys: readonly string[]): void => {
+    if (hasOwnField(next, target)) {
+      return
+    }
+    const value = readFirstDefined(record, keys)
+    if (value !== undefined && value !== '') {
+      next[target] = value
+    }
+  }
+  copyFirst('tool_name', ['deepseekToolName', 'DEEPSEEK_TOOL_NAME'])
+  copyFirst('tool_args', ['deepseekToolArgs', 'DEEPSEEK_TOOL_ARGS'])
+  copyFirst('tool_result', ['deepseekToolResult', 'DEEPSEEK_TOOL_RESULT'])
+  copyFirst('tool_exit_code', ['deepseekToolExitCode', 'DEEPSEEK_TOOL_EXIT_CODE'])
+  copyFirst('tool_success', ['deepseekToolSuccess', 'DEEPSEEK_TOOL_SUCCESS'])
+  copyFirst('error', ['deepseekError', 'DEEPSEEK_ERROR'])
+  copyFirst('session_id', ['deepseekSessionId', 'DEEPSEEK_SESSION_ID'])
+  copyFirst('message', ['deepseekMessage', 'DEEPSEEK_MESSAGE'])
+  copyFirst('workspace', ['deepseekWorkspace', 'DEEPSEEK_WORKSPACE'])
+  copyFirst('model', ['deepseekModel', 'DEEPSEEK_MODEL'])
+  copyFirst('total_tokens', ['deepseekTotalTokens', 'DEEPSEEK_TOTAL_TOKENS'])
+  return next
+}
+
 function isGrokPermissionNotification(message: string | undefined): boolean {
   if (!message) {
     return false
@@ -2051,6 +2209,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       // (clears turn cache, returns null) so it never reaches this branch.
       // UserPromptSubmit is the real new-turn boundary for Devin.
       return eventName === 'UserPromptSubmit'
+    case 'codewhale':
+      return false
   }
 }
 
@@ -2140,6 +2300,8 @@ function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'codewhale':
+      return extractCodeWhaleToolFields(eventName, hookPayload)
   }
 }
 
@@ -3120,6 +3282,57 @@ function normalizeHermesEvent(
   )
 }
 
+function normalizeCodeWhaleEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const failed = isCodeWhaleFailureStatus(hookPayload)
+  const stateName = isCodeWhaleEvent(eventName, 'on_error')
+    ? 'blocked'
+    : isCodeWhaleEvent(eventName, 'turn_end', 'session_end')
+      ? failed
+        ? 'blocked'
+        : 'done'
+      : isCodeWhaleEvent(eventName, 'tool_call_after')
+        ? 'working'
+        : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('codewhale', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('codewhale', eventName) }
+  )
+  const errorText =
+    stateName === 'blocked'
+      ? (readCodeWhaleErrorText(hookPayload) ??
+        (isCodeWhaleEvent(eventName, 'on_error')
+          ? readString(hookPayload, 'message')
+          : undefined) ??
+        readString(hookPayload, 'status'))
+      : undefined
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('codewhale', eventName)
+      }),
+      agentType: 'codewhale',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: errorText ?? snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -3145,13 +3358,15 @@ export function normalizeHookPayload(
   const rawPayload = record.payload
   const hookPayload =
     typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(rawPayload)
-          } catch {
-            return null
-          }
-        })()
+      ? rawPayload.trim().length === 0 && source === 'codewhale'
+        ? {}
+        : (() => {
+            try {
+              return JSON.parse(rawPayload)
+            } catch {
+              return null
+            }
+          })()
       : rawPayload
   if (
     !paneKey ||
@@ -3176,13 +3391,17 @@ export function normalizeHookPayload(
   const worktreeId = readStringField(record, 'worktreeId')
   const launchToken = readStringField(record, 'launchToken')
 
-  const hookPayloadRecord = hookPayload as Record<string, unknown>
+  const hookPayloadRecord =
+    source === 'codewhale'
+      ? mergeCodeWhaleEnvMirrorFields(record, hookPayload as Record<string, unknown>)
+      : (hookPayload as Record<string, unknown>)
   let promptInteractionKey: string | undefined
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName
-  const extractedPrompt = extractPromptText(hookPayload as Record<string, unknown>)
+    hookPayloadRecord.hookEventName ??
+    (source === 'codewhale' ? hookPayloadRecord.event : undefined)
+  const extractedPrompt = extractPromptText(hookPayloadRecord)
   const promptText = extractedPrompt.text
   let resolvedPromptText = promptText
   let hasTranscriptPromptEvidence = false
@@ -3294,6 +3513,9 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'codewhale':
+      payload = normalizeCodeWhaleEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
@@ -3350,7 +3572,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/codewhale': 'codewhale'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

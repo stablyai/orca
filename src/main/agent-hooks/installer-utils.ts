@@ -37,6 +37,19 @@ export type HooksConfig = {
   [key: string]: unknown
 }
 
+type WindowsAgentHookFormField = readonly [fieldName: string, envName: string]
+
+type WindowsAgentHookPayloadSource =
+  | { kind: 'stdin' }
+  | { kind: 'literal'; value: string }
+
+export type WindowsAgentHookPostCommandOptions = {
+  extraEnvFileFields?: readonly WindowsAgentHookFormField[]
+  payload?: WindowsAgentHookPayloadSource
+  tempDirEnvName?: string
+  tempDirPrefix?: string
+}
+
 // Why: host-level backstop (seconds) for Orca-managed status hooks. The shell
 // wrapper's curl `--max-time 1.5` is the normal dead-endpoint bound; this caps a
 // hook the agent host itself runs in case that transport budget is bypassed.
@@ -147,6 +160,12 @@ function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
+function assertSafeWindowsFormName(value: string): void {
+  if (!/^[A-Za-z0-9_.-]+$/.test(value)) {
+    throw new Error(`Unsafe Windows hook form field name: ${value}`)
+  }
+}
+
 function getWindowsPowerShellExecutablePath(): string {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows'
   // Why: PATH lookup lets a worktree-local powershell.exe hijack hook payloads.
@@ -181,12 +200,52 @@ export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath) ? bashPath : wrapWindowsHookCommand(scriptPath)
 }
 
-export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
-  // Why: Codex runs these hooks inline on every turn. PowerShell startup alone
-  // makes trusted Windows hooks visibly slow, so mirror the POSIX curl path.
-  // Qualify curl so a repo-local curl.exe cannot hijack hook payloads.
+function buildWindowsFormFieldWriterEncodedCommand(args: {
+  formDirEnvName: string
+  extraEnvFileFields: readonly WindowsAgentHookFormField[]
+  payload: WindowsAgentHookPayloadSource
+}): string {
+  for (const [fieldName] of args.extraEnvFileFields) {
+    assertSafeWindowsFormName(fieldName)
+  }
+  const fieldEntries = args.extraEnvFileFields
+    .map(([fieldName, envName]) => `  ${quotePowerShellString(fieldName)} = ${quotePowerShellString(envName)}`)
+    .join('\n')
+  const formDir = `$env:${args.formDirEnvName}`
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    '$utf8 = [System.Text.UTF8Encoding]::new($false)',
+    '$fields = @{',
+    fieldEntries,
+    '}',
+    'foreach ($entry in $fields.GetEnumerator()) {',
+    '  $value = [string][Environment]::GetEnvironmentVariable($entry.Value)',
+    `  [System.IO.File]::WriteAllText((Join-Path ${formDir} $entry.Key), $value, $utf8)`,
+    '}',
+    ...(args.payload.kind === 'literal'
+      ? [
+          `[System.IO.File]::WriteAllText((Join-Path ${formDir} "payload"), ${quotePowerShellString(args.payload.value)}, $utf8)`
+        ]
+      : [])
+  ].join('\n')
+  return Buffer.from(command, 'utf16le').toString('base64')
+}
+
+function buildWindowsAgentHookCurlLines(args: {
+  source: AgentHookSource
+  extraEnvFileFields: readonly WindowsAgentHookFormField[]
+  formDirEnvName: string
+  payload: WindowsAgentHookPayloadSource
+}): string[] {
+  const fileFieldArgs = args.extraEnvFileFields.map(
+    ([fieldName]) => `  --data-urlencode "${fieldName}@%${args.formDirEnvName}%\\${fieldName}" ^`
+  )
+  const payloadArg =
+    args.payload.kind === 'literal'
+      ? `  --data-urlencode "payload@%${args.formDirEnvName}%\\payload" >nul 2>nul`
+      : '  --data-urlencode "payload@-" >nul 2>nul'
   return [
-    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${args.source}" ^`,
     '  --connect-timeout 0.5 --max-time 1.5 ^',
     '  -H "Content-Type: application/x-www-form-urlencoded" ^',
     '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',
@@ -196,7 +255,49 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
     '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
     '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
     '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
-    '  --data-urlencode "payload@-" >nul 2>nul'
+    ...fileFieldArgs,
+    payloadArg
+  ]
+}
+
+export function buildWindowsAgentHookPostCommand(
+  source: AgentHookSource,
+  options: WindowsAgentHookPostCommandOptions = {}
+): string {
+  // Why: Codex runs these hooks inline on every turn. PowerShell startup alone
+  // makes trusted Windows hooks visibly slow, so mirror the POSIX curl path.
+  // Qualify curl so a repo-local curl.exe cannot hijack hook payloads.
+  const extraEnvFileFields = options.extraEnvFileFields ?? []
+  const payload = options.payload ?? { kind: 'stdin' }
+  const formDirEnvName = options.tempDirEnvName ?? 'ORCA_AGENT_HOOK_FORM_DIR'
+  const tempDirPrefix = options.tempDirPrefix ?? 'orca-agent-hook'
+  const curlLines = buildWindowsAgentHookCurlLines({
+    source,
+    extraEnvFileFields,
+    formDirEnvName,
+    payload
+  })
+  if (extraEnvFileFields.length === 0 && payload.kind === 'stdin') {
+    return curlLines.join('\r\n')
+  }
+  const fieldWriterCommand = buildWindowsFormFieldWriterEncodedCommand({
+    formDirEnvName,
+    extraEnvFileFields,
+    payload
+  })
+  return [
+    `if defined TEMP set "${formDirEnvName}=%TEMP%\\${tempDirPrefix}-%RANDOM%-%RANDOM%-%RANDOM%"`,
+    `if not defined ${formDirEnvName} if defined TMP set "${formDirEnvName}=%TMP%\\${tempDirPrefix}-%RANDOM%-%RANDOM%-%RANDOM%"`,
+    `if not defined ${formDirEnvName} exit /b 0`,
+    `mkdir "%${formDirEnvName}%" >nul 2>nul`,
+    'if errorlevel 1 exit /b 0',
+    `"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${fieldWriterCommand} >nul 2>nul`,
+    'if not errorlevel 1 goto orca_agent_hook_fields_ready',
+    `rmdir /s /q "%${formDirEnvName}%" >nul 2>nul`,
+    'exit /b 0',
+    ':orca_agent_hook_fields_ready',
+    ...curlLines,
+    `rmdir /s /q "%${formDirEnvName}%" >nul 2>nul`
   ].join('\r\n')
 }
 

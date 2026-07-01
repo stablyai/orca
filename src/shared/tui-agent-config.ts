@@ -122,6 +122,18 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // for post-\x1b[?2004h show-cursor (\x1b[?25h) so paste hits mounted input.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  codewhale: {
+    // Why: CodeWhale's npm package exposes several bins (`codewhale`,
+    // `codew`, `codewhale-tui`), and the hosted foreground TUI process may be
+    // the package binary rather than the public launch command. Orca hosts it in
+    // xterm, so force mouse capture for reliable wheel/click reporting. Its
+    // `--prompt` path is one-shot, so Orca starts the long-lived TUI first.
+    detectCmd: 'codewhale',
+    detectCmdAliases: ['codew', 'codewhale-tui'],
+    launchCmd: 'codewhale --mouse-capture',
+    expectedProcess: 'codewhale-tui',
+    promptInjectionMode: 'stdin-after-start'
+  },
   'mimo-code': {
     detectCmd: 'mimo',
     launchCmd: 'mimo',

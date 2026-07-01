@@ -43,7 +43,7 @@ export function createAccumulator(args: {
 export function finalizeSession(
   accumulator: SessionAccumulator,
   platform: NodeJS.Platform,
-  options: { codexHome?: string | null } = {}
+  options: { codexHome?: string | null; codeWhaleHome?: string | null } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
   if (!sessionId) {
@@ -64,6 +64,7 @@ export function finalizeSession(
     model: accumulator.model,
     filePath: accumulator.filePath,
     codexHome: accumulator.agent === 'codex' ? (options.codexHome ?? null) : null,
+    ...(accumulator.agent === 'codewhale' ? { codeWhaleHome: options.codeWhaleHome ?? null } : {}),
     createdAt: accumulator.createdAt,
     updatedAt: accumulator.updatedAt,
     modifiedAt: accumulator.modifiedAt,
@@ -75,7 +76,8 @@ export function finalizeSession(
       sessionId,
       cwd: accumulator.cwd,
       platform,
-      codexHome: options.codexHome
+      codexHome: options.codexHome,
+      codeWhaleHome: options.codeWhaleHome
     })
   }
 }

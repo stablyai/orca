@@ -15,6 +15,7 @@ import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { AmpHookService } from '../amp/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
+import { CodeWhaleHookService } from '../codewhale/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
@@ -167,6 +168,11 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
           install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/codewhale-hook.sh',
+          install: (sftp: SFTPWrapper) =>
+            new CodeWhaleHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -244,13 +250,14 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
-  it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {
+  it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, CodeWhale, and Devin configs using their CLI-specific schemas', async () => {
     const gemini = createFakeSftp()
     const antigravity = createFakeSftp()
     const amp = createFakeSftp()
     const cursor = createFakeSftp()
     const commandCode = createFakeSftp()
     const grok = createFakeSftp()
+    const codeWhale = createFakeSftp()
     const devin = createFakeSftp({
       '/home/dev/.config/devin/config.json': `{
   // Existing Devin config comment
@@ -266,6 +273,7 @@ describe('remote hook service installers', () => {
     await new CursorHookService().installRemote(cursor.sftp, '/home/dev')
     await new CommandCodeHookService().installRemote(commandCode.sftp, '/home/dev')
     await new GrokHookService().installRemote(grok.sftp, '/home/dev')
+    await new CodeWhaleHookService().installRemote(codeWhale.sftp, '/home/dev')
     await new DevinHookService().installRemote(devin.sftp, '/home/dev')
 
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
@@ -360,6 +368,22 @@ describe('remote hook service installers', () => {
     }
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
 
+    const codeWhaleConfig = codeWhale.fs.files.get('/home/dev/.codewhale/config.toml')!
+    expect(codeWhaleConfig).not.toContain('[hooks]\n')
+    expect(codeWhaleConfig).not.toContain('enabled = true')
+    expect(codeWhaleConfig).toContain('[[hooks.hooks]]')
+    for (const eventName of ['tool_call_after', 'turn_end', 'on_error', 'session_end']) {
+      expect(codeWhaleConfig).toContain(`event = "${eventName}"`)
+      expect(codeWhaleConfig).toContain(`ORCA_CODEWHALE_HOOK_EVENT='${eventName}'`)
+    }
+    expect(codeWhaleConfig).not.toContain('event = "message_submit"')
+    expect(codeWhaleConfig).not.toContain('event = "tool_call_before"')
+    expect(codeWhaleConfig).toContain('/home/dev/.orca/agent-hooks/codewhale-hook.sh')
+    expect(codeWhaleConfig).not.toContain('/home/dev/.deepseek/config.toml')
+    expect(codeWhale.fs.files.get('/home/dev/.orca/agent-hooks/codewhale-hook.sh')).toContain(
+      '/hook/codewhale'
+    )
+
     const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
       permissions: { mode: string }
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
@@ -385,6 +409,72 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
+  })
+
+  it('ignores an existing remote legacy DeepSeek config for CodeWhale hooks', async () => {
+    const userConfig = 'model = "deepseek-chat"\n'
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.deepseek/config.toml': userConfig
+    })
+
+    const status = await new CodeWhaleHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.codewhale/config.toml')
+    expect(fs.files.get('/home/dev/.deepseek/config.toml')).toBe(userConfig)
+    const config = fs.files.get('/home/dev/.codewhale/config.toml')!
+    expect(config).toContain('[[hooks.hooks]]')
+    expect(config).toContain('/home/dev/.orca/agent-hooks/codewhale-hook.sh')
+  })
+
+  it('preserves remote legacy DeepSeek config when CodeWhale config exists', async () => {
+    const codeWhaleConfig = 'model = "codewhale-chat"\n'
+    const legacyConfig = 'model = "deepseek-chat"\n'
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.codewhale/config.toml': codeWhaleConfig,
+      '/home/dev/.deepseek/config.toml': legacyConfig
+    })
+
+    const status = await new CodeWhaleHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.codewhale/config.toml')
+    expect(fs.files.get('/home/dev/.codewhale/config.toml')).toContain('[[hooks.hooks]]')
+    expect(fs.files.get('/home/dev/.deepseek/config.toml')).toBe(legacyConfig)
+  })
+
+  it('reports remote CodeWhale install errors on primary config read failures', async () => {
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.deepseek/config.toml': 'model = "deepseek-chat"\n'
+    })
+    type ReadFileCallback = (err: Error | undefined, data?: Buffer | string) => void
+    const originalReadFile = sftp.readFile.bind(sftp) as (
+      path: string,
+      encoding: BufferEncoding,
+      callback: ReadFileCallback
+    ) => void
+    sftp.readFile = ((
+      path: string,
+      encoding: BufferEncoding,
+      callback: ReadFileCallback
+    ): void => {
+      if (path === '/home/dev/.codewhale/config.toml') {
+        const error = new Error('permission denied primary CodeWhale config') as Error & {
+          code: number
+        }
+        error.code = 13
+        callback(error)
+        return
+      }
+      originalReadFile(path, encoding, callback)
+    }) as SFTPWrapper['readFile']
+
+    const status = await new CodeWhaleHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('error')
+    expect(status.configPath).toBe('/home/dev/.codewhale/config.toml')
+    expect(status.detail).toContain('permission denied primary CodeWhale config')
+    expect(fs.files.get('/home/dev/.deepseek/config.toml')).toBe('model = "deepseek-chat"\n')
   })
 
   it('installs remote Kimi hooks as a managed config.toml block preserving user config', async () => {

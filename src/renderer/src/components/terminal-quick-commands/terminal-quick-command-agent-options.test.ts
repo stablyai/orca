@@ -21,6 +21,8 @@ describe('terminal quick command agent options', () => {
 
     expect(firstUnsupportedIndex).toBeGreaterThan(-1)
     expect(lastSupportedIndex).toBeLessThan(firstUnsupportedIndex)
+    expect(ids.indexOf('codewhale')).toBeGreaterThan(lastSupportedIndex)
+    expect(supportsTerminalAgentQuickCommand('codewhale')).toBe(false)
   })
 
   it('keeps the same agent set as the global catalog', () => {

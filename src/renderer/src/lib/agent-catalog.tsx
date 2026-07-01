@@ -90,6 +90,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
+    id: 'codewhale',
+    label: translate('auto.lib.agent.catalog.codewhale_label', 'CodeWhale'),
+    cmd: 'codewhale',
+    faviconDomain: 'codewhale.net',
+    homepageUrl: 'https://github.com/Hmbown/CodeWhale'
+  },
+  {
     id: 'mimo-code',
     label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
     cmd: 'mimo',

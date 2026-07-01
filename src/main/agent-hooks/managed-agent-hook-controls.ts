@@ -5,6 +5,7 @@ import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
+import { codeWhaleHookService } from '../codewhale/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
@@ -34,7 +35,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
+  ['kimi', () => kimiHookService.install()],
+  ['codewhale', () => codeWhaleHookService.install()]
 ]
 
 const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
@@ -51,7 +53,8 @@ const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
+  ['kimi', () => kimiHookService.remove()],
+  ['codewhale', () => codeWhaleHookService.remove()]
 ]
 
 const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
@@ -68,7 +71,8 @@ const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()],
   ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
+  ['kimi', () => kimiHookService.getStatus()],
+  ['codewhale', () => codeWhaleHookService.getStatus()]
 ]
 
 export function isAgentStatusHooksEnabled(

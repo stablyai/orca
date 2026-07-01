@@ -2312,6 +2312,7 @@ export type TuiAgent =
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
   | 'opencode' // OpenCode
+  | 'codewhale' // CodeWhale
   | 'mimo-code'
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)

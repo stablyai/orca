@@ -7,8 +7,9 @@ import {
 } from './agent-session-resume'
 
 describe('agent session resume metadata', () => {
-  it('treats devin as a resumable TUI agent', () => {
+  it('treats CodeWhale and Devin as resumable TUI agents', () => {
     expect(isResumableTuiAgent('devin')).toBe(true)
+    expect(isResumableTuiAgent('codewhale')).toBe(true)
   })
 
   it.each([
@@ -24,7 +25,12 @@ describe('agent session resume metadata', () => {
     ['mimo-code', { sessionID: 'mimo-session' }, { key: 'session_id', id: 'mimo-session' }],
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
-    ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }]
+    ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }],
+    [
+      'codewhale',
+      { session_id: 'codewhale-session' },
+      { key: 'session_id', id: 'codewhale-session' }
+    ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -38,7 +44,12 @@ describe('agent session resume metadata', () => {
     ['mimo-code', { key: 'session_id', id: 's1' }, ['mimo', '--session', 's1']],
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
-    ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']]
+    ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']],
+    [
+      'codewhale',
+      { key: 'session_id', id: 'codewhale-session' },
+      ['codewhale', 'resume', 'codewhale-session']
+    ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })

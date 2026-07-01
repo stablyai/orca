@@ -22,7 +22,10 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
-type AiVaultResumeCommandSession = Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'>
+type AiVaultResumeCommandSession = Pick<
+  AiVaultSession,
+  'agent' | 'sessionId' | 'cwd' | 'codexHome' | 'codeWhaleHome'
+>
 
 export type AiVaultResumeStartup = {
   command: string
@@ -67,6 +70,7 @@ export function buildAiVaultResumeStartupForWorktree(args: {
 }): AiVaultResumeStartup {
   const platform = getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
+  const codeWhaleHome = getAiVaultResumeCodeWhaleHome(args.session.codeWhaleHome ?? null, platform)
   // Why: the queued command is typed verbatim into the freshly spawned tab whose
   // live shell is the configured Windows shell (default PowerShell). Hardcoding
   // cmd quoting made PowerShell mis-parse the `""`-doubled wrapper (#6152), so
@@ -98,9 +102,17 @@ export function buildAiVaultResumeStartupForWorktree(args: {
           cwd: args.session.cwd,
           platform,
           codexHome,
+          codeWhaleHome,
           shell: queuedShell
         }),
-        ...(startupPlan.env ? { env: startupPlan.env } : {}),
+        ...(startupPlan.env || codeWhaleHome
+          ? {
+              env: {
+                ...startupPlan.env,
+                ...(codeWhaleHome ? { CODEWHALE_HOME: codeWhaleHome } : {})
+              }
+            }
+          : {}),
         launchConfig: startupPlan.launchConfig
       }
     }
@@ -113,7 +125,8 @@ export function buildAiVaultResumeStartupForWorktree(args: {
       cwd: args.session.cwd,
       platform,
       commandOverride: args.commandOverride,
-      codexHome
+      codexHome,
+      codeWhaleHome
     })
   }
 }
@@ -128,6 +141,16 @@ function getAiVaultResumeCodexHome(
     return codexHome
   }
   return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
+}
+
+function getAiVaultResumeCodeWhaleHome(
+  codeWhaleHome: string | null,
+  platform: NodeJS.Platform
+): string | null {
+  if (!codeWhaleHome || platform !== 'linux') {
+    return codeWhaleHome
+  }
+  return parseWslUncPath(codeWhaleHome)?.linuxPath ?? codeWhaleHome
 }
 
 export function getAiVaultResumePlatform(

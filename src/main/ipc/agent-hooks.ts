@@ -16,6 +16,7 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
+import { codeWhaleHookService } from '../codewhale/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
@@ -85,6 +86,7 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentHooks:devinStatus')
   ipcMain.removeHandler('agentHooks:kimiStatus')
+  ipcMain.removeHandler('agentHooks:codeWhaleStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
@@ -319,6 +321,19 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
     } catch (err) {
       return {
         agent: 'kimi',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:codeWhaleStatus', (): AgentHookInstallStatus => {
+    try {
+      return codeWhaleHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'codewhale',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
