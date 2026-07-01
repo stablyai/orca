@@ -1,5 +1,5 @@
 import { createElement, type RefObject } from 'react'
-import { renderToString } from 'react-dom/server'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
@@ -9,6 +9,7 @@ type TerminalLiveInputCommitHarness = {
   readonly captures: readonly string[]
   readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
   readonly sent: readonly string[]
+  readonly unmount: () => void
 }
 
 function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness {
@@ -29,6 +30,7 @@ function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness 
     }
   }
   let handlers: ReturnType<typeof useTerminalLiveInputCommit<string>> | null = null
+  let renderer: ReactTestRenderer | null = null
 
   function Harness(): null {
     handlers = useTerminalLiveInputCommit({
@@ -45,12 +47,21 @@ function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness 
     return null
   }
 
-  renderToString(createElement(Harness))
-  if (handlers === null) {
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
+  if (!handlers || !renderer) {
     throw new Error('terminal live input hook did not render')
   }
 
-  return { captures, handlers, sent }
+  return {
+    captures,
+    handlers,
+    sent,
+    unmount: () => {
+      act(() => renderer?.unmount())
+    }
+  }
 }
 
 describe('terminal live input commit hook', () => {
@@ -82,5 +93,19 @@ describe('terminal live input commit hook', () => {
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+  })
+
+  it('Given deferred IME text When the hook unmounts Then cancels the pending commit timer', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent, unmount } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('é')
+
+    // When
+    unmount()
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    // Then
+    expect(sent).toEqual([])
   })
 })
