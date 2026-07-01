@@ -23,8 +23,14 @@ function formatCell(value: unknown): { text: string; isNull: boolean } {
 
 function copyCell(value: unknown): void {
   const { text, isNull } = formatCell(value)
-  void navigator.clipboard.writeText(isNull ? '' : text)
-  toast.success(translate('auto.components.database.ResultsGrid.copied', 'Copied cell'))
+  // Only claim success once the write actually resolves — a rejected clipboard
+  // write (no permission/focus) must not show a false "Copied" toast.
+  navigator.clipboard
+    .writeText(isNull ? '' : text)
+    .then(() => toast.success(translate('auto.components.database.ResultsGrid.copied', 'Copied cell')))
+    .catch(() =>
+      toast.error(translate('auto.components.database.ResultsGrid.copyFailed', 'Copy failed'))
+    )
 }
 
 export function ResultsGrid({

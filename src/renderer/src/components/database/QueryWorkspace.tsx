@@ -77,7 +77,10 @@ export function QueryWorkspace({ connectionId }: { connectionId: string }): Reac
           </Badge>
         ) : null}
         <span className="ml-auto text-[11px] text-muted-foreground">
-          {translate('auto.components.database.QueryWorkspace.runHint', '⌘/Ctrl + Enter to run')}
+          {translate('auto.components.database.QueryWorkspace.runHint', '{{mod}} + Enter to run', {
+            // Show the platform's real run-shortcut modifier (⌘ on Mac, Ctrl elsewhere).
+            mod: navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
+          })}
         </span>
       </div>
 

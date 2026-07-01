@@ -488,11 +488,24 @@ describe('Store DB Connections CRUD', () => {
       const plaintext = 'on-disk-secret-async'
       store.addDbConnection(makeDbConnectionInput({ password: plaintext }))
 
-      // Let the 300ms debounce fire, then await the in-flight async write.
-      await new Promise((resolve) => setTimeout(resolve, 400))
-      await store.waitForPendingWrite()
+      // Poll until the debounced write actually lands: a fixed sleep can race a
+      // slow CI timer (the 300ms debounce may fire later than any wall-clock
+      // guess, and waitForPendingWrite is a no-op until the timer sets it).
+      let persisted: { dbConnections?: { password?: string }[] } = {}
+      for (let i = 0; i < 200; i++) {
+        await store.waitForPendingWrite()
+        // The file may not exist until the first debounced write lands.
+        try {
+          persisted = readDataFile() as { dbConnections?: { password?: string }[] }
+        } catch {
+          persisted = {}
+        }
+        if (persisted.dbConnections?.[0]?.password) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
 
-      const persisted = readDataFile() as { dbConnections?: { password?: string }[] }
       expect(persisted.dbConnections?.[0]?.password).toMatch(/^db\.safeStorage\.v1:/)
       expect(persisted.dbConnections?.[0]?.password).not.toContain(plaintext)
     })

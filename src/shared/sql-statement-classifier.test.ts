@@ -9,6 +9,12 @@ describe('isMultiStatement', () => {
     ['SELECT 1; DROP TABLE x', true],
     ['SET TRANSACTION READ WRITE; DELETE FROM t', true],
     ["SELECT ';' AS semi", false],
+    // A semicolon inside a double-quoted identifier or backtick identifier is
+    // not a statement separator.
+    ['SELECT * FROM "weird;name"', false],
+    ['SELECT * FROM `weird;name`', false],
+    // A single quote inside a double-quoted identifier must not desync parsing.
+    ["SELECT * FROM \"it's;here\" WHERE x = 'a'", false],
     ['-- a; b\nSELECT 1', false]
   ])('classifies %j as multi-statement=%s', (sql, expected) => {
     expect(isMultiStatement(sql)).toBe(expected)
@@ -41,6 +47,11 @@ describe('needsWriteConfirm', () => {
 
   it('does not confirm when a write keyword only appears inside a string literal', () => {
     expect(needsWriteConfirm("SELECT * FROM logs WHERE action = 'DELETE'")).toBe(false)
+  })
+
+  it('does not confirm when a write keyword only appears inside a quoted identifier', () => {
+    expect(needsWriteConfirm('SELECT * FROM "DELETE"')).toBe(false)
+    expect(needsWriteConfirm('SELECT * FROM `DROP`')).toBe(false)
   })
 
   it('confirms writes and DDL', () => {

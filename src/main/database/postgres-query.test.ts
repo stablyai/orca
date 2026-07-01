@@ -63,7 +63,7 @@ describe('runPostgresQuery', () => {
     expect(calls.some((c) => /\bLIMIT\b/i.test(c))).toBe(false)
   })
 
-  it('omits the read-only transaction for a writable connection', async () => {
+  it('runs a writable non-cursorable statement in autocommit (no transaction)', async () => {
     const { calls, client } = makeClient([], [])
     await runPostgresQuery(
       makePool(client),
@@ -75,7 +75,39 @@ describe('runPostgresQuery', () => {
     expect(calls).not.toContain('SET TRANSACTION READ ONLY')
     // A write is non-cursorable → runs directly, no DECLARE.
     expect(calls.some((c) => c.startsWith('DECLARE'))).toBe(false)
+    // No explicit transaction wraps it, so a transaction-block-unsafe command
+    // (VACUUM, CREATE DATABASE, REINDEX CONCURRENTLY) isn't rejected.
+    expect(calls).not.toContain('BEGIN')
+    expect(calls).not.toContain('COMMIT')
+  })
+
+  it('does not open a transaction for VACUUM on a writable connection', async () => {
+    const { calls, client } = makeClient([], [])
+    await runPostgresQuery(
+      makePool(client),
+      'c1',
+      'VACUUM ANALYZE t',
+      opts({ allowWrite: true }),
+      vi.fn()
+    )
+    expect(calls).not.toContain('BEGIN')
+    expect(calls).not.toContain('COMMIT')
+  })
+
+  it('still wraps a writable cursorable read in a transaction for the cursor', async () => {
+    const { calls, client } = makeClient([[1]], [{ name: 'n' }])
+    await runPostgresQuery(
+      makePool(client),
+      'c1',
+      'SELECT * FROM t',
+      opts({ allowWrite: true }),
+      vi.fn()
+    )
+    expect(calls).toContain('BEGIN')
     expect(calls).toContain('COMMIT')
+    // Writable, so no read-only downgrade — but the cursor still bounds the read.
+    expect(calls).not.toContain('SET TRANSACTION READ ONLY')
+    expect(calls.some((c) => c.startsWith('DECLARE'))).toBe(true)
   })
 
   it('rolls back and rethrows when the query fails', async () => {

@@ -116,6 +116,20 @@ describe('DbConnectionManager', () => {
     expect(pgDriver.close).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores a late error from a superseded connection', async () => {
+    // First connect captures onError bound to connection #1.
+    await manager.connect(cfg())
+    const staleOnError = state.capturedOnError
+    // Disconnect + reconnect under the same id → a fresh live connection #2.
+    await manager.disconnect('c1')
+    await manager.connect(cfg())
+    expect(manager.getConnection('c1')).toBeDefined()
+    // The OLD pool now emits a late error; it must NOT tear down connection #2.
+    staleOnError?.(Object.assign(new Error('late'), { code: 'ECONNRESET' }))
+    expect(manager.getStatus('c1').status).toBe('connected')
+    expect(manager.getConnection('c1')).toBeDefined()
+  })
+
   it('disconnect closes the pool and resets status to idle', async () => {
     await manager.connect(cfg())
     await manager.disconnect('c1')
@@ -237,6 +251,31 @@ describe('DbConnectionManager', () => {
         allowWrite: true
       })
       expect(pgDriver.query).toHaveBeenCalledTimes(1)
+    })
+
+    it('clears the in-flight handle when a connection is dropped mid-query', async () => {
+      await manager.connect(cfg())
+      let release: (() => void) | undefined
+      pgDriver.query.mockImplementationOnce(
+        (conn: LiveConnection, _sql: string, _opts: unknown, onStart: (h: QueryHandle) => void) => {
+          onStart({ connectionId: conn.id, backendPid: 9 })
+          return new Promise((resolve) => {
+            release = () =>
+              resolve({ columns: [], rows: [], rowCount: 0, truncated: false, durationMs: 1 })
+          })
+        }
+      )
+      const opts = { rowLimit: 100, timeoutMs: 1000, allowWrite: false }
+      const running = manager.query('c1', 'SELECT 1', opts)
+      // Connection drops while the query is still in-flight.
+      state.capturedOnError?.(Object.assign(new Error('reset'), { code: 'ECONNRESET' }))
+      expect(manager.getStatus('c1').status).toBe('lost')
+      // Reconnect and run again: the stale in-flight handle must not block it
+      // with db_query_in_progress or misdirect a later cancel.
+      await manager.connect(cfg())
+      await expect(manager.query('c1', 'SELECT 2', opts)).resolves.toBeDefined()
+      release?.()
+      await running
     })
 
     it('rejects a second concurrent query on the same connection (L3)', async () => {

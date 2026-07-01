@@ -6,6 +6,9 @@
 // single-statement writes and writing CTEs. Multi-statement input is rejected
 // up-front for read-only connections by the manager (a simple query runs every
 // statement, so it could otherwise flip the txn back to read-write first).
+// A writable, non-cursorable statement runs in autocommit (no explicit BEGIN)
+// so transaction-block-unsafe commands (VACUUM, CREATE DATABASE, REINDEX
+// CONCURRENTLY) aren't rejected with "cannot run inside a transaction block".
 // Result bounding (red-team F9): a SELECT runs through a server-side cursor,
 // fetching only rowLimit+1 rows; the user's SQL is never rewritten (no appended
 // LIMIT), so trailing semicolons / existing LIMIT / multi-statement stay intact.
@@ -65,6 +68,17 @@ export async function runPostgresQuery(
     onStart({ connectionId, backendPid })
 
     await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
+
+    // A cursor must live inside a transaction, and a read-only connection must
+    // run inside a read-only transaction (the write guard). A writable,
+    // non-cursorable statement gets no explicit transaction so it may be a
+    // transaction-block-unsafe command.
+    if (opts.allowWrite && !isCursorableRead(sql)) {
+      const startedAt = Date.now()
+      const bounded = await fetchBounded(client, sql, opts.rowLimit)
+      return { ...bounded, durationMs: Date.now() - startedAt }
+    }
+
     await client.query('BEGIN')
     if (!opts.allowWrite) {
       await client.query('SET TRANSACTION READ ONLY')

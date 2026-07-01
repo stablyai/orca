@@ -148,7 +148,13 @@ export function raceWithTimeout<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      onTimeout?.()
+      // A throwing cleanup callback must not escape the timer (uncaught) and
+      // leave the caller hanging — always reject deterministically on timeout.
+      try {
+        onTimeout?.()
+      } catch {
+        // Best-effort teardown; the operation still fails closed below.
+      }
       reject(new DbTimeoutError())
     }, ms)
     promise.then(

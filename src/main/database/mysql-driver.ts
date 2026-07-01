@@ -90,7 +90,9 @@ async function loadMysql(): Promise<MysqlModule> {
 async function validatePool(pool: Pool): Promise<void> {
   const conn = await raceWithTimeout(pool.getConnection(), DB_CONNECT_TIMEOUT_MS)
   try {
-    await conn.query('SELECT 1')
+    // Bound the ping too: connectTimeout only covers the TCP dial, so a server
+    // that accepts the socket but never answers would otherwise hang connect().
+    await raceWithTimeout(conn.query('SELECT 1'), DB_CONNECT_TIMEOUT_MS)
   } finally {
     conn.release()
   }

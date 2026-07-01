@@ -83,10 +83,17 @@ export class DbConnectionManager {
     }
     this.connectingTargets.add(cfg.id)
     this.setStatus(cfg.id, 'connecting')
+    // Bind the driver's 'error' listener to this specific connection: a late
+    // error from a pool that was disconnected/reconnected must not tear down the
+    // live connection that replaced it under the same id.
+    let liveConn: LiveConnection | null = null
     try {
-      const conn = await getDriver(cfg.engine).connect(cfg, (err) =>
-        this.handleConnectionError(cfg.id, err)
-      )
+      const conn = await getDriver(cfg.engine).connect(cfg, (err) => {
+        if (liveConn && this.connections.get(cfg.id) === liveConn) {
+          this.handleConnectionError(cfg.id, err)
+        }
+      })
+      liveConn = conn
       this.connections.set(cfg.id, conn)
       this.setStatus(cfg.id, 'connected')
       return this.getStatus(cfg.id)
@@ -104,6 +111,10 @@ export class DbConnectionManager {
   private handleConnectionError(id: string, err: unknown): void {
     const conn = this.connections.get(id)
     this.connections.delete(id)
+    // Drop any in-flight handle: a reconnect under this id must not inherit the
+    // dead query's backend PID (cancel would target the wrong backend) or trip
+    // the concurrency guard against a query that can no longer settle.
+    this.inFlight.delete(id)
     this.setStatus(id, 'lost', normalizeDbError(err))
     if (conn) {
       void getDriver(conn.engine)
@@ -179,6 +190,7 @@ export class DbConnectionManager {
   async disconnect(id: string): Promise<void> {
     const conn = this.connections.get(id)
     this.connections.delete(id)
+    this.inFlight.delete(id)
     this.setStatus(id, 'idle')
     if (conn) {
       await getDriver(conn.engine).close(conn)
@@ -190,6 +202,7 @@ export class DbConnectionManager {
   async disconnectAll(): Promise<void> {
     const live = Array.from(this.connections.values())
     this.connections.clear()
+    this.inFlight.clear()
     await Promise.allSettled(live.map((conn) => getDriver(conn.engine).close(conn)))
   }
 }

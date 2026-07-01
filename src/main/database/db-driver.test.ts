@@ -150,4 +150,18 @@ describe('raceWithTimeout', () => {
     await assertion
     expect(onTimeout).toHaveBeenCalledTimes(1)
   })
+
+  it('still rejects deterministically when onTimeout throws', async () => {
+    vi.useFakeTimers()
+    const onTimeout = vi.fn(() => {
+      throw new Error('cleanup failed')
+    })
+    // A throwing cleanup callback must not escape the timer or leave the caller
+    // hanging — the timeout rejection must still surface.
+    const pending = raceWithTimeout<never>(new Promise<never>(() => {}), 1000, onTimeout)
+    const assertion = expect(pending).rejects.toBeInstanceOf(DbTimeoutError)
+    await vi.advanceTimersByTimeAsync(1000)
+    await assertion
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+  })
 })

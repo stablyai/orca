@@ -12359,6 +12359,7 @@
         },
         "ResultsGrid": {
           "copied": "Copied cell",
+          "copyFailed": "Copy failed",
           "running": "Running…",
           "empty": "Run a query to see results",
           "noRows": "No rows returned",
@@ -12370,7 +12371,7 @@
           "cancel": "Cancel",
           "run": "Run",
           "readOnly": "Read-only",
-          "runHint": "⌘/Ctrl + Enter to run",
+          "runHint": "{{mod}} + Enter to run",
           "confirmTitle": "Run this statement?",
           "confirmBody": "This looks like it may modify data or schema. Run it against a writable connection?",
           "confirmCancel": "Cancel",

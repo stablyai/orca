@@ -6,14 +6,26 @@
 // Neither is a security boundary: read-only connections are enforced by a
 // database read-only transaction (see the drivers), not by these checks.
 
-// Strip comments and blank single-quoted string-literal contents so keyword and
-// statement-separator detection isn't fooled by commented-out text or by words/
-// semicolons inside literals (e.g. `WHERE action = 'DELETE; DROP'`).
+// Strip comments and blank quoted regions so keyword and statement-separator
+// detection isn't fooled by commented-out text or by words/semicolons inside
+// literals or quoted identifiers (e.g. `WHERE action = 'DELETE; DROP'`, or a
+// table named `"weird;name"` / `` `weird;name` ``).
+//
+// Single-quoted strings, double-quoted strings/identifiers, and backtick
+// identifiers are matched in one left-to-right pass so interleaved quote types
+// (a `'` inside `"…"`, etc.) resolve correctly. Only doubled-quote escapes
+// (SQL-standard) are recognized — backslash is deliberately NOT treated as an
+// escape: Postgres under standard_conforming_strings doesn't either, and
+// assuming it would let a crafted `\'` swallow a real `;` and slip a
+// multi-statement past the read-only guard. Treating `\'` as a literal quote
+// instead only ever over-detects (a harmless false confirm), never under-detects.
+const QUOTED_REGION_RE = /'(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`/g
+
 function sanitize(sql: string): string {
   return sql
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/--[^\n]*/g, ' ')
-    .replace(/'(?:[^']|'')*'/g, "''")
+    .replace(QUOTED_REGION_RE, ' ')
 }
 
 // True when, after trimming trailing separators, another statement separator

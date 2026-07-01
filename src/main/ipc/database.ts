@@ -78,6 +78,37 @@ function sanitizeInput(input: DbConnectionInput): DbConnectionInput {
   }
 }
 
+// Why: like sanitizeInput, but for a partial update — only coerce/validate the
+// fields actually present so a malformed update can't poison the stored record
+// (database:update forwards renderer fields straight into persistence otherwise).
+function sanitizeUpdate(updates: DbConnectionUpdate): DbConnectionUpdate {
+  const sanitized: DbConnectionUpdate = {}
+  if (updates.name !== undefined) sanitized.name = String(updates.name).trim()
+  if (updates.host !== undefined) sanitized.host = String(updates.host).trim()
+  if (updates.database !== undefined) sanitized.database = String(updates.database).trim()
+  if (updates.user !== undefined) sanitized.user = String(updates.user).trim()
+  if (updates.password !== undefined) {
+    sanitized.password = updates.password ? String(updates.password) : undefined
+  }
+  if (updates.engine !== undefined) {
+    if (!VALID_ENGINES.has(updates.engine)) {
+      throw new Error('invalid_engine')
+    }
+    sanitized.engine = updates.engine
+  }
+  if (updates.port !== undefined) {
+    const port = Number(updates.port)
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new Error('invalid_port')
+    }
+    sanitized.port = port
+  }
+  if (updates.readOnly !== undefined) sanitized.readOnly = updates.readOnly === true
+  if (updates.ssl !== undefined) sanitized.ssl = updates.ssl
+  if (updates.sshTunnel !== undefined) sanitized.sshTunnel = updates.sshTunnel
+  return sanitized
+}
+
 // Why: decrypt is strict/fail-closed — a keychain-changed secret throws here
 // rather than handing a bogus credential to a driver. Resolves the saved record
 // into a dial-ready config (password decrypted at point-of-use; SSL smart-by-host).
@@ -163,7 +194,7 @@ export function registerDatabaseHandlers(store: Store): void {
     'database:update',
     (event, args: { id: string; updates: DbConnectionUpdate }): DbConnectionSummary | null => {
       requireTrusted(event.sender)
-      const updated = store.updateDbConnection(args.id, args.updates)
+      const updated = store.updateDbConnection(args.id, sanitizeUpdate(args.updates))
       return updated ? toSummary(updated) : null
     }
   )

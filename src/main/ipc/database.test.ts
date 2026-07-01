@@ -360,6 +360,54 @@ describe('registerDatabaseHandlers', () => {
       expect(result).toBeNull()
     })
 
+    it('sanitizes and coerces update fields before persisting', () => {
+      const updated = makeDbConnection({ id: 'id-1' })
+      const store = makeStore({ updateDbConnection: vi.fn(() => updated) })
+      registerDatabaseHandlers(store)
+
+      const handler = handleMock.mock.calls.find(([ch]) => ch === 'database:update')?.[1]
+      const event = makeEvent({ isTrusted: true })
+      handler?.(event, {
+        id: 'id-1',
+        updates: { name: '  spaced  ', port: '6543' as unknown as number }
+      })
+
+      const arg = vi.mocked(store.updateDbConnection).mock.calls[0][1]
+      expect(arg.name).toBe('spaced')
+      expect(arg.port).toBe(6543)
+      expect(typeof arg.port).toBe('number')
+      // Absent fields must not be injected into the persisted record.
+      expect('engine' in arg).toBe(false)
+      expect('host' in arg).toBe(false)
+    })
+
+    it('rejects an invalid engine in an update', () => {
+      const store = makeStore()
+      registerDatabaseHandlers(store)
+
+      const handler = handleMock.mock.calls.find(([ch]) => ch === 'database:update')?.[1]
+      const event = makeEvent({ isTrusted: true })
+
+      expect(() =>
+        handler?.(event, {
+          id: 'id-1',
+          updates: { engine: 'sqlite' as unknown as DbConnectionInput['engine'] }
+        })
+      ).toThrow('invalid_engine')
+      expect(store.updateDbConnection).not.toHaveBeenCalled()
+    })
+
+    it('rejects an invalid port in an update', () => {
+      const store = makeStore()
+      registerDatabaseHandlers(store)
+
+      const handler = handleMock.mock.calls.find(([ch]) => ch === 'database:update')?.[1]
+      const event = makeEvent({ isTrusted: true })
+
+      expect(() => handler?.(event, { id: 'id-1', updates: { port: 0 } })).toThrow('invalid_port')
+      expect(store.updateDbConnection).not.toHaveBeenCalled()
+    })
+
     it('rejects untrusted sender', () => {
       const store = makeStore()
       registerDatabaseHandlers(store)
