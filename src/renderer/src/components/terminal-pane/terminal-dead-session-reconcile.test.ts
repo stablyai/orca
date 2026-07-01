@@ -3,6 +3,7 @@ import {
   reconcileDeadSessions,
   shouldReconcileDeadSession
 } from './terminal-dead-session-reconcile'
+import { TerminalSnapshotFreshnessContract } from './terminal-snapshot-freshness-contract'
 
 describe('shouldReconcileDeadSession', () => {
   it('reconciles a local, non-remote id genuinely absent from the live set', () => {
@@ -187,5 +188,60 @@ describe('reconcileDeadSessions', () => {
     expect(typeof requestedAt).toBe('number')
     expect(requestedAt).toBeGreaterThanOrEqual(before)
     expect(requestedAt).toBeLessThanOrEqual(after)
+  })
+})
+
+describe('terminal snapshot freshness provider contract', () => {
+  function scriptPerformanceNow(values: number[]) {
+    const pendingValues = [...values]
+    const lastValue = values.at(-1) ?? 0
+    return vi.spyOn(performance, 'now').mockImplementation(() => pendingValues.shift() ?? lastValue)
+  }
+
+  it('keeps newer visible and hidden PTY bindings alive when a stale snapshot resolves', async () => {
+    // Why (regression): the provider snapshot was requested before these
+    // rebinds, so its missing ids cannot prove the newer bindings dead.
+    const now = scriptPerformanceNow([80, 90, 100, 200, 210, 300])
+    try {
+      const contract = new TerminalSnapshotFreshnessContract()
+      contract.visibleActivePane.bindLocalPty('pty-visible-old')
+      contract.hiddenInactivePane.bindLocalPty('pty-hidden-old')
+
+      const staleSnapshot = contract.requestSnapshot()
+      expect(contract.provider.requestCount).toBe(1)
+
+      contract.visibleActivePane.bindLocalPty('pty-visible-new')
+      contract.hiddenInactivePane.bindLocalPty('pty-hidden-new')
+      contract.provider.resolveSnapshot(['pty-visible-old', 'pty-hidden-old'])
+      await staleSnapshot
+
+      expect(contract.visibleActivePane.teardowns).toEqual([])
+      expect(contract.hiddenInactivePane.teardowns).toEqual([])
+
+      const freshSnapshot = contract.requestSnapshot()
+      contract.provider.resolveSnapshot(['some-other-live-session'])
+      await freshSnapshot
+
+      expect(contract.visibleActivePane.teardowns).toEqual(['pty-visible-new'])
+      expect(contract.hiddenInactivePane.teardowns).toEqual(['pty-hidden-new'])
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('treats fresh SSH snapshot misses as unknown liveness, not teardown evidence', async () => {
+    const now = scriptPerformanceNow([100, 200])
+    try {
+      const contract = new TerminalSnapshotFreshnessContract()
+      contract.visibleActivePane.bindSshPty('pty-ssh-session', 'ssh-target-1')
+
+      const snapshot = contract.requestSnapshot()
+      contract.provider.resolveSnapshot([])
+      await snapshot
+
+      expect(contract.visibleActivePane.teardowns).toEqual([])
+    } finally {
+      now.mockRestore()
+    }
   })
 })

@@ -15,7 +15,7 @@
       "title": "Stale liveness snapshots cannot close newer PTY bindings",
       "maturity": "soak",
       "owner": "terminal-runtime",
-      "layer": "renderer-unit",
+      "layer": "renderer-provider-contract",
       "surfaces": ["terminal lifecycle", "dead-session reconciliation", "tab creation"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon"],
@@ -26,16 +26,17 @@
         "https://github.com/stablyai/orca/pull/6801"
       ],
       "invariant": "A local or daemon liveness snapshot requested before a pane binds a PTY cannot prove that newer binding dead or route it through exit teardown.",
-      "oracle": "The decision layer rejects reconciliation when ptyBoundAt is greater than or equal to snapshotRequestedAt, still reconciles genuinely absent older local ids, and treats rejected provider listing as unknown.",
+      "oracle": "A deferred listSessions provider snapshot requested before visible or hidden pane rebinds cannot close those newer local PTY bindings when it resolves stale, while a later post-bind snapshot still closes genuinely absent local ids and SSH misses remain unknown liveness.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts"
       ],
       "testFiles": [
-        "src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts"
+        "src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-snapshot-freshness-contract.ts"
       ],
       "runtimeBudget": {
         "p95Seconds": 10,
-        "scope": "local unit test"
+        "scope": "local renderer provider-contract test"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -43,19 +44,19 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Unit tests encode the stale snapshot/newborn race and fail if the freshness guard is removed. Needs saved CI or intentional-break artifact before blocking promotion."
+        "evidence": "The provider-contract test encodes the stale snapshot/rebind race and fails if the freshness guard is removed or the snapshot request time is captured after provider resolution. Needs saved CI or intentional-break artifact before blocking promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The gate itself is cheap. Any PR changing reconciliation loops, hidden-pane scans, or provider polling must also run a terminal throughput or event-loop-delay measurement before blocking promotion."
+        "evidence": "The gate adds only a deferred in-memory provider test; production reconciliation remains one listSessions call per visibility/input-triggered pass and adds no polling or hidden-pane churn. Any PR changing reconciliation loops, hidden-pane scans, or provider polling must also run a terminal throughput or event-loop-delay measurement before blocking promotion."
       },
       "promotionCriteria": [
         "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
         "Attach red/green evidence from the freshness guard regression.",
-        "Add an integration/provider-contract follow-up that proves tab survival plus input/output after stale snapshot release."
+        "Add a full Electron tab-survival/input echo fixture before blocking promotion if reviewer confidence requires UI-level proof beyond the deterministic provider contract."
       ],
       "knownGaps": [
-        "Current command proves the pure decision and orchestration timestamp forwarding, not a full Electron tab-survival/input echo flow.",
+        "Current command proves the deterministic provider-contract race, not a full Electron tab-survival/input echo flow.",
         "SSH and remote providers are intentionally unknown-liveness paths and need separate provider-contract gates."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
