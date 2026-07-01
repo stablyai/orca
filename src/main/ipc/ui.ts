@@ -58,7 +58,7 @@ export function registerUIHandlers(store: Store): void {
   })
 }
 
-function isTrustedUIRenderer(sender: WebContents): boolean {
+export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }

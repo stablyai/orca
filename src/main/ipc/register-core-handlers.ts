@@ -35,6 +35,7 @@ import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
 import { registerSkillsHandlers } from './skills'
+import { registerDatabaseHandlers } from './database'
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
 import { registerWorkspacePortHandlers } from './workspace-ports'
 import { registerLocalhostWorktreeLabelHandlers } from './localhost-worktree-labels'
@@ -141,6 +142,7 @@ export function registerCoreHandlers(
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store)
+  registerDatabaseHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)
   }

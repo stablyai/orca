@@ -279,6 +279,7 @@ const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
+const DatabasePage = lazy(() => import('./components/database/DatabasePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const WorkspaceCleanupDialog = lazy(
@@ -1372,7 +1373,8 @@ function App(): React.JSX.Element {
     activeView !== 'settings' &&
     activeView !== 'activity' &&
     activeView !== 'space' &&
-    activeView !== 'skills'
+    activeView !== 'skills' &&
+    activeView !== 'database'
   // Why: Tasks/Landing keep the full titlebar only when the sidebar is
   // collapsed; with it open, mirror workspace view so titlebar-left sits flush
   // above nav. Creation layout suppresses the full-width titlebar.
@@ -2262,6 +2264,7 @@ function App(): React.JSX.Element {
                               {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                               {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                               {activeView === 'mobile' ? <MobilePage /> : null}
+                              {activeView === 'database' ? <DatabasePage /> : null}
                               {activeView === 'terminal' &&
                               creationLayoutActive &&
                               activePendingCreationId ? (

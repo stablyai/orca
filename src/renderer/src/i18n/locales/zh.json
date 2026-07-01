@@ -3737,7 +3737,8 @@
           "196c1b5362": "打开 GitLab 任务",
           "0ccba862b8": "打开 GitHub 任务",
           "fee535205b": "任务",
-          "d599269755": "从侧边栏隐藏"
+          "d599269755": "从侧边栏隐藏",
+          "database": "Database"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -12142,6 +12143,93 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "Copy"
+        }
+      },
+      "database": {
+        "DatabasePage": {
+          "back": "Back",
+          "title": "Database",
+          "beta": "Beta",
+          "subtitle": "Connect to Postgres and MySQL servers",
+          "emptyTitle": "No connections yet",
+          "emptyBody": "Connection management arrives in the next step of this feature."
+        },
+        "ConnectionForm": {
+          "titleEdit": "Edit connection",
+          "titleCreate": "Add connection",
+          "descriptionEdit": "Update the database connection settings.",
+          "descriptionCreate": "Configure a new database connection.",
+          "errorUpdate": "Failed to update connection",
+          "errorCreate": "Failed to add connection",
+          "warningBannerBody": "The OS has no strong secret store so the password will be saved in a recoverable form on this machine.",
+          "labelName": "Name",
+          "namePlaceholder": "My database",
+          "labelEngine": "Engine",
+          "enginePostgres": "Postgres",
+          "engineMysql": "MySQL",
+          "labelSsl": "SSL",
+          "sslAuto": "Auto (smart by host)",
+          "sslDisable": "Disable",
+          "sslVerifyFull": "Verify full",
+          "sslInsecure": "Insecure — no verify",
+          "labelHost": "Host",
+          "labelPort": "Port",
+          "labelDatabase": "Database",
+          "labelUser": "User",
+          "labelPassword": "Password",
+          "passwordPlaceholderEdit": "•••••• (unchanged — type to replace)",
+          "labelReadOnly": "Read-only",
+          "consentLabel": "I understand the password will be stored in a recoverable form",
+          "cancel": "Cancel",
+          "save": "Save",
+          "hostPlaceholder": "localhost",
+          "test": "Test connection",
+          "testing": "Testing…",
+          "testSuccess": "Connection succeeded",
+          "testError": "Test failed"
+        },
+        "ConnectionList": {
+          "postgres": "Postgres",
+          "mysql": "MySQL",
+          "emptyTitle": "No connections yet",
+          "emptyBody": "Add a Postgres or MySQL connection to get started.",
+          "addConnection": "Add connection",
+          "errorDelete": "Failed to remove connection",
+          "readOnly": "Read-only",
+          "passwordStored": "Password stored",
+          "editAction": "Edit",
+          "deleteAction": "Delete",
+          "confirmDeleteTitle": "Delete connection",
+          "confirmDeleteBody": "Permanently remove \"{{name}}\"? This cannot be undone.",
+          "cancelDelete": "Cancel",
+          "confirmDeleteAction": "Delete",
+          "connect": "Connect",
+          "disconnect": "Disconnect",
+          "reconnect": "Reconnect",
+          "errorConnect": "Failed to connect",
+          "errorDisconnect": "Failed to disconnect"
+        },
+        "status": {
+          "idle": "Not connected",
+          "testing": "Testing…",
+          "connecting": "Connecting…",
+          "connected": "Connected",
+          "error": "Error",
+          "lost": "Connection lost"
+        },
+        "SchemaTree": {
+          "title": "Schema",
+          "refresh": "Refresh",
+          "loading": "Loading schema…",
+          "loadError": "Could not read the schema",
+          "empty": "No schemas",
+          "notConnected": "Connect to browse the schema",
+          "lost": "Connection lost — reconnect to browse",
+          "retry": "Retry",
+          "nodeError": "Failed to load",
+          "overflow": "Too many objects — refine the connection",
+          "noItems": "Empty",
+          "notNull": "not null"
         }
       }
     },

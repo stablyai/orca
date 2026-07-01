@@ -346,6 +346,18 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DbColumnListResult,
+  DbConnectionInput,
+  DbConnectionRuntimeState,
+  DbConnectionSummary,
+  DbConnectionUpdate,
+  DbEncryptionStatus,
+  DbIntrospectResult,
+  DbTableListResult,
+  DbTableRef,
+  DbTestResult
+} from '../shared/database-types'
+import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
@@ -2004,6 +2016,24 @@ export type PreloadApi = {
   }
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
+  }
+  database: {
+    list: () => Promise<DbConnectionSummary[]>
+    add: (args: { input: DbConnectionInput }) => Promise<DbConnectionSummary>
+    update: (args: {
+      id: string
+      updates: DbConnectionUpdate
+    }) => Promise<DbConnectionSummary | null>
+    remove: (args: { id: string }) => Promise<void>
+    encryptionStatus: () => Promise<DbEncryptionStatus>
+    test: (args: { input: DbConnectionInput; id?: string }) => Promise<DbTestResult>
+    connect: (args: { id: string }) => Promise<DbConnectionRuntimeState>
+    disconnect: (args: { id: string }) => Promise<void>
+    statuses: () => Promise<DbConnectionRuntimeState[]>
+    onStatusChanged: (callback: (state: DbConnectionRuntimeState) => void) => () => void
+    introspect: (args: { id: string }) => Promise<DbIntrospectResult>
+    introspectSchemaTables: (args: { id: string; schema: string }) => Promise<DbTableListResult>
+    introspectTableColumns: (args: { id: string; ref: DbTableRef }) => Promise<DbColumnListResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>

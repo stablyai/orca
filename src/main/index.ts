@@ -23,6 +23,7 @@ import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
+import { dbConnectionManager } from './database/db-connection-manager'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
@@ -1827,6 +1828,9 @@ app.on('will-quit', (e) => {
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   serveSimStateWatcher.stop()
   killAllPty()
+  // Why (red-team F12): SSH's manager is never disposed on quit; the DB manager
+  // must be wired explicitly so held pools/sockets are torn down on exit.
+  void dbConnectionManager.disconnectAll()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
 

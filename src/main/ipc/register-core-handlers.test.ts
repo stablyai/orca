@@ -50,6 +50,7 @@ const {
   registerOnboardingHandlersMock,
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
+  registerDatabaseHandlersMock,
   registerWorkspaceSpaceHandlersMock,
   registerWorkspacePortHandlersMock,
   registerLocalhostWorktreeLabelHandlersMock,
@@ -104,6 +105,7 @@ const {
   registerOnboardingHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
+  registerDatabaseHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
   registerWorkspacePortHandlersMock: vi.fn(),
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
@@ -182,6 +184,10 @@ vi.mock('./settings', () => ({
 
 vi.mock('./skills', () => ({
   registerSkillsHandlers: registerSkillsHandlersMock
+}))
+
+vi.mock('./database', () => ({
+  registerDatabaseHandlers: registerDatabaseHandlersMock
 }))
 
 vi.mock('./workspace-space', () => ({
