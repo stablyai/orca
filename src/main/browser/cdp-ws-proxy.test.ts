@@ -89,6 +89,15 @@ describe('CdpWsProxy', () => {
     })
   }
 
+  function getSendCommandMethods(): string[] {
+    const calls = mock.webContents.debugger.sendCommand.mock.calls as unknown as [
+      string,
+      Record<string, unknown>?,
+      string?
+    ][]
+    return calls.map((call) => call[0])
+  }
+
   it('starts on a random port and returns ws:// URL', () => {
     expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
     expect(proxy.getPort()).toBeGreaterThan(0)
@@ -308,6 +317,68 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
+    client.close()
+  })
+
+  it('primes lifecycle events for Page.navigate', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 11,
+      method: 'Page.navigate',
+      params: { url: 'https://example.com/next' }
+    })
+
+    expect(response.id).toBe(11)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Network.enable',
+      'Page.enable',
+      'Page.setLifecycleEventsEnabled',
+      'Page.navigate'
+    ])
+    client.close()
+  })
+
+  it('primes lifecycle events for Page.reload and preserves response id', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 12,
+      method: 'Page.reload'
+    })
+
+    expect(response.id).toBe(12)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Network.enable',
+      'Page.enable',
+      'Page.setLifecycleEventsEnabled',
+      'Page.reload'
+    ])
+    client.close()
+  })
+
+  it('forwards Runtime.evaluate without lifecycle priming', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 13,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.readyState' }
+    })
+
+    expect(response.id).toBe(13)
+    expect(response.result).toEqual({})
+    expect(getSendCommandMethods()).toEqual([
+      'Page.enable',
+      'Page.addScriptToEvaluateOnNewDocument',
+      'Runtime.evaluate'
+    ])
     client.close()
   })
 

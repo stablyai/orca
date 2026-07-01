@@ -298,8 +298,11 @@ export class CdpWsProxy {
     }
     // Why: agent-browser waits for network idle to detect navigation completion.
     // Electron webview CDP subscriptions silently lapse after cross-process swaps.
-    if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
-      void this.navigateWithLifecycleEnsured(client, clientId, msg.params ?? {})
+    if (
+      (msg.method === 'Page.navigate' || msg.method === 'Page.reload') &&
+      !this.webContents.isDestroyed()
+    ) {
+      void this.forwardWithLifecycle(client, clientId, msg.method, msg.params ?? {}, msg.sessionId)
       return
     }
     this.forwardCommand(client, clientId, msg.method, msg.params ?? {}, msg.sessionId)
@@ -331,10 +334,12 @@ export class CdpWsProxy {
     }
   }
 
-  private async navigateWithLifecycleEnsured(
+  private async forwardWithLifecycle(
     client: WebSocket,
     clientId: number,
-    params: Record<string, unknown>
+    method: string,
+    params: Record<string, unknown>,
+    msgSessionId?: string
   ): Promise<void> {
     try {
       const dbg = this.webContents.debugger
@@ -345,7 +350,7 @@ export class CdpWsProxy {
     } catch {
       /* best-effort */
     }
-    this.forwardCommand(client, clientId, 'Page.navigate', params)
+    this.forwardCommand(client, clientId, method, params, msgSessionId)
   }
 
   private handleScreenshot(
