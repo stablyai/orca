@@ -1268,8 +1268,9 @@ export default function SessionScreen() {
         if (!insertHandle) {
           return
         }
-        void sendLiveTerminalInput(insertHandle, route.text)
-        showToast('Dictation inserted')
+        void sendLiveTerminalInput(insertHandle, route.text).then(
+          (sent) => sent && showToast('Dictation inserted')
+        )
         return
       }
       setInput((current) => appendBufferedDictation(current, route.text))
