@@ -149,7 +149,10 @@ export function ConnectionForm({
     password.trim().length > 0 || (connection !== undefined && (connection.hasPassword || false))
 
   const needsConsent = isWeakEncryption && hasPasswordIntent
-  const saveEnabled = isValid && !saving && (!needsConsent || consentChecked)
+  // While encryption status is still loading (null) and a password will be stored,
+  // block Save so the consent gate can't be bypassed during the load window.
+  const encryptionStatusPending = dbEncryptionStatus === null && hasPasswordIntent
+  const saveEnabled = isValid && !saving && !encryptionStatusPending && (!needsConsent || consentChecked)
 
   const isEditMode = connection !== undefined
   const dialogTitle = isEditMode

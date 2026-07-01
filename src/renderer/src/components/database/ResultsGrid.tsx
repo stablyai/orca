@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { DbColumnFilter, DbSafeError, QueryResult } from '../../../../shared/database-types'
 import type { DbQueryRefine } from '@/store/slices/database'
-import { copyCell, formatCell } from './data-grid-cell-format'
+import { formatCell } from './data-grid-cell-format'
 import { DataGridColumnHeader } from './DataGridColumnHeader'
 import { filterFor } from './data-grid-filters'
 import { ordinalSortDirectionFor } from './data-grid-sort-state'
@@ -126,17 +126,15 @@ export function ResultsGrid({
                     {result.columns.map((_col, ci) => {
                       const { text, isNull } = formatCell(row?.[ci])
                       return (
-                        <button
+                        <div
                           key={ci}
-                          type="button"
-                          onClick={() => copyCell(row?.[ci])}
                           title={text}
-                          className={`truncate border-r border-border/40 px-2 text-left ${
+                          className={`truncate border-r border-border/40 px-2 select-text cursor-text ${
                             isNull ? 'italic text-muted-foreground/60' : ''
                           }`}
                         >
                           {text}
-                        </button>
+                        </div>
                       )
                     })}
                   </div>

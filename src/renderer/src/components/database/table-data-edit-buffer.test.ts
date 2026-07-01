@@ -39,6 +39,33 @@ describe('stageCellEdit', () => {
     const b = stageCellEdit(emptyEditBuffer(), '[7]', 'name', '', null)
     expect(b.updates).toEqual({ '[7]': { name: '' } })
   })
+
+  it('treats a Uint8Array original vs its display text as unchanged (no-op, prevents binary corruption)', () => {
+    // The inline editor seeds from formatCell(value).text ("[3 bytes]"); committing
+    // that unchanged text back must not stage a lossy write against the binary column.
+    const bytes = new Uint8Array([1, 2, 3])
+    const b = stageCellEdit(emptyEditBuffer(), '[7]', 'data', '[3 bytes]', bytes)
+    expect(b.updates).toEqual({})
+  })
+
+  it('treats an array original vs its JSON display string as unchanged (no-op)', () => {
+    // formatCell([1,2]).text === "[1,2]", so committing that text back is a no-op.
+    const b = stageCellEdit(emptyEditBuffer(), '[7]', 'tags', '[1,2]', [1, 2])
+    expect(b.updates).toEqual({})
+  })
+
+  it('treats a Date original vs its ISO display string as unchanged (no-op)', () => {
+    const d = new Date('2024-01-15T12:00:00.000Z')
+    const b = stageCellEdit(emptyEditBuffer(), '[7]', 'created_at', d.toISOString(), d)
+    expect(b.updates).toEqual({})
+  })
+
+  it('stages a real change from a complex value to genuinely different text', () => {
+    // '[3 bytes]' is the display for the original; 'something' diverges → real edit.
+    const bytes = new Uint8Array([1, 2, 3])
+    const b = stageCellEdit(emptyEditBuffer(), '[7]', 'data', 'something', bytes)
+    expect(b.updates).toEqual({ '[7]': { data: 'something' } })
+  })
 })
 
 describe('delete + new row staging', () => {

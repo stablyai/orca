@@ -72,8 +72,14 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
   // Expand a schema (lazy-loading its tables) or collapse it.
   const toggleSchema = useCallback(
     (schema: string) => {
+      // Derive willExpand before updating state: the early-return guard needs the
+      // current snapshot. Reading expandedSchemas after setExpandedSchemas would
+      // see the stale closure value, not the post-update state.
+      const willExpand = !expandedSchemas.has(schema)
       setExpandedSchemas((prev) => toggleSet(prev, schema))
-      if (expandedSchemas.has(schema) || cache?.tables[schema]) {
+      // Skip fetch when collapsing, already cached, or an in-flight fetch is
+      // pending — nodeState 'loading' guard prevents a double-click double-fetch.
+      if (!willExpand || cache?.tables[schema] || nodeState[schema] === 'loading') {
         return
       }
       setNodeState((prev) => ({ ...prev, [schema]: 'loading' }))
@@ -89,7 +95,7 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
         })
       })
     },
-    [cache, connectionId, expandedSchemas, loadDbSchemaTables]
+    [cache, connectionId, expandedSchemas, loadDbSchemaTables, nodeState]
   )
 
   const toggleTable = useCallback(
@@ -128,6 +134,23 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
     getItemKey: (index) => rows[index]?.key ?? index
   })
 
+  // Clamp selectedIndex to the visible row count when rows shrink after a collapse
+  // so the cursor never points past the end of the list.
+  useEffect(() => {
+    if (rows.length > 0 && selectedIndex >= rows.length) {
+      setSelectedIndex(rows.length - 1)
+    }
+  }, [rows.length, selectedIndex])
+
+  // Scroll the virtualizer when selection changes — kept separate from the
+  // setSelectedIndex updater because React state updaters must be pure (no side
+  // effects). Calling scrollToIndex inside an updater would run during reconcile.
+  useEffect(() => {
+    if (rows.length > 0) {
+      virtualizer.scrollToIndex(selectedIndex, { align: 'auto' })
+    }
+  }, [selectedIndex, rows.length, virtualizer])
+
   // Expand/collapse a schema or table (tables/columns lazy-load on first open).
   // Bound to the chevron and the Arrow keys so it stays separate from a row's
   // primary action.
@@ -157,13 +180,9 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
 
   const moveSelection = useCallback(
     (delta: number) => {
-      setSelectedIndex((prev) => {
-        const next = Math.max(0, Math.min(rows.length - 1, prev + delta))
-        virtualizer.scrollToIndex(next, { align: 'auto' })
-        return next
-      })
+      setSelectedIndex((prev) => Math.max(0, Math.min(rows.length - 1, prev + delta)))
     },
-    [rows.length, virtualizer]
+    [rows.length]
   )
 
   const handleKeyDown = useCallback(
@@ -185,9 +204,22 @@ export function SchemaTree({ connectionId }: { connectionId: string }): React.JS
           }
           break
         case 'ArrowLeft':
-          if (row && (row.type === 'schema' || row.type === 'table') && row.expanded) {
+          if (row) {
             event.preventDefault()
-            toggleExpand(row)
+            if ((row.type === 'schema' || row.type === 'table') && row.expanded) {
+              // Collapse the expanded node.
+              toggleExpand(row)
+            } else if (row.depth > 0) {
+              // Navigate to the nearest ancestor row (first row above with a
+              // lower depth value — e.g. table → schema, column → table).
+              let parentIdx = selectedIndex - 1
+              while (parentIdx >= 0 && rows[parentIdx].depth >= row.depth) {
+                parentIdx--
+              }
+              if (parentIdx >= 0) {
+                setSelectedIndex(parentIdx)
+              }
+            }
           }
           break
         case 'Enter':

@@ -9,6 +9,7 @@ import {
   buildInsertSql,
   buildUpdateByKeySql
 } from '../../../../shared/table-data-sql'
+import { formatCell } from './data-grid-cell-format'
 
 // A not-yet-inserted row. `tempId` is a client-only handle; `values` holds only
 // the columns the user filled (the rest fall back to DB defaults on INSERT).
@@ -44,8 +45,11 @@ export function rowKeyFor(keyColumns: string[], columnNames: string[], row: unkn
   return JSON.stringify(keyColumns.map((k) => row[columnNames.indexOf(k)]))
 }
 
-// Cells are equal if identical, or if both non-null and share a string form (so
-// re-typing a number's text — e.g. "18" over 18 — doesn't stage a no-op update).
+// Equality must match the text the editor seeds/commits. String() diverges from
+// formatCell() for complex values (e.g. String(Uint8Array) vs "[N bytes]") — so
+// using formatCell here prevents an unchanged binary/array/JSON cell from staging
+// a lossy display string as if it were a user edit. Re-typing a number still
+// no-ops (formatCell(18).text === formatCell("18").text === "18").
 // NULL stays distinct from '' so clearing a value to empty is a real change.
 function sameCellValue(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) {
@@ -54,7 +58,7 @@ function sameCellValue(a: unknown, b: unknown): boolean {
   if (a == null || b == null) {
     return false
   }
-  return String(a) === String(b)
+  return formatCell(a).text === formatCell(b).text
 }
 
 // Stage (or, if the value equals the original, un-stage) one cell edit.

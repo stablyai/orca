@@ -55,7 +55,10 @@ export function TableDataView({
 
   const keyColumns = (columns ?? []).filter((c) => c.isPrimaryKey).map((c) => c.name)
   const hasPrimaryKey = keyColumns.length > 0
-  const editable = hasPrimaryKey && !readOnly
+  // Staging edits during an in-flight reload would be overwritten by the
+  // arriving result unless the buffer is preserved — disable editing while
+  // loading to eliminate the race entirely.
+  const editable = hasPrimaryKey && !readOnly && !view.loading
   const dirtyCount = bufferChangeCount(view.edit)
   const dirty = dirtyCount > 0
 

@@ -75,6 +75,14 @@ export type DbTableDataState = {
 // Client-only id sequence for not-yet-inserted rows (never reaches the DB).
 let newRowSeq = 0
 
+// Monotonic load epoch — globally unique across all tabs and connections.
+// A per-tab reset to 0 would let a pre-close stale response (seq=1) commit into
+// a freshly-reopened tab (which also starts at seq=1), silently overwriting it.
+let loadSeqCounter = 0
+function nextLoadSeq(): number {
+  return ++loadSeqCounter
+}
+
 // Server-side sort/filter/pagination applied on top of a free-form read by
 // wrapping it as a subquery. `sort` is by OUTPUT ORDINAL (survives duplicate
 // column names); `filters` are by name. `engaged` flips true once the user first
@@ -609,7 +617,9 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       if (!connection || !view) {
         return
       }
-      const seq = view.loadSeq + 1
+      // Global monotonic epoch — avoids seq=1 reuse when a tab is closed and
+      // reopened (per-tab reset would let a stale response commit into the new tab).
+      const seq = nextLoadSeq()
       set((s) => ({
         dbTableData: patchTableDataState(s.dbTableData, id, tabId, {
           loading: true,
@@ -628,8 +638,9 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       })
       const res = await window.api.database.execute({ id, statement })
       set((s) => {
+        const current = s.dbTableData[id]?.[tabId]
         // Drop a stale response superseded by a newer load for this tab.
-        if (s.dbTableData[id]?.[tabId]?.loadSeq !== seq) {
+        if (!current || current.loadSeq !== seq) {
           return {}
         }
         if (!res.ok) {
@@ -648,7 +659,9 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
             error: undefined,
             hasNext,
             result: { ...res.result, rows, rowCount: rows.length, truncated: false },
-            // A fresh page discards staged edits (navigation is gated while dirty).
+            // A reload replaces the buffer: the post-save reload clears the applied
+            // edits, and mid-reload staging can't happen because editing is disabled
+            // while view.loading (see TableDataView) — so no unsaved work is lost.
             edit: emptyEditBuffer(),
             saveError: undefined
           })
@@ -698,6 +711,10 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       if (!connection || !view) {
         return
       }
+      // Capture filters snapshot before the async fetch. setDbTableFilters replaces
+      // the array reference, so a reference compare in the commit guard is sufficient
+      // to detect a filter change that makes this count stale.
+      const filtersAtRequest = view.filters
       const statement = buildCountSql(connection.engine, {
         schema: view.schema,
         table: view.table,
@@ -706,9 +723,17 @@ export const createDatabaseSlice: StateCreator<AppState, [], [], DatabaseSlice> 
       const res = await window.api.database.execute({ id, statement })
       if (res.ok) {
         const total = Number(res.result.rows[0]?.[0]) || 0
-        set((s) => ({
-          dbTableData: patchTableDataState(s.dbTableData, id, tabId, { totalCount: total })
-        }))
+        set((s) => {
+          const current = s.dbTableData[id]?.[tabId]
+          // Only apply if the tab still exists and filters haven't changed since
+          // the request was issued — a later filter change makes this count wrong.
+          if (!current || current.filters !== filtersAtRequest) {
+            return {}
+          }
+          return {
+            dbTableData: patchTableDataState(s.dbTableData, id, tabId, { totalCount: total })
+          }
+        })
       }
     },
 
