@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
@@ -192,7 +193,7 @@ describe('terminal replay state reset', () => {
     }
   })
 
-  it('preserves hidden cursor visibility after live reattach replay', async () => {
+  it('resets hidden cursor visibility after ordinary reattach replay', async () => {
     const term = new Terminal({
       cols: 80,
       rows: 24,
@@ -205,15 +206,13 @@ describe('terminal replay state reset', () => {
 
       await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
 
-      // Why: live agent TUIs often park the real terminal cursor off-input and
-      // hide it while drawing their own input caret. Reattach must not reveal it.
-      expect(readCursorHidden(term)).toBe(true)
+      expect(readCursorHidden(term)).toBe(false)
     } finally {
       term.dispose()
     }
   })
 
-  it('preserves live focus reporting after live reattach replay', async () => {
+  it('resets focus reporting after ordinary reattach replay', async () => {
     const term = new Terminal({
       cols: 80,
       rows: 24,
@@ -224,6 +223,45 @@ describe('terminal replay state reset', () => {
       expect(readSendFocus(term)).toBe(true)
 
       await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      expect(readSendFocus(term)).toBe(false)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves hidden cursor visibility after live agent reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[?25l')
+      expect(readCursorHidden(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
+
+      // Why: live agent TUIs often park the real terminal cursor off-input and
+      // hide it while drawing their own input caret. Reattach must not reveal it.
+      expect(readCursorHidden(term)).toBe(true)
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves live focus reporting after live agent reattach replay', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true
+    })
+    try {
+      await writeTerminal(term, '\x1b[?1004h')
+      expect(readSendFocus(term)).toBe(true)
+
+      await writeTerminal(term, POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
 
       // Why: live TUIs such as cursor-agent can rely on focus events to repaint
       // their own hidden-cursor input caret after renderer reattach.

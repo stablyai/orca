@@ -4,6 +4,7 @@ import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IDisposable } from '@xterm/xterm'
 import {
   detectAgentStatusFromTitle,
+  getAgentLabel,
   isGeminiTerminalTitle,
   isClaudeAgent
 } from '@/lib/agent-status'
@@ -49,6 +50,7 @@ import {
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 import {
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
@@ -214,25 +216,13 @@ type E2eTerminalPtyDataInjectionApi = {
 
 type TerminalWithFocusMode = {
   textarea?: HTMLTextAreaElement | null
-  _core?: {
-    coreService?: {
-      decPrivateModes?: {
-        sendFocus?: boolean
-      }
-    }
-    _coreService?: {
-      decPrivateModes?: {
-        sendFocus?: boolean
-      }
-    }
+  modes?: {
+    sendFocusMode?: boolean
   }
 }
 
 function terminalHasFocusReportingEnabled(terminal: TerminalWithFocusMode): boolean {
-  const core = terminal._core
-  return Boolean(
-    core?.coreService?.decPrivateModes?.sendFocus ?? core?._coreService?.decPrivateModes?.sendFocus
-  )
+  return terminal.modes?.sendFocusMode === true
 }
 
 function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
@@ -240,6 +230,27 @@ function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
     return false
   }
   return document.activeElement === terminal.textarea
+}
+
+function stripAnsiCsiSequences(data: string): string {
+  let normalized = ''
+  let index = 0
+  while (index < data.length) {
+    if (data.charCodeAt(index) === 0x1b && data[index + 1] === '[') {
+      index += 2
+      while (index < data.length) {
+        const code = data.charCodeAt(index)
+        index += 1
+        if (code >= 0x40 && code <= 0x7e) {
+          break
+        }
+      }
+      continue
+    }
+    normalized += data[index]
+    index += 1
+  }
+  return normalized
 }
 
 type E2eTerminalPtyDataInjectionWindow = Window & {
@@ -1257,6 +1268,30 @@ export function connectPanePty(
       (entry) => entry.id === deps.tabId
     )?.title
     return runtimeTitle ?? tabTitle ?? null
+  }
+  let reattachReplayPayloadAgentLabel: string | null = null
+  const rememberReattachPayloadAgentSignal = (data: string): void => {
+    const normalized = stripAnsiCsiSequences(data)
+    reattachReplayPayloadAgentLabel = getAgentLabel(normalized)
+  }
+  const hasLiveAgentReattachSignal = (): boolean => {
+    if (useAppStore.getState().agentStatusByPaneKey[cacheKey] || getAuthoritativePaneAgent()) {
+      return true
+    }
+    const title = getCurrentTerminalTitle() ?? ''
+    return (
+      detectAgentStatusFromTitle(title) !== null ||
+      getAgentLabel(title) !== null ||
+      reattachReplayPayloadAgentLabel !== null
+    )
+  }
+  const shouldPreserveAgentReattachModes = (): boolean => {
+    // Why: ordinary shells can inherit stale ?25l/?1004h from replay bytes.
+    // Preserve those modes only when reattach still looks agent-owned.
+    return hasLiveAgentReattachSignal()
+  }
+  const shouldSendFocusedAgentReattachFocusIn = (): boolean => {
+    return terminalOwnsDomFocus(pane.terminal) && shouldPreserveAgentReattachModes()
   }
   const scheduleReattachIdleAgentCursorReset = (): void => {
     const status = detectAgentStatusFromTitle(getCurrentTerminalTitle() ?? '')
@@ -3386,6 +3421,12 @@ export function connectPanePty(
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
     }
 
+    const reattachReplayResetSequence = (): string => {
+      return shouldPreserveAgentReattachModes()
+        ? POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+        : POST_REPLAY_REATTACH_RESET
+    }
+
     const sendFocusedReattachFocusInAfterReplay = (): void => {
       void waitForTerminalOutputParsed(pane.terminal).then(() => {
         if (disposed) {
@@ -3397,10 +3438,8 @@ export function connectPanePty(
         // focus, so xterm never emits the focus-in the agent needs and the parked
         // cursor anchors the IME/caret to the wrong cell. Gated on ?1004h so a
         // bare shell never receives a stray \x1b[I.
-        if (
-          !terminalHasFocusReportingEnabled(pane.terminal) ||
-          !terminalOwnsDomFocus(pane.terminal)
-        ) {
+        const sendFocusMode = terminalHasFocusReportingEnabled(pane.terminal)
+        if (!shouldSendFocusedAgentReattachFocusIn() || !sendFocusMode) {
           return
         }
         transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE)
@@ -3427,7 +3466,7 @@ export function connectPanePty(
         }
         await writeReplayDataAsync(data)
         if (clearBeforeReplay || data.length > 0) {
-          await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
+          await writeReplayDataAsync(reattachReplayResetSequence())
           sendFocusedReattachFocusInAfterReplay()
         }
         if (disposed) {
@@ -4606,12 +4645,13 @@ export function connectPanePty(
       // the daemon and relay are by definition tracking the same session
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
+        rememberReattachPayloadAgentSignal(connectResult.snapshot)
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. We only drop renderer-owned state that should not leak from
         // replay bytes into the restored renderer terminal.
-        writeReplayData(POST_REPLAY_REATTACH_RESET)
+        writeReplayData(reattachReplayResetSequence())
         sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the
@@ -4621,13 +4661,14 @@ export function connectPanePty(
           }
         }
       } else if (connectResult?.replay) {
+        rememberReattachPayloadAgentSignal(connectResult.replay)
         // Relay replay holds the last 100 KB of raw output. The xterm may
         // already hold pre-disconnect content; clear first to avoid
         // duplication. The reattach reset clears renderer-owned state without
         // tearing down the still-running TUI's live modes.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
-        writeReplayData(POST_REPLAY_REATTACH_RESET)
+        writeReplayData(reattachReplayResetSequence())
         sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {

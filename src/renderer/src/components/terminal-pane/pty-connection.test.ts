@@ -2,6 +2,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   RESET_KITTY_KEYBOARD_PROTOCOL,
@@ -330,7 +331,8 @@ function createPane(paneId: number) {
         active: activeBuffer
       },
       modes: {
-        bracketedPasteMode: false
+        bracketedPasteMode: false,
+        sendFocusMode: false
       },
       options: {
         ignoreBracketedPasteMode: false,
@@ -4068,7 +4070,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('injects focus-in after reattach when focus reporting is enabled and the terminal owns focus', async () => {
+  it('preserves live modes and injects focus-in after focused agent reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -4081,24 +4083,19 @@ describe('connectPanePty', () => {
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'Cursor Agent' }]
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'Cursor Agent' }
       }
     } as StoreState
 
     const pane = createPane(1)
     const textarea = {} as HTMLTextAreaElement
-    // Why: focus reporting on + the pane owning DOM focus is the observable
-    // signal of a live focus-driven TUI (e.g. cursor-agent) — no agent identity.
-    Object.assign(pane.terminal, {
-      textarea,
-      _core: {
-        coreService: {
-          decPrivateModes: {
-            sendFocus: true
-          }
-        }
-      }
-    })
+    // Why: public xterm modes plus an agent title are the stable signal for a
+    // live focus-driven TUI; avoid private `_core` field probes.
+    Object.assign(pane.terminal, { textarea })
+    Object.assign(pane.terminal.modes, { sendFocusMode: true })
     pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
       callback?.()
     })
@@ -4118,6 +4115,10 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
     } finally {
       if (originalDocument) {
         Object.defineProperty(globalThis, 'document', originalDocument)
@@ -4140,22 +4141,17 @@ describe('connectPanePty', () => {
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'Cursor Agent' }]
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'Cursor Agent' }
       }
     } as StoreState
 
     const pane = createPane(1)
     const textarea = {} as HTMLTextAreaElement
-    Object.assign(pane.terminal, {
-      textarea,
-      _core: {
-        coreService: {
-          decPrivateModes: {
-            sendFocus: true
-          }
-        }
-      }
-    })
+    Object.assign(pane.terminal, { textarea })
+    Object.assign(pane.terminal.modes, { sendFocusMode: true })
     pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
       callback?.()
     })
@@ -4177,6 +4173,70 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    } finally {
+      if (originalDocument) {
+        Object.defineProperty(globalThis, 'document', originalDocument)
+      } else {
+        Reflect.deleteProperty(globalThis, 'document')
+      }
+    }
+  })
+
+  it('resets stale focus and cursor modes for a focused non-agent shell reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'zsh' }]
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'zsh' }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    Object.assign(pane.terminal, { textarea })
+    Object.assign(pane.terminal.modes, { sendFocusMode: true })
+    pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { activeElement: textarea }
+    })
+    try {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
     } finally {
       if (originalDocument) {
         Object.defineProperty(globalThis, 'document', originalDocument)
