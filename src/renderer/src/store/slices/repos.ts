@@ -44,6 +44,10 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import {
+  canMoveProjectToGroup,
+  getProjectGroupExecutionHostId
+} from '../../../../shared/project-group-move-targets'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
@@ -788,13 +792,6 @@ function mergeProjectCompatibilityForHostRepoChange({
   })
 }
 
-function getProjectGroupHostId(group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>) {
-  if (group.executionHostId) {
-    return group.executionHostId
-  }
-  return group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
-}
-
 function mergeFetchedProjectGroupsForHost(
   previous: readonly ProjectGroup[],
   fetched: ProjectGroup[],
@@ -802,7 +799,7 @@ function mergeFetchedProjectGroupsForHost(
 ): ProjectGroup[] {
   const fetchedIds = new Set(fetched.map((group) => group.id))
   const preserved = previous.filter((group) => {
-    const existingHostId = getProjectGroupHostId(group)
+    const existingHostId = getProjectGroupExecutionHostId(group)
     return existingHostId !== hostId || fetchedIds.has(group.id)
   })
   return mergeById(preserved, fetched)
@@ -821,7 +818,7 @@ function mergeFetchedFolderWorkspacesForHost({
 }): FolderWorkspace[] {
   const fetchedIds = new Set(fetched.map((workspace) => workspace.id))
   const projectGroupHostIds = new Map(
-    projectGroups.map((group) => [group.id, getProjectGroupHostId(group)])
+    projectGroups.map((group) => [group.id, getProjectGroupExecutionHostId(group)])
   )
   const preserved = previous.filter((workspace) => {
     const existingHostId = projectGroupHostIds.get(workspace.projectGroupId)
@@ -1916,7 +1913,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   moveProjectToGroup: async (projectId, groupId, order) => {
     try {
-      if (!findRepoForHost(get().repos, projectId, { settings: get().settings })) {
+      const repo = findRepoForHost(get().repos, projectId, { settings: get().settings })
+      if (!repo) {
+        return false
+      }
+      const group =
+        groupId === null
+          ? null
+          : get().projectGroups.find((projectGroup) => projectGroup.id === groupId)
+      if (groupId !== null && (!group || !canMoveProjectToGroup(repo, group))) {
+        // Why: project-group membership is persisted by the project's owning
+        // host. Sending a group from another host makes that backend drop the
+        // membership as unknown, which looks like a failed move.
         return false
       }
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
