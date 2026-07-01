@@ -1,13 +1,21 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
-import type { GateStatus } from '../../orchestration/db'
+import type { CoordinatorRun, GateStatus, OrchestrationDb } from '../../orchestration/db'
 import { Coordinator } from '../../orchestration/coordinator'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
 // the DB's active-run check), so a single reference suffices.
 let activeCoordinator: Coordinator | null = null
+
+function markStaleCoordinatorRunFailed(db: OrchestrationDb, run: CoordinatorRun): void {
+  // Why: a process restart loses the module-scope coordinator handle but can
+  // leave the durable row marked running. Without a live handle, the row cannot
+  // make progress, so fail it before accepting or acknowledging new lifecycle
+  // commands.
+  db.updateCoordinatorRun(run.id, 'failed')
+}
 
 const RunParams = z.object({
   spec: requiredString('Missing --spec'),
@@ -48,7 +56,10 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
 
       const existing = db.getActiveCoordinatorRun()
       if (existing) {
-        throw new Error(`Coordinator already running: ${existing.id}`)
+        if (activeCoordinator) {
+          throw new Error(`Coordinator already running: ${existing.id}`)
+        }
+        markStaleCoordinatorRunFailed(db, existing)
       }
 
       const coordinatorHandle = params.from ?? 'coordinator'
@@ -93,7 +104,8 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
 
       if (activeCoordinator) {
         activeCoordinator.stop()
-        activeCoordinator = null
+      } else {
+        markStaleCoordinatorRunFailed(db, run)
       }
 
       return { runId: run.id, stopped: true }
