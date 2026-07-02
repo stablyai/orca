@@ -58,6 +58,7 @@ function createResolved(overrides?: Partial<SystemSshResolvedConfig>): SystemSsh
 describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
   beforeEach(() => {
     vi.unstubAllEnvs()
+    vi.stubEnv('XDG_RUNTIME_DIR', '')
     tmpdirMock.mockReset()
     tmpdirMock.mockReturnValue('/tmp')
     mkdirSyncMock.mockReset()
