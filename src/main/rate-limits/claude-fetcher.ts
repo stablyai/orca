@@ -260,22 +260,22 @@ function resolveOAuthCredentialReadOptions(
 
 function buildClaudeUsageFetchDiagnostic(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined,
-  oauthCredentials: OAuthCredentialReadResult
+  oauthCredentials: OAuthCredentialReadResult | null
 ): Record<string, unknown> {
   return {
     provenance: authPreparation?.provenance ?? 'system',
     runtime: authPreparation?.runtime ?? 'host',
     wslDistro: authPreparation?.wslDistro ?? null,
     hasExplicitClaudeConfigDir: Boolean(authPreparation?.envPatch.CLAUDE_CONFIG_DIR),
-    credentialSource: oauthCredentials.source,
-    keychainUnavailable: oauthCredentials.keychainUnavailable,
-    hasRefreshableCredentials: oauthCredentials.hasRefreshableCredentials
+    credentialSource: oauthCredentials?.source ?? null,
+    keychainUnavailable: oauthCredentials?.keychainUnavailable,
+    hasRefreshableCredentials: oauthCredentials?.hasRefreshableCredentials
   }
 }
 
 function warnClaudeUsageFetchFailure(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined,
-  oauthCredentials: OAuthCredentialReadResult,
+  oauthCredentials: OAuthCredentialReadResult | null,
   error: unknown
 ): void {
   const message = error instanceof Error ? error.message : String(error)
@@ -565,6 +565,48 @@ function errorResultForClassification(input: {
   })
 }
 
+// Why: re-sync runtime auth (adopting a terminal-rotated token into the managed
+// store and proactively refreshing when safe), re-read credentials, and retry
+// the OAuth usage fetch. Returns the successful result, or null to fall through
+// to the heavier CLI-spawn repair. Avoids spawning `claude` against the same
+// dead credentials when the terminal already minted a fresh token.
+async function attemptReconcileThenRetryOAuth(input: {
+  options?: FetchClaudeRateLimitsOptions
+  attempts: ClaudeUsageAttemptState
+}): Promise<ProviderRateLimits | null> {
+  if (!input.options?.reconcileManagedAuth) {
+    return null
+  }
+  try {
+    await input.options.reconcileManagedAuth()
+  } catch (err) {
+    warnClaudeUsageFetchFailure(input.options?.authPreparation, null, err)
+    return null
+  }
+  const reconciledCredentials = await readOAuthCredentials(
+    resolveOAuthCredentialReadOptions(input.options?.authPreparation)
+  )
+  if (!reconciledCredentials.token) {
+    return null
+  }
+  recordAttempt(input.attempts, 'oauth')
+  try {
+    const oauthRetry = await fetchViaOAuth(reconciledCredentials.token)
+    return withClaudeUsageMetadata(
+      oauthRetry,
+      metadataForAttempt({
+        attemptedSources: input.attempts.attemptedSources,
+        oauthCredentials: reconciledCredentials,
+        authPreparation: input.options?.authPreparation,
+        source: 'oauth'
+      })
+    )
+  } catch (err) {
+    warnClaudeUsageFetchFailure(input.options?.authPreparation, reconciledCredentials, err)
+    return null
+  }
+}
+
 async function attemptCliRepairThenRetryOAuth(input: {
   options?: FetchClaudeRateLimitsOptions
   attempts: ClaudeUsageAttemptState
@@ -612,6 +654,12 @@ async function attemptCliRepairThenRetryOAuth(input: {
 export type FetchClaudeRateLimitsOptions = {
   authPreparation?: ClaudeRuntimeAuthPreparation
   allowPtyFallback?: boolean
+  // Why: when a usage fetch fails with a stale managed token, a terminal Claude
+  // session may have already rotated the shared ~/.claude token. This callback
+  // re-syncs runtime auth so the rotated token is adopted into the managed
+  // store before retrying — recovering without an interactive re-auth. It
+  // preserves the live-PTY guard, so it never races a live session's rotation.
+  reconcileManagedAuth?: () => Promise<ClaudeRuntimeAuthPreparation | void>
 }
 
 export async function fetchClaudeRateLimits(
@@ -663,6 +711,18 @@ export async function fetchClaudeRateLimits(
           oauthCredentials,
           authPreparation: options?.authPreparation
         })
+      }
+
+      // Why: try the cheap cross-store reconcile first — when a terminal session
+      // already rotated the shared token, adopting it recovers without a `claude`
+      // spawn or interactive re-auth. Runs on every platform (unlike the CLI
+      // repair below, which is gated by allowCliFallback / unreliable on Windows)
+      // because reconcile needs no PTY — just file/network token adoption.
+      if (classification.shouldAttemptDelegatedRefresh) {
+        const reconciled = await attemptReconcileThenRetryOAuth({ options, attempts })
+        if (reconciled) {
+          return reconciled
+        }
       }
 
       if (classification.shouldAttemptDelegatedRefresh && allowCliFallback) {

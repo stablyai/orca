@@ -333,6 +333,63 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })
 
+  it('passes a reconcile callback for managed Claude accounts that routes to the reconcile resolver', async () => {
+    const service = new RateLimitService()
+    const managedPreparation = {
+      configDir: '/Users/test/.claude',
+      runtime: 'host' as const,
+      envPatch: {},
+      stripAuthEnv: true,
+      provenance: 'managed:account-1'
+    }
+    const claudeTarget = { runtime: 'host' as const }
+    service.setClaudeFetchTarget(claudeTarget)
+    service.setClaudeAuthPreparationResolver(async () => managedPreparation)
+    const reconcileResolver = vi.fn(async () => managedPreparation)
+    service.setClaudeAuthReconcileResolver(reconcileResolver)
+
+    let capturedOptions: Parameters<typeof fetchClaudeRateLimits>[0] | undefined
+    vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(async (options) => {
+      capturedOptions = options
+      return okProvider('claude', 10, Date.now())
+    })
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    expect(capturedOptions?.reconcileManagedAuth).toBeTypeOf('function')
+    // The callback must route to the reconcile resolver with the active target.
+    await capturedOptions?.reconcileManagedAuth?.()
+    expect(reconcileResolver).toHaveBeenCalledWith(expect.objectContaining({ runtime: 'host' }))
+  })
+
+  it('omits the reconcile callback for system-default Claude auth', async () => {
+    const service = new RateLimitService()
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/Users/test/.claude',
+      runtime: 'host' as const,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }))
+    const reconcileResolver = vi.fn()
+    service.setClaudeAuthReconcileResolver(reconcileResolver)
+
+    let capturedOptions: Parameters<typeof fetchClaudeRateLimits>[0] | undefined
+    vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(async (options) => {
+      capturedOptions = options
+      return okProvider('claude', 10, Date.now())
+    })
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await service.refresh()
+
+    // System-default auth is owned by the user's terminal — Orca must not
+    // re-sync/refresh it, so no reconcile callback is wired.
+    expect(capturedOptions?.reconcileManagedAuth).toBeUndefined()
+    expect(reconcileResolver).not.toHaveBeenCalled()
+  })
+
   it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({

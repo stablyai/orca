@@ -745,6 +745,33 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
   })
 
+  it('reconcileActiveManagedAuthFromRuntime adopts a terminal-rotated token into the managed store', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original')
+    const rotatedCredentials = createClaudeCredentialsJson('user@example.com', 'rotated')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    settings.activeClaudeManagedAccountId = 'account-1'
+    await service.syncForCurrentSelection()
+
+    // Simulate a terminal Claude session rotating the shared ~/.claude token.
+    writeFileSync(runtimeCredentialsPath, rotatedCredentials, 'utf-8')
+    await service.reconcileActiveManagedAuthFromRuntime()
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(rotatedCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(rotatedCredentials)
+  })
+
   it('rejects wrong-shaped refreshed credentials during read-back', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original')

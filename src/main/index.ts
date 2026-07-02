@@ -1602,6 +1602,9 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
+  rateLimits.setClaudeAuthReconcileResolver((target) =>
+    claudeRuntimeAuth!.reconcileActiveManagedAuthFromRuntime(target)
+  )
   rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store!.getSettings()
     return {

@@ -37,6 +37,13 @@ type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
+// Why: re-sync runtime auth after a failed Claude usage fetch so a token a
+// terminal session already rotated is adopted into the managed store before
+// retrying — recovering a stale managed account without an interactive re-auth.
+type ClaudeAuthReconcileResolver = (
+  target?: ClaudeAccountSelectionTarget
+) => Promise<ClaudeRuntimeAuthPreparation>
+
 type OpenCodeGoRateLimitConfig = {
   sessionCookie: string
   workspaceIdOverride: string
@@ -113,6 +120,7 @@ export class RateLimitService {
     wslDistro: null
   }
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
+  private claudeAuthReconcileResolver: ClaudeAuthReconcileResolver | null = null
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
     wslDistro: null
@@ -150,6 +158,10 @@ export class RateLimitService {
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
     this.claudeAuthPreparationResolver = resolver
+  }
+
+  setClaudeAuthReconcileResolver(resolver: ClaudeAuthReconcileResolver): void {
+    this.claudeAuthReconcileResolver = resolver
   }
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
@@ -818,6 +830,20 @@ export class RateLimitService {
     return !isSystemDefaultClaudeAuth(authPreparation)
   }
 
+  // Why: build the cross-store reconcile callback for the active managed
+  // account. Scoped to managed accounts — system-default auth is owned by the
+  // user's terminal, not Orca, so Orca must not re-sync/refresh it.
+  private buildClaudeReconcileCallback(
+    target: ClaudeAccountSelectionTarget,
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined
+  ): (() => Promise<ClaudeRuntimeAuthPreparation | void>) | undefined {
+    if (!this.claudeAuthReconcileResolver || isSystemDefaultClaudeAuth(authPreparation)) {
+      return undefined
+    }
+    const resolver = this.claudeAuthReconcileResolver
+    return () => resolver(target)
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
@@ -881,7 +907,11 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
+          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+          reconcileManagedAuth: this.buildClaudeReconcileCallback(
+            claudeTarget,
+            claudeAuthPreparation
+          )
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1056,7 +1086,8 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation)
+      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+      reconcileManagedAuth: this.buildClaudeReconcileCallback(claudeTarget, claudeAuthPreparation)
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',

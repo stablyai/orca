@@ -594,6 +594,218 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('reconciles a terminal-rotated token and retries OAuth without spawning the CLI', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'managed:account-1'
+    }
+    // First read: the stale managed token. After reconcile adopts the token a
+    // terminal session already rotated into the shared store, the second read
+    // returns the fresh token.
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'stale-oauth-token',
+            refreshToken: 'refresh-token',
+            expiresAt: Date.now() - 60_000
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'terminal-rotated-token',
+            refreshToken: 'refresh-token-2',
+            expiresAt: Date.now() + 60_000
+          }
+        })
+      )
+    netFetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: { type: 'authentication_error', message: 'Invalid OAuth token.' }
+          }),
+          { status: 401 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            five_hour: { utilization: 9 },
+            seven_day: { utilization: 18 }
+          }),
+          { status: 200 }
+        )
+      )
+    const reconcileManagedAuth = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, reconcileManagedAuth })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 9 },
+      weekly: { usedPercent: 18 },
+      usageMetadata: { source: 'oauth' }
+    })
+
+    expect(reconcileManagedAuth).toHaveBeenCalledTimes(1)
+    // Recovered from the rotated token alone — never spawned `claude`.
+    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer terminal-rotated-token' })
+      })
+    )
+  })
+
+  it('reconciles a rotated token even when CLI fallback is disabled (Windows managed accounts)', async () => {
+    // Why: Windows managed accounts disable PTY/CLI fallback, but reconcile
+    // needs no `claude` spawn — it must still recover a terminal-rotated token.
+    // This guards against reconcile being coupled to the allowCliFallback gate.
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'stale-oauth-token',
+            refreshToken: 'refresh-token',
+            expiresAt: Date.now() - 60_000
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: 'terminal-rotated-token',
+            refreshToken: 'refresh-token-2',
+            expiresAt: Date.now() + 60_000
+          }
+        })
+      )
+    netFetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: { type: 'authentication_error', message: 'Invalid OAuth token.' }
+          }),
+          { status: 401 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            five_hour: { utilization: 7 },
+            seven_day: { utilization: 13 }
+          }),
+          { status: 200 }
+        )
+      )
+    const reconcileManagedAuth = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, reconcileManagedAuth, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 7 },
+      weekly: { usedPercent: 13 },
+      usageMetadata: { source: 'oauth' }
+    })
+
+    expect(reconcileManagedAuth).toHaveBeenCalledTimes(1)
+    expect(fetchViaPty).not.toHaveBeenCalled()
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer terminal-rotated-token' })
+      })
+    )
+  })
+
+  it('falls through to CLI repair when reconcile yields no fresher token', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'managed:account-1'
+    }
+    // Reconcile finds no rotation: every read returns the same stale token, so
+    // the OAuth retry after reconcile still 401s and the CLI repair runs.
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: { type: 'authentication_error', message: 'Invalid OAuth token.' }
+        }),
+        { status: 401 }
+      )
+    )
+    const reconcileManagedAuth = vi.fn().mockResolvedValue(undefined)
+
+    await fetchClaudeRateLimits({ authPreparation, reconcileManagedAuth })
+
+    expect(reconcileManagedAuth).toHaveBeenCalledTimes(1)
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
+  it('falls through to CLI repair when reconcile throws', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: { type: 'authentication_error', message: 'Invalid OAuth token.' }
+        }),
+        { status: 401 }
+      )
+    )
+    const reconcileManagedAuth = vi.fn().mockRejectedValue(new Error('sync failed'))
+
+    await fetchClaudeRateLimits({ authPreparation, reconcileManagedAuth })
+
+    expect(reconcileManagedAuth).toHaveBeenCalledTimes(1)
+    // A failed reconcile must not block recovery — CLI repair still runs.
+    expect(fetchViaPty).toHaveBeenCalledWith({ authPreparation })
+  })
+
   it('explains auth failures when a live Claude terminal owns managed refresh', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {

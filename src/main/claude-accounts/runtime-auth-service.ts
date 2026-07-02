@@ -125,6 +125,23 @@ export class ClaudeRuntimeAuthService {
     return this.getPreparation(effectiveTarget)
   }
 
+  // Why: Claude OAuth refresh tokens are single-use and rotating, and Orca's
+  // managed store shares the same lineage as the terminal's ~/.claude. When a
+  // terminal Claude session rotates the token, the managed copy goes stale and
+  // a usage fetch fails with invalid_grant. Re-running the sync adopts the
+  // terminal's rotated token back into the managed store (the read-back path),
+  // and proactively refreshes when no live PTY owns the credentials — so a
+  // failed fetch can recover without forcing an interactive re-auth. The
+  // live-PTY guard inside the sync is preserved, so this never races a live
+  // session's own rotation.
+  async reconcileActiveManagedAuthFromRuntime(
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
+  }
+
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
     await this.serializeMutation(() =>
       this.doSyncForCurrentSelection(target ?? this.getDefaultAccountSelectionTarget())
