@@ -2549,6 +2549,17 @@
             "dont_ask_again": "No volver a preguntar por pestañas fijadas",
             "0b38ee2f86": "Cancelar",
             "c337c9d75c": "Cerrar"
+          },
+          "TerminalSshReconnectOverlay": {
+            "authFailed": "Error de autenticación en {{value0}}. Vuelve a conectar para continuar esta sesión de terminal.",
+            "reconnectFailed": "La conexión SSH a {{value0}} falló. Vuelve a conectar para continuar esta sesión de terminal.",
+            "connecting": "Conectando a {{value0}}. Esta terminal se reanudará cuando el host esté disponible.",
+            "connected": "SSH está conectado.",
+            "disconnected": "Esta terminal está esperando {{value0}}. Conéctate para continuar esta sesión SSH.",
+            "connectFailed": "Error de conexión SSH",
+            "title": "Se requiere conexión SSH",
+            "connectingButton": "Conectando...",
+            "connectButton": "Conectar"
           }
         }
       },
@@ -2892,7 +2903,9 @@
             "c35af53b73": "Iniciar sesión",
             "f19a63e7cd": "Inicia sesión para ver el uso",
             "5c938d39ac": "% semana",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5h",
+            "a79c64f87e": "Fable",
             "8295903d17": "Reinicie los terminales Claude en vivo antes de continuar conversaciones antiguas después de cambiar.",
             "c98ea88392": "Ninguna otra cuenta",
             "9332ba8684": "Cambiar a",
@@ -3056,6 +3069,7 @@
             "6d6df77f41": "No hay datos disponibles",
             "7f7f208060": "Mensual",
             "252c096536": "Semanalmente",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "Sesión",
             "2c35eca8d4": "No se puede recuperar el uso",
             "1292d4f2ee": "Indisponible",
@@ -6352,7 +6366,11 @@
           "29af933cd5": "Nuevo destino SSH",
           "f2331ce599": "Editar destino SSH",
           "7c13f58c91": "Hasta restablecer",
-          "55c56cf2c7": "Tiempo de espera tras desconectar (segundos)"
+          "55c56cf2c7": "Tiempo de espera tras desconectar (segundos)",
+          "4a342f44c1": "Conexión avanzada",
+          "e9609ddca6": "Proxy, host de salto y reutilización de conexión",
+          "8c922dffba": "Reutilizar la conexión SSH para configurar más rápido",
+          "53e9aabfc0": "Usa multiplexación de OpenSSH cuando está disponible. Desactívalo para hosts con restricciones SSH personalizadas."
         },
         "TasksPane": {
           "3a72b9745e": "Elija qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral.",

@@ -1110,6 +1110,7 @@ export class RateLimitService {
     const previousHasData = Boolean(
       previous?.session ||
       previous?.weekly ||
+      previous?.fableWeekly ||
       previous?.monthly ||
       (previous?.buckets && previous.buckets.length > 0)
     )

@@ -16,7 +16,7 @@ import {
 import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type {
   Automation,
   AutomationCreateInput,
@@ -474,6 +474,8 @@ type LegacyTerminalScrollbackSettings = {
   terminalScrollbackBytes?: unknown
 }
 
+const LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT = 3
+
 function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminalScrollbackSettings {
   return settings && typeof settings === 'object'
     ? (settings as LegacyTerminalScrollbackSettings)
@@ -506,6 +508,29 @@ function migrateTerminalScrollbackRows(settings: unknown): {
   return {
     rows,
     needsSave: !hasRows || hasLegacyBytes || legacySettings.terminalScrollbackRows !== rows
+  }
+}
+
+function migrateTerminalTuiScrollSensitivityDefault(settings: GlobalSettings | undefined): {
+  settings: Pick<
+    GlobalSettings,
+    'terminalTuiScrollSensitivity' | 'terminalTuiScrollSensitivityDefaultedToOne'
+  >
+  needsSave: boolean
+} {
+  const alreadyDefaultedToOne = settings?.terminalTuiScrollSensitivityDefaultedToOne === true
+  const current = settings?.terminalTuiScrollSensitivity
+  const shouldMoveInheritedDefault =
+    !alreadyDefaultedToOne &&
+    (current === undefined || current === LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT)
+  const terminalTuiScrollSensitivity = shouldMoveInheritedDefault ? 1 : (current ?? 1)
+
+  return {
+    settings: {
+      terminalTuiScrollSensitivity,
+      terminalTuiScrollSensitivityDefaultedToOne: true
+    },
+    needsSave: !alreadyDefaultedToOne || current === undefined
   }
 }
 
@@ -999,11 +1024,13 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
+  const systemSshConnectionReuse = target.systemSshConnectionReuse
   // Why: remote workspace sync now follows the SSH relay lifecycle, so the
   // retired per-target sync opt-out and grace-period fields stop at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
+  delete target.systemSshConnectionReuse
   // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
   // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
@@ -1021,6 +1048,9 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
   ) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  if (systemSshConnectionReuse === false) {
+    normalized.systemSshConnectionReuse = false
   }
   return normalized
 }
@@ -2414,6 +2444,13 @@ export class Store {
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
+  // Why: hash of the plaintext state as of the last successful write. Saves
+  // triggered by mutations that net out to identical state skip the full
+  // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
+  // written payload) because encrypt() uses a random IV per call, so the
+  // on-disk bytes differ even for identical state.
+  private lastWrittenStateHash: string | null = null
+  private firstPendingSaveAt: number | null = null
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -2672,6 +2709,12 @@ export class Store {
         if (migratedTerminalScrollback.needsSave) {
           this.loadNeedsSave = true
         }
+        const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
+          parsed.settings
+        )
+        if (migratedTerminalTuiScrollSensitivity.needsSave) {
+          this.loadNeedsSave = true
+        }
         const rawSourceControlAi = parsed.settings?.sourceControlAi
         const rawSourceControlAiMissing = rawSourceControlAi === undefined
         const rawSourceControlAiActionsMissing =
@@ -2913,6 +2956,7 @@ export class Store {
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
+            ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: open first-run onboarding is the local fresh-install signal;
@@ -2990,8 +3034,11 @@ export class Store {
             }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
-            // Only exact legacy default payloads are migrated; users who
+            // Why: a short-lived default put Done on the left. Repair only
+            // the exact raw payload once; user-authored reorders then survive.
+            const workspaceStatusesReorderedDefaultRepaired =
+              parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
+            // Why: only exact legacy default payloads are migrated; users who
             // customized status labels, colors, icons, or order keep theirs.
             const workspaceStatusesDefaultWorkflowMigrated =
               parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
@@ -3003,12 +3050,13 @@ export class Store {
               parsed.ui?.workspaceStatuses,
               {
                 migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
-                repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
+                repairReorderedDefaultStatuses: !workspaceStatusesReorderedDefaultRepaired,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesReorderedDefaultRepaired ||
               !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
@@ -3106,6 +3154,7 @@ export class Store {
               ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesReorderedDefaultRepaired: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
@@ -3311,12 +3360,25 @@ export class Store {
     }
   }
 
+  // Why 1s trailing + 5s max-wait (previously 300ms trailing, unbounded):
+  // sustained sub-interval mutation bursts used to either rewrite the full
+  // multi-MB state ~3x/sec or postpone the write indefinitely by resetting
+  // the timer. The max-wait bounds crash staleness at 5s while bursts
+  // coalesce; the content-hash guard in the writers skips no-op payloads.
+  private static SAVE_DEBOUNCE_MS = 1_000
+  private static SAVE_MAX_WAIT_MS = 5_000
+
   private scheduleSave(): void {
+    const now = Date.now()
+    this.firstPendingSaveAt ??= now
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
     }
+    const untilMaxWait = Math.max(0, this.firstPendingSaveAt + Store.SAVE_MAX_WAIT_MS - now)
+    const delay = Math.min(Store.SAVE_DEBOUNCE_MS, untilMaxWait)
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
+      this.firstPendingSaveAt = null
       // Why (issue #1158): serialize async writes so backup rotation never has
       // two callers racing over the same dataFile/tmp/.bak paths.
       const prev = this.pendingWrite ?? Promise.resolve()
@@ -3331,7 +3393,7 @@ export class Store {
           }
         })
       this.pendingWrite = next
-    }, 300)
+    }, delay)
   }
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
@@ -3341,15 +3403,14 @@ export class Store {
     }
   }
 
-  // Why: async writes avoid blocking the main Electron thread on every
-  // debounced save (every 300ms during active use).
-  private async writeToDiskAsync(): Promise<void> {
-    const gen = this.writeGeneration
-    const dataFile = getDataFile()
-    const dir = dirname(dataFile)
-    await mkdir(dir, { recursive: true }).catch(() => {})
-    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+  private computeStateHash(): string {
+    return createHash('sha1').update(JSON.stringify(this.state)).digest('hex')
+  }
 
+  // Why: builds the on-disk payload synchronously so the hash and the
+  // serialized bytes reflect the same state tick (no mutation can interleave
+  // before an await).
+  private buildStateToSave(): string {
     // Why: secrets must be encrypted on disk. Clone state so the in-memory
     // this.state stays plaintext for the rest of the app.
     const stateToSave = {
@@ -3364,13 +3425,31 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
+    return JSON.stringify(stateToSave, null, 2)
+  }
+
+  // Why: async writes avoid blocking the main Electron thread on every
+  // debounced save during active use.
+  private async writeToDiskAsync(): Promise<void> {
+    const gen = this.writeGeneration
+    const stateHash = this.computeStateHash()
+    // Why: a mutation burst that nets out to already-persisted state (or a
+    // flush that raced ahead) must not rewrite a byte-identical multi-MB file.
+    if (stateHash === this.lastWrittenStateHash) {
+      return
+    }
+    const payload = this.buildStateToSave()
+    const dataFile = getDataFile()
+    const dir = dirname(dataFile)
+    await mkdir(dir, { recursive: true }).catch(() => {})
+    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
     // Why: wrap write+rename in try/finally-on-error so any failure (ENOSPC,
     // ENFILE, EIO, permission) removes the tmp file rather than leaving a
     // multi-megabyte orphan behind. Successful rename consumes the tmp file.
     let renamed = false
     try {
-      await writeFile(tmpFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
+      await writeFile(tmpFile, payload, 'utf-8')
       // Why: if flush() ran while this async write was in-flight, it bumped
       // writeGeneration and already wrote the latest state synchronously.
       // Renaming this stale tmp file would overwrite the fresh data.
@@ -3379,6 +3458,13 @@ export class Store {
       }
       await rename(tmpFile, dataFile)
       renamed = true
+      // Why the gen re-check: a sync flush can interleave during the rename
+      // await, write fresher state, and record its own hash. Recording this
+      // stale hash over it would make later saves skip against content that
+      // is not what the file holds.
+      if (this.writeGeneration === gen) {
+        this.lastWrittenStateHash = stateHash
+      }
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
@@ -3397,7 +3483,16 @@ export class Store {
 
   // Why: synchronous variant kept only for flush() at shutdown, where the
   // process may exit before an async write completes.
-  private writeToDiskSync(): void {
+  private writeToDiskSync(opts: { force?: boolean } = {}): void {
+    const stateHash = this.computeStateHash()
+    // Why: skipping is safe under flushOrThrow's durability contract — a
+    // matching hash means this exact state is already the file's content.
+    // Except when an async write was in flight at flush entry (force): its
+    // rename may already be dispatched past the generation check, and only
+    // an unconditional sync write afterwards reliably out-orders it.
+    if (!opts.force && stateHash === this.lastWrittenStateHash) {
+      return
+    }
     const dataFile = getDataFile()
     const dir = dirname(dataFile)
     if (!existsSync(dir)) {
@@ -3405,29 +3500,17 @@ export class Store {
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: secrets must be encrypted on disk. Clone state so the in-memory
-    // this.state stays plaintext for the rest of the app.
-    const stateToSave = {
-      ...this.state,
-      settings: {
-        ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
-      },
-      ui: {
-        ...this.state.ui,
-        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
-      }
-    }
+    const payload = this.buildStateToSave()
 
     // Why: mirror the async path — on any failure between writeFileSync and
     // renameSync, remove the tmp file so crashes during shutdown don't leak
     // orphans into userData.
     let renamed = false
     try {
-      writeFileSync(tmpFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
+      writeFileSync(tmpFile, payload, 'utf-8')
       renameSync(tmpFile, dataFile)
       renamed = true
+      this.lastWrittenStateHash = stateHash
     } finally {
       if (!renamed) {
         try {
@@ -3448,11 +3531,13 @@ export class Store {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
     }
+    this.firstPendingSaveAt = null
+    const asyncWriteWasInFlight = this.pendingWrite !== null
     // Why: bump writeGeneration so any in-flight async writeToDiskAsync skips
     // its rename, preventing a stale snapshot from overwriting this sync write.
     this.writeGeneration++
     this.pendingWrite = null
-    this.writeToDiskSync()
+    this.writeToDiskSync({ force: asyncWriteWasInFlight })
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -4811,6 +4896,12 @@ export class Store {
         updates.terminalScrollbackRows
       )
     }
+    if (
+      'terminalTuiScrollSensitivity' in updates ||
+      'terminalTuiScrollSensitivityDefaultedToOne' in updates
+    ) {
+      sanitizedUpdates.terminalTuiScrollSensitivityDefaultedToOne = true
+    }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
       const taskProviderSettings = normalizeTaskProviderSettings({
         visibleTaskProviders:
@@ -5630,7 +5721,14 @@ export class Store {
     if (!target) {
       return null
     }
-    Object.assign(target, updates, normalizeSshTarget({ ...target, ...updates }))
+    const normalized = normalizeSshTarget({ ...target, ...updates })
+    Object.assign(target, updates, normalized)
+    if (!Object.hasOwn(normalized, 'relayGracePeriodSeconds')) {
+      delete target.relayGracePeriodSeconds
+    }
+    if (!Object.hasOwn(normalized, 'systemSshConnectionReuse')) {
+      delete target.systemSshConnectionReuse
+    }
     this.scheduleSave()
     return { ...target }
   }

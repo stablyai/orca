@@ -1263,6 +1263,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
+  ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
@@ -3444,6 +3445,23 @@ export function registerPtyHandlers(
       return Array.from(deduped.values())
     }
   )
+
+  ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
+    const ownedConnectionId = ptyOwnership.get(args.id)
+    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+    const provider = parsedSshId
+      ? sshProviders.get(parsedSshId.connectionId)
+      : tryGetProviderForPty(args.id)
+    if (!provider?.hasPty) {
+      return null
+    }
+    try {
+      return provider.hasPty(args.id)
+    } catch {
+      // Why: liveness is only allowed to close panes on an authoritative false.
+      return null
+    }
+  })
 
   ipcMain.handle(
     'pty:hasChildProcesses',

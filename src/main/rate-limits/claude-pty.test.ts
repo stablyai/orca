@@ -177,4 +177,223 @@ describe('fetchViaPty', () => {
       error: null
     })
   })
+
+  it('parses the newer Claude weekly limits wording for Fable usage', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Plan usage limits
+
+      Current session
+      18% remaining
+      Resets in 2h 10m
+
+      Weekly limits
+      Fable
+      42% consumed
+      Resets in 3d 2h
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 82,
+        resetDescription: '2h 10m'
+      },
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 42,
+        resetDescription: '3d 2h'
+      },
+      error: null
+    })
+  })
+
+  it('parses generic weekly and Fable weekly limits as separate windows', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Plan usage limits
+
+      Current session
+      18% remaining
+      Resets in 2h 10m
+
+      Current week (all models)
+      84% left
+      Resets in 5d 4h
+
+      Fable
+      42% consumed
+      Resets in 3d 2h
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 82,
+        resetDescription: '2h 10m'
+      },
+      weekly: {
+        usedPercent: 16,
+        resetDescription: '5d 4h'
+      },
+      fableWeekly: {
+        usedPercent: 42,
+        resetDescription: '3d 2h'
+      },
+      error: null
+    })
+  })
+
+  it('does not let an incomplete Fable section consume later usage sections', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Plan usage limits
+
+      Fable
+      Usage unavailable
+
+      Current session
+      12% used
+
+      Current week (all models)
+      84% left
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 12
+      },
+      weekly: {
+        usedPercent: 16
+      },
+      fableWeekly: null,
+      error: null
+    })
+  })
+
+  it('does not treat inline Fable weekly text as a parsed usage label', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Plan usage limits
+
+      Current session
+      Fable weekly usage
+      42% consumed
+
+      Current week (all models)
+      84% left
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: null,
+      weekly: {
+        usedPercent: 16
+      },
+      fableWeekly: null,
+      error: null
+    })
+  })
+
+  it('keeps waiting after a bare Fable heading until another usage section renders', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+    let settled = false
+
+    const resultPromise = fetchViaPty().finally(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Plan usage limits
+
+      Fable
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(settled).toBe(false)
+
+    term.emitData(`
+      42% consumed
+
+      Current session
+      12% used
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 12
+      },
+      fableWeekly: {
+        usedPercent: 42
+      },
+      error: null
+    })
+  })
+
+  it('parses 7-day weekly labels without the old Current week heading', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Usage
+
+      Current session
+      12% used
+
+      7-day
+      84% left
+      Resets Wed at 9:05 PM
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 12
+      },
+      weekly: {
+        usedPercent: 16,
+        resetDescription: 'Wed at 9:05 PM'
+      },
+      error: null
+    })
+  })
 })

@@ -13,24 +13,11 @@ import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
-
-// ── Ignore patterns ──────────────────────────────────────────────────
-// Why: high-churn directories are suppressed at the native watcher level
-// so events never leave the OS kernel. This list is separate from the
-// File Explorer display filter (which only hides rows). Directories like
-// `dist` and `build` remain visible in the tree but will not auto-refresh.
-
-const WATCHER_IGNORE_DIRS: string[] = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-  '.cache',
-  '__pycache__',
-  'target',
-  '.venv'
-]
+// Why: high-churn directories are suppressed at the native watcher level so
+// events never leave the OS/daemon. This list is separate from the File
+// Explorer display filter (which only hides rows). Directories like `dist`
+// and `build` remain visible in the tree but will not auto-refresh.
+import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOption } from './filesystem-watcher-ignore'
 
 // ── Debounce helpers ─────────────────────────────────────────────────
 
@@ -309,7 +296,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     let errorCleanedUp = false
 
     const watcherOptions = {
-      ignore: WATCHER_IGNORE_DIRS,
+      ignore: buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS),
       // Why: Parcel checks Watchman before the native Windows backend by
       // default, and Windows prints a shell-level "watchman not recognized"
       // error for that probe. Pinning the backend keeps local watches quiet.

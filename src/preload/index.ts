@@ -830,6 +830,7 @@ const api = {
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
+    hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (
       id: string,
@@ -3611,7 +3612,12 @@ const api = {
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
-      ipcRenderer.invoke('aiVault:listSessions', args)
+      ipcRenderer.invoke('aiVault:listSessions', args),
+    onWindowFocused: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('aiVault:windowFocused', listener)
+      return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
+    }
   },
 
   nativeChat: {

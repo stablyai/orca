@@ -116,22 +116,28 @@ vi.mock('ssh2', () => {
   }
 })
 
-const { spawnSystemSshCommandMock } = vi.hoisted(() => ({
+const {
+  getOrcaControlSocketPathMock,
+  removeControlSocketPathMock,
+  spawnSystemSshCommandMock,
+  spawnSystemSshMock
+} = vi.hoisted(() => ({
+  getOrcaControlSocketPathMock: vi.fn(),
+  removeControlSocketPathMock: vi.fn(),
+  spawnSystemSshMock: vi.fn(),
   spawnSystemSshCommandMock: vi.fn()
 }))
 
 vi.mock('./ssh-system-fallback', () => ({
-  spawnSystemSsh: vi.fn().mockReturnValue({
-    stdin: {},
-    stdout: {},
-    stderr: {},
-    kill: vi.fn(),
-    onExit: vi.fn(),
-    pid: 99999
-  }),
+  getOrcaControlSocketPath: getOrcaControlSocketPathMock,
+  spawnSystemSsh: spawnSystemSshMock,
   spawnSystemSshCommand: spawnSystemSshCommandMock,
   uploadDirectoryViaSystemSsh: vi.fn(),
   writeFileViaSystemSsh: vi.fn()
+}))
+
+vi.mock('./ssh-control-socket', () => ({
+  removeControlSocketPath: removeControlSocketPathMock
 }))
 
 vi.mock('./ssh-config-parser', () => ({
@@ -144,7 +150,7 @@ import {
   shouldUseSystemSshTransport,
   type SshConnectionCallbacks
 } from './ssh-connection'
-import { resolveWithSshG } from './ssh-config-parser'
+import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './ssh-system-fallback'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -156,6 +162,20 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
     host: 'example.com',
     port: 22,
     username: 'deploy',
+    ...overrides
+  }
+}
+
+function createResolvedConfig(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig {
+  return {
+    hostname: 'example.com',
+    port: 22,
+    identityFile: [],
+    forwardAgent: false,
+    identitiesOnly: false,
+    proxyUseFdpass: true,
+    controlMaster: 'no',
+    controlPersist: 'no',
     ...overrides
   }
 }
@@ -187,6 +207,51 @@ function createSystemCommandChannel(): EventEmitter & {
   return channel
 }
 
+function createFailingSystemCommandChannel(
+  code: number,
+  stderrText = ''
+): ReturnType<typeof createSystemCommandChannel> {
+  const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+  channel.stdin = { end: vi.fn(), write: vi.fn() }
+  channel.stderr = new EventEmitter()
+  channel.close = vi.fn()
+  queueMicrotask(() => {
+    if (stderrText) {
+      channel.stderr.emit('data', Buffer.from(stderrText))
+    }
+    channel.emit('close', code)
+  })
+  return channel
+}
+
+function createPendingSystemSshProcess() {
+  const stdout = new EventEmitter()
+  return {
+    stdin: {},
+    stdout,
+    stderr: new EventEmitter(),
+    kill: vi.fn(),
+    onExit: vi.fn(),
+    pid: 99999
+  }
+}
+
+function createSystemSshProcess() {
+  const proc = createPendingSystemSshProcess()
+  queueMicrotask(() => {
+    proc.stdout.emit('data', Buffer.from('ORCA-SYSTEM-SSH-READY'))
+  })
+  return proc
+}
+
+function createFailingSystemSshProcess(code: number) {
+  const proc = createPendingSystemSshProcess()
+  proc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {
+    queueMicrotask(() => handler(code))
+  })
+  return proc
+}
+
 describe('SshConnection', () => {
   beforeEach(() => {
     eventHandlers = new Map()
@@ -200,6 +265,11 @@ describe('SshConnection', () => {
     sftpBehavior = 'callback'
     pendingSftpCallback = null
     clientInstances = []
+    getOrcaControlSocketPathMock.mockReset()
+    getOrcaControlSocketPathMock.mockReturnValue(null)
+    removeControlSocketPathMock.mockReset()
+    spawnSystemSshMock.mockReset()
+    spawnSystemSshMock.mockImplementation(() => createSystemSshProcess())
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
     vi.mocked(uploadDirectoryViaSystemSsh).mockReset()
@@ -674,14 +744,7 @@ describe('SshConnection', () => {
   })
 
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
-    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
-      hostname: 'example.com',
-      port: 22,
-      identityFile: [],
-      forwardAgent: false,
-      identitiesOnly: false,
-      proxyUseFdpass: true
-    })
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
     await conn.connect()
@@ -692,7 +755,62 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      {
+        wrapCommand: false,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      }
+    )
+  })
+
+  it('retries a failed system SSH probe without ControlMaster and disables mux for the session', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock
+      .mockImplementationOnce(() => createFailingSystemCommandChannel(255, 'mux client failed'))
+      .mockImplementation(() => createSystemCommandChannel())
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connect()
+    await conn.exec('echo after-connect')
+    await conn.writeFile('/tmp/after-connect', 'contents')
+
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({
+        wrapCommand: false,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({
+        disableControlMaster: true,
+        wrapCommand: false,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo after-connect',
+      expect.objectContaining({
+        disableControlMaster: true,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
+    )
+    expect(writeFileViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      '/tmp/after-connect',
+      'contents',
+      expect.objectContaining({
+        disableControlMaster: true,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
     )
   })
 
@@ -757,14 +875,7 @@ describe('SshConnection', () => {
   })
 
   it('passes the detected host platform to system SSH file operations', async () => {
-    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
-      hostname: 'example.com',
-      port: 22,
-      identityFile: [],
-      forwardAgent: false,
-      identitiesOnly: false,
-      proxyUseFdpass: true
-    })
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
@@ -780,13 +891,19 @@ describe('SshConnection', () => {
       expect.objectContaining({ configHost: 'fdpass-host' }),
       '/tmp/local-relay',
       'C:/Users/me/.orca-remote/relay',
-      expect.objectContaining({ hostPlatform })
+      expect.objectContaining({
+        hostPlatform,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
     )
     expect(writeFileViaSystemSsh).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
       'C:/Users/me/.orca-remote/relay/.version',
       '0.1.0',
-      expect.objectContaining({ hostPlatform })
+      expect.objectContaining({
+        hostPlatform,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
     )
   })
 
@@ -797,14 +914,7 @@ describe('SshConnection', () => {
     channel.stderr = new EventEmitter()
     channel.close = vi.fn()
     spawnSystemSshCommandMock.mockReturnValueOnce(channel)
-    vi.mocked(resolveWithSshG).mockResolvedValueOnce({
-      hostname: 'example.com',
-      port: 22,
-      identityFile: [],
-      forwardAgent: false,
-      identitiesOnly: false,
-      proxyUseFdpass: true
-    })
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
     try {
@@ -823,6 +933,163 @@ describe('SshConnection', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('passes resolved OpenSSH config to direct system SSH connections', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connectViaSystemSsh()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(spawnSystemSshMock).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      {
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      }
+    )
+  })
+
+  it('retries direct system SSH connections without ControlMaster after mux startup failure', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshMock
+      .mockReturnValueOnce(createFailingSystemSshProcess(255))
+      .mockImplementation(() => createSystemSshProcess())
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connectViaSystemSsh()
+
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+    expect(spawnSystemSshMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      {
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      }
+    )
+    expect(spawnSystemSshMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      {
+        disableControlMaster: true,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      }
+    )
+  })
+
+  it('kills delayed direct system SSH startup on disconnect and ignores late stdout', async () => {
+    const proc = createPendingSystemSshProcess()
+    spawnSystemSshMock.mockReturnValueOnce(proc)
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), callbacks)
+
+    const connectResult = conn.connectViaSystemSsh().catch((err: Error) => err)
+    for (let i = 0; i < 5 && spawnSystemSshMock.mock.calls.length === 0; i++) {
+      await Promise.resolve()
+    }
+    expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
+
+    await conn.disconnect()
+
+    expect(proc.kill).toHaveBeenCalled()
+    proc.stdout.emit('data', Buffer.from('ORCA-SYSTEM-SSH-READY'))
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'SSH connection attempt was cancelled'
+    })
+    expect(conn.getState().status).toBe('disconnected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'connected' })
+    )
+  })
+
+  it('treats delayed direct system SSH exit after disconnect as cancellation', async () => {
+    const proc = createPendingSystemSshProcess()
+    let capturedExit: ((exitCode: number | null) => void) | null = null
+    proc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {
+      capturedExit = handler
+    })
+    proc.kill = vi.fn(() => {
+      queueMicrotask(() => capturedExit?.(null))
+    })
+    spawnSystemSshMock.mockReturnValueOnce(proc)
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), callbacks)
+
+    const connectResult = conn.connectViaSystemSsh().catch((err: Error) => err)
+    for (let i = 0; i < 5 && spawnSystemSshMock.mock.calls.length === 0; i++) {
+      await Promise.resolve()
+    }
+    expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
+
+    await conn.disconnect()
+
+    const result = await connectResult
+    expect(result).toBeInstanceOf(Error)
+    if (!(result instanceof Error)) {
+      throw new Error('Expected direct system SSH startup to reject')
+    }
+    expect(result.message).toBe('SSH connection attempt was cancelled')
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'error' })
+    )
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'connected' })
+    )
+  })
+
+  it('does not spawn direct system SSH after disconnect while OpenSSH config is resolving', async () => {
+    let resolveConfig!: (config: SshResolvedConfig | null) => void
+    vi.mocked(resolveWithSshG).mockReturnValueOnce(
+      new Promise<SshResolvedConfig | null>((resolve) => {
+        resolveConfig = resolve
+      })
+    )
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    const connectResult = conn.connectViaSystemSsh().catch((err: Error) => err)
+    await Promise.resolve()
+    await conn.disconnect()
+    resolveConfig(createResolvedConfig())
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'SSH connection attempt was cancelled'
+    })
+    expect(spawnSystemSshMock).not.toHaveBeenCalled()
+    expect(conn.getState().status).toBe('disconnected')
+  })
+
+  it('does not spawn direct system SSH retry after cancellation between mux failure and retry', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    const firstProc = createPendingSystemSshProcess()
+    let conn!: SshConnection
+    firstProc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {
+      queueMicrotask(() => {
+        handler(255)
+        void conn.disconnect()
+      })
+    })
+    spawnSystemSshMock
+      .mockReturnValueOnce(firstProc)
+      .mockImplementation(() => createSystemSshProcess())
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    const result = await conn.connectViaSystemSsh().catch((err: Error) => err)
+
+    expect(result).toMatchObject({ message: 'SSH connection attempt was cancelled' })
+    expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
+    expect(conn.getState().status).toBe('disconnected')
   })
 })
 

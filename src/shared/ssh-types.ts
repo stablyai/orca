@@ -46,6 +46,9 @@ export type SshTarget = {
   /** Port forwards to auto-restore on connect/reconnect. Persisted so
    *  forwards survive app restarts. */
   portForwards?: SavedPortForward[]
+  /** Reuse a system OpenSSH connection across setup commands. Undefined means
+   *  enabled; false is an explicit per-target compatibility opt-out. */
+  systemSshConnectionReuse?: boolean
 }
 
 export type SavedPortForward = {

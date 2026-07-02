@@ -7,12 +7,23 @@ import {
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
+// Why: while Chromium refuses WebGL context creation (GPU process crashed or
+// WebGL blocked after repeated resets), every attach attempt burns a canvas +
+// failed getContext and logs a full-stack warning — and title changes retrigger
+// attach constantly in "on" mode. Latch the first failure and skip attempts
+// until the next recovery boundary (rendering resume or GPU-setting change).
+let webglAttachFailedSinceRecovery = false
 
 export function resetTerminalWebglSuggestion(): void {
   // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
   // attach failure suggested DOM rendering for this app session.
   suggestedRendererType = undefined
+  webglAttachFailedSinceRecovery = false
   resetTerminalWebglAutoDecision()
+}
+
+export function clearTerminalWebglAttachBackoff(): void {
+  webglAttachFailedSinceRecovery = false
 }
 
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
@@ -96,7 +107,8 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     !pane.gpuRenderingEnabled ||
     !shouldUseTerminalWebgl(pane) ||
     pane.webglAttachmentDeferred ||
-    pane.webglDisabledAfterContextLoss
+    pane.webglDisabledAfterContextLoss ||
+    webglAttachFailedSinceRecovery
   ) {
     pane.webglAddon = null
     return
@@ -111,7 +123,8 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       )
       // Why: Chromium starts reclaiming terminal contexts under pressure.
       // Recreating WebGL for this pane can loop context loss and leave xterm
-      // visually blank, so keep the pane on the DOM renderer until remount.
+      // visually blank, so keep the pane on the DOM renderer until the next
+      // rendering resume (worktree foreground / window wake) retries it.
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })
@@ -124,6 +137,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // enough signal to keep new auto panes on DOM until the setting changes.
       suggestedRendererType = 'dom'
     }
+    webglAttachFailedSinceRecovery = true
     // WebGL not available — default DOM renderer is fine, but log it for debugging
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
     pane.webglAddon = null
