@@ -146,6 +146,23 @@ describe('buildWorktreeDragPreviewOffsets', () => {
 
     expect(Array.from(offsets)).toEqual([['parent', 108]])
   })
+
+  it('reserves one card-height slot while previewing a multi-select batch', () => {
+    const offsets = buildWorktreeDragPreviewOffsets({
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      dropIndex: 5,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ]
+    })
+
+    expect(Array.from(offsets)).toEqual([['e', -56]])
+  })
 })
 
 describe('buildManualOrderUpdatesForVisibleGroups', () => {

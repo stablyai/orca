@@ -38,13 +38,28 @@ function getFallbackGap(rects: readonly WorktreeDragPreviewRect[]): number {
   return gaps[Math.floor(gaps.length / 2)]!
 }
 
+function getPreviewLayoutDraggedIds(
+  groupIds: readonly string[],
+  draggedIds: readonly string[]
+): readonly string[] {
+  if (draggedIds.length <= 1) {
+    return draggedIds
+  }
+  const draggedSet = new Set(draggedIds)
+  const firstVisibleDraggedId = groupIds.find((id) => draggedSet.has(id))
+  return firstVisibleDraggedId ? [firstVisibleDraggedId] : draggedIds.slice(0, 1)
+}
+
 export function buildWorktreeDragPreviewOffsets(args: {
   groupIds: readonly string[]
   draggedIds: readonly string[]
   dropIndex: number
   rects: readonly WorktreeDragPreviewRect[]
 }): Map<string, number> {
-  const nextIds = moveWorktreeIdsWithinGroup(args.groupIds, args.draggedIds, args.dropIndex)
+  // Why: dragging a large multi-select batch should advertise the insertion
+  // point without opening a giant hole that makes the sidebar jump around.
+  const layoutDraggedIds = getPreviewLayoutDraggedIds(args.groupIds, args.draggedIds)
+  const nextIds = moveWorktreeIdsWithinGroup(args.groupIds, layoutDraggedIds, args.dropIndex)
   if (arraysEqual(nextIds, args.groupIds)) {
     return new Map()
   }
