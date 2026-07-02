@@ -5,7 +5,7 @@ import {
   resolveTerminalFileLink
 } from '@/lib/terminal-links'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { isRemoteRuntimeFileOperation, runtimePathExists } from '@/runtime/runtime-file-client'
+import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
 import {
   buildCandidateLogicalLinesForBufferPosition,
   dedupeLogicalLines,
@@ -23,11 +23,8 @@ import {
   rangeForParsedFileLink,
   type WrappedLogicalLine
 } from './wrapped-terminal-link-ranges'
-import {
-  getTerminalPathExistsCacheKey,
-  readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
-} from './terminal-path-exists-cache'
+import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
+import { probeTerminalPathExists } from './terminal-path-exists-probe'
 import {
   getTerminalHtmlFileOpenHint,
   getTerminalOrcaFileOpenHint,
@@ -160,13 +157,13 @@ export function createFilePathLinkProvider(
               // Why: exact known workspace roots must stay clickable for SSH or
               // stale local paths even when filesystem probing says "missing".
               if (!worktreeRootLink) {
-                const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
-                const exists =
-                  cachedExists ??
-                  (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, resolved.absolutePath)
-                    : await window.api.shell.pathExists(resolved.absolutePath))
-                writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
+                const exists = await probeTerminalPathExists({
+                  absolutePath: resolved.absolutePath,
+                  cacheKey,
+                  fileContext,
+                  isRemoteRuntimePath,
+                  pathExistsCache
+                })
                 if (!exists) {
                   return null
                 }

@@ -1369,6 +1369,34 @@ describe('createFilePathLinkProvider range bounds', () => {
     })
   })
 
+  it('treats remote path probe failures as missing links', async () => {
+    setPlatform('Windows')
+    const pathExistsCache = new Map<string, boolean>()
+    runtimeEnvironmentCallMock.mockResolvedValueOnce({
+      id: 'stat',
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: "ENAMETOOLONG: name too long, realpath '/repo/too-long.ts'"
+      },
+      _meta: { runtimeId: 'env-1' }
+    })
+    const { provider } = createProviderSetup([makeBufferLine('too-long.ts')], pathExistsCache, {
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    const links = await new Promise<ILink[]>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('link provider callback not called')), 100)
+      provider.provideLinks(1, (provided) => {
+        clearTimeout(timeout)
+        resolve(provided ?? [])
+      })
+    })
+
+    expect(links).toEqual([])
+    expect(pathExistsCache.get('env-1\0/repo/too-long.ts')).toBe(false)
+  })
+
   it('opens a single-row file path from a direct modifier-click fallback', async () => {
     setPlatform('Macintosh')
     const pathExists = createDeferred<boolean>()
