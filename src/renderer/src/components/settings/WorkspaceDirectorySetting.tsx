@@ -198,6 +198,8 @@ export function WorkspaceDirectorySetting({
           }}
           onBlur={handleBlur}
           onKeyDown={(e) => {
+            // Why: an Enter that only confirms a CJK IME candidate must not
+            // commit the rename; wait for a non-composition Enter.
             if (isImeCompositionKeyDown(e)) {
               return
             }
