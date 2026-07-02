@@ -1982,7 +1982,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           type: 'subscribed',
           streamId,
           lines: read.tail,
-          truncated: initialOutputOverflowed || isTerminalReadPayloadIncomplete(read),
+          truncated:
+            initialOutputOverflowed ||
+            (serialized ? read.truncated : isTerminalReadPayloadIncomplete(read)),
           cols: serialized?.cols ?? size?.cols,
           rows: serialized?.rows ?? size?.rows,
           displayMode,

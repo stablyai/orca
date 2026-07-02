@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
@@ -25,6 +25,9 @@ export function MobileFileMarkdownPreview({
   initialLine
 }: Props) {
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
+  useEffect(() => {
+    setMode(initialLine ? 'source' : 'preview')
+  }, [initialLine, relativePath])
   const previewSelected = mode === 'preview'
   const sourceSelected = mode === 'source'
 

@@ -29,6 +29,11 @@ export function sourceKeyForPreview(source: MobileFilePreviewSource | null): str
     return null
   }
   return source.source === 'terminalArtifact'
-    ? `terminal:${source.worktreeId}:${source.absolutePath}:${source.terminalHandle ?? ''}`
-    : `worktree:${source.worktreeId}:${source.relativePath}`
+    ? JSON.stringify([
+        'terminal',
+        source.worktreeId,
+        source.absolutePath,
+        source.terminalHandle ?? ''
+      ])
+    : JSON.stringify(['worktree', source.worktreeId, source.relativePath])
 }

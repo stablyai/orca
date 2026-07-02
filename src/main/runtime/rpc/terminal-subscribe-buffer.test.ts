@@ -317,6 +317,13 @@ describe('terminal subscribe buffering', () => {
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
     )
+    const subscribed = messages
+      .map((msg) => JSON.parse(msg).result)
+      .find((result) => result?.type === 'subscribed')
+    expect(subscribed).toMatchObject({
+      type: 'subscribed',
+      truncated: false
+    })
     const snapshotStart = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)

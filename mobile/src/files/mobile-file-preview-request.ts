@@ -212,6 +212,9 @@ async function verifyTerminalArtifactBaseContent(
     }
   }
   const latest = normalizeMobileFilePreviewResponse(readSource.absolutePath, response)
+  if (latest.status === 'error' || latest.status === 'waiting') {
+    return { status: 'error', error: latest }
+  }
   if (!terminalArtifactPreviewMatchesBase(latest, baseContent)) {
     return {
       status: 'error',

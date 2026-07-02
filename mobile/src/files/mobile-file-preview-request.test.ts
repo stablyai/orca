@@ -438,6 +438,52 @@ describe('mobile-file-preview-request', () => {
     })
   })
 
+  it('reports a malformed refreshed artifact read instead of treating it as changed desktop content', async () => {
+    const client = clientWithResponses([
+      fail('terminal_file_grant_stale'),
+      ok({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/tmp/result.json',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          absolutePath: '/tmp/result.json',
+          grantId: 'grant-2'
+        }
+      }),
+      ok({ truncated: false, byteLength: 11 })
+    ])
+
+    await expect(
+      saveMobileTerminalArtifactPreview(
+        client,
+        {
+          source: 'terminalArtifact',
+          worktreeId: 'wt-1',
+          absolutePath: '/tmp/result.json',
+          grantId: 'grant-1',
+          terminalHandle: 'term-1'
+        },
+        '{"ok":false}',
+        { baseContent: '{"ok":true}' }
+      )
+    ).resolves.toEqual({
+      status: 'error',
+      message: 'Unable to load preview',
+      reconnect: false
+    })
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(3)
+    expect(client.sendRequest).not.toHaveBeenCalledWith('files.writeTerminalArtifact', {
+      worktree: 'id:wt-1',
+      absolutePath: '/tmp/result.json',
+      grantId: 'grant-2',
+      content: '{"ok":false}'
+    })
+  })
+
   it('does not retry a dirty save when grant refresh resolves to a different artifact', async () => {
     const client = clientWithResponses([
       fail('terminal_file_grant_expired'),
