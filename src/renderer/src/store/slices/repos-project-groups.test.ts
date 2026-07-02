@@ -813,6 +813,60 @@ describe('project group store routing', () => {
     expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
   })
 
+  it('forwards a numeric drop order over the runtime transport when moving between groups', async () => {
+    // Why: sidebar drag passes a computed order (the context menu never did), so
+    // the order must survive the runtime RPC envelope, not just the local path.
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-move-order',
+      ok: true,
+      result: { repo: { ...remoteRepo, projectGroupId: 'group-1', projectGroupOrder: 3 } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [{ ...remoteRepo, executionHostId: 'runtime:env-1' }]
+    })
+
+    await expect(store.getState().moveProjectToGroup(remoteRepo.id, 'group-1', 3)).resolves.toBe(
+      true
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.moveProject',
+      params: { repo: remoteRepo.id, groupId: 'group-1', order: 3 },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards a group tabOrder update over the runtime transport', async () => {
+    // Why: group drag persists reordering via updateProjectGroup({ tabOrder }),
+    // which must route through the runtime RPC for runtime-owned groups.
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-update-group',
+      ok: true,
+      result: { group: { ...projectGroup, tabOrder: 5 } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [projectGroup]
+    })
+
+    await expect(
+      store.getState().updateProjectGroup(projectGroup.id, { tabOrder: 5 })
+    ).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.update',
+      params: { groupId: projectGroup.id, updates: { tabOrder: 5 } },
+      timeoutMs: 15_000
+    })
+  })
+
   it('propagates specific folder workspace create failures to callers', async () => {
     folderWorkspacesCreate.mockRejectedValue(new Error('folder_workspace_path_missing:/srv/app'))
     const store = createTestStore()

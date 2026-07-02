@@ -2,17 +2,24 @@ import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
 import type { Repo } from '../../../../shared/types'
+import { isHeaderDragHandleTarget } from './header-drag-target-predicates'
 
 export type RepoDragState = {
   draggingRepoId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  targetBucketKey: string | null
+  /** Group to highlight as the drop target when dropping into a collapsed/empty
+   *  group (in that case no drop line is drawn). */
+  dropIntoGroupId: string | null
 }
 
 export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
   draggingRepoId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  targetBucketKey: null,
+  dropIntoGroupId: null
 }
 
 export type UseRepoHeaderDragArgs = {
@@ -21,7 +28,7 @@ export type UseRepoHeaderDragArgs = {
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order?: number) => void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -33,12 +40,17 @@ export type RepoHeaderDragController = {
 export type ProjectHeaderDragSession = {
   repoId: string
   bucketKey: ProjectHeaderDragBucketKey
+  // Source bucket's repo headers (flat) for same-bucket reorder.
   sidebarRepoHeaderIds: readonly string[]
+  // Repo headers for every bucket, as currently shown in the sidebar (excludes
+  // filtered/collapsed members), used to resolve a cross-bucket drop's siblings.
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   pointerId: number
   headerRects: ProjectHeaderDragRect[]
   handleEl: HTMLElement
   startX: number
   startY: number
+  latestPointerX: number
   latestPointerY: number
   promoted: boolean
 }
@@ -47,26 +59,9 @@ export const PROJECT_HEADER_DRAG_THRESHOLD_PX = 4
 
 const REPO_HEADER_DRAG_HANDLE_SELECTOR = '[data-repo-header-drag-handle]'
 
-const REPO_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-
 export function isProjectHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
 ): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-  const dragHandle = target.closest(REPO_HEADER_DRAG_HANDLE_SELECTOR)
-  return dragHandle !== null && currentTarget.contains(dragHandle)
-}
-
-export function isRepoHeaderActionTarget(
-  target: EventTarget | null,
-  currentTarget: HTMLElement
-): boolean {
-  if (!(target instanceof HTMLElement) || target === currentTarget) {
-    return false
-  }
-  return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
+  return isHeaderDragHandleTarget(target, currentTarget, REPO_HEADER_DRAG_HANDLE_SELECTOR)
 }

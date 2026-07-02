@@ -97,3 +97,54 @@ export function createSidebarDragPreview(args: {
   document.body.appendChild(preview)
   return { preview, offsetX, offsetY }
 }
+
+/** Floating preview for a multi-row block (a header + its children): clones
+ *  each row and stacks them at their current relative offsets, so the ghost
+ *  shows the whole block, not just the header. `rows[0]` is the header row and
+ *  anchors the pointer offset. */
+export function createSidebarBlockDragPreview(args: {
+  rows: readonly HTMLElement[]
+  pointerX: number
+  pointerY: number
+}): { preview: HTMLElement; offsetX: number; offsetY: number } {
+  const headRect = args.rows[0]!.getBoundingClientRect()
+  const preview = document.createElement('div')
+  preview.setAttribute(POINTER_DRAG_PREVIEW_ATTR, 'true')
+  preview.setAttribute('aria-hidden', 'true')
+
+  let maxBottom = headRect.bottom
+  for (const row of args.rows) {
+    const rect = row.getBoundingClientRect()
+    const clone = row.cloneNode(true) as HTMLElement
+    stripDuplicatePreviewAttributes(clone)
+    clone.style.position = 'absolute'
+    clone.style.left = '0'
+    clone.style.right = '0'
+    // Place each clone at its offset from the header so the stack mirrors the
+    // live layout; drop the live translateY transform that positioned it.
+    clone.style.top = `${rect.top - headRect.top}px`
+    clone.style.transform = 'none'
+    preview.appendChild(clone)
+    maxBottom = Math.max(maxBottom, rect.bottom)
+  }
+
+  const offsetX = Math.min(Math.max(args.pointerX - headRect.left, 0), headRect.width)
+  const offsetY = Math.min(Math.max(args.pointerY - headRect.top, 0), headRect.height)
+
+  preview.style.position = 'fixed'
+  preview.style.left = '0'
+  preview.style.top = '0'
+  preview.style.width = `${headRect.width}px`
+  preview.style.height = `${maxBottom - headRect.top}px`
+  preview.style.pointerEvents = 'none'
+  preview.style.transformOrigin = 'top left'
+  updateSidebarDragPreviewPosition({
+    preview,
+    pointerX: args.pointerX,
+    pointerY: args.pointerY,
+    offsetX,
+    offsetY
+  })
+  document.body.appendChild(preview)
+  return { preview, offsetX, offsetY }
+}

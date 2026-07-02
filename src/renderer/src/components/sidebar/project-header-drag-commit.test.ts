@@ -74,4 +74,57 @@ describe('commitProjectHeaderDragDrop', () => {
 
     expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1)
   })
+
+  it('moves a project into a different group when the target bucket differs', () => {
+    const onCommitProjectGroupOrder = vi.fn()
+    const repos = [
+      makeRepo('a', { projectGroupId: 'group-1', projectGroupOrder: 0 }),
+      makeRepo('b', { projectGroupId: 'group-2', projectGroupOrder: 0 }),
+      makeRepo('c', { projectGroupId: 'group-1', projectGroupOrder: 1 })
+    ]
+    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
+    commitProjectHeaderDragDrop({
+      session: makeSession('c', ['c']), // c dragged out of group-1
+      sidebarDropIndex: 1,
+      targetBucketKey: 'group:group-2',
+      sidebarRepoHeaderIdsByBucket: new Map([
+        ['group:group-1', ['a', 'c']],
+        ['group:group-2', ['b']]
+      ]),
+      orderedRepoIds: ['a', 'b', 'c'],
+      repoById,
+      usesProjectGroupOrdering: true,
+      onCommitRepoOrder: vi.fn(),
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-2', 1)
+  })
+
+  it('ungroups a project when the target bucket is ungrouped', () => {
+    const onCommitProjectGroupOrder = vi.fn()
+    const repos = [
+      makeRepo('a', { projectGroupId: 'group-1', projectGroupOrder: 0 }),
+      makeRepo('u', { projectGroupId: null, projectGroupOrder: 0 })
+    ]
+    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
+    commitProjectHeaderDragDrop({
+      session: makeSession('a', ['a']),
+      sidebarDropIndex: 1,
+      targetBucketKey: 'ungrouped',
+      sidebarRepoHeaderIdsByBucket: new Map([
+        ['group:group-1', ['a']],
+        ['ungrouped', ['u']]
+      ]),
+      orderedRepoIds: ['a', 'u'],
+      repoById,
+      usesProjectGroupOrdering: true,
+      onCommitRepoOrder: vi.fn(),
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('a', null, 1)
+  })
 })

@@ -7,9 +7,9 @@ import {
 } from './project-header-drop'
 import {
   isProjectHeaderDragHandleTarget,
-  isRepoHeaderActionTarget,
   type ProjectHeaderDragSession
 } from './project-header-drag-contract'
+import { isHeaderActionTarget } from './header-drag-target-predicates'
 import type { Repo } from '../../../../shared/types'
 
 export function createProjectHeaderDragSession(args: {
@@ -17,6 +17,10 @@ export function createProjectHeaderDragSession(args: {
   repoId: string
   repoById: ReadonlyMap<string, Repo>
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  /** Total project count across ALL groups (collapsed included). Falls back to
+   *  the visible-bucket sum; callers pass the complete count so a project stays
+   *  draggable when other groups are collapsed and hide their projects. */
+  totalProjectCount?: number
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -25,7 +29,7 @@ export function createProjectHeaderDragSession(args: {
   if (!isProjectHeaderDragHandleTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
+  if (isHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
   const repo = args.repoById.get(args.repoId)
@@ -34,9 +38,12 @@ export function createProjectHeaderDragSession(args: {
   }
   const bucketKey = getProjectHeaderDragBucketKey(repo)
   const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: a single project in its bucket has nowhere to land, so skip arming
-  // drag and let the header click toggle collapse instead.
-  if (sidebarRepoHeaderIds.length <= 1) {
+  const totalHeaders =
+    args.totalProjectCount ??
+    Array.from(args.sidebarRepoHeaderIdsByBucket.values()).reduce((sum, ids) => sum + ids.length, 0)
+  // Why: a project can now move across buckets, so arming requires only that some
+  // other project exists somewhere, not that the source bucket has a sibling.
+  if (totalHeaders <= 1) {
     return null
   }
   const container = args.getScrollContainer()
@@ -50,11 +57,13 @@ export function createProjectHeaderDragSession(args: {
     repoId: args.repoId,
     bucketKey,
     sidebarRepoHeaderIds,
+    sidebarRepoHeaderIdsByBucket: args.sidebarRepoHeaderIdsByBucket,
     pointerId: args.event.pointerId,
     headerRects: measureProjectHeaderDragRects(container, bucketKey),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,
+    latestPointerX: args.event.clientX,
     latestPointerY: args.event.clientY,
     promoted: false
   }

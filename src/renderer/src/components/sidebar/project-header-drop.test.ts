@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyAllRepoInsertAt,
-  computeProjectHeaderDropPreview,
+  computeProjectHeaderDropPreviewAcrossBuckets,
   getProjectGroupOrderForSidebarDrop,
   getProjectHeaderDragBucketKey,
   getSidebarOrderedRepoHeaderIdsByBucket,
@@ -101,36 +101,6 @@ describe('mapSidebarProjectHeaderDropIndexToSiblingInsertIndex', () => {
   })
 })
 
-describe('computeProjectHeaderDropPreview', () => {
-  it('uses row-model header indices instead of mounted subset order', () => {
-    const preview = computeProjectHeaderDropPreview({
-      pointerY: 105,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarRepoHeaderIds: ['a', 'b', 'c', 'd', 'e'],
-      rects: [
-        { repoId: 'b', bucketKey: 'ungrouped', headerIndex: 1, top: 100, bottom: 128 },
-        { repoId: 'c', bucketKey: 'ungrouped', headerIndex: 2, top: 200, bottom: 228 },
-        { repoId: 'd', bucketKey: 'ungrouped', headerIndex: 3, top: 300, bottom: 328 }
-      ]
-    })
-
-    expect(preview).toEqual({ dropIndex: 1, dropIndicatorY: 96 })
-  })
-
-  it('supports boundary drops at the end of the full sidebar list', () => {
-    const preview = computeProjectHeaderDropPreview({
-      pointerY: 360,
-      containerTop: 0,
-      scrollTop: 0,
-      sidebarRepoHeaderIds: ['a', 'b', 'c'],
-      rects: [{ repoId: 'c', bucketKey: 'ungrouped', headerIndex: 2, top: 300, bottom: 328 }]
-    })
-
-    expect(preview).toEqual({ dropIndex: 3, dropIndicatorY: 331 })
-  })
-})
-
 describe('applyAllRepoInsertAt', () => {
   it('reorders repos using a full-list insertion index', () => {
     expect(applyAllRepoInsertAt(['hidden', 'a', 'b', 'c'], 'c', 1)).toEqual([
@@ -143,6 +113,132 @@ describe('applyAllRepoInsertAt', () => {
 
   it('returns null for no-op reorders', () => {
     expect(applyAllRepoInsertAt(['a', 'b', 'c'], 'b', 2)).toBeNull()
+  })
+})
+
+describe('computeProjectHeaderDropPreviewAcrossBuckets', () => {
+  it('targets the bucket whose project block contains the pointer', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 60,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 28 },
+        { repoId: 'b', bucketKey: 'group:2', headerIndex: 0, top: 50, bottom: 78 }
+      ],
+      groupZones: [
+        { bucketKey: 'group:1', top: 0, bottom: 40, projectCount: 1 },
+        { bucketKey: 'group:2', top: 45, bottom: 85, projectCount: 1 }
+      ]
+    })
+    expect(result?.targetBucketKey).toBe('group:2')
+  })
+
+  it('targets the ungrouped bucket when the pointer is below all groups', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 200,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [{ repoId: 'u', bucketKey: 'ungrouped', headerIndex: 0, top: 150, bottom: 178 }],
+      groupZones: [{ bucketKey: 'group:1', top: 0, bottom: 40, projectCount: 1 }]
+    })
+    expect(result?.targetBucketKey).toBe('ungrouped')
+  })
+
+  it('appends into a collapsed group whose header contains the pointer', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 12,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [],
+      groupZones: [{ bucketKey: 'group:1', top: 0, bottom: 24, projectCount: 3 }]
+    })
+    expect(result).toEqual({
+      targetBucketKey: 'group:1',
+      dropIndex: 3,
+      dropIndicatorY: 0,
+      intoGroupId: '1'
+    })
+  })
+
+  it('collapses the slot below the dragged project (same bucket) to its home above', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 40, // lower half of bucket → would resolve to "below a" (index 1)
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 28 },
+        { repoId: 'b', bucketKey: 'group:1', headerIndex: 1, top: 50, bottom: 78 }
+      ],
+      groupZones: [],
+      draggingRepoId: 'a'
+    })
+    expect(result?.dropIndex).toBe(0)
+  })
+
+  it('highlights the target group (no line) when moving a project into a different group', () => {
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 60, // over group:2's (expanded) block
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 28 },
+        { repoId: 'b', bucketKey: 'group:2', headerIndex: 0, top: 50, bottom: 78 }
+      ],
+      groupZones: [],
+      draggingRepoId: 'a'
+    })
+    expect(result?.targetBucketKey).toBe('group:2')
+    expect(result?.intoGroupId).toBe('2')
+    expect(result?.dropIndex).toBe(1) // appended after group:2's project
+  })
+
+  it('appends after the last project at its block bottom', () => {
+    // Block-extent rects (as measureProjectHeaderDragRects now produces): project
+    // "a" spans its whole block 0..300 (header + worktrees), not a 28px header.
+    // Dropping over its lower worktrees must land the line below the block.
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 280,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [{ repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, bottom: 300 }],
+      groupZones: []
+    })
+    expect(result?.dropIndex).toBe(1)
+    expect(result?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(300)
+  })
+
+  it('treats hovering a project body (its worktrees) as "after" it, not "before"', () => {
+    // Project "a" block 0..300 with a 28px header. y=40 is in its worktrees —
+    // below the header but above the block midpoint (150). With the header-row
+    // threshold this reads as "after a" (append), not "before a" (dropIndex 0).
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 40,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'a', bucketKey: 'group:1', headerIndex: 0, top: 0, headerBottom: 28, bottom: 300 }
+      ],
+      groupZones: []
+    })
+    expect(result?.dropIndex).toBe(1)
+    expect(result?.dropIndicatorY ?? 0).toBeGreaterThanOrEqual(300)
+  })
+
+  it('appends using the full sibling headerIndex, not the mounted-rect count', () => {
+    // Only one mounted rect, but it sits at sibling index 50 (the rest are
+    // virtualized off-screen). Dropping below it must append at 51, not at
+    // targetRects.length (1).
+    const result = computeProjectHeaderDropPreviewAcrossBuckets({
+      pointerY: 100,
+      containerTop: 0,
+      scrollTop: 0,
+      repoRects: [
+        { repoId: 'z', bucketKey: 'group:1', headerIndex: 50, top: 0, headerBottom: 28, bottom: 60 }
+      ],
+      groupZones: []
+    })
+    expect(result?.dropIndex).toBe(51)
   })
 })
 

@@ -46,6 +46,39 @@ describe('createProjectHeaderDragSession', () => {
     expect(handleEl.setPointerCapture).not.toHaveBeenCalled()
   })
 
+  it('arms a drag for a lone grouped project when another bucket exists', () => {
+    const handleEl = document.createElement('div')
+    handleEl.setAttribute('data-repo-header-drag-handle', '')
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, handleEl)
+
+    const repoById = new Map<string, Repo>([
+      ['only', createRepo('only', 'group-1')],
+      ['other', createRepo('other')]
+    ])
+    const sidebarRepoHeaderIdsByBucket = new Map([
+      ['group:group-1', ['only']],
+      ['ungrouped', ['other']]
+    ])
+
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: handleEl,
+        currentTarget: handleEl
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'only',
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session).not.toBeNull()
+  })
+
   it('does not arm drag when the pointer starts outside the project icon handle', () => {
     const header = document.createElement('div')
     const handleEl = document.createElement('div')

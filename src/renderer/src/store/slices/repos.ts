@@ -1779,10 +1779,29 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   updateProjectGroup: async (groupId, updates) => {
+    // Why: project groups are focused-host-scoped by design — fetch/create/update/
+    // delete all route by the focused host, and the list is replaced (not merged).
+    const target = getActiveRuntimeTarget(get().settings)
+    const previousGroup = get().projectGroups.find((group) => group.id === groupId)
+    // Optimistically apply so a drag reorder (tabOrder) re-sorts the instant the
+    // drag is dropped (no flash before the async round-trip); main's
+    // authoritative group replaces this below, and a failure reverts it.
+    set((s) => ({
+      projectGroups: s.projectGroups.map((group) =>
+        group.id === groupId ? { ...group, ...updates } : group
+      )
+    }))
+    const revertOptimistic = (): void => {
+      if (!previousGroup) {
+        return
+      }
+      set((s) => ({
+        projectGroups: s.projectGroups.map((group) =>
+          group.id === groupId ? previousGroup : group
+        )
+      }))
+    }
     try {
-      // Why: project groups are focused-host-scoped by design — fetch/create/update/
-      // delete all route by the focused host, and the list is replaced (not merged).
-      const target = getActiveRuntimeTarget(get().settings)
       const updated =
         target.kind === 'local'
           ? await window.api.projectGroups.update({ groupId, updates })
@@ -1795,6 +1814,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).group
       if (!updated) {
+        revertOptimistic()
         return false
       }
       const ownedGroup = projectGroupWithFetchedOwner(updated, target)
@@ -1804,6 +1824,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }))
       return true
     } catch (err) {
+      revertOptimistic()
       console.error('Failed to update project group:', err)
       return false
     }
@@ -1915,11 +1936,39 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   moveProjectToGroup: async (projectId, groupId, order) => {
-    try {
-      if (!findRepoForHost(get().repos, projectId, { settings: get().settings })) {
-        return false
+    const identity = findRepoForHost(get().repos, projectId, { settings: get().settings })
+    if (!identity) {
+      return false
+    }
+    const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+    const optimisticHostId = getRepoExecutionHostId(identity)
+    const previousRepo = get().repos.find((repo) =>
+      repoMatchesHostIdentity(repo, projectId, optimisticHostId)
+    )
+    // Optimistically reflect the move so the sidebar reorders the instant the
+    // drag is dropped (no flash before the async round-trip); main's
+    // authoritative repo replaces this below, and a failure reverts this repo.
+    set((s) => ({
+      repos: s.repos.map((repo) => {
+        if (!repoMatchesHostIdentity(repo, projectId, optimisticHostId)) {
+          return repo
+        }
+        return order === undefined
+          ? { ...repo, projectGroupId: groupId }
+          : { ...repo, projectGroupId: groupId, projectGroupOrder: order }
+      })
+    }))
+    const revertOptimistic = (): void => {
+      if (!previousRepo) {
+        return
       }
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
+      set((s) => ({
+        repos: s.repos.map((repo) =>
+          repoMatchesHostIdentity(repo, projectId, optimisticHostId) ? previousRepo : repo
+        )
+      }))
+    }
+    try {
       const moved =
         target.kind === 'local'
           ? await window.api.projectGroups.moveProject({
@@ -1936,6 +1985,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).repo
       if (!moved) {
+        revertOptimistic()
         return false
       }
       const ownedMoved = repoWithFetchedOwner(moved, target)
@@ -1956,6 +2006,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
       return true
     } catch (err) {
+      revertOptimistic()
       console.error('Failed to move repo to group:', err)
       return false
     }

@@ -1,0 +1,170 @@
+// group-header-drop.ts
+import { interpolateSparseOrder } from './sidebar-drop-order-interpolation'
+import { mapSidebarProjectHeaderDropIndexToSiblingInsertIndex } from './project-header-drop'
+import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
+import { resolveVirtualRowStart, resolveVirtualRowTop } from './sidebar-virtual-row-offset'
+import type { Row } from './worktree-list-groups'
+import type { ProjectGroup } from '../../../../shared/types'
+
+export type GroupHeaderDragRect = {
+  groupId: string
+  // Index among sibling group headers (same parent) from the row model, not the
+  // mounted subset — virtualized rows unmount off-screen headers.
+  siblingIndex: number
+  top: number
+  bottom: number
+}
+
+export type GroupHeaderDropPreview = {
+  dropIndex: number
+  dropIndicatorY: number
+}
+
+export { mapSidebarProjectHeaderDropIndexToSiblingInsertIndex as mapSidebarGroupDropIndexToSiblingInsertIndex }
+
+export function getTabOrderForGroupDrop(args: {
+  siblings: readonly ProjectGroup[]
+  dropIndex: number
+}): number {
+  if (args.siblings.length === 0) {
+    return 0
+  }
+  const before = args.siblings[args.dropIndex - 1]?.tabOrder
+  const after = args.siblings[args.dropIndex]?.tabOrder
+  return interpolateSparseOrder(before, after)
+}
+
+/** Ordered sibling group ids keyed by parent (null = top level). Mirrors the
+ *  row builder's per-parent tabOrder||name sort so drag indices line up. */
+export function getSiblingGroupIdsByParent(rows: readonly Row[]): Map<string | null, string[]> {
+  const byParent = new Map<string | null, string[]>()
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (row.type !== 'header' || !row.projectGroup || row.projectGroup.id === null) {
+      continue
+    }
+    if (seen.has(row.projectGroup.id)) {
+      continue
+    }
+    seen.add(row.projectGroup.id)
+    const parent = row.projectGroup.parentGroupId ?? null
+    const list = byParent.get(parent) ?? []
+    list.push(row.projectGroup.id)
+    byParent.set(parent, list)
+  }
+  return byParent
+}
+
+export function measureGroupHeaderDragRects(
+  container: HTMLElement,
+  parentGroupId?: string | null
+): GroupHeaderDragRect[] {
+  const containerRect = container.getBoundingClientRect()
+  // Measure from the virtual row's slot start so boundaries match the
+  // gap-opening shift's coordinate space (the shift keys off the same
+  // virtualizer starts; the header's intra-row spacing would offset them).
+  const rowTop = (element: HTMLElement): number =>
+    resolveVirtualRowStart(element) ?? resolveVirtualRowTop(element, container, containerRect)
+  const rects: GroupHeaderDragRect[] = []
+  container.querySelectorAll<HTMLElement>('[data-project-group-header-id]').forEach((element) => {
+    const groupId = element.getAttribute('data-project-group-header-id')
+    const rawSiblingIndex = element.getAttribute('data-project-group-sibling-index')
+    const siblingIndex = rawSiblingIndex === null ? Number.NaN : Number(rawSiblingIndex)
+    const rawParent = element.getAttribute('data-project-group-parent')
+    const elementParent = rawParent === null || rawParent === '' ? null : rawParent
+    if (!groupId || !Number.isFinite(siblingIndex)) {
+      return
+    }
+    if (parentGroupId !== undefined && elementParent !== parentGroupId) {
+      return
+    }
+    const top = rowTop(element)
+    rects.push({ groupId, siblingIndex, top, bottom: top })
+  })
+  rects.sort((left, right) => left.top - right.top)
+  // Why: a group's drop footprint is its whole block (header + projects +
+  // worktrees), not just the header row. Extend each rect's bottom to the next
+  // sibling group's top — and the last to the bottom of the last rendered row
+  // — so the drop line lands at block boundaries instead of inside a group
+  // below its header. (Uses the last row's bottom, not scrollHeight, which can
+  // exceed the rendered content.)
+  let contentBottom = rects.at(-1)?.top ?? 0
+  container.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]').forEach((element) => {
+    contentBottom = Math.max(
+      contentBottom,
+      rowTop(element) + element.getBoundingClientRect().height
+    )
+  })
+  for (let index = 0; index < rects.length; index++) {
+    const next = rects[index + 1]
+    rects[index]!.bottom = next ? next.top : contentBottom
+  }
+  return rects
+}
+
+export function computeGroupHeaderDropPreview(args: {
+  pointerY: number
+  containerTop: number
+  scrollTop: number
+  rects: readonly GroupHeaderDragRect[]
+  siblingGroupIds: readonly string[]
+  /** The group being dragged, so the slot immediately below it (a no-op,
+   *  identical to leaving it in place) collapses to its home position above. */
+  draggingGroupId?: string
+}): GroupHeaderDropPreview | null {
+  const { rects, siblingGroupIds } = args
+  if (rects.length === 0 || siblingGroupIds.length === 0) {
+    return null
+  }
+  const localY = args.pointerY - args.containerTop + args.scrollTop
+  const first = rects[0]!
+  const last = rects.at(-1)!
+  const boundaryDrop = getWorktreeSidebarBoundaryDrop({
+    localY,
+    firstRect: {
+      worktreeId: first.groupId,
+      groupIndex: first.siblingIndex,
+      top: first.top,
+      bottom: first.bottom
+    },
+    lastRect: {
+      worktreeId: last.groupId,
+      groupIndex: last.siblingIndex,
+      top: last.top,
+      bottom: last.bottom
+    },
+    sourceGroupSize: siblingGroupIds.length
+  })
+  if (boundaryDrop.kind === 'outside') {
+    return null
+  }
+
+  let dropIndex = last.siblingIndex + 1
+  // Indicator sits exactly at the block boundary so it matches the gap-opening
+  // shift's drop point (a cosmetic offset would pull the next sibling's unit
+  // into the shift).
+  let indicatorY = last.bottom
+  if (boundaryDrop.kind === 'drop') {
+    dropIndex = boundaryDrop.dropIndex
+    indicatorY = boundaryDrop.indicatorY
+  } else {
+    for (const rect of rects) {
+      const mid = (rect.top + rect.bottom) / 2
+      if (localY < mid) {
+        dropIndex = rect.siblingIndex
+        indicatorY = Math.max(0, rect.top)
+        break
+      }
+    }
+  }
+  // The slot right below the dragged group is the same as leaving it in place;
+  // collapse it to the home position above the group so only that shows.
+  const draggedRect = args.draggingGroupId
+    ? rects.find((rect) => rect.groupId === args.draggingGroupId)
+    : undefined
+  if (draggedRect && dropIndex === draggedRect.siblingIndex + 1) {
+    dropIndex = draggedRect.siblingIndex
+    indicatorY = Math.max(0, draggedRect.top)
+  }
+  return { dropIndex, dropIndicatorY: Math.max(args.scrollTop, indicatorY) }
+}

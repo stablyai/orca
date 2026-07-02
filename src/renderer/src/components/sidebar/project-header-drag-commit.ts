@@ -1,6 +1,8 @@
 import {
   applyAllRepoInsertAt,
+  bucketKeyToProjectGroupId,
   getProjectGroupOrderForSidebarDrop,
+  getProjectHeaderDragBucketKey,
   mapSidebarProjectHeaderDropIndexToSiblingInsertIndex,
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
@@ -10,14 +12,50 @@ import type { Repo } from '../../../../shared/types'
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
   sidebarDropIndex: number
+  targetBucketKey?: string
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
   orderedRepoIds: readonly string[]
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order?: number) => void
 }): void {
   const draggedRepo = args.repoById.get(args.session.repoId)
   if (!draggedRepo) {
+    return
+  }
+
+  // Cross-bucket move: when the target bucket differs from the source, place the
+  // dragged repo into the new group without touching same-bucket ordering logic.
+  const sourceBucketKey = getProjectHeaderDragBucketKey(draggedRepo)
+
+  if (
+    args.usesProjectGroupOrdering &&
+    args.targetBucketKey &&
+    args.targetBucketKey !== sourceBucketKey
+  ) {
+    const targetGroupId = bucketKeyToProjectGroupId(args.targetBucketKey)
+    const targetSiblings = (args.sidebarRepoHeaderIdsByBucket?.get(args.targetBucketKey) ?? [])
+      .filter((repoId) => repoId !== args.session.repoId)
+      .map((repoId) => args.repoById.get(repoId))
+      .filter((repo): repo is Repo => repo !== undefined)
+    // Why: a collapsed group has no visible sibling rects, so sidebarDropIndex
+    // is 0 (front). Pass undefined instead so the store appends, matching the
+    // context-menu "move to group" behaviour.
+    if (targetSiblings.length === 0) {
+      args.onCommitProjectGroupOrder(args.session.repoId, targetGroupId, undefined)
+      return
+    }
+    const repoOrderRankById = new Map(
+      args.orderedRepoIds.map((repoId, index) => [repoId, index] as const)
+    )
+    const insertIndex = Math.max(0, Math.min(targetSiblings.length, args.sidebarDropIndex))
+    const order = getProjectGroupOrderForSidebarDrop({
+      siblings: targetSiblings,
+      dropIndex: insertIndex,
+      repoOrderRankById
+    })
+    args.onCommitProjectGroupOrder(args.session.repoId, targetGroupId, order)
     return
   }
 
