@@ -1,18 +1,21 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useRef, useState } from 'react'
-import { joinPath, normalizeRelativePath } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
-import type { DirEntry } from '../../../../shared/types'
-import type { DirCache, FileExplorerRoot, TreeNode } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
-import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
+import type { DirCache, FileExplorerRoot } from './file-explorer-types'
 import { readRuntimeDirectory, statRuntimePath } from '@/runtime/runtime-file-client'
-import {
-  createFileExplorerDirLoadTracker,
-  type FileExplorerDirLoadTracker
-} from './file-explorer-dir-load-tracker'
+import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
-import { isPathInsideOrEqual, relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+import {
+  createRootedFileExplorerChildren,
+  createWorkspaceRootNode,
+  findRootForPath,
+  getDirectoryNodeDepth,
+  resolveRootContext
+} from './file-explorer-workspace-roots'
+import {
+  refreshFileExplorerExpandedDirs,
+  type RefreshFileExplorerTreeDir
+} from './file-explorer-expanded-refresh'
 
 export const FILE_EXPLORER_MULTI_ROOT_CACHE_KEY = '__orca_file_explorer_multi_root__'
 
@@ -31,153 +34,6 @@ type UseFileExplorerTreeResult = {
   refreshTree: () => Promise<void>
   refreshDir: (dirPath: string) => Promise<void>
   resetAndLoad: () => void
-}
-
-type RefreshFileExplorerTreeDir = {
-  dirPath: string
-  depth: number
-}
-
-type RefreshFileExplorerExpandedDirsParams = {
-  dirs: RefreshFileExplorerTreeDir[]
-  worktreePath: string
-  dirLoadTracker: FileExplorerDirLoadTracker
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
-  readDirectory: (dirPath: string) => Promise<DirEntry[]>
-  createChildren?: (entries: DirEntry[], dir: RefreshFileExplorerTreeDir) => TreeNode[]
-}
-
-function entriesToTreeNodes(
-  entries: DirEntry[],
-  dirPath: string,
-  depth: number,
-  worktreePath: string | null
-): TreeNode[] {
-  return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
-    const path = joinPath(dirPath, entry.name)
-    return {
-      name: entry.name,
-      path,
-      relativePath: worktreePath
-        ? normalizeRelativePath(path.slice(worktreePath.length + 1))
-        : entry.name,
-      isDirectory: entry.isDirectory,
-      isSymlink: entry.isSymlink,
-      depth: depth + 1
-    }
-  })
-}
-
-function entriesToRootTreeNodes(
-  entries: DirEntry[],
-  dirPath: string,
-  depth: number,
-  root: FileExplorerRoot | null,
-  rootPath: string | null
-): TreeNode[] {
-  return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
-    const path = joinPath(dirPath, entry.name)
-    return {
-      name: entry.name,
-      path,
-      relativePath: getRelativePathForRoot(rootPath, path, entry.name),
-      isDirectory: entry.isDirectory,
-      isSymlink: entry.isSymlink,
-      depth: depth + 1,
-      rootId: root?.id,
-      rootName: root?.name,
-      rootPath: root?.path,
-      rootWorktreeId: root?.worktreeId,
-      rootRepoId: root?.repoId,
-      rootConnectionId: root?.connectionId,
-      rootRuntimeEnvironmentId: root?.runtimeEnvironmentId
-    }
-  })
-}
-
-export async function refreshFileExplorerExpandedDirs({
-  dirs,
-  worktreePath,
-  dirLoadTracker,
-  setDirCache,
-  readDirectory,
-  createChildren
-}: RefreshFileExplorerExpandedDirsParams): Promise<boolean> {
-  if (dirs.length === 0) {
-    return true
-  }
-
-  const uniqueDirs = Array.from(new Map(dirs.map((dir) => [dir.dirPath, dir])).values())
-  const loadTokens = new Map(
-    uniqueDirs.map((dir) => [dir.dirPath, dirLoadTracker.begin(dir.dirPath)])
-  )
-
-  // Why: expanded refresh can touch many directories; commit the loading and
-  // result states in two batched setDirCache writes (rather than per-directory)
-  // so refreshing large worktrees stays O(N) instead of O(N²) cache spreads.
-  setDirCache((prev) => {
-    const next = { ...prev }
-    for (const { dirPath } of uniqueDirs) {
-      next[dirPath] = {
-        children: prev[dirPath]?.children ?? [],
-        loading: true
-      }
-    }
-    return next
-  })
-
-  const results = await Promise.all(
-    uniqueDirs.map(async ({ dirPath, depth }) => {
-      const loadToken = loadTokens.get(dirPath)!
-      try {
-        const entries = await readDirectory(dirPath)
-        if (!dirLoadTracker.isCurrent(loadToken)) {
-          return { current: false as const }
-        }
-        return {
-          current: true as const,
-          dirPath,
-          cache: {
-            children: createChildren
-              ? createChildren(entries, { dirPath, depth })
-              : entriesToTreeNodes(entries, dirPath, depth, worktreePath),
-            loading: false
-          }
-        }
-      } catch {
-        if (!dirLoadTracker.isCurrent(loadToken)) {
-          return { current: false as const }
-        }
-        return {
-          current: true as const,
-          dirPath,
-          cache: { children: [], loading: false }
-        }
-      }
-    })
-  )
-
-  // Why: the batch commits only after the slowest read, so a dir can be
-  // superseded (watcher refreshDir, worktree reset) after its own read
-  // resolved. Re-check tokens at commit time so the batched write never
-  // clobbers a newer load — preserving the old per-dir commit ordering.
-  const currentResults = results.filter(
-    (result): result is Extract<typeof result, { current: true }> =>
-      result.current && dirLoadTracker.isCurrent(loadTokens.get(result.dirPath)!)
-  )
-  if (currentResults.length === 0) {
-    return false
-  }
-
-  setDirCache((prev) => {
-    const next = { ...prev }
-    for (const result of currentResults) {
-      next[result.dirPath] = result.cache
-    }
-    return next
-  })
-
-  return currentResults.length === uniqueDirs.length
 }
 
 export function useFileExplorerTree(
@@ -230,11 +86,12 @@ export function useFileExplorerTree(
         }
       }))
       try {
-        const root = findRootForPath(rootsRef.current, dirPath, worktreePath, activeWorktreeId)
-        const rootWorktreeId = root?.worktreeId ?? activeWorktreeId ?? null
-        const rootPath = root?.path ?? worktreePath
-        const connectionId =
-          root?.connectionId ?? getConnectionId(rootWorktreeId ?? null) ?? undefined
+        const {
+          root,
+          worktreeId: rootWorktreeId,
+          worktreePath: rootPath,
+          connectionId
+        } = resolveRootContext(rootsRef.current, dirPath, worktreePath, activeWorktreeId)
         const entries = await readRuntimeDirectory(
           {
             settings: getRightSidebarWorktreeRuntimeSettings(rootWorktreeId),
@@ -250,7 +107,7 @@ export function useFileExplorerTree(
         if (depth === -1) {
           setRootError(null)
         }
-        const children = entriesToRootTreeNodes(entries, dirPath, depth, root, rootPath)
+        const children = createRootedFileExplorerChildren(entries, dirPath, depth, root, rootPath)
         setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
         return true
       } catch (error) {
@@ -293,11 +150,11 @@ export function useFileExplorerTree(
 
   const statPath = useCallback(
     async (path: string) => {
-      const root = findRootForPath(rootsRef.current, path, worktreePath, activeWorktreeId)
-      const rootWorktreeId = root?.worktreeId ?? activeWorktreeId ?? null
-      const rootPath = root?.path ?? worktreePath
-      const connectionId =
-        root?.connectionId ?? getConnectionId(rootWorktreeId ?? null) ?? undefined
+      const {
+        worktreeId: rootWorktreeId,
+        worktreePath: rootPath,
+        connectionId
+      } = resolveRootContext(rootsRef.current, path, worktreePath, activeWorktreeId)
       return statRuntimePath(
         {
           settings: getRightSidebarWorktreeRuntimeSettings(rootWorktreeId),
@@ -343,11 +200,11 @@ export function useFileExplorerTree(
       dirLoadTracker: dirLoadTrackerRef.current,
       setDirCache,
       readDirectory: (dirPath) => {
-        const root = findRootForPath(rootsRef.current, dirPath, worktreePath, activeWorktreeId)
-        const rootWorktreeId = root?.worktreeId ?? activeWorktreeId ?? null
-        const rootPath = root?.path ?? worktreePath
-        const connectionId =
-          root?.connectionId ?? getConnectionId(rootWorktreeId ?? null) ?? undefined
+        const {
+          worktreeId: rootWorktreeId,
+          worktreePath: rootPath,
+          connectionId
+        } = resolveRootContext(rootsRef.current, dirPath, worktreePath, activeWorktreeId)
         return readRuntimeDirectory(
           {
             settings: getRightSidebarWorktreeRuntimeSettings(rootWorktreeId),
@@ -361,7 +218,7 @@ export function useFileExplorerTree(
       createChildren: (entries, { dirPath, depth }) => {
         const root = findRootForPath(rootsRef.current, dirPath, worktreePath, activeWorktreeId)
         const rootPath = root?.path ?? worktreePath
-        return entriesToRootTreeNodes(entries, dirPath, depth, root, rootPath)
+        return createRootedFileExplorerChildren(entries, dirPath, depth, root, rootPath)
       }
     })
   }, [activeWorktreeId, expanded, loadDir, rootCacheKey, worktreePath])
@@ -412,77 +269,4 @@ export function useFileExplorerTree(
     refreshDir,
     resetAndLoad
   }
-}
-
-function createWorkspaceRootNode(root: FileExplorerRoot): TreeNode {
-  return {
-    name: root.name,
-    path: root.path,
-    relativePath: '',
-    isDirectory: true,
-    depth: 0,
-    rootId: root.id,
-    rootName: root.name,
-    rootPath: root.path,
-    rootWorktreeId: root.worktreeId,
-    rootRepoId: root.repoId,
-    rootConnectionId: root.connectionId,
-    rootRuntimeEnvironmentId: root.runtimeEnvironmentId,
-    isWorkspaceRoot: true
-  }
-}
-
-function findRootForPath(
-  roots: readonly FileExplorerRoot[],
-  path: string,
-  fallbackWorktreePath: string | null,
-  fallbackWorktreeId?: string | null
-): FileExplorerRoot | null {
-  const candidates =
-    roots.length > 0 ? roots : createFallbackRoots(fallbackWorktreePath, fallbackWorktreeId)
-  let best: FileExplorerRoot | null = null
-  for (const root of candidates) {
-    if (!isPathInsideOrEqual(root.path, path)) {
-      continue
-    }
-    if (!best || root.path.length > best.path.length) {
-      best = root
-    }
-  }
-  return best
-}
-
-function createFallbackRoots(
-  worktreePath: string | null,
-  worktreeId?: string | null
-): FileExplorerRoot[] {
-  if (!worktreePath || !worktreeId) {
-    return []
-  }
-  return [
-    {
-      id: worktreeId,
-      name: worktreePath,
-      path: worktreePath,
-      worktreeId,
-      repoId: '',
-      isActive: true
-    }
-  ]
-}
-
-function getRelativePathForRoot(
-  rootPath: string | null | undefined,
-  filePath: string,
-  fallbackName: string
-): string {
-  if (!rootPath) {
-    return fallbackName
-  }
-  return normalizeRelativePath(relativePathInsideRoot(rootPath, filePath) ?? fallbackName)
-}
-
-function getDirectoryNodeDepth(relativePath: string, hasMultipleRoots: boolean): number {
-  const segmentCount = splitPathSegments(relativePath).length
-  return hasMultipleRoots ? segmentCount : segmentCount - 1
 }

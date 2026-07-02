@@ -8771,7 +8771,7 @@
           "b16483c176": "Refresh SSH targets",
           "d8abffec10": "Public host",
           "3ac60f0235": "server.example.com",
-          "7879ab7ccc": "Port",
+          "7879ab7ccc": "Public port",
           "62ca6d3a7d": "Local runtime port",
           "9f023b53e6": "Start",
           "a0d4f95c12": "Stop",

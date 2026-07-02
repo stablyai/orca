@@ -162,7 +162,9 @@ function FileExplorerFiles(): React.JSX.Element {
       const root = getNodeFileExplorerRoot(workspaceRoots, node)
       const nodeWorktreeId = root?.worktreeId ?? activeWorktreeId
       const nodeWorktreePath = root?.path ?? worktreePath
-      const runtimeEnvironmentId = root?.runtimeEnvironmentId ?? activeRuntimeEnvironmentId
+      const runtimeEnvironmentId = root
+        ? (root.runtimeEnvironmentId ?? null)
+        : activeRuntimeEnvironmentId
       if (!nodeWorktreeId || !nodeWorktreePath) {
         return null
       }
@@ -170,7 +172,9 @@ function FileExplorerFiles(): React.JSX.Element {
         settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
         worktreeId: nodeWorktreeId,
         worktreePath: nodeWorktreePath,
-        connectionId: root?.connectionId ?? activeRepo?.connectionId ?? undefined
+        connectionId: root
+          ? (root.connectionId ?? undefined)
+          : (activeRepo?.connectionId ?? undefined)
       }
     },
     [
@@ -184,7 +188,7 @@ function FileExplorerFiles(): React.JSX.Element {
   const getNodeConnectionId = useCallback(
     (node: TreeNode) => {
       const root = getNodeFileExplorerRoot(workspaceRoots, node)
-      return root?.connectionId ?? activeRepo?.connectionId ?? null
+      return root ? (root.connectionId ?? null) : (activeRepo?.connectionId ?? null)
     },
     [activeRepo?.connectionId, workspaceRoots]
   )

@@ -178,4 +178,21 @@ describe('useFileExplorerTree multi-root routing', () => {
       }
     ])
   })
+
+  it('falls back to the worktree connection when no workspace roots are provided', async () => {
+    await renderHookProbe([])
+
+    await act(async () => {
+      await tree().loadDir('/remote/api', -1, { force: true })
+    })
+
+    expect(compactRuntimeContexts()).toEqual([
+      {
+        runtimeEnvironmentId: null,
+        worktreeId: 'api-wt',
+        worktreePath: '/remote/api',
+        connectionId: 'ssh-api'
+      }
+    ])
+  })
 })

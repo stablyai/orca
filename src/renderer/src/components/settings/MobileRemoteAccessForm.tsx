@@ -134,7 +134,10 @@ export function MobileRemoteAccessForm({
 
         <div className="space-y-1">
           <Label htmlFor="mobile-remote-port">
-            {translate('auto.components.settings.MobileRemoteAccessSection.7879ab7ccc', 'Port')}
+            {translate(
+              'auto.components.settings.MobileRemoteAccessSection.7879ab7ccc',
+              'Public port'
+            )}
           </Label>
           <Input
             id="mobile-remote-port"

@@ -25,6 +25,8 @@ vi.mock('node:net', () => ({
 
 import {
   SYSTEM_SSH_REVERSE_TUNNEL_ENDPOINT_PROBE_INTERVAL_MS,
+  SYSTEM_SSH_REVERSE_TUNNEL_STARTUP_GRACE_MS,
+  SYSTEM_SSH_REVERSE_TUNNEL_STOP_TIMEOUT_MS,
   spawnSystemSshReverseTunnel,
   waitForSystemSshReverseTunnelStartup,
   waitForSystemSshReverseTunnelStop
@@ -149,11 +151,43 @@ describe('system SSH reverse tunnel process', () => {
     await expect(pending).rejects.toThrow('remote port forwarding failed')
   })
 
+  it('resolves startup after the grace period when the endpoint probe keeps failing', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+    const sockets: FakeSocket[] = []
+    connectMock.mockImplementation(() => {
+      const socket = createFakeSocket()
+      sockets.push(socket)
+      return socket
+    })
+
+    const pending = waitForSystemSshReverseTunnelStartup(child as never, '203.0.113.10', 6768)
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_REVERSE_TUNNEL_ENDPOINT_PROBE_INTERVAL_MS)
+    sockets[0]?.emit('error', new Error('unreachable'))
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_REVERSE_TUNNEL_STARTUP_GRACE_MS)
+
+    await expect(pending).resolves.toBeUndefined()
+    expect(connectMock).toHaveBeenCalled()
+  })
+
   it('does not wait for exit when stopping an already exited process', async () => {
     const child = createFakeProcess()
     child.exitCode = 255
 
     await expect(waitForSystemSshReverseTunnelStop(child as never)).resolves.toBeUndefined()
     expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('escalates stop from SIGTERM to SIGKILL after the timeout', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    const pending = waitForSystemSshReverseTunnelStop(child as never)
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_REVERSE_TUNNEL_STOP_TIMEOUT_MS)
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    child.emit('exit', 0)
+
+    await expect(pending).resolves.toBeUndefined()
   })
 })

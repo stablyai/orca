@@ -176,6 +176,8 @@ export function MobilePane(): React.JSX.Element {
       <MobileRemoteAccessSection
         loadingQr={loading}
         onGenerateTunnelQr={(address) => {
+          // Why: keep the shared pairing address pointed at the tunnel's public
+          // endpoint so later QR regeneration keeps using the reachable address.
           setSelectedAddress(address)
           void generateQR({ rotate: qrDataUrl != null, address })
         }}

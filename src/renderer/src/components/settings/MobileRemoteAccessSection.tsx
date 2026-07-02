@@ -14,16 +14,16 @@ function tunnelStatusLabel(tunnel: MobileReverseTunnelEntry | null): string {
   if (!tunnel) {
     return translate('auto.components.settings.MobileRemoteAccessSection.31d88d6000', 'Not running')
   }
-  if (tunnel.status === 'starting') {
-    return translate('auto.components.settings.MobileRemoteAccessSection.d48c2a62a4', 'Starting')
+  switch (tunnel.status) {
+    case 'starting':
+      return translate('auto.components.settings.MobileRemoteAccessSection.d48c2a62a4', 'Starting')
+    case 'running':
+      return translate('auto.components.settings.MobileRemoteAccessSection.684ad62309', 'Running')
+    case 'stopping':
+      return translate('auto.components.settings.MobileRemoteAccessSection.f2a7a9e55f', 'Stopping')
+    case 'failed':
+      return translate('auto.components.settings.MobileRemoteAccessSection.18968ede9e', 'Failed')
   }
-  if (tunnel.status === 'running') {
-    return translate('auto.components.settings.MobileRemoteAccessSection.684ad62309', 'Running')
-  }
-  if (tunnel.status === 'stopping') {
-    return translate('auto.components.settings.MobileRemoteAccessSection.f2a7a9e55f', 'Stopping')
-  }
-  return translate('auto.components.settings.MobileRemoteAccessSection.18968ede9e', 'Failed')
 }
 
 export function MobileRemoteAccessSection({

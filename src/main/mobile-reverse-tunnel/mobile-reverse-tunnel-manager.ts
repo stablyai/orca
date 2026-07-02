@@ -75,20 +75,6 @@ export class MobileReverseTunnelManager {
     this.tunnels.set(id, started)
     this.broadcast(entry)
 
-    process.process.once('exit', () => {
-      const current = this.tunnels.get(id)
-      if (current !== started || current.entry.status === 'stopping') {
-        return
-      }
-      current.entry = {
-        ...current.entry,
-        status: 'failed',
-        error: 'SSH tunnel exited unexpectedly.',
-        updatedAt: Date.now()
-      }
-      this.broadcast(current.entry)
-    })
-
     try {
       await process.waitForStartup()
       const current = this.tunnels.get(id)
@@ -97,6 +83,19 @@ export class MobileReverseTunnelManager {
       }
       current.entry = { ...current.entry, status: 'running', error: null, updatedAt: Date.now() }
       this.broadcast(current.entry)
+      process.process.once('exit', () => {
+        const latest = this.tunnels.get(id)
+        if (latest !== current || latest.entry.status === 'stopping') {
+          return
+        }
+        latest.entry = {
+          ...latest.entry,
+          status: 'failed',
+          error: 'SSH tunnel exited unexpectedly.',
+          updatedAt: Date.now()
+        }
+        this.broadcast(latest.entry)
+      })
       return current.entry
     } catch (error) {
       process.dispose()

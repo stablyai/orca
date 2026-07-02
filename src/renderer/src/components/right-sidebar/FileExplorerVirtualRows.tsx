@@ -184,8 +184,10 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
-              connectionId={getConnectionId?.(n) ?? connectionId}
-              runtimeDownloadContext={getRuntimeDownloadContext?.(n) ?? runtimeDownloadContext}
+              connectionId={getConnectionId ? getConnectionId(n) : connectionId}
+              runtimeDownloadContext={
+                getRuntimeDownloadContext ? getRuntimeDownloadContext(n) : runtimeDownloadContext
+              }
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}

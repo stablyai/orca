@@ -173,9 +173,7 @@ export function useFileExplorerInlineInput({
               openFile(
                 {
                   filePath: fullPath,
-                  relativePath: inlineWorktreePath
-                    ? fullPath.slice(inlineWorktreePath.length + 1)
-                    : name,
+                  relativePath: fullPath.slice(inlineWorktreePath.length + 1),
                   worktreeId: inlineWorktreeId,
                   runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
                   language: detectLanguage(name),

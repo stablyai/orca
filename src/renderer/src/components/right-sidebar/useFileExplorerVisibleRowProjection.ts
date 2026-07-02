@@ -71,6 +71,8 @@ export function getFileExplorerIgnoredQueryRelativePaths(
   return relativePaths
 }
 
+// Why: workspace-root pseudo-rows anchor each project-group member and must
+// render independently of dotfile and gitignore visibility filters.
 function isVirtualWorkspaceRoot(row: TreeNode, worktreePath: string): boolean {
   return worktreePath === FILE_EXPLORER_MULTI_ROOT_CACHE_KEY && row.isWorkspaceRoot === true
 }

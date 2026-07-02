@@ -199,6 +199,8 @@ export function useFileExplorerDragDrop({
       }
       const sourceRoot = getRootForPath?.(sourcePath) ?? null
       const destinationRoot = getRootForPath?.(destDir) ?? null
+      // Why: each root may be an independent repo/worktree, so internal moves
+      // stay within one root until cross-root copy semantics are defined.
       if (sourceRoot && destinationRoot && sourceRoot.id !== destinationRoot.id) {
         return
       }
