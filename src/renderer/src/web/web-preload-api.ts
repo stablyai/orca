@@ -523,6 +523,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       dismiss: () => Promise.resolve(null),
       recordRendererError: () => Promise.resolve({ ok: true, report: null, deduped: true }),
       recordBreadcrumb: () => {},
+      markExpectedRendererReload: () => {},
       submit: () =>
         Promise.resolve({
           ok: false,

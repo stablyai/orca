@@ -17,10 +17,16 @@ function spyOnReload(): ReturnType<typeof vi.fn> {
   return reload
 }
 
-function stubCrashReportsBreadcrumb(): ReturnType<typeof vi.fn> {
+function stubCrashReportsRecoveryApis(): {
+  recordBreadcrumb: ReturnType<typeof vi.fn>
+  markExpectedRendererReload: ReturnType<typeof vi.fn>
+} {
   const recordBreadcrumb = vi.fn()
-  Object.assign(window, { api: { crashReports: { recordBreadcrumb } } })
-  return recordBreadcrumb
+  const markExpectedRendererReload = vi.fn()
+  Object.assign(window, {
+    api: { crashReports: { recordBreadcrumb, markExpectedRendererReload } }
+  })
+  return { recordBreadcrumb, markExpectedRendererReload }
 }
 
 // Why: happy-dom's Storage is a Proxy that vi.spyOn cannot reliably restore, so
@@ -206,7 +212,7 @@ describe('loadLazyWithRetry', () => {
 
   it('records a lazy_chunk_reload breadcrumb (with reloadKey) before reloading', async () => {
     const reload = spyOnReload()
-    const recordBreadcrumb = stubCrashReportsBreadcrumb()
+    const { recordBreadcrumb, markExpectedRendererReload } = stubCrashReportsRecoveryApis()
     const factory = vi.fn(() => Promise.reject(chunkParseError()))
 
     const loaded = loadLazyWithRetry(factory, { retries: 0, reloadKey: 'right-sidebar' })
@@ -221,11 +227,15 @@ describe('loadLazyWithRetry', () => {
     )
     await vi.advanceTimersByTimeAsync(5000)
 
+    expect(markExpectedRendererReload).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumb).toHaveBeenCalledWith({
       name: 'lazy_chunk_reload',
       data: { reloadKey: 'right-sidebar', message: "Unexpected token ']'" }
     })
+    expect(markExpectedRendererReload.mock.invocationCallOrder[0]).toBeLessThan(
+      recordBreadcrumb.mock.invocationCallOrder[0]
+    )
     // The breadcrumb must land before window.location.reload() tears the page down.
     expect(recordBreadcrumb.mock.invocationCallOrder[0]).toBeLessThan(
       reload.mock.invocationCallOrder[0]

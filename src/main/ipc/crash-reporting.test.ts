@@ -734,6 +734,26 @@ describe('registerCrashReportingHandlers', () => {
     expect(spanEndMock).toHaveBeenCalledTimes(1)
   })
 
+  it('marks expected renderer reloads using the sender webContents id', () => {
+    const markExpectedRendererReload = vi.fn()
+    registerCrashReportingHandlers(
+      {
+        getLatestPending: vi.fn(),
+        getById: vi.fn(),
+        dismiss: vi.fn(),
+        markSent: vi.fn(),
+        listRecent: vi.fn(),
+        record: vi.fn(),
+        formatDiagnosticText: vi.fn()
+      } as never,
+      { markExpectedRendererReload }
+    )
+
+    listeners.get('crashReports:markExpectedRendererReload')?.({ sender: { id: 774 } } as never)
+
+    expect(markExpectedRendererReload).toHaveBeenCalledWith(774)
+  })
+
   it('ignores renderer breadcrumbs without a string name', () => {
     registerCrashReportingHandlers({
       getLatestPending: vi.fn(),

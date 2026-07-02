@@ -828,7 +828,8 @@ function openMainWindow(): BrowserWindow {
       onBeforeRelaunch: async () => {
         isQuitting = true
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
-      }
+      },
+      markExpectedRendererReload
     }
   )
   automations.setWebContents(window.webContents)

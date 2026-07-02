@@ -74,6 +74,7 @@ let registered = false
 type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+  markExpectedRendererReload?: (webContentsId: number) => void
 }
 
 export function registerCoreHandlers(
@@ -125,7 +126,9 @@ export function registerCoreHandlers(
   registerJiraHandlers()
   registerFeedbackHandlers()
   if (crashReports) {
-    registerCrashReportingHandlers(crashReports)
+    registerCrashReportingHandlers(crashReports, {
+      markExpectedRendererReload: lifecycleOptions.markExpectedRendererReload
+    })
   }
   registerExportHandlers()
   registerStatsHandlers(stats)
