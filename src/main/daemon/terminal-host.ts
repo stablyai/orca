@@ -295,7 +295,7 @@ export class TerminalHost {
       if (!session.isAlive) {
         continue
       }
-      const snapshot = session.getSnapshot()
+      const size = session.getAppliedSize()
       result.push({
         sessionId: session.sessionId,
         state: session.state,
@@ -303,8 +303,8 @@ export class TerminalHost {
         isAlive: true,
         pid: session.pid,
         cwd: session.getCwd(),
-        cols: snapshot?.cols ?? 0,
-        rows: snapshot?.rows ?? 0,
+        cols: size?.cols ?? 0,
+        rows: size?.rows ?? 0,
         createdAt: 0
       })
     }

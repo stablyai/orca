@@ -158,7 +158,7 @@ export function attachDividerDrag(
     if (shouldRefit && nextEl) {
       callbacks.refitPanesUnder(nextEl)
     }
-    if (shouldRefit) {
+    if (commitLayout && shouldRefit) {
       releasePtyResizeHold?.flush()
     } else {
       releasePtyResizeHold?.cancel()
@@ -179,6 +179,21 @@ export function attachDividerDrag(
     e.preventDefault()
     flexScheduler.cancel()
     finishActiveDrag(false)
+    const previousPane = divider.previousElementSibling as HTMLElement | null
+    const nextPane = divider.nextElementSibling as HTMLElement | null
+    if (!previousPane || !nextPane) {
+      return
+    }
+
+    const prevRect = previousPane.getBoundingClientRect()
+    const nextRect = nextPane.getBoundingClientRect()
+    const prevSize = isVertical ? prevRect.width : prevRect.height
+    const nextSize = isVertical ? nextRect.width : nextRect.height
+    const measuredTotalSize = prevSize + nextSize
+    if (!Number.isFinite(measuredTotalSize) || measuredTotalSize <= 0) {
+      return
+    }
+
     divider.setPointerCapture(e.pointerId)
     activePointerId = e.pointerId
     divider.classList.add('is-dragging')
@@ -188,12 +203,8 @@ export function attachDividerDrag(
     addWindowListeners()
 
     startPos = isVertical ? e.clientX : e.clientY
-    prevEl = divider.previousElementSibling as HTMLElement | null
-    nextEl = divider.nextElementSibling as HTMLElement | null
-
-    if (!prevEl || !nextEl) {
-      return
-    }
+    prevEl = previousPane
+    nextEl = nextPane
     prevInitialFlex = prevEl.style.flex
     nextInitialFlex = nextEl.style.flex
 
@@ -201,11 +212,7 @@ export function attachDividerDrag(
     // we still fit xterm locally, but forward only the final PTY size on drop.
     releasePtyResizeHold = holdPtyResizesForPaneSubtrees([prevEl, nextEl])
 
-    const prevRect = prevEl.getBoundingClientRect()
-    const nextRect = nextEl.getBoundingClientRect()
-    const prevSize = isVertical ? prevRect.width : prevRect.height
-    const nextSize = isVertical ? nextRect.width : nextRect.height
-    totalSize = prevSize + nextSize
+    totalSize = measuredTotalSize
     prevFlex = prevSize
   }
 
