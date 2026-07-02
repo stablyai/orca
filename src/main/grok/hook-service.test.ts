@@ -61,12 +61,9 @@ describe('GrokHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
     expect(config.hooks.PostToolUseFailure[0].matcher).toBe('*')
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
-    const cmd = config.hooks.PreToolUse[0].hooks[0].command
-    expect(
-      process.platform === 'win32'
-        ? WINDOWS_POWERSHELL_LAUNCHER.test(cmd) || cmd.includes(GROK_SCRIPT_FILE_NAME)
-        : /grok-hook/.test(cmd)
-    ).toBe(true)
+    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
+      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
+    )
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
@@ -102,9 +99,7 @@ describe('GrokHookService', () => {
 
         for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(
-            WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(GROK_SCRIPT_FILE_NAME)
-          ).toBe(true)
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -140,7 +135,7 @@ describe('GrokHookService', () => {
     expect(
       commands.some((command) =>
         process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(GROK_SCRIPT_FILE_NAME)
+          ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
           : command.includes(GROK_SCRIPT_FILE_NAME)
       )
     ).toBe(true)

@@ -8,7 +8,8 @@ import {
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
-  wrapHookCommand,
+  wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -55,7 +56,12 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return wrapHookCommand(scriptPath)
+  // Why: Factory invokes the .cmd via cmd.exe, but the raw path still splits at
+  // whitespace when the user profile contains a space (e.g. `C:\Users\Jane Doe`).
+  // The shared Windows wrapper keeps the path out of cmd.exe's raw command line. #6078.
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(): string {

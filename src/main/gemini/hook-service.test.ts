@@ -25,7 +25,6 @@ vi.mock('os', async (importOriginal) => {
 
 import { GeminiHookService } from './hook-service'
 
-const GEMINI_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'gemini-hook.cmd' : 'gemini-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
@@ -108,18 +107,10 @@ describe('GeminiHookService', () => {
       process.platform === 'win32'
         ? WINDOWS_POWERSHELL_LAUNCHER
         : new RegExp(managedHookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    for (const cmd of [
-      config.hooks.BeforeAgent[1].hooks[0].command,
-      config.hooks.AfterAgent[0].hooks[0].command,
-      config.hooks.AfterTool[0].hooks[0].command,
-      config.hooks.BeforeTool[0].hooks[0].command
-    ]) {
-      expect(
-        process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER.test(cmd) || cmd.includes(GEMINI_SCRIPT_FILE_NAME)
-          : managedCommandPattern.test(cmd)
-      ).toBe(true)
-    }
+    expect(config.hooks.BeforeAgent[1].hooks[0].command).toMatch(managedCommandPattern)
+    expect(config.hooks.AfterAgent[0].hooks[0].command).toMatch(managedCommandPattern)
+    expect(config.hooks.AfterTool[0].hooks[0].command).toMatch(managedCommandPattern)
+    expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(managedCommandPattern)
   })
 
   // Why: #6078 — a Windows user profile path with a space used to be written
@@ -141,9 +132,7 @@ describe('GeminiHookService', () => {
 
         for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(
-            WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(GEMINI_SCRIPT_FILE_NAME)
-          ).toBe(true)
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -193,11 +182,10 @@ describe('GeminiHookService', () => {
 
     expect(status.state).toBe('installed')
     expect(preToolCommands).toEqual(['echo user-authored'])
-    const cmd = config.hooks.BeforeTool[0].hooks[0].command
-    expect(
+    expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(
       process.platform === 'win32'
-        ? WINDOWS_POWERSHELL_LAUNCHER.test(cmd) || cmd.includes(GEMINI_SCRIPT_FILE_NAME)
-        : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(cmd)
-    ).toBe(true)
+        ? WINDOWS_POWERSHELL_LAUNCHER
+        : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    )
   })
 })

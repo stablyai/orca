@@ -24,7 +24,6 @@ vi.mock('os', async () => {
 
 import { DroidHookService } from './hook-service'
 
-const DROID_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'droid-hook.cmd' : 'droid-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
@@ -74,12 +73,9 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
     expect(config.hooks.PermissionRequest[0].matcher).toBe('*')
     expect(config.hooks.UserPromptSubmit[0].matcher).toBeUndefined()
-    const command = config.hooks.PreToolUse[0].hooks[0].command
-    expect(
-      process.platform === 'win32'
-        ? WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(DROID_SCRIPT_FILE_NAME)
-        : /droid-hook/.test(command)
-    ).toBe(true)
+    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
+      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /droid-hook/
+    )
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
@@ -105,9 +101,7 @@ describe('DroidHookService', () => {
 
         for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(
-            WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(DROID_SCRIPT_FILE_NAME)
-          ).toBe(true)
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })

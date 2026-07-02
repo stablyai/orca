@@ -5,8 +5,8 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   removeManagedCommands,
-  wrapHookCommand,
   wrapPosixHookCommand,
+  wrapWindowsGitBashHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -75,7 +75,9 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  return wrapHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsGitBashHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
