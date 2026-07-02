@@ -108,6 +108,24 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(readFileSync(getSystemConfigPath(), 'utf-8')).toContain('codex_hooks = true')
   })
 
+  it('normalizes deprecated codex_hooks in a CRLF system config', () => {
+    // A Windows-authored ~/.codex/config.toml uses CRLF, so split('\n') leaves a
+    // trailing \r on the [features] header line — the migration must still detect it.
+    writeFileSync(
+      getSystemConfigPath(),
+      ['model = "system-model"', '', '[features]', 'codex_hooks = true', ''].join('\r\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('[features]')
+    expect(runtimeConfig).toContain('hooks = true')
+    expect(runtimeConfig).not.toContain('codex_hooks')
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toContain('codex_hooks = true')
+  })
+
   it('drops deprecated codex_hooks when the new hooks flag already exists', () => {
     writeFileSync(
       getSystemConfigPath(),
