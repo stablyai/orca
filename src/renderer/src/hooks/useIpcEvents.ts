@@ -81,6 +81,7 @@ import {
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
+import { createReposChangedRefetchRunner } from './repos-changed-refetch'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
@@ -1042,25 +1043,16 @@ export function useIpcEvents(): void {
     unsubs.push(runtimeClientEventsSync.stop)
     unsubs.push(runtimeProjectRefreshScheduler.stop)
 
-    unsubs.push(
-      window.api.repos.onChanged(() => {
-        const state = useAppStore.getState()
-        if (isRuntimeEnvironmentActive()) {
-          // Why: the all-host sidebar includes local repos even when a runtime
-          // is focused, so local store changes must refresh the local slice
-          // without dropping the runtime-owned slices already shown.
-          void (async () => {
-            await state.fetchReposForAllHosts()
-            await state.fetchProjectGroupsForAllHosts()
-            await state.fetchFolderWorkspacesForAllHosts()
-          })()
-          return
-        }
-        void state.fetchProjectGroups()
-        void state.fetchFolderWorkspaces()
-        void state.fetchRepos()
-      })
-    )
+    // Why: repos:changed fires once per persisted mutation, so a project-group
+    // delete that also removes N contained projects emits N+1 events. Coalescing
+    // the refetch through a serial runner stops an early, unsequenced fetch from
+    // resolving last and resurfacing just-removed projects as stale sidebar rows.
+    const reposChangedRefetch = createReposChangedRefetchRunner({
+      getActions: () => useAppStore.getState(),
+      isRuntimeEnvironmentActive
+    })
+    unsubs.push(reposChangedRefetch.dispose)
+    unsubs.push(window.api.repos.onChanged(() => reposChangedRefetch.run()))
 
     unsubs.push(
       window.api.worktrees.onChanged(

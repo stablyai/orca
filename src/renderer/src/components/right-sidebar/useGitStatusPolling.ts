@@ -6,7 +6,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
-import { type CoalescedPollRunner, createCoalescedPollRunner } from './coalesced-poll-runner'
+import { type CoalescedPollRunner, createCoalescedPollRunner } from '@/lib/coalesced-poll-runner'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   hasInteractiveActiveGitStatusConsumer,
