@@ -6379,8 +6379,6 @@
         "SshTargetForm": {
           "fea9cb402e": "Cancel",
           "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
-          "7c13f58c91": "Until reset",
-          "55c56cf2c7": "Timeout after disconnect (seconds)",
           "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
           "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
           "71fc546097": "Keep terminals alive until reset",
