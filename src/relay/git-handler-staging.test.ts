@@ -3,10 +3,10 @@
  *
  * Why: split from git-handler.test.ts to stay under the oxlint max-lines (300) limit.
  */
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { GitHandler } from './git-handler'
@@ -19,16 +19,20 @@ import {
   type RelayDispatcher
 } from './git-handler-test-setup'
 
+type GitSpyTarget = {
+  git(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+}
+
 describe('GitHandler — commit & staging', () => {
   let dispatcher: MockDispatcher
+  let handler: GitHandler
   let tmpDir: string
 
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-git-staging-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    // eslint-disable-next-line no-new
-    new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
+    handler = new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })
 
   afterEach(async () => {
@@ -115,6 +119,76 @@ describe('GitHandler — commit & staging', () => {
         filePaths: ['a.txt', 'b.txt']
       })
 
+      const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      })
+      expect(output.trim()).toBe('')
+    })
+
+    it('normalizes Windows separators before bulk staging nested files', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, 'tests', 'breakgit'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'a.txt'), 'a')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'b.txt'), 'b')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'a.txt'), 'a-modified')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'b.txt'), 'b-modified')
+
+      const gitHarness = handler as unknown as GitSpyTarget
+      const originalGit = gitHarness.git.bind(handler) as GitSpyTarget['git']
+      const gitSpy = vi
+        .spyOn(gitHarness, 'git')
+        .mockImplementation((args, cwd) => originalGit(args, cwd))
+
+      await dispatcher.callRequest('git.bulkStage', {
+        worktreePath: tmpDir,
+        filePaths: ['tests\\breakgit\\a.txt', 'tests\\breakgit\\b.txt']
+      })
+
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['add', '--', ':(literal)tests/breakgit/a.txt', ':(literal)tests/breakgit/b.txt'],
+        tmpDir
+      )
+      const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      })
+      expect(output).toContain('tests/breakgit/a.txt')
+      expect(output).toContain('tests/breakgit/b.txt')
+    })
+
+    it('normalizes Windows separators before bulk unstaging nested files', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, 'tests', 'breakgit'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'a.txt'), 'a')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'b.txt'), 'b')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'a.txt'), 'changed')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'b.txt'), 'changed')
+      execFileSync('git', ['add', '.'], { cwd: tmpDir, stdio: 'pipe' })
+
+      const gitHarness = handler as unknown as GitSpyTarget
+      const originalGit = gitHarness.git.bind(handler) as GitSpyTarget['git']
+      const gitSpy = vi
+        .spyOn(gitHarness, 'git')
+        .mockImplementation((args, cwd) => originalGit(args, cwd))
+
+      await dispatcher.callRequest('git.bulkUnstage', {
+        worktreePath: tmpDir,
+        filePaths: ['tests\\breakgit\\a.txt', 'tests\\breakgit\\b.txt']
+      })
+
+      expect(gitSpy).toHaveBeenCalledWith(
+        [
+          'restore',
+          '--staged',
+          '--',
+          ':(literal)tests/breakgit/a.txt',
+          ':(literal)tests/breakgit/b.txt'
+        ],
+        tmpDir
+      )
       const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
         cwd: tmpDir,
         encoding: 'utf-8'

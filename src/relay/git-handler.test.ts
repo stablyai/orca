@@ -558,6 +558,65 @@ describe('GitHandler', () => {
       })
       expect(output.trim()).toBe('')
     })
+
+    it('normalizes Windows separators before staging nested files', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, 'tests', 'breakgit'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'content')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'changed')
+
+      const gitHarness = handler as unknown as GitSpyTarget
+      const originalGit = gitHarness.git.bind(handler) as GitSpyTarget['git']
+      const gitSpy = vi
+        .spyOn(gitHarness, 'git')
+        .mockImplementation((args, cwd) => originalGit(args, cwd))
+
+      await dispatcher.callRequest('git.stage', {
+        worktreePath: tmpDir,
+        filePath: 'tests\\breakgit\\file.txt'
+      })
+
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['add', '--', ':(literal)tests/breakgit/file.txt'],
+        tmpDir
+      )
+      const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      })
+      expect(output.trim()).toBe('tests/breakgit/file.txt')
+    })
+
+    it('normalizes Windows separators before unstaging nested files', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, 'tests', 'breakgit'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'content')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'changed')
+      execFileSync('git', ['add', 'tests/breakgit/file.txt'], { cwd: tmpDir, stdio: 'pipe' })
+
+      const gitHarness = handler as unknown as GitSpyTarget
+      const originalGit = gitHarness.git.bind(handler) as GitSpyTarget['git']
+      const gitSpy = vi
+        .spyOn(gitHarness, 'git')
+        .mockImplementation((args, cwd) => originalGit(args, cwd))
+
+      await dispatcher.callRequest('git.unstage', {
+        worktreePath: tmpDir,
+        filePath: 'tests\\breakgit\\file.txt'
+      })
+
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['restore', '--staged', '--', ':(literal)tests/breakgit/file.txt'],
+        tmpDir
+      )
+      const output = execFileSync('git', ['diff', '--cached', '--name-only'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      })
+      expect(output.trim()).toBe('')
+    })
   })
 
   describe('diff', () => {
@@ -592,6 +651,23 @@ describe('GitHandler', () => {
       expect(result.kind).toBe('text')
       expect(result.originalContent).toBe('original')
       expect(result.modifiedContent).toBe('staged-content')
+    })
+
+    it('preserves nested diff reads for Windows-style relative paths', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, 'tests', 'breakgit'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'original')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'modified')
+
+      const result = (await dispatcher.callRequest('git.diff', {
+        worktreePath: tmpDir,
+        filePath: 'tests\\breakgit\\file.txt',
+        staged: false
+      })) as { kind: string; originalContent: string; modifiedContent: string }
+      expect(result.kind).toBe('text')
+      expect(result.originalContent).toBe('original')
+      expect(result.modifiedContent).toBe('modified')
     })
 
     it('omits over-limit text bodies before returning diff payloads', async () => {
@@ -865,6 +941,39 @@ describe('GitHandler', () => {
       await expect(fs.readFile(path.join(tmpDir, 'keep.log'), 'utf-8')).resolves.toBe(
         'keep modified'
       )
+    })
+
+    it('normalizes Windows separators inside tracked discard pathspecs', async () => {
+      gitInit(tmpDir)
+      mkdirSync(path.join(tmpDir, 'tests', 'breakgit'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'selected')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'selected modified')
+
+      const gitHarness = handler as unknown as GitSpyTarget
+      const originalGit = gitHarness.git.bind(handler) as GitSpyTarget['git']
+      const gitSpy = vi
+        .spyOn(gitHarness, 'git')
+        .mockImplementation((args, cwd) => originalGit(args, cwd))
+
+      await dispatcher.callRequest('git.discard', {
+        worktreePath: tmpDir,
+        filePath: 'tests\\breakgit\\file.txt'
+      })
+
+      expect(gitSpy).toHaveBeenNthCalledWith(
+        1,
+        ['ls-files', '--error-unmatch', '--', ':(literal)tests/breakgit/file.txt'],
+        tmpDir
+      )
+      expect(gitSpy).toHaveBeenNthCalledWith(
+        2,
+        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)tests/breakgit/file.txt'],
+        tmpDir
+      )
+      await expect(
+        fs.readFile(path.join(tmpDir, 'tests', 'breakgit', 'file.txt'), 'utf-8')
+      ).resolves.toBe('selected')
     })
 
     it('bulk discards tracked and untracked files', async () => {
@@ -1188,7 +1297,7 @@ describe('GitHandler', () => {
       await Promise.all([first, second])
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
-      expect(gitSpy).toHaveBeenCalledWith(['add', '--', 'src/file.ts'], tmpDir)
+      expect(gitSpy).toHaveBeenNthCalledWith(2, ['add', '--', ':(literal)src/file.ts'], tmpDir)
     })
 
     it('clears pending git.diff reads when a narrow ref fetch runs', async () => {
@@ -1863,9 +1972,11 @@ describe('GitHandler', () => {
       const nonRepoDir = path.join(tmpDir, 'not-a-repo')
       await fs.mkdir(nonRepoDir, { recursive: true })
 
+      // Why: git's exact non-repo diagnostic varies by platform and version,
+      // but the request must reject instead of collapsing to hasUpstream=false.
       await expect(
         dispatcher.callRequest('git.upstreamStatus', { worktreePath: nonRepoDir })
-      ).rejects.toThrow(/not a git repository/i)
+      ).rejects.toThrow()
     })
   })
 
