@@ -1122,20 +1122,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
-  // Why: when the selected repo is remote (has a connectionId), read the
-  // per-connection agent list instead of the local one. This ensures the
-  // Create Workspace dialog shows agents installed on the SSH host, not the
-  // local machine.
+  // Why: when the selected repo has a connectionId or runtime environment, read
+  // the per-host agent list instead of the local one. This ensures the Create
+  // Workspace dialog shows agents installed on the SSH host or paired runtime,
+  // not the local machine.
   const connectionId = selectedRepoConnectionId
   const isRemote = typeof connectionId === 'string'
+  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
   const detectedAgentList = useAppStore((s) => {
     if (isRemote) {
       return s.remoteDetectedAgentIds[connectionId] ?? null
+    }
+    if (runtimeEnvironmentId) {
+      return s.runtimeDetectedAgentIds[runtimeEnvironmentId] ?? null
     }
     return s.detectedAgentIds
   })
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((s) => s.ensureRemoteDetectedAgents)
+  const ensureRuntimeDetectedAgents = useAppStore((s) => s.ensureRuntimeDetectedAgents)
   const detectedAgentIds = useMemo<Set<TuiAgent> | null>(
     () => (detectedAgentList ? new Set(detectedAgentList) : null),
     [detectedAgentList]
@@ -1696,14 +1701,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   ])
 
   // Why: detect agents for the selected repo. For local repos this runs once
-  // on mount (deduped by the store). For remote repos it re-runs when the
-  // selected repo changes so the agent list matches the SSH host.
+  // on mount (deduped by the store). For remote/runtime repos it re-runs when
+  // the selected repo changes so the agent list matches the correct host.
   useEffect(() => {
     if (isRemote && selectedRepoSshStatus !== 'connected') {
       return
     }
     let cancelled = false
-    const detect = isRemote ? ensureRemoteDetectedAgents(connectionId) : ensureDetectedAgents()
+    const detect = isRemote
+      ? ensureRemoteDetectedAgents(connectionId)
+      : runtimeEnvironmentId
+        ? ensureRuntimeDetectedAgents(runtimeEnvironmentId)
+        : ensureDetectedAgents()
     void detect.then((ids) => {
       if (cancelled) {
         return
@@ -1722,11 +1731,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-    // Why: re-run when connectionId changes (user picks a different repo) so
-    // detection targets the correct host. Draft/settings deps are intentionally
-    // excluded — detection is a best-effort PATH snapshot.
+    // Why: re-run when connectionId/runtimeEnvironmentId changes (user picks a
+    // different repo) so detection targets the correct host. Draft/settings deps
+    // are intentionally excluded — detection is a best-effort PATH snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, isRemote, selectedRepoSshStatus, disabledTuiAgents])
+  }, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
