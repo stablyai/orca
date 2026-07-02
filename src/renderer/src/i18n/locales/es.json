@@ -4627,7 +4627,10 @@
           "75ca9b718e": "Codex informó que la cuenta activa necesita un nuevo inicio de sesión. Vuelva a autenticarlo antes de iniciar nuevas sesiones del Codex.",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Usa tu actual",
-          "e05d0ff737": "Utilice su inicio de sesión actual de {{value0}} Claude."
+          "e05d0ff737": "Utilice su inicio de sesión actual de {{value0}} Claude.",
+          "2eb471df34": "Use default Codex config directory",
+          "e321640e44": "Run host Codex with your system ~/.codex config instead of Orca's managed home. This stops background quota refreshes from touching host managed homes, preventing single-session token revocation with non-Orca Codex. Host managed account switching is paused while on; WSL accounts stay managed.",
+          "4f3a6c2d19": "Host managed Codex accounts are paused while default ~/.codex is enabled. WSL accounts still use managed homes."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reanudar",
@@ -6750,7 +6753,9 @@
             "bdbd1e668e": "ventanas",
             "593720c17f": "ubicación",
             "b84a5b0c8a": "Elija si las cuentas de proveedor se inspeccionan y agregan en este dispositivo o en WSL.",
-            "d09fb5ca92": "Ubicación de la cuenta"
+            "d09fb5ca92": "Ubicación de la cuenta",
+            "d6347a2658": "Default Codex config directory",
+            "edd9a67f8d": "Run host Codex with your system ~/.codex config instead of Orca's managed home."
           }
         },
         "advanced": {

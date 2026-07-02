@@ -1369,6 +1369,101 @@ describe('CodexAccountService config sync', () => {
     })
   })
 
+  it('pauses host managed account mutations in default-home mode while allowing WSL selection', async () => {
+    vi.resetModules()
+    const spawnMock = vi.fn()
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+
+    const hostManagedHomePath = createManagedHome(
+      testState.userDataDir,
+      'host-account',
+      '',
+      '{"account":"host"}\n'
+    )
+    const wslManagedHomePath =
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-accounts\\wsl-account\\home'
+    const settings = createSettings({
+      codexUseDefaultConfigDir: true,
+      codexManagedAccounts: [
+        {
+          id: 'host-account',
+          email: 'host@example.com',
+          managedHomePath: hostManagedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          wslLinuxHomePath: null,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'wsl-account',
+          email: 'wsl@example.com',
+          managedHomePath: wslManagedHomePath,
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/wsl-account/home',
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: 'host-account',
+      activeCodexManagedAccountIdsByRuntime: {
+        host: 'host-account',
+        wsl: {}
+      }
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    await expect(service.addAccount()).rejects.toThrow('Host managed Codex accounts are paused')
+    await expect(service.reauthenticateAccount('host-account')).rejects.toThrow(
+      'Host managed Codex accounts are paused'
+    )
+    await expect(
+      service.selectAccountForTarget('host-account', { runtime: 'host' })
+    ).rejects.toThrow('Host managed Codex accounts are paused')
+    await expect(service.selectAccountForTarget(null, { runtime: 'host' })).rejects.toThrow(
+      'Host managed Codex accounts are paused'
+    )
+
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(runtimeHome.syncForCurrentSelection).not.toHaveBeenCalled()
+
+    const result = await service.selectAccountForTarget('wsl-account', {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(result.activeAccountId).toBe('host-account')
+    expect(result.activeAccountIdsByRuntime).toEqual({
+      host: 'host-account',
+      wsl: { Ubuntu: 'wsl-account' }
+    })
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
   it('removes an account and cleans up managed home', async () => {
     const managedHomePath = createManagedHome(
       testState.userDataDir,

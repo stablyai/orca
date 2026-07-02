@@ -4612,7 +4612,10 @@
           "75ca9b718e": "Codex 报告活动账户需要重新登录。在开始新的 Codex 会话之前重新对其进行身份验证。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "用你已有的",
-          "e05d0ff737": "使用您当前 {{value0}} Claude 登录名。"
+          "e05d0ff737": "使用您当前 {{value0}} Claude 登录名。",
+          "2eb471df34": "Use default Codex config directory",
+          "e321640e44": "Run host Codex with your system ~/.codex config instead of Orca's managed home. This stops background quota refreshes from touching host managed homes, preventing single-session token revocation with non-Orca Codex. Host managed account switching is paused while on; WSL accounts stay managed.",
+          "4f3a6c2d19": "Host managed Codex accounts are paused while default ~/.codex is enabled. WSL accounts still use managed homes."
         },
         "AdvancedPane": {
           "40b29e0bf3": "重新启动",
@@ -6735,7 +6738,9 @@
             "bdbd1e668e": "视窗",
             "593720c17f": "位置",
             "b84a5b0c8a": "选择是否在此设备上或 WSL 中检查和添加提供商账户。",
-            "d09fb5ca92": "账户位置"
+            "d09fb5ca92": "账户位置",
+            "d6347a2658": "Default Codex config directory",
+            "edd9a67f8d": "Run host Codex with your system ~/.codex config instead of Orca's managed home."
           }
         },
         "advanced": {

@@ -30,7 +30,10 @@ import {
   getFirstCommandToken
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import {
+  isAgentStatusHooksEnabled,
+  isCodexDefaultHomeEnabled
+} from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
@@ -1307,7 +1310,9 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
-          skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
+          skipCodexHomeEnv:
+            isCodexDefaultHomeEnabled(getSettings?.()) ||
+            (ctx?.isWsl === true && !selectedCodexHomePath),
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
           shellPath: ctx?.shellPath,
@@ -2001,9 +2006,10 @@ export function registerPtyHandlers(
           )
         : null
       const skipCodexHomeEnv =
-        isDaemonHostSpawn &&
-        shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd) &&
-        !selectedCodexHomePath
+        isCodexDefaultHomeEnabled(getSettings?.()) ||
+        (isDaemonHostSpawn &&
+          shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd) &&
+          !selectedCodexHomePath)
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
@@ -2663,9 +2669,10 @@ export function registerPtyHandlers(
           )
         : null
       const skipCodexHomeEnv =
-        isDaemonHostSpawn &&
-        shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd) &&
-        !selectedCodexHomePath
+        isCodexDefaultHomeEnabled(getSettings?.()) ||
+        (isDaemonHostSpawn &&
+          shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd) &&
+          !selectedCodexHomePath)
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
           // Should be unreachable: the expression above returns a string when

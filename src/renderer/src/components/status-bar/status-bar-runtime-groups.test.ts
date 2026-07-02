@@ -87,6 +87,62 @@ describe('status bar runtime switch groups', () => {
     ])
   })
 
+  it('treats host Codex as system default in default-home mode while keeping WSL accounts', () => {
+    const state: CodexRateLimitAccountsState = {
+      accounts: [
+        {
+          id: 'codex-host',
+          email: 'host@example.com',
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'codex-wsl',
+          email: 'wsl@example.com',
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeAccountId: 'codex-host',
+      activeAccountIdsByRuntime: { host: 'codex-host', wsl: { Ubuntu: 'codex-wsl' } }
+    }
+
+    expect(
+      buildCodexStatusSwitchGroups(
+        state,
+        { runtime: 'host', wslDistro: null },
+        { hostDefaultHomeEnabled: true }
+      ).map((group) => ({
+        key: group.key,
+        targets: group.targets.map((target) => ({
+          label: target.label,
+          active: target.active
+        }))
+      }))
+    ).toEqual([
+      { key: 'host', targets: [{ label: 'System default', active: true }] },
+      {
+        key: 'wsl:Ubuntu',
+        targets: [
+          { label: 'System default', active: false },
+          { label: 'wsl@example.com', active: true }
+        ]
+      }
+    ])
+  })
+
   it('keeps Claude WSL system-default available without managed Claude accounts', () => {
     const state: ClaudeRateLimitAccountsState = {
       accounts: [],

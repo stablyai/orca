@@ -34,6 +34,8 @@ import {
 
 const LOGIN_TIMEOUT_MS = 120_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
+const HOST_MANAGED_ACCOUNTS_PAUSED_MESSAGE =
+  'Host managed Codex accounts are paused while Use default Codex config directory is enabled.'
 
 type CodexOAuthCredentials = {
   idToken: string | null
@@ -112,11 +114,13 @@ export class CodexAccountService {
   }
 
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
+    this.assertHostManagedAccountsAvailable(target)
     const accountId = randomUUID()
     const managedHome = this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
 
     try {
+      this.assertHostManagedHomeAvailable(managedHome)
       this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
       await this.runCodexLogin(managedHomePath)
       const identity = this.readIdentityFromHome(managedHomePath)
@@ -170,6 +174,7 @@ export class CodexAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    this.assertHostManagedAccountsAvailable(getCodexSelectionTargetForAccount(account))
     const managedHomePath = this.ensureManagedHomeForReauthentication(account)
 
     this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
@@ -268,6 +273,7 @@ export class CodexAccountService {
     const selection = normalizeCodexRuntimeSelection(previousSettings)
     const outgoingAccountId = getSelectedCodexAccountIdForTarget(previousSettings, effectiveTarget)
     const nextSelection = setSelectedCodexAccountIdForTarget(selection, accountId, effectiveTarget)
+    this.assertHostManagedAccountsAvailable(effectiveTarget)
 
     this.store.updateSettings({
       activeCodexManagedAccountId:
@@ -279,6 +285,29 @@ export class CodexAccountService {
 
     await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, effectiveTarget)
     return this.getSnapshot()
+  }
+
+  private assertHostManagedAccountsAvailable(
+    target?: CodexAccountSelectionTarget | CodexAccountAddTarget | null
+  ): void {
+    if (this.store.getSettings().codexUseDefaultConfigDir !== true) {
+      return
+    }
+    if (normalizeCodexAccountSelectionTarget(target).runtime === 'wsl') {
+      return
+    }
+    // Why: the opt-in must never let a stale renderer path spawn Codex against
+    // a host managed home, or it can re-trigger the ~/.codex token revocation war.
+    throw new Error(HOST_MANAGED_ACCOUNTS_PAUSED_MESSAGE)
+  }
+
+  private assertHostManagedHomeAvailable(managedHome: ManagedHomeLocation): void {
+    if (
+      this.store.getSettings().codexUseDefaultConfigDir === true &&
+      managedHome.managedHomeRuntime === 'host'
+    ) {
+      throw new Error(HOST_MANAGED_ACCOUNTS_PAUSED_MESSAGE)
+    }
   }
 
   private getSnapshot(): CodexRateLimitAccountsState {

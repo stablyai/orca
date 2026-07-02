@@ -77,6 +77,17 @@ export function isAgentStatusHooksEnabled(
   return settings?.agentStatusHooksEnabled !== false
 }
 
+/**
+ * Why: opt-in setting that makes host Codex use its default config home
+ * (~/.codex) by skipping managed CODEX_HOME injection. Default off
+ * (undefined/false) keeps Orca's managed runtime home and account switching.
+ */
+export function isCodexDefaultHomeEnabled(
+  settings: Pick<GlobalSettings, 'codexUseDefaultConfigDir'> | null | undefined
+): boolean {
+  return settings?.codexUseDefaultConfigDir === true
+}
+
 export function installManagedAgentHooks(): void {
   for (const [agent, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
     try {

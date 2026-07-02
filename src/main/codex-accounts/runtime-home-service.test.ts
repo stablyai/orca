@@ -737,6 +737,47 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
   })
 
+  it('targets the default ~/.codex home for launch and quota fetch when the opt-in is on', async () => {
+    // Why: closes the background revocation gap — when codexUseDefaultConfigDir
+    // is on, the quota poller and any host launch must resolve null (the system
+    // ~/.codex home) instead of spawning Codex against the managed runtime home,
+    // which would refresh and revoke the user's single-OAuth-session token.
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('one@example.com', 'acct-1', 'one')
+    )
+    const store = createStore(
+      createSettings({
+        codexUseDefaultConfigDir: true,
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'one@example.com',
+            managedHomePath,
+            providerAccountId: 'acct-1',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-1',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1',
+        activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    // Why: null is how callers (pty env build, rate-limit fetcher, commit-msg
+    // agent) resolve the system ~/.codex home instead of an Orca-managed
+    // CODEX_HOME, so the background poller never spawns Codex against the
+    // managed home and never refreshes/revokes the ~/.codex OAuth session.
+    expect(service.prepareForRateLimitFetch()).toBeNull()
+    expect(service.prepareForCodexLaunch()).toBeNull()
+  })
+
   it('uses the same host CODEX_HOME after switching managed Codex accounts', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const account1Auth = createCodexAuthJson('one@example.com', 'acct-1', 'one')

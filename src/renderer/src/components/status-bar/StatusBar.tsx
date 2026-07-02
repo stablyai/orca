@@ -130,6 +130,7 @@ export type ClaudeStatusSwitchGroup = {
 
 type StatusSwitchGroupOptions = {
   fallbackWslDistro?: string | null
+  hostDefaultHomeEnabled?: boolean
   includeFallbackWsl?: boolean
 }
 
@@ -256,8 +257,12 @@ export function buildCodexStatusSwitchGroups(
   const groups: CodexStatusSwitchGroup[] = []
   const normalizedCurrentTarget = normalizeCodexStatusRuntimeTarget(state, currentTarget)
   const makeGroup = (target: CodexStatusRuntimeTarget): CodexStatusSwitchGroup => {
-    const activeId = getCodexStatusActiveId(state, target)
-    const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
+    const hostDefaultHomeEnabled =
+      options.hostDefaultHomeEnabled === true && target.runtime === 'host'
+    const activeId = hostDefaultHomeEnabled ? null : getCodexStatusActiveId(state, target)
+    const accountsForTarget = hostDefaultHomeEnabled
+      ? []
+      : getCodexStatusAccountsForTarget(state, target)
     return {
       key: getCodexStatusRuntimeKey(target),
       label: getCodexStatusRuntimeLabel(target),
@@ -1364,6 +1369,7 @@ function CodexSwitcherMenu({
     toCodexStatusRuntimeTarget(codexTarget),
     {
       fallbackWslDistro,
+      hostDefaultHomeEnabled: settings?.codexUseDefaultConfigDir === true,
       includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
     }
   )

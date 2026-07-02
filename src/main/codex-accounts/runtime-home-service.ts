@@ -136,6 +136,14 @@ export class CodexRuntimeHomeService {
         this.getWslSystemCodexHomePath(wslTarget)
       )
     }
+    // Why: with the default-home opt-in, every host Codex launch (terminals,
+    // commit-message agent) must resolve ~/.codex. Returning null tells callers
+    // to inject no CODEX_HOME, and skipping the managed-home sync means Orca
+    // never spawns Codex against the managed home to drive a token refresh that
+    // would revoke the user's single-OAuth-session ~/.codex login.
+    if (this.isDefaultConfigDirEnabled()) {
+      return null
+    }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
@@ -189,10 +197,22 @@ export class CodexRuntimeHomeService {
         this.getWslSystemCodexHomePath(wslTarget)
       )
     }
+    // Why: when the user opts into the default ~/.codex home, the background
+    // quota poller must NOT spawn Codex against the managed home — doing so
+    // refreshes the managed home's single-use OAuth token and revokes the
+    // ~/.codex session. Return null so the fetcher targets the system home and
+    // skip the managed-home sync entirely (no auth.json read-back to mutate).
+    if (this.isDefaultConfigDirEnabled()) {
+      return null
+    }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     return this.getRuntimeHomePath()
+  }
+
+  private isDefaultConfigDirEnabled(): boolean {
+    return this.store.getSettings().codexUseDefaultConfigDir === true
   }
 
   syncForCurrentSelection(target?: CodexAccountSelectionTarget): void {

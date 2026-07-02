@@ -97,16 +97,14 @@ import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
+import { getInactiveCodexRateLimitAccounts } from './codex-accounts/inactive-codex-rate-limit-accounts'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createSystemTray, destroySystemTray } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
-import {
-  normalizeCodexRuntimeSelection,
-  type CodexAccountSelectionTarget
-} from './codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService } from './codex/hook-service'
 import { ClaudeAccountService } from './claude-accounts/service'
@@ -1634,16 +1632,7 @@ app.whenReady().then(async () => {
       }))
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
-    const settings = store!.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeCodexRuntimeSelection(settings).host,
-        ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
-    )
-    return settings.codexManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
-      .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
+    return getInactiveCodexRateLimitAccounts(store!.getSettings())
   })
   const runtimeService = new OrcaRuntimeService(store, stats, {
     // Why: resolve the PTY provider lazily. initDaemonPtyProvider() runs later
