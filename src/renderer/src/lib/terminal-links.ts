@@ -255,19 +255,32 @@ function insertClaimedRange(claimedRanges: [number, number][], range: [number, n
 }
 
 function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
-  const filenameBeforeProseMatch = /^(.+\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?)(?:\s+.+)$/.exec(
-    range.text
-  )
-  if (!filenameBeforeProseMatch) {
+  let selected: string | null = null
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  let match: RegExpExecArray | null
+  while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
+    const text = range.text.slice(0, match.index + match[0].length)
+    if (countPathStarts(text) <= 1) {
+      selected = text
+    }
+  }
+  if (!selected) {
     return range
   }
-
-  const text = filenameBeforeProseMatch[1]
   return {
-    text,
+    text: selected,
     startIndex: range.startIndex,
-    endIndex: range.startIndex + text.length
+    endIndex: range.startIndex + selected.length
   }
+}
+
+function countPathStarts(text: string): number {
+  let count = 0
+  for (const match of text.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
+    void match
+    count += 1
+  }
+  return count
 }
 
 function trimTrailingWhitespace(range: DetectedRange): DetectedRange {
