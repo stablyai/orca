@@ -105,6 +105,8 @@ describe('setupGuestContextMenu', () => {
       screenY: 375,
       pageUrl: 'https://test.dev/page',
       linkUrl: 'https://test.dev/link',
+      selectionText: '',
+      canCopy: false,
       canGoBack: true,
       canGoForward: true
     })

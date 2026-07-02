@@ -95,6 +95,8 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
+      selectionText: params.selectionText ?? '',
+      canCopy: params.editFlags?.canCopy ?? false,
       ...navigationState
     })
   }
