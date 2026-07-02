@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 
 function getRuntimeCodexConfigTomlPath(): string {
   return join(getOrcaManagedCodexHomePath(), 'config.toml')
@@ -28,8 +29,9 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
     return
   }
 
-  const systemConfig = normalizeDeprecatedCodexHookFeatureFlag(
-    systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
+  const systemConfig = prepareSystemConfigForRuntimeMirror(
+    systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : '',
+    dirname(systemConfigPath)
   )
   if (!runtimeConfigExists) {
     // Why: trust blocks reference a hooks.json path, so system-home hook trust
@@ -43,6 +45,13 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
   if (mergedConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, mergedConfig)
   }
+}
+
+function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
+  return rewriteRelativePathConfigValues(
+    normalizeDeprecatedCodexHookFeatureFlag(config),
+    systemConfigDir
+  )
 }
 
 function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {

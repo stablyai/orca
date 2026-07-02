@@ -108,6 +108,61 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(readFileSync(getSystemConfigPath(), 'utf-8')).toContain('codex_hooks = true')
   })
 
+  it('preserves system-home relative path references in the runtime config copy', () => {
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        'model_instructions_file = "instructions.md"',
+        "model_catalog_json = 'catalogs/models.json'",
+        'experimental_compact_prompt_file = "prompts/compact.md"',
+        'experimental_instructions_file = "legacy-instructions.md"',
+        'log_dir = "logs"',
+        'sqlite_home = "state"',
+        '',
+        '[agents.reviewer]',
+        'config_file = "agents/reviewer.toml"',
+        '',
+        '[model_providers.qwen.auth]',
+        'cwd = "auth"',
+        '',
+        '[[skills.config]]',
+        'path = "skills/local"',
+        ''
+      ].join('\r\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain(
+      `model_instructions_file = '${join(getSystemCodexHomePath(), 'instructions.md')}'`
+    )
+    expect(runtimeConfig).toContain(
+      `model_catalog_json = '${join(getSystemCodexHomePath(), 'catalogs', 'models.json')}'`
+    )
+    expect(runtimeConfig).toContain(
+      `experimental_compact_prompt_file = '${join(
+        getSystemCodexHomePath(),
+        'prompts',
+        'compact.md'
+      )}'`
+    )
+    expect(runtimeConfig).toContain(
+      `experimental_instructions_file = '${join(
+        getSystemCodexHomePath(),
+        'legacy-instructions.md'
+      )}'`
+    )
+    expect(runtimeConfig).toContain(`log_dir = '${join(getSystemCodexHomePath(), 'logs')}'`)
+    expect(runtimeConfig).toContain(`sqlite_home = '${join(getSystemCodexHomePath(), 'state')}'`)
+    expect(runtimeConfig).toContain(
+      `config_file = '${join(getSystemCodexHomePath(), 'agents', 'reviewer.toml')}'`
+    )
+    expect(runtimeConfig).toContain(`cwd = '${join(getSystemCodexHomePath(), 'auth')}'`)
+    expect(runtimeConfig).toContain(`path = '${join(getSystemCodexHomePath(), 'skills', 'local')}'`)
+  })
+
   it('drops deprecated codex_hooks when the new hooks flag already exists', () => {
     writeFileSync(
       getSystemConfigPath(),
