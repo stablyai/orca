@@ -813,6 +813,23 @@ describe('project group store routing', () => {
     expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
   })
 
+  it('does not send local repo moves to groups owned by another host', async () => {
+    const runtimeGroup: ProjectGroup = {
+      ...projectGroup,
+      id: 'runtime-group',
+      executionHostId: 'runtime:env-1'
+    }
+    const store = createTestStore()
+    store.setState({ repos: [remoteRepo], projectGroups: [runtimeGroup] })
+
+    await expect(store.getState().moveProjectToGroup(remoteRepo.id, runtimeGroup.id)).resolves.toBe(
+      false
+    )
+
+    expect(projectGroupsMoveProject).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([remoteRepo])
+  })
+
   it('propagates specific folder workspace create failures to callers', async () => {
     folderWorkspacesCreate.mockRejectedValue(new Error('folder_workspace_path_missing:/srv/app'))
     const store = createTestStore()

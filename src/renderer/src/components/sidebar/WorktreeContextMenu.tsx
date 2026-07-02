@@ -49,11 +49,14 @@ import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
+import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
+import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
+import { getProjectGroupMoveTargets } from '../../../../shared/project-group-move-targets'
 
 type Props = {
   worktree: Worktree
@@ -82,6 +85,16 @@ const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
 const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
+
+type ProjectGroupNameDialogState =
+  | { type: 'create-from-repo' }
+  | { type: 'rename'; groupId: string; currentName: string }
+
+type ProjectGroupDeleteDialogState = {
+  groupId: string
+  groupName: string
+  removeContainedProjects: boolean
+}
 
 // Why: the gating decision for the menu-only store subscriptions. When the menu is
 // closed we MUST return the same `empty` reference every render so Zustand's Object.is
@@ -278,17 +291,32 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const openModal = useAppStore((s) => s.openModal)
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
+  const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+  const deleteProjectGroupWithContainedProjects = useAppStore(
+    (s) => s.deleteProjectGroupWithContainedProjects
+  )
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const repo = useRepoById(worktree.repoId)
+  const projectGroupMoveTargets = useMemo(
+    () => getProjectGroupMoveTargets(repo, projectGroups),
+    [projectGroups, repo]
+  )
+  const currentProjectGroup = useMemo(
+    () => projectGroups.find((group) => group.id === repo?.projectGroupId) ?? null,
+    [projectGroups, repo?.projectGroupId]
+  )
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
     effectiveSelectedWorktrees
   )
-  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [projectGroupNameDialog, setProjectGroupNameDialog] =
+    useState<ProjectGroupNameDialogState | null>(null)
+  const [projectGroupDeleteDialog, setProjectGroupDeleteDialog] =
+    useState<ProjectGroupDeleteDialogState | null>(null)
   const [parentPicker, setParentPicker] = useState<{
     childWorktreeId: string
     anchorElement: HTMLElement
@@ -440,21 +468,84 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     if (!repo) {
       return
     }
-    setCreateGroupDialogOpen(true)
+    setProjectGroupNameDialog({ type: 'create-from-repo' })
   }, [repo])
 
-  const handleSubmitNewProjectGroup = useCallback(
+  const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!repo) {
         return
       }
-      const group = await createProjectGroup(name)
-      if (group) {
-        await moveProjectToGroup(repo.id, group.id)
+      if (projectGroupNameDialog?.type === 'create-from-repo') {
+        const group = await createProjectGroup(name)
+        if (group) {
+          await moveProjectToGroup(repo.id, group.id)
+        }
+        return
+      }
+      if (projectGroupNameDialog?.type === 'rename') {
+        await updateProjectGroup(projectGroupNameDialog.groupId, { name })
       }
     },
-    [createProjectGroup, moveProjectToGroup, repo]
+    [createProjectGroup, moveProjectToGroup, projectGroupNameDialog, repo, updateProjectGroup]
   )
+
+  const handleRenameCurrentProjectGroup = useCallback(() => {
+    if (!currentProjectGroup) {
+      return
+    }
+    setProjectGroupNameDialog({
+      type: 'rename',
+      groupId: currentProjectGroup.id,
+      currentName: currentProjectGroup.name
+    })
+  }, [currentProjectGroup])
+
+  const handleDeleteCurrentProjectGroup = useCallback(() => {
+    if (!currentProjectGroup) {
+      return
+    }
+    setProjectGroupDeleteDialog({
+      groupId: currentProjectGroup.id,
+      groupName: currentProjectGroup.name,
+      removeContainedProjects: false
+    })
+  }, [currentProjectGroup])
+
+  const projectGroupDeleteTargets = useMemo(() => {
+    if (!projectGroupDeleteDialog) {
+      return null
+    }
+    return selectProjectGroupRemovalTargets(
+      projectGroups,
+      [...repoMap.values()],
+      projectGroupDeleteDialog.groupId
+    )
+  }, [projectGroupDeleteDialog, projectGroups, repoMap])
+  const projectGroupDeleteProjectCount = projectGroupDeleteTargets?.projectIds.length ?? 0
+  const projectGroupDeleteProjectNames = useMemo(
+    () =>
+      (projectGroupDeleteTargets?.projectIds ?? []).map(
+        (projectId) => repoMap.get(projectId)?.displayName ?? projectId
+      ),
+    [projectGroupDeleteTargets, repoMap]
+  )
+  const projectGroupRemoveContainedProjects =
+    projectGroupDeleteProjectCount > 0 && projectGroupDeleteDialog?.removeContainedProjects === true
+
+  const handleConfirmDeleteProjectGroup = useCallback(async () => {
+    if (!projectGroupDeleteDialog) {
+      return
+    }
+    await deleteProjectGroupWithContainedProjects(projectGroupDeleteDialog.groupId, {
+      removeContainedProjects: projectGroupRemoveContainedProjects
+    })
+    setProjectGroupDeleteDialog(null)
+  }, [
+    deleteProjectGroupWithContainedProjects,
+    projectGroupDeleteDialog,
+    projectGroupRemoveContainedProjects
+  ])
 
   const handleMoveProjectToGroup = useCallback(
     (groupId: string) => {
@@ -773,7 +864,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                       'New group from project'
                     )}
                   </DropdownMenuItem>
-                  {projectGroups.length > 0 ? (
+                  {projectGroupMoveTargets.length > 0 ? (
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger disabled={isDeleting}>
                         <FolderInput className="size-3.5" />
@@ -783,7 +874,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                         )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
-                        {projectGroups.map((group) => (
+                        {projectGroupMoveTargets.map((group) => (
                           <DropdownMenuItem
                             key={group.id}
                             disabled={repo.projectGroupId === group.id}
@@ -803,6 +894,31 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                         'Remove from group'
                       )}
                     </DropdownMenuItem>
+                  ) : null}
+                  {currentProjectGroup ? (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={handleRenameCurrentProjectGroup}
+                        disabled={isDeleting}
+                      >
+                        <Pencil className="size-3.5" />
+                        {translate(
+                          'auto.components.sidebar.WorktreeContextMenu.renameCurrentGroup',
+                          'Rename current group'
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={handleDeleteCurrentProjectGroup}
+                        disabled={isDeleting}
+                      >
+                        <Trash2 className="size-3.5" />
+                        {translate(
+                          'auto.components.sidebar.WorktreeContextMenu.deleteCurrentGroup',
+                          'Delete current group'
+                        )}
+                      </DropdownMenuItem>
+                    </>
                   ) : null}
                 </>
               ) : null}
@@ -939,19 +1055,61 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <ProjectGroupNameDialog
-        open={createGroupDialogOpen}
-        title={translate(
-          'auto.components.sidebar.WorktreeContextMenu.6664418e98',
-          'New Project Group'
-        )}
-        description={translate(
-          'auto.components.sidebar.WorktreeContextMenu.c39c37676a',
-          'Create a group and move this project into it.'
-        )}
-        initialName={repo ? `${repo.displayName} group` : ''}
-        confirmLabel="Create"
-        onOpenChange={setCreateGroupDialogOpen}
-        onSubmit={handleSubmitNewProjectGroup}
+        open={projectGroupNameDialog !== null}
+        title={
+          projectGroupNameDialog?.type === 'rename'
+            ? translate(
+                'auto.components.sidebar.WorktreeContextMenu.renameProjectGroupTitle',
+                'Rename Project Group'
+              )
+            : translate(
+                'auto.components.sidebar.WorktreeContextMenu.6664418e98',
+                'New Project Group'
+              )
+        }
+        description={
+          projectGroupNameDialog?.type === 'rename'
+            ? translate(
+                'auto.components.sidebar.WorktreeContextMenu.renameProjectGroupDescription',
+                'Update the group name shown in the sidebar.'
+              )
+            : translate(
+                'auto.components.sidebar.WorktreeContextMenu.c39c37676a',
+                'Create a group and move this project into it.'
+              )
+        }
+        initialName={
+          projectGroupNameDialog?.type === 'rename'
+            ? projectGroupNameDialog.currentName
+            : repo
+              ? `${repo.displayName} group`
+              : ''
+        }
+        confirmLabel={projectGroupNameDialog?.type === 'rename' ? 'Rename' : 'Create'}
+        onOpenChange={(open) => {
+          if (!open) {
+            setProjectGroupNameDialog(null)
+          }
+        }}
+        onSubmit={handleSubmitProjectGroupName}
+      />
+      <ProjectGroupDeleteDialog
+        open={projectGroupDeleteDialog !== null}
+        groupName={projectGroupDeleteDialog?.groupName ?? ''}
+        projectCount={projectGroupDeleteProjectCount}
+        projectNames={projectGroupDeleteProjectNames}
+        removeContainedProjects={projectGroupRemoveContainedProjects}
+        onRemoveContainedProjectsChange={(removeContainedProjects) => {
+          setProjectGroupDeleteDialog((current) =>
+            current ? { ...current, removeContainedProjects } : current
+          )
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setProjectGroupDeleteDialog(null)
+          }
+        }}
+        onConfirm={handleConfirmDeleteProjectGroup}
       />
       <WorktreeParentPickerPopover
         open={parentPicker !== null}

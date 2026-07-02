@@ -63,6 +63,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import { getProjectGroupMoveTargets } from '../../../../shared/project-group-move-targets'
 import { buildWorktreeComparator } from './smart-sort'
 import {
   buildAttentionByWorktree,
@@ -4376,7 +4377,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 'New group from project'
                               )}
                             </DropdownMenuItem>
-                            {projectGroups.length > 0 ? (
+                            {getProjectGroupMoveTargets(row.repo, projectGroups).length > 0 ? (
                               <DropdownMenuSub>
                                 <DropdownMenuSubTrigger>
                                   <FolderInput className="size-3.5" />
@@ -4386,19 +4387,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                   )}
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent>
-                                  {projectGroups.map((group) => (
-                                    <DropdownMenuItem
-                                      key={group.id}
-                                      disabled={row.repo?.projectGroupId === group.id}
-                                      onSelect={() => {
-                                        if (row.repo) {
-                                          handleMoveProjectToGroup(row.repo, group.id)
-                                        }
-                                      }}
-                                    >
-                                      <span className="max-w-48 truncate">{group.name}</span>
-                                    </DropdownMenuItem>
-                                  ))}
+                                  {getProjectGroupMoveTargets(row.repo, projectGroups).map(
+                                    (group) => (
+                                      <DropdownMenuItem
+                                        key={group.id}
+                                        disabled={row.repo?.projectGroupId === group.id}
+                                        onSelect={() => {
+                                          if (row.repo) {
+                                            handleMoveProjectToGroup(row.repo, group.id)
+                                          }
+                                        }}
+                                      >
+                                        <span className="max-w-48 truncate">{group.name}</span>
+                                      </DropdownMenuItem>
+                                    )
+                                  )}
                                 </DropdownMenuSubContent>
                               </DropdownMenuSub>
                             ) : null}
