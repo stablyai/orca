@@ -877,6 +877,9 @@ const api = {
      *  re-assert, instead of trusting the size it last fired blind. */
     getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
       ipcRenderer.invoke('pty:getSize', { id }),
+    /** Targeted liveness for one PTY id. Null means provider state is unknown
+     *  and must never be treated as evidence that a pane is dead. */
+    hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void

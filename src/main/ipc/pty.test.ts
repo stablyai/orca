@@ -3181,6 +3181,126 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('checks targeted PTY liveness through cached ownership without listing providers', async () => {
+    const hasPty = vi.fn((id: string) => id === 'pty-live')
+    const listProcesses = vi.fn(async () => [{ id: 'pty-live', cwd: '/repo', title: 'shell' }])
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      attach: vi.fn(),
+      hasPty,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      listProcesses,
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {})
+    } as never)
+    setPtyOwnership('pty-live', null)
+    setPtyOwnership('pty-dead', null)
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'pty-live' })).resolves.toBe(true)
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'pty-dead' })).resolves.toBe(false)
+
+    expect(hasPty).toHaveBeenCalledTimes(2)
+    expect(listProcesses).not.toHaveBeenCalled()
+    deletePtyOwnership('pty-live')
+    deletePtyOwnership('pty-dead')
+  })
+
+  it('treats missing PTY ownership and provider liveness failures as unknown', async () => {
+    const hasPty = vi.fn(() => {
+      throw new Error('provider unavailable')
+    })
+    const listProcesses = vi.fn(async () => [])
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      attach: vi.fn(),
+      hasPty,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      listProcesses,
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {})
+    } as never)
+    setPtyOwnership('pty-owned', null)
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'pty-unknown' })).resolves.toBeNull()
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'pty-owned' })).resolves.toBeNull()
+
+    expect(hasPty).toHaveBeenCalledTimes(1)
+    expect(hasPty).toHaveBeenCalledWith('pty-owned')
+    expect(listProcesses).not.toHaveBeenCalled()
+    deletePtyOwnership('pty-owned')
+  })
+
+  it('preserves provider receiver when calling targeted liveness', async () => {
+    const listProcesses = vi.fn(async () => [])
+    const provider = {
+      liveIds: new Set(['pty-live']),
+      spawn: vi.fn(),
+      attach: vi.fn(),
+      targetedHasPty(id: string) {
+        return this.liveIds.has(id)
+      },
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      listProcesses,
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {})
+    }
+    setLocalPtyProvider(provider as never)
+    setPtyOwnership('pty-live', null)
+    setPtyOwnership('pty-dead', null)
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'pty-live' })).resolves.toBe(true)
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'pty-dead' })).resolves.toBe(false)
+
+    expect(listProcesses).not.toHaveBeenCalled()
+    deletePtyOwnership('pty-live')
+    deletePtyOwnership('pty-dead')
+  })
+
   it('kills app-scoped SSH PTY ids through the parsed provider when ownership is not rebuilt', async () => {
     const localShutdown = vi.fn()
     setLocalPtyProvider({

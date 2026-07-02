@@ -80,6 +80,16 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.findProviderForExistingSession(id) !== null
   }
 
+  targetedHasPty(id: string): boolean | null {
+    const mapped = this.sessionProviders.get(id)
+    if (!mapped) {
+      // Why: hot-path liveness must not fan out across fallback/current/legacy
+      // providers. Explicit inventory paths seed this map before targeted use.
+      return null
+    }
+    return mapped.hasPty?.(id) ?? true
+  }
+
   write(id: string, data: string): void {
     this.providerFor(id).write(id, data)
   }
@@ -137,9 +147,19 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     const results = await Promise.all(
-      this.allProviders().map((provider) => provider.listProcesses())
+      this.allProviders().map(async (provider) => ({
+        provider,
+        sessions: await provider.listProcesses()
+      }))
     )
-    return results.flat()
+    const out: { id: string; cwd: string; title: string }[] = []
+    for (const { provider, sessions } of results) {
+      for (const session of sessions) {
+        this.sessionProviders.set(session.id, provider)
+        out.push(session)
+      }
+    }
+    return out
   }
 
   async getDefaultShell(): Promise<string> {

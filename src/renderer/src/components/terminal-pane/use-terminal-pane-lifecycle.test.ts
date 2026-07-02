@@ -325,7 +325,30 @@ describe('scheduleVisibilityReconcilePass', () => {
     expect(isTerminalPaneVisibilityResume({ previousIsVisible: false, isVisible: true })).toBe(true)
   })
 
-  it('schedules a reconcile pass over the bindings when becoming visible', async () => {
+  it('schedules targeted liveness over the bindings when becoming visible', () => {
+    const reconcileIfSessionDead = vi.fn()
+    const reconcileIfSessionMissing = vi.fn()
+    const hasPty = vi.fn(async () => true)
+    const listSessions = vi
+      .fn<() => Promise<{ id: string; cwd: string; title: string }[]>>()
+      .mockResolvedValue([{ id: 'live-1', cwd: '/a', title: 'a' }])
+
+    const scheduled = scheduleVisibilityReconcilePass({
+      previousIsVisible: false,
+      isVisible: true,
+      bindings: [{ reconcileIfSessionDead, reconcileIfSessionMissing }],
+      hasPty,
+      listSessions
+    })
+
+    expect(scheduled).toBe(true)
+    expect(reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
+    expect(reconcileIfSessionDead).not.toHaveBeenCalled()
+    expect(listSessions).not.toHaveBeenCalled()
+    expect(hasPty).not.toHaveBeenCalled()
+  })
+
+  it('keeps the broad listing fallback only when targeted liveness is unavailable', async () => {
     const reconcileIfSessionDead = vi.fn()
     const listSessions = vi
       .fn<() => Promise<{ id: string; cwd: string; title: string }[]>>()
@@ -339,7 +362,6 @@ describe('scheduleVisibilityReconcilePass', () => {
     })
 
     expect(scheduled).toBe(true)
-    // Fire-and-forget: let the async listSessions resolve before asserting.
     await Promise.resolve()
     await Promise.resolve()
     expect(listSessions).toHaveBeenCalledTimes(1)

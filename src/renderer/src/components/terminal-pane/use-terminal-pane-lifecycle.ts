@@ -76,7 +76,12 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
-import { reconcileDeadSessions, type ReconcilableBinding } from './terminal-dead-session-reconcile'
+import {
+  reconcileDeadSessions,
+  reconcileMissingSessions,
+  type HasPty,
+  type ReconcilableBinding
+} from './terminal-dead-session-reconcile'
 import type { PtyTransport } from './pty-transport'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
@@ -467,14 +472,21 @@ export function scheduleVisibilityReconcilePass(args: {
   previousIsVisible: boolean | null
   isVisible: boolean
   bindings: Iterable<ReconcilableBinding>
-  listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+  hasPty?: HasPty
+  listSessions?: () => Promise<{ id: string; cwd: string; title: string }[]>
 }): boolean {
   if (!isTerminalPaneVisibilityResume(args)) {
     return false
   }
-  // Why: fire-and-forget so the async listSessions IPC never blocks the
-  // synchronous WebGL/fit resume work the user sees first.
-  void reconcileDeadSessions({ bindings: args.bindings, listSessions: args.listSessions })
+  if (args.hasPty) {
+    reconcileMissingSessions({ bindings: args.bindings, hasPty: args.hasPty })
+    return true
+  }
+  if (args.listSessions) {
+    // Why: retained for older preload/test shims; production should use
+    // targeted hasPty so visibility resume never fans out provider listings.
+    void reconcileDeadSessions({ bindings: args.bindings, listSessions: args.listSessions })
+  }
   return true
 }
 
@@ -1695,7 +1707,7 @@ export function useTerminalPaneLifecycle({
       previousIsVisible,
       isVisible,
       bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
-      listSessions: () => window.api.pty.listSessions()
+      hasPty: window.api.pty.hasPty
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility and terminal identity changes must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [cwd, isVisible, isVisibleRef, panePtyBindingsRef, tabId])

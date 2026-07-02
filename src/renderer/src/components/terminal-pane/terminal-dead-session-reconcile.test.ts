@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   reconcileDeadSessions,
-  shouldReconcileDeadSession
+  reconcileMissingSessions,
+  shouldReconcileDeadSession,
+  shouldReconcileMissingSession
 } from './terminal-dead-session-reconcile'
 
 describe('shouldReconcileDeadSession', () => {
@@ -128,6 +130,58 @@ describe('shouldReconcileDeadSession', () => {
   })
 })
 
+describe('shouldReconcileMissingSession', () => {
+  it('reconciles only on an authoritative false liveness result', () => {
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@dead',
+        connectionId: null,
+        isLive: false
+      })
+    ).toBe(true)
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@maybe',
+        connectionId: null,
+        isLive: null
+      })
+    ).toBe(false)
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@live',
+        connectionId: null,
+        isLive: true
+      })
+    ).toBe(false)
+  })
+
+  it('keeps SSH, remote, and newborn bindings safe for missing-session checks', () => {
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@ssh',
+        connectionId: 'ssh-1',
+        isLive: false
+      })
+    ).toBe(false)
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'remote:env-1:abc',
+        connectionId: null,
+        isLive: false
+      })
+    ).toBe(false)
+    expect(
+      shouldReconcileMissingSession({
+        ptyId: 'wt@@newborn',
+        connectionId: null,
+        isLive: false,
+        ptyBoundAt: 100,
+        livenessRequestedAt: 100
+      })
+    ).toBe(false)
+  })
+})
+
 describe('reconcileDeadSessions', () => {
   function createBinding() {
     return {
@@ -187,5 +241,28 @@ describe('reconcileDeadSessions', () => {
     expect(typeof requestedAt).toBe('number')
     expect(requestedAt).toBeGreaterThanOrEqual(before)
     expect(requestedAt).toBeLessThanOrEqual(after)
+  })
+})
+
+describe('reconcileMissingSessions', () => {
+  it('invokes each binding with targeted liveness and a shared request timestamp', () => {
+    const bindingA = {
+      reconcileIfSessionMissing:
+        vi.fn<(hasPty: (ptyId: string) => Promise<boolean | null>, requestedAt?: number) => void>()
+    }
+    const bindingB = {
+      reconcileIfSessionMissing:
+        vi.fn<(hasPty: (ptyId: string) => Promise<boolean | null>, requestedAt?: number) => void>()
+    }
+    const hasPty = vi.fn(async () => true)
+
+    reconcileMissingSessions({ bindings: [bindingA, bindingB], hasPty })
+
+    expect(bindingA.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
+    expect(bindingB.reconcileIfSessionMissing).toHaveBeenCalledWith(hasPty, expect.any(Number))
+    expect(bindingA.reconcileIfSessionMissing.mock.calls[0]?.[1]).toBe(
+      bindingB.reconcileIfSessionMissing.mock.calls[0]?.[1]
+    )
+    expect(hasPty).not.toHaveBeenCalled()
   })
 })

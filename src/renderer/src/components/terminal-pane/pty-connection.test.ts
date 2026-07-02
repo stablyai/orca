@@ -610,6 +610,7 @@ describe('connectPanePty', () => {
         pty: {
           signal: vi.fn(),
           listSessions: vi.fn().mockResolvedValue([]),
+          hasPty: vi.fn().mockResolvedValue(true),
           getSize: vi.fn().mockResolvedValue(null),
           getMainBufferSnapshot: vi.fn().mockResolvedValue(null),
           getForegroundProcess: vi.fn().mockResolvedValue(null),
@@ -11087,10 +11088,9 @@ describe('connectPanePty', () => {
   })
 
   describe('input liveness re-check IPC gating (perf)', () => {
-    // Why (perf regression guard): listSessions() is a renderer→main→daemon
-    // round-trip. The input-driven liveness re-check must fire at most once per
-    // resume window, never once per keystroke, or every healthy local pane puts
-    // a process-enumeration round-trip on the typing hot path.
+    // Why (perf regression guard): broad listSessions() is a renderer→main→daemon
+    // inventory round-trip. The input-driven liveness re-check must use targeted
+    // hasPty at most once per resume window, never once per keystroke.
     async function connectActivePaneWithInput(): Promise<{
       binding: { noteVisibilityResume: () => void }
       typeKeystroke: (data?: string) => void
@@ -11114,9 +11114,11 @@ describe('connectPanePty', () => {
       }
     }
 
-    it('does not fire listSessions for first input on a fresh mount', async () => {
+    it('does not fire liveness IPC for first input on a fresh mount', async () => {
       const listSessions = vi.mocked(window.api.pty.listSessions)
+      const hasPty = vi.mocked(window.api.pty.hasPty)
       listSessions.mockClear()
+      hasPty.mockClear()
       const { typeKeystroke } = await connectActivePaneWithInput()
 
       for (let i = 0; i < 25; i++) {
@@ -11124,39 +11126,66 @@ describe('connectPanePty', () => {
       }
 
       expect(listSessions).not.toHaveBeenCalled()
+      expect(hasPty).not.toHaveBeenCalled()
     })
 
-    it('fires listSessions once for the first input after a visibility resume', async () => {
+    it('uses targeted hasPty once for the first input after a visibility resume', async () => {
       const listSessions = vi.mocked(window.api.pty.listSessions)
+      const hasPty = vi.mocked(window.api.pty.hasPty)
       listSessions.mockClear()
+      hasPty.mockClear()
       const { binding, typeKeystroke } = await connectActivePaneWithInput()
 
       binding.noteVisibilityResume()
       typeKeystroke('a')
       typeKeystroke('b')
 
-      expect(listSessions).toHaveBeenCalledTimes(1)
+      expect(hasPty).toHaveBeenCalledTimes(1)
+      expect(hasPty).toHaveBeenCalledWith('pty-pane-2')
+      expect(listSessions).not.toHaveBeenCalled()
     })
 
     it('re-arms one re-check after a second visibility resume', async () => {
       const listSessions = vi.mocked(window.api.pty.listSessions)
+      const hasPty = vi.mocked(window.api.pty.hasPty)
       listSessions.mockClear()
+      hasPty.mockClear()
       const { binding, typeKeystroke } = await connectActivePaneWithInput()
 
       binding.noteVisibilityResume()
       typeKeystroke('a')
       typeKeystroke('b')
-      expect(listSessions).toHaveBeenCalledTimes(1)
+      expect(hasPty).toHaveBeenCalledTimes(1)
+      expect(listSessions).not.toHaveBeenCalled()
 
       binding.noteVisibilityResume()
       typeKeystroke('c')
       typeKeystroke('d')
-      expect(listSessions).toHaveBeenCalledTimes(2)
+      expect(hasPty).toHaveBeenCalledTimes(2)
+      expect(listSessions).not.toHaveBeenCalled()
+    })
+
+    it('does not close on unknown or rejected targeted liveness', async () => {
+      const hasPty = vi.mocked(window.api.pty.hasPty)
+      hasPty.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('provider unavailable'))
+      const { binding, typeKeystroke } = await connectActivePaneWithInput()
+
+      binding.noteVisibilityResume()
+      typeKeystroke('a')
+      await flushAsyncTicks()
+      binding.noteVisibilityResume()
+      typeKeystroke('b')
+      await flushAsyncTicks()
+
+      expect(hasPty).toHaveBeenCalledTimes(2)
+      expect(window.api.pty.listSessions).not.toHaveBeenCalled()
     })
 
     it('never fires listSessions for a remote: web-runtime pane (liveness owned by host snapshot)', async () => {
       const listSessions = vi.mocked(window.api.pty.listSessions)
+      const hasPty = vi.mocked(window.api.pty.hasPty)
       listSessions.mockClear()
+      hasPty.mockClear()
       const { connectPanePty } = await import('./pty-connection')
       // Remote panes report a null connectionId but a remote:-prefixed ptyId, so
       // the SSH/connectionId guard alone would not exclude them — the remote
@@ -11179,11 +11208,14 @@ describe('connectPanePty', () => {
       sendTerminalInputThroughPane(pane, 'y')
 
       expect(listSessions).not.toHaveBeenCalled()
+      expect(hasPty).not.toHaveBeenCalled()
     })
 
     it('never fires listSessions for an SSH pane after resume', async () => {
       const listSessions = vi.mocked(window.api.pty.listSessions)
+      const hasPty = vi.mocked(window.api.pty.hasPty)
       listSessions.mockClear()
+      hasPty.mockClear()
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('ssh-pty-2')
       transport.getConnectionId.mockReturnValue('ssh-connection-1')
@@ -11203,6 +11235,7 @@ describe('connectPanePty', () => {
       sendTerminalInputThroughPane(pane, 'y')
 
       expect(listSessions).not.toHaveBeenCalled()
+      expect(hasPty).not.toHaveBeenCalled()
     })
   })
 

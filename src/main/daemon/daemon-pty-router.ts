@@ -35,7 +35,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       try {
         const sessions = await adapter.listProcesses()
         for (const session of sessions) {
-          this.sessionAdapters.set(session.id, adapter)
+          this.rememberSessionAdapter(session.id, adapter)
         }
       } catch (error) {
         console.warn('[daemon] Failed to discover legacy daemon sessions', error)
@@ -47,7 +47,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
-    this.sessionAdapters.set(result.id, target)
+    this.rememberSessionAdapter(result.id, target)
     return result
   }
 
@@ -60,7 +60,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     if (routed) {
       return routed.hasPty(id)
     }
-    return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+    const currentHasPty = this.current.hasPty(id)
+    if (currentHasPty) {
+      this.rememberSessionAdapter(id, this.current)
+    }
+    return currentHasPty
   }
 
   write(id: string, data: string): void {
@@ -127,8 +131,20 @@ export class DaemonPtyRouter implements IPtyProvider {
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
-    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
-    return results.flat()
+    const results = await Promise.all(
+      this.allAdapters().map(async (adapter) => ({
+        adapter,
+        sessions: await adapter.listProcesses()
+      }))
+    )
+    const out: { id: string; cwd: string; title: string }[] = []
+    for (const { adapter, sessions } of results) {
+      for (const session of sessions) {
+        this.rememberSessionAdapter(session.id, adapter)
+        out.push(session)
+      }
+    }
+    return out
   }
 
   async getDefaultShell(): Promise<string> {
@@ -246,6 +262,10 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
+  }
+
+  private rememberSessionAdapter(sessionId: string, adapter: DaemonPtyAdapter): void {
+    this.sessionAdapters.set(sessionId, adapter)
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

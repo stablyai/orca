@@ -145,6 +145,30 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
+  it('does not fan out targeted hasPty to legacy adapters for unknown ids', () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    expect(router.hasPty('legacy-session')).toBe(false)
+    expect(current.hasPty).toHaveBeenCalledWith('legacy-session')
+    expect(legacy.hasPty).not.toHaveBeenCalledWith('legacy-session')
+  })
+
+  it('uses explicit listProcesses inventory to seed later targeted liveness routes', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.listProcesses()
+
+    vi.mocked(current.hasPty).mockClear()
+    vi.mocked(legacy.hasPty).mockClear()
+    expect(router.hasPty('legacy-session')).toBe(true)
+    expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
+    expect(legacy.hasPty).toHaveBeenCalledWith('legacy-session')
+  })
+
   it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
     const current = createAdapter('current', ['current-session'])
     const legacy = createAdapter('legacy', ['legacy-session'])

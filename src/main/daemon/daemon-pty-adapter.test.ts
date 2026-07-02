@@ -399,6 +399,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('id')
       expect(procs[0]).toHaveProperty('cwd')
       expect(procs[0]).toHaveProperty('title')
+      expect(adapter.hasPty(procs[0]!.id)).toBe(true)
+      expect(adapter.hasPty(procs[1]!.id)).toBe(true)
     })
   })
 

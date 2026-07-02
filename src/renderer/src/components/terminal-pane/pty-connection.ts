@@ -22,7 +22,11 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
-import { shouldReconcileDeadSession } from './terminal-dead-session-reconcile'
+import {
+  shouldReconcileDeadSession,
+  shouldReconcileMissingSession,
+  type HasPty
+} from './terminal-dead-session-reconcile'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -521,6 +525,7 @@ type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
   noteVisibilityResume: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
+  reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
 
 function isAgentTaskCompleteNotificationEnabled(): boolean {
@@ -4609,9 +4614,9 @@ export function connectPanePty(
   // Why: on visibility resume a pane may still be bound to a daemon session
   // reaped while hidden (the missed-exit defect). Route it through the SAME
   // teardown a real onExit runs. Re-validate identity at apply time so a
-  // reattach racing the listSessions snapshot is never clobbered, and respect
-  // the remote/SSH guards. Suppression semantics come for free via onExit
-  // (which consults consumeSuppressedPtyExit) plus the per-ptyId guard above.
+  // reattach racing a liveness response is never clobbered, and respect the
+  // remote/SSH guards. Suppression semantics come for free via onExit (which
+  // consults consumeSuppressedPtyExit) plus the per-ptyId guard above.
   const reconcileIfSessionDead = (
     liveSessionIds: Set<string>,
     snapshotRequestedAt?: number
@@ -4638,9 +4643,55 @@ export function connectPanePty(
     onExit(currentPtyId)
   }
 
-  // Why (perf + startup correctness): listSessions() is authoritative only
-  // after a real visibility resume. Fresh PTY startup can briefly lag the daemon
-  // listing, so newborn terminals start disarmed and noteVisibilityResume grants
+  const reconcileIfSessionMissing = (
+    hasPty: HasPty,
+    livenessRequestedAt = performance.now()
+  ): void => {
+    const requestedPtyId = transport.getPtyId()
+    if (
+      !requestedPtyId ||
+      requestedPtyId === handledExitPtyId ||
+      isRemoteRuntimePtyId(requestedPtyId) ||
+      transport.getConnectionId?.() != null
+    ) {
+      return
+    }
+
+    let livenessPromise: Promise<boolean | null>
+    try {
+      livenessPromise = Promise.resolve(hasPty(requestedPtyId))
+    } catch {
+      return
+    }
+
+    void livenessPromise
+      .then((isLive) => {
+        if (disposed) {
+          return
+        }
+        const currentPtyId = transport.getPtyId()
+        if (
+          !currentPtyId ||
+          currentPtyId !== requestedPtyId ||
+          handledExitPtyId === currentPtyId ||
+          !shouldReconcileMissingSession({
+            ptyId: currentPtyId,
+            connectionId: transport.getConnectionId?.(),
+            isLive,
+            ptyBoundAt: activePanePtyBindingBoundAt,
+            livenessRequestedAt
+          })
+        ) {
+          return
+        }
+        onExit(currentPtyId)
+      })
+      .catch(() => {})
+  }
+
+  // Why (perf + startup correctness): targeted hasPty liveness is only useful
+  // after a real visibility resume. Fresh PTY startup can briefly lag provider
+  // state, so newborn terminals start disarmed and noteVisibilityResume grants
   // exactly one first-input liveness probe for the next resume window.
   let livenessRecheckArmedForResume = false
 
@@ -4664,24 +4715,17 @@ export function connectPanePty(
       !currentPtyId ||
       // Why: this ptyId's exit was already handled — nothing left to reconcile.
       handledExitPtyId === currentPtyId ||
-      // Why: `remote:` web-runtime liveness is owned by the host snapshot, not
-      // listSessions; skip here so a remote pane's keystrokes never put a local
-      // daemon round-trip on the typing hot path (reconcile would no-op anyway).
+      // Why: `remote:` web-runtime liveness is owned by the host snapshot; skip
+      // here so a remote pane's keystrokes never put a local daemon round-trip
+      // on the typing hot path (reconcile would no-op anyway).
       isRemoteRuntimePtyId(currentPtyId) ||
       (currentConnectionId !== null && currentConnectionId !== undefined)
     ) {
       return
     }
-    // Why: capture request time before the round-trip so a pane that bound after
-    // this request is not torn down by its (pre-bind) stale snapshot.
-    const requestedAt = performance.now()
-    void window.api.pty
-      .listSessions()
-      .then((sessions) => {
-        reconcileIfSessionDead(new Set(sessions.map((session) => session.id)), requestedAt)
-      })
-      // Why: a rejected listing is "unknown" — never close a pane on it.
-      .catch(() => {})
+    if (typeof window.api.pty.hasPty === 'function') {
+      reconcileIfSessionMissing(window.api.pty.hasPty)
+    }
   }
 
   return {
@@ -4690,7 +4734,7 @@ export function connectPanePty(
     },
     // Why: re-arm the once-per-resume input re-check when the pane becomes
     // visible again. Called from the lifecycle visibility effect; the gate
-    // keeps the typing hot path off the listSessions IPC between resumes.
+    // keeps repeated typing off liveness IPC between resumes.
     noteVisibilityResume() {
       livenessRecheckArmedForResume = true
       // Why: re-assert the PTY size on resume so a resize that was dropped while
@@ -4699,6 +4743,7 @@ export function connectPanePty(
       reassertPtySizeOnResume()
     },
     reconcileIfSessionDead,
+    reconcileIfSessionMissing,
     dispose() {
       disposed = true
       // Why: the post-spawn reconcile polls across frames; cancel its pending

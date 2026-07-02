@@ -472,11 +472,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
     return result.sessions
       .filter((s) => s.isAlive)
-      .map((s) => ({
-        id: s.sessionId,
-        cwd: s.cwd ?? '',
-        title: 'shell'
-      }))
+      .map((s) => {
+        // Why: discovery can be the first production observation of a daemon
+        // session after restart; targeted hasPty must agree with that route.
+        this.activeSessionIds.add(s.sessionId)
+        return {
+          id: s.sessionId,
+          cwd: s.cwd ?? '',
+          title: 'shell'
+        }
+      })
   }
 
   // Why: the Manage Sessions panel needs the full SessionInfo (pid, state,

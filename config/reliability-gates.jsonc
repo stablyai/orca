@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-01",
+  "updatedAt": "2026-07-02",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -159,6 +159,72 @@
       "demotionRule": "Cannot promote without deterministic oracle and runtime history."
     },
     {
+      "id": "terminal-session.targeted-liveness",
+      "title": "Hot terminal paths use targeted PTY liveness instead of broad session inventory",
+      "maturity": "experimental",
+      "owner": "terminal-runtime",
+      "layer": "renderer-main-contract",
+      "surfaces": [
+        "typing",
+        "focus",
+        "light tab switch",
+        "workspace switch",
+        "visibility resume",
+        "resize",
+        "render",
+        "per-pane liveness",
+        "resource manager session inventory"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/6773",
+        "https://github.com/stablyai/orca/pull/6514"
+      ],
+      "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, and per-pane liveness paths must not call global pty:listSessions; destructive liveness may act only on authoritative exact-id local/daemon false, while unknown provider state is non-destructive.",
+      "oracle": "The executable slice asserts visibility resume and first input use targeted pty.hasPty without pty:listSessions, light/fresh input paths avoid liveness IPC, SSH/remote panes skip destructive local liveness, resize resume uses targeted pty:getSize without listSessions, Resource Manager closed badge code has no session inventory interval, and main pty:hasPty uses cached ownership without provider listing.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/status-bar/resource-manager-session-polling.test.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/terminal-dead-session-reconcile.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/components/status-bar/resource-manager-session-polling.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/daemon/daemon-pty-router.test.ts",
+        "src/main/daemon/degraded-daemon-pty-provider.test.ts"
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "focused renderer/main/daemon unit tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental count/contract gate; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests fail if visibility/input liveness falls back to listSessions, if pty:hasPty scans provider inventory, or if unknown liveness closes. Needs saved intentional-break evidence and live high-session Electron counters before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Focused count tests assert zero pty:listSessions for covered hot-path slices and zero provider listing from pty:hasPty. Broader raw focus/workspace-switch/render/high-session Electron instrumentation remains a known gap."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach red/green evidence for broad-list fallback regressions.",
+        "Add live Electron high-session counter coverage for raw focus, workspace switch, render ticks, SSH, WSL, and Windows ConPTY before promoting beyond experimental."
+      ],
+      "knownGaps": [
+        "Current command is deterministic macOS unit/contract coverage, not live local/daemon/SSH/WSL/remote-runtime provider execution.",
+        "Current command does not yet instrument every raw focus, workspace-switch, render, or high-session Electron path listed in the invariant.",
+        "SSH and remote-runtime liveness remain intentionally unknown/non-destructive rather than authoritative."
+      ],
+      "demotionRule": "Demote or quarantine if the count tests flake without an owner bug, or if any hot-path regression reintroduces pty:listSessions/provider-list fanout."
+    },
+    {
       "id": "xterm-addon.boundary-containment",
       "title": "xterm addon failures stay pane-scoped and input survives",
       "maturity": "experimental",
@@ -240,6 +306,50 @@
       ],
       "knownGaps": ["No fixture corpus or command yet."],
       "demotionRule": "Cannot promote without old production fixture provenance."
+    },
+    {
+      "id": "startup-upgrade.local-pty-hydration-observability",
+      "title": "Boot PTY registry hydration is bounded and observable",
+      "maturity": "experimental",
+      "owner": "startup-persistence",
+      "layer": "main-unit",
+      "surfaces": ["startup", "daemon warm reattach", "resource manager memory attribution"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon"],
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/6514"],
+      "invariant": "Boot-time local PTY registry hydration may enumerate daemon sessions only in the boot hydrator, must not block first usable UI, and must expose bounded counters for provider-unavailable, success, partial adapter failure, skipped remote/unknown records, already-registered records, and elapsed time.",
+      "oracle": "The main-unit hydrator tests assert provider-unavailable does not flip the once-only guard, success records bounded repo/worktree/adapter/session/registration counters, existing spawn-written rows are not clobbered, SSH repos skip worktree enumeration, adapter partial failure remains non-throwing, and large session lists are processed without spread limits.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/memory/hydrate-local-pty-registry.test.ts"
+      ],
+      "testFiles": ["src/main/memory/hydrate-local-pty-registry.test.ts"],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused main unit test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental diagnostic gate; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests encode bounded counter shape and partial-failure behavior. Needs saved intentional-break evidence and startup timing artifact before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The command asserts boot-scoped counters and large-list bounded iteration. It does not measure full Electron first-paint timing."
+      },
+      "promotionCriteria": [
+        "Attach a startup timing artifact proving hydration remains off the first usable UI critical path.",
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Add upgrade fixture coverage that exercises a real daemon warm reattach profile."
+      ],
+      "knownGaps": [
+        "Current command is a main-unit hydrator test, not an Electron startup timing benchmark.",
+        "Current command does not exercise real daemon sockets across macOS, Linux, or Windows.",
+        "Current command does not validate SSH/remote provider live behavior because those records are intentionally skipped for local process sampling."
+      ],
+      "demotionRule": "Demote or quarantine if counters become unbounded, raw terminal output is added to diagnostics, or hydration moves onto the first-UI critical path."
     }
   ]
 }

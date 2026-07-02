@@ -110,6 +110,9 @@ let localProvider: IPtyProvider = new LocalPtyProvider()
 type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
+type TargetedPtyLivenessProvider = IPtyProvider & {
+  targetedHasPty?: (id: string) => boolean | null
+}
 const sshProviders = new Map<string, IPtyProvider>()
 // Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
 // write/resize/kill calls only carry the PTY ID. This map lets us route
@@ -953,6 +956,20 @@ function routesFreshSpawnsToLocalProvider(
   return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
 }
 
+function getTargetedPtyLiveness(
+  provider: IPtyProvider,
+  ptyId: string
+): boolean | Promise<boolean | null> | null {
+  const targetedHasPty = (provider as TargetedPtyLivenessProvider).targetedHasPty
+  if (targetedHasPty) {
+    return targetedHasPty.call(provider, ptyId)
+  }
+  if (!provider.hasPty) {
+    return null
+  }
+  return provider.hasPty(ptyId)
+}
+
 /** Register an SSH PTY provider for a connection. */
 export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
   sshProviders.set(connectionId, provider)
@@ -1215,6 +1232,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
+  ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
@@ -3287,6 +3305,26 @@ export function registerPtyHandlers(
       return Array.from(deduped.values())
     }
   )
+
+  ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
+    const ownedConnectionId = ptyOwnership.get(args.id)
+    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+    if (ownedConnectionId === undefined && !parsedSshId) {
+      return null
+    }
+    const provider = parsedSshId
+      ? sshProviders.get(parsedSshId.connectionId)
+      : tryGetProviderForPty(args.id)
+    if (!provider) {
+      return null
+    }
+    try {
+      return await getTargetedPtyLiveness(provider, args.id)
+    } catch {
+      // Why: liveness may close a pane only on authoritative false.
+      return null
+    }
+  })
 
   ipcMain.handle(
     'pty:hasChildProcesses',

@@ -151,6 +151,22 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).not.toHaveBeenCalled()
   })
 
+  it('keeps targeted liveness nullable until an explicit route is cached', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    expect(provider.targetedHasPty('daemon-session')).toBeNull()
+    expect(current.hasPty).not.toHaveBeenCalled()
+    expect(fallback.hasPty).not.toHaveBeenCalled()
+
+    await provider.listProcesses()
+
+    expect(provider.targetedHasPty('daemon-session')).toBe(true)
+    expect(current.hasPty).toHaveBeenCalledWith('daemon-session')
+    expect(fallback.hasPty).not.toHaveBeenCalledWith('daemon-session')
+  })
+
   it('forwards replay output from fallback and daemon providers', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')

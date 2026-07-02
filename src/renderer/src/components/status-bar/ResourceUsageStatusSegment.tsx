@@ -31,7 +31,6 @@ import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '../../store'
 import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
@@ -877,24 +876,22 @@ export function ResourceUsageStatusSegment({
   }
   const spaceScanReady = nextSpaceScanSnapshot.ready
 
-  // Poll memory + sessions when popover is open. Sessions also poll in the
-  // background at a slower rate so the badge count stays reasonably fresh
-  // without keeping the Memory IPC hot.
+  // Poll memory and broad session inventory only while the management popover is open.
   useEffect(() => {
     if (!open || runtimeEnvironmentActive) {
       return
     }
     void fetchSnapshot()
     void refreshSessions()
-    // Why: sessions already have an always-on poll in the effect below; only
-    // the memory snapshot is gated on the popover being open. Stacking a
-    // second sessions interval here doubled IPC traffic while the popover
-    // was open.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
+    const sessionTimer = window.setInterval(() => {
+      void refreshSessions()
+    }, SESSIONS_POLL_MS)
     return () => {
       window.clearInterval(memTimer)
+      window.clearInterval(sessionTimer)
     }
   }, [open, runtimeEnvironmentActive, fetchSnapshot, refreshSessions])
 
@@ -902,16 +899,8 @@ export function ResourceUsageStatusSegment({
     if (runtimeEnvironmentActive) {
       setSessions([])
       setSessionsError(false)
-      return
     }
-    // Why: the closed-popover badge is informational. Polling daemon sessions
-    // while the whole window is hidden keeps IPC and daemon list calls hot for
-    // no visible UI; visibility refreshes catch the badge up immediately.
-    return installWindowVisibilityInterval({
-      run: () => void refreshSessions(),
-      intervalMs: SESSIONS_POLL_MS
-    })
-  }, [runtimeEnvironmentActive, refreshSessions])
+  }, [runtimeEnvironmentActive])
 
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -1132,8 +1121,8 @@ export function ResourceUsageStatusSegment({
     if (orphans.length === 0) {
       return
     }
-    // Why: optimistic removal so the rows disappear immediately rather than
-    // lingering up to SESSIONS_POLL_MS while the daemon-side list reconciles.
+    // Why: optimistic removal keeps the management row from reappearing while
+    // the explicit post-kill daemon inventory refresh settles.
     const orphanIds = new Set(orphans.map((s) => s.id))
     setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
@@ -1147,8 +1136,8 @@ export function ResourceUsageStatusSegment({
     const target = killConfirm
     setKilling(true)
     // Why: optimistic removal — the kill X was on the row that's about to be
-    // unmounted, so updating local state immediately avoids a flash where the
-    // dialog closes but the killed row stays for up to 10s.
+    // unmounted, so updating local state avoids a flash before the explicit
+    // post-kill daemon inventory refresh settles.
     setSessions((prev) => prev.filter((s) => s.id !== target.sessionId))
     try {
       await window.api.pty.kill(target.sessionId)
