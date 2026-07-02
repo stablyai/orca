@@ -15,6 +15,17 @@ import {
   sendToTerminal,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import {
+  restoreFiveHundredMillisecondTimeouts,
+  STRETCHED_HIDDEN_OUTPUT_FALLBACK_MS,
+  stretchFiveHundredMillisecondTimeouts
+} from './terminal-recovery-timeout-stretch'
+import {
+  instrumentTabResetCounters,
+  readTabResetCount,
+  readTabResetSnapshot,
+  setVisibilityRecoverySuppressed
+} from './terminal-recovery-reset-counters'
 import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 
 const TAB_A_MARKER = 'ORCA_OVERLAP_REPRO_TAB_A_ONLY'
@@ -25,7 +36,6 @@ const VISUAL_OVERLAP_PROBE_CYCLES = 140
 const SIBLING_COLOR_PIXEL_FLOOR = 150
 const SIBLING_COLOR_PIXEL_DELTA = 100
 const REVEAL_RECOVERY_TIMEOUT_MS = 180
-const REVEAL_BEATS_FALLBACK_WINDOW_MS = 330
 const REAL_CLAUDE_PROBE_CYCLES = 160
 const REFRESH_REPAIR_DIFF_RATIO = 0.035
 
@@ -55,16 +65,6 @@ type HiddenOutputWindow = Window & {
   __terminalPtyDataInjection?: {
     inject: (paneKey: string, data: string, meta?: { seq?: number; rawLength?: number }) => boolean
   }
-}
-
-type RecoveryCounterWindow = Window & {
-  __terminalTabOverlapResetCounts?: Record<string, number>
-  __terminalTabOverlapResetTimes?: Record<string, number[]>
-}
-
-type ResetCounterSnapshot = {
-  count: number
-  latestAt: number
 }
 
 async function setTerminalGpuOn(page: Page): Promise<void> {
@@ -396,8 +396,14 @@ async function corruptTabAtlas(page: Page, tabId: string): Promise<number> {
             corrupted += 1
           }
         }
+        if (corrupted > 0) {
+          break
+        }
       }
       gl.activeTexture(gl.TEXTURE0)
+      if (corrupted > 0) {
+        break
+      }
     }
     pane.terminal.refresh(0, pane.terminal.rows - 1)
     return corrupted
@@ -417,57 +423,6 @@ async function waitForTwoAnimationFrames(page: Page): Promise<void> {
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   )
-}
-
-async function instrumentTabResetCounters(page: Page, tabIds: string[]): Promise<void> {
-  const instrumented = await page.evaluate((tabIds) => {
-    const counterWindow = window as RecoveryCounterWindow
-    counterWindow.__terminalTabOverlapResetCounts = Object.fromEntries(
-      tabIds.map((tabId) => [tabId, 0])
-    )
-    counterWindow.__terminalTabOverlapResetTimes = Object.fromEntries(
-      tabIds.map((tabId) => [tabId, []])
-    )
-    return tabIds.map((tabId) => {
-      const manager = window.__paneManagers?.get(tabId)
-      if (!manager?.resetWebglTextureAtlases) {
-        return false
-      }
-      const originalReset = manager.resetWebglTextureAtlases.bind(manager)
-      manager.resetWebglTextureAtlases = () => {
-        const counts = counterWindow.__terminalTabOverlapResetCounts ?? {}
-        counts[tabId] = (counts[tabId] ?? 0) + 1
-        counterWindow.__terminalTabOverlapResetCounts = counts
-        const times = counterWindow.__terminalTabOverlapResetTimes ?? {}
-        times[tabId] = [...(times[tabId] ?? []), performance.now()]
-        counterWindow.__terminalTabOverlapResetTimes = times
-        originalReset()
-      }
-      return true
-    })
-  }, tabIds)
-  expect(
-    instrumented,
-    `could not instrument WebGL reset counters for tabs ${tabIds.join(', ')}`
-  ).toEqual(tabIds.map(() => true))
-}
-
-async function readTabResetCount(page: Page, tabId: string): Promise<number> {
-  return page.evaluate(
-    (tabId) => (window as RecoveryCounterWindow).__terminalTabOverlapResetCounts?.[tabId] ?? 0,
-    tabId
-  )
-}
-
-async function readTabResetSnapshot(page: Page, tabId: string): Promise<ResetCounterSnapshot> {
-  return page.evaluate((tabId) => {
-    const counterWindow = window as RecoveryCounterWindow
-    const times = counterWindow.__terminalTabOverlapResetTimes?.[tabId] ?? []
-    return {
-      count: counterWindow.__terminalTabOverlapResetCounts?.[tabId] ?? 0,
-      latestAt: times.at(-1) ?? 0
-    }
-  }, tabId)
 }
 
 async function captureTabScreen(page: Page, tabId: string): Promise<Buffer> {
@@ -708,29 +663,64 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
       'WebGL did not attach on all regular terminal tabs'
     )
     await instrumentTabResetCounters(orcaPage, [firstTabId, secondTabId, thirdTabId])
-    await injectHiddenTuiFrame(orcaPage, thirdIdentity, 'ORCA_HIDDEN_OUTPUT_RECOVERY_IN_FLIGHT')
-    // Why: the regression is the output-recovery latch suppressing reveal
-    // recovery. Prove the hidden-output burst reached its rAF and 120ms passes
-    // before reveal, leaving only the later 500ms pass as the old-code fallback.
-    await expect
-      .poll(() => readTabResetCount(orcaPage, thirdTabId), {
-        timeout: 2_000,
-        message: 'hidden-output recovery did not fire its first two reset passes'
-      })
-      .toBeGreaterThanOrEqual(2)
+    await stretchFiveHundredMillisecondTimeouts(orcaPage)
+    try {
+      await injectHiddenTuiFrame(orcaPage, thirdIdentity, 'ORCA_HIDDEN_OUTPUT_RECOVERY_IN_FLIGHT')
+      // Why: the regression is the output-recovery latch suppressing reveal
+      // recovery. Prove the hidden-output burst reached its rAF and 120ms passes
+      // before reveal, while its old 500ms fallback is stretched out of range.
+      await expect
+        .poll(() => readTabResetCount(orcaPage, thirdTabId), {
+          timeout: 2_000,
+          message: 'hidden-output recovery did not fire its first two reset passes'
+        })
+        .toBeGreaterThanOrEqual(2)
+    } finally {
+      await restoreFiveHundredMillisecondTimeouts(orcaPage)
+    }
     const hiddenOutputResetCount = await readTabResetCount(orcaPage, thirdTabId)
     expect(hiddenOutputResetCount).toBeGreaterThanOrEqual(2)
-    test.skip(
-      hiddenOutputResetCount > 2,
+    expect(
+      hiddenOutputResetCount,
       'hidden-output fallback fired before the reveal precondition could be exercised'
-    )
+    ).toBeLessThanOrEqual(2)
     const hiddenOutputResetWindow = await readTabResetSnapshot(orcaPage, thirdTabId)
-
-    const hiddenCorruptedTiles = await corruptTabAtlas(orcaPage, firstTabId)
-    expect(hiddenCorruptedTiles).toBeGreaterThan(0)
+    const resetCountBeforeSuppressedReveal = await readTabResetCount(orcaPage, firstTabId)
+    expect(resetCountBeforeSuppressedReveal).toBeGreaterThanOrEqual(2)
+    expect(
+      resetCountBeforeSuppressedReveal,
+      'hidden-output fallback fired before tab reveal'
+    ).toBeLessThanOrEqual(2)
+    let suppressedReveal: Buffer | null = null
+    try {
+      await setVisibilityRecoverySuppressed(orcaPage, true)
+      await activateTerminalTab(orcaPage, firstTabId)
+      await waitForTwoAnimationFrames(orcaPage)
+      const staleCorruptedTiles = await corruptTabAtlas(orcaPage, firstTabId)
+      expect(staleCorruptedTiles).toBeGreaterThan(0)
+      suppressedReveal = await captureTabScreen(orcaPage, firstTabId)
+      const suppressedRevealDiff = compareTerminalScreenshots(baseline, suppressedReveal)
+      expect(
+        suppressedRevealDiff.matches,
+        'simulated stale returned-tab pixels must be visible when recovery is suppressed'
+      ).toBe(false)
+      await activateTerminalTab(orcaPage, secondTabId)
+      await waitForTwoAnimationFrames(orcaPage)
+    } finally {
+      await setVisibilityRecoverySuppressed(orcaPage, false)
+    }
     const resetCountBeforeReveal = await readTabResetCount(orcaPage, firstTabId)
+    expect(resetCountBeforeReveal).toBe(resetCountBeforeSuppressedReveal)
     expect(resetCountBeforeReveal).toBeGreaterThanOrEqual(2)
-    test.skip(resetCountBeforeReveal > 2, 'hidden-output fallback fired before tab reveal')
+    expect(
+      resetCountBeforeReveal,
+      'hidden-output fallback fired before tab reveal'
+    ).toBeLessThanOrEqual(2)
+    const revealStartedAt = await orcaPage.evaluate(() => performance.now())
+    expect(
+      revealStartedAt - hiddenOutputResetWindow.latestAt,
+      'tab reveal started too close to the stretched hidden-output fallback to prove independent recovery'
+    ).toBeLessThan(STRETCHED_HIDDEN_OUTPUT_FALLBACK_MS - REVEAL_RECOVERY_TIMEOUT_MS)
     await activateTerminalTab(orcaPage, firstTabId)
     await expect
       .poll(() => readTabResetCount(orcaPage, firstTabId), {
@@ -740,18 +730,27 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
       .toBeGreaterThan(resetCountBeforeReveal)
     const resetAfterReveal = await readTabResetSnapshot(orcaPage, firstTabId)
     expect(
-      resetAfterReveal.latestAt - hiddenOutputResetWindow.latestAt,
+      resetAfterReveal.latestAt - revealStartedAt,
       'reveal recovery must beat the old hidden-output 500ms fallback reset'
-    ).toBeLessThan(REVEAL_BEATS_FALLBACK_WINDOW_MS)
+    ).toBeLessThan(REVEAL_RECOVERY_TIMEOUT_MS)
+    expect(
+      resetAfterReveal.latestAt - hiddenOutputResetWindow.latestAt,
+      'post-reveal reset must occur before the hidden-output 500ms fallback could explain it'
+    ).toBeLessThan(STRETCHED_HIDDEN_OUTPUT_FALLBACK_MS)
     await waitForTwoAnimationFrames(orcaPage)
     const afterReveal = await captureTabScreen(orcaPage, firstTabId)
     const afterRevealDiff = compareTerminalScreenshots(baseline, afterReveal)
     await attachArtifact(testInfo, 'deterministic-baseline.png', baseline)
+    await attachArtifact(
+      testInfo,
+      'deterministic-suppressed-reveal.png',
+      suppressedReveal ?? Buffer.from('')
+    )
     await attachArtifact(testInfo, 'deterministic-after-reveal.png', afterReveal)
     await attachArtifact(
       testInfo,
       'deterministic-reset-counts.txt',
-      `beforeReveal=${resetCountBeforeReveal}\nafterReveal=${resetAfterReveal.count}\n`
+      `beforeReveal=${resetCountBeforeReveal}\nafterReveal=${resetAfterReveal.count}\nrevealDelayMs=${resetAfterReveal.latestAt - revealStartedAt}\nhiddenSecondResetToRevealMs=${revealStartedAt - hiddenOutputResetWindow.latestAt}\nstretchedHiddenOutputFallbackMs=${STRETCHED_HIDDEN_OUTPUT_FALLBACK_MS}\n`
     )
     expect(
       afterRevealDiff.matches,

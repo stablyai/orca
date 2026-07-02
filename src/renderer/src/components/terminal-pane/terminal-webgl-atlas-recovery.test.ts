@@ -196,8 +196,10 @@ describe('terminal WebGL atlas recovery', () => {
     expect(rafCallbacks).toHaveLength(1)
     rafCallbacks.shift()?.(0)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(120)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
 
     scheduleTerminalVisibilityWebglRecovery()
     scheduleTerminalVisibilityWebglRecovery()
@@ -205,18 +207,25 @@ describe('terminal WebGL atlas recovery', () => {
     expect(rafCallbacks).toHaveLength(1)
     rafCallbacks.shift()?.(0)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
     vi.advanceTimersByTime(120)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
     vi.advanceTimersByTime(380)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(6)
 
     scheduleTerminalVisibilityWebglRecovery()
     expect(rafCallbacks).toHaveLength(1)
     rafCallbacks.shift()?.(0)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(7)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(7)
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(9)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(9)
   })
 
-  it('allows another tab reveal after the previous reveal reaches its first reset', () => {
+  it('allows another first-frame tab reveal while coalescing the delayed tail', () => {
     vi.useFakeTimers()
     const rafCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal(
@@ -232,15 +241,19 @@ describe('terminal WebGL atlas recovery', () => {
     expect(rafCallbacks).toHaveLength(1)
     rafCallbacks.shift()?.(0)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
 
     scheduleTerminalVisibilityWebglRecovery()
     expect(rafCallbacks).toHaveLength(1)
     rafCallbacks.shift()?.(0)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
 
     vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
     vi.advanceTimersByTime(380)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
   })
 })
