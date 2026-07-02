@@ -70,6 +70,8 @@ export function scheduleTerminalVisibilityWebglRecovery(): void {
   terminalVisibilityRecoveryScheduled = true
   // Why: tab reveal is a separate repaint boundary from hidden-output parsing,
   // so an in-flight output recovery must not suppress the returned tab's repaint.
+  // Clearing on first reset allows rapid consecutive reveals to get their own
+  // repaint, even though their delayed reset timers may overlap.
   scheduleAtlasRecoveryBurst({
     onFirstReset: () => {
       terminalVisibilityRecoveryScheduled = false

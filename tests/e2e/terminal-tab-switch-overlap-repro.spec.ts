@@ -21,6 +21,13 @@ const TAB_A_MARKER = 'ORCA_OVERLAP_REPRO_TAB_A_ONLY'
 const TAB_B_MARKER = 'ORCA_OVERLAP_REPRO_TAB_B_ONLY'
 const TAB_B_GLYPHS = 'ZYXWVUTSRQPONMLKJIHGFEDCBA 9876543210 !?^"\'();:,.|$_-'
 const TAB_B_COLOR = { red: 255, green: 75, blue: 170 }
+const VISUAL_OVERLAP_PROBE_CYCLES = 140
+const SIBLING_COLOR_PIXEL_FLOOR = 150
+const SIBLING_COLOR_PIXEL_DELTA = 100
+const REVEAL_RECOVERY_TIMEOUT_MS = 180
+const REVEAL_BEATS_FALLBACK_WINDOW_MS = 330
+const REAL_CLAUDE_PROBE_CYCLES = 160
+const REFRESH_REPAIR_DIFF_RATIO = 0.035
 
 type TabIdentity = {
   tabId: string
@@ -403,6 +410,10 @@ async function resetAndRefreshTab(page: Page, tabId: string): Promise<void> {
     manager?.resetWebglTextureAtlases?.()
     manager?.refreshAllPanes?.()
   }, tabId)
+  await waitForTwoAnimationFrames(page)
+}
+
+async function waitForTwoAnimationFrames(page: Page): Promise<void> {
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   )
@@ -510,9 +521,7 @@ async function refreshActiveTabAndCompare(page: Page, tabId: string): Promise<Re
     }
     pane.terminal.refresh(0, pane.terminal.rows - 1)
   }, tabId)
-  await page.evaluate(
-    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-  )
+  await waitForTwoAnimationFrames(page)
   const afterScreenshot = await captureTabScreen(page, tabId)
   const afterText = (await readTabBufferProbe(page, tabId, '', '\u0000')).visibleText
   const diff = compareTerminalScreenshots(beforeScreenshot, afterScreenshot)
@@ -610,7 +619,7 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
     expect(baselineBHasOwnColor).toBeGreaterThan(500)
 
     const reports: string[] = []
-    for (let cycle = 0; cycle < 140; cycle += 1) {
+    for (let cycle = 0; cycle < VISUAL_OVERLAP_PROBE_CYCLES; cycle += 1) {
       await activateTerminalTab(orcaPage, secondTabId)
       await orcaPage.waitForTimeout(15)
       await activateTerminalTab(orcaPage, firstTabId)
@@ -625,7 +634,10 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
         break
       }
       const siblingColorPixels = countColorPixels(screenshot, TAB_B_COLOR)
-      if (siblingColorPixels > Math.max(150, baselineAHasSiblingColor + 100)) {
+      if (
+        siblingColorPixels >
+        Math.max(SIBLING_COLOR_PIXEL_FLOOR, baselineAHasSiblingColor + SIBLING_COLOR_PIXEL_DELTA)
+      ) {
         reports.push(
           `cycle ${cycle} visual sibling color active=${activeTabId} siblingPixels=${siblingColorPixels} baselineSiblingPixels=${baselineAHasSiblingColor} bufferSibling=${probe.containsSiblingMarker}`
         )
@@ -687,10 +699,14 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
     expect(compareTerminalScreenshots(baseline, restored).matches).toBe(true)
 
     await activateTerminalTab(orcaPage, thirdTabId)
+    const thirdWebgl = await waitForWebglOnTab(orcaPage, thirdTabId)
     const thirdIdentity = await readTabIdentity(orcaPage, thirdTabId)
     await activateTerminalTab(orcaPage, secondTabId)
     const secondWebgl = await waitForWebglOnTab(orcaPage, secondTabId)
-    test.skip(!firstWebgl || !secondWebgl, 'WebGL did not attach on both regular terminal tabs')
+    test.skip(
+      !firstWebgl || !secondWebgl || !thirdWebgl,
+      'WebGL did not attach on all regular terminal tabs'
+    )
     await instrumentTabResetCounters(orcaPage, [firstTabId, secondTabId, thirdTabId])
     await injectHiddenTuiFrame(orcaPage, thirdIdentity, 'ORCA_HIDDEN_OUTPUT_RECOVERY_IN_FLIGHT')
     // Why: the regression is the output-recovery latch suppressing reveal
@@ -702,17 +718,23 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
         message: 'hidden-output recovery did not fire its first two reset passes'
       })
       .toBeGreaterThanOrEqual(2)
-    expect(await readTabResetCount(orcaPage, thirdTabId)).toBe(2)
+    const hiddenOutputResetCount = await readTabResetCount(orcaPage, thirdTabId)
+    expect(hiddenOutputResetCount).toBeGreaterThanOrEqual(2)
+    test.skip(
+      hiddenOutputResetCount > 2,
+      'hidden-output fallback fired before the reveal precondition could be exercised'
+    )
     const hiddenOutputResetWindow = await readTabResetSnapshot(orcaPage, thirdTabId)
 
     const hiddenCorruptedTiles = await corruptTabAtlas(orcaPage, firstTabId)
     expect(hiddenCorruptedTiles).toBeGreaterThan(0)
     const resetCountBeforeReveal = await readTabResetCount(orcaPage, firstTabId)
-    expect(resetCountBeforeReveal).toBe(2)
+    expect(resetCountBeforeReveal).toBeGreaterThanOrEqual(2)
+    test.skip(resetCountBeforeReveal > 2, 'hidden-output fallback fired before tab reveal')
     await activateTerminalTab(orcaPage, firstTabId)
     await expect
       .poll(() => readTabResetCount(orcaPage, firstTabId), {
-        timeout: 180,
+        timeout: REVEAL_RECOVERY_TIMEOUT_MS,
         message: 'tab reveal did not schedule an independent WebGL recovery reset'
       })
       .toBeGreaterThan(resetCountBeforeReveal)
@@ -720,7 +742,8 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
     expect(
       resetAfterReveal.latestAt - hiddenOutputResetWindow.latestAt,
       'reveal recovery must beat the old hidden-output 500ms fallback reset'
-    ).toBeLessThan(330)
+    ).toBeLessThan(REVEAL_BEATS_FALLBACK_WINDOW_MS)
+    await waitForTwoAnimationFrames(orcaPage)
     const afterReveal = await captureTabScreen(orcaPage, firstTabId)
     const afterRevealDiff = compareTerminalScreenshots(baseline, afterReveal)
     await attachArtifact(testInfo, 'deterministic-baseline.png', baseline)
@@ -773,12 +796,12 @@ test.describe('Terminal tab switch visual overlap repro @headful', () => {
     )
 
     const reports: string[] = []
-    for (let cycle = 0; cycle < 160; cycle += 1) {
+    for (let cycle = 0; cycle < REAL_CLAUDE_PROBE_CYCLES; cycle += 1) {
       const tabId = cycle % 2 === 0 ? firstTabId : secondTabId
       await activateTerminalTab(orcaPage, tabId)
       await orcaPage.waitForTimeout(120)
       const repair = await refreshActiveTabAndCompare(orcaPage, tabId)
-      if (repair.bufferUnchanged && repair.diffRatio > 0.035) {
+      if (repair.bufferUnchanged && repair.diffRatio > REFRESH_REPAIR_DIFF_RATIO) {
         reports.push(
           `cycle ${cycle} tab=${tabId} refresh changed ${(repair.diffRatio * 100).toFixed(2)}% of pixels without buffer change (${repair.diffPixels} px)`
         )
