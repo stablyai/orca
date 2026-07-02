@@ -125,6 +125,10 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 const lastInputAtByPty = new Map<string, number>()
 const interactiveOutputCharsByPty = new Map<string, number>()
 const activeRendererPtys = new Set<string>()
+const visibleRendererPtys = new Set<string>()
+const rendererVisibilityKnownPtys = new Set<string>()
+const pendingHiddenRendererResizeOutputPtys = new Set<string>()
+const deliveredHiddenRendererResizeOutputPtys = new Set<string>()
 const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
 const KEEP_HISTORY_STOP_POLL_MS = 100
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
@@ -1031,6 +1035,10 @@ export function clearProviderPtyState(id: string): void {
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
   activeRendererPtys.delete(id)
+  visibleRendererPtys.delete(id)
+  rendererVisibilityKnownPtys.delete(id)
+  pendingHiddenRendererResizeOutputPtys.delete(id)
+  deliveredHiddenRendererResizeOutputPtys.delete(id)
   clearStartupTerminalColorQueryReplies(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
@@ -1109,6 +1117,8 @@ let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
+let rendererLifecycleResetWebContents: WebContents | null = null
+let rendererLifecycleResetHandler: (() => void) | null = null
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
 // against the freshly-created adapter after replaceDaemonProvider swaps the
@@ -1175,6 +1185,42 @@ function clearDidFinishLoadHandler(): void {
   didFinishLoadWebContents = null
 }
 
+function markRendererPtysHiddenForRendererLifecycleReset(): void {
+  // Why: renderer-owned hints die with the page; keep known-visibility state so
+  // surviving daemon/SSH PTYs fail closed until the new renderer reports again.
+  activeRendererPtys.clear()
+  visibleRendererPtys.clear()
+}
+
+function clearRendererLifecycleResetHandlers(): void {
+  if (!rendererLifecycleResetWebContents) {
+    return
+  }
+  if (rendererLifecycleResetHandler) {
+    rendererLifecycleResetWebContents.removeListener(
+      'did-start-loading',
+      rendererLifecycleResetHandler
+    )
+    rendererLifecycleResetWebContents.removeListener(
+      'render-process-gone',
+      rendererLifecycleResetHandler
+    )
+    rendererLifecycleResetWebContents.removeListener('destroyed', rendererLifecycleResetHandler)
+  }
+  rendererLifecycleResetWebContents = null
+  rendererLifecycleResetHandler = null
+}
+
+function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
+  clearRendererLifecycleResetHandlers()
+  markRendererPtysHiddenForRendererLifecycleReset()
+  rendererLifecycleResetWebContents = webContents
+  rendererLifecycleResetHandler = markRendererPtysHiddenForRendererLifecycleReset
+  webContents.on('did-start-loading', rendererLifecycleResetHandler)
+  webContents.on('render-process-gone', rendererLifecycleResetHandler)
+  webContents.on('destroyed', rendererLifecycleResetHandler)
+}
+
 // Why: the "Restart daemon" flow needs to detach listeners from the current
 // adapter *after* synthetic pty:exit events fan out (so the renderer receives
 // them) but *before* replaceDaemonProvider swaps in the new adapter (so the
@@ -1200,6 +1246,8 @@ export function registerPtyHandlers(
     awaitLocalPtyStartup?: () => Promise<void>
   }
 ): void {
+  registerRendererLifecycleResetHandlers(mainWindow.webContents)
+
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
       return undefined
@@ -1215,6 +1263,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
+  ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
@@ -1302,6 +1351,15 @@ export function registerPtyHandlers(
   type PendingPtyData = {
     data: string
     startSeq?: number
+    containsBackgroundOutput?: boolean
+  }
+
+  type PtyDataPayload = {
+    id: string
+    data: string
+    seq?: number
+    rawLength?: number
+    background?: boolean
   }
 
   const pendingData = new Map<string, PendingPtyData>()
@@ -1421,12 +1479,16 @@ export function registerPtyHandlers(
   function makePtyDataPayload(
     id: string,
     data: string,
-    startSeq: number | undefined
-  ): { id: string; data: string; seq?: number; rawLength?: number } {
-    const payload: { id: string; data: string; seq?: number; rawLength?: number } = { id, data }
+    startSeq: number | undefined,
+    containsBackgroundOutput: boolean | undefined
+  ): PtyDataPayload {
+    const payload: PtyDataPayload = { id, data }
     if (typeof startSeq === 'number') {
       payload.seq = startSeq + data.length
       payload.rawLength = data.length
+    }
+    if (containsBackgroundOutput === true) {
+      payload.background = true
     }
     return payload
   }
@@ -1450,15 +1512,39 @@ export function registerPtyHandlers(
     )
   }
 
-  function sendPtyDataToRenderer(
-    id: string,
-    payload: { id: string; data: string; seq?: number; rawLength?: number }
-  ): void {
+  function sendPtyDataToRenderer(id: string, payload: PtyDataPayload): void {
     const charCount = getPtyPayloadCharCount(payload)
     rendererInFlightCharsByPty.set(id, (rendererInFlightCharsByPty.get(id) ?? 0) + charCount)
     rendererInFlightTotalChars += charCount
     recordPtyRendererDeliveryPressure()
     mainWindow.webContents.send('pty:data', payload)
+  }
+
+  function rendererPtyIsKnownHidden(id: string): boolean {
+    return rendererVisibilityKnownPtys.has(id) && !visibleRendererPtys.has(id)
+  }
+
+  function ptyHasHiddenRendererResizeOutput(id: string): boolean {
+    return (
+      pendingHiddenRendererResizeOutputPtys.has(id) ||
+      deliveredHiddenRendererResizeOutputPtys.has(id)
+    )
+  }
+
+  function markHiddenRendererResizeOutputDelivered(id: string): void {
+    if (!pendingHiddenRendererResizeOutputPtys.delete(id)) {
+      return
+    }
+    deliveredHiddenRendererResizeOutputPtys.add(id)
+  }
+
+  function clearDeliveredHiddenRendererResizeOutput(id: string): void {
+    deliveredHiddenRendererResizeOutputPtys.delete(id)
+  }
+
+  function clearHiddenRendererResizeOutput(id: string): void {
+    pendingHiddenRendererResizeOutputPtys.delete(id)
+    deliveredHiddenRendererResizeOutputPtys.delete(id)
   }
 
   function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
@@ -1479,15 +1565,28 @@ export function registerPtyHandlers(
     existing: PendingPtyData | undefined,
     data: string,
     startSeq: number | undefined,
-    preservesSeq: boolean
+    preservesSeq: boolean,
+    containsBackgroundOutput: boolean
   ): PendingPtyData {
+    const nextContainsBackgroundOutput =
+      existing?.containsBackgroundOutput === true || containsBackgroundOutput
     if (!preservesSeq) {
-      return { data: (existing?.data ?? '') + data }
+      return {
+        data: (existing?.data ?? '') + data,
+        ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+      }
     }
     if (!existing) {
-      return typeof startSeq === 'number' ? { data, startSeq } : { data }
+      return {
+        data,
+        ...(typeof startSeq === 'number' ? { startSeq } : {}),
+        ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+      }
     }
-    const next: PendingPtyData = { data: existing.data + data }
+    const next: PendingPtyData = {
+      data: existing.data + data,
+      ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
+    }
     if (typeof existing.startSeq === 'number') {
       next.startSeq = existing.startSeq
     }
@@ -1527,9 +1626,15 @@ export function registerPtyHandlers(
         if (typeof pending.startSeq === 'number') {
           nextPending.startSeq = pending.startSeq + chunk.length
         }
+        if (pending.containsBackgroundOutput === true) {
+          nextPending.containsBackgroundOutput = true
+        }
         pendingData.set(id, nextPending)
       }
-      sendPtyDataToRenderer(id, makePtyDataPayload(id, chunk, pending.startSeq))
+      sendPtyDataToRenderer(
+        id,
+        makePtyDataPayload(id, chunk, pending.startSeq, pending.containsBackgroundOutput)
+      )
       writes++
     }
     if (pendingData.size > 0 && writes === 0) {
@@ -1591,8 +1696,19 @@ export function registerPtyHandlers(
       if (rendererData.length === 0) {
         return
       }
+      const containsBackgroundOutput =
+        rendererPtyIsKnownHidden(payload.id) || ptyHasHiddenRendererResizeOutput(payload.id)
+      if (containsBackgroundOutput) {
+        markHiddenRendererResizeOutputDelivered(payload.id)
+      }
       const existing = pendingData.get(payload.id)
-      const pending = appendPendingPtyData(existing, rendererData, startSeq, preservesSeq)
+      const pending = appendPendingPtyData(
+        existing,
+        rendererData,
+        startSeq,
+        preservesSeq,
+        containsBackgroundOutput
+      )
       const nextData = pending.data
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
         payload.id,
@@ -1617,7 +1733,8 @@ export function registerPtyHandlers(
           data: nextData,
           ...(typeof pending.startSeq === 'number'
             ? { seq: pending.startSeq + nextData.length, rawLength: nextData.length }
-            : {})
+            : {}),
+          ...(pending.containsBackgroundOutput === true ? { background: true } : {})
         })
         return
       }
@@ -1642,7 +1759,12 @@ export function registerPtyHandlers(
         if (remaining) {
           sendPtyDataToRenderer(
             payload.id,
-            makePtyDataPayload(payload.id, remaining.data, remaining.startSeq)
+            makePtyDataPayload(
+              payload.id,
+              remaining.data,
+              remaining.startSeq,
+              remaining.containsBackgroundOutput
+            )
           )
           pendingData.delete(payload.id)
         }
@@ -3075,6 +3197,9 @@ export function registerPtyHandlers(
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+      if (visibleRendererPtys.has(args.id)) {
+        clearHiddenRendererResizeOutput(args.id)
+      }
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
@@ -3100,6 +3225,9 @@ export function registerPtyHandlers(
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+      if (visibleRendererPtys.has(args.id)) {
+        clearHiddenRendererResizeOutput(args.id)
+      }
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
@@ -3146,9 +3274,24 @@ export function registerPtyHandlers(
     if (!provider) {
       return
     }
+    const markedHiddenResizeOutput = rendererPtyIsKnownHidden(args.id)
+    if (markedHiddenResizeOutput) {
+      // Why: alternate-screen TUIs repaint on SIGWINCH. If that hidden repaint
+      // is read after the user switches back, it must not masquerade as live
+      // foreground output and overwrite the correctly-sized screen.
+      pendingHiddenRendererResizeOutputPtys.add(args.id)
+      deliveredHiddenRendererResizeOutputPtys.delete(args.id)
+    } else if (visibleRendererPtys.has(args.id)) {
+      // Why: after the stale hidden-resize repaint has been observed, the
+      // renderer's visible resize pulse owns the next repaint.
+      clearDeliveredHiddenRendererResizeOutput(args.id)
+    }
     try {
       provider.resize(args.id, args.cols, args.rows)
     } catch {
+      if (markedHiddenResizeOutput) {
+        pendingHiddenRendererResizeOutputPtys.delete(args.id)
+      }
       return
     }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
@@ -3220,6 +3363,21 @@ export function registerPtyHandlers(
     }
   })
 
+  ipcMain.removeAllListeners('pty:setRendererPtyVisible')
+  ipcMain.on('pty:setRendererPtyVisible', (_event, args: { id: string; visible: boolean }) => {
+    if (typeof args.id !== 'string' || !args.id) {
+      return
+    }
+    // Why: data produced while no renderer can see this PTY must keep that origin
+    // through batching, even if the user switches back before the flush lands.
+    rendererVisibilityKnownPtys.add(args.id)
+    if (args.visible) {
+      visibleRendererPtys.add(args.id)
+    } else {
+      visibleRendererPtys.delete(args.id)
+    }
+  })
+
   ipcMain.removeAllListeners('pty:signal')
   ipcMain.on('pty:signal', (_event, args: { id: string; signal: string }) => {
     tryGetProviderForPty(args.id)
@@ -3287,6 +3445,23 @@ export function registerPtyHandlers(
       return Array.from(deduped.values())
     }
   )
+
+  ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
+    const ownedConnectionId = ptyOwnership.get(args.id)
+    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+    const provider = parsedSshId
+      ? sshProviders.get(parsedSshId.connectionId)
+      : tryGetProviderForPty(args.id)
+    if (!provider?.hasPty) {
+      return null
+    }
+    try {
+      return provider.hasPty(args.id)
+    } catch {
+      // Why: liveness is only allowed to close panes on an authoritative false.
+      return null
+    }
+  })
 
   ipcMain.handle(
     'pty:hasChildProcesses',

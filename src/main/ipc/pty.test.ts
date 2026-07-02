@@ -304,6 +304,7 @@ describe('registerPtyHandlers', () => {
     clearPaneKeyAliasesForPtyMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
+    mainWindow.webContents.removeListener.mockReset()
 
     // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel
     // unless removeHandler cleared it first. This catches a re-registration
@@ -553,6 +554,43 @@ describe('registerPtyHandlers', () => {
       throw new Error('missing pty:setActiveRendererPty listener')
     }
     return activeCall[1] as (event: unknown, args: { id: string; active: boolean }) => void
+  }
+
+  function getPtySetRendererPtyVisibleListener(): (
+    event: unknown,
+    args: { id: string; visible: boolean }
+  ) => void {
+    const visibleCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:setRendererPtyVisible'
+    )
+    if (!visibleCall) {
+      throw new Error('missing pty:setRendererPtyVisible listener')
+    }
+    return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
+  }
+
+  function getMainWindowWebContentsListener(eventName: string): (...args: unknown[]) => void {
+    const listenerCall = mainWindow.webContents.on.mock.calls.find(
+      (call: unknown[]) => call[0] === eventName
+    )
+    if (!listenerCall) {
+      throw new Error(`missing ${eventName} listener`)
+    }
+    return listenerCall[1] as (...args: unknown[]) => void
+  }
+
+  function getPtyResizeListener(): (
+    event: unknown,
+    args: { id: string; cols: number; rows: number }
+  ) => void {
+    const resizeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:resize')
+    if (!resizeCall) {
+      throw new Error('missing pty:resize listener')
+    }
+    return resizeCall[1] as (
+      event: unknown,
+      args: { id: string; cols: number; rows: number }
+    ) => void
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
@@ -3102,6 +3140,101 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('checks single-PTY liveness without listing every session', async () => {
+    const hasPty = vi.fn((id: string) => id === 'live-pty')
+    const listProcesses = vi.fn(async () => {
+      throw new Error('listProcesses should not be called')
+    })
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses,
+      attach: vi.fn(),
+      hasPty,
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'live-pty' })).resolves.toBe(true)
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'dead-pty' })).resolves.toBe(false)
+
+    expect(hasPty).toHaveBeenCalledWith('live-pty')
+    expect(hasPty).toHaveBeenCalledWith('dead-pty')
+    expect(listProcesses).not.toHaveBeenCalled()
+  })
+
+  it('treats unsupported or failed single-PTY liveness as unknown', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'maybe-pty' })).resolves.toBe(null)
+
+    const hasPty = vi.fn(() => {
+      throw new Error('provider unavailable')
+    })
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      hasPty,
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'maybe-pty' })).resolves.toBe(null)
+  })
+
   it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
     registerPtyHandlers(mainWindow as never)
     const shutdownA = vi.fn(async () => undefined)
@@ -4988,7 +5121,16 @@ describe('registerPtyHandlers', () => {
     const env = spawnCall[2].env as Record<string, string>
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD')
+    expect(env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining([
+        'ORCA_TERMINAL_HANDLE/u',
+        'ORCA_AGENT_HOOK_PORT/u',
+        'ORCA_AGENT_HOOK_TOKEN/u',
+        'ORCA_OMP_SOURCE_AGENT_DIR/p',
+        'ORCA_OMP_STATUS_EXTENSION/p',
+        'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
+      ])
+    )
   })
 
   describe('Windows UTF-8 code page', () => {
@@ -5818,6 +5960,161 @@ describe('registerPtyHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'background output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves background-origin metadata when hidden output flushes after resume', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      mockProc.emitData('visible output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible output'
+      })
+
+      mainWindow.webContents.send.mockClear()
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      mockProc.emitData('\x1b[2Khidden-width redraw')
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '\x1b[2Khidden-width redraw',
+        background: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks visible renderer PTYs hidden while the renderer lifecycle resets', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      handleRendererLoading()
+      mockProc.emitData('reload-gap output')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'reload-gap output',
+        background: true
+      })
+
+      mainWindow.webContents.send.mockClear()
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      mockProc.emitData('visible output')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves background-origin metadata for repaint output caused by a hidden resize', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const resizePty = getPtyResizeListener()
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      mockProc.emitData('\x1b[2Khidden-resize redraw')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '\x1b[2Khidden-resize redraw',
+        background: true
+      })
+
+      mainWindow.webContents.send.mockClear()
+      resizePty(null, { id: spawnResult.id, cols: 80, rows: 24 })
+      mockProc.emitData('visible repaint')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'visible repaint'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not keep hidden resize metadata after visible user input', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const resizePty = getPtyResizeListener()
+      const writePty = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
+      writePty(mainWindowIpcEvent, { id: spawnResult.id, data: 'x' })
+      mockProc.emitData('x')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'x'
       })
     } finally {
       vi.useRealTimers()

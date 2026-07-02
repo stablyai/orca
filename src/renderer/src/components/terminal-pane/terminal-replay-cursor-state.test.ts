@@ -4,7 +4,8 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_KITTY_KEYBOARD_PROTOCOL
+  RESET_KITTY_KEYBOARD_PROTOCOL,
+  RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
 
 const OLD_REATTACH_RESET_WITHOUT_CURSOR_STYLE = '\x1b[?25h\x1b[?1004l'
@@ -141,6 +142,34 @@ describe('terminal replay state reset', () => {
       await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
       // Why: after renderer reattach, the next Ctrl+C must not inherit a stale
       // Kitty CSI-u encoder state from the replayed TUI snapshot.
+      expect(readKittyKeyboardState(term)).toMatchObject({
+        flags: 0,
+        mainFlags: 0,
+        mainStack: []
+      })
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('clears active-buffer Kitty keyboard state with the idle-agent reset sequence', async () => {
+    const term = new Terminal({
+      cols: 80,
+      rows: 24,
+      allowProposedApi: true,
+      vtExtensions: { kittyKeyboard: true }
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[=31u\x1b[>15u')
+      expect(readKittyKeyboardState(term)).toMatchObject({
+        flags: 15,
+        mainStack: [31]
+      })
+
+      await writeTerminal(term, `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`)
+      // Why: this is the exact reset emitted when a native Windows agent turn
+      // completes, so the next Backspace/Enter must not inherit CSI-u encoding.
       expect(readKittyKeyboardState(term)).toMatchObject({
         flags: 0,
         mainFlags: 0,

@@ -57,6 +57,12 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
   }
 }
 
+function listPublicRuntimeEnvironments(): PublicKnownRuntimeEnvironment[] {
+  // Why: `source` is persisted on the env record, so read it directly instead of
+  // joining the VM store — a corrupt VM store must not break listing all envs.
+  return listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
+}
+
 export function registerRuntimeEnvironmentHandlers(): void {
   // Why: keep direct re-registration safe even though register-core-handlers
   // normally guards this path; otherwise the binary send listener can stack.
@@ -67,7 +73,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
 
   ipcMain.handle('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] =>
-    listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
+    listPublicRuntimeEnvironments()
   )
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',

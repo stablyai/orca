@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown, {
+  type CommentMarkdownLinkClickHandler
+} from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
@@ -123,12 +125,16 @@ function TypingIndicatorRow(): React.JSX.Element {
 function MessageRow({
   message,
   expandSignal,
-  onScrollMessageToTop
+  onScrollMessageToTop,
+  onLinkClick,
+  allowFileUriLinks = false
 }: {
   message: NativeChatMessage
   expandSignal: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -163,7 +169,13 @@ function MessageRow({
           {markdown ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
-              <CommentMarkdown content={markdown} variant="document" className="text-sm" />
+              <CommentMarkdown
+                content={markdown}
+                variant="document"
+                className="text-sm"
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
             </>
           ) : (
             <ImageAttachmentRefs blocks={prose} />
@@ -196,7 +208,13 @@ function MessageRow({
       ) : null}
       <ImageAttachmentRefs blocks={prose} />
       {markdown ? (
-        <CommentMarkdown content={markdown} variant="document" className="text-sm" />
+        <CommentMarkdown
+          content={markdown}
+          variant="document"
+          className="text-sm"
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
       ) : null}
       {tools.length > 0 ? <NativeChatToolRun blocks={tools} expandSignal={expandSignal} /> : null}
     </div>
@@ -207,7 +225,9 @@ export function NativeChatMessageList({
   session,
   isWorking,
   expandSignal,
-  fontScale
+  fontScale,
+  onLinkClick,
+  allowFileUriLinks = false
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -215,6 +235,8 @@ export function NativeChatMessageList({
   expandSignal: boolean
   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
   fontScale: number
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowFileUriLinks?: boolean
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
@@ -346,6 +368,8 @@ export function NativeChatMessageList({
               message={message}
               expandSignal={expandSignal}
               onScrollMessageToTop={scrollMessageToTop}
+              onLinkClick={onLinkClick}
+              allowFileUriLinks={allowFileUriLinks}
             />
           ))}
           {showTypingIndicator ? <TypingIndicatorRow /> : null}

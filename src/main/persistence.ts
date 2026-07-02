@@ -474,6 +474,8 @@ type LegacyTerminalScrollbackSettings = {
   terminalScrollbackBytes?: unknown
 }
 
+const LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT = 3
+
 function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminalScrollbackSettings {
   return settings && typeof settings === 'object'
     ? (settings as LegacyTerminalScrollbackSettings)
@@ -506,6 +508,29 @@ function migrateTerminalScrollbackRows(settings: unknown): {
   return {
     rows,
     needsSave: !hasRows || hasLegacyBytes || legacySettings.terminalScrollbackRows !== rows
+  }
+}
+
+function migrateTerminalTuiScrollSensitivityDefault(settings: GlobalSettings | undefined): {
+  settings: Pick<
+    GlobalSettings,
+    'terminalTuiScrollSensitivity' | 'terminalTuiScrollSensitivityDefaultedToOne'
+  >
+  needsSave: boolean
+} {
+  const alreadyDefaultedToOne = settings?.terminalTuiScrollSensitivityDefaultedToOne === true
+  const current = settings?.terminalTuiScrollSensitivity
+  const shouldMoveInheritedDefault =
+    !alreadyDefaultedToOne &&
+    (current === undefined || current === LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT)
+  const terminalTuiScrollSensitivity = shouldMoveInheritedDefault ? 1 : (current ?? 1)
+
+  return {
+    settings: {
+      terminalTuiScrollSensitivity,
+      terminalTuiScrollSensitivityDefaultedToOne: true
+    },
+    needsSave: !alreadyDefaultedToOne || current === undefined
   }
 }
 
@@ -2677,6 +2702,12 @@ export class Store {
         if (migratedTerminalScrollback.needsSave) {
           this.loadNeedsSave = true
         }
+        const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
+          parsed.settings
+        )
+        if (migratedTerminalTuiScrollSensitivity.needsSave) {
+          this.loadNeedsSave = true
+        }
         const rawSourceControlAi = parsed.settings?.sourceControlAi
         const rawSourceControlAiMissing = rawSourceControlAi === undefined
         const rawSourceControlAiActionsMissing =
@@ -2918,6 +2949,7 @@ export class Store {
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
+            ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: open first-run onboarding is the local fresh-install signal;
@@ -2995,8 +3027,11 @@ export class Store {
             }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
-            // Only exact legacy default payloads are migrated; users who
+            // Why: a short-lived default put Done on the left. Repair only
+            // the exact raw payload once; user-authored reorders then survive.
+            const workspaceStatusesReorderedDefaultRepaired =
+              parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
+            // Why: only exact legacy default payloads are migrated; users who
             // customized status labels, colors, icons, or order keep theirs.
             const workspaceStatusesDefaultWorkflowMigrated =
               parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
@@ -3008,12 +3043,13 @@ export class Store {
               parsed.ui?.workspaceStatuses,
               {
                 migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
-                repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
+                repairReorderedDefaultStatuses: !workspaceStatusesReorderedDefaultRepaired,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesReorderedDefaultRepaired ||
               !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
@@ -3111,6 +3147,7 @@ export class Store {
               ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesReorderedDefaultRepaired: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
@@ -4815,6 +4852,12 @@ export class Store {
       sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
         updates.terminalScrollbackRows
       )
+    }
+    if (
+      'terminalTuiScrollSensitivity' in updates ||
+      'terminalTuiScrollSensitivityDefaultedToOne' in updates
+    ) {
+      sanitizedUpdates.terminalTuiScrollSensitivityDefaultedToOne = true
     }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
       const taskProviderSettings = normalizeTaskProviderSettings({

@@ -18,7 +18,10 @@ export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selec
 
 function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
   return (
-    commandPath[0] === 'environment' || commandPath[0] === 'serve' || commandPath[0] === 'agent'
+    commandPath[0] === 'environment' ||
+    commandPath[0] === 'serve' ||
+    commandPath[0] === 'agent' ||
+    commandPath[0] === 'vm'
   )
 }
 

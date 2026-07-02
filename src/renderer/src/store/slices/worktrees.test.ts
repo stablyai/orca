@@ -9,6 +9,7 @@ import type {
   DetectedWorktreeListResult,
   FolderWorkspace,
   LocalBaseRefRefreshResult,
+  TerminalTab,
   Worktree,
   WorktreeLineage,
   WorkspaceLineage
@@ -78,6 +79,11 @@ const mockApi = {
   },
   runtimeEnvironments: {
     call: runtimeEnvironmentTransportCall
+  },
+  ephemeralVm: {
+    cancelProvision: vi.fn().mockResolvedValue({ cancelled: true }),
+    cleanup: vi.fn().mockResolvedValue({}),
+    listRuntimes: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -119,6 +125,8 @@ function createTestStore() {
         ...createWorktreeSlice(...a),
         trustedOrcaHooks: {},
         repos: [],
+        projectHostSetups: [],
+        deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
         updateSettings: vi.fn().mockResolvedValue(undefined),
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
@@ -186,6 +194,18 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
+    ...overrides
+  }
+}
+
+function makeTerminalTab(overrides: Partial<TerminalTab> & { id: string; worktreeId: string }) {
+  return {
+    ptyId: null,
+    title: 'Terminal',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1,
     ...overrides
   }
 }
@@ -269,6 +289,8 @@ describe('setActiveWorktree focus handling', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+    mockApi.ephemeralVm.cancelProvision.mockResolvedValue({ cancelled: true })
+    mockApi.ephemeralVm.cleanup.mockResolvedValue({})
   })
 
   it('moves focus out of a registered webview before switching worktrees', () => {
@@ -1131,6 +1153,68 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
       { ...remote, hostId: 'runtime:env-1' }
+    ])
+  })
+
+  it('stamps runtime worktrees with the owning project host setup', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo-remote::/vercel/sandbox/orca',
+      repoId: 'repo-remote',
+      path: '/vercel/sandbox/orca',
+      branch: 'refs/heads/Jinwoo-H/vm-improve-2',
+      hostId: 'local'
+    })
+    store.setState({
+      repos: [
+        {
+          id: 'repo-remote',
+          path: '/vercel/sandbox/orca',
+          displayName: 'orca',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      projectHostSetups: [
+        {
+          id: 'repo-remote',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:env-1',
+          repoId: 'repo-remote',
+          path: '/vercel/sandbox/orca',
+          displayName: 'orca',
+          setupState: 'ready',
+          setupMethod: 'imported-existing-folder',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-runtime-worktree',
+      ok: true,
+      result: makeDetectedResult('repo-remote', [remote]),
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo-remote')
+
+    expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
+      {
+        ...remote,
+        hostId: 'runtime:env-1',
+        projectId: 'github:stablyai/orca',
+        projectHostSetupId: 'repo-remote'
+      }
+    ])
+    expect(store.getState().detectedWorktreesByRepo['repo-remote']?.worktrees).toEqual([
+      expect.objectContaining({
+        id: remote.id,
+        hostId: 'runtime:env-1',
+        projectId: 'github:stablyai/orca',
+        projectHostSetupId: 'repo-remote'
+      })
     ])
   })
 
@@ -3154,6 +3238,83 @@ describe('removeWorktree state cleanup', () => {
 
     expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBe(0)
     expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
+  })
+
+  it('cleans up automatic agent resume claims for removed worktree tabs', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    const surviving = makeWorktree({
+      id: 'repo1::/path/wt2',
+      repoId: 'repo1',
+      path: '/path/wt2'
+    })
+
+    store.setState({
+      worktreesByRepo: { repo1: [removed, surviving] },
+      tabsByWorktree: {
+        [removed.id]: [makeTerminalTab({ id: 'removed-tab', worktreeId: removed.id })],
+        [surviving.id]: [makeTerminalTab({ id: 'surviving-tab', worktreeId: surviving.id })]
+      },
+      automaticAgentResumeClaimsByTabId: {
+        'removed-tab': {
+          worktreeId: removed.id,
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'removed-session' }
+        },
+        'surviving-tab': {
+          worktreeId: surviving.id,
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'surviving-session' }
+        }
+      }
+    } as Partial<AppState>)
+
+    await store.getState().removeWorktree(removed.id)
+
+    expect(store.getState().automaticAgentResumeClaimsByTabId).toEqual({
+      'surviving-tab': {
+        worktreeId: surviving.id,
+        launchAgent: 'codex',
+        providerSession: { key: 'session_id', id: 'surviving-session' }
+      }
+    })
+  })
+
+  it('purges the orphaned project that pointed at a destroyed runtime-owned SSH target', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const orphanedSetup = {
+      id: 'setup-runtime-ssh',
+      hostId: 'ssh:runtime-ssh-orca-1'
+    } as unknown as AppState['projectHostSetups'][number]
+    const userSshSetup = {
+      id: 'setup-user-ssh',
+      hostId: 'ssh:my-server'
+    } as unknown as AppState['projectHostSetups'][number]
+    const deleteProjectHostSetup = vi.fn().mockResolvedValue(null)
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      projectHostSetups: [orphanedSetup, userSshSetup],
+      deleteProjectHostSetup
+    } as unknown as Partial<AppState>)
+    mockApi.ephemeralVm.listRuntimes.mockResolvedValueOnce([
+      {
+        id: 'runtime-1',
+        workspaceId: 'repo1::/path/wt1',
+        cleanupStatus: 'not_started',
+        sshTargetId: 'runtime-ssh-orca-1'
+      }
+    ])
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    // Only the orphaned runtime-owned project setup is purged; the user's SSH project is untouched.
+    expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'setup-runtime-ssh' })
   })
 
   it('cleans up editorDrafts for files in the removed worktree', async () => {
@@ -5688,6 +5849,18 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'], 'tab-3': ['pty-3'] },
       runtimePaneTitlesByTabId: { 'tab-1': 'claude', 'tab-3': 'bash' },
+      automaticAgentResumeClaimsByTabId: {
+        'tab-1': {
+          worktreeId: 'repoA::/a/wt1',
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' }
+        },
+        'tab-3': {
+          worktreeId: 'repoA::/a/wt2',
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-3' }
+        }
+      },
       openFiles: [
         {
           id: 'file-1',
@@ -5741,6 +5914,13 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.terminalLayoutsByTabId).toEqual({ 'tab-3': { panes: [] } })
     expect(s.ptyIdsByTabId).toEqual({ 'tab-3': ['pty-3'] })
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
+    expect(s.automaticAgentResumeClaimsByTabId).toEqual({
+      'tab-3': {
+        worktreeId: 'repoA::/a/wt2',
+        launchAgent: 'codex',
+        providerSession: { key: 'session_id', id: 'sess-3' }
+      }
+    })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
@@ -6481,6 +6661,7 @@ function makePendingCreation(
     creationId,
     phase: 'fetching',
     status: 'creating',
+    startedAt: 1000,
     indeterminate: false,
     loaderVisible: false,
     request: {
@@ -6617,6 +6798,56 @@ describe('pending worktree creation state', () => {
 
     store.getState().removePendingWorktreeCreation('c2')
     expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('removePendingWorktreeCreation cancels active VM provisioning', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(
+      makePendingCreation('c1', {
+        phase: 'provisioning-vm'
+      })
+    )
+
+    store.getState().removePendingWorktreeCreation('c1')
+
+    expect(mockApi.ephemeralVm.cancelProvision).toHaveBeenCalledWith({ provisionId: 'c1' })
+    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
+  })
+
+  it('removePendingWorktreeCreation cleans up a provisioned VM runtime', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(
+      makePendingCreation('c1', {
+        phase: 'fetching',
+        request: {
+          ...makePendingCreation('c1').request,
+          ephemeralVmRuntimeId: 'runtime-1'
+        }
+      })
+    )
+
+    store.getState().removePendingWorktreeCreation('c1')
+
+    expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-1' })
+    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
+  })
+
+  it('removePendingWorktreeCreation can drop a completed VM creation without cleanup', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(
+      makePendingCreation('c1', {
+        phase: 'fetching',
+        request: {
+          ...makePendingCreation('c1').request,
+          ephemeralVmRuntimeId: 'runtime-1'
+        }
+      })
+    )
+
+    store.getState().removePendingWorktreeCreation('c1', { cleanupVm: false })
+
+    expect(mockApi.ephemeralVm.cleanup).not.toHaveBeenCalled()
+    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
   })
 
   it('setActivePendingWorktreeCreation ignores unknown ids but always accepts null', () => {

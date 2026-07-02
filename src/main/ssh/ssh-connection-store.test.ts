@@ -91,6 +91,23 @@ describe('SshConnectionStore', () => {
     expect(target.source).toBe('ssh-config')
   })
 
+  it('hides runtime-owned targets from normal target lists', () => {
+    const userTarget = sshStore.addTarget({
+      label: 'My Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    sshStore.upsertRuntimeOwnedTarget('runtime-1', {
+      label: 'Sandbox',
+      host: 'sandbox.example.com',
+      port: 22,
+      username: 'root'
+    })
+
+    expect(sshStore.listTargets()).toEqual([userTarget])
+  })
+
   it('updateTarget delegates to store', () => {
     const original: SshTarget = {
       id: 'ssh-1',

@@ -19,7 +19,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -108,6 +108,7 @@ import {
 } from './terminal-live-layout-reconciliation'
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
@@ -121,9 +122,10 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
-import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
+import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -281,8 +283,28 @@ export default function TerminalPane({
   const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const isVisibleRef = useRef(isVisible)
-  isVisibleRef.current = isVisible
+  const isRendererVisible = isVisible && isWorktreeActive
+  const isVisibleRef = useRef(isRendererVisible)
+  isVisibleRef.current = isRendererVisible
+  const sshReconnectTargetId = useAppStore((store) => {
+    const connectionId = getConnectionIdFromState(store, worktreeId)
+    // Why: runtime-owned SSH targets are internal plumbing users can't connect
+    // to directly, so a reconnect prompt would offer a misleading action.
+    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
+      return null
+    }
+    return connectionId
+  })
+  const sshReconnectStatus = useAppStore((store) =>
+    sshReconnectTargetId
+      ? (store.sshConnectionStates.get(sshReconnectTargetId)?.status ?? 'disconnected')
+      : null
+  )
+  const sshReconnectTargetLabel = useAppStore((store) =>
+    sshReconnectTargetId
+      ? (store.sshTargetLabels.get(sshReconnectTargetId) ?? sshReconnectTargetId)
+      : ''
+  )
 
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
@@ -1284,7 +1306,7 @@ export default function TerminalPane({
     setupSplit,
     issueCommandSplit,
     isActive,
-    isVisible,
+    isVisible: isRendererVisible,
     systemPrefersDark,
     settings,
     settingsRef,
@@ -1637,7 +1659,7 @@ export default function TerminalPane({
     isWorktreeActive,
     // Why: hidden startup probes are opacity-hidden but measurable; ordinary
     // hidden tabs are display:none and refit on visibility resume instead.
-    isSyncFitEnabled: isVisible || shouldMeasureHiddenStartup,
+    isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
     containerRef,
@@ -2717,6 +2739,13 @@ export default function TerminalPane({
 
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
+  const showSshReconnectOverlay = Boolean(
+    isActive &&
+    isVisible &&
+    sshReconnectTargetId &&
+    sshReconnectStatus &&
+    sshReconnectStatus !== 'connected'
+  )
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   const chatLeafStillMounted = chatLeafId
@@ -2808,6 +2837,13 @@ export default function TerminalPane({
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       )}
+      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus ? (
+        <TerminalSshReconnectOverlay
+          targetId={sshReconnectTargetId}
+          targetLabel={sshReconnectTargetLabel}
+          status={sshReconnectStatus}
+        />
+      ) : null}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog

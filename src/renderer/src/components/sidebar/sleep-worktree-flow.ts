@@ -146,6 +146,9 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // serializer buffers into buffersByLeafId for SSH wake to reseed
         // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
         await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+        if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
+          await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+        }
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err))
       }

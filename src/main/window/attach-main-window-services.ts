@@ -264,10 +264,12 @@ function registerRuntimeWindowLifecycle(
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
         const handler = (
-          _event: Electron.IpcMainEvent,
+          event: Electron.IpcMainEvent,
           reply: { requestId: string; tabId?: string; title?: string; error?: string }
         ): void => {
-          if (reply.requestId !== requestId) {
+          // Why: requestId is renderer-supplied; only the targeted main window
+          // may satisfy the reveal and provide the tab handle.
+          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)

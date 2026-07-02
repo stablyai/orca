@@ -215,7 +215,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
-    terminalTuiScrollSensitivity: 3,
+    terminalTuiScrollSensitivity: 1,
+    terminalTuiScrollSensitivityDefaultedToOne: true,
     // Why: "auto" should use WebGL when supported while keeping DOM fallback
     // for renderer failures and Linux software/unknown GPU renderers.
     terminalGpuAcceleration: 'auto',
@@ -353,6 +354,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
+    experimentalEphemeralVms: false,
     compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
     // Why: local desktop remains the default server until the user explicitly
@@ -475,6 +477,7 @@ export function getDefaultUIState(): PersistedUIState {
     workspaceBoardColumnWidth: 308,
     syncTaskStatusFromWorkspaceBoard: false,
     _workspaceStatusesDefaultOrderMigrated: true,
+    _workspaceStatusesReorderedDefaultRepaired: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
     _workspaceStatusesDefaultVisualsMigrated: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],

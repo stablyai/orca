@@ -9,10 +9,11 @@ import {
   ServerOff,
   Trash2
 } from 'lucide-react'
-import type {
-  SshTarget,
-  SshConnectionState,
-  SshConnectionStatus
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshConnectionState,
+  type SshConnectionStatus,
+  type SshTarget
 } from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -49,6 +50,31 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'disconnected':
       return 'bg-muted-foreground/40'
   }
+}
+
+function formatGraceDuration(seconds: number): string {
+  if (seconds % 86_400 === 0) {
+    return `${seconds / 86_400}d`
+  }
+  if (seconds % 3_600 === 0) {
+    return `${seconds / 3_600}h`
+  }
+  if (seconds % 60 === 0) {
+    return `${seconds / 60}m`
+  }
+  return `${seconds}s`
+}
+
+function formatTerminalPersistence(target: SshTarget): string {
+  const graceSeconds = target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  if (graceSeconds === 0) {
+    return translate('auto.components.settings.SshTargetCard.8ce71262f4', 'terminals until reset')
+  }
+  return translate(
+    'auto.components.settings.SshTargetCard.a883f5a00f',
+    'terminal timeout: {{value0}}',
+    { value0: formatGraceDuration(graceSeconds) }
+  )
 }
 
 // ── SshTargetCard ────────────────────────────────────────────────────
@@ -92,6 +118,7 @@ export function SshTargetCard({
   const endpoint = target.username
     ? `${target.username}@${target.host}:${target.port}`
     : `${target.host}:${target.port}`
+  const terminalPersistence = formatTerminalPersistence(target)
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: SSH target actions can resolve after the card is removed; the root
@@ -270,6 +297,7 @@ export function SshTargetCard({
         <p className="truncate text-xs text-muted-foreground">
           {endpoint}
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
+          {` \u2022 ${terminalPersistence}`}
         </p>
         {state?.error ? (
           <p className="mt-0.5 truncate text-xs text-red-400">{state.error}</p>

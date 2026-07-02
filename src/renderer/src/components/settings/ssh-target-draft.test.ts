@@ -4,6 +4,7 @@ import {
   applyParsedSshHostInput,
   getEditingTargetForSshTarget,
   getSshTargetDraftConnectionFields,
+  parseRelayGracePeriodSeconds,
   parseSshHostInput
 } from './ssh-target-draft'
 
@@ -154,9 +155,10 @@ describe('getSshTargetDraftConnectionFields', () => {
 })
 
 describe('getEditingTargetForSshTarget', () => {
-  it('defaults new SSH targets to keeping remote terminals alive until reset', () => {
+  it('defaults new SSH targets to keep terminals alive until reset', () => {
     expect(EMPTY_FORM.relayKeepAliveUntilReset).toBe(true)
     expect(EMPTY_FORM.relayGracePeriodSeconds).toBe('86400')
+    expect(parseRelayGracePeriodSeconds(EMPTY_FORM)).toBe(0)
   })
 
   it('recomputes implicit configHost when a manual target host is edited', () => {
@@ -214,7 +216,7 @@ describe('getEditingTargetForSshTarget', () => {
     expect(draft.systemSshConnectionReuse).toBe(false)
   })
 
-  it('treats missing relay grace as the persistent default when editing', () => {
+  it('uses the default persistence for targets without an explicit grace period', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',
       label: 'Server',
@@ -225,6 +227,7 @@ describe('getEditingTargetForSshTarget', () => {
 
     expect(draft.relayKeepAliveUntilReset).toBe(true)
     expect(draft.relayGracePeriodSeconds).toBe('86400')
+    expect(parseRelayGracePeriodSeconds(draft)).toBe(0)
   })
 
   it('preserves explicit bounded relay grace periods when editing', () => {

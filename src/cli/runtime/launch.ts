@@ -63,6 +63,8 @@ export function serveOrcaApp(
     pairingAddress?: string | null
     noPairing?: boolean
     mobilePairing?: boolean
+    recipeJson?: boolean
+    projectRoot?: string | null
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
@@ -82,13 +84,27 @@ export function serveOrcaApp(
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')
   }
+  if (args.recipeJson) {
+    if (!args.projectRoot) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Recipe JSON output requires --project-root.'
+      )
+    }
+    childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
+  }
 
   const child = spawnProcess(executable, childArgs, {
+    detached: args.recipeJson === true,
     cwd: resolveAppRoot(),
-    stdio: 'inherit',
+    stdio: args.recipeJson === true ? ['ignore', 'pipe', 'inherit'] : 'inherit',
     ...getExecutableSpawnOptions(executable),
     env: stripElectronRunAsNode(process.env)
   })
+
+  if (args.recipeJson) {
+    return waitForRecipeJson(child)
+  }
 
   return new Promise((resolve, reject) => {
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
@@ -120,6 +136,70 @@ export function serveOrcaApp(
       }
       reject(new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${signal}`))
     })
+  })
+}
+
+function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let output = ''
+    let settled = false
+    const timeout = setTimeout(() => {
+      finish(new RuntimeClientError('runtime_serve_failed', 'Timed out waiting for recipe JSON.'))
+      child.kill('SIGTERM')
+    }, 60000)
+    const finish = (error?: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      child.stdout?.off('data', onData)
+      child.off('error', onError)
+      child.off('exit', onExit)
+      if (error) {
+        reject(error)
+        return
+      }
+      child.stdout?.destroy?.()
+      child.unref()
+      resolve(0)
+    }
+    const emitLine = (line: string): void => {
+      process.stdout.write(`${line}\n`)
+      finish()
+    }
+    const onData = (chunk: Buffer | string): void => {
+      output += chunk.toString()
+      const newlineIndex = output.indexOf('\n')
+      if (newlineIndex === -1) {
+        return
+      }
+      emitLine(output.slice(0, newlineIndex))
+    }
+    const onError = (error: Error): void => {
+      finish(error)
+    }
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      if (settled) {
+        return
+      }
+      const trimmed = output.trim()
+      if (trimmed) {
+        emitLine(trimmed)
+        return
+      }
+      finish(
+        new RuntimeClientError(
+          'runtime_serve_failed',
+          typeof code === 'number'
+            ? `Orca serve exited before printing recipe JSON with code ${code}.`
+            : `Orca serve exited before printing recipe JSON via ${signal}.`
+        )
+      )
+    }
+    child.stdout?.on('data', onData)
+    child.once('error', onError)
+    child.once('exit', onExit)
   })
 }
 

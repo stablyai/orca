@@ -71,13 +71,7 @@ const REORDERED_DEFAULT_WORKSPACE_STATUSES = [
   },
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
 ]
-const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
-  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
-  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
-]
-const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+const REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
   { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
   {
@@ -87,6 +81,23 @@ const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
     icon: 'conductor-progress'
   },
   { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
+const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
+  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
+  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
+]
+const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' }
 ]
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -481,7 +492,8 @@ describe('Store', () => {
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.terminalScrollSensitivity).toBe(1.15)
     expect(settings.terminalFastScrollSensitivity).toBe(5)
-    expect(settings.terminalTuiScrollSensitivity).toBe(3)
+    expect(settings.terminalTuiScrollSensitivity).toBe(1)
+    expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
@@ -1989,6 +2001,57 @@ describe('Store', () => {
     const updated = store.updateSettings({ autoRenameBranchFromWorkDefaultedOn: false })
 
     expect(updated.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('migrates inherited TUI scroll sensitivity defaults to one report on first load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalTuiScrollSensitivity: 3 },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalTuiScrollSensitivity).toBe(1)
+    expect(store.getSettings().terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalTuiScrollSensitivity).toBe(1)
+  })
+
+  it('preserves TUI scroll sensitivity choices after the one-report migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        terminalTuiScrollSensitivity: 3,
+        terminalTuiScrollSensitivityDefaultedToOne: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalTuiScrollSensitivity).toBe(3)
+    expect(store.getSettings().terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
+  })
+
+  it('stamps the TUI scroll sensitivity migration guard on future updates', async () => {
+    const store = await createStore()
+
+    const updated = store.updateSettings({
+      terminalTuiScrollSensitivity: 3,
+      terminalTuiScrollSensitivityDefaultedToOne: false
+    })
+
+    expect(updated.terminalTuiScrollSensitivity).toBe(3)
+    expect(updated.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
   })
 
   it('merges rollback commit-message AI writes into existing source-control AI on load', async () => {
@@ -5057,34 +5120,55 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(ui.workspaceStatuses?.[0]?.label).toBe('Done')
+    expect(ui.workspaceStatuses?.at(-1)?.label).toBe('Done')
     expect(ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
     expect(ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
 
     store.flush()
-    const persisted = readDataFile() as {
-      ui?: {
-        workspaceStatuses?: typeof REORDERED_DEFAULT_WORKSPACE_STATUSES
-        _workspaceStatusesDefaultOrderMigrated?: boolean
-        _workspaceStatusesDefaultWorkflowMigrated?: boolean
-        _workspaceStatusesDefaultVisualsMigrated?: boolean
-      }
-    }
-    expect(persisted.ui?._workspaceStatusesDefaultOrderMigrated).toBe(true)
-    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
-    expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
-    expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'completed',
-      'in-review',
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(persisted.ui._workspaceStatusesReorderedDefaultRepaired).toBe(true)
+    expect(persisted.ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
+    expect(persisted.ui._workspaceStatusesDefaultVisualsMigrated).toBe(true)
+    expect(persisted.ui.workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
       'in-progress',
-      'todo'
+      'in-review',
+      'completed'
     ])
-    expect(persisted.ui?.workspaceStatuses?.[0]?.label).toBe('Done')
+    expect(persisted.ui.workspaceStatuses?.at(-1)?.label).toBe('Done')
+  })
+
+  it('repairs the known-bad reordered default statuses after old migration flags are set', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        workspaceStatuses: REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES,
+        _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true,
+        _workspaceStatusesDefaultVisualsMigrated: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
+      'in-progress',
+      'in-review',
+      'completed'
+    ])
+    expect(store.getUI().workspaceStatuses?.at(-1)?.label).toBe('Done')
+    expect(store.getUI()._workspaceStatusesReorderedDefaultRepaired).toBe(true)
   })
 
   it('migrates legacy default workspace status visuals and workflow once on load', async () => {
@@ -5149,6 +5233,7 @@ describe('Store', () => {
       ui: {
         workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES,
         _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesReorderedDefaultRepaired: true,
         _workspaceStatusesDefaultWorkflowMigrated: true
       },
       githubCache: { pr: {}, issue: {} },

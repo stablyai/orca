@@ -3997,10 +3997,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
-              // Why: repo/project headers already reveal actions on hover; tuck
-              // the collapse chevron into that cluster instead of a new surface.
+              // Why: repo/project and status headers use the same compact
+              // section chrome; flat "All" stays a simple label.
               const showHeaderCollapseAffordance =
-                row.count > 0 && (isRepoHeader || isProjectGroupHeader)
+                row.count > 0 &&
+                (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null)
               // Why: non-project section headers like "All" are labels for the
               // flat list, so they should not reserve project hierarchy indent.
               const headerPaddingLeft =
