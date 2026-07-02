@@ -719,6 +719,108 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(checkpoint).not.toHaveBeenCalled()
     })
 
+    describe('full-snapshot cooldown', () => {
+      type CooldownInternals = {
+        client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+        historyManager: {
+          checkpoint: ReturnType<typeof vi.fn>
+          appendIncrements: ReturnType<typeof vi.fn>
+          dispose: ReturnType<typeof vi.fn>
+        }
+        checkpointSessions(
+          sessionIds: Iterable<string>,
+          opts?: { final?: boolean; teardown?: boolean }
+        ): Promise<Set<string>>
+        sessionsNeedingFullCheckpoint: Set<string>
+        lastFullCheckpointAt: Map<string, number>
+      }
+
+      function makeCooldownHarness(takeResult: {
+        overflowed: boolean
+        appendResult?: 'ok' | 'needs-checkpoint'
+      }): CooldownInternals {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const request = vi.fn(async (_type: string, payload: Record<string, unknown>) => {
+          if (payload.includeSnapshot === true) {
+            return { records: [], seq: 2, overflowed: false, snapshot: { cols: 80, rows: 24 } }
+          }
+          return {
+            records: [{ kind: 'output', data: 'x' }],
+            seq: 1,
+            overflowed: takeResult.overflowed,
+            snapshot: null
+          }
+        })
+        const internals = historyAdapter as unknown as CooldownInternals
+        internals.client = { request, disconnect: vi.fn() }
+        internals.historyManager = {
+          checkpoint: vi.fn(async () => {}),
+          appendIncrements: vi.fn(async () => takeResult.appendResult ?? 'ok'),
+          dispose: vi.fn(async () => {})
+        }
+        return internals
+      }
+
+      it('bounds overflow-triggered full snapshots to one per cooldown window', async () => {
+        const internals = makeCooldownHarness({ overflowed: true })
+
+        // First overflow: full snapshot allowed immediately.
+        await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+
+        // Second tick inside the cooldown: the overflow defers and flags the
+        // session; no snapshot write.
+        await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+        expect(internals.sessionsNeedingFullCheckpoint.has('hot')).toBe(true)
+        const requestsAfterSecondTick = internals.client.request.mock.calls.length
+
+        // Ticks 3..24 (a hot session over ~2 minutes): flagged + cooling down
+        // short-circuits with ZERO daemon RPCs and zero disk writes.
+        for (let i = 0; i < 22; i++) {
+          await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
+        }
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+        expect(internals.client.request.mock.calls.length).toBe(requestsAfterSecondTick)
+
+        // Cooldown expiry: the deferred full snapshot lands and clears the flag.
+        internals.lastFullCheckpointAt.set('hot', Date.now() - 46_000)
+        await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(2)
+        expect(internals.sessionsNeedingFullCheckpoint.has('hot')).toBe(false)
+      })
+
+      it('lets final checkpoints bypass the cooldown', async () => {
+        const internals = makeCooldownHarness({ overflowed: true })
+        await internals.checkpointSessions(['hot'])
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+
+        // Cooldown is active, but quit/sleep-time persistence must not be
+        // deferred — stale-on-crash is acceptable, stale-on-clean-exit is not.
+        await expect(internals.checkpointSessions(['hot'], { final: true })).resolves.toEqual(
+          new Set(['hot'])
+        )
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(2)
+      })
+
+      it('defers log-cap (needs-checkpoint) snapshots inside the cooldown', async () => {
+        const internals = makeCooldownHarness({
+          overflowed: false,
+          appendResult: 'needs-checkpoint'
+        })
+        internals.lastFullCheckpointAt.set('capped', Date.now())
+
+        await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set())
+        expect(internals.historyManager.checkpoint).not.toHaveBeenCalled()
+        expect(internals.sessionsNeedingFullCheckpoint.has('capped')).toBe(true)
+
+        internals.lastFullCheckpointAt.set('capped', Date.now() - 46_000)
+        await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set(['capped']))
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+        expect(internals.sessionsNeedingFullCheckpoint.has('capped')).toBe(false)
+      })
+    })
+
     it('does not schedule a checkpoint timer until a session is dirty', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
@@ -1079,6 +1181,62 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
       }
+    })
+
+    it('clears a stale snapshot cooldown when the cold-restore re-anchor is flagged', async () => {
+      // Simulate a previous daemon crash with recoverable history on disk.
+      const sessionId = 'cold-restore-stale-cooldown'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/tmp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'pre-crash output\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        lastFullCheckpointAt: Map<string, number>
+        sessionsNeedingFullCheckpoint: Set<string>
+      }
+      // A daemon respawn inside one adapter keeps this map: seed a fresh
+      // cooldown as if the pre-crash generation just snapshotted.
+      internals.lastFullCheckpointAt.set(sessionId, Date.now())
+
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      // The revived generation has no checkpoint of its own — the re-anchor
+      // must not inherit the previous generation's cooldown.
+      expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
+      expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
+    })
+
+    it('re-anchors a warm reattach the adapter was not already managing', async () => {
+      const sessionId = 'warm-reattach-reanchor'
+      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      await first.spawn({ cols: 80, rows: 24, sessionId })
+      first.dispose()
+
+      // A fresh adapter (app relaunch) attaches to the still-live daemon
+      // session. The old adapter may have drained records it never persisted
+      // (deferred hot-session tick), so appends must not resume until a full
+      // snapshot re-anchors the log.
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        sessionsNeedingFullCheckpoint: Set<string>
+        lastFullCheckpointAt: Map<string, number>
+      }
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(result.isReattach).toBe(true)
+      expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
+      expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
     })
 
     it('returns same cold restore on StrictMode double-mount (sticky cache)', async () => {

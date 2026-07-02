@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
@@ -756,6 +756,55 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+
+  it('does not inherit AppImage runtime env into daemon PTY shells', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const saved = {
+      APPIMAGE: process.env.APPIMAGE,
+      APPDIR: process.env.APPDIR,
+      ARGV0: process.env.ARGV0,
+      OWD: process.env.OWD,
+      APPIMAGE_LIBRARY_PATH: process.env.APPIMAGE_LIBRARY_PATH,
+      PATH: process.env.PATH,
+      LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+    }
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    process.env.APPIMAGE = '/data/apps/orca.appimage'
+    process.env.APPDIR = '/tmp/.mount_orca123'
+    process.env.ARGV0 = '/data/apps/orca.appimage'
+    process.env.OWD = '/home/user/project'
+    process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
+    process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+      delimiter
+    )
+    process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(delimiter)
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.APPIMAGE).toBeUndefined()
+    expect(env.APPDIR).toBeUndefined()
+    expect(env.ARGV0).toBeUndefined()
+    expect(env.OWD).toBeUndefined()
+    expect(env.APPIMAGE_LIBRARY_PATH).toBeUndefined()
+    expect(env.PATH).toBe('/usr/bin')
+    expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
   })
 
   it('does not inherit parent agent hook endpoint for development hook env', () => {

@@ -767,6 +767,8 @@ export type OpenCodeUsageApi = {
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  /** Fires when any app window regains OS focus; returns an unsubscribe. */
+  onWindowFocused: (callback: () => void) => () => void
 }
 
 export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
@@ -1168,11 +1170,13 @@ export type PreloadApi = {
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number) => void
     setActiveRendererPty: (id: string, active: boolean) => void
+    setRendererPtyVisible: (id: string, visible: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+    hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
@@ -1202,7 +1206,13 @@ export type PreloadApi = {
     }>
     resetRendererDeliveryDebug: () => Promise<void>
     onData: (
-      callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
+      callback: (data: {
+        id: string
+        data: string
+        seq?: number
+        rawLength?: number
+        background?: boolean
+      }) => void
     ) => () => void
     onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void

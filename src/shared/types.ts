@@ -2489,6 +2489,8 @@ export type GlobalSettings = {
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number
   terminalTuiScrollSensitivity: number
+  /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
+  terminalTuiScrollSensitivityDefaultedToOne?: boolean
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
@@ -3192,9 +3194,11 @@ export type PersistedUIState = {
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
-  /** One-shot migration flag for the default status workflow order/label:
-   *  Done -> In review -> In progress -> Todo. Exact legacy default payloads
-   *  migrate; customized statuses are preserved. */
+  /** One-shot repair flag for the exact default payload that a short-lived
+   *  build persisted in reverse workflow order. */
+  _workspaceStatusesReorderedDefaultRepaired?: boolean
+  /** One-shot migration flag for default status workflow labels/visuals.
+   *  Exact legacy default payloads migrate; customized statuses are preserved. */
   _workspaceStatusesDefaultWorkflowMigrated?: boolean
   /** One-shot migration flag for the old default blue/violet/emerald status
    *  visuals. Once stamped, valid user-authored colors/icons are preserved. */

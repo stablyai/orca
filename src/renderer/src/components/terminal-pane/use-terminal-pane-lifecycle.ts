@@ -78,8 +78,11 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
-import { reconcileDeadSessions, type ReconcilableBinding } from './terminal-dead-session-reconcile'
 import type { PtyTransport } from './pty-transport'
+import {
+  reconcileMissingSessions,
+  type ReconcilableBinding
+} from './terminal-dead-session-reconcile'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -471,21 +474,6 @@ export function getPreviousVisibleForTerminalPane(args: {
     return null
   }
   return args.previous.isVisible
-}
-
-export function scheduleVisibilityReconcilePass(args: {
-  previousIsVisible: boolean | null
-  isVisible: boolean
-  bindings: Iterable<ReconcilableBinding>
-  listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
-}): boolean {
-  if (!isTerminalPaneVisibilityResume(args)) {
-    return false
-  }
-  // Why: fire-and-forget so the async listSessions IPC never blocks the
-  // synchronous WebGL/fit resume work the user sees first.
-  void reconcileDeadSessions({ bindings: args.bindings, listSessions: args.listSessions })
-  return true
 }
 
 export function useTerminalPaneLifecycle({
@@ -1694,23 +1682,20 @@ export function useTerminalPaneLifecycle({
         noteVisibilityResume?: () => void
       }
       bindingWithVisibility.syncProcessTracking?.()
-      // Why: re-arm the once-per-resume input liveness re-check so the typing
-      // hot path stays off the listSessions IPC between resumes (the re-check
-      // is only useful right after a hidden→visible flip).
+      // Why: visible-resume repairs dropped hidden resizes, but it must not fit
+      // against xterm's transient hidden DOM fallback.
       if (resumedFromHidden) {
         bindingWithVisibility.noteVisibilityResume?.()
       }
     }
-    // Why: the reconcile pass self-gates on becoming visible (resume) — the
-    // effect also fires on hide and initial mount. Initial visible mounts are
-    // fresh PTY startup, so an early listSessions snapshot must not close the
-    // newborn tab before the daemon lists it.
-    scheduleVisibilityReconcilePass({
-      previousIsVisible,
-      isVisible,
-      bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
-      listSessions: () => window.api.pty.listSessions()
-    })
+    if (resumedFromHidden && typeof window.api.pty.hasPty === 'function') {
+      // Why: preserve missed-exit recovery without daemon-wide listSessions;
+      // providers can answer a single-PTY liveness check from in-memory state.
+      reconcileMissingSessions({
+        bindings: panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
+        hasPty: window.api.pty.hasPty
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility and terminal identity changes must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [cwd, isVisible, isVisibleRef, panePtyBindingsRef, tabId])
 

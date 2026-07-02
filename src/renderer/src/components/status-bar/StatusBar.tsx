@@ -912,6 +912,9 @@ function InlineUsageBars({
     ? Math.max(0, Math.round(100 - limits.session.usedPercent))
     : null
   const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
+  const fableLeft = limits.fableWeekly
+    ? Math.max(0, Math.round(100 - limits.fableWeekly.usedPercent))
+    : null
 
   return (
     <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
@@ -943,7 +946,21 @@ function InlineUsageBars({
           </span>
         </div>
       )}
-      {limits.status === 'error' && !limits.session && !limits.weekly && (
+      {fableLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(fableLeft)}`}
+              style={{ width: `${fableLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {fableLeft}
+            {translate('auto.components.status.bar.StatusBar.54e8d6bb2d', '% Fable')}
+          </span>
+        </div>
+      )}
+      {limits.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly && (
         <span className="text-[10px] text-muted-foreground">
           {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
         </span>
@@ -953,7 +970,7 @@ function InlineUsageBars({
 }
 
 function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly
+  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
 }
 
 function InlineUsageSignInAction({
@@ -1053,7 +1070,7 @@ function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly) {
+  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1072,7 +1089,7 @@ function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1109,15 +1126,40 @@ function ProviderSegment({
     )
   }
 
+  const visibleWindows = [
+    p.session
+      ? {
+          key: 'session',
+          window: p.session,
+          label: formatWindowLabel(p.session.windowMinutes)
+        }
+      : null,
+    p.weekly
+      ? {
+          key: 'weekly',
+          window: p.weekly,
+          label: formatWindowLabel(p.weekly.windowMinutes)
+        }
+      : null,
+    p.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          window: p.fableWeekly,
+          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+        }
+      : null
+  ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
-      {p.session && (
-        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
-      )}
-      {p.session && p.weekly && <span className="text-muted-foreground">·</span>}
-      {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
+      {visibleWindows.map((window, index) => (
+        <React.Fragment key={window.key}>
+          {index > 0 && <span className="text-muted-foreground">·</span>}
+          <WindowLabel w={window.window} label={window.label} />
+        </React.Fragment>
+      ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -1643,7 +1685,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'

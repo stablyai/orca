@@ -274,6 +274,29 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
+    const p: ProviderRateLimits = {
+      provider: 'claude',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 20, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      fableWeekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    expect(sections).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Fable', window: p.fableWeekly }
+    ])
+  })
+
   it('returns session and weekly for empty buckets array', () => {
     const p: ProviderRateLimits = {
       provider: 'gemini',
