@@ -2,14 +2,98 @@ import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import type { GlobalSettings } from '../../../../shared/types'
+import {
+  DEFAULT_AUTO_UPDATE_COOLDOWN_DAYS,
+  MAX_AUTO_UPDATE_COOLDOWN_DAYS,
+  MIN_AUTO_UPDATE_COOLDOWN_DAYS
+} from '../../../../shared/constants'
 import { useAppStore } from '../../store'
+import { clampNumber } from '@/lib/terminal-theme'
 import { Button } from '../ui/button'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
-export function GeneralUpdateSettingsSection(): React.JSX.Element {
+type CooldownDraftState = {
+  sourceDays: number
+  draft: string
+}
+
+function getCooldownDaysSetting(settings: GlobalSettings): number {
+  return settings.autoUpdateCooldownDays ?? DEFAULT_AUTO_UPDATE_COOLDOWN_DAYS
+}
+
+function createCooldownDraftState(days: number): CooldownDraftState {
+  return {
+    sourceDays: days,
+    draft: String(days)
+  }
+}
+
+function resolveCooldownDraftState(
+  state: CooldownDraftState,
+  cooldownDays: number
+): CooldownDraftState {
+  return state.sourceDays === cooldownDays ? state : createCooldownDraftState(cooldownDays)
+}
+
+type GeneralUpdateSettingsSectionProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}
+
+export function GeneralUpdateSettingsSection({
+  settings,
+  updateSettings
+}: GeneralUpdateSettingsSectionProps): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const cooldownDays = getCooldownDaysSetting(settings)
+  const [cooldownDraftState, setCooldownDraftState] = useState(() =>
+    createCooldownDraftState(cooldownDays)
+  )
+  const resolvedCooldownDraftState = resolveCooldownDraftState(cooldownDraftState, cooldownDays)
+  if (resolvedCooldownDraftState !== cooldownDraftState) {
+    // Why: settings may change from another window; keep the visible draft
+    // aligned with the persisted value before paint.
+    setCooldownDraftState(resolvedCooldownDraftState)
+  }
+  const cooldownDraft = resolvedCooldownDraftState.draft
+
+  const updateCooldownDraft = (draft: string): void => {
+    setCooldownDraftState((current) => ({
+      ...resolveCooldownDraftState(current, cooldownDays),
+      draft
+    }))
+  }
+
+  const commitCooldownDraft = (): void => {
+    const trimmed = cooldownDraft.trim()
+    if (trimmed === '') {
+      setCooldownDraftState(createCooldownDraftState(cooldownDays))
+      return
+    }
+
+    const value = Number(trimmed)
+    if (!Number.isFinite(value)) {
+      setCooldownDraftState(createCooldownDraftState(cooldownDays))
+      return
+    }
+
+    const next = clampNumber(
+      Math.round(value),
+      MIN_AUTO_UPDATE_COOLDOWN_DAYS,
+      MAX_AUTO_UPDATE_COOLDOWN_DAYS
+    )
+    updateSettings({ autoUpdateCooldownDays: next })
+    setCooldownDraftState((current) => ({
+      ...resolveCooldownDraftState(current, cooldownDays),
+      draft: String(next)
+    }))
+  }
+
   // Why: the 'error' variant of UpdateStatus does not carry a `version` field.
   // The main process emits `{ state: 'error' }` for both check failures (no
   // version known yet) and download/install failures (version was known from
@@ -70,6 +154,62 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           { value0: appVersion ?? '...' }
         )}
       />
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.ed46a7cfcf',
+          'Update cooldown'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralUpdateSettingsSection.4c35dc5ec5',
+          'Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.'
+        )}
+        keywords={[
+          'cooldown',
+          'security',
+          'supply chain',
+          'delay',
+          'days',
+          'stable',
+          'auto update'
+        ]}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.ed46a7cfcf',
+              'Update cooldown'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.GeneralUpdateSettingsSection.4c35dc5ec5',
+              'Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.'
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Input
+            type="number"
+            min={MIN_AUTO_UPDATE_COOLDOWN_DAYS}
+            max={MAX_AUTO_UPDATE_COOLDOWN_DAYS}
+            step={1}
+            value={cooldownDraft}
+            onChange={(event) => updateCooldownDraft(event.target.value)}
+            onBlur={commitCooldownDraft}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitCooldownDraft()
+              }
+            }}
+            className="number-input-clean w-20 text-right tabular-nums"
+          />
+          <span className="text-xs text-muted-foreground">
+            {translate('auto.components.settings.GeneralUpdateSettingsSection.62d7b3afec', 'days')}
+          </span>
+        </div>
+      </SearchableSetting>
 
       <SearchableSetting
         title={translate(
@@ -186,10 +326,15 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             </>
           )}
           {updateStatus.state === 'not-available' &&
-            translate(
-              'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
-              'You’re on the latest version.'
-            )}
+            (updateStatus.heldByCooldown
+              ? translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.updateCooldownHeld',
+                  'A newer stable release is available but is being held by your update cooldown. Use Check for Updates to install it now.'
+                )
+              : translate(
+                  'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
+                  'You’re on the latest version.'
+                ))}
           {updateStatus.state === 'downloading' &&
             translate(
               'auto.components.settings.GeneralUpdateSettingsSection.2a48034c4c',

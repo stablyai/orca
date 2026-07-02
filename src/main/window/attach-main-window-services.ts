@@ -5,6 +5,7 @@ import { app, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
+import { DEFAULT_AUTO_UPDATE_COOLDOWN_DAYS } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -118,6 +119,8 @@ export function attachMainWindowServices(
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+    getAutoUpdateCooldownDays: () =>
+      store.getSettings().autoUpdateCooldownDays ?? DEFAULT_AUTO_UPDATE_COOLDOWN_DAYS,
     onBeforeQuit: async () => {
       try {
         await options?.onBeforeUpdateQuit?.()

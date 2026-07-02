@@ -10,11 +10,18 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
+const OLD_UPDATED_AT = '2026-01-01T00:00:00.000Z'
+
 function buildAtomFeed(tags: string[]): string {
   const entries = tags
-    .map(
-      (tag) =>
-        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+    .map((tag) =>
+      [
+        '<entry>',
+        `<link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/>`,
+        `<title>${tag}</title>`,
+        `<updated>${OLD_UPDATED_AT}</updated>`,
+        '</entry>'
+      ].join('')
     )
     .join('')
   return `<?xml version="1.0" encoding="UTF-8"?><feed>${entries}</feed>`

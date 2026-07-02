@@ -8,6 +8,10 @@ import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
+import {
+  MAX_AUTO_UPDATE_COOLDOWN_DAYS,
+  MIN_AUTO_UPDATE_COOLDOWN_DAYS
+} from '../../shared/constants'
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -94,6 +98,15 @@ export function registerSettingsHandlers(
       sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
         args.terminalScrollbackRows
       )
+    }
+    if ('autoUpdateCooldownDays' in args) {
+      const value = Number(args.autoUpdateCooldownDays)
+      sanitizedArgs.autoUpdateCooldownDays = Number.isFinite(value)
+        ? Math.min(
+            Math.max(Math.trunc(value), MIN_AUTO_UPDATE_COOLDOWN_DAYS),
+            MAX_AUTO_UPDATE_COOLDOWN_DAYS
+          )
+        : MIN_AUTO_UPDATE_COOLDOWN_DAYS
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)

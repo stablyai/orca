@@ -2195,7 +2195,7 @@ export type UpdateStatus =
       // checks straightforward.
       changelog: ChangelogData | null
     }
-  | { state: 'not-available'; userInitiated?: boolean }
+  | { state: 'not-available'; userInitiated?: boolean; heldByCooldown?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
   | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
@@ -2468,6 +2468,8 @@ export type GlobalSettings = {
   appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
+  /** Supply-chain safety: automatic update checks only offer a stable release once it has been published at least this many days. 0 disables. Manual checks, prerelease, and nudges bypass it. */
+  autoUpdateCooldownDays?: number
   editorMinimapEnabled: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean

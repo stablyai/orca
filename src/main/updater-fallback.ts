@@ -7,7 +7,11 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
     case 'checking':
       return right.state === 'checking' && left.userInitiated === right.userInitiated
     case 'not-available':
-      return right.state === 'not-available' && left.userInitiated === right.userInitiated
+      return (
+        right.state === 'not-available' &&
+        left.userInitiated === right.userInitiated &&
+        left.heldByCooldown === right.heldByCooldown
+      )
     case 'available':
       return (
         right.state === 'available' &&

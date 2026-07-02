@@ -5210,7 +5210,11 @@
           "31fd7150cf": "正在检查更新...",
           "3394d1f663": "检查中",
           "d69a09b672": "启动时会自动检查更新。",
-          "7173352632": "空闲"
+          "7173352632": "空闲",
+          "62d7b3afec": "days",
+          "4c35dc5ec5": "Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.",
+          "ed46a7cfcf": "Update cooldown",
+          "updateCooldownHeld": "A newer stable release is available but is being held by your update cooldown. Use Check for Updates to install it now."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "从工作区的“打开方式”菜单中选择可用的应用程序。",
@@ -7400,7 +7404,16 @@
             "161a86a9da": "关闭固定标签页前确认",
             "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "默认项目运行时",
-            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。"
+            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。",
+            "updateCooldownKeywordAutoUpdate": "auto update",
+            "updateCooldownKeywordStable": "stable",
+            "updateCooldownKeywordDays": "days",
+            "updateCooldownKeywordDelay": "delay",
+            "updateCooldownKeywordSupplyChain": "supply chain",
+            "updateCooldownKeywordSecurity": "security",
+            "updateCooldownKeywordCooldown": "cooldown",
+            "updateCooldownDescription": "Delay automatic stable update offers for supply-chain safety.",
+            "updateCooldownTitle": "Update cooldown"
           }
         },
         "git": {

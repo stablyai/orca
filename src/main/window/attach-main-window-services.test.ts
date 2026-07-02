@@ -258,6 +258,23 @@ describe('attachMainWindowServices', () => {
     expect(store.flush).toHaveBeenCalledTimes(1)
   })
 
+  it('wires the live auto update cooldown setting into the auto-updater', () => {
+    let autoUpdateCooldownDays: number | undefined = 4
+    const store = {
+      ...createStore(),
+      getSettings: vi.fn(() => ({ autoUpdateCooldownDays }))
+    }
+
+    attachMainWindowServices(createMainWindow() as never, store as never, createRuntime() as never)
+
+    expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    const opts = setupAutoUpdaterMock.mock.calls[0][1]
+    expect(opts.getAutoUpdateCooldownDays()).toBe(4)
+
+    autoUpdateCooldownDays = undefined
+    expect(opts.getAutoUpdateCooldownDays()).toBe(0)
+  })
+
   it('flushes the store before update quit when no cleanup is injected', async () => {
     const store = createStore()
 

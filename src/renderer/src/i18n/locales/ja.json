@@ -5210,7 +5210,11 @@
           "31fd7150cf": "アップデートをチェックしています...",
           "3394d1f663": "チェック中",
           "d69a09b672": "アップデートは起動時に自動的にチェックされます。",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "62d7b3afec": "days",
+          "4c35dc5ec5": "Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.",
+          "ed46a7cfcf": "Update cooldown",
+          "updateCooldownHeld": "A newer stable release is available but is being held by your update cooldown. Use Check for Updates to install it now."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "ワークスペースの「開く」メニューから利用可能なアプリを選択します。",
@@ -7437,7 +7441,16 @@
             "161a86a9da": "ピン留めしたタブを閉じる前に確認",
             "8e593f04fc": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "updateCooldownKeywordAutoUpdate": "auto update",
+            "updateCooldownKeywordStable": "stable",
+            "updateCooldownKeywordDays": "days",
+            "updateCooldownKeywordDelay": "delay",
+            "updateCooldownKeywordSupplyChain": "supply chain",
+            "updateCooldownKeywordSecurity": "security",
+            "updateCooldownKeywordCooldown": "cooldown",
+            "updateCooldownDescription": "Delay automatic stable update offers for supply-chain safety.",
+            "updateCooldownTitle": "Update cooldown"
           }
         },
         "git": {

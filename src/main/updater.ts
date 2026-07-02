@@ -3,6 +3,7 @@ import { app, BrowserWindow, powerMonitor } from 'electron'
 import type { NsisUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
+import { MAX_AUTO_UPDATE_COOLDOWN_DAYS, MIN_AUTO_UPDATE_COOLDOWN_DAYS } from '../shared/constants'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -32,6 +33,7 @@ type PrimaryEventSuppression = { failureKey: string; error: unknown }
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
+const MS_PER_DAY = 24 * 60 * 60 * 1000
 const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
 const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
 const QUIT_AND_INSTALL_DELAY_MS = 100
@@ -58,6 +60,7 @@ let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
+let _getAutoUpdateCooldownDays: (() => number) | null = null
 let backgroundCheckLaunchPending = false
 // Why: a manually promoted background check can emit an error event before the
 // paired promise catch runs; keep the promotion attached to that launch.
@@ -75,6 +78,7 @@ let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
 let lastNudgeCheckAt = 0
 let publishingWindowLastGoodCheck: { lastGoodTag: string } | null = null
+let cooldownHoldActive = false
 let pendingPrereleaseFallback: {
   primaryTag: string
   fallbackTag: string
@@ -136,6 +140,21 @@ function clearPublishingWindowLastGoodCheck(): void {
 
 function getPublishingWindowLastGoodCheck(): { lastGoodTag: string } | null {
   return publishingWindowLastGoodCheck
+}
+
+function getCooldownHoldActive(): boolean {
+  return cooldownHoldActive
+}
+
+function getAutoUpdateCooldownDays(): number {
+  const rawCooldownDays = _getAutoUpdateCooldownDays?.() ?? 0
+  if (!Number.isFinite(rawCooldownDays)) {
+    return MIN_AUTO_UPDATE_COOLDOWN_DAYS
+  }
+  return Math.min(
+    Math.max(Math.trunc(rawCooldownDays), MIN_AUTO_UPDATE_COOLDOWN_DAYS),
+    MAX_AUTO_UPDATE_COOLDOWN_DAYS
+  )
 }
 
 function getPersistedPendingUpdateNudgeId(): string | null {
@@ -769,7 +788,7 @@ function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): v
   )
 }
 
-async function pinDefaultReleaseFeed(): Promise<void> {
+async function pinDefaultReleaseFeed(opts: { bypassCooldown?: boolean } = {}): Promise<void> {
   const autoUpdater = getAutoUpdater()
   // Why: the /releases/latest/download/ redirect can move between the update
   // check and the later manual download click. Pinning to the concrete tag
@@ -779,11 +798,16 @@ async function pinDefaultReleaseFeed(): Promise<void> {
   // newer RC or the next stable. Stable users should only resolve stable tags.
   const currentVersion = app.getVersion()
   const includePrerelease = includePrereleaseActive || isPrereleaseVersion(currentVersion)
+  const cooldownDays = getAutoUpdateCooldownDays()
+  const applyCooldown = !opts.bypassCooldown && !includePrerelease && cooldownDays > 0
+  cooldownHoldActive = false
   const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
     currentVersion,
     includePrerelease ? 2 : 1,
     {
-      includePrerelease
+      includePrerelease,
+      minReleaseAgeMs: applyCooldown ? cooldownDays * MS_PER_DAY : undefined,
+      nowMs: Date.now()
     }
   )
   const newerTag = releaseTagsResult.tags[0] ?? null
@@ -832,6 +856,15 @@ async function pinDefaultReleaseFeed(): Promise<void> {
       `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
     )
     throw new Error('Latest release assets are still publishing')
+  } else if (releaseTagsResult.state === 'cooldown') {
+    clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
+    cooldownHoldActive = true
+    const url = getReleaseDownloadUrl(`v${currentVersion}`)
+    console.info(
+      `[updater] release feed held by cooldown: current=${currentVersion} cooldownDays=${cooldownDays}`
+    )
+    autoUpdater.setFeedURL({ provider: 'generic', url })
   } else {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()
@@ -936,7 +969,7 @@ function runBackgroundUpdateCheck(
     markUpdateCheckLaunched(attemptId)
     return autoUpdater.checkForUpdates()
   }
-  const run = pinDefaultReleaseFeed().then(launch)
+  const run = pinDefaultReleaseFeed({ bypassCooldown: awaitingNudgeCheckOutcome }).then(launch)
   void Promise.resolve(run)
     .then(() => handleSettledUpdateCheckPromise(attemptId))
     .catch((err) => {
@@ -1026,7 +1059,7 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
     markUpdateCheckLaunched(attemptId)
     return autoUpdater.checkForUpdates()
   }
-  const run = pinDefaultReleaseFeed().then(launch)
+  const run = pinDefaultReleaseFeed({ bypassCooldown: true }).then(launch)
   void Promise.resolve(run)
     .then(() => handleSettledUpdateCheckPromise(attemptId))
     .catch((err) => {
@@ -1136,6 +1169,7 @@ export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
     getLastUpdateCheckAt?: () => number | null
+    getAutoUpdateCooldownDays?: () => number
     onBeforeQuit?: () => void | Promise<void>
     setLastUpdateCheckAt?: (timestamp: number) => void
     getPendingUpdateNudgeId?: () => string | null
@@ -1148,6 +1182,7 @@ export function setupAutoUpdater(
   onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
   persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
   _getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
+  _getAutoUpdateCooldownDays = opts?.getAutoUpdateCooldownDays ?? null
   _getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
@@ -1210,6 +1245,7 @@ export function setupAutoUpdater(
     autoUpdater,
     clearAvailableUpdateContext,
     consumeMissingManifestPrereleaseFallbackResult,
+    getCooldownHoldActive,
     getMissingManifestPrereleaseFallbackUserInitiated,
     getPublishingWindowLastGoodCheck,
     getActiveUpdateCheckEventAttemptId,

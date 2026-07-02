@@ -8,12 +8,27 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-function buildAtomFeed(tags: string[]): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><feed>${tags
-    .map(
-      (tag) =>
-        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
-    )
+type AtomFeedEntry = string | { tag: string; updated?: string }
+
+const OLD_UPDATED_AT = '2026-01-01T00:00:00.000Z'
+
+function getAtomFeedEntryTag(entry: AtomFeedEntry): string {
+  return typeof entry === 'string' ? entry : entry.tag
+}
+
+function buildAtomFeed(entries: AtomFeedEntry[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><feed>${entries
+    .map((entry) => {
+      const tag = getAtomFeedEntryTag(entry)
+      const updated = typeof entry === 'string' ? OLD_UPDATED_AT : entry.updated
+      return [
+        '<entry>',
+        `<link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/>`,
+        `<title>${tag}</title>`,
+        updated === undefined ? '' : `<updated>${updated}</updated>`,
+        '</entry>'
+      ].join('')
+    })
     .join('')}</feed>`
 }
 
@@ -33,7 +48,7 @@ function isPlatformManifestRequest(url: string): boolean {
 }
 
 function respondWithAtom(
-  tags: string[],
+  tags: AtomFeedEntry[],
   missingManifestTags: string[] = [],
   missingAssetTags: string[] = []
 ): void {
@@ -282,6 +297,96 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     await expect(fetchNewerReleaseTagsWithReadiness('1.4.27', 1)).resolves.toEqual({
       tags: [],
       state: 'not-ready'
+    })
+  })
+
+  it('reports cooldown when every newer stable release is too fresh', async () => {
+    respondWithAtom([{ tag: 'v1.4.28', updated: '2026-06-28T00:00:00.000Z' }])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.27', 1, {
+        includePrerelease: false,
+        minReleaseAgeMs: 3 * 24 * 60 * 60 * 1000,
+        nowMs: Date.parse('2026-06-29T00:00:00.000Z')
+      })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'cooldown'
+    })
+  })
+
+  it('returns an older newer release when the newest release is inside the cooldown', async () => {
+    respondWithAtom([
+      { tag: 'v1.4.27', updated: '2026-06-28T00:00:00.000Z' },
+      { tag: 'v1.4.26', updated: '2026-06-20T00:00:00.000Z' }
+    ])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.25', 1, {
+        includePrerelease: false,
+        minReleaseAgeMs: 3 * 24 * 60 * 60 * 1000,
+        nowMs: Date.parse('2026-06-29T00:00:00.000Z')
+      })
+    ).resolves.toEqual({
+      tags: ['v1.4.26'],
+      state: 'ready'
+    })
+  })
+
+  it('returns the newest newer release when all newer releases are aged', async () => {
+    respondWithAtom([
+      { tag: 'v1.4.27', updated: '2026-06-20T00:00:00.000Z' },
+      { tag: 'v1.4.26', updated: '2026-06-19T00:00:00.000Z' }
+    ])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.25', 1, {
+        includePrerelease: false,
+        minReleaseAgeMs: 3 * 24 * 60 * 60 * 1000,
+        nowMs: Date.parse('2026-06-29T00:00:00.000Z')
+      })
+    ).resolves.toEqual({
+      tags: ['v1.4.27'],
+      state: 'ready'
+    })
+  })
+
+  it('keeps existing behavior when no minimum release age is configured', async () => {
+    respondWithAtom([{ tag: 'v1.4.27', updated: '2026-06-28T00:00:00.000Z' }])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.26', 1, {
+        includePrerelease: false,
+        nowMs: Date.parse('2026-06-29T00:00:00.000Z')
+      })
+    ).resolves.toEqual({
+      tags: ['v1.4.27'],
+      state: 'ready'
+    })
+  })
+
+  it('excludes newer candidates with missing updated timestamps while cooldown is active', async () => {
+    respondWithAtom([{ tag: 'v1.4.27' }])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(
+      fetchNewerReleaseTagsWithReadiness('1.4.26', 1, {
+        includePrerelease: false,
+        minReleaseAgeMs: 3 * 24 * 60 * 60 * 1000,
+        nowMs: Date.parse('2026-06-29T00:00:00.000Z')
+      })
+    ).resolves.toEqual({
+      tags: [],
+      state: 'cooldown'
     })
   })
 })

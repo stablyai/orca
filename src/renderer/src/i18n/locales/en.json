@@ -5225,7 +5225,11 @@
           "31fd7150cf": "Checking for updates...",
           "3394d1f663": "checking",
           "d69a09b672": "Updates are checked automatically on launch.",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "62d7b3afec": "days",
+          "4c35dc5ec5": "Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.",
+          "ed46a7cfcf": "Update cooldown",
+          "updateCooldownHeld": "A newer stable release is available but is being held by your update cooldown. Use Check for Updates to install it now."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
@@ -7353,6 +7357,15 @@
             "f89a94773c": "update",
             "79ff46776e": "Check for app updates and install a newer Orca version.",
             "e15af4eb64": "Check for Updates",
+            "updateCooldownKeywordAutoUpdate": "auto update",
+            "updateCooldownKeywordStable": "stable",
+            "updateCooldownKeywordDays": "days",
+            "updateCooldownKeywordDelay": "delay",
+            "updateCooldownKeywordSupplyChain": "supply chain",
+            "updateCooldownKeywordSecurity": "security",
+            "updateCooldownKeywordCooldown": "cooldown",
+            "updateCooldownDescription": "Delay automatic stable update offers for supply-chain safety.",
+            "updateCooldownTitle": "Update cooldown",
             "6382fe9724": "npx",
             "baa263d6d8": "agents",
             "bda108e66c": "skill",

@@ -190,7 +190,11 @@ export function GeneralPane({
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (
-      <GeneralUpdateSettingsSection key="updates" />
+      <GeneralUpdateSettingsSection
+        key="updates"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null
     // Note: the Support section is rendered outside this array so it can own
     // its own loading placeholder and its own collapsing Separator. Without

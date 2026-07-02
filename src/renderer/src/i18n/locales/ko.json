@@ -5210,7 +5210,11 @@
           "31fd7150cf": "업데이트 확인 중...",
           "3394d1f663": "확인 중",
           "d69a09b672": "업데이트는 시작 시 자동으로 확인됩니다.",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "62d7b3afec": "days",
+          "4c35dc5ec5": "Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.",
+          "ed46a7cfcf": "Update cooldown",
+          "updateCooldownHeld": "A newer stable release is available but is being held by your update cooldown. Use Check for Updates to install it now."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "워크스페이스의 열기 메뉴에서 사용 가능한 앱을 선택하세요.",
@@ -7400,7 +7404,16 @@
             "161a86a9da": "고정된 탭을 닫기 전에 확인",
             "8e593f04fc": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
             "defaultProjectRuntime": "기본 프로젝트 런타임",
-            "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다."
+            "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다.",
+            "updateCooldownKeywordAutoUpdate": "auto update",
+            "updateCooldownKeywordStable": "stable",
+            "updateCooldownKeywordDays": "days",
+            "updateCooldownKeywordDelay": "delay",
+            "updateCooldownKeywordSupplyChain": "supply chain",
+            "updateCooldownKeywordSecurity": "security",
+            "updateCooldownKeywordCooldown": "cooldown",
+            "updateCooldownDescription": "Delay automatic stable update offers for supply-chain safety.",
+            "updateCooldownTitle": "Update cooldown"
           }
         },
         "git": {

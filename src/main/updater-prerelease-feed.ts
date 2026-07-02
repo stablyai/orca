@@ -10,7 +10,9 @@ const MAX_MANIFEST_PROBE_CANDIDATES = 6
 // Why: GitHub's atom feed lists every release (prerelease or stable) in a
 // single flat list. Each entry has a /releases/tag/<tag> URL we can mine
 // without any channel filtering.
-const TAG_HREF_RE = /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/g
+const TAG_HREF_RE = /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/
+const ENTRY_RE = /<entry\b[\s\S]*?<\/entry>/gi
+const UPDATED_RE = /<updated>([^<]+)<\/updated>/i
 
 export function getReleaseDownloadUrl(tag: string): string {
   return `${RELEASES_DOWNLOAD_BASE}/${encodeURIComponent(tag)}`
@@ -41,6 +43,7 @@ export function normalizeTagToVersion(tag: string): string {
 type ReleaseFeedTag = {
   tag: string
   version: string
+  publishedAtMs: number | null
 }
 
 async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
@@ -55,11 +58,19 @@ async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
     const body = await res.text()
     const tags: ReleaseFeedTag[] = []
 
-    for (const match of body.matchAll(TAG_HREF_RE)) {
-      const tag = match[1]
+    for (const [entry] of body.matchAll(ENTRY_RE)) {
+      const tag = entry.match(TAG_HREF_RE)?.[1]
+      if (!tag) {
+        continue
+      }
       const version = normalizeTagToVersion(tag)
       if (isValidVersion(version)) {
-        tags.push({ tag, version })
+        const publishedAtMs = Date.parse(entry.match(UPDATED_RE)?.[1] ?? '')
+        tags.push({
+          tag,
+          version,
+          publishedAtMs: Number.isFinite(publishedAtMs) ? publishedAtMs : null
+        })
       }
     }
 
@@ -156,11 +167,13 @@ async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
  */
 type FetchNewerReleaseTagOptions = {
   includePrerelease?: boolean
+  minReleaseAgeMs?: number
+  nowMs?: number
 }
 
 export type FetchNewerReleaseTagsResult = {
   tags: string[]
-  state: 'ready' | 'no-newer' | 'not-ready' | 'unavailable'
+  state: 'ready' | 'no-newer' | 'not-ready' | 'unavailable' | 'cooldown'
   lastGoodTag?: string
 }
 
@@ -200,12 +213,28 @@ export async function fetchNewerReleaseTagsWithReadiness(
     return { tags: [], state: 'no-newer' }
   }
 
+  const minReleaseAgeMs = options.minReleaseAgeMs ?? 0
+  const nowMs = options.nowMs ?? Date.now()
+  const releaseCandidates =
+    minReleaseAgeMs > 0
+      ? candidates
+          .slice(newestNewerIndex)
+          .filter(({ version }) => compareVersions(version, currentVersion) > 0)
+          .filter(({ publishedAtMs }) => {
+            if (publishedAtMs === null) {
+              return false
+            }
+            return nowMs - publishedAtMs >= minReleaseAgeMs
+          })
+      : candidates.slice(newestNewerIndex)
+
+  if (minReleaseAgeMs > 0 && releaseCandidates.length === 0) {
+    return { tags: [], state: 'cooldown' }
+  }
+
   // Why: a cancelled release can leave several feed entries without manifests,
   // but update checks must not stall on an unbounded run of 5s probes.
-  const probeCandidates = candidates.slice(
-    newestNewerIndex,
-    newestNewerIndex + MAX_MANIFEST_PROBE_CANDIDATES
-  )
+  const probeCandidates = releaseCandidates.slice(0, MAX_MANIFEST_PROBE_CANDIDATES)
   const manifestResults = await Promise.all(
     probeCandidates.map(async ({ tag, version }) => ({
       tag,

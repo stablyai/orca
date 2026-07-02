@@ -111,6 +111,9 @@ export const RICH_MARKDOWN_MAX_SIZE_BYTES = 300 * 1024
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
 export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
+export const DEFAULT_AUTO_UPDATE_COOLDOWN_DAYS = 0
+export const MIN_AUTO_UPDATE_COOLDOWN_DAYS = 0
+export const MAX_AUTO_UPDATE_COOLDOWN_DAYS = 30
 
 // Why: initial threshold of agents spawned (since last update) before we show
 // the star-on-GitHub notification. Doubles each time the user dismisses
@@ -202,6 +205,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+    autoUpdateCooldownDays: DEFAULT_AUTO_UPDATE_COOLDOWN_DAYS,
     editorMinimapEnabled: false,
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),

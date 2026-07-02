@@ -20,6 +20,7 @@ type UpdaterHandlerContext = {
   clearBackgroundCheckLaunchPending: () => void
   clearAvailableUpdateContext: () => void
   consumeMissingManifestPrereleaseFallbackResult: () => { userInitiated: boolean } | null
+  getCooldownHoldActive: () => boolean
   getPublishingWindowLastGoodCheck: () => { lastGoodTag: string } | null
   getMissingManifestPrereleaseFallbackUserInitiated: () => boolean | null
   getCurrentStatus: () => UpdateStatus
@@ -57,6 +58,7 @@ export function registerAutoUpdaterHandlers({
   clearBackgroundCheckLaunchPending,
   clearAvailableUpdateContext,
   consumeMissingManifestPrereleaseFallbackResult,
+  getCooldownHoldActive,
   getPublishingWindowLastGoodCheck,
   getMissingManifestPrereleaseFallbackUserInitiated,
   getCurrentStatus,
@@ -161,7 +163,11 @@ export function registerAutoUpdaterHandlers({
           scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
         }
       }
-      sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+      sendStatus({
+        state: 'not-available',
+        userInitiated: wasUserInitiated || undefined,
+        heldByCooldown: getCooldownHoldActive() || undefined
+      })
       return
     }
 
@@ -233,7 +239,11 @@ export function registerAutoUpdaterHandlers({
         scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
       }
     }
-    sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+    sendStatus({
+      state: 'not-available',
+      userInitiated: wasUserInitiated || undefined,
+      heldByCooldown: getCooldownHoldActive() || undefined
+    })
   })
 
   autoUpdater.on('download-progress', (progress) => {

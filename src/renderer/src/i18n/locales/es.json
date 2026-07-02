@@ -5225,7 +5225,11 @@
           "31fd7150cf": "Buscando actualizaciones...",
           "3394d1f663": "de cheques",
           "d69a09b672": "Las actualizaciones se verifican automáticamente al iniciarse.",
-          "7173352632": "idle"
+          "7173352632": "idle",
+          "62d7b3afec": "days",
+          "4c35dc5ec5": "Automatic update checks wait this many days after a stable release is published before offering it. Manual checks ignore the cooldown. Set to 0 to disable. Nothing is installed automatically.",
+          "ed46a7cfcf": "Update cooldown",
+          "updateCooldownHeld": "A newer stable release is available but is being held by your update cooldown. Use Check for Updates to install it now."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Elija las aplicaciones disponibles en el menú Abrir en de un espacio de trabajo.",
@@ -7415,7 +7419,16 @@
             "161a86a9da": "Confirmar antes de cerrar pestañas fijadas",
             "8e593f04fc": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "updateCooldownKeywordAutoUpdate": "auto update",
+            "updateCooldownKeywordStable": "stable",
+            "updateCooldownKeywordDays": "days",
+            "updateCooldownKeywordDelay": "delay",
+            "updateCooldownKeywordSupplyChain": "supply chain",
+            "updateCooldownKeywordSecurity": "security",
+            "updateCooldownKeywordCooldown": "cooldown",
+            "updateCooldownDescription": "Delay automatic stable update offers for supply-chain safety.",
+            "updateCooldownTitle": "Update cooldown"
           }
         },
         "git": {

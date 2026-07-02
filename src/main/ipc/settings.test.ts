@@ -306,6 +306,31 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('normalizes auto update cooldown days from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ autoUpdateCooldownDays: 0 })
+    store.updateSettings.mockReturnValue({ autoUpdateCooldownDays: 30 })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { autoUpdateCooldownDays: 31.8 })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { autoUpdateCooldownDays: 30 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+
+    store.updateSettings.mockClear()
+    await handler(settingsInvokeEvent, { autoUpdateCooldownDays: Number.NaN })
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { autoUpdateCooldownDays: 0 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('normalizes custom terminal themes from renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ terminalCustomThemes: [] })
     store.updateSettings.mockReturnValue({ terminalCustomThemes: [] })

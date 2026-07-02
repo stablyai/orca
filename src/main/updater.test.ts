@@ -885,9 +885,14 @@ describe('updater', () => {
     resolveStableCheck()
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.35', 2, {
-        includePrerelease: true
-      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.4.35',
+        2,
+        expect.objectContaining({
+          includePrerelease: true,
+          minReleaseAgeMs: undefined
+        })
+      )
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
@@ -999,9 +1004,14 @@ describe('updater', () => {
     checkForUpdatesFromMenu({ includePrerelease: true })
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
-        includePrerelease: true
-      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.3.17',
+        2,
+        expect.objectContaining({
+          includePrerelease: true,
+          minReleaseAgeMs: undefined
+        })
+      )
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
         url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
@@ -1735,9 +1745,14 @@ describe('updater', () => {
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17-rc.1', 2, {
-        includePrerelease: true
-      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.3.17-rc.1',
+        2,
+        expect.objectContaining({
+          includePrerelease: true,
+          minReleaseAgeMs: undefined
+        })
+      )
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
         url: 'https://github.com/stablyai/orca/releases/download/v1.3.17-rc.2'
@@ -1791,6 +1806,197 @@ describe('updater', () => {
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
       url: 'https://github.com/stablyai/orca/releases/latest/download'
+    })
+  })
+
+  it('passes a minimum release age for ordinary background checks', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-29T12:00:00.000Z'))
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      getAutoUpdateCooldownDays: () => 3
+    })
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.0.51', 1, {
+        includePrerelease: false,
+        minReleaseAgeMs: 3 * 24 * 60 * 60 * 1000,
+        nowMs: Date.parse('2026-06-29T12:00:00.000Z')
+      })
+    })
+  })
+
+  it('bypasses cooldown for manual, prerelease, and nudge-triggered checks', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutoUpdateCooldownDays: () => 7
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.0.51',
+        1,
+        expect.objectContaining({
+          includePrerelease: false,
+          minReleaseAgeMs: undefined
+        })
+      )
+    })
+
+    vi.resetModules()
+    autoUpdaterMock.reset()
+    fetchNewerReleaseTagsMock.mockReset().mockResolvedValue({ tags: [], state: 'no-newer' })
+    appMock.getVersion.mockReturnValue('1.0.52-rc.1')
+
+    const { setupAutoUpdater: setupPrereleaseUpdater } = await import('./updater')
+    setupPrereleaseUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      getAutoUpdateCooldownDays: () => 7
+    })
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.0.52-rc.1',
+        2,
+        expect.objectContaining({
+          includePrerelease: true,
+          minReleaseAgeMs: undefined
+        })
+      )
+    })
+
+    vi.resetModules()
+    autoUpdaterMock.reset()
+    appMock.getVersion.mockReturnValue('1.0.51')
+    fetchNudgeMock.mockResolvedValue({ id: 'campaign-1', minVersion: '1.0.0' })
+    shouldApplyNudgeMock.mockReturnValue(true)
+    fetchNewerReleaseTagsMock.mockReset().mockResolvedValue({ tags: [], state: 'no-newer' })
+
+    const { setupAutoUpdater: setupNudgeUpdater } = await import('./updater')
+    setupNudgeUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getPendingUpdateNudgeId: () => null,
+      getDismissedUpdateNudgeId: () => null,
+      setPendingUpdateNudgeId: vi.fn(),
+      getAutoUpdateCooldownDays: () => 7
+    })
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.0.51',
+        1,
+        expect.objectContaining({
+          includePrerelease: false,
+          minReleaseAgeMs: undefined
+        })
+      )
+    })
+  })
+
+  it('pins to the current release and tags not-available while held by cooldown', async () => {
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({ tags: [], state: 'cooldown' })
+      .mockResolvedValueOnce({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-not-available')
+      })
+      return Promise.resolve(undefined)
+    })
+    const sendMock = vi.fn()
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    const mainWindow = { webContents: { send: sendMock } }
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      getAutoUpdateCooldownDays: () => 3
+    })
+    const feedCallsBeforePreflight = autoUpdaterMock.setFeedURL.mock.calls.length
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'not-available',
+        userInitiated: undefined,
+        heldByCooldown: true
+      })
+    })
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
+    })
+    expect(
+      autoUpdaterMock.setFeedURL.mock.calls.slice(feedCallsBeforePreflight)
+    ).not.toContainEqual([
+      {
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/latest/download'
+      }
+    ])
+
+    sendMock.mockClear()
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'not-available',
+        userInitiated: true,
+        heldByCooldown: undefined
+      })
+    })
+  })
+
+  it('clears stale cooldown holds before a later no-newer cycle emits', async () => {
+    vi.useFakeTimers()
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({ tags: [], state: 'cooldown' })
+      .mockResolvedValueOnce({ tags: [], state: 'no-newer' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
+        return new Promise(() => {})
+      }
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-not-available')
+      })
+      return Promise.resolve(undefined)
+    })
+    const sendMock = vi.fn()
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    const mainWindow = { webContents: { send: sendMock } }
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      getAutoUpdateCooldownDays: () => 3
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    await vi.advanceTimersByTimeAsync(45 * 1000)
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'not-available',
+        userInitiated: undefined,
+        heldByCooldown: undefined
+      })
     })
   })
 
@@ -2885,9 +3091,14 @@ describe('updater', () => {
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 1, {
-        includePrerelease: false
-      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.3.17',
+        1,
+        expect.objectContaining({
+          includePrerelease: false,
+          minReleaseAgeMs: undefined
+        })
+      )
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
@@ -2912,9 +3123,14 @@ describe('updater', () => {
     checkForUpdatesFromMenu({ includePrerelease: true })
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
-        includePrerelease: true
-      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(
+        '1.3.17',
+        2,
+        expect.objectContaining({
+          includePrerelease: true,
+          minReleaseAgeMs: undefined
+        })
+      )
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
     expect(autoUpdaterMock.allowPrerelease).toBe(true)
