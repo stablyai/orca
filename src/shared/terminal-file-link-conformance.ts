@@ -63,6 +63,12 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     expected: { pathText: '/tmp/final report.json', line: null, column: null }
   },
   {
+    name: 'spaced path ending in a dotfile',
+    lineText: 'wrote /tmp/My Project/.env for you',
+    tapText: '.env',
+    expected: { pathText: '/tmp/My Project/.env', line: null, column: null }
+  },
+  {
     name: 'first of two spaced candidates',
     lineText: 'see /tmp/a.txt and /tmp/b.txt done',
     tapText: 'a.txt',

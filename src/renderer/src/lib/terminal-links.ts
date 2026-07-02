@@ -255,6 +255,8 @@ function insertClaimedRange(claimedRanges: [number, number][], range: [number, n
 }
 
 function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
+  // Why: keep one extension-terminated path, but drop trailing prose or a
+  // second unrelated path that the broad spaced-path scan also captured.
   let selected: string | null = null
   const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
   let match: RegExpExecArray | null

@@ -51,7 +51,7 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
 
 	  function trimSpacedPathTrailingProse(range, col) {
 	    var selected = null;
-	    var extensionPrefixPattern = /.+?\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g;
+	    var extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g;
 	    var match;
 	    while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
 	      var text = range.text.slice(0, match.index + match[0].length);

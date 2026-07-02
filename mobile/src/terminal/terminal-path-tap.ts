@@ -83,7 +83,7 @@ function trimSpacedPathTrailingProse(
   col?: number
 ): (Span & { text: string }) | null {
   let selected: string | null = null
-  const extensionPrefixPattern = /.+?\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
   let match: RegExpExecArray | null
   while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
     const text = range.text.slice(0, match.index + match[0].length)
