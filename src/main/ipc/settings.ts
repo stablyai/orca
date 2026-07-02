@@ -118,7 +118,7 @@ export function registerSettingsHandlers(
       before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
     ) {
       try {
-        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
+        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result)
       } catch (error) {
         console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
       }

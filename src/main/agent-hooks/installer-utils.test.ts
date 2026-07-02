@@ -278,6 +278,23 @@ describe('writeManagedScript', () => {
       expect(statSync(scriptPath).mode & 0o111).not.toBe(0)
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not rewrite or chmod an unchanged executable script',
+    () => {
+      const scriptPath = join(tmpDir, 'agent-hooks', 'claude-hook.sh')
+
+      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
+      const before = statSync(scriptPath)
+
+      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
+      const after = statSync(scriptPath)
+
+      expect(after.mtimeMs).toBe(before.mtimeMs)
+      expect(after.ctimeMs).toBe(before.ctimeMs)
+      expect(after.mode & 0o111).not.toBe(0)
+    }
+  )
 })
 
 describe('wrapPosixHookCommand', () => {

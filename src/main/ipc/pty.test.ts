@@ -8,6 +8,7 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
+import type * as ClaudeHookServiceModule from '../claude/hook-service'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -38,8 +39,10 @@ const {
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
+  claudeHookInstallMock,
   mimoCodeBuildPtyEnvMock,
   buildAgentHookEnvMock,
+  agentHookPosixEndpointFilePathMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
@@ -69,9 +72,11 @@ const {
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   mimoCodeBuildPtyEnvMock: vi.fn(),
+  claudeHookInstallMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
+  agentHookPosixEndpointFilePathMock: vi.fn(),
   clearAgentHookPaneStateMock: vi.fn(),
   registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
@@ -126,6 +131,16 @@ vi.mock('../opencode/hook-service', () => ({
   }
 }))
 
+vi.mock('../claude/hook-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof ClaudeHookServiceModule>()
+  return {
+    ...actual,
+    claudeHookService: {
+      install: claudeHookInstallMock
+    }
+  }
+})
+
 vi.mock('../mimo/hook-service', () => ({
   mimoCodeHookService: {
     buildPtyEnv: mimoCodeBuildPtyEnvMock
@@ -135,6 +150,9 @@ vi.mock('../mimo/hook-service', () => ({
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
     buildPtyEnv: buildAgentHookEnvMock,
+    get posixEndpointFilePath() {
+      return agentHookPosixEndpointFilePathMock()
+    },
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
     clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
@@ -286,9 +304,11 @@ describe('registerPtyHandlers', () => {
     getPathMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
+    claudeHookInstallMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
+    agentHookPosixEndpointFilePathMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
@@ -330,6 +350,13 @@ describe('registerPtyHandlers', () => {
         ? '/tmp/orca-opencode-overlay'
         : '/tmp/orca-opencode-config'
     }))
+    claudeHookInstallMock.mockReturnValue({
+      agent: 'claude',
+      state: 'installed',
+      configPath: '/tmp/claude/settings.json',
+      managedHooksPresent: true,
+      detail: null
+    })
     mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
       MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'
     }))
@@ -337,6 +364,9 @@ describe('registerPtyHandlers', () => {
       ORCA_AGENT_HOOK_PORT: '5678',
       ORCA_AGENT_HOOK_TOKEN: 'agent-token'
     })
+    agentHookPosixEndpointFilePathMock.mockReturnValue(
+      '/tmp/orca-user-data/agent-hooks/endpoint.env'
+    )
     piBuildPtyEnvMock.mockImplementation(
       (_ptyId: string, existingAgentDir?: string, kind?: string) =>
         kind === 'omp'
@@ -692,6 +722,224 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
       expect(hasLiveClaudePtys()).toBe(false)
+    })
+
+    it('repairs Claude hooks in the prepared config dir before pty:spawn launches Claude', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude-personal',
+        runtime: 'host' as const,
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/claude-personal' },
+        stripAuthEnv: false,
+        provenance: 'managed:personal'
+      }))
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        (() => ({ agentStatusHooksEnabled: true })) as never,
+        prepareClaudeAuth
+      )
+
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude'
+      })) as { id: string }
+
+      expect(claudeHookInstallMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          configDir: '/tmp/claude-personal',
+          runtime: 'host'
+        }),
+        { verifyStatus: false }
+      )
+      expect(claudeHookInstallMock.mock.invocationCallOrder[0]).toBeLessThan(
+        spawnMock.mock.invocationCallOrder[0]
+      )
+      expect(spawnMock).toHaveBeenCalled()
+      await handlers.get('pty:kill')!(null, { id: result.id })
+    })
+
+    it('continues Claude pty:spawn when prepared hook repair fails', async () => {
+      claudeHookInstallMock.mockImplementation(() => {
+        throw new Error('settings locked')
+      })
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude-locked',
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/claude-locked' },
+        stripAuthEnv: false,
+        provenance: 'managed:locked'
+      }))
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        (() => ({ agentStatusHooksEnabled: true })) as never,
+        prepareClaudeAuth
+      )
+
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude'
+      })) as { id: string }
+      expect(spawnMock).toHaveBeenCalled()
+      await handlers.get('pty:kill')!(null, { id: result.id })
+    })
+
+    it('does not repair Claude hooks when agent status hooks are disabled', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude-disabled',
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/claude-disabled' },
+        stripAuthEnv: false,
+        provenance: 'managed:disabled'
+      }))
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        (() => ({ agentStatusHooksEnabled: false })) as never,
+        prepareClaudeAuth
+      )
+
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude'
+      })) as { id: string }
+
+      expect(claudeHookInstallMock).not.toHaveBeenCalled()
+      await handlers.get('pty:kill')!(null, { id: result.id })
+    })
+
+    it('does not run local Claude hook repair for SSH launches', async () => {
+      const sshSpawn = vi.fn(async () => ({ id: 'ssh-pty' }))
+      registerSshPtyProvider('ssh-1', {
+        spawn: sshSpawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        shutdown: vi.fn(),
+        sendSignal: vi.fn(),
+        getCwd: vi.fn(),
+        getInitialCwd: vi.fn(),
+        clearBuffer: vi.fn(),
+        acknowledgeDataEvent: vi.fn(),
+        hasChildProcesses: vi.fn(),
+        getForegroundProcess: vi.fn(),
+        serialize: vi.fn(),
+        revive: vi.fn(),
+        onData: vi.fn(() => () => {}),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => []),
+        attach: vi.fn(),
+        getDefaultShell: vi.fn(),
+        getProfiles: vi.fn()
+      } as never)
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude-ssh',
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/claude-ssh' },
+        stripAuthEnv: false,
+        provenance: 'managed:ssh'
+      }))
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        (() => ({ agentStatusHooksEnabled: true })) as never,
+        prepareClaudeAuth
+      )
+
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude',
+        connectionId: 'ssh-1'
+      })
+
+      expect(prepareClaudeAuth).not.toHaveBeenCalled()
+      expect(claudeHookInstallMock).not.toHaveBeenCalled()
+      expect(sshSpawn).toHaveBeenCalled()
+    })
+
+    it('passes WSL Claude config dirs to hook repair without host-path settings commands', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.claude-managed',
+        runtime: 'wsl' as const,
+        wslDistro: 'Ubuntu',
+        wslLinuxConfigDir: '/home/dev/.claude-managed',
+        envPatch: { CLAUDE_CONFIG_DIR: '/home/dev/.claude-managed' },
+        stripAuthEnv: false,
+        provenance: 'managed:wsl'
+      }))
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        (() => ({ agentStatusHooksEnabled: true })) as never,
+        prepareClaudeAuth
+      )
+
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude',
+        shellOverride: 'wsl.exe'
+      })) as { id: string }
+
+      expect(claudeHookInstallMock).toHaveBeenCalledWith(
+        {
+          configDir: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.claude-managed',
+          runtime: 'wsl',
+          wslLinuxConfigDir: '/home/dev/.claude-managed'
+        },
+        { verifyStatus: false }
+      )
+      await handlers.get('pty:kill')!(null, { id: result.id })
+    })
+
+    it('repairs Claude hooks before runtime-controller spawned Claude launches', async () => {
+      type RuntimeSpawnController = {
+        spawn(args: {
+          cols: number
+          rows: number
+          worktreeId?: string
+          command?: string
+          env?: Record<string, string>
+        }): Promise<{ id: string }>
+      }
+      const runtime = {
+        setPtyController: vi.fn(),
+        preAllocateHandleForPty: vi.fn(() => 'term_runtime'),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude-runtime',
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/claude-runtime' },
+        stripAuthEnv: false,
+        provenance: 'managed:runtime'
+      }))
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        (() => ({ agentStatusHooksEnabled: true })) as never,
+        prepareClaudeAuth
+      )
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+      const result = await controller.spawn({ cols: 80, rows: 24, command: 'claude', env: {} })
+
+      expect(claudeHookInstallMock).toHaveBeenCalledWith(
+        expect.objectContaining({ configDir: '/tmp/claude-runtime' }),
+        { verifyStatus: false }
+      )
+      expect(claudeHookInstallMock.mock.invocationCallOrder[0]).toBeLessThan(
+        spawnMock.mock.invocationCallOrder[0]
+      )
+      clearProviderPtyState(result.id)
     })
 
     it('clears Claude live-PTY tracking from shared provider teardown', () => {
@@ -1285,6 +1533,7 @@ describe('registerPtyHandlers', () => {
         argsEnv?: Record<string, string>,
         getSelectedCodexHomePath?: () => string | null,
         getSettings?: () => {
+          agentStatusHooksEnabled?: boolean
           enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
@@ -1341,6 +1590,7 @@ describe('registerPtyHandlers', () => {
         argsEnv?: Record<string, string>,
         getSelectedCodexHomePath?: () => string | null,
         getSettings?: () => {
+          agentStatusHooksEnabled?: boolean
           enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
@@ -1531,6 +1781,118 @@ describe('registerPtyHandlers', () => {
             value: originalPlatform
           })
         }
+      })
+
+      it('deletes inherited Claude config dirs for WSL system-default Claude launches', async () => {
+        await withWin32Platform(async () => {
+          const daemonSpawn = setupDaemonAdapter()
+          const prepareClaudeAuth = vi.fn(async () => ({
+            configDir: '\\\\wsl.localhost\\Ubuntu\\home\\test\\.claude',
+            runtime: 'wsl' as const,
+            wslDistro: 'Ubuntu',
+            wslLinuxConfigDir: '/home/test/.claude',
+            envPatch: {},
+            stripAuthEnv: true,
+            provenance: 'wsl:Ubuntu:system'
+          }))
+          handlers.clear()
+          registerPtyHandlers(
+            mainWindow as never,
+            undefined,
+            undefined,
+            (() => ({ agentStatusHooksEnabled: true })) as never,
+            prepareClaudeAuth
+          )
+
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            command: 'claude',
+            shellOverride: 'wsl.exe',
+            env: {
+              CLAUDE_CONFIG_DIR: 'C:\\Users\\test\\.claude-host'
+            }
+          })
+
+          const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+          expect(spawnOptions.env.CLAUDE_CONFIG_DIR).toBeUndefined()
+          expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['CLAUDE_CONFIG_DIR']))
+        })
+      })
+
+      it('keeps explicit managed WSL Claude config dirs for WSL Claude launches', async () => {
+        await withWin32Platform(async () => {
+          const daemonSpawn = setupDaemonAdapter()
+          const prepareClaudeAuth = vi.fn(async () => ({
+            configDir: '\\\\wsl.localhost\\Ubuntu\\home\\test\\.claude-managed',
+            runtime: 'wsl' as const,
+            wslDistro: 'Ubuntu',
+            wslLinuxConfigDir: '/home/test/.claude-managed',
+            envPatch: { CLAUDE_CONFIG_DIR: '/home/test/.claude-managed' },
+            stripAuthEnv: true,
+            provenance: 'managed:wsl'
+          }))
+          handlers.clear()
+          registerPtyHandlers(
+            mainWindow as never,
+            undefined,
+            undefined,
+            (() => ({ agentStatusHooksEnabled: true })) as never,
+            prepareClaudeAuth
+          )
+
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            command: 'claude',
+            shellOverride: 'wsl.exe'
+          })
+
+          const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+          expect(spawnOptions.env.CLAUDE_CONFIG_DIR).toBe('/home/test/.claude-managed')
+          expect(spawnOptions.envToDelete ?? []).not.toContain('CLAUDE_CONFIG_DIR')
+        })
+      })
+
+      it('uses the POSIX endpoint file path for WSL daemon hook env', async () => {
+        await withWin32Platform(async () => {
+          agentHookPosixEndpointFilePathMock.mockReturnValue(
+            'C:\\Users\\test\\AppData\\Roaming\\Orca\\agent-hooks\\endpoint.env'
+          )
+          const spawnOptions = await daemonSpawnAndGetOptions(
+            {},
+            undefined,
+            () => ({ agentStatusHooksEnabled: true }),
+            undefined,
+            { shellOverride: 'wsl.exe' }
+          )
+
+          expect(spawnOptions.env.ORCA_AGENT_HOOK_ENDPOINT).toBe(
+            '/mnt/c/Users/test/AppData/Roaming/Orca/agent-hooks/endpoint.env'
+          )
+        })
+      })
+
+      it('clears the native endpoint file path when WSL has no POSIX endpoint file', async () => {
+        await withWin32Platform(async () => {
+          buildAgentHookEnvMock.mockReturnValueOnce({
+            ORCA_AGENT_HOOK_PORT: '5678',
+            ORCA_AGENT_HOOK_TOKEN: 'agent-token',
+            ORCA_AGENT_HOOK_ENDPOINT:
+              'C:\\Users\\test\\AppData\\Roaming\\Orca\\agent-hooks\\endpoint.cmd'
+          })
+          agentHookPosixEndpointFilePathMock.mockReturnValue(null)
+
+          const spawnOptions = await daemonSpawnAndGetOptions(
+            {},
+            undefined,
+            () => ({ agentStatusHooksEnabled: true }),
+            undefined,
+            { shellOverride: 'wsl.exe' }
+          )
+
+          expect(spawnOptions.env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        })
       })
 
       it('injects the agent-hook receiver env on the daemon path', async () => {

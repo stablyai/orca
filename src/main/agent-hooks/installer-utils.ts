@@ -1,4 +1,6 @@
 import {
+  accessSync,
+  constants,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -269,7 +271,13 @@ export function writeManagedScript(scriptPath: string, content: string): void {
     try {
       if (readFileSync(scriptPath, 'utf-8') === content) {
         if (process.platform !== 'win32') {
-          chmodSync(scriptPath, 0o755)
+          // Why: POSIX [ -x ] checks the running user's execute access, not
+          // whether any owner/group/other execute bit happens to be set.
+          try {
+            accessSync(scriptPath, constants.X_OK)
+          } catch {
+            chmodSync(scriptPath, 0o755)
+          }
         }
         return
       }

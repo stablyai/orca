@@ -2346,7 +2346,7 @@ export class OrcaRuntimeService {
       typeof updates.agentStatusHooksEnabled === 'boolean' &&
       before !== updates.agentStatusHooksEnabled
     ) {
-      applyAgentStatusHooksEnabled(updates.agentStatusHooksEnabled)
+      applyAgentStatusHooksEnabled(updates.agentStatusHooksEnabled, this.store.getSettings())
     }
     return this.getClientSettings()
   }

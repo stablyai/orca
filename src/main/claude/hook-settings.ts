@@ -16,6 +16,10 @@ export type ClaudeCompatibleHookSettings = {
   scriptBaseName: 'claude-hook' | 'openclaude-hook'
 }
 
+export type ClaudeHookConfigTarget = {
+  configDir?: string
+}
+
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
   scriptBaseName: 'claude-hook'
@@ -52,8 +56,13 @@ export const CLAUDE_EVENTS = [
   }
 ] as const
 
-export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return join(homedir(), settings.configDirName, 'settings.json')
+export function getConfigPath(
+  settings = CLAUDE_HOOK_SETTINGS,
+  target: ClaudeHookConfigTarget = {}
+): string {
+  return target.configDir
+    ? join(target.configDir, 'settings.json')
+    : join(homedir(), settings.configDirName, 'settings.json')
 }
 
 export function getManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -87,6 +96,13 @@ export function getManagedCommand(scriptPath: string): string {
 
 export function getRemoteManagedCommand(scriptPath: string): string {
   return wrapPosixHookCommand(scriptPath)
+}
+
+export function getWslManagedCommand(scriptPath: string): string {
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  // Why: WSL hook scripts are written through Windows and may not carry POSIX
+  // executable bits; Claude only needs /bin/sh to be able to read them.
+  return `if [ -f ${quoted} ]; then /bin/sh ${quoted}; fi`
 }
 
 export function applyManagedHooks(

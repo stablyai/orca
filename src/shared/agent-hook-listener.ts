@@ -3359,11 +3359,13 @@ export function resolveHookSource(pathname: string): AgentHookSource | null {
 
 // ─── Endpoint-file writing ──────────────────────────────────────────
 
-export function getEndpointFileName(): string {
+export type EndpointFileShell = 'native' | 'posix'
+
+export function getEndpointFileName(shell: EndpointFileShell = 'native'): string {
   // Why: per-platform extension lets hook scripts source the file natively
   // (`. "$file"` POSIX, `call "%file%"` Windows). The OpenCode plugin's regex
   // accepts both shapes already.
-  return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
+  return shell === 'native' && process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
 
 export function isShellSafeEndpointValue(value: string): boolean {
@@ -3387,10 +3389,12 @@ export type EndpointFileFields = {
 export function writeEndpointFile(
   endpointDir: string,
   finalPath: string,
-  fields: EndpointFileFields
+  fields: EndpointFileFields,
+  options: { shell?: EndpointFileShell } = {}
 ): boolean {
   const tmpPath = join(endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
-  const prefix = process.platform === 'win32' ? 'set ' : ''
+  const isWindowsShell = (options.shell ?? 'native') === 'native' && process.platform === 'win32'
+  const prefix = isWindowsShell ? 'set ' : ''
   const valuesToWrite: [string, string][] = [
     ['ORCA_AGENT_HOOK_PORT', String(fields.port)],
     ['ORCA_AGENT_HOOK_TOKEN', fields.token],
@@ -3442,7 +3446,7 @@ export function writeEndpointFile(
     } catch {
       // readdirSync can fail on exotic filesystems
     }
-    const separator = process.platform === 'win32' ? '\r\n' : '\n'
+    const separator = isWindowsShell ? '\r\n' : '\n'
     writeFileSync(tmpPath, lines.join(separator), { mode: 0o600 })
     tmpWritten = true
     renameSync(tmpPath, finalPath)

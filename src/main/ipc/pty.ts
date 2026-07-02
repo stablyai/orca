@@ -23,6 +23,7 @@ import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
 } from '../../shared/local-windows-terminal-runtime'
+import { claudeHookService, type ClaudeLocalHookTarget } from '../claude/hook-service'
 import { openCodeHookService } from '../opencode/hook-service'
 import { mimoCodeHookService } from '../mimo/hook-service'
 import {
@@ -30,7 +31,10 @@ import {
   getFirstCommandToken
 } from '../../shared/command-token-scanner'
 import { agentHookServer } from '../agent-hooks/server'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import {
+  isAgentStatusHooksEnabled,
+  recordClaudeWslSystemDefaultHookTarget
+} from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
@@ -80,7 +84,7 @@ import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
 } from '../agent-hooks/migration-unsupported-pty-state'
-import { parseWslPath } from '../wsl'
+import { parseWslPath, toLinuxPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -554,6 +558,35 @@ type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
+function installClaudeHooksForPreparedLaunch(
+  claudeAuth: ClaudeRuntimeAuthPreparation | null,
+  agentStatusHooksEnabled: boolean
+): void {
+  if (!claudeAuth || !agentStatusHooksEnabled) {
+    return
+  }
+  if (claudeAuth.runtime === 'wsl' && !claudeAuth.wslLinuxConfigDir) {
+    console.warn('[claude-hooks] Skipping WSL hook install: missing Linux Claude config dir')
+    return
+  }
+
+  try {
+    const target: ClaudeLocalHookTarget = {
+      configDir: claudeAuth.configDir,
+      ...(claudeAuth.runtime ? { runtime: claudeAuth.runtime } : {}),
+      ...(claudeAuth.wslLinuxConfigDir ? { wslLinuxConfigDir: claudeAuth.wslLinuxConfigDir } : {})
+    }
+    const status = claudeHookService.install(target, { verifyStatus: false })
+    if (status.state === 'error') {
+      console.warn('[claude-hooks] Failed to install Claude hooks:', status.detail)
+    } else if (claudeAuth.runtime === 'wsl' && !claudeAuth.envPatch.CLAUDE_CONFIG_DIR) {
+      recordClaudeWslSystemDefaultHookTarget(target)
+    }
+  } catch (error) {
+    console.warn('[claude-hooks] Failed to install Claude hooks:', error)
+  }
+}
+
 function getCodexSelectionTargetForPty(
   shellPath: string | undefined,
   cwd: string | undefined,
@@ -673,6 +706,14 @@ function mergePtyEnvDeletions(
     return undefined
   }
   return Array.from(new Set([...(existingKeys ?? []), ...additionalKeys]))
+}
+
+function getWslClaudeConfigDirEnvKeysToDelete(
+  claudeAuth: ClaudeRuntimeAuthPreparation | null
+): string[] {
+  return claudeAuth?.runtime === 'wsl' && !claudeAuth.envPatch.CLAUDE_CONFIG_DIR
+    ? ['CLAUDE_CONFIG_DIR']
+    : []
 }
 
 function getInheritedAgentHookEnvKeysToDelete(
@@ -852,6 +893,16 @@ export function buildPtyHostEnv(
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
+    if (opts.isWsl) {
+      if (agentHookServer.posixEndpointFilePath) {
+        // Why: WSL hook scripts source POSIX shell, not Windows cmd.exe.
+        // Point them at the stable endpoint.env path through DrvFs so
+        // long-lived WSL PTYs can refresh hook coords after Orca restarts.
+        baseEnv.ORCA_AGENT_HOOK_ENDPOINT = toLinuxPath(agentHookServer.posixEndpointFilePath)
+      } else {
+        delete baseEnv.ORCA_AGENT_HOOK_ENDPOINT
+      }
+    }
   }
 
   // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root. Keep
@@ -1947,6 +1998,8 @@ export function registerPtyHandlers(
           'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
         )
       }
+      const agentStatusHooksEnabled = isAgentStatusHooksEnabled(getSettings?.())
+      installClaudeHooksForPreparedLaunch(claudeAuth, agentStatusHooksEnabled)
 
       const isDaemonHostSpawn =
         !args.connectionId &&
@@ -2017,7 +2070,7 @@ export function registerPtyHandlers(
           launchCommand: args.command,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd),
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          agentStatusHooksEnabled,
           networkProxySettings: getSettings?.()
         })
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
@@ -2034,7 +2087,10 @@ export function registerPtyHandlers(
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
+        mergePtyEnvDeletions(
+          mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
+          getWslClaudeConfigDirEnvKeysToDelete(claudeAuth)
+        ),
         isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
       )
       if (skipCodexHomeEnv) {
@@ -2496,6 +2552,8 @@ export function registerPtyHandlers(
           'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
         )
       }
+      const agentStatusHooksEnabled = isAgentStatusHooksEnabled(getSettings?.())
+      installClaudeHooksForPreparedLaunch(claudeAuth, agentStatusHooksEnabled)
       // Why: the daemon-backed provider replaces LocalPtyProvider and therefore
       // never runs its buildSpawnEnv closure. We must assemble the same
       // host-local env (OpenCode plugin, agent-hook server, Pi/OMP managed
@@ -2694,7 +2752,7 @@ export function registerPtyHandlers(
             launchCommand: args.command,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd),
-            agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+            agentStatusHooksEnabled,
             networkProxySettings: getSettings?.()
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
@@ -2722,7 +2780,10 @@ export function registerPtyHandlers(
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
           mergePtyEnvDeletions(
-            mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+            mergePtyEnvDeletions(
+              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+              getWslClaudeConfigDirEnvKeysToDelete(claudeAuth)
+            ),
             agentTeamsEnvToDelete ?? []
           ),
           isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []

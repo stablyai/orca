@@ -436,7 +436,9 @@ export class AgentHookServer {
   // (keeps it mockable in the vitest node environment).
   private endpointDir: string | null = null
   private endpointFilePathCache: string | null = null
+  private posixEndpointFilePathCache: string | null = null
   private endpointFileWritten = false
+  private posixEndpointFileWritten = false
   // Why: per-instance caches (warn-once Sets, lastPrompt/lastTool/lastStatus
   // by paneKey). Held on the instance instead of as module-level Maps so
   // tests can spin up multiple servers without state cross-contamination.
@@ -1165,10 +1167,12 @@ export class AgentHookServer {
         ? join(options.userDataPath, 'agent-hooks', options.endpointNamespace)
         : join(options.userDataPath, 'agent-hooks')
       this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
+      this.posixEndpointFilePathCache = join(this.endpointDir, getEndpointFileName('posix'))
       this.lastStatusFilePath = join(this.endpointDir, LAST_STATUS_FILE_NAME)
     }
     this.token = randomUUID()
     this.endpointFileWritten = false
+    this.posixEndpointFileWritten = false
     this.lastWrittenJson = null
     // Why: hydrate before binding the HTTP listener so any new hook POST
     // (which goes through state.lastStatusByPaneKey.set) runs against an
@@ -1273,7 +1277,9 @@ export class AgentHookServer {
     // would introduce a TOCTOU race vs. a concurrent Orca instance.
     this.endpointDir = null
     this.endpointFilePathCache = null
+    this.posixEndpointFilePathCache = null
     this.endpointFileWritten = false
+    this.posixEndpointFileWritten = false
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
@@ -1432,6 +1438,10 @@ export class AgentHookServer {
     return this.endpointFilePathCache
   }
 
+  get posixEndpointFilePath(): string | null {
+    return this.posixEndpointFileWritten ? this.posixEndpointFilePathCache : null
+  }
+
   /** Test/diagnostic accessor for the on-disk last-status file path. */
   get lastStatusPath(): string | null {
     return this.lastStatusFilePath
@@ -1442,13 +1452,29 @@ export class AgentHookServer {
       return
     }
     this.endpointFileWritten = false
+    this.posixEndpointFileWritten = false
     const ok = writeEndpointFile(this.endpointDir, this.endpointFilePathCache, {
       port: this.port,
       token: this.token,
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION
     })
+    const posixOk =
+      !this.posixEndpointFilePathCache ||
+      this.posixEndpointFilePathCache === this.endpointFilePathCache ||
+      writeEndpointFile(
+        this.endpointDir,
+        this.posixEndpointFilePathCache,
+        {
+          port: this.port,
+          token: this.token,
+          env: this.env,
+          version: ORCA_HOOK_PROTOCOL_VERSION
+        },
+        { shell: 'posix' }
+      )
     this.endpointFileWritten = ok
+    this.posixEndpointFileWritten = Boolean(posixOk)
   }
 
   private hydrateLastStatusFromDisk(): void {

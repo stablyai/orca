@@ -493,6 +493,97 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.WSLENV).toContain('CODEX_HOME')
     })
 
+    it('imports Claude hook receiver env into WSL terminals without explicit Claude config dirs', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.WSLENV = 'KEEP/u:CLAUDE_CONFIG_DIR/u:ORCA_AGENT_HOOK_ENDPOINT/u'
+          env.ORCA_AGENT_HOOK_PORT = '5678'
+          env.ORCA_AGENT_HOOK_TOKEN = 'token'
+          env.ORCA_AGENT_HOOK_ENV = 'test'
+          env.ORCA_AGENT_HOOK_VERSION = '1'
+          env.ORCA_PANE_KEY = 'tab:leaf'
+          env.ORCA_TAB_ID = 'tab'
+          env.ORCA_WORKTREE_ID = 'wt'
+          env.ORCA_AGENT_LAUNCH_TOKEN = 'launch'
+          env.ORCA_AGENT_HOOK_ENDPOINT = 'C:\\Users\\jin\\AppData\\Roaming\\endpoint.cmd'
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      const wslEnv = spawnCall[2].env.WSLENV as string
+      for (const key of [
+        'ORCA_AGENT_HOOK_PORT',
+        'ORCA_AGENT_HOOK_TOKEN',
+        'ORCA_AGENT_HOOK_ENV',
+        'ORCA_AGENT_HOOK_VERSION',
+        'ORCA_PANE_KEY',
+        'ORCA_TAB_ID',
+        'ORCA_WORKTREE_ID',
+        'ORCA_AGENT_LAUNCH_TOKEN'
+      ]) {
+        expect(wslEnv).toContain(key)
+      }
+      expect(wslEnv).not.toContain('CLAUDE_CONFIG_DIR')
+      expect(wslEnv).not.toContain('ORCA_AGENT_HOOK_ENDPOINT')
+    })
+
+    it('removes inherited Claude config dir WSL imports when the launch deletes the config dir', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.WSLENV = 'FOO/u:CLAUDE_CONFIG_DIR/u'
+          env.ORCA_AGENT_HOOK_PORT = '5678'
+          env.ORCA_AGENT_HOOK_TOKEN = 'token'
+          env.ORCA_PANE_KEY = 'tab:leaf'
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        envToDelete: ['CLAUDE_CONFIG_DIR']
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.CLAUDE_CONFIG_DIR).toBeUndefined()
+      expect(spawnCall[2].env.WSLENV).toContain('FOO/u')
+      expect(spawnCall[2].env.WSLENV).not.toContain('CLAUDE_CONFIG_DIR')
+      expect(spawnCall[2].env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT')
+    })
+
+    it('imports Linux-shaped Claude hook endpoint paths into WSL terminals', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.WSLENV = 'KEEP/u'
+          env.ORCA_AGENT_HOOK_PORT = '5678'
+          env.ORCA_AGENT_HOOK_TOKEN = 'token'
+          env.ORCA_PANE_KEY = 'tab:leaf'
+          env.ORCA_AGENT_HOOK_ENDPOINT = '/mnt/c/Users/jin/AppData/Roaming/Orca/endpoint.env'
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT')
+    })
+
     it('translates a WSL managed Codex home before launching a WSL terminal', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

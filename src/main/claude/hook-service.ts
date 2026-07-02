@@ -1,4 +1,5 @@
 import type { SFTPWrapper } from 'ssh2'
+import { join } from 'node:path'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookCurlPostCommand,
@@ -15,6 +16,7 @@ import {
   applyManagedHooks,
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
+  type ClaudeHookConfigTarget,
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
@@ -22,9 +24,19 @@ import {
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
+  getWslManagedCommand,
   removeManagedHooks,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
+
+export type ClaudeLocalHookTarget = ClaudeHookConfigTarget & {
+  runtime?: 'host' | 'wsl'
+  wslLinuxConfigDir?: string | null
+}
+
+export type ClaudeHookInstallOptions = {
+  verifyStatus?: boolean
+}
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -129,6 +141,54 @@ function getManagedScript(
   ].join('\n')
 }
 
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+function getLocalHookPaths(
+  settings: ClaudeCompatibleHookSettings,
+  target: ClaudeLocalHookTarget = {}
+): {
+  configPath: string
+  scriptPath: string
+  scriptFileName: string
+  scriptTarget: 'local' | 'posix'
+  command: string
+} {
+  const hostConfigDir = target.configDir
+  const wslLinuxConfigDir = target.wslLinuxConfigDir
+  if (target.runtime === 'wsl' && (!hostConfigDir || !wslLinuxConfigDir)) {
+    throw new Error('Cannot install WSL Claude hooks without host and Linux config dirs')
+  }
+  if (target.runtime === 'wsl') {
+    const scriptFileName = getPosixManagedScriptFileName(settings)
+    const commandScriptPath = [
+      trimTrailingSlash(wslLinuxConfigDir!),
+      '.orca/agent-hooks',
+      scriptFileName
+    ].join('/')
+    return {
+      configPath: getConfigPath(settings, target),
+      scriptPath: join(hostConfigDir!, '.orca', 'agent-hooks', scriptFileName),
+      scriptFileName,
+      scriptTarget: 'posix',
+      command: getWslManagedCommand(commandScriptPath)
+    }
+  }
+
+  const scriptFileName = getManagedScriptFileName(settings)
+  const scriptPath = hostConfigDir
+    ? join(hostConfigDir, '.orca', 'agent-hooks', scriptFileName)
+    : getManagedScriptPath(settings)
+  return {
+    configPath: getConfigPath(settings, target),
+    scriptPath,
+    scriptFileName,
+    scriptTarget: 'local',
+    command: getManagedCommand(scriptPath)
+  }
+}
+
 export class ClaudeHookService {
   private readonly options: ClaudeHookServiceOptions
 
@@ -136,9 +196,8 @@ export class ClaudeHookService {
     this.options = options
   }
 
-  getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
-    const scriptPath = getManagedScriptPath(this.options.settings)
+  getStatus(target: ClaudeLocalHookTarget = {}): AgentHookInstallStatus {
+    const { configPath, command } = getLocalHookPaths(this.options.settings, target)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -154,7 +213,6 @@ export class ClaudeHookService {
     // sidebar surfaces a degraded install rather than a false-positive
     // `installed`. Each CLAUDE_EVENTS entry must contain the managed command for
     // the integration to function end-to-end.
-    const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
     for (const event of CLAUDE_EVENTS) {
@@ -186,9 +244,14 @@ export class ClaudeHookService {
     return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
-    const scriptPath = getManagedScriptPath(this.options.settings)
+  install(
+    target: ClaudeLocalHookTarget = {},
+    options: ClaudeHookInstallOptions = {}
+  ): AgentHookInstallStatus {
+    const { configPath, scriptPath, scriptFileName, scriptTarget, command } = getLocalHookPaths(
+      this.options.settings,
+      target
+    )
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -200,18 +263,24 @@ export class ClaudeHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(
-      config,
-      command,
-      getManagedScriptFileName(this.options.settings)
-    )
+    const nextConfig = applyManagedHooks(config, command, scriptFileName)
     writeManagedScript(
       scriptPath,
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript(scriptTarget, {
+        skipWhenDevinImportsClaude: this.options.agent === 'claude'
+      })
     )
     writeHooksJson(configPath, nextConfig)
-    return this.getStatus()
+    if (options.verifyStatus === false) {
+      return {
+        agent: this.options.agent,
+        state: 'installed',
+        configPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    }
+    return this.getStatus(target)
   }
 
   // Why: install Orca's Claude hook settings on the remote box rather than the
@@ -282,8 +351,8 @@ export class ClaudeHookService {
     }
   }
 
-  remove(): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
+  remove(target: ClaudeLocalHookTarget = {}): AgentHookInstallStatus {
+    const { configPath, scriptFileName } = getLocalHookPaths(this.options.settings, target)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -294,14 +363,11 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: nextConfig, changed } = removeManagedHooks(
-      config,
-      getManagedScriptFileName(this.options.settings)
-    )
+    const { config: nextConfig, changed } = removeManagedHooks(config, scriptFileName)
     if (changed) {
       writeHooksJson(configPath, nextConfig)
     }
-    return this.getStatus()
+    return this.getStatus(target)
   }
 }
 

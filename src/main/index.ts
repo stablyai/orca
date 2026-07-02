@@ -32,8 +32,10 @@ import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
 import {
   isAgentStatusHooksEnabled,
   MANAGED_AGENT_HOOK_INSTALLERS,
-  removeManagedAgentHooks
+  removeManagedAgentHooks,
+  setWslSystemDefaultHookTargetResolver
 } from './agent-hooks/managed-agent-hook-controls'
+import { getDefaultWslDistro, getWslHome } from './wsl'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
 import { resolveConsent } from './telemetry/consent'
@@ -1786,13 +1788,14 @@ app.whenReady().then(async () => {
     runtimeService.notifyEmulatorAutoAttachFromWatcher(worktreeId, info)
   })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  setWslSystemDefaultHookTargetResolver({ getDefaultWslDistro, getWslHome })
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
     // users who removed Orca-managed hooks do not see them silently reappear on launch.
     if (isAgentStatusHooksEnabled(store.getSettings())) {
       runManagedHookInstallers(MANAGED_AGENT_HOOK_INSTALLERS)
     } else {
-      removeManagedAgentHooks()
+      removeManagedAgentHooks(store.getSettings(), { includeWslSystemDefaultDiscovery: false })
     }
   }
 

@@ -188,6 +188,115 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
+  it('installs, reports, and removes managed hooks in an explicit Claude config dir', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-target-hooks-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const defaultSettings = join(tmpHome, '.claude', 'settings.json')
+      const targetConfigDir = join(tmpHome, 'accounts', 'personal')
+      const targetSettings = join(targetConfigDir, 'settings.json')
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      mkdirSync(targetConfigDir, { recursive: true })
+      writeFileSync(defaultSettings, JSON.stringify({ hooks: {} }))
+      writeFileSync(
+        targetSettings,
+        JSON.stringify({
+          hooks: {
+            Stop: [{ hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }]
+          }
+        })
+      )
+
+      const service = new ClaudeHookService()
+      const installStatus = service.install({ configDir: targetConfigDir })
+      const target = JSON.parse(readFileSync(targetSettings, 'utf-8'))
+      const defaultConfig = JSON.parse(readFileSync(defaultSettings, 'utf-8'))
+
+      expect(installStatus).toMatchObject({ state: 'installed', configPath: targetSettings })
+      expect(service.getStatus({ configDir: targetConfigDir }).state).toBe('installed')
+      expect(defaultConfig.hooks).toEqual({})
+      const managedCommand = target.hooks.UserPromptSubmit[0].hooks[0].command as string
+      if (process.platform !== 'win32') {
+        expect(managedCommand).toContain(join(targetConfigDir, '.orca', 'agent-hooks'))
+        expect(managedCommand).not.toContain(join(tmpHome, '.orca', 'agent-hooks'))
+      }
+      expect(
+        readFileSync(
+          join(targetConfigDir, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+          'utf-8'
+        )
+      ).toContain(process.platform === 'win32' ? '@echo off' : '#!/bin/sh')
+      expect(
+        target.hooks.Stop.flatMap((definition: { hooks: { command: string }[] }) =>
+          definition.hooks.map((hook) => hook.command)
+        )
+      ).toContain('/usr/local/bin/user-hook')
+
+      const removeStatus = service.remove({ configDir: targetConfigDir })
+      const removed = JSON.parse(readFileSync(targetSettings, 'utf-8'))
+      expect(removeStatus).toMatchObject({ state: 'not_installed', configPath: targetSettings })
+      expect(removed.hooks.Stop[0].hooks[0].command).toBe('/usr/local/bin/user-hook')
+      expect(JSON.parse(readFileSync(defaultSettings, 'utf-8')).hooks).toEqual({})
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('writes WSL Claude settings with a Linux hook command and Windows-accessible script', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-wsl-hooks-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const hostConfigDir = join(tmpHome, 'host-user-data', 'claude-account')
+      const settingsPath = join(hostConfigDir, 'settings.json')
+      mkdirSync(hostConfigDir, { recursive: true })
+
+      const status = new ClaudeHookService().install({
+        configDir: hostConfigDir,
+        runtime: 'wsl',
+        wslLinuxConfigDir: '/home/dev/.local/share/orca/claude-account'
+      })
+
+      expect(status).toMatchObject({ state: 'installed', configPath: settingsPath })
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      const command = parsed.hooks.Stop[0].hooks[0].command as string
+      expect(command).toContain(
+        '/home/dev/.local/share/orca/claude-account/.orca/agent-hooks/claude-hook.sh'
+      )
+      expect(command).toMatch(/^if \[ -f /)
+      expect(command).not.toContain('.cmd')
+      expect(command).not.toContain('\\\\wsl')
+      expect(command).not.toContain('host-user-data')
+      expect(command).not.toContain(tmpHome)
+      expect(
+        readFileSync(join(hostConfigDir, '.orca', 'agent-hooks', 'claude-hook.sh'), 'utf-8')
+      ).toContain('#!/bin/sh')
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects WSL hook targets without a Linux config dir instead of writing host commands', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-wsl-missing-linux-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const hostConfigDir = join(tmpHome, 'host-user-data', 'claude-account')
+      mkdirSync(hostConfigDir, { recursive: true })
+
+      expect(() =>
+        new ClaudeHookService().install({ configDir: hostConfigDir, runtime: 'wsl' })
+      ).toThrow(/host and Linux config dirs/)
+      expect(existsSync(join(hostConfigDir, 'settings.json'))).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
   // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
   // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
   // command must use an encoded launcher so Git Bash/cmd.exe never splits or

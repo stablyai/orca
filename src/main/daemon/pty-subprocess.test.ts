@@ -2032,6 +2032,122 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('imports Claude hook receiver env into daemon WSL terminals without explicit Claude config dirs', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        env: {
+          WSLENV: 'KEEP/u:CLAUDE_CONFIG_DIR/u:ORCA_AGENT_HOOK_ENDPOINT/u',
+          ORCA_AGENT_HOOK_PORT: '5678',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_AGENT_HOOK_ENV: 'test',
+          ORCA_AGENT_HOOK_VERSION: '1',
+          ORCA_PANE_KEY: 'tab:leaf',
+          ORCA_TAB_ID: 'tab',
+          ORCA_WORKTREE_ID: 'wt',
+          ORCA_AGENT_LAUNCH_TOKEN: 'launch',
+          ORCA_AGENT_HOOK_ENDPOINT: 'C:\\Users\\jin\\AppData\\Roaming\\endpoint.cmd'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const wslEnv = spawnCall[2].env.WSLENV as string
+    for (const key of [
+      'ORCA_AGENT_HOOK_PORT',
+      'ORCA_AGENT_HOOK_TOKEN',
+      'ORCA_AGENT_HOOK_ENV',
+      'ORCA_AGENT_HOOK_VERSION',
+      'ORCA_PANE_KEY',
+      'ORCA_TAB_ID',
+      'ORCA_WORKTREE_ID',
+      'ORCA_AGENT_LAUNCH_TOKEN'
+    ]) {
+      expect(wslEnv).toContain(key)
+    }
+    expect(wslEnv).not.toContain('CLAUDE_CONFIG_DIR')
+    expect(wslEnv).not.toContain('ORCA_AGENT_HOOK_ENDPOINT')
+  })
+
+  it('removes inherited Claude config dir WSL imports when the launch deletes the config dir', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        envToDelete: ['CLAUDE_CONFIG_DIR'],
+        env: {
+          WSLENV: 'FOO/u:CLAUDE_CONFIG_DIR/u',
+          ORCA_AGENT_HOOK_PORT: '5678',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_PANE_KEY: 'tab:leaf'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env
+    expect(env.CLAUDE_CONFIG_DIR).toBeUndefined()
+    expect(env.WSLENV).toContain('FOO/u')
+    expect(env.WSLENV).not.toContain('CLAUDE_CONFIG_DIR')
+    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_PORT')
+  })
+
+  it('imports Linux-shaped Claude hook endpoint paths into daemon WSL terminals', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        env: {
+          WSLENV: 'KEEP/u',
+          ORCA_AGENT_HOOK_PORT: '5678',
+          ORCA_AGENT_HOOK_TOKEN: 'token',
+          ORCA_PANE_KEY: 'tab:leaf',
+          ORCA_AGENT_HOOK_ENDPOINT: '/mnt/c/Users/jin/AppData/Roaming/Orca/endpoint.env'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    expect(spawnCall[2].env.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT')
+  })
+
   it('does not mark deleted Powerlevel10k wizard env for daemon WSL import', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

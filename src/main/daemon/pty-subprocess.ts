@@ -31,7 +31,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
-import { addWslEnvKeys } from '../wsl-env'
+import { addWslEnvKeys, removeWslEnvKeys, WSL_AGENT_HOOK_ENV_KEYS } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import {
@@ -703,6 +703,22 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
         // through Windows wsl.exe; non-default env vars need WSLENV import.
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+      } else {
+        // Why: inherited host-side Claude config dirs are not valid inside WSL;
+        // system-default WSL Claude must read its Linux ~/.claude namespace.
+        removeWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+      }
+      if (env.ORCA_PANE_KEY && env.ORCA_AGENT_HOOK_PORT && env.ORCA_AGENT_HOOK_TOKEN) {
+        // Why: WSL system-default Claude can use ~/.claude without
+        // CLAUDE_CONFIG_DIR, but its status hooks still need these
+        // non-default env vars imported through wsl.exe.
+        addWslEnvKeys(env, WSL_AGENT_HOOK_ENV_KEYS)
+        if (env.ORCA_AGENT_HOOK_ENDPOINT?.startsWith('/')) {
+          addWslEnvKeys(env, ['ORCA_AGENT_HOOK_ENDPOINT'])
+        } else {
+          delete env.ORCA_AGENT_HOOK_ENDPOINT
+          removeWslEnvKeys(env, ['ORCA_AGENT_HOOK_ENDPOINT'])
+        }
       }
     } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
       // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use

@@ -5419,6 +5419,29 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
+  it('writes a POSIX endpoint file alongside the Windows native endpoint file', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const server = new AgentHookServer()
+    try {
+      await server.start({ env: 'development', userDataPath })
+      const nativePath = server.endpointFilePath
+      const posixPath = server.posixEndpointFilePath
+      expect(nativePath).toBeTruthy()
+      expect(posixPath).toBeTruthy()
+      expect(nativePath).toContain('endpoint.cmd')
+      expect(posixPath).toContain('endpoint.env')
+      expect(readFileSync(nativePath!, 'utf8')).toContain('set ORCA_AGENT_HOOK_PORT=')
+      expect(readFileSync(posixPath!, 'utf8')).toContain('ORCA_AGENT_HOOK_PORT=')
+      expect(readFileSync(posixPath!, 'utf8')).not.toContain('set ORCA_AGENT_HOOK_PORT=')
+    } finally {
+      server.stop()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('writes the endpoint file with owner-only permissions on POSIX', async () => {
     if (process.platform === 'win32') {
       return
