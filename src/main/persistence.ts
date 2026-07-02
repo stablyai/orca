@@ -80,7 +80,11 @@ import {
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { hardenExistingSecureFile } from '../shared/secure-file'
-import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
+import {
+  LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshRemotePtyLease,
+  type SshTarget
+} from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
@@ -995,11 +999,13 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
+  const systemSshConnectionReuse = target.systemSshConnectionReuse
   // Why: remote workspace sync now follows the SSH relay lifecycle, so the
   // retired per-target sync opt-out and grace-period fields stop at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
+  delete target.systemSshConnectionReuse
   // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
   // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
@@ -1010,8 +1016,16 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  if (relayGracePeriodSeconds !== undefined) {
+  // Why: the old SSH form eagerly persisted 10800 even when the user had not
+  // chosen a timeout; treat that legacy default as the new implicit default.
+  if (
+    relayGracePeriodSeconds !== undefined &&
+    relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  ) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  if (systemSshConnectionReuse === false) {
+    normalized.systemSshConnectionReuse = false
   }
   return normalized
 }
@@ -5621,7 +5635,14 @@ export class Store {
     if (!target) {
       return null
     }
-    Object.assign(target, updates, normalizeSshTarget({ ...target, ...updates }))
+    const normalized = normalizeSshTarget({ ...target, ...updates })
+    Object.assign(target, updates, normalized)
+    if (!Object.hasOwn(normalized, 'relayGracePeriodSeconds')) {
+      delete target.relayGracePeriodSeconds
+    }
+    if (!Object.hasOwn(normalized, 'systemSshConnectionReuse')) {
+      delete target.systemSshConnectionReuse
+    }
     this.scheduleSave()
     return { ...target }
   }

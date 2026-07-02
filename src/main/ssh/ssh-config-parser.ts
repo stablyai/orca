@@ -269,6 +269,9 @@ export type SshResolvedConfig = {
   proxyCommand?: string
   proxyUseFdpass: boolean
   proxyJump?: string
+  controlMaster: string
+  controlPath?: string
+  controlPersist: string
 }
 
 const SSH_G_TIMEOUT_MS = 5000
@@ -343,6 +346,11 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
   const rawIdentityAgent = map.get('identityagent')
   const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
+  const rawControlPath = map.get('controlpath')
+  const controlPath =
+    rawControlPath && rawControlPath !== 'none'
+      ? resolveSshConfigHomePath(rawControlPath)
+      : undefined
 
   return {
     hostname: map.get('hostname') ?? '',
@@ -354,6 +362,9 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     forwardAgent: map.get('forwardagent') === 'yes',
     proxyCommand,
     proxyUseFdpass: map.get('proxyusefdpass') === 'yes',
-    proxyJump
+    proxyJump,
+    controlMaster: map.get('controlmaster') ?? 'no',
+    controlPath,
+    controlPersist: map.get('controlpersist') ?? 'no'
   }
 }

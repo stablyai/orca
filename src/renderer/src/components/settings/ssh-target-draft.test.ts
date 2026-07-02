@@ -154,6 +154,11 @@ describe('getSshTargetDraftConnectionFields', () => {
 })
 
 describe('getEditingTargetForSshTarget', () => {
+  it('defaults new SSH targets to keeping remote terminals alive until reset', () => {
+    expect(EMPTY_FORM.relayKeepAliveUntilReset).toBe(true)
+    expect(EMPTY_FORM.relayGracePeriodSeconds).toBe('86400')
+  })
+
   it('recomputes implicit configHost when a manual target host is edited', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',
@@ -194,5 +199,45 @@ describe('getEditingTargetForSshTarget', () => {
       username: 'deploy',
       port: 22
     })
+  })
+
+  it('preserves explicit system SSH connection reuse opt-outs while editing', () => {
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Restricted appliance',
+      host: 'appliance.example.com',
+      port: 22,
+      username: 'admin',
+      systemSshConnectionReuse: false
+    })
+
+    expect(draft.systemSshConnectionReuse).toBe(false)
+  })
+
+  it('treats missing relay grace as the persistent default when editing', () => {
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy'
+    })
+
+    expect(draft.relayKeepAliveUntilReset).toBe(true)
+    expect(draft.relayGracePeriodSeconds).toBe('86400')
+  })
+
+  it('preserves explicit bounded relay grace periods when editing', () => {
+    const draft = getEditingTargetForSshTarget({
+      id: 'ssh-1',
+      label: 'Bounded server',
+      host: 'server.example.com',
+      port: 22,
+      username: 'deploy',
+      relayGracePeriodSeconds: 600
+    })
+
+    expect(draft.relayKeepAliveUntilReset).toBe(false)
+    expect(draft.relayGracePeriodSeconds).toBe('600')
   })
 })
