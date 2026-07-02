@@ -136,40 +136,6 @@ export function SpotlightQuickAction({
   )
 }
 
-/** Replaces the scary "Detached HEAD @ sha" badge on the primary row while
- *  Spotlight is active — the detachment is expected and temporary. */
-export function SpotlightSnapshotBadge({ repo }: { repo: Repo }): React.JSX.Element {
-  const holderName = useAppStore((s) => {
-    const state = s.spotlightByRepo?.[repo.id]
-    return state
-      ? s.worktreesByRepo?.[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
-          ?.displayName
-      : undefined
-  })
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge
-          variant="outline"
-          className="h-[16px] gap-1 px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
-        >
-          <Flashlight className="size-2.5" />
-          {translate(
-            'auto.components.sidebar.WorktreeCardSpotlightControls.snapshotBadge',
-            'spotlight snapshot'
-          )}
-        </Badge>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8} className="max-w-72">
-        {translate(
-          'auto.components.sidebar.WorktreeCardSpotlightControls.snapshotBadgeTooltip',
-          'The project root is temporarily showing "{{holder}}". It returns to its branch when Spotlight turns off.'
-        ).replace('{{holder}}', holderName ?? '…')}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 /** Shown on the primary-worktree row while Spotlight is active. The chip is
  *  the one-click jump to the repo's server terminal; the small × next to it
  *  turns Spotlight off and restores the root. */

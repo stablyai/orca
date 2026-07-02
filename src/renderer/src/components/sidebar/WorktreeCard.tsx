@@ -27,8 +27,7 @@ import WorktreeCardAgents from './WorktreeCardAgents'
 import {
   canHoldSpotlight,
   SpotlightPrimaryBadge,
-  SpotlightQuickAction,
-  SpotlightSnapshotBadge
+  SpotlightQuickAction
 } from './WorktreeCardSpotlightControls'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
@@ -1187,7 +1186,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel
-  const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
+  const spotlightActiveForRepo = useAppStore((s) =>
+    repo ? Boolean(s.spotlightByRepo?.[repo.id]) : false
+  )
+  // Why: while Spotlight owns the root, its detachment is expected and already
+  // signaled by the amber spotlight chip — a second badge would just be noise.
+  const showDetachedHeadInMetaRow =
+    !compactCards &&
+    !isFolder &&
+    detachedHeadDisplay !== null &&
+    !(worktree.isMainWorktree && spotlightActiveForRepo)
   const showBranch =
     !isFolder &&
     branch.length > 0 &&
@@ -1223,9 +1231,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
   const spotlightEligible = canHoldSpotlight(worktree, repo, isFolder)
-  const spotlightActiveForRepo = useAppStore((s) =>
-    repo ? Boolean(s.spotlightByRepo?.[repo.id]) : false
-  )
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction || spotlightEligible
   // Why: the hover owns full identity when the row truncates; normalize once
   // so title/branch de-dupe and identity-only hover eligibility stay in sync.
@@ -1704,18 +1709,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   tooltipEnabled={!hasHoverDetails}
                 />
               ) : showDetachedHeadInMetaRow && detachedHeadDisplay ? (
-                worktree.isMainWorktree && repo && spotlightActiveForRepo ? (
-                  // The detachment is Spotlight's doing — expected and
-                  // temporary; don't alarm the user with a raw detached-HEAD.
-                  <SpotlightSnapshotBadge repo={repo} />
-                ) : (
-                  <DetachedHeadBadge
-                    display={detachedHeadDisplay}
-                    label="sidebar"
-                    side="right"
-                    className="h-[16px]"
-                  />
-                )
+                <DetachedHeadBadge
+                  display={detachedHeadDisplay}
+                  label="sidebar"
+                  side="right"
+                  className="h-[16px]"
+                />
               ) : null}
 
               {showConflictOperationBadge && (
