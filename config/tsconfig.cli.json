@@ -15,6 +15,8 @@
     "../src/main/codex/config-toml-trust.ts",
     "../src/main/codex/hook-service.ts",
     "../src/main/codex-accounts/fs-utils.ts",
+    "../src/main/codewhale/hook-config-toml.ts",
+    "../src/main/codewhale/hook-service.ts",
     "../src/main/command-code/command-code-managed-script.ts",
     "../src/main/command-code/hook-service.ts",
     "../src/main/copilot/hook-service.ts",

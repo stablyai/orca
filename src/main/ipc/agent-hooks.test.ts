@@ -63,6 +63,9 @@ vi.mock('../openclaude/hook-service', () => ({
 vi.mock('../codex/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
+vi.mock('../codewhale/hook-service', () => ({
+  codeWhaleHookService: { getStatus: vi.fn(() => ({ agent: 'codewhale', state: 'absent' })) }
+}))
 vi.mock('../gemini/hook-service', () => ({
   geminiHookService: { getStatus: vi.fn(() => ({ agent: 'gemini', state: 'absent' })) }
 }))
@@ -261,6 +264,17 @@ describe('agentHooks:kimiStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:kimiStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
+  })
+})
+
+describe('agentHooks:codeWhaleStatus IPC', () => {
+  it('returns CodeWhale hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:codeWhaleStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'codewhale', state: 'absent' })
   })
 })
 

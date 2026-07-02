@@ -5,6 +5,7 @@ import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
+import { codeWhaleHookService } from '../codewhale/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
@@ -16,7 +17,7 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => void]
+export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 type ManagedHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 type ManagedHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
@@ -34,7 +35,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
+  ['kimi', () => kimiHookService.install()],
+  ['codewhale', () => codeWhaleHookService.install()]
 ]
 
 const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
@@ -51,7 +53,8 @@ const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
+  ['kimi', () => kimiHookService.remove()],
+  ['codewhale', () => codeWhaleHookService.remove()]
 ]
 
 const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
@@ -68,7 +71,8 @@ const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()],
   ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
+  ['kimi', () => kimiHookService.getStatus()],
+  ['codewhale', () => codeWhaleHookService.getStatus()]
 ]
 
 export function isAgentStatusHooksEnabled(
@@ -80,7 +84,14 @@ export function isAgentStatusHooksEnabled(
 export function installManagedAgentHooks(): void {
   for (const [agent, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
     try {
-      install()
+      const status = install()
+      if (status.state === 'error') {
+        console.warn(
+          `[agent-hooks] Failed to install ${agent} managed hooks for ${status.configPath}: ${
+            status.detail ?? 'unknown error'
+          }`
+        )
+      }
     } catch (error) {
       console.warn(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     }

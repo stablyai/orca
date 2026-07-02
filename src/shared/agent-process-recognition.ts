@@ -92,6 +92,9 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
+  if (normalized.startsWith('codewhale-')) {
+    return PROCESS_TO_AGENT.get('codewhale')
+  }
   return undefined
 }
 
@@ -268,6 +271,10 @@ export function isExpectedAgentProcess(
   const normalizedExpected = normalizeProcessName(expectedProcess)
   if (!normalizedProcess || !normalizedExpected) {
     return false
+  }
+  // Why: CodeWhale can foreground a packaged binary while Orca waits on the TUI family.
+  if (normalizedExpected === 'codewhale-tui' && normalizedProcess.startsWith('codewhale-')) {
+    return true
   }
   return (
     normalizedProcess === normalizedExpected ||

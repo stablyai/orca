@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { codeWhaleDiscoveries } from './session-scanner-codewhale-sources'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
@@ -62,7 +63,8 @@ export async function discoverAiVaultSessionSources(args: {
     ...standardDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     openClawDiscovery(options, wslHomeDirs, limitPerAgent, issues),
     ...droidDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    ...kimiDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
+    ...kimiDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...codeWhaleDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
   ])
 }
 

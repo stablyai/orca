@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { parseCodeWhaleSessionFile } from './session-scanner-codewhale-json'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import {
@@ -73,5 +74,7 @@ export async function parseAgentSessionFile(
       return parseDevinSessionFile(candidate.file, platform)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform)
+    case 'codewhale':
+      return parseCodeWhaleSessionFile(candidate.file, platform, candidate.codeWhaleHome ?? null)
   }
 }

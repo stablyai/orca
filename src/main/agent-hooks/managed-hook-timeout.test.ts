@@ -30,6 +30,7 @@ vi.mock('os', async (importOriginal) => {
 
 import { MANAGED_HOOK_TIMEOUT_MILLISECONDS, MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
 import { CodexHookService } from '../codex/hook-service'
+import { CodeWhaleHookService } from '../codewhale/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
@@ -261,6 +262,18 @@ describe('managed agent hook timeouts', () => {
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
   })
 
+  it('writes a timeout on the managed CodeWhale TOML hook block', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const status = await new CodeWhaleHookService().installRemote(sftp, REMOTE_HOME)
+    expect(status.state).toBe('installed')
+    const config = fs.files.get(`${REMOTE_HOME}/.codewhale/config.toml`)!
+    const timeoutLines = config.match(
+      new RegExp(`timeout_secs = ${MANAGED_HOOK_TIMEOUT_SECONDS}`, 'g')
+    )
+    expect(timeoutLines?.length ?? 0).toBeGreaterThan(0)
+    expect(config).toContain('/home/dev/.orca/agent-hooks/codewhale-hook.sh')
+  })
+
   it('writes a config-level timeout on local-only Droid hooks', () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'orca-droid-hook-timeout-'))
     homedirMock.mockReturnValue(homeDir)
@@ -296,6 +309,16 @@ describe('managed agent hook timeouts', () => {
     const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/kimi-hook.sh`)!
     expect(kimiWrapper, 'kimi wrapper missing --connect-timeout').toContain('--connect-timeout')
     expect(kimiWrapper, 'kimi wrapper missing --max-time').toContain('--max-time')
+    curlWrappersChecked += 1
+    const codeWhale = createFakeSftp()
+    await new CodeWhaleHookService().installRemote(codeWhale.sftp, REMOTE_HOME)
+    const codeWhaleWrapper = codeWhale.fs.files.get(
+      `${REMOTE_HOME}/.orca/agent-hooks/codewhale-hook.sh`
+    )!
+    expect(codeWhaleWrapper, 'codewhale wrapper missing --connect-timeout').toContain(
+      '--connect-timeout'
+    )
+    expect(codeWhaleWrapper, 'codewhale wrapper missing --max-time').toContain('--max-time')
     curlWrappersChecked += 1
     expect(curlWrappersChecked).toBeGreaterThan(0)
   })

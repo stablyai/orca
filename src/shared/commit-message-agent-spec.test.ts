@@ -123,6 +123,11 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(listCommitMessageAgentIds()).not.toContain(CUSTOM_AGENT_ID)
   })
 
+  it('does not expose CodeWhale until Source Control prompts can avoid argv limits', () => {
+    expect(getCommitMessageAgentSpec('codewhale')).toBeUndefined()
+    expect(listCommitMessageAgentIds()).not.toContain('codewhale')
+  })
+
   it('orders Codex models by version descending to match the official picker', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([

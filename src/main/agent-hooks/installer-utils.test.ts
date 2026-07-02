@@ -416,6 +416,39 @@ describe('buildWindowsAgentHookPostCommand', () => {
     expect(command).toMatch(/^"%SystemRoot%\\System32\\curl\.exe"/)
     expect(command).not.toMatch(/^curl\.exe\b/)
   })
+
+  it('can stage extra env fields and literal payload through UTF-8 files', () => {
+    const command = buildWindowsAgentHookPostCommand('codewhale', {
+      extraEnvFileFields: [
+        ['hook_event_name', 'ORCA_CODEWHALE_HOOK_EVENT'],
+        ['deepseekToolArgs', 'DEEPSEEK_TOOL_ARGS']
+      ],
+      payload: { kind: 'literal', value: '{}' },
+      tempDirEnvName: 'ORCA_CODEWHALE_FORM_DIR',
+      tempDirPrefix: 'orca-codewhale-hook'
+    })
+    const encodedFieldWriter = command.match(/-EncodedCommand (\S+)/)?.[1]
+    expect(encodedFieldWriter).toBeDefined()
+    const fieldWriter = Buffer.from(encodedFieldWriter!, 'base64').toString('utf16le')
+
+    expect(command).toContain('%ORCA_CODEWHALE_FORM_DIR%')
+    expect(command).toContain('orca-codewhale-hook-%RANDOM%')
+    expect(command).toContain('--data-urlencode "hook_event_name@%ORCA_CODEWHALE_FORM_DIR%\\hook_event_name"')
+    expect(command).toContain('--data-urlencode "deepseekToolArgs@%ORCA_CODEWHALE_FORM_DIR%\\deepseekToolArgs"')
+    expect(command).toContain('--data-urlencode "payload@%ORCA_CODEWHALE_FORM_DIR%\\payload"')
+    expect(command).not.toContain('payload@-')
+    expect(fieldWriter).toContain("'hook_event_name' = 'ORCA_CODEWHALE_HOOK_EVENT'")
+    expect(fieldWriter).toContain("'deepseekToolArgs' = 'DEEPSEEK_TOOL_ARGS'")
+    expect(fieldWriter).toContain('Join-Path $env:ORCA_CODEWHALE_FORM_DIR "payload"')
+  })
+
+  it('rejects Windows form field path sentinels', () => {
+    expect(() =>
+      buildWindowsAgentHookPostCommand('codewhale', {
+        extraEnvFileFields: [['..', 'DEEPSEEK_TOOL_ARGS']]
+      })
+    ).toThrow('Unsafe Windows hook form field name')
+  })
 })
 
 describe('buildWindowsAgentHookCurlPostCommand', () => {

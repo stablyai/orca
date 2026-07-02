@@ -27,6 +27,7 @@ export type AiVaultScanOptions = {
   droidSessionsDir?: string
   droidProjectsDir?: string
   kimiSessionsDir?: string
+  codeWhaleSessionsDir?: string
   limit?: number
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
@@ -45,12 +46,14 @@ export type SessionFileCandidate = {
   agent: AiVaultAgent
   file: FileWithMtime
   codexHome: string | null
+  codeWhaleHome?: string | null
 }
 
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  codeWhaleHome?: string | null
 }
 
 export type SessionParseResult = {

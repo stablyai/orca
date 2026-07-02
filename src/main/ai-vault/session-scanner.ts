@@ -53,7 +53,10 @@ export async function scanAiVaultSessions(
           codexHome:
             discovery.agent === 'codex'
               ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-              : null
+              : null,
+          ...(discovery.agent === 'codewhale'
+            ? { codeWhaleHome: discovery.codeWhaleHome ?? null }
+            : {})
         })
       )
     )

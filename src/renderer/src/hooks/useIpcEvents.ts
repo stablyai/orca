@@ -1423,7 +1423,7 @@ export function useIpcEvents(): void {
                     ...(launchAgent
                       ? {
                           launchAgent,
-                          ...initialAgentTabViewModeProps(store.settings)
+                          ...initialAgentTabViewModeProps(store.settings, launchAgent)
                         }
                       : {}),
                     // Why: tabId hint comes from CLI-spawned PTYs whose env
@@ -1602,7 +1602,7 @@ export function useIpcEvents(): void {
             ? {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
-                ...initialAgentTabViewModeProps(store.settings)
+                ...initialAgentTabViewModeProps(store.settings, data.launchAgent)
               }
             : shouldActivate
               ? undefined

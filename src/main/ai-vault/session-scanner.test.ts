@@ -9,6 +9,7 @@ let tempRoots: string[] = []
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
@@ -33,12 +34,47 @@ function isolatedScanRoots(root: string) {
     piSessionsDir: join(root, 'pi-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    codeWhaleSessionsDir: join(root, 'codewhale-sessions')
   }
 }
 
 function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
+}
+
+async function writeCodeWhaleSession(
+  sessionsDir: string,
+  args: { cwd?: string; sessionId?: string; title?: string } = {}
+): Promise<string> {
+  const sessionId = args.sessionId ?? 'codewhale-session'
+  const title = args.title ?? 'CodeWhale title'
+  const cwd = args.cwd ?? '/tmp/codewhale'
+  await mkdir(sessionsDir, { recursive: true })
+  const filePath = join(sessionsDir, `${sessionId}.json`)
+  await writeFile(
+    filePath,
+    JSON.stringify({
+      schema_version: 1,
+      metadata: {
+        id: sessionId,
+        title,
+        created_at: '2026-06-30T10:40:36.468636Z',
+        updated_at: '2026-06-30T10:41:36.468636Z',
+        message_count: 2,
+        total_tokens: 320,
+        model: 'deepseek-v4',
+        workspace: cwd
+      },
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: title }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'CodeWhale reply' }] }
+      ],
+      system_prompt: 'system'
+    }),
+    'utf-8'
+  )
+  return filePath
 }
 
 describe('scanAiVaultSessions', () => {
@@ -269,6 +305,7 @@ describe('scanAiVaultSessions', () => {
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const wslHome = join(root, 'wsl', 'Ubuntu', 'home', 'ada')
+    vi.stubEnv('CODEWHALE_HOME', join(root, 'missing-codewhale-home'))
     await mkdir(join(wslHome, '.claude', 'projects', 'repo'), { recursive: true })
     await mkdir(
       join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions'),
@@ -317,9 +354,16 @@ describe('scanAiVaultSessions', () => {
         }
       ])
     )
+    const codeWhaleHome = join(wslHome, '.codewhale')
+    await writeCodeWhaleSession(join(codeWhaleHome, 'sessions'), {
+      sessionId: 'codewhale-wsl',
+      title: 'CodeWhale WSL title',
+      cwd: '/home/ada/codewhale'
+    })
 
     const result = await scanAiVaultSessions({
       ...roots,
+      codeWhaleSessionsDir: undefined,
       wslHomeDirs: [wslHome],
       platform: 'win32'
     })
@@ -327,10 +371,16 @@ describe('scanAiVaultSessions', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions.map((session) => session.title).sort()).toEqual([
       'Claude WSL title',
+      'CodeWhale WSL title',
       'Codex WSL title'
     ])
     expect(result.sessions.find((session) => session.agent === 'codex')?.codexHome).toBe(
       join(wslHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
+    )
+    const codeWhale = result.sessions.find((session) => session.agent === 'codewhale')
+    expect(codeWhale?.codeWhaleHome).toBe(codeWhaleHome)
+    expect(codeWhale?.resumeCommand).toBe(
+      `cmd /d /s /c "cd /d ""/home/ada/codewhale"" && set ""CODEWHALE_HOME=${codeWhaleHome}"" && codewhale --mouse-capture resume ""codewhale-wsl"""`
     )
   })
 
@@ -707,6 +757,35 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    await mkdir(roots.codeWhaleSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.codeWhaleSessionsDir, 'codewhale-session.json'),
+      JSON.stringify({
+        schema_version: 1,
+        metadata: {
+          id: 'codewhale-session',
+          title: 'CodeWhale vault title',
+          created_at: '2026-05-01T10:12:00.000Z',
+          updated_at: '2026-05-01T10:12:05.000Z',
+          message_count: 2,
+          total_tokens: 12,
+          model: 'deepseek-v4',
+          workspace: '/tmp/codewhale'
+        },
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'CodeWhale vault title' }]
+          },
+          {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'CodeWhale reply' }]
+          }
+        ],
+        system_prompt: 'system'
+      })
+    )
+
     const result = await scanAiVaultSessions({
       ...roots,
       platform: 'darwin',
@@ -750,6 +829,38 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
+    )
+    expect(commandByAgent.get('codewhale')).toBe(
+      `cd '/tmp/codewhale' && CODEWHALE_HOME='${root}' codewhale --mouse-capture resume 'codewhale-session'`
+    )
+  })
+
+  it('indexes explicit CodeWhale saved-session JSON with pinned resume homes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codewhale-explicit-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const codeWhaleHome = join(root, 'codewhale-home')
+    const sessionsDir = join(codeWhaleHome, 'sessions')
+    await writeCodeWhaleSession(sessionsDir)
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      codeWhaleSessionsDir: sessionsDir,
+      platform: 'darwin',
+      limit: 10
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      agent: 'codewhale',
+      sessionId: 'codewhale-session',
+      title: 'CodeWhale title',
+      cwd: '/tmp/codewhale',
+      codeWhaleHome
+    })
+    expect(result.sessions[0]?.resumeCommand).toBe(
+      `cd '/tmp/codewhale' && CODEWHALE_HOME='${codeWhaleHome}' codewhale --mouse-capture resume 'codewhale-session'`
     )
   })
 

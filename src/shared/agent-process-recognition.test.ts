@@ -16,6 +16,32 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('codex-aarch64-ap')).toBe(true)
   })
 
+  it('recognizes CodeWhale aliases and packaged foreground process names', () => {
+    expect(recognizeAgentProcess('codewhale')).toEqual({
+      agent: 'codewhale',
+      processName: 'codewhale'
+    })
+    expect(recognizeAgentProcess('codew')).toEqual({
+      agent: 'codewhale',
+      processName: 'codew'
+    })
+    expect(recognizeAgentProcess('codewhale-tui')).toEqual({
+      agent: 'codewhale',
+      processName: 'codewhale-tui'
+    })
+    expect(recognizeAgentProcess('codewhale-aarch64-apple-darwin')).toEqual({
+      agent: 'codewhale',
+      processName: 'codewhale-aarch64-apple-darwin'
+    })
+    expect(recognizeAgentProcess('codewhale-tui-x86_64-pc-windows-msvc')).toEqual({
+      agent: 'codewhale',
+      processName: 'codewhale-tui-x86_64-pc-windows-msvc'
+    })
+    expect(isExpectedAgentProcess('codewhale-tui-aarch64-apple-darwin', 'codewhale-tui')).toBe(true)
+    expect(isExpectedAgentProcess('codewhale-aarch64-apple-darwin', 'codewhale-tui')).toBe(true)
+    expect(isRecognizedAgentType('codewhale-tui-aarch64-apple-darwin')).toBe(true)
+  })
+
   it('recognizes the OpenClaude foreground process', () => {
     expect(recognizeAgentProcess('/usr/local/bin/openclaude')).toEqual({
       agent: 'openclaude',

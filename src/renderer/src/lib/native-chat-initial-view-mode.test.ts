@@ -6,33 +6,53 @@ import {
 
 describe('decideInitialAgentTabViewMode', () => {
   it("returns 'chat' when native chat and the opt-in default setting are on", () => {
-    expect(decideInitialAgentTabViewMode(true, true)).toBe('chat')
+    expect(decideInitialAgentTabViewMode('claude', true, true)).toBe('chat')
+    expect(decideInitialAgentTabViewMode('codex', true, true)).toBe('chat')
+  })
+
+  it('returns undefined for CodeWhale because native chat cannot render it', () => {
+    expect(decideInitialAgentTabViewMode('codewhale', true, true)).toBeUndefined()
   })
 
   it('returns undefined when native chat is disabled', () => {
-    expect(decideInitialAgentTabViewMode(false, true)).toBeUndefined()
+    expect(decideInitialAgentTabViewMode('claude', false, true)).toBeUndefined()
   })
 
   it('returns undefined when the default-chat setting is off', () => {
-    expect(decideInitialAgentTabViewMode(true, false)).toBeUndefined()
+    expect(decideInitialAgentTabViewMode('claude', true, false)).toBeUndefined()
   })
 
   it('returns undefined when the setting is missing (legacy settings)', () => {
-    expect(decideInitialAgentTabViewMode(true, undefined)).toBeUndefined()
+    expect(decideInitialAgentTabViewMode('claude', true, undefined)).toBeUndefined()
   })
 
   it('returns tab creation props only when chat should be the initial mode', () => {
     expect(
-      initialAgentTabViewModeProps({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true
-      })
+      initialAgentTabViewModeProps(
+        {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        },
+        'claude'
+      )
     ).toEqual({ viewMode: 'chat' })
     expect(
-      initialAgentTabViewModeProps({
-        experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: true
-      })
+      initialAgentTabViewModeProps(
+        {
+          experimentalNativeChat: false,
+          openAgentTabsInChatByDefault: true
+        },
+        'claude'
+      )
+    ).toEqual({})
+    expect(
+      initialAgentTabViewModeProps(
+        {
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        },
+        'codewhale'
+      )
     ).toEqual({})
   })
 })

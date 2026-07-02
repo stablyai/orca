@@ -92,6 +92,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+    expect(resolveHookSource('/hook/codewhale')).toBe('codewhale')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -695,6 +696,125 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.payload).toMatchObject({ agentType: 'kimi', state: 'done' })
     // The Claude-shaped session_id is captured for provider-session resume.
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
+  })
+
+  it('normalizes CodeWhale hook events and provider session metadata', () => {
+    const toolAfter = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          event: 'tool_call_after',
+          session_id: 'cw-session',
+          tool_name: 'Bash',
+          tool_result: { text: '/repo' }
+        }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        payload: { event: 'turn_end', session_id: 'cw-session', status: 'success' }
+      },
+      'production'
+    )
+    const failed = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          event: 'session_end',
+          session_id: 'cw-session',
+          status: 'failed',
+          error: 'tool crashed'
+        }
+      },
+      'production'
+    )
+    const onError = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        hookEventName: 'on_error',
+        payload: '',
+        deepseekSessionId: 'cw-session',
+        deepseekError: 'rate limited'
+      },
+      'production'
+    )
+
+    expect(toolAfter?.payload).toMatchObject({
+      agentType: 'codewhale',
+      state: 'working',
+      lastAssistantMessage: '/repo'
+    })
+    expect(done?.payload).toMatchObject({ agentType: 'codewhale', state: 'done' })
+    expect(failed?.payload).toMatchObject({
+      agentType: 'codewhale',
+      state: 'blocked',
+      lastAssistantMessage: 'tool crashed'
+    })
+    expect(onError?.payload).toMatchObject({
+      agentType: 'codewhale',
+      state: 'blocked',
+      lastAssistantMessage: 'rate limited'
+    })
+  })
+
+  it('ignores CodeWhale prompt and tool gate events', () => {
+    const prompt = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          event: 'message_submit',
+          session_id: 'cw-session',
+          text: 'ship the fix'
+        }
+      },
+      'production'
+    )
+    const gate = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        hookEventName: 'tool_call_before',
+        payload: '',
+        deepseekSessionId: 'cw-session',
+        deepseekToolName: 'Bash',
+        deepseekToolArgs: '{"command":"pwd"}'
+      },
+      'production'
+    )
+
+    expect(prompt).toBeNull()
+    expect(gate).toBeNull()
+  })
+
+  it('ignores unknown CodeWhale events instead of inventing status', () => {
+    const result = normalizeHookPayload(
+      state,
+      'codewhale',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          event: 'message_delta',
+          session_id: 'cw-session',
+          text: 'partial assistant text'
+        }
+      },
+      'production'
+    )
+
+    expect(result).toBeNull()
   })
 
   it('normalizes MiMo Code OpenCode-compatible lifecycle events as mimo-code status', () => {

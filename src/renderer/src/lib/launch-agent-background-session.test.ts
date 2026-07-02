@@ -425,6 +425,38 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
+  it('starts CodeWhale as a long-lived TUI before submitting the automation prompt', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'codewhale',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    const spawnCommand = mockSpawn.mock.calls[0]?.[0].command
+    expect(spawnCommand).toBe("codewhale --mouse-capture '--yolo'")
+    expect(spawnCommand).not.toContain('--prompt')
+    expect(spawnCommand).not.toContain('run the automation')
+    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
+      launchConfig: {
+        agentCommand: "codewhale --mouse-capture '--yolo'",
+        agentArgs: '--yolo',
+        agentEnv: {}
+      },
+      launchAgent: 'codewhale'
+    })
+    expectStablePaneSpawn()
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        content: 'run the automation',
+        agent: 'codewhale',
+        submit: true
+      })
+    )
+  })
+
   it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
     try {
