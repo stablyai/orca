@@ -75,14 +75,17 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    // Why: Claude Code runs hooks through Git Bash on Windows. Forward slashes
-    // alone don't survive a path with spaces — bash splits at the space and
-    // tries to execute `C:/Users/Jorge` as a command. Wrapping in
-    // `cmd.exe /d /c call "..."` keeps the path as one argument. #6078.
-    return wrapWindowsHookCommand(scriptPath)
+  if (process.platform !== 'win32') {
+    return wrapPosixHookCommand(scriptPath)
   }
-  return wrapPosixHookCommand(scriptPath)
+  // Why: Claude Code runs hooks through Git Bash/MSYS on Windows, which
+  // executes .cmd files directly. The bare forward-slash path avoids ~180ms
+  // of PowerShell startup per hook call. Fall back to PowerShell encoded
+  // launcher only when the path contains spaces or cmd metacharacters (#7116).
+  if (/^[A-Za-z0-9_.:\\/~-]+$/.test(scriptPath)) {
+    return scriptPath.replaceAll('\\', '/')
+  }
+  return wrapWindowsHookCommand(scriptPath)
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
