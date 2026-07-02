@@ -287,6 +287,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     nativeChatSessionOptions: {},
+    // Why: default global hotkey is Alt+Space (Option+Space on macOS) to
+    // match Spotlight/Raycast/Alfred conventions. Empty string disables it.
+    globalHotkey: process.platform === 'darwin' ? 'Alt+Space' : 'Alt+Space',
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,

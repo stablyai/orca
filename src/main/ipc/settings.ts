@@ -125,6 +125,11 @@ export function registerSettingsHandlers(
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
     }
+    if ('globalHotkey' in args) {
+      // Why: coerce to string so a non-string renderer payload can never
+      // persist a truthy non-string that later breaks accelerator registration.
+      sanitizedArgs.globalHotkey = typeof args.globalHotkey === 'string' ? args.globalHotkey : ''
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }

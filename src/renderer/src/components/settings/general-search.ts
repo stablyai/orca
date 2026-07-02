@@ -132,6 +132,23 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
     ]
+  },
+  {
+    title: translate('auto.components.settings.general.search.globalHotkey', 'Global Hotkey'),
+    description: translate(
+      'auto.components.settings.general.search.globalHotkeyDescription',
+      'System-wide keyboard shortcut to show or hide the Orca window.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.hotkey', 'hotkey'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.globalShortcut',
+        'global shortcut'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.showHide', 'show window'),
+      ...translateSearchKeyword('auto.components.settings.general.search.toggle', 'toggle'),
+      ...translateSearchKeyword('auto.components.settings.general.search.spotlight', 'spotlight')
+    ]
   }
 ])
 

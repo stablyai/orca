@@ -23,6 +23,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
+import { GlobalHotkeySetting } from './GlobalHotkeySetting'
 
 export {
   createAutoSaveDelayDraftState,
@@ -135,6 +136,28 @@ export function GeneralPane({
             onChange={() =>
               updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
             }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate('auto.components.settings.GeneralPane.globalHotkey', 'Global Hotkey')}
+          description={translate(
+            'auto.components.settings.GeneralPane.globalHotkeyDescription',
+            'Show or hide the Orca window from anywhere with a system-wide keyboard shortcut.'
+          )}
+          keywords={[
+            'hotkey',
+            'shortcut',
+            'global',
+            'show',
+            'hide',
+            'toggle',
+            'window',
+            'spotlight'
+          ]}
+        >
+          <GlobalHotkeySetting
+            value={settings.globalHotkey}
+            onChange={(accelerator) => updateSettings({ globalHotkey: accelerator })}
           />
         </SearchableSetting>
       </section>
