@@ -3,6 +3,7 @@ import { resetAndRefreshAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-
 const ATLAS_RECOVERY_DELAYS_MS = [120, 500]
 
 let terminalOutputRecoveryScheduled = false
+let terminalVisibilityRecoveryScheduled = false
 
 function scheduleNextFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame === 'function') {
@@ -22,13 +23,21 @@ function resetAtlasesAndRefreshPanes(): void {
   }
 }
 
-function scheduleAtlasRecoveryBurst(onComplete?: () => void): void {
-  scheduleNextFrame(() => resetAtlasesAndRefreshPanes())
+type AtlasRecoveryBurstCallbacks = {
+  onComplete?: () => void
+  onFirstReset?: () => void
+}
+
+function scheduleAtlasRecoveryBurst(callbacks: AtlasRecoveryBurstCallbacks = {}): void {
+  scheduleNextFrame(() => {
+    resetAtlasesAndRefreshPanes()
+    callbacks.onFirstReset?.()
+  })
   for (const [index, delayMs] of ATLAS_RECOVERY_DELAYS_MS.entries()) {
     globalThis.setTimeout(() => {
       resetAtlasesAndRefreshPanes()
       if (index === ATLAS_RECOVERY_DELAYS_MS.length - 1) {
-        onComplete?.()
+        callbacks.onComplete?.()
       }
     }, delayMs)
   }
@@ -47,7 +56,23 @@ export function scheduleTerminalWebglAtlasRecovery(): void {
   terminalOutputRecoveryScheduled = true
   // Why: TUI redraw bursts can corrupt xterm's shared WebGL glyph atlas without
   // a context-loss event; coalesce resets so output storms do not queue timers.
-  scheduleAtlasRecoveryBurst(() => {
-    terminalOutputRecoveryScheduled = false
+  scheduleAtlasRecoveryBurst({
+    onComplete: () => {
+      terminalOutputRecoveryScheduled = false
+    }
+  })
+}
+
+export function scheduleTerminalVisibilityWebglRecovery(): void {
+  if (terminalVisibilityRecoveryScheduled) {
+    return
+  }
+  terminalVisibilityRecoveryScheduled = true
+  // Why: tab reveal is a separate repaint boundary from hidden-output parsing,
+  // so an in-flight output recovery must not suppress the returned tab's repaint.
+  scheduleAtlasRecoveryBurst({
+    onFirstReset: () => {
+      terminalVisibilityRecoveryScheduled = false
+    }
   })
 }
