@@ -163,6 +163,25 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain(`path = '${join(getSystemCodexHomePath(), 'skills', 'local')}'`)
   })
 
+  it('leaves absolute, home-prefixed, env-shaped, and URL path references untouched', () => {
+    const passthroughLines = [
+      'model_instructions_file = "~/notes/instructions.md"',
+      'model_catalog_json = "$CODEX_ASSETS/models.json"',
+      'experimental_instructions_file = "%USERPROFILE%\\\\instructions.md"',
+      'log_dir = "/var/log/codex"',
+      "sqlite_home = 'C:\\Users\\example\\state'",
+      'experimental_compact_prompt_file = "file://server/prompts/compact.md"'
+    ]
+    writeFileSync(getSystemConfigPath(), `${passthroughLines.join('\n')}\n`, 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    for (const line of passthroughLines) {
+      expect(runtimeConfig).toContain(line)
+    }
+  })
+
   it('drops deprecated codex_hooks when the new hooks flag already exists', () => {
     writeFileSync(
       getSystemConfigPath(),
