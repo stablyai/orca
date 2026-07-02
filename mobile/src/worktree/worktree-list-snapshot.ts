@@ -25,6 +25,8 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     left.repoId === right.repoId &&
     left.repo === right.repo &&
     left.branch === right.branch &&
+    (left.hostId ?? null) === (right.hostId ?? null) &&
+    (left.terminalPlatform ?? null) === (right.terminalPlatform ?? null) &&
     left.displayName === right.displayName &&
     (left.workspaceStatus ?? null) === (right.workspaceStatus ?? null) &&
     (left.sortOrder ?? null) === (right.sortOrder ?? null) &&

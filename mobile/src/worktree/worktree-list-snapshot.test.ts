@@ -111,6 +111,16 @@ describe('areWorktreeListsEqual', () => {
     ).toBe(false)
   })
 
+  it('detects resume host and terminal platform changes', () => {
+    expect(areWorktreeListsEqual([worktree()], [worktree({ hostId: 'ssh:box' })])).toBe(false)
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ terminalPlatform: 'win32' })],
+        [worktree({ terminalPlatform: 'linux' })]
+      )
+    ).toBe(false)
+  })
+
   it('detects lineage changes', () => {
     const base = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-a' })
     const changedParent = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-b' })
