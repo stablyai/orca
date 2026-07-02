@@ -4118,7 +4118,8 @@
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
-          "sidebarRowMissing": "Target no longer exists"
+          "sidebarRowMissing": "Target no longer exists",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -6404,8 +6405,6 @@
           "a62b4cb39a": "Save Changes",
           "29af933cd5": "New SSH Target",
           "f2331ce599": "Edit SSH Target",
-          "7c13f58c91": "Until reset",
-          "55c56cf2c7": "Timeout after disconnect (seconds)",
           "4a342f44c1": "Advanced Connection",
           "e9609ddca6": "Proxy, jump host, and connection reuse",
           "8c922dffba": "Reuse SSH connection for faster setup",

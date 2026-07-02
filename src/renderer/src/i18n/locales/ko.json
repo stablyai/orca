@@ -4076,7 +4076,8 @@
           "hostAuthNeeded": "인증 필요",
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
-          "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다"
+          "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",

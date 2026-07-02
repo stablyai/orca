@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this menu keeps row targeting, batch actions, and ctrl-click event guards together so nested worktree menus share one event policy. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -659,8 +660,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
-        const bounds = event.currentTarget.getBoundingClientRect()
-        setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+        setMenuPoint({ x: event.clientX, y: event.clientY })
         setMenuOpenState(true)
       }}
       onClickCapture={(event) => {
@@ -669,14 +669,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     >
       {children}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpenState} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none absolute size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
+        {createPortal(
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-hidden
+              tabIndex={-1}
+              className="pointer-events-none fixed size-px opacity-0"
+              style={{ left: menuPoint.x, top: menuPoint.y }}
+            />
+          </DropdownMenuTrigger>,
+          document.body
+        )}
         <DropdownMenuContent
           className={cn('w-52', contentClassName)}
           sideOffset={0}
