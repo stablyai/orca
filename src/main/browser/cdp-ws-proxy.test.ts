@@ -97,6 +97,8 @@ describe('CdpWsProxy', () => {
     return result.stream as string
   }
 
+  const defaultPdfMarginInches = 1 / 2.54
+
   it('starts on a random port and returns ws:// URL', () => {
     expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
     expect(proxy.getPort()).toBeGreaterThan(0)
@@ -349,10 +351,10 @@ describe('CdpWsProxy', () => {
       pageSize: { width: 8.5, height: 11 },
       margins: {
         marginType: 'custom',
-        top: 24,
-        bottom: 48,
-        left: 72,
-        right: 96
+        top: 0.25,
+        bottom: 0.5,
+        left: 0.75,
+        right: 1
       },
       pageRanges: '1-2',
       preferCSSPageSize: true
@@ -361,6 +363,29 @@ describe('CdpWsProxy', () => {
       (call) => (call as unknown[])[0]
     )
     expect(forwardedMethods).not.toContain('Page.printToPDF')
+    client.close()
+  })
+
+  it('keeps default PDF margins for omitted sides', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 12,
+      method: 'Page.printToPDF',
+      params: {
+        marginTop: 0.25
+      }
+    })
+
+    expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
+      margins: {
+        marginType: 'custom',
+        top: 0.25,
+        bottom: defaultPdfMarginInches,
+        left: defaultPdfMarginInches,
+        right: defaultPdfMarginInches
+      }
+    })
     client.close()
   })
 

@@ -7,7 +7,7 @@ import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
-const PDF_INCH_TO_CSS_PIXEL = 96
+const PDF_DEFAULT_MARGIN_INCHES = 1 / 2.54
 const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
 const PDF_STREAM_HANDLE_PREFIX = 'orca-pdf-'
 const PDF_STREAM_TTL_MS = 5 * 60 * 1000
@@ -60,12 +60,13 @@ function buildPrintToPdfOptions(params: Record<string, unknown>): PrintToPDFOpti
   const marginLeft = finiteNumber(params.marginLeft)
   const marginRight = finiteNumber(params.marginRight)
   if ([marginTop, marginBottom, marginLeft, marginRight].some((margin) => margin !== null)) {
+    // CDP and Electron printToPDF both use inches; omitted CDP sides default to 1cm.
     options.margins = {
       marginType: 'custom',
-      top: (marginTop ?? 0) * PDF_INCH_TO_CSS_PIXEL,
-      bottom: (marginBottom ?? 0) * PDF_INCH_TO_CSS_PIXEL,
-      left: (marginLeft ?? 0) * PDF_INCH_TO_CSS_PIXEL,
-      right: (marginRight ?? 0) * PDF_INCH_TO_CSS_PIXEL
+      top: marginTop ?? PDF_DEFAULT_MARGIN_INCHES,
+      bottom: marginBottom ?? PDF_DEFAULT_MARGIN_INCHES,
+      left: marginLeft ?? PDF_DEFAULT_MARGIN_INCHES,
+      right: marginRight ?? PDF_DEFAULT_MARGIN_INCHES
     }
   }
 
