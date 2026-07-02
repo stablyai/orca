@@ -37,9 +37,9 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
-  ListChecks,
   MessageSquare,
   Monitor,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Send,
@@ -75,7 +75,7 @@ import {
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
-import { MobileAgentSessionHistoryIcon } from '../../../../src/agent-history/MobileAgentSessionHistoryIcon'
+import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
@@ -983,6 +983,7 @@ export default function SessionScreen() {
     useState<MobileNewTabAgentLoadState>('idle')
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
+  const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
     MobileSessionTab,
@@ -4568,6 +4569,9 @@ export default function SessionScreen() {
     const params = new URLSearchParams({ name: worktreeName || '' })
     router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
   }
+  const showAgentSessionHistoryAction = !isFolderWorkspaceRoute
+  const showChecksAction = prRepoContextLoaded && prIsGithubRepo
+  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
 
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
@@ -4618,19 +4622,12 @@ export default function SessionScreen() {
                 onPress={() => handlePanelTap('sourceControl')}
               />
             )}
-            {!isFolderWorkspaceRoute ? (
-              <MobileSessionHeaderIconButton
-                accessibilityLabel="Open agent session history"
-                icon={MobileAgentSessionHistoryIcon}
-                onPress={openAgentSessionHistory}
-              />
-            ) : null}
-            {prRepoContextLoaded && prIsGithubRepo ? (
+            {showHeaderMoreButton ? (
               <MobileSessionHeaderIconButton
                 active={activePanel === 'pr'}
-                accessibilityLabel="Open pull request"
-                icon={ListChecks}
-                onPress={() => handlePanelTap('pr')}
+                accessibilityLabel="More session actions"
+                icon={MoreHorizontal}
+                onPress={() => setShowHeaderMoreActions(true)}
               />
             ) : null}
           </View>
@@ -5210,6 +5207,15 @@ export default function SessionScreen() {
           )}
         </View>
       </View>
+
+      <MobileSessionHeaderMoreActionsSheet
+        visible={showHeaderMoreActions}
+        showAgentSessionHistory={showAgentSessionHistoryAction}
+        showChecks={showChecksAction}
+        onOpenAgentSessionHistory={openAgentSessionHistory}
+        onOpenChecks={() => handlePanelTap('pr')}
+        onClose={() => setShowHeaderMoreActions(false)}
+      />
 
       <ActionSheetModal
         visible={showCreateTabDrawer}
