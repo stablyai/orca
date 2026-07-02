@@ -2167,6 +2167,8 @@ const api = {
         screenY: number
         pageUrl: string
         linkUrl: string | null
+        selectionText: string
+        canCopy: boolean
         canGoBack: boolean
         canGoForward: boolean
       }) => void
@@ -2181,6 +2183,8 @@ const api = {
           screenY: number
           pageUrl: string
           linkUrl: string | null
+          selectionText: string
+          canCopy: boolean
           canGoBack: boolean
           canGoForward: boolean
         }
