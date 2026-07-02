@@ -5,8 +5,8 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   removeManagedCommands,
+  wrapHookCommand,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -75,17 +75,7 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  if (process.platform !== 'win32') {
-    return wrapPosixHookCommand(scriptPath)
-  }
-  // Why: Claude Code runs hooks through Git Bash/MSYS on Windows, which
-  // executes .cmd files directly. The bare forward-slash path avoids ~180ms
-  // of PowerShell startup per hook call. Fall back to PowerShell encoded
-  // launcher only when the path contains spaces or cmd metacharacters (#7116).
-  if (/^[A-Za-z0-9_.:\\/~-]+$/.test(scriptPath)) {
-    return scriptPath.replaceAll('\\', '/')
-  }
-  return wrapWindowsHookCommand(scriptPath)
+  return wrapHookCommand(scriptPath)
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {

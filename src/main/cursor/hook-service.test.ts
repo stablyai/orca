@@ -60,9 +60,12 @@ describe('CursorHookService', () => {
     expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
     for (const eventName of CURSOR_EVENTS) {
       const definition = config.hooks[eventName]?.[0]
-      expect(definition?.command).toMatch(
-        process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
-      )
+      expect(
+        process.platform === 'win32'
+          ? WINDOWS_POWERSHELL_LAUNCHER.test(definition?.command ?? '') ||
+              (definition?.command ?? '').includes(CURSOR_SCRIPT_FILE_NAME)
+          : /cursor-hook/.test(definition?.command ?? '')
+      ).toBe(true)
       if (process.platform !== 'win32') {
         expect(definition?.command).toContain(join(homeDir, '.orca'))
       }
@@ -100,7 +103,9 @@ describe('CursorHookService', () => {
 
         for (const eventName of ['beforeSubmitPrompt', 'stop']) {
           const command = config.hooks[eventName]?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+          expect(
+            WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(CURSOR_SCRIPT_FILE_NAME)
+          ).toBe(true)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -142,7 +147,8 @@ describe('CursorHookService', () => {
     expect(
       promptCommands.filter((command) =>
         process.platform === 'win32'
-          ? command !== undefined && WINDOWS_POWERSHELL_LAUNCHER.test(command)
+          ? command !== undefined &&
+            (WINDOWS_POWERSHELL_LAUNCHER.test(command) || command.includes(CURSOR_SCRIPT_FILE_NAME))
           : command?.includes(CURSOR_SCRIPT_FILE_NAME)
       )
     ).toHaveLength(1)

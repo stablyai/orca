@@ -9,8 +9,8 @@ import {
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
+  wrapHookCommand,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -57,9 +57,7 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+  return wrapHookCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {

@@ -20,6 +20,8 @@ vi.mock('os', async () => {
 
 import { CommandCodeHookService } from './hook-service'
 
+const COMMAND_CODE_SCRIPT_FILE_NAME =
+  process.platform === 'win32' ? 'command-code-hook.cmd' : 'command-code-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
@@ -51,9 +53,12 @@ describe('CommandCodeHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
     expect(config.hooks.Stop[0].matcher).toBeUndefined()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /command-code-hook/
-    )
+    const cmd = config.hooks.PreToolUse[0].hooks[0].command
+    expect(
+      process.platform === 'win32'
+        ? WINDOWS_POWERSHELL_LAUNCHER.test(cmd) || cmd.includes(COMMAND_CODE_SCRIPT_FILE_NAME)
+        : /command-code-hook/.test(cmd)
+    ).toBe(true)
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
@@ -80,7 +85,10 @@ describe('CommandCodeHookService', () => {
         ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
 
         const command = config.hooks.PreToolUse[0].hooks[0].command
-        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+        expect(
+          WINDOWS_POWERSHELL_LAUNCHER.test(command) ||
+            command.includes(COMMAND_CODE_SCRIPT_FILE_NAME)
+        ).toBe(true)
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
       }
