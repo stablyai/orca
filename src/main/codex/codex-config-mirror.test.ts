@@ -163,6 +163,67 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain(`path = '${join(getSystemCodexHomePath(), 'skills', 'local')}'`)
   })
 
+  it('rewrites profile and debug lockfile path references', () => {
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        '[profiles.fast]',
+        'model_catalog_json = "catalogs/fast.json"',
+        '',
+        '[debug.config_lockfile]',
+        'load_path = "locks/config.lock.toml"',
+        'export_dir = "locks"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain(
+      `model_catalog_json = '${join(getSystemCodexHomePath(), 'catalogs', 'fast.json')}'`
+    )
+    expect(runtimeConfig).toContain(
+      `load_path = '${join(getSystemCodexHomePath(), 'locks', 'config.lock.toml')}'`
+    )
+    expect(runtimeConfig).toContain(`export_dir = '${join(getSystemCodexHomePath(), 'locks')}'`)
+  })
+
+  it('does not treat lines inside multiline arrays as headers or path keys', () => {
+    writeFileSync(
+      getSystemConfigPath(),
+      ['notify = [', '  ["custom", 1]', ']', 'log_dir = "logs"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('  ["custom", 1]')
+    expect(runtimeConfig).toContain(`log_dir = '${join(getSystemCodexHomePath(), 'logs')}'`)
+  })
+
+  it('escapes control characters instead of emitting them raw in rewritten paths', () => {
+    writeFileSync(getSystemConfigPath(), 'log_dir = "logs\\bdir"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('log_dir = "')
+    expect(runtimeConfig).toContain('\\u0008')
+    expect(runtimeConfig).not.toContain('\b')
+  })
+
+  it('leaves values with lone-surrogate unicode escapes untouched', () => {
+    writeFileSync(getSystemConfigPath(), 'log_dir = "logs\\uD800dir"\n', 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('log_dir = "logs\\uD800dir"')
+  })
+
   it('leaves absolute, home-prefixed, env-shaped, and URL path references untouched', () => {
     const passthroughLines = [
       'model_instructions_file = "~/notes/instructions.md"',

@@ -12,9 +12,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { escapeRegex } from '../../shared/string-utils'
 import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import {
-  isInsideTomlMultilineString,
-  updateTomlMultilineState,
-  type TomlMultilineState
+  createTomlLineScanState,
+  isTomlStructuralLine,
+  updateTomlLineScanState
 } from './config-toml-line-scan'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
@@ -481,16 +481,14 @@ export function normalizeHookTrustKeyForLookup(key: string): string {
 function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
   const ranges: TrustBlockRange[] = []
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    const headerKey = isInsideTomlMultilineString(multilineState)
-      ? null
-      : parseHookStateHeaderKey(line)
+    const headerKey = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (
       headerKey !== null &&
       normalizeHookTrustKeyForLookup(headerKey) === normalizeHookTrustKeyForLookup(key)
@@ -503,7 +501,7 @@ function findTrustBlockRanges(content: string, key: string): TrustBlockRange[] {
       cursor = Math.max(blockEnd, nextCursor)
       continue
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     cursor = nextCursor
   }
   return ranges
@@ -601,13 +599,13 @@ function skipTomlInlineWhitespace(line: string, startIndex: number): number {
 // a flat regex misclassifies both cases.
 function findNextTableHeader(text: string): number {
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < text.length) {
     const newlineIdx = text.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? text.length : newlineIdx
     const rawLine = text.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
-    if (!isInsideTomlMultilineString(multilineState)) {
+    if (isTomlStructuralLine(scanState)) {
       const trimmed = line.trimStart()
       // Why: stop at both `[table]` and `[[array.of.tables]]` — both end our
       // block. Skipping `[[ ]]` here would let our slice consume past array
@@ -616,7 +614,7 @@ function findNextTableHeader(text: string): number {
         return cursor
       }
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     if (newlineIdx === -1) {
       return -1
     }
@@ -749,14 +747,14 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
   // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
   // `'''...'''` multi-line string isn't mistaken for a real header.
   let cursor = 0
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
   while (cursor < content.length) {
     const newlineIdx = content.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
     const rawLine = content.slice(cursor, lineEnd)
     const line = rawLine.replace(/\r$/, '')
     const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
-    const key = isInsideTomlMultilineString(multilineState) ? null : parseHookStateHeaderKey(line)
+    const key = isTomlStructuralLine(scanState) ? parseHookStateHeaderKey(line) : null
     if (key !== null) {
       // Why: block ends at the next *real* header (multi-line aware).
       const after = content.slice(nextCursor)
@@ -782,7 +780,7 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
       cursor = nextCursor
       continue
     }
-    multilineState = updateTomlMultilineState(multilineState, line)
+    scanState = updateTomlLineScanState(scanState, line)
     cursor = nextCursor
   }
   return result

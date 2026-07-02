@@ -1,23 +1,29 @@
 // Why: Orca edits Codex config.toml byte-preservingly (no TOML dependency), so
-// every editor must agree on which lines sit inside multiline strings vs real
-// TOML structure. Keep the line-scanner in one place to avoid drift.
+// every editor must agree on which lines sit inside multiline strings or
+// arrays vs real TOML structure. Keep the line-scanner in one place to avoid
+// drift.
 
-export type TomlMultilineState = {
+export type TomlLineScanState = {
   basic: boolean
   literal: boolean
+  arrayDepth: number
 }
 
 type TomlMultilineMode = 'basic' | 'literal' | null
 
-export function isInsideTomlMultilineString(state: TomlMultilineState): boolean {
-  return state.basic || state.literal
+export function createTomlLineScanState(): TomlLineScanState {
+  return { basic: false, literal: false, arrayDepth: 0 }
 }
 
-export function updateTomlMultilineState(
-  state: TomlMultilineState,
-  line: string
-): TomlMultilineState {
+// Why: lines inside multiline strings or unclosed arrays can look exactly like
+// `[section]` headers or `key = value` pairs but are data, not structure.
+export function isTomlStructuralLine(state: TomlLineScanState): boolean {
+  return !state.basic && !state.literal && state.arrayDepth === 0
+}
+
+export function updateTomlLineScanState(state: TomlLineScanState, line: string): TomlLineScanState {
   let mode: TomlMultilineMode = state.basic ? 'basic' : state.literal ? 'literal' : null
+  let arrayDepth = state.arrayDepth
   let index = 0
   while (index < line.length) {
     if (mode === 'basic') {
@@ -65,9 +71,21 @@ export function updateTomlMultilineState(
       index = skipTomlLiteralString(line, index + 1)
       continue
     }
+    // Why: table-header brackets balance within their line, so a depth that
+    // stays positive across lines means a multiline array is still open.
+    if (char === '[') {
+      arrayDepth += 1
+      index += 1
+      continue
+    }
+    if (char === ']') {
+      arrayDepth = Math.max(0, arrayDepth - 1)
+      index += 1
+      continue
+    }
     index += 1
   }
-  return { basic: mode === 'basic', literal: mode === 'literal' }
+  return { basic: mode === 'basic', literal: mode === 'literal', arrayDepth }
 }
 
 export function getTomlTableHeader(line: string): string | null {

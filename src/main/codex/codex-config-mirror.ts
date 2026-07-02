@@ -4,10 +4,10 @@ import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
 import {
+  createTomlLineScanState,
   getTomlTableHeader,
-  isInsideTomlMultilineString,
-  updateTomlMultilineState,
-  type TomlMultilineState
+  isTomlStructuralLine,
+  updateTomlLineScanState
 } from './config-toml-line-scan'
 
 function getRuntimeCodexConfigTomlPath(): string {
@@ -187,14 +187,12 @@ function getTomlSections(config: string): TomlSection[] {
   const sections: TomlSection[] = []
   let sectionStart = -1
   let sectionHeader: string | null = null
-  let multilineState: TomlMultilineState = { basic: false, literal: false }
+  let scanState = createTomlLineScanState()
 
   for (let index = 0; index < lines.length; index += 1) {
-    const header = isInsideTomlMultilineString(multilineState)
-      ? null
-      : getTomlTableHeader(lines[index] ?? '')
+    const header = isTomlStructuralLine(scanState) ? getTomlTableHeader(lines[index] ?? '') : null
     if (!header) {
-      multilineState = updateTomlMultilineState(multilineState, lines[index] ?? '')
+      scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
       continue
     }
 
@@ -207,7 +205,7 @@ function getTomlSections(config: string): TomlSection[] {
     }
     sectionStart = index
     sectionHeader = header
-    multilineState = updateTomlMultilineState(multilineState, lines[index] ?? '')
+    scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
   }
 
   if (sectionStart !== -1) {
