@@ -1,5 +1,10 @@
 import type { Socket } from 'node:net'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
+import {
+  DaemonStreamBackpressureQueue,
+  type DaemonBackpressuredStreamLine,
+  type DaemonStreamBackpressureQueueOptions
+} from './daemon-stream-backpressure-queue'
 
 type StreamDataClient = {
   streamSocket: Socket | null
@@ -22,7 +27,7 @@ type EnqueueOptions = {
 
 type DaemonStreamDataBatcherOptions = {
   maxLineBytes?: number
-}
+} & DaemonStreamBackpressureQueueOptions
 
 function encodeStreamDataEvent(sessionId: string, data: string): string {
   return encodeNdjson({
@@ -104,6 +109,7 @@ function splitStreamDataForNdjson(sessionId: string, data: string, maxLineBytes:
 
 export class DaemonStreamDataBatcher {
   private pendingByClient = new Map<string, PendingStreamDataBatch>()
+  private backpressureQueue: DaemonStreamBackpressureQueue
   private getClient: (clientId: string) => StreamDataClient | undefined
   private maxLineBytes: number
 
@@ -113,6 +119,7 @@ export class DaemonStreamDataBatcher {
   ) {
     this.getClient = getClient
     this.maxLineBytes = Math.max(1, options.maxLineBytes ?? NDJSON_MAX_LINE_BYTES)
+    this.backpressureQueue = new DaemonStreamBackpressureQueue(options)
   }
 
   enqueue(clientId: string, sessionId: string, data: string, options: EnqueueOptions = {}): void {
@@ -166,7 +173,7 @@ export class DaemonStreamDataBatcher {
     }
 
     for (const entry of batch.queue) {
-      this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
+      this.writeStreamDataEvent(clientId, client.streamSocket, entry.sessionId, entry.data)
     }
   }
 
@@ -217,30 +224,47 @@ export class DaemonStreamDataBatcher {
     }
 
     for (const entry of flushed) {
-      this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
+      this.writeStreamDataEvent(clientId, client.streamSocket, entry.sessionId, entry.data, {
+        priority: true
+      })
     }
   }
 
   clear(clientId?: string): void {
-    const batches =
+    const clientIds =
       clientId === undefined
-        ? Array.from(this.pendingByClient.entries())
-        : [[clientId, this.pendingByClient.get(clientId)] as const]
+        ? new Set([...this.pendingByClient.keys(), ...this.backpressureQueue.clientIds()])
+        : new Set([clientId])
 
-    for (const [id, batch] of batches) {
+    for (const id of clientIds) {
+      const batch = this.pendingByClient.get(id)
       if (batch?.timer) {
         clearTimeout(batch.timer)
       }
       this.pendingByClient.delete(id)
+      this.backpressureQueue.clear(id)
     }
   }
 
-  private writeStreamDataEvent(streamSocket: Socket, sessionId: string, data: string): void {
+  private writeStreamDataEvent(
+    clientId: string,
+    streamSocket: Socket,
+    sessionId: string,
+    data: string,
+    options: { priority?: boolean } = {}
+  ): void {
     // Why: createNdjsonParser rejects oversized lines. Terminal output can
     // burst faster than the batch interval, so writer-side chunking prevents
     // the daemon from dropping its own stream events at the receiver.
-    for (const chunk of splitStreamDataForNdjson(sessionId, data, this.maxLineBytes)) {
-      streamSocket.write(encodeStreamDataEvent(sessionId, chunk))
-    }
+    const lines: DaemonBackpressuredStreamLine[] = splitStreamDataForNdjson(
+      sessionId,
+      data,
+      this.maxLineBytes
+    ).map((chunk) => ({
+      sessionId,
+      line: encodeStreamDataEvent(sessionId, chunk),
+      priority: options.priority === true
+    }))
+    this.backpressureQueue.writeLines(clientId, streamSocket, lines, options)
   }
 }

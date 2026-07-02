@@ -6431,6 +6431,173 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('caps pending renderer output per PTY and preserves the newest tail', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData(`${'a'.repeat(1024 * 1024)}${'b'.repeat(2 * 1024 * 1024)}`)
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: spawnResult.id,
+        data: 'b'.repeat(16 * 1024)
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingChars: 2 * 1024 * 1024 - 16 * 1024,
+        maxPendingCharsByPty: 2 * 1024 * 1024 - 16 * 1024,
+        rendererInFlightChars: 16 * 1024,
+        droppedPendingChars: 1024 * 1024,
+        peakDroppedPendingChars: 1024 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps total pending renderer output and trims background PTYs before active PTYs', async () => {
+    vi.useFakeTimers()
+    const procs = Array.from({ length: 11 }, () => createMockProc())
+    for (const proc of procs) {
+      spawnMock.mockReturnValueOnce(proc.proc)
+    }
+    let activePtyId: string | null = null
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawns: { id: string }[] = []
+      for (const _proc of procs) {
+        spawns.push(
+          (await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            cwd: '/tmp'
+          })) as { id: string }
+        )
+      }
+      const setActiveRendererPty = getPtySetActiveRendererPtyListener()
+      const activeIndex = procs.length - 1
+      activePtyId = spawns[activeIndex]!.id
+      setActiveRendererPty(null, { id: activePtyId, active: true })
+      mainWindow.webContents.send.mockClear()
+
+      for (let index = 0; index < procs.length; index++) {
+        procs[index]!.emitData(String.fromCharCode(65 + index).repeat(2 * 1024 * 1024))
+      }
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingChars: 16 * 1024 * 1024,
+        droppedPendingChars: 6 * 1024 * 1024,
+        peakDroppedPendingChars: 6 * 1024 * 1024
+      })
+
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: spawns[activeIndex]!.id,
+        data: String.fromCharCode(65 + activeIndex).repeat(16 * 1024)
+      })
+    } finally {
+      if (activePtyId) {
+        getPtySetActiveRendererPtyListener()(null, { id: activePtyId, active: false })
+      }
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds pending output flushed during PTY exit to one renderer slice', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('z'.repeat(20 * 1024))
+      mockProc.emitExit(0)
+
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
+        id: spawnResult.id,
+        data: 'z'.repeat(16 * 1024)
+      })
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'pty:exit', {
+        id: spawnResult.id,
+        code: 0
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingChars: 0,
+        rendererInFlightChars: 16 * 1024,
+        droppedPendingChars: 4 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops pending exit output when renderer ACK backpressure is saturated', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 31; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingChars: 88 * 1024,
+        rendererInFlightChars: 512 * 1024
+      })
+
+      mockProc.emitExit(0)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(33)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(33, 'pty:exit', {
+        id: spawnResult.id,
+        code: 0
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingChars: 0,
+        rendererInFlightChars: 512 * 1024,
+        droppedPendingChars: 88 * 1024
+      })
+
+      ackData(null, { id: spawnResult.id, charCount: 16 * 1024 })
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 496 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards only actually in-flight bytes to provider ACK backpressure', async () => {
     vi.useFakeTimers()
     const acknowledgeDataEvent = vi.fn()

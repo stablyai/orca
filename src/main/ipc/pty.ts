@@ -1136,6 +1136,8 @@ export type PtyRendererDeliveryDebugSnapshot = {
   peakRendererInFlightChars: number
   peakMaxRendererInFlightCharsByPty: number
   ackGatedFlushSkipCount: number
+  droppedPendingChars: number
+  peakDroppedPendingChars: number
 }
 
 const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapshot = {
@@ -1151,7 +1153,9 @@ const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapsh
   peakMaxPendingCharsByPty: 0,
   peakRendererInFlightChars: 0,
   peakMaxRendererInFlightCharsByPty: 0,
-  ackGatedFlushSkipCount: 0
+  ackGatedFlushSkipCount: 0,
+  droppedPendingChars: 0,
+  peakDroppedPendingChars: 0
 }
 
 let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot => ({
@@ -1308,6 +1312,7 @@ export function registerPtyHandlers(
   const rendererInFlightCharsByPty = new Map<string, number>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let totalPendingChars = 0
   let rendererInFlightTotalChars = 0
   const PTY_BATCH_INTERVAL_MS = 8
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
@@ -1315,6 +1320,8 @@ export function registerPtyHandlers(
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
   const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
   const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
+  const PTY_RENDERER_PENDING_HIGH_WATER_CHARS_BY_PTY = 2 * 1024 * 1024
+  const PTY_RENDERER_TOTAL_PENDING_HIGH_WATER_CHARS = 16 * 1024 * 1024
   const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
   // Why: active panes need a bounded lane through old hidden bulk output so a
   // keystroke redraw can reach the renderer before every background ACK lands.
@@ -1330,6 +1337,8 @@ export function registerPtyHandlers(
   let peakRendererInFlightChars = 0
   let peakMaxRendererInFlightCharsByPty = 0
   let ackGatedFlushSkipCount = 0
+  let droppedPendingChars = 0
+  let peakDroppedPendingChars = 0
 
   function getMaxMapValue(values: Iterable<number>): number {
     let max = 0
@@ -1340,16 +1349,14 @@ export function registerPtyHandlers(
   }
 
   function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
-    let pendingChars = 0
     let maxPendingCharsByPty = 0
     for (const pending of pendingData.values()) {
       const chars = pending.data.length
-      pendingChars += chars
       maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
     }
     return {
       pendingPtyCount: pendingData.size,
-      pendingChars,
+      pendingChars: totalPendingChars,
       maxPendingCharsByPty,
       rendererInFlightPtyCount: rendererInFlightCharsByPty.size,
       rendererInFlightChars: rendererInFlightTotalChars,
@@ -1360,7 +1367,9 @@ export function registerPtyHandlers(
       peakMaxPendingCharsByPty,
       peakRendererInFlightChars,
       peakMaxRendererInFlightCharsByPty,
-      ackGatedFlushSkipCount
+      ackGatedFlushSkipCount,
+      droppedPendingChars,
+      peakDroppedPendingChars
     }
   }
 
@@ -1373,6 +1382,7 @@ export function registerPtyHandlers(
       peakMaxRendererInFlightCharsByPty,
       current.maxRendererInFlightCharsByPty
     )
+    peakDroppedPendingChars = Math.max(peakDroppedPendingChars, droppedPendingChars)
   }
 
   readPtyRendererDeliveryDebugSnapshot = readCurrentPtyRendererDeliveryDebugSnapshot
@@ -1382,6 +1392,8 @@ export function registerPtyHandlers(
     peakRendererInFlightChars = 0
     peakMaxRendererInFlightCharsByPty = 0
     ackGatedFlushSkipCount = 0
+    droppedPendingChars = 0
+    peakDroppedPendingChars = 0
     recordPtyRendererDeliveryPressure()
   }
 
@@ -1461,6 +1473,31 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:data', payload)
   }
 
+  function setPendingPtyData(id: string, pending: PendingPtyData): void {
+    const previousChars = pendingData.get(id)?.data.length ?? 0
+    if (pending.data.length === 0) {
+      pendingData.delete(id)
+      totalPendingChars -= previousChars
+      return
+    }
+    pendingData.set(id, pending)
+    totalPendingChars += pending.data.length - previousChars
+  }
+
+  function deletePendingPtyData(id: string): PendingPtyData | undefined {
+    const pending = pendingData.get(id)
+    if (pending) {
+      pendingData.delete(id)
+      totalPendingChars -= pending.data.length
+    }
+    return pending
+  }
+
+  function clearPendingPtyData(): void {
+    pendingData.clear()
+    totalPendingChars = 0
+  }
+
   function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
     const entries = Array.from(pendingData.entries())
     const active: [string, PendingPtyData][] = []
@@ -1482,16 +1519,78 @@ export function registerPtyHandlers(
     preservesSeq: boolean
   ): PendingPtyData {
     if (!preservesSeq) {
-      return { data: (existing?.data ?? '') + data }
+      return clampPendingPtyData({ data: (existing?.data ?? '') + data })
     }
     if (!existing) {
-      return typeof startSeq === 'number' ? { data, startSeq } : { data }
+      return clampPendingPtyData(typeof startSeq === 'number' ? { data, startSeq } : { data })
     }
     const next: PendingPtyData = { data: existing.data + data }
     if (typeof existing.startSeq === 'number') {
       next.startSeq = existing.startSeq
     }
+    return clampPendingPtyData(next)
+  }
+
+  function clampPendingPtyData(pending: PendingPtyData): PendingPtyData {
+    if (pending.data.length <= PTY_RENDERER_PENDING_HIGH_WATER_CHARS_BY_PTY) {
+      return pending
+    }
+    const dropped = pending.data.length - PTY_RENDERER_PENDING_HIGH_WATER_CHARS_BY_PTY
+    droppedPendingChars += dropped
+    const next: PendingPtyData = { data: pending.data.slice(dropped) }
+    if (typeof pending.startSeq === 'number') {
+      // Why: overlap trimming depends on raw output sequence. When overload
+      // drops old pending bytes, the surviving tail keeps its true start.
+      next.startSeq = pending.startSeq + dropped
+    }
     return next
+  }
+
+  function getPendingTrimOrder(): string[] {
+    const background: string[] = []
+    const active: string[] = []
+    for (const id of pendingData.keys()) {
+      if (activeRendererPtys.has(id)) {
+        active.push(id)
+      } else {
+        background.push(id)
+      }
+    }
+    return [...background, ...active]
+  }
+
+  function enforceTotalPendingDataBudget(): void {
+    let total = totalPendingChars
+    if (total <= PTY_RENDERER_TOTAL_PENDING_HIGH_WATER_CHARS) {
+      return
+    }
+    for (const id of getPendingTrimOrder()) {
+      if (total <= PTY_RENDERER_TOTAL_PENDING_HIGH_WATER_CHARS) {
+        break
+      }
+      const pending = pendingData.get(id)
+      if (!pending) {
+        continue
+      }
+      const targetLength = Math.max(
+        0,
+        pending.data.length - (total - PTY_RENDERER_TOTAL_PENDING_HIGH_WATER_CHARS)
+      )
+      if (targetLength === 0) {
+        droppedPendingChars += pending.data.length
+        total -= pending.data.length
+        deletePendingPtyData(id)
+        continue
+      }
+      const dropped = pending.data.length - targetLength
+      droppedPendingChars += dropped
+      const next: PendingPtyData = { data: pending.data.slice(dropped) }
+      if (typeof pending.startSeq === 'number') {
+        next.startSeq = pending.startSeq + dropped
+      }
+      setPendingPtyData(id, next)
+      total -= dropped
+    }
   }
 
   function schedulePendingDataFlush(delayMs: number): void {
@@ -1504,7 +1603,7 @@ export function registerPtyHandlers(
   function flushPendingData(): void {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
-      pendingData.clear()
+      clearPendingPtyData()
       rendererInFlightCharsByPty.clear()
       rendererInFlightTotalChars = 0
       recordPtyRendererDeliveryPressure()
@@ -1518,7 +1617,7 @@ export function registerPtyHandlers(
       if (!canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
         continue
       }
-      pendingData.delete(id)
+      deletePendingPtyData(id)
       const { data } = pending
       const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
       const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
@@ -1527,7 +1626,7 @@ export function registerPtyHandlers(
         if (typeof pending.startSeq === 'number') {
           nextPending.startSeq = pending.startSeq + chunk.length
         }
-        pendingData.set(id, nextPending)
+        setPendingPtyData(id, nextPending)
       }
       sendPtyDataToRenderer(id, makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
@@ -1582,7 +1681,7 @@ export function registerPtyHandlers(
           clearTimeout(flushTimer)
           flushTimer = null
         }
-        pendingData.clear()
+        clearPendingPtyData()
         rendererInFlightCharsByPty.clear()
         rendererInFlightTotalChars = 0
         recordPtyRendererDeliveryPressure()
@@ -1604,11 +1703,12 @@ export function registerPtyHandlers(
         // terminal output already handed to the renderer. The reserve is
         // bounded, and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
-          pendingData.set(payload.id, pending)
+          setPendingPtyData(payload.id, pending)
+          enforceTotalPendingDataBudget()
           recordPtyRendererDeliveryPressure()
           return
         }
-        pendingData.delete(payload.id)
+        deletePendingPtyData(payload.id)
         clearFlushTimerIfIdle()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
         // Waiting for the throughput batch timer adds visible input latency.
@@ -1621,7 +1721,8 @@ export function registerPtyHandlers(
         })
         return
       }
-      pendingData.set(payload.id, pending)
+      setPendingPtyData(payload.id, pending)
+      enforceTotalPendingDataBudget()
       recordPtyRendererDeliveryPressure()
       if (!flushTimer) {
         schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
@@ -1638,21 +1739,30 @@ export function registerPtyHandlers(
         // Why: flush any batched data for this PTY before sending the exit event,
         // otherwise the last ≤8ms of output is silently lost because the renderer
         // tears down the terminal on pty:exit before the batch timer fires.
-        const remaining = pendingData.get(payload.id)
+        const remaining = deletePendingPtyData(payload.id)
         if (remaining) {
-          sendPtyDataToRenderer(
-            payload.id,
-            makePtyDataPayload(payload.id, remaining.data, remaining.startSeq)
-          )
-          pendingData.delete(payload.id)
+          if (
+            canSendPtyDataToRenderer(payload.id, {
+              interactive: activeRendererPtys.has(payload.id)
+            })
+          ) {
+            // Why: exit must not blast a multi-MiB pending tail past the same
+            // renderer ACK budget that protects live output.
+            const chunk = remaining.data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
+            const dropped = remaining.data.length - chunk.length
+            if (dropped > 0) {
+              droppedPendingChars += dropped
+            }
+            sendPtyDataToRenderer(
+              payload.id,
+              makePtyDataPayload(payload.id, chunk, remaining.startSeq)
+            )
+          } else {
+            droppedPendingChars += remaining.data.length
+          }
         }
         lastInputAtByPty.delete(payload.id)
         interactiveOutputCharsByPty.delete(payload.id)
-        rendererInFlightTotalChars = Math.max(
-          0,
-          rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
-        )
-        rendererInFlightCharsByPty.delete(payload.id)
         recordPtyRendererDeliveryPressure()
         mainWindow.webContents.send('pty:exit', payload)
       }

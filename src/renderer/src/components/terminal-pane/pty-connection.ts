@@ -2894,29 +2894,40 @@ export function connectPanePty(
 
     let replayWriteQueue = Promise.resolve()
     let pendingReplayData: string | null = null
+    const replayDataQueue: string[] = []
+    const maxQueuedReplaySnapshots = 8
     let replayDrainQueued = false
+    let replayDrainInProgress = false
     const drainReplayDataQueue = async (): Promise<void> => {
-      while (pendingReplayData !== null) {
-        const data = pendingReplayData
-        pendingReplayData = null
-        // Relay replay buffer holds the last 100 KB of output, which may
-        // overlap with content already rendered in xterm before the
-        // disconnect. Clear first to prevent duplication on SSH reconnect.
-        await writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
-        await writeReplayDataAsync(data)
-        await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
-        if (disposed) {
+      replayDrainInProgress = true
+      try {
+        while (pendingReplayData !== null || replayDataQueue.length > 0) {
+          const data = replayDataQueue.shift() ?? pendingReplayData
           pendingReplayData = null
-          return
+          if (data === null) {
+            continue
+          }
+          // Relay replay buffer holds the last 100 KB of output, which may
+          // overlap with content already rendered in xterm before the
+          // disconnect. Clear first to prevent duplication on SSH reconnect.
+          await writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
+          await writeReplayDataAsync(data)
+          await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
+          if (disposed) {
+            pendingReplayData = null
+            replayDataQueue.length = 0
+            return
+          }
+          // Why: remote-runtime snapshots can arrive after WebGL attached to an
+          // empty buffer; rebuilding after replay parses seeds the glyph atlas
+          // from the now-populated xterm state.
+          manager.rebuildPaneWebgl(pane.id)
         }
-        // Why: remote-runtime snapshots can arrive after WebGL attached to an
-        // empty buffer; rebuilding after replay parses seeds the glyph atlas
-        // from the now-populated xterm state.
-        manager.rebuildPaneWebgl(pane.id)
+      } finally {
+        replayDrainInProgress = false
       }
     }
-    const replayDataCallback = (data: string): void => {
-      pendingReplayData = data
+    const scheduleReplayDrain = (): void => {
       if (replayDrainQueued) {
         return
       }
@@ -2926,10 +2937,27 @@ export function connectPanePty(
         .then(drainReplayDataQueue)
         .finally(() => {
           replayDrainQueued = false
-          if (pendingReplayData !== null) {
-            replayDataCallback(pendingReplayData)
+          if (pendingReplayData !== null || replayDataQueue.length > 0) {
+            scheduleReplayDrain()
           }
         })
+    }
+    const replayDataCallback = (data: string): void => {
+      if (replayDrainInProgress) {
+        if (replayDataQueue.length >= maxQueuedReplaySnapshots) {
+          // Why: replay payloads are snapshots. Preserve accepted FIFO work,
+          // then coalesce the burst tail so slow xterm parsing cannot grow
+          // memory without bound on repeated remote replay notifications.
+          replayDataQueue[replayDataQueue.length - 1] = data
+        } else {
+          replayDataQueue.push(data)
+        }
+      } else {
+        // Why: before xterm starts parsing, replay snapshots supersede one
+        // another; once parsing starts, accepted snapshots drain FIFO.
+        pendingReplayData = data
+      }
+      scheduleReplayDrain()
     }
 
     type PendingHiddenOutputRestoreChunk = {

@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Socket } from 'node:net'
+import { EventEmitter } from 'node:events'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser } from './ndjson'
 
+class FakeStreamSocket extends EventEmitter {
+  destroyed = false
+  write = vi.fn((_line: string) => true)
+}
+
 function createBatcher(options?: ConstructorParameters<typeof DaemonStreamDataBatcher>[1]) {
-  const streamSocket = {
-    destroyed: false,
-    write: vi.fn()
-  } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
+  const streamSocket = new FakeStreamSocket() as unknown as Socket & FakeStreamSocket
   const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket }), options)
   return { batcher, streamSocket }
 }
@@ -125,6 +128,117 @@ describe('DaemonStreamDataBatcher', () => {
           .map(([message]) => (message as { payload?: { data?: string } }).payload?.data ?? '')
           .join('')
       ).toBe(data)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('pauses daemon stream writes after socket backpressure until drain', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher({ maxLineBytes: 128 })
+      streamSocket.write
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true)
+
+      batcher.enqueue('client-1', 'session-1', 'a'.repeat(512))
+      vi.advanceTimersByTime(8)
+
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+      batcher.enqueue('client-1', 'session-2', 'interactive', {
+        flushImmediately: true,
+        flushMaxChars: 1024
+      })
+      expect(streamSocket.write).toHaveBeenCalledTimes(1)
+
+      streamSocket.emit('drain')
+
+      expect(streamSocket.write.mock.calls.length).toBeGreaterThan(1)
+      const lines = streamSocket.write.mock.calls.map(([line]) => String(line))
+      expect(lines.some((line) => line.includes('"sessionId":"session-2"'))).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('prioritizes flush-immediate output ahead of queued background backlog on drain', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher({ maxLineBytes: 128 })
+      streamSocket.write.mockReturnValueOnce(false).mockReturnValue(true)
+
+      batcher.enqueue('client-1', 'session-background', 'b'.repeat(512))
+      vi.advanceTimersByTime(8)
+      batcher.enqueue('client-1', 'session-active', 'active', {
+        flushImmediately: true,
+        flushMaxChars: 1024
+      })
+      streamSocket.write.mockClear()
+
+      streamSocket.emit('drain')
+
+      const firstWrittenAfterDrain = String(streamSocket.write.mock.calls[0]?.[0] ?? '')
+      expect(firstWrittenAfterDrain).toContain('"sessionId":"session-active"')
+      expect(firstWrittenAfterDrain).toContain('"data":"active"')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps queued daemon stream writes to the newest tail while backpressured', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher({
+        maxBackpressuredBytes: 512,
+        maxLineBytes: 256
+      })
+      streamSocket.write.mockReturnValueOnce(false).mockReturnValue(true)
+
+      batcher.enqueue('client-1', 'session-1', 'first-background')
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 30; index += 1) {
+        batcher.enqueue('client-1', `session-${index + 2}`, `chunk-${index}`)
+      }
+      vi.advanceTimersByTime(8)
+      streamSocket.write.mockClear()
+
+      streamSocket.emit('drain')
+
+      const written = streamSocket.write.mock.calls.map(([line]) => String(line)).join('\n')
+      expect(written).not.toContain('chunk-0')
+      expect(written).toContain('chunk-29')
+      expect(streamSocket.listenerCount('drain')).toBe(0)
+      expect(streamSocket.listenerCount('close')).toBe(0)
+      expect(streamSocket.listenerCount('error')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps queued daemon stream writes by line count for tiny chunks', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher({
+        maxBackpressuredBytes: 1024 * 1024,
+        maxBackpressuredLines: 4
+      })
+      streamSocket.write.mockReturnValueOnce(false).mockReturnValue(true)
+
+      batcher.enqueue('client-1', 'session-1', 'initial')
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 20; index += 1) {
+        batcher.enqueue('client-1', `session-${index + 2}`, `tiny-${index}`)
+      }
+      vi.advanceTimersByTime(8)
+      streamSocket.write.mockClear()
+
+      streamSocket.emit('drain')
+
+      const written = streamSocket.write.mock.calls.map(([line]) => String(line))
+      expect(written).toHaveLength(4)
+      expect(written.join('\n')).not.toContain('tiny-0')
+      expect(written.join('\n')).toContain('tiny-19')
     } finally {
       vi.useRealTimers()
     }

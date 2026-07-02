@@ -7710,6 +7710,71 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  it('bounds remote replay payloads queued while parsing is in progress', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const pendingParses: (() => void)[] = []
+    pane.terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      if (callback) {
+        pendingParses.push(callback)
+      }
+    })
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedReplayCallback.current?.('replay-0')
+    await flushAsyncTicks(2)
+    expect(pane.terminal.write).toHaveBeenNthCalledWith(
+      1,
+      '\x1b[2J\x1b[3J\x1b[H',
+      expect.any(Function)
+    )
+
+    for (let index = 1; index <= 12; index += 1) {
+      capturedReplayCallback.current?.(`replay-${index}`)
+    }
+
+    for (let index = 0; index < 80; index += 1) {
+      const next = pendingParses.shift()
+      if (!next) {
+        await flushAsyncTicks(1)
+        continue
+      }
+      next()
+      await flushAsyncTicks(1)
+    }
+
+    const replayedPayloads = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls
+      .map(([data]) => data)
+      .filter((data): data is string => typeof data === 'string' && data.startsWith('replay-'))
+    expect(replayedPayloads).toEqual([
+      'replay-0',
+      'replay-1',
+      'replay-2',
+      'replay-3',
+      'replay-4',
+      'replay-5',
+      'replay-6',
+      'replay-7',
+      'replay-12'
+    ])
+    expect(manager.rebuildPaneWebgl).toHaveBeenCalledTimes(9)
+    disposable.dispose()
+  })
+
   it('does not switch renderers for Arabic output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

@@ -200,6 +200,73 @@
       "demotionRule": "Cannot promote while it only checks visual rendering."
     },
     {
+      "id": "terminal-session.pty-output-backpressure",
+      "title": "PTY output queues stay bounded under stalled consumers",
+      "maturity": "experimental",
+      "owner": "terminal-runtime",
+      "layer": "main-renderer-runtime-unit",
+      "surfaces": [
+        "PTY output",
+        "daemon stream batching",
+        "main-to-renderer IPC",
+        "runtime terminal streams",
+        "hidden terminal replay"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime", "mobile/relay"],
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7001",
+        "https://github.com/stablyai/orca/pull/7008",
+        "https://github.com/stablyai/orca/pull/7005",
+        "https://github.com/stablyai/orca/pull/7004",
+        "https://github.com/stablyai/orca/pull/7006",
+        "https://github.com/stablyai/orca/pull/7007"
+      ],
+      "invariant": "PTY output crossing daemon sockets, main-to-renderer IPC, renderer replay, and runtime/mobile streams must retain bounded queues under stalled consumers while active terminal output has a bounded priority lane and accepted output order is preserved.",
+      "oracle": "Focused tests force socket.write(false), missing renderer ACKs, active-vs-background backlog, repeated replay snapshots, exit-time pending output, and snapshot-time live-output buffering; they assert drain waits, byte/char/line caps, newest-tail trimming, dropped-char debug counters, and FIFO ordering for accepted work.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts --testNamePattern \"renderer backpressure|pending renderer output|interactive output|active PTY|in-flight output|PTY exit\"",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts --testNamePattern \"remote replay\"",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/main/runtime/rpc/terminal-output-batching.test.ts",
+        "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
+        "src/main/runtime/rpc/terminal-multiplex.test.ts"
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "focused daemon/main/renderer/runtime unit tests"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New experimental gate; needs soak history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Tests encode socket drain, pending caps, active priority, replay queue, and runtime pending-output cap regressions. Needs saved intentional-break artifact before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Tests count bytes, chars, queued lines, writes, ACK-gated flush skips, exit-flush drops, listener cleanup, and array-shift avoidance; no polling, subprocesses, startup awaits, or hidden-pane scan loops are introduced."
+      },
+      "promotionCriteria": [
+        "Run in soak across macOS, Linux, and Windows for at least the manifest blocking-promotion window.",
+        "Attach red/green evidence for each queue cap and active-priority lane.",
+        "Add real terminal throughput/hidden-output soak evidence before considering this blocking."
+      ],
+      "knownGaps": [
+        "Current coverage is deterministic unit/integration evidence, not a real SSH or relay soak.",
+        "Hidden-output renderer wakeup and active keystroke latency under real TUI floods remain perf-review and soak follow-ups.",
+        "The gate proves explicit byte/queue/count limits, not absolute terminal throughput regressions."
+      ],
+      "demotionRule": "Keep experimental or demote if failures are non-actionable, if runtime exceeds budget repeatedly, or if real terminal soak finds latency regressions not represented by these contracts."
+    },
+    {
       "id": "startup-upgrade.persisted-session-corpus",
       "title": "Current Orca preserves or recovers old production persisted sessions",
       "maturity": "experimental",
