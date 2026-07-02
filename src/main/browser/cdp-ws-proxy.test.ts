@@ -90,6 +90,13 @@ describe('CdpWsProxy', () => {
     })
   }
 
+  function expectPdfStreamHandle(response: Record<string, unknown>): string {
+    const result = response.result as Record<string, unknown>
+    expect(result.data).toBe('')
+    expect(result.stream).toEqual(expect.stringMatching(/^orca-pdf-[\da-f-]{36}-\d+$/))
+    return result.stream as string
+  }
+
   it('starts on a random port and returns ws:// URL', () => {
     expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
     expect(proxy.getPort()).toBeGreaterThan(0)
@@ -350,11 +357,10 @@ describe('CdpWsProxy', () => {
       pageRanges: '1-2',
       preferCSSPageSize: true
     })
-    expect(mock.webContents.debugger.sendCommand).not.toHaveBeenCalledWith(
-      'Page.printToPDF',
-      expect.anything(),
-      expect.anything()
+    const forwardedMethods = mock.webContents.debugger.sendCommand.mock.calls.map(
+      (call) => (call as unknown[])[0]
     )
+    expect(forwardedMethods).not.toContain('Page.printToPDF')
     client.close()
   })
 
@@ -367,28 +373,30 @@ describe('CdpWsProxy', () => {
       method: 'Page.printToPDF',
       params: { transferMode: 'ReturnAsStream' }
     })
-
-    expect(printResponse).toEqual({
-      id: 12,
-      result: { data: '', stream: 'orca-pdf-1' }
-    })
+    const handle = expectPdfStreamHandle(printResponse)
 
     const firstRead = await sendAndReceive(client, {
       id: 13,
       method: 'IO.read',
-      params: { handle: 'orca-pdf-1', size: 2 }
+      params: { handle, size: 2 }
     })
     const secondRead = await sendAndReceive(client, {
       id: 14,
       method: 'IO.read',
-      params: { handle: 'orca-pdf-1' }
+      params: { handle }
     })
     const closeResponse = await sendAndReceive(client, {
       id: 15,
       method: 'IO.close',
-      params: { handle: 'orca-pdf-1' }
+      params: { handle }
+    })
+    const readAfterClose = await sendAndReceive(client, {
+      id: 16,
+      method: 'IO.read',
+      params: { handle }
     })
 
+    expect(printResponse.id).toBe(12)
     expect(firstRead).toEqual({
       id: 13,
       result: { base64Encoded: true, data: Buffer.from('ab').toString('base64'), eof: false }
@@ -398,6 +406,71 @@ describe('CdpWsProxy', () => {
       result: { base64Encoded: true, data: Buffer.from('cdef').toString('base64'), eof: true }
     })
     expect(closeResponse).toEqual({ id: 15, result: {} })
+    expect(readAfterClose).toEqual({
+      id: 16,
+      error: { code: -32000, message: 'Invalid stream handle' }
+    })
+    client.close()
+  })
+
+  it('clears streamed PDF data when the client disconnects', async () => {
+    mock.webContents.printToPDF.mockResolvedValueOnce(Buffer.from('abcdef'))
+    const client = await connect()
+
+    const printResponse = await sendAndReceive(client, {
+      id: 16,
+      method: 'Page.printToPDF',
+      params: { transferMode: 'ReturnAsStream' }
+    })
+    const handle = expectPdfStreamHandle(printResponse)
+
+    expect(printResponse.id).toBe(16)
+    client.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const nextClient = await connect()
+    const staleRead = await sendAndReceive(nextClient, {
+      id: 17,
+      method: 'IO.read',
+      params: { handle }
+    })
+
+    expect(staleRead).toEqual({
+      id: 17,
+      error: { code: -32000, message: 'Invalid stream handle' }
+    })
+    nextClient.close()
+  })
+
+  it('forwards non-PDF IO streams to the debugger', async () => {
+    mock.webContents.debugger.sendCommand
+      .mockResolvedValueOnce({ data: 'trace-data', eof: false })
+      .mockResolvedValueOnce({})
+    const client = await connect()
+
+    const readResponse = await sendAndReceive(client, {
+      id: 18,
+      method: 'IO.read',
+      params: { handle: 'trace-stream', size: 64 }
+    })
+    const closeResponse = await sendAndReceive(client, {
+      id: 19,
+      method: 'IO.close',
+      params: { handle: 'trace-stream' }
+    })
+
+    expect(readResponse).toEqual({ id: 18, result: { data: 'trace-data', eof: false } })
+    expect(closeResponse).toEqual({ id: 19, result: {} })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'IO.read',
+      { handle: 'trace-stream', size: 64 },
+      undefined
+    )
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'IO.close',
+      { handle: 'trace-stream' },
+      undefined
+    )
     client.close()
   })
 

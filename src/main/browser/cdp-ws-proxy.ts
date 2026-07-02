@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
+import { randomUUID } from 'node:crypto'
 import type { PrintToPDFOptions, WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
@@ -8,10 +9,13 @@ import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-
 
 const PDF_INCH_TO_CSS_PIXEL = 96
 const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
+const PDF_STREAM_HANDLE_PREFIX = 'orca-pdf-'
+const PDF_STREAM_TTL_MS = 5 * 60 * 1000
 
 type PdfStream = {
   data: Buffer
   offset: number
+  cleanupTimer: ReturnType<typeof setTimeout>
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -91,6 +95,7 @@ export class CdpWsProxy {
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
   private readonly pdfStreams = new Map<string, PdfStream>()
+  private readonly pdfStreamHandlePrefix = `${PDF_STREAM_HANDLE_PREFIX}${randomUUID()}-`
   private nextPdfStreamId = 0
 
   constructor(private readonly webContents: WebContents) {}
@@ -123,6 +128,7 @@ export class CdpWsProxy {
         const onClose = (): void => {
           detach()
           if (this.client === ws) {
+            this.clearPdfStreams()
             this.client = null
           }
         }
@@ -153,7 +159,6 @@ export class CdpWsProxy {
 
   async stop(): Promise<void> {
     this.detachDebugger()
-    this.pdfStreams.clear()
     this.closeClient()
     if (this.wss) {
       this.wss.close()
@@ -174,6 +179,7 @@ export class CdpWsProxy {
     this.detachClientListeners?.()
     this.detachClientListeners = null
     this.client = null
+    this.clearPdfStreams()
     client?.close()
   }
 
@@ -370,11 +376,21 @@ export class CdpWsProxy {
       return
     }
     if (msg.method === 'IO.read') {
-      this.handleStreamRead(client, clientId, msg.params ?? {})
+      const params = msg.params ?? {}
+      if (this.isPdfStreamRequest(params)) {
+        this.handleStreamRead(client, clientId, params)
+        return
+      }
+      this.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
     if (msg.method === 'IO.close') {
-      this.handleStreamClose(client, clientId, msg.params ?? {})
+      const params = msg.params ?? {}
+      if (this.isPdfStreamRequest(params)) {
+        this.handleStreamClose(client, clientId, params)
+        return
+      }
+      this.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
     // Why: Input.insertText can still require native focus in Electron webviews.
@@ -450,8 +466,12 @@ export class CdpWsProxy {
       const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
       const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
       if (params.transferMode === 'ReturnAsStream') {
-        const handle = `orca-pdf-${++this.nextPdfStreamId}`
-        this.pdfStreams.set(handle, { data: buffer, offset: 0 })
+        const handle = `${this.pdfStreamHandlePrefix}${++this.nextPdfStreamId}`
+        this.pdfStreams.set(handle, {
+          data: buffer,
+          offset: 0,
+          cleanupTimer: this.schedulePdfStreamCleanup(handle)
+        })
         this.sendResult(clientId, { data: '', stream: handle }, client)
         return
       }
@@ -459,6 +479,40 @@ export class CdpWsProxy {
     } catch (err) {
       this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
     }
+  }
+
+  private isPdfStreamRequest(params: Record<string, unknown>): boolean {
+    return typeof params.handle === 'string' && params.handle.startsWith(this.pdfStreamHandlePrefix)
+  }
+
+  private schedulePdfStreamCleanup(handle: string): ReturnType<typeof setTimeout> {
+    const cleanupTimer = setTimeout(() => {
+      this.deletePdfStream(handle)
+    }, PDF_STREAM_TTL_MS)
+    const maybeNodeTimer = cleanupTimer as { unref?: () => void }
+    maybeNodeTimer.unref?.()
+    return cleanupTimer
+  }
+
+  private refreshPdfStreamCleanup(handle: string, stream: PdfStream): void {
+    clearTimeout(stream.cleanupTimer)
+    stream.cleanupTimer = this.schedulePdfStreamCleanup(handle)
+  }
+
+  private deletePdfStream(handle: string): void {
+    const stream = this.pdfStreams.get(handle)
+    if (!stream) {
+      return
+    }
+    clearTimeout(stream.cleanupTimer)
+    this.pdfStreams.delete(handle)
+  }
+
+  private clearPdfStreams(): void {
+    for (const stream of this.pdfStreams.values()) {
+      clearTimeout(stream.cleanupTimer)
+    }
+    this.pdfStreams.clear()
   }
 
   private handleStreamRead(
@@ -472,6 +526,7 @@ export class CdpWsProxy {
       this.sendError(clientId, 'Invalid stream handle', client)
       return
     }
+    this.refreshPdfStreamCleanup(handle, stream)
 
     const offset = finiteNumber(params.offset)
     if (offset !== null) {
@@ -504,7 +559,7 @@ export class CdpWsProxy {
     params: Record<string, unknown>
   ): void {
     const handle = typeof params.handle === 'string' ? params.handle : ''
-    this.pdfStreams.delete(handle)
+    this.deletePdfStream(handle)
     this.sendResult(clientId, {}, client)
   }
 
