@@ -9,6 +9,7 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
+import { isRunningTranslatedOnAppleSilicon } from '../startup/rosetta-detection'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable, listWslDistros } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
@@ -224,6 +225,21 @@ async function readKeyboardInputSourceId(): Promise<string | null> {
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
+
+  // Why: the x64 build under Rosetta on Apple Silicon is severely laggy but
+  // gives users no signal they installed the wrong dmg. Surface it so the
+  // renderer can nudge them to the native arm64 build; dismissal is main-owned
+  // so it survives restarts.
+  ipcMain.handle(
+    'app:getArchAdvisory',
+    (): { translated: boolean; dismissed: boolean } => ({
+      translated: isRunningTranslatedOnAppleSilicon(),
+      dismissed: store.getUI().archAdvisoryDismissed ?? false
+    })
+  )
+  ipcMain.handle('app:dismissArchAdvisory', (): void => {
+    store.updateUI({ archAdvisoryDismissed: true })
+  })
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
     const identity = getDevInstanceIdentity(is.dev)

@@ -3317,6 +3317,9 @@ export type PersistedUIState = {
   /** App version that already consumed the first successful-agent value-moment ask.
    *  Main-owned so remote/web clients cannot spoof the once-per-version cap. */
   starNagAgentValueMomentAppVersion?: string | null
+  /** Once dismissed, permanently suppress the "running the Intel build under
+   *  Rosetta on Apple Silicon" advisory. Main-owned so it survives restarts. */
+  archAdvisoryDismissed?: boolean
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]
   /** Whether the experimental pet overlay is currently visible. Separate
