@@ -88,6 +88,43 @@ describe('registerSshBrowseHandler', () => {
     expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
   })
 
+  it('falls back to PowerShell when a Windows SSH shell rejects POSIX exec', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users/alice' })
+    await Promise.resolve()
+    posixChannel.stderr.emit(
+      'data',
+      Buffer.from('"exec" no se reconoce como un comando interno o externo')
+    )
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from('C:\\Users\\alice\nDesktop/\nnotes.txt\n'))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: 'C:\\Users\\alice',
+      entries: [
+        { name: 'Desktop', isDirectory: true },
+        { name: 'notes.txt', isDirectory: false }
+      ]
+    })
+    expect(exec).toHaveBeenCalledTimes(2)
+    expect(exec).toHaveBeenNthCalledWith(1, "cd 'C:/Users/alice' && pwd && command ls -1Ap")
+    expect(exec.mock.calls[1]?.[0]).toMatch(/^powershell\.exe /)
+    expect(exec.mock.calls[1]?.[1]).toEqual({ wrapCommand: false })
+  })
+
   it('rejects and detaches listeners when the browse channel errors', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)
