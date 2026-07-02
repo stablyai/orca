@@ -669,6 +669,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     >
       {children}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpenState} modal={false}>
+        {/* Why: viewport coordinates in a body portal avoid offsets from transformed virtualized rows. */}
         {createPortal(
           <DropdownMenuTrigger asChild>
             <button
