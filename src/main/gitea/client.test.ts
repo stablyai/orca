@@ -35,8 +35,9 @@ vi.mock('./project-config', () => ({
       if (config) {
         const envAuth = envGiteaAuthFn()
         if (config.apiBaseUrl) {
+          const trimmed = config.apiBaseUrl.trim().replace(/\/+$/, '')
           return {
-            apiBaseUrl: `${config.apiBaseUrl.replace(/\/+$/, '')}/api/v1`,
+            apiBaseUrl: /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`,
             token: config.token ?? null
           }
         }
