@@ -226,7 +226,9 @@ describe('useIpcEvents zoom routing', () => {
           setActiveWorktree: vi.fn(),
           revealWorktreeInSidebar: vi.fn(),
           setIsFullScreen: vi.fn(),
-          setRateLimitsFromPush: vi.fn()
+          setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve())
         })
       }
     }))
@@ -269,6 +271,7 @@ describe('useIpcEvents zoom routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        spotlight: makeEvents({ getState: () => Promise.resolve({ byRepo: {} }) }),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),
@@ -368,7 +371,9 @@ describe('useIpcEvents zoom routing', () => {
           setActiveWorktree: vi.fn(),
           revealWorktreeInSidebar: vi.fn(),
           setIsFullScreen: vi.fn(),
-          setRateLimitsFromPush: vi.fn()
+          setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve())
         })
       }
     }))
@@ -411,6 +416,7 @@ describe('useIpcEvents zoom routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        spotlight: makeEvents({ getState: () => Promise.resolve({ byRepo: {} }) }),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),
@@ -553,6 +559,8 @@ describe('useIpcEvents rate-limit hydration', () => {
           setEditorFontZoomLevel: vi.fn(),
           settings: { terminalFontSize: 13 },
           setRateLimitsFromPush,
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           updateWorktreeBaseStatus: vi.fn(),
           updateWorktreeRemoteBranchConflict: vi.fn(),
           setSshConnectionState: vi.fn(),
@@ -619,6 +627,7 @@ describe('useIpcEvents rate-limit hydration', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        spotlight: makeEvents({ getState: () => Promise.resolve({ byRepo: {} }) }),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),
@@ -851,6 +860,8 @@ describe('useIpcEvents browser tab create routing', () => {
       editorFontZoomLevel: 0,
       setEditorFontZoomLevel: vi.fn(),
       setRateLimitsFromPush: vi.fn(),
+      applySpotlightChanged: vi.fn(),
+      hydrateSpotlightState: vi.fn(() => Promise.resolve()),
       setSshConnectionState: vi.fn(),
       setSshTargetLabels: vi.fn(),
       setPortForwards: vi.fn(),
@@ -934,6 +945,10 @@ describe('useIpcEvents browser tab create routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -1116,6 +1131,8 @@ describe('useIpcEvents updater integration', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -1154,6 +1171,10 @@ describe('useIpcEvents updater integration', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -1322,6 +1343,8 @@ describe('useIpcEvents updater integration', () => {
       editorFontZoomLevel: 0,
       setEditorFontZoomLevel: vi.fn(),
       setRateLimitsFromPush: vi.fn(),
+      applySpotlightChanged: vi.fn(),
+      hydrateSpotlightState: vi.fn(() => Promise.resolve()),
       setSshConnectionState,
       setSshTargetLabels: vi.fn(),
       setSshTargetsMetadata,
@@ -1397,6 +1420,10 @@ describe('useIpcEvents updater integration', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -1690,6 +1717,8 @@ describe('useIpcEvents updater integration', () => {
       editorFontZoomLevel: 0,
       setEditorFontZoomLevel: vi.fn(),
       setRateLimitsFromPush: vi.fn(),
+      applySpotlightChanged: vi.fn(),
+      hydrateSpotlightState: vi.fn(() => Promise.resolve()),
       setSshConnectionState: vi.fn(),
       setSshTargetLabels: vi.fn(),
       setPortForwards: vi.fn(),
@@ -1829,6 +1858,10 @@ describe('useIpcEvents updater integration', () => {
       dispatchEvent,
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -2669,6 +2702,8 @@ describe('useIpcEvents browser tab close routing', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -2721,6 +2756,10 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -3158,6 +3197,8 @@ describe('useIpcEvents browser tab close routing', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -3209,6 +3250,10 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -3373,6 +3418,8 @@ describe('useIpcEvents browser tab close routing', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -3425,6 +3472,10 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -3587,6 +3638,8 @@ describe('useIpcEvents browser tab close routing', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -3636,6 +3689,10 @@ describe('useIpcEvents browser tab close routing', () => {
       dispatchEvent: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -3826,6 +3883,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -3865,6 +3924,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -4080,6 +4143,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          applySpotlightChanged: vi.fn(),
+          hydrateSpotlightState: vi.fn(() => Promise.resolve()),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -4119,6 +4184,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -4315,6 +4384,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       editorFontZoomLevel: 0,
       setEditorFontZoomLevel: vi.fn(),
       setRateLimitsFromPush: vi.fn(),
+      applySpotlightChanged: vi.fn(),
+      hydrateSpotlightState: vi.fn(() => Promise.resolve()),
       updateWorktreeBaseStatus: vi.fn(),
       updateWorktreeRemoteBranchConflict: vi.fn(),
       setSshConnectionState: vi.fn(),
@@ -4352,6 +4423,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
     return {
       api: {
         repos: { onChanged: () => () => {} },
+        spotlight: {
+          onChanged: () => () => {},
+          getState: () => Promise.resolve({ byRepo: {} })
+        },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},

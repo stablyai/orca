@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
 import { registerRepoHandlers } from '../ipc/repos'
+import { registerSpotlightHandlers } from '../ipc/spotlight'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
@@ -63,6 +64,7 @@ export function attachMainWindowServices(
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
+  registerSpotlightHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
   // Why: repo/settings mutations resync watchers through this attached main-window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)

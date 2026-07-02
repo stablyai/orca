@@ -988,6 +988,21 @@ export function getLocalPtyProvider(): IPtyProvider {
  *  Call before registerPtyHandlers so the IPC layer routes through the daemon. */
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
+  for (const listener of providerChangeListeners) {
+    listener(provider)
+  }
+}
+
+// Why: secondary PTY-data consumers (e.g. the Spotlight log mirror) subscribe
+// on the provider instance; a daemon swap would silently orphan them without
+// this change signal to re-subscribe on the new provider.
+const providerChangeListeners = new Set<(provider: IPtyProvider) => void>()
+
+export function onLocalPtyProviderChanged(listener: (provider: IPtyProvider) => void): () => void {
+  providerChangeListeners.add(listener)
+  return () => {
+    providerChangeListeners.delete(listener)
+  }
 }
 
 /** Get all PTY IDs owned by a given connectionId (for reconnection reattach). */

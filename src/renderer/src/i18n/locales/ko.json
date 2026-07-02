@@ -258,6 +258,18 @@
         },
         "linear": {
           "37d36984d0": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
+        },
+        "spotlight": {
+          "operationInProgress": "Finish or abort the merge/rebase in progress first.",
+          "rootDiverged": "The project root has changes made outside the Spotlight workspace. Commit or discard them there first.",
+          "restoreConflict": "Restoring the original root changes conflicted. Resolve it in the project root, then retry.",
+          "unsupportedHost": "Spotlight testing is not available for this project host yet.",
+          "activated": "Spotlight on — the project root now mirrors this workspace",
+          "activateFailed": "Failed to start Spotlight",
+          "syncFailed": "Spotlight sync failed",
+          "released": "Spotlight off — project root restored",
+          "deactivateFailed": "Failed to turn off Spotlight",
+          "activatedLogs": "Server logs are mirrored for agents at .orca/spotlight.log"
         }
       }
     },
@@ -404,6 +416,13 @@
           "emulator": {
             "tab": {
               "bf4f2a8a72": "에뮬레이터를 시작할 수 없습니다. iOS 또는 Android 에뮬레이터 설정을 확인하고 다른 기기를 사용해 보세요."
+            }
+          }
+        },
+        "spotlight": {
+          "terminal": {
+            "tab": {
+              "title": "Spotlight"
             }
           }
         }
@@ -2548,7 +2567,10 @@
             "0d1963f4a6": "이 탭은 고정되어 있습니다. 정말 닫으시겠어요?",
             "dont_ask_again": "고정된 탭에 대해 다시 묻지 않기",
             "0b38ee2f86": "취소",
-            "c337c9d75c": "닫기"
+            "c337c9d75c": "닫기",
+            "spotlightTitle": "Spotlight is using this terminal",
+            "spotlightDescription": "This terminal runs your server at the project root and feeds agent logs. Closing it turns Spotlight off and restores the project root.",
+            "spotlightConfirm": "Turn Off Spotlight & Close"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "{{value0}} 인증에 실패했습니다. 이 터미널 세션을 계속하려면 다시 연결하세요.",
@@ -4030,7 +4052,9 @@
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
-          "deleteWorktree": "작업 트리 삭제"
+          "deleteWorktree": "작업 트리 삭제",
+          "spotlightOff": "Turn Off Spotlight",
+          "spotlightOn": "Spotlight This Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -4500,6 +4524,17 @@
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
           "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다."
+        },
+        "WorktreeCardSpotlightControls": {
+          "syncing": "Syncing…",
+          "activeHere": "Spotlight on — this workspace mirrors to the project root. Click to turn off.",
+          "takeover": "Take the Spotlight from \"{{holder}}\" — the project root will mirror this workspace instead.",
+          "activate": "Spotlight this workspace — mirror its changes onto the project root for testing.",
+          "primaryBadgeAria": "Spotlight is mirroring a workspace onto this project root. Click to turn off.",
+          "badgeLabel": "spotlight",
+          "primaryBadgeTooltip": "The project root mirrors \"{{holder}}\". Click to turn Spotlight off and restore the root.",
+          "turnOff": "Turn off Spotlight and restore the project root",
+          "agentLogs": "Agents in every workspace can read the server logs: .orca/spotlight.log (env var ORCA_SPOTLIGHT_LOG)."
         }
       },
       "shared": {
@@ -7885,7 +7920,9 @@
             "projectRuntimeDescription": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다.",
             "copy": "copy",
             "clone": "clone",
-            "apfs": "apfs"
+            "apfs": "apfs",
+            "spotlightTesting": "Spotlight Testing",
+            "spotlightTestingDescription": "Mirror workspace changes onto the project root for testing."
           }
         },
         "runtime": {
@@ -8694,6 +8731,13 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "repo 소유 온디맨드 환경에 대한 설정 제어 및 워크스페이스 실행 대상을 표시합니다.",
           "toggleLabel": "워크스페이스별 환경 전환"
+        },
+        "RepositorySpotlightSection": {
+          "title": "Spotlight Testing",
+          "sectionDescription": "Test workspace changes against the project root without duplicating installed dependencies or build output.",
+          "toggleDescription": "Show a Spotlight button on workspaces of this project that mirrors their tracked changes onto the project root.",
+          "toggleLabel": "Use Spotlight testing",
+          "logsDescription": "While Spotlight is on, the server terminal's output is mirrored to .orca/spotlight.log so agents in any workspace can read it (env var ORCA_SPOTLIGHT_LOG)."
         }
       },
       "right": {

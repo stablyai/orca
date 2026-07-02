@@ -23,6 +23,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Flashlight,
   Kanban,
   Trash2,
   Unlink,
@@ -36,6 +37,9 @@ import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { canHoldSpotlight } from './WorktreeCardSpotlightControls'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { openSpotlightTerminalTab } from '@/lib/open-spotlight-terminal-tab'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -436,6 +440,31 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)
   }, [worktree.id, worktree.isPinned, setWorktreesPinnedAndReveal])
 
+  const spotlightState = useAppStore((s) => (repo ? s.spotlightByRepo[repo.id] : undefined))
+  const spotlightEligible = repo ? canHoldSpotlight(worktree, repo, isFolderRepo(repo)) : false
+  const spotlightHeldHere = spotlightState?.holderWorktreeId === worktree.id
+  // The main worktree can't hold the Spotlight, but while it's on its context
+  // menu offers the off switch (the root is what Spotlight is rewriting).
+  const spotlightOffOnMain = Boolean(worktree.isMainWorktree && repo && spotlightState)
+  const handleToggleSpotlight = useCallback(() => {
+    if (!repo) {
+      return
+    }
+    const state = useAppStore.getState()
+    if (
+      worktree.isMainWorktree ||
+      state.spotlightByRepo[repo.id]?.holderWorktreeId === worktree.id
+    ) {
+      void state.deactivateSpotlight(repo.id)
+      return
+    }
+    void state.activateSpotlight(repo.id, worktree.id).then((result) => {
+      if (result.ok) {
+        openSpotlightTerminalTab({ repoId: repo.id, reveal: false })
+      }
+    })
+  }, [repo, worktree.id, worktree.isMainWorktree])
+
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!repo) {
       return
@@ -763,6 +792,23 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                       'Mark Unread'
                     )}
               </DropdownMenuItem>
+              {spotlightEligible || spotlightOffOnMain ? (
+                <DropdownMenuItem
+                  onSelect={handleToggleSpotlight}
+                  disabled={isDeleting || spotlightState?.status === 'syncing'}
+                >
+                  <Flashlight className="size-3.5" />
+                  {spotlightHeldHere || spotlightOffOnMain
+                    ? translate(
+                        'auto.components.sidebar.WorktreeContextMenu.spotlightOff',
+                        'Turn Off Spotlight'
+                      )
+                    : translate(
+                        'auto.components.sidebar.WorktreeContextMenu.spotlightOn',
+                        'Spotlight This Workspace'
+                      )}
+                </DropdownMenuItem>
+              ) : null}
               {repo ? (
                 <>
                   <DropdownMenuSeparator />

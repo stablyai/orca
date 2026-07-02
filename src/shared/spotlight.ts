@@ -1,0 +1,80 @@
+// Spotlight testing: sync a workspace worktree's tracked changes onto the repo
+// root checkout so it can be tested against the root's installed toolchain
+// (node_modules, native builds, running dev servers) without duplicating it.
+
+export type SpotlightStatus = 'active' | 'syncing'
+
+export type SpotlightErrorCode =
+  /** Rebase/merge/cherry-pick in progress in the root or holder worktree. */
+  | 'operation-in-progress'
+  /** Root HEAD moved off the snapshot or picked up changes while active. */
+  | 'root-diverged'
+  /** Restoring the root's uncommitted changes conflicted on deactivate. */
+  | 'restore-conflict'
+  /** The root's original branch was deleted while Spotlight was active. */
+  | 'branch-missing'
+  | 'unborn-head'
+  | 'bare-root'
+  /** The main worktree cannot hold the Spotlight (it IS the sync target). */
+  | 'root-is-holder'
+  | 'repo-not-found'
+  | 'worktree-not-found'
+  | 'not-active'
+  | 'unsupported-host'
+  | 'git-failed'
+
+export type SpotlightError = {
+  code: SpotlightErrorCode
+  message: string
+}
+
+export type SpotlightRepoState = {
+  repoId: string
+  /** Worktree currently holding the Spotlight (its changes mirror to the root). */
+  holderWorktreeId: string
+  status: SpotlightStatus
+  /** Root branch to re-attach on deactivate; null = root was detached. */
+  originalBranch: string | null
+  originalHeadSha: string
+  /** Stash-form commit of the root's uncommitted state; == originalHeadSha when clean. */
+  backupSha: string
+  lastSnapshotSha: string | null
+  activatedAt: number
+  lastSyncAt: number | null
+  lastError: SpotlightError | null
+}
+
+export type SpotlightStateSnapshot = {
+  byRepo: Record<string, SpotlightRepoState>
+}
+
+export type SpotlightOpResult =
+  | { ok: true; state: SpotlightRepoState | null }
+  | { ok: false; error: SpotlightError; state: SpotlightRepoState | null }
+
+/** Pushed by main on every state transition (activate/sync/deactivate/takeover/reconcile). */
+export type SpotlightChangedEvent = {
+  repoId: string
+  state: SpotlightRepoState | null
+}
+
+/** What the spotlight refs in the repo actually say — source of truth for reconcile. */
+export type SpotlightRefsSnapshot = {
+  snapshotSha: string | null
+  backupSha: string | null
+  originalHeadSha: string | null
+  originalBranch: string | null
+  /** Current root HEAD, for detecting divergence from the snapshot. */
+  rootHeadSha: string | null
+}
+
+/** Where the Spotlight terminal's output is mirrored, relative to the repo
+ *  root. Agents discover it via the ORCA_SPOTLIGHT_LOG env var. */
+export const SPOTLIGHT_LOG_RELATIVE_PATH = '.orca/spotlight.log'
+
+export const SPOTLIGHT_REFS = {
+  snapshot: 'refs/orca/spotlight/snapshot',
+  backup: 'refs/orca/spotlight/backup',
+  originalHead: 'refs/orca/spotlight/original-head',
+  originalBranch: 'refs/orca/spotlight/original-branch'
+} as const

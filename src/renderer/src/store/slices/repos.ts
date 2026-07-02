@@ -103,6 +103,7 @@ export type RepoUpdate = Partial<
     | 'importedExternalWorktreePaths'
     | 'projectGroupId'
     | 'projectGroupOrder'
+    | 'spotlightTestingEnabled'
   >
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
@@ -186,6 +187,13 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     sanitized.forkSyncMode !== 'off'
   ) {
     delete sanitized.forkSyncMode
+  }
+  if (
+    'spotlightTestingEnabled' in sanitized &&
+    sanitized.spotlightTestingEnabled !== undefined &&
+    typeof sanitized.spotlightTestingEnabled !== 'boolean'
+  ) {
+    delete sanitized.spotlightTestingEnabled
   }
   return sanitized
 }

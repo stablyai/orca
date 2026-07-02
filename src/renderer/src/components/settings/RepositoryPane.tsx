@@ -31,6 +31,7 @@ import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
+import { RepositorySpotlightSection } from './RepositorySpotlightSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
@@ -172,6 +173,11 @@ export function RepositoryPane({
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
+  const spotlightEntries = allEntries.filter(
+    (entry) =>
+      entry.title ===
+      translate('auto.components.settings.repository.search.spotlightTesting', 'Spotlight Testing')
+  )
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
@@ -349,6 +355,16 @@ export function RepositoryPane({
         key="source-control-ai"
         repo={repo}
         updateRepo={updateRepo}
+      />
+    ) : null,
+    !isFolder &&
+    !repo.connectionId &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, spotlightEntries)) ? (
+      <RepositorySpotlightSection
+        key="spotlight"
+        repo={repo}
+        updateRepo={updateRepo}
+        forceVisible={forceFullPaneForRepoMatch}
       />
     ) : null,
     !isFolder &&

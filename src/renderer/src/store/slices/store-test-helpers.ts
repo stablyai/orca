@@ -10,6 +10,7 @@ import type {
 import type { OpenFile } from './editor'
 import { createRepoSlice } from './repos'
 import { createSparsePresetsSlice } from './sparse-presets'
+import { createSpotlightSlice } from './spotlight'
 import { createWorktreeSlice } from './worktrees'
 import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
@@ -55,6 +56,7 @@ export function createTestStore() {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),
+    ...createSpotlightSlice(...a),
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
     ...createTabsSlice(...a),

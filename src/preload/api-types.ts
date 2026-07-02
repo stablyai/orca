@@ -194,6 +194,11 @@ import type {
 } from '../shared/terminal-custom-themes'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type {
+  SpotlightChangedEvent,
+  SpotlightOpResult,
+  SpotlightStateSnapshot
+} from '../shared/spotlight'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
   EphemeralVmRecipeDoctorResult,
@@ -878,6 +883,7 @@ export type PreloadApi = {
           | 'projectGroupId'
           | 'projectGroupOrder'
           | 'forkSyncMode'
+          | 'spotlightTestingEnabled'
         >
       > & {
         sourceControlAi?: Repo['sourceControlAi'] | null
@@ -921,6 +927,22 @@ export type PreloadApi = {
       limit?: number
     }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
+  }
+  spotlight: {
+    /** Main is the source of truth; the renderer hydrates this snapshot at startup. */
+    getState: () => Promise<SpotlightStateSnapshot>
+    /** Activate for a worktree. Re-activating the current holder re-syncs;
+     *  activating from another worktree of the same repo is a takeover. */
+    activate: (args: { repoId: string; worktreeId: string }) => Promise<SpotlightOpResult>
+    /** Re-sync the current holder's changes onto the root. */
+    sync: (args: { repoId: string; force?: boolean }) => Promise<SpotlightOpResult>
+    /** Release the Spotlight and restore the root's original state. */
+    deactivate: (args: { repoId: string; discardBackup?: boolean }) => Promise<SpotlightOpResult>
+    /** Mirror this PTY's output to <root>/.orca/spotlight.log (the workspace's
+     *  Spotlight terminal) so agents in any worktree can read server logs. */
+    setLogPty: (args: { repoId: string; ptyId: string }) => Promise<void>
+    clearLogPty: (args: { repoId: string; ptyId?: string }) => Promise<void>
+    onChanged: (callback: (event: SpotlightChangedEvent) => void) => () => void
   }
   projects: {
     list: () => Promise<Project[]>

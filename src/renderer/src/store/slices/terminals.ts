@@ -440,6 +440,9 @@ export type TerminalSlice = {
        *  `'chat'` so the tab opens in the native chat view; omitted otherwise
        *  so the tab keeps the implicit `'terminal'` default. */
       viewMode?: Tab['viewMode']
+      /** Marks the workspace's Spotlight terminal (cwd = repo root) so
+       *  re-activation finds and reuses it instead of stacking duplicates. */
+      spotlightRepoRoot?: boolean
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -472,6 +475,9 @@ export type TerminalSlice = {
     title: string | null,
     opts?: { recordInteraction?: boolean }
   ) => void
+  /** Adopt an existing terminal as the repo's Spotlight (server) terminal —
+   *  used when the user already had one running at the root on activation. */
+  markTabSpotlightRepoRoot: (tabId: string) => void
   setTabColor: (tabId: string, color: string | null) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   clearTabPtyId: (tabId: string, ptyId?: string) => void
@@ -808,7 +814,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // Without this, clicking a never-visited worktree would stamp
         // lastActivityAt and reorder Recent/Smart on click — same bug class as
         // the generation-bump → remount path, different code path.
-        ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
+        ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
+        ...(options?.spotlightRepoRoot ? { spotlightRepoRoot: true } : {})
       }
       const validTargetGroupId =
         targetGroupId && s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
@@ -1592,6 +1599,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
+  markTabSpotlightRepoRoot: (tabId) => {
+    set((s) => {
+      const next = { ...s.tabsByWorktree }
+      for (const wId of Object.keys(next)) {
+        next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, spotlightRepoRoot: true } : t))
+      }
+      return { tabsByWorktree: next }
+    })
+  },
+
   setTabColor: (tabId, color) => {
     set((s) => {
       const next = { ...s.tabsByWorktree }
@@ -1622,6 +1639,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   updateTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
     let wasActivationSpawn = false
+    let becameSpotlightLogPty = false
     const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
     set((s) => {
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
@@ -1649,6 +1667,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // primary binding from the original pane or remount/close flows can
         // reattach the tab to the wrong PTY and appear to "reset" panes.
         const nextTabPtyId = tab.ptyId ?? nextPtyIds[0] ?? null
+        // Only the tab's primary PTY feeds the Spotlight log mirror — split
+        // panes in the Spotlight tab shouldn't interleave into the server log.
+        if (tab.spotlightRepoRoot && nextTabPtyId === ptyId) {
+          becameSpotlightLogPty = true
+        }
         const nextPendingActivationSpawn = consumePendingActivationSpawn(tab.pendingActivationSpawn)
         if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
           const nextTabs = [...tabs]
@@ -1701,11 +1724,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
       get().bumpWorktreeActivity(worktreeId)
     }
+
+    if (becameSpotlightLogPty && worktreeId) {
+      const repoId = getRepoIdFromWorktreeId(worktreeId)
+      // Only the repo's single Spotlight terminal (in the main worktree) feeds
+      // the log mirror; stale spotlight-flagged tabs elsewhere stay inert.
+      const isMainWorktreeTab = get().worktreesByRepo[repoId]?.some(
+        (entry) => entry.id === worktreeId && entry.isMainWorktree
+      )
+      // Optional-chained: PTY spawns must never fail on a renderer/preload
+      // version skew (dev reload before app restart).
+      if (isMainWorktreeTab) {
+        void window.api.spotlight?.setLogPty?.({ repoId, ptyId })
+      }
+    }
   },
 
   clearTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
     let wasActivationSpawn = false
+    let clearedSpotlightTab = false
+    let nextSpotlightLogPtyId: string | null = null
     let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
     set((s) => {
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
@@ -1732,6 +1771,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const { pendingActivationSpawn: _unused, ...rest } = tab
         void _unused
         const nextTabPtyId = remainingPtyIds.at(-1) ?? null
+        if (tab.spotlightRepoRoot) {
+          clearedSpotlightTab = true
+          nextSpotlightLogPtyId = nextTabPtyId
+        }
         const shouldRetainActivationSpawn =
           wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId)
         const nextPendingActivationSpawn = shouldRetainActivationSpawn
@@ -1793,6 +1836,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       !(ptyId && get().suppressedPtyExitIds[ptyId])
     ) {
       get().bumpWorktreeActivity(worktreeId)
+    }
+
+    if (clearedSpotlightTab && worktreeId) {
+      const repoId = getRepoIdFromWorktreeId(worktreeId)
+      const isMainWorktreeTab = get().worktreesByRepo[repoId]?.some(
+        (entry) => entry.id === worktreeId && entry.isMainWorktree
+      )
+      if (isMainWorktreeTab) {
+        if (nextSpotlightLogPtyId) {
+          // The Spotlight tab still has a live pane; keep mirroring from it.
+          void window.api.spotlight?.setLogPty?.({ repoId, ptyId: nextSpotlightLogPtyId })
+        } else {
+          void window.api.spotlight?.clearLogPty?.({ repoId })
+        }
+      }
     }
   },
 

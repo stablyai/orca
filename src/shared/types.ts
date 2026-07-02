@@ -36,6 +36,7 @@ import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
+import type { SpotlightRepoState } from './spotlight'
 import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
@@ -285,6 +286,10 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Per-repo opt-in for Spotlight testing: sync a workspace's tracked changes
+   *  onto the repo root so it can be tested against the root's installed
+   *  toolchain (node_modules, native builds) without duplicating it. */
+  spotlightTestingEnabled?: boolean
 }
 
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
@@ -852,6 +857,10 @@ export type TerminalTab = {
    *  `sortEpoch` increments. Split layouts use a numeric count because one tab
    *  can remount several panes. Never persisted — it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
+  /** Why: marks the per-workspace "Spotlight" terminal (cwd = repo root) so
+   *  re-activation reuses it instead of stacking duplicates. Persisted so the
+   *  marker survives session restore. */
+  spotlightRepoRoot?: boolean
 }
 
 export type BrowserHistoryEntry = {
@@ -3469,6 +3478,10 @@ export type PersistedState = {
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
+  /** Spotlight testing holder per repo. Cache only — the git refs
+   *  (refs/orca/spotlight/*) in each repo are the source of truth; this record
+   *  is reconciled against them on repo load. Optional on legacy files. */
+  spotlightByRepoId?: Record<string, SpotlightRepoState>
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

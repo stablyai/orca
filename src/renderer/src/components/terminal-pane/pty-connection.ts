@@ -163,6 +163,9 @@ import {
   releaseAgentStartupDeliveryAttempt
 } from '@/lib/agent-startup-delayed-delivery'
 import { isExpectedAgentProcess } from '../../../../shared/agent-process-recognition'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { resolveRuntimePath } from '../../../../shared/cross-platform-path'
+import { SPOTLIGHT_LOG_RELATIVE_PATH } from '../../../../shared/spotlight'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -2071,8 +2074,20 @@ export function connectPanePty(
     ORCA_WORKTREE_ID: deps.worktreeId,
     ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
   }
+  // Why: agents in any worktree of a Spotlight-enabled repo must be able to
+  // find the dev server's mirrored log without knowing the root checkout path.
+  const spotlightLogRepo = state.repos.find(
+    (repo) => repo.id === getRepoIdFromWorktreeId(deps.worktreeId)
+  )
+  const spotlightLogEnv: Record<string, string> =
+    spotlightLogRepo?.spotlightTestingEnabled === true && !spotlightLogRepo.connectionId?.trim()
+      ? {
+          ORCA_SPOTLIGHT_LOG: resolveRuntimePath(spotlightLogRepo.path, SPOTLIGHT_LOG_RELATIVE_PATH)
+        }
+      : {}
   const paneEnv = {
     ...paneStartup?.env,
+    ...spotlightLogEnv,
     ...paneIdentityEnv
   }
 

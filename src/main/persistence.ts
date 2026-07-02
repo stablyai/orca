@@ -73,6 +73,7 @@ import {
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
+import type { SpotlightRepoState } from '../shared/spotlight'
 import {
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
@@ -3892,6 +3893,9 @@ export class Store {
     // Why: presets are repo-scoped, so removing the repo means the presets
     // can never be referenced again — drop them with the parent.
     delete this.state.sparsePresetsByRepo[id]
+    if (this.state.spotlightByRepoId) {
+      delete this.state.spotlightByRepoId[id]
+    }
     // Clean up worktree meta for this repo
     const prefix = `${id}::`
     for (const key of Object.keys(this.state.worktreeMeta)) {
@@ -3942,6 +3946,7 @@ export class Store {
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
+        | 'spotlightTestingEnabled'
       >
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
@@ -4181,6 +4186,31 @@ export class Store {
     const existing = this.state.sparsePresetsByRepo[repoId] ?? []
     this.state.sparsePresetsByRepo[repoId] = existing.filter((entry) => entry.id !== presetId)
     this.scheduleSave()
+  }
+
+  // ── Spotlight testing ──────────────────────────────────────────────
+
+  getSpotlightState(repoId: string): SpotlightRepoState | null {
+    return this.state.spotlightByRepoId?.[repoId] ?? null
+  }
+
+  getAllSpotlightStates(): Record<string, SpotlightRepoState> {
+    return { ...this.state.spotlightByRepoId }
+  }
+
+  setSpotlightState(repoId: string, spotlightState: SpotlightRepoState): void {
+    if (!this.state.spotlightByRepoId) {
+      this.state.spotlightByRepoId = {}
+    }
+    this.state.spotlightByRepoId[repoId] = spotlightState
+    this.scheduleSave()
+  }
+
+  clearSpotlightState(repoId: string): void {
+    if (this.state.spotlightByRepoId && repoId in this.state.spotlightByRepoId) {
+      delete this.state.spotlightByRepoId[repoId]
+      this.scheduleSave()
+    }
   }
 
   // ── Automations ───────────────────────────────────────────────────

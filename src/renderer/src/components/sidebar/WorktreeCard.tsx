@@ -24,6 +24,11 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import {
+  canHoldSpotlight,
+  SpotlightPrimaryBadge,
+  SpotlightQuickAction
+} from './WorktreeCardSpotlightControls'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
@@ -1216,7 +1221,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hasMetaRow = compactCards
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
-  const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
+  const spotlightEligible = canHoldSpotlight(worktree, repo, isFolder)
+  const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction || spotlightEligible
   // Why: the hover owns full identity when the row truncates; normalize once
   // so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
@@ -1553,6 +1559,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </TooltipContent>
               </Tooltip>
             )}
+            {!compactCards && worktree.isMainWorktree && !isFolder && repo ? (
+              <SpotlightPrimaryBadge repo={repo} />
+            ) : null}
 
             {worktree.isSparse && (
               <Tooltip>
@@ -1608,6 +1617,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   </TooltipContent>
                 </Tooltip>
               )}
+
+              {showTitleRowPrimary && repo ? <SpotlightPrimaryBadge repo={repo} /> : null}
+
+              {spotlightEligible && repo ? (
+                <SpotlightQuickAction worktree={worktree} repo={repo} />
+              ) : null}
 
               {showDeleteQuickAction && (
                 <Tooltip>

@@ -1946,6 +1946,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'importedExternalWorktreePaths'
             | 'projectGroupId'
             | 'projectGroupOrder'
+            | 'spotlightTestingEnabled'
           >
         > & {
           sourceControlAi?: Repo['sourceControlAi'] | null
@@ -2023,6 +2024,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.externalWorktreeVisibility !== 'show'
       ) {
         delete updates.externalWorktreeVisibility
+      }
+      if (
+        'spotlightTestingEnabled' in updates &&
+        updates.spotlightTestingEnabled !== undefined &&
+        typeof updates.spotlightTestingEnabled !== 'boolean'
+      ) {
+        delete updates.spotlightTestingEnabled
       }
       if (
         'externalWorktreeVisibilityPromptDismissedAt' in updates &&

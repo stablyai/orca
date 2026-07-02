@@ -258,6 +258,18 @@
         },
         "linear": {
           "37d36984d0": "La conexión de Linear fue reemplazada por una solicitud más reciente."
+        },
+        "spotlight": {
+          "operationInProgress": "Finish or abort the merge/rebase in progress first.",
+          "rootDiverged": "The project root has changes made outside the Spotlight workspace. Commit or discard them there first.",
+          "restoreConflict": "Restoring the original root changes conflicted. Resolve it in the project root, then retry.",
+          "unsupportedHost": "Spotlight testing is not available for this project host yet.",
+          "activated": "Spotlight on — the project root now mirrors this workspace",
+          "activateFailed": "Failed to start Spotlight",
+          "syncFailed": "Spotlight sync failed",
+          "released": "Spotlight off — project root restored",
+          "deactivateFailed": "Failed to turn off Spotlight",
+          "activatedLogs": "Server logs are mirrored for agents at .orca/spotlight.log"
         }
       }
     },
@@ -404,6 +416,13 @@
           "emulator": {
             "tab": {
               "bf4f2a8a72": "No se pudo iniciar el emulador. Verifique la configuración del emulador de iOS o Android y pruebe con otro dispositivo."
+            }
+          }
+        },
+        "spotlight": {
+          "terminal": {
+            "tab": {
+              "title": "Spotlight"
             }
           }
         }
@@ -2548,7 +2567,10 @@
             "0d1963f4a6": "Esta pestaña está fijada. ¿Seguro que quieres cerrarla?",
             "dont_ask_again": "No volver a preguntar por pestañas fijadas",
             "0b38ee2f86": "Cancelar",
-            "c337c9d75c": "Cerrar"
+            "c337c9d75c": "Cerrar",
+            "spotlightTitle": "Spotlight is using this terminal",
+            "spotlightDescription": "This terminal runs your server at the project root and feeds agent logs. Closing it turns Spotlight off and restores the project root.",
+            "spotlightConfirm": "Turn Off Spotlight & Close"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Error de autenticación en {{value0}}. Vuelve a conectar para continuar esta sesión de terminal.",
@@ -4049,7 +4071,9 @@
           "setParentWorkspace": "Establecer árbol de trabajo padre...",
           "workspaceSection": "Espacio de trabajo",
           "primaryDeleteDisabled": "El árbol de trabajo principal no se puede eliminar. Elimina el proyecto en su lugar.",
-          "deleteWorktree": "Eliminar árbol de trabajo"
+          "deleteWorktree": "Eliminar árbol de trabajo",
+          "spotlightOff": "Turn Off Spotlight",
+          "spotlightOn": "Spotlight This Workspace"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -4500,6 +4524,17 @@
           "importing": "Importador...",
           "importSshConfig": "Importar ~/.ssh/config",
           "sshPersistenceDefault": "Los terminales remotos de este host seguirán activos hasta que los cierres o restablezcas el relé."
+        },
+        "WorktreeCardSpotlightControls": {
+          "syncing": "Syncing…",
+          "activeHere": "Spotlight on — this workspace mirrors to the project root. Click to turn off.",
+          "takeover": "Take the Spotlight from \"{{holder}}\" — the project root will mirror this workspace instead.",
+          "activate": "Spotlight this workspace — mirror its changes onto the project root for testing.",
+          "primaryBadgeAria": "Spotlight is mirroring a workspace onto this project root. Click to turn off.",
+          "badgeLabel": "spotlight",
+          "primaryBadgeTooltip": "The project root mirrors \"{{holder}}\". Click to turn Spotlight off and restore the root.",
+          "turnOff": "Turn off Spotlight and restore the project root",
+          "agentLogs": "Agents in every workspace can read the server logs: .orca/spotlight.log (env var ORCA_SPOTLIGHT_LOG)."
         }
       },
       "shared": {
@@ -7900,7 +7935,9 @@
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
             "copy": "copy",
             "clone": "clone",
-            "apfs": "apfs"
+            "apfs": "apfs",
+            "spotlightTesting": "Spotlight Testing",
+            "spotlightTestingDescription": "Mirror workspace changes onto the project root for testing."
           }
         },
         "runtime": {
@@ -8694,6 +8731,13 @@
         "ephemeralVmsExperimentalSetting": {
           "description": "Muestra controles de configuración y objetivos de ejecución del espacio de trabajo para entornos bajo demanda de propiedad de repos.",
           "toggleLabel": "Alternar entornos por espacio de trabajo"
+        },
+        "RepositorySpotlightSection": {
+          "title": "Spotlight Testing",
+          "sectionDescription": "Test workspace changes against the project root without duplicating installed dependencies or build output.",
+          "toggleDescription": "Show a Spotlight button on workspaces of this project that mirrors their tracked changes onto the project root.",
+          "toggleLabel": "Use Spotlight testing",
+          "logsDescription": "While Spotlight is on, the server terminal's output is mirrored to .orca/spotlight.log so agents in any workspace can read it (env var ORCA_SPOTLIGHT_LOG)."
         }
       },
       "right": {

@@ -1,0 +1,229 @@
+import { execFile, execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { promisify } from 'node:util'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  activateSpotlightCore,
+  createCheckpointCommit,
+  deactivateSpotlightCore,
+  inspectSpotlightRefsCore,
+  syncSpotlightCore,
+  SpotlightCoreError,
+  type SpotlightGitContext,
+  type SpotlightGitExecutor
+} from './spotlight-sync-core'
+
+const execFileAsync = promisify(execFile)
+
+const realGitExecutor: SpotlightGitExecutor = async (args, cwd, opts) => {
+  const { stdout, stderr } = await execFileAsync('git', args, {
+    cwd,
+    encoding: 'utf-8',
+    env: opts?.env ? { ...process.env, ...opts.env } : process.env
+  })
+  return { stdout, stderr }
+}
+
+function makeContext(overrides: Partial<SpotlightGitContext> = {}): SpotlightGitContext {
+  return {
+    git: realGitExecutor,
+    detectConflict: async () => 'unknown',
+    ...overrides
+  }
+}
+
+function run(cwd: string, ...args: string[]): string {
+  return execFileSync('git', args, { cwd, stdio: 'pipe', encoding: 'utf-8' }).trim()
+}
+
+function write(dir: string, relPath: string, content: string): void {
+  const filePath = path.join(dir, relPath)
+  mkdirSync(path.dirname(filePath), { recursive: true })
+  writeFileSync(filePath, content)
+}
+
+describe('spotlight-sync-core', () => {
+  let baseDir: string
+  let rootPath: string
+  let worktreePath: string
+  const ctx = makeContext()
+
+  beforeEach(() => {
+    baseDir = mkdtempSync(path.join(tmpdir(), 'orca-spotlight-'))
+    rootPath = path.join(baseDir, 'root')
+    worktreePath = path.join(baseDir, 'wt')
+    mkdirSync(rootPath)
+    run(rootPath, 'init', '-b', 'main')
+    run(rootPath, 'config', 'user.name', 'Test')
+    run(rootPath, 'config', 'user.email', 'test@example.com')
+    write(rootPath, '.gitignore', 'node_modules/\n')
+    write(rootPath, 'a.txt', 'a-original\n')
+    write(rootPath, 'dir/b.txt', 'b-original\n')
+    write(rootPath, 'to-delete.txt', 'delete-me\n')
+    run(rootPath, 'add', '-A')
+    run(rootPath, 'commit', '-m', 'initial')
+    run(rootPath, 'worktree', 'add', worktreePath, '-b', 'feature')
+  })
+
+  afterEach(() => {
+    rmSync(baseDir, { recursive: true, force: true })
+  })
+
+  it('activate mirrors adds, edits, deletes and untracked files onto the root', async () => {
+    write(worktreePath, 'a.txt', 'a-changed\n')
+    write(worktreePath, 'brand-new.txt', 'new-file\n') // untracked, never staged
+    rmSync(path.join(worktreePath, 'to-delete.txt'))
+    write(worktreePath, 'node_modules/dep.js', 'ignored\n') // gitignored
+    write(rootPath, 'node_modules/root-dep.js', 'root-install\n')
+    write(rootPath, 'stray.log', 'untracked-root-file\n')
+
+    const outcome = await activateSpotlightCore(ctx, rootPath, worktreePath)
+
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('a-changed\n')
+    expect(readFileSync(path.join(rootPath, 'brand-new.txt'), 'utf-8')).toBe('new-file\n')
+    expect(existsSync(path.join(rootPath, 'to-delete.txt'))).toBe(false)
+    // Ignored files never sync; untracked files already in the root survive.
+    expect(existsSync(path.join(rootPath, 'node_modules/dep.js'))).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'node_modules/root-dep.js'), 'utf-8')).toBe(
+      'root-install\n'
+    )
+    expect(readFileSync(path.join(rootPath, 'stray.log'), 'utf-8')).toBe('untracked-root-file\n')
+    // Root is detached at the snapshot; the original branch pointer is safe.
+    expect(run(rootPath, 'rev-parse', 'HEAD')).toBe(outcome.snapshotSha)
+    expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()
+    expect(outcome.alreadyActive).toBe(false)
+    expect(outcome.originalBranch).toBe('main')
+  })
+
+  it('never disturbs the worktree branch, index, or files', async () => {
+    write(worktreePath, 'a.txt', 'a-changed\n')
+    write(worktreePath, 'staged.txt', 'staged\n')
+    run(worktreePath, 'add', 'staged.txt')
+    write(worktreePath, 'unstaged-new.txt', 'unstaged\n')
+    const statusBefore = run(worktreePath, 'status', '--porcelain')
+    const headBefore = run(worktreePath, 'rev-parse', 'HEAD')
+
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+
+    expect(run(worktreePath, 'status', '--porcelain')).toBe(statusBefore)
+    expect(run(worktreePath, 'rev-parse', 'HEAD')).toBe(headBefore)
+    expect(run(worktreePath, 'symbolic-ref', '--short', 'HEAD')).toBe('feature')
+  })
+
+  it('sync applies incremental changes and skips no-op syncs', async () => {
+    write(worktreePath, 'a.txt', 'v1\n')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+
+    write(worktreePath, 'a.txt', 'v2\n')
+    write(worktreePath, 'dir/c.txt', 'c-new\n')
+    const synced = await syncSpotlightCore(ctx, rootPath, worktreePath)
+    expect(synced.skipped).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('v2\n')
+    expect(readFileSync(path.join(rootPath, 'dir/c.txt'), 'utf-8')).toBe('c-new\n')
+
+    const noop = await syncSpotlightCore(ctx, rootPath, worktreePath)
+    expect(noop.skipped).toBe(true)
+    expect(noop.snapshotSha).toBe(synced.snapshotSha)
+  })
+
+  it('restores a dirty root exactly on deactivate, including staged state', async () => {
+    write(rootPath, 'a.txt', 'root-edit\n')
+    write(rootPath, 'root-staged.txt', 'root-staged\n')
+    run(rootPath, 'add', 'root-staged.txt')
+    const statusBefore = run(rootPath, 'status', '--porcelain')
+    const stagedBefore = run(rootPath, 'diff', '--cached', '--name-only')
+
+    write(worktreePath, 'a.txt', 'wt-version\n')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('wt-version\n')
+
+    await deactivateSpotlightCore(ctx, rootPath)
+
+    expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+    expect(run(rootPath, 'status', '--porcelain')).toBe(statusBefore)
+    expect(run(rootPath, 'diff', '--cached', '--name-only')).toBe(stagedBefore)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('root-edit\n')
+    // All spotlight refs are gone.
+    const refs = await inspectSpotlightRefsCore(ctx, rootPath)
+    expect(refs.snapshotSha).toBeNull()
+    expect(refs.backupSha).toBeNull()
+    expect(refs.originalHeadSha).toBeNull()
+  })
+
+  it('refuses to sync when the root diverged, unless forced', async () => {
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    write(rootPath, 'a.txt', 'edited-directly-in-root\n')
+
+    write(worktreePath, 'a.txt', 'wt-change\n')
+    await expect(syncSpotlightCore(ctx, rootPath, worktreePath)).rejects.toMatchObject({
+      code: 'root-diverged'
+    })
+
+    const forced = await syncSpotlightCore(ctx, rootPath, worktreePath, { force: true })
+    expect(forced.skipped).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('wt-change\n')
+  })
+
+  it('takeover keeps the original root backup', async () => {
+    const worktree2 = path.join(baseDir, 'wt2')
+    run(rootPath, 'worktree', 'add', worktree2, '-b', 'feature-2')
+    write(rootPath, 'a.txt', 'root-uncommitted\n')
+
+    write(worktreePath, 'a.txt', 'wt1-version\n')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+
+    write(worktree2, 'a.txt', 'wt2-version\n')
+    const takeover = await activateSpotlightCore(ctx, rootPath, worktree2)
+    expect(takeover.alreadyActive).toBe(true)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('wt2-version\n')
+
+    await deactivateSpotlightCore(ctx, rootPath)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('root-uncommitted\n')
+    expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+  })
+
+  it('deactivate with a deleted original branch stays detached and reports it', async () => {
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    const originalHead = (await inspectSpotlightRefsCore(ctx, rootPath)).originalHeadSha
+    run(rootPath, 'branch', '-D', 'main')
+
+    const outcome = await deactivateSpotlightCore(ctx, rootPath)
+    expect(outcome.branchMissing).toBe(true)
+    expect(run(rootPath, 'rev-parse', 'HEAD')).toBe(originalHead)
+    expect(() => run(rootPath, 'symbolic-ref', '-q', 'HEAD')).toThrow()
+  })
+
+  it('handles renames', async () => {
+    run(worktreePath, 'mv', 'a.txt', 'renamed.txt')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+    expect(existsSync(path.join(rootPath, 'a.txt'))).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'renamed.txt'), 'utf-8')).toBe('a-original\n')
+  })
+
+  it('refuses to run during a merge/rebase', async () => {
+    const conflictedCtx = makeContext({ detectConflict: async () => 'rebase' })
+    await expect(activateSpotlightCore(conflictedCtx, rootPath, worktreePath)).rejects.toThrow(
+      SpotlightCoreError
+    )
+    await expect(
+      activateSpotlightCore(conflictedCtx, rootPath, worktreePath)
+    ).rejects.toMatchObject({ code: 'operation-in-progress' })
+  })
+
+  it('sync without activation reports not-active', async () => {
+    await expect(syncSpotlightCore(ctx, rootPath, worktreePath)).rejects.toMatchObject({
+      code: 'not-active'
+    })
+    await expect(deactivateSpotlightCore(ctx, rootPath)).rejects.toMatchObject({
+      code: 'not-active'
+    })
+  })
+
+  it('checkpoint of a clean worktree reuses HEAD', async () => {
+    const head = run(worktreePath, 'rev-parse', 'HEAD')
+    const checkpoint = await createCheckpointCommit(ctx, worktreePath)
+    expect(checkpoint.sha).toBe(head)
+  })
+})

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import type { AppState } from './types'
 
 /** Resolves the displayed tab-strip label for the destructive confirmation. */
@@ -23,23 +24,66 @@ export function isUnifiedTabPinned(state: AppState, worktreeId: string, tabId: s
   )
 }
 
+/** Whether this terminal tab is the repo's Spotlight server terminal while
+ *  Spotlight is active — closing it would kill the dev server and the agent
+ *  log mirror, so close attempts must go through the off-and-close prompt. */
+export function isSpotlightProtectedTab(
+  state: AppState,
+  worktreeId: string,
+  terminalTabId: string
+): boolean {
+  const tab = (state.tabsByWorktree?.[worktreeId] ?? []).find((entry) => entry.id === terminalTabId)
+  if (!tab?.spotlightRepoRoot) {
+    return false
+  }
+  return Boolean(state.spotlightByRepo?.[getRepoIdFromWorktreeId(worktreeId)])
+}
+
 /** Routes a pinned-tab close attempt through the confirmation dialog when the
  *  setting is on. Non-pinned tabs (and pinned tabs when the setting is off)
  *  close immediately. Keeping every close path behind this single helper is why
- *  the keyboard/native-menu paths can no longer silently drop a pinned tab. */
+ *  the keyboard/native-menu paths can no longer silently drop a pinned tab.
+ *  When `worktreeId`/`terminalTabId` identify a live Spotlight server terminal,
+ *  the close is intercepted regardless of the pinned setting: confirming turns
+ *  Spotlight off (restoring the root) before the tab closes. */
 export function guardPinnedTabClose(params: {
   isPinned: boolean
   tabLabel: string
   onClose: () => void
   onCancel?: () => void
+  worktreeId?: string
+  terminalTabId?: string
 }): void {
-  const { isPinned, tabLabel, onClose, onCancel } = params
+  const { isPinned, tabLabel, onClose, onCancel, worktreeId, terminalTabId } = params
+  const state = useAppStore.getState()
+
+  if (worktreeId && terminalTabId && isSpotlightProtectedTab(state, worktreeId, terminalTabId)) {
+    state.requestPinnedTabCloseConfirm({
+      tabLabel,
+      kind: 'spotlight',
+      onConfirm: () => {
+        const repoId = getRepoIdFromWorktreeId(worktreeId)
+        void useAppStore
+          .getState()
+          .deactivateSpotlight(repoId)
+          .then((result) => {
+            // Only close once the root is restored; a failed restore keeps the
+            // terminal (and the server) alive so nothing is lost.
+            if (result.ok) {
+              onClose()
+            }
+          })
+      },
+      ...(onCancel ? { onCancel } : {})
+    })
+    return
+  }
+
   if (!isPinned) {
     onClose()
     return
   }
 
-  const state = useAppStore.getState()
   const shouldConfirm = state.settings?.confirmClosePinnedTab ?? true
   if (!shouldConfirm) {
     onClose()

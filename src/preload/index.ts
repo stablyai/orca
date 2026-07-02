@@ -57,6 +57,7 @@ import type {
   WarpThemeImportSource
 } from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type { SpotlightChangedEvent } from '../shared/spotlight'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -570,6 +571,27 @@ const api = {
       return () => ipcRenderer.removeListener('repos:changed', listener)
     }
   } satisfies PreloadApi['repos'],
+
+  spotlight: {
+    getState: () => ipcRenderer.invoke('spotlight:getState'),
+
+    activate: (args) => ipcRenderer.invoke('spotlight:activate', args),
+
+    sync: (args) => ipcRenderer.invoke('spotlight:sync', args),
+
+    deactivate: (args) => ipcRenderer.invoke('spotlight:deactivate', args),
+
+    setLogPty: (args) => ipcRenderer.invoke('spotlight:setLogPty', args),
+
+    clearLogPty: (args) => ipcRenderer.invoke('spotlight:clearLogPty', args),
+
+    onChanged: (callback: (event: SpotlightChangedEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: SpotlightChangedEvent) =>
+        callback(data)
+      ipcRenderer.on('spotlight:changed', listener)
+      return () => ipcRenderer.removeListener('spotlight:changed', listener)
+    }
+  } satisfies PreloadApi['spotlight'],
 
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),

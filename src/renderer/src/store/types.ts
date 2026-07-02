@@ -1,5 +1,6 @@
 import type { RepoSlice } from './slices/repos'
 import type { SparsePresetsSlice } from './slices/sparse-presets'
+import type { SpotlightSlice } from './slices/spotlight'
 import type { WorktreeSlice } from './slices/worktrees'
 import type { TerminalSlice } from './slices/terminals'
 import type { TabsSlice } from './slices/tabs'
@@ -34,6 +35,7 @@ import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confi
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
+  SpotlightSlice &
   WorktreeSlice &
   TerminalSlice &
   TabsSlice &

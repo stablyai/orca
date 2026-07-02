@@ -10,6 +10,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { SpotlightOpResult } from '../../../shared/spotlight'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -604,6 +605,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     nativeChat: createNativeChatApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
+    spotlight: {
+      getState: async () => ({ byRepo: {} }),
+      activate: async () => webSpotlightUnavailable(),
+      sync: async () => webSpotlightUnavailable(),
+      deactivate: async () => webSpotlightUnavailable(),
+      setLogPty: async () => {},
+      clearLogPty: async () => {},
+      onChanged: () => noopUnsubscribe
+    },
     worktrees: createWorktreesApi(),
     fs: createFileApi(),
     git: createGitApi(),
@@ -3332,3 +3342,14 @@ function getFallbackResult(path: string[], args: unknown[]): unknown {
 }
 
 function noopUnsubscribe(): void {}
+
+function webSpotlightUnavailable(): SpotlightOpResult {
+  return {
+    ok: false,
+    error: {
+      code: 'unsupported-host',
+      message: 'Spotlight testing is unavailable on web.'
+    },
+    state: null
+  }
+}

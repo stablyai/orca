@@ -45,6 +45,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
+import SpotlightAutoSyncGate from './components/sidebar/SpotlightAutoSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
@@ -2107,6 +2108,7 @@ function App(): React.JSX.Element {
             subscriptions from re-rendering the App tree. */}
             <RetainedAgentsSyncGate />
             <AgentHibernationGate />
+            <SpotlightAutoSyncGate />
             {/* Why: workspace activation is a hot path; including activeWorktreeId
             in reset keys remounts whole surfaces during wake. */}
             <RecoverableRenderErrorBoundary

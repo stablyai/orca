@@ -41,6 +41,8 @@ vi.mock('@/store', () => ({
       settings,
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
+      spotlightByRepo: {},
+      worktreesByRepo: {},
       browserTabsByWorktree,
       ptyIdsByTabId,
       tabsByWorktree,
