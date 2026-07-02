@@ -49,8 +49,8 @@ on:
     - cron: '30 8 * * *'
 
 jobs:
-  terminal-perf:
-    name: terminal scale perf
+  terminal-perf-linux:
+    name: terminal scale perf (linux)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -133,7 +133,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: terminal-scale-perf-report
+          name: terminal-scale-perf-report-linux
           path: ${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}
           retention-days: 14
           if-no-files-found: warn
@@ -142,7 +142,99 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: terminal-scale-perf-traces
+          name: terminal-scale-perf-traces-linux
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  terminal-perf-windows:
+    name: terminal scale perf (windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_E2E_FORWARD_APP_LOGS: '1'
+      ORCA_E2E_TERMINAL_PERF_REPORT_PATH: ${{ inputs.report_path || 'test-results/terminal-scale-perf-report.json' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for terminal perf
+        run: npx electron-vite build --mode e2e
+
+      # Why: the env var setup and Playwright call use bash (available via Git
+      # Bash on Windows runners). xvfb is not needed — Electron runs headless
+      # natively on Windows.
+      - name: Run terminal scale perf report gate
+        shell: bash
+        env:
+          ORCA_TERMINAL_PERF_GREP: ${{ inputs.grep }}
+          ORCA_TERMINAL_PERF_FRAME_COUNT: ${{ inputs.frame_count }}
+          ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS: ${{ inputs.frame_interval_ms }}
+          ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS: ${{ inputs.pressure_output_chars }}
+          ORCA_TERMINAL_PERF_SCALE_PANES: ${{ inputs.scale_panes }}
+          ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES: ${{ inputs.scale_cross_workspace_panes }}
+          ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES: ${{ inputs.scale_pressure_panes }}
+          ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES: ${{ inputs.scale_hidden_pressure_panes }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${ORCA_TERMINAL_PERF_GREP:-}" ]; then
+            args+=(--grep "$ORCA_TERMINAL_PERF_GREP")
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_FRAME_COUNT:-}" ]; then
+            export ORCA_E2E_OPENCODE_FRAME_COUNT="$ORCA_TERMINAL_PERF_FRAME_COUNT"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS:-}" ]; then
+            export ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS="$ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS:-}" ]; then
+            export ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS="$ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_PANES="$ORCA_TERMINAL_PERF_SCALE_PANES"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES="$ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES="$ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES="$ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES"
+          fi
+          env SKIP_BUILD=1 pnpm run test:e2e:terminal-perf:scale:report -- "${args[@]}"
+
+      - name: Upload terminal perf report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-scale-perf-report-windows
+          path: ${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-scale-perf-traces-windows
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
