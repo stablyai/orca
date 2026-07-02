@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import { TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS } from './terminal-live-text-commit'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
 type TerminalLiveInputCommitHarness = {
@@ -10,6 +11,10 @@ type TerminalLiveInputCommitHarness = {
   readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
   readonly sent: readonly string[]
   readonly unmount: () => void
+}
+
+type TerminalLiveInputCommitHarnessOptions = {
+  readonly sendResult?: boolean
 }
 
 function suppressReactTestRendererDeprecationWarning(): () => void {
@@ -24,7 +29,9 @@ function suppressReactTestRendererDeprecationWarning(): () => void {
   return () => consoleErrorSpy.mockRestore()
 }
 
-function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness {
+function createTerminalLiveInputCommitHarness({
+  sendResult = true
+}: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
   const activeHandle = 'terminal-a'
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
   const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
@@ -38,7 +45,7 @@ function createTerminalLiveInputCommitHarness(): TerminalLiveInputCommitHarness 
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (_handle, bytes) => {
       sent.push(bytes)
-      return true
+      return sendResult
     }
   }
   let handlers: ReturnType<typeof useTerminalLiveInputCommit<string>> | null = null
@@ -110,6 +117,55 @@ describe('terminal live input commit hook', () => {
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+  })
+
+  it('Given Hangul pending text When an external terminal send is requested Then flushes composed text first', async () => {
+    // Given
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('한')
+
+    // When
+    const flushed = await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+
+    // Then
+    expect(flushed).toBe(true)
+    expect(sent).toEqual(['한'])
+  })
+
+  it('Given pending text cannot be sent When an external terminal send is requested Then reports failure', async () => {
+    // Given
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
+    handlers.handleLiveInputChange('한')
+
+    // When
+    const flushed = await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+
+    // Then
+    expect(flushed).toBe(false)
+    expect(sent).toEqual(['한'])
+  })
+
+  it('Given Chinese and Vietnamese IME text When the settle window elapses Then sends the committed text', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When
+    handlers.handleLiveInputChange('你好')
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS - 1)
+
+    // Then
+    expect(captures).toEqual(['你好'])
+    expect(sent).toEqual([])
+
+    // When
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.waitFor(() => expect(sent).toEqual(['你好']))
+    handlers.handleLiveInputChange('tiếng Việt')
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS)
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['你好', 'tiếng Việt']))
   })
 
   it('Given deferred IME text When the hook unmounts Then cancels the pending commit timer', async () => {

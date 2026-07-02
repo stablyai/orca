@@ -55,6 +55,26 @@ describe('terminal live text commit', () => {
     expect(decision).toEqual({ kind: 'defer', text, delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS })
   })
 
+  it('Given Chinese and Vietnamese IME text When live text changes Then does not use Hangul-only indefinite deferral', () => {
+    // Given
+    const nonHangulImeTexts = ['你好', 'tiếng Việt'] as const
+
+    for (const text of nonHangulImeTexts) {
+      // When
+      const decision = getTerminalLiveTextChangeDecision(text)
+
+      // Then
+      expect(isTerminalLiveTextImeCandidate(text)).toBe(true)
+      expect(isTerminalLiveTextHangulCandidate(text)).toBe(false)
+      expect(getTerminalLiveDeferredTextDelayMs(text)).toBe(TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS)
+      expect(decision).toEqual({
+        kind: 'defer',
+        text,
+        delayMs: TERMINAL_LIVE_TEXT_COMMIT_DELAY_MS
+      })
+    }
+  })
+
   it('Given ASCII text When live text changes Then sends immediately', () => {
     // Given
     const text = 'abc123'

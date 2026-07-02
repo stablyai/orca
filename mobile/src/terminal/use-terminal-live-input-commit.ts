@@ -35,6 +35,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
 
 type TerminalLiveInputCommitHandlers = {
   readonly clearPendingLiveInputCommit: () => void
+  readonly flushPendingLiveInputBeforeExternalSend: (handle: string) => Promise<boolean>
   readonly handleLiveInputAccessoryBytes: (
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
@@ -84,6 +85,21 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       clearPendingLiveInputCommit()
     }
   }, [activeHandle, activeSessionTabType, clearPendingLiveInputCommit, liveInputTerminalHandles])
+
+  const flushPendingLiveInputBeforeExternalSend = useCallback(
+    async (handle: string): Promise<boolean> => {
+      const pendingHandle = pendingLiveInputHandleRef.current
+      if (pendingHandle && pendingHandle !== handle) {
+        clearPendingLiveInputCommit()
+        return waitForPendingLiveInputFlush()
+      }
+      if (pendingHandle === handle && pendingLiveInputTextRef.current.length > 0) {
+        return flushPendingLiveInputText(handle)
+      }
+      return waitForPendingLiveInputFlush()
+    },
+    [clearPendingLiveInputCommit, flushPendingLiveInputText, waitForPendingLiveInputFlush]
+  )
 
   const handleLiveInputChange = useCallback(
     (text: string) => {
@@ -211,6 +227,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   return {
     clearPendingLiveInputCommit,
+    flushPendingLiveInputBeforeExternalSend,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
