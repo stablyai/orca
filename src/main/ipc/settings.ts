@@ -12,6 +12,7 @@ import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { applyElectronProxySettings } from '../network/proxy-settings'
+import { applyAutomaticUpdatesSetting } from '../updater'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
@@ -121,6 +122,16 @@ export function registerSettingsHandlers(
         applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
       } catch (error) {
         console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
+      }
+    }
+    if (
+      'automaticUpdates' in sanitizedArgs &&
+      before.automaticUpdates !== result.automaticUpdates
+    ) {
+      try {
+        applyAutomaticUpdatesSetting(result.automaticUpdates === true)
+      } catch (error) {
+        console.warn('[settings] failed to apply automaticUpdates:', error)
       }
     }
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {

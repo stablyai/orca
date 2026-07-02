@@ -4,6 +4,7 @@ import { Download, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
+import { AutomaticUpdatesSetting } from './AutomaticUpdatesSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
@@ -242,6 +243,8 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                 ))}
         </p>
       </SearchableSetting>
+
+      <AutomaticUpdatesSetting />
     </section>
   )
 }

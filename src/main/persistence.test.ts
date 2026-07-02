@@ -534,6 +534,23 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
+  it('defaults automaticUpdates to false when unset', async () => {
+    const store = await createStore()
+    expect(store.getSettings().automaticUpdates).toBe(false)
+  })
+
+  it('persists automaticUpdates true/false round-trip', async () => {
+    const store = await createStore()
+    store.updateSettings({ automaticUpdates: true })
+    expect(store.getSettings().automaticUpdates).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.automaticUpdates).toBe(true)
+    store.updateSettings({ automaticUpdates: false })
+    expect(store.getSettings().automaticUpdates).toBe(false)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.automaticUpdates).toBe(false)
+  })
+
   it('coerces loaded minimizeToTrayOnClose to false unless stored as true', async () => {
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),

@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const {
   applyAppIconMock,
+  applyAutomaticUpdatesSettingMock,
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
@@ -11,6 +12,7 @@ const {
   rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
+  applyAutomaticUpdatesSettingMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
@@ -42,6 +44,10 @@ vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
 }))
 
+vi.mock('../updater', () => ({
+  applyAutomaticUpdatesSetting: applyAutomaticUpdatesSettingMock
+}))
+
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
 }))
@@ -71,6 +77,7 @@ describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
     applyAppIconMock.mockClear()
+    applyAutomaticUpdatesSettingMock.mockClear()
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
@@ -220,6 +227,36 @@ describe('registerSettingsHandlers', () => {
     handler(settingsInvokeEvent, { defaultTuiAgent: 'codex' })
 
     expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
+  })
+
+  it('applies automatic updates when the setting changes', async () => {
+    store.getSettings.mockReturnValue({ automaticUpdates: false })
+    store.updateSettings.mockReturnValue({ automaticUpdates: true })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { automaticUpdates: true })
+
+    expect(applyAutomaticUpdatesSettingMock).toHaveBeenCalledWith(true)
+  })
+
+  it('does not apply automatic updates when the setting value is unchanged', async () => {
+    store.getSettings.mockReturnValue({ automaticUpdates: true })
+    store.updateSettings.mockReturnValue({ automaticUpdates: true })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { automaticUpdates: true })
+
+    expect(applyAutomaticUpdatesSettingMock).not.toHaveBeenCalled()
   })
 
   it('prepares local worktree roots when workspace directory changes', async () => {

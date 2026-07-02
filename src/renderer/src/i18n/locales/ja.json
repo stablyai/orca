@@ -5194,6 +5194,8 @@
           "f44299636f": "再起動してアップデート (",
           "42717918f4": "アップデートのインストール (",
           "02dc082e70": "アップデートのダウンロードを開始できませんでした。",
+          "a73f0c19be": "Automatic updates",
+          "b8e724f0d3": "Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted.",
           "e1a647adc5": "アップデートをチェックする",
           "ceb579abaf": "アプリのアップデートを確認し、新規 Orca バージョンをインストールします。",
           "d91ebfb87e": "現在のバージョン: {{value0}}",
@@ -7437,7 +7439,9 @@
             "161a86a9da": "ピン留めしたタブを閉じる前に確認",
             "8e593f04fc": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "a1c4e7f209": "Automatic updates",
+            "b2d5f8a310": "Download and install updates automatically in the background."
           }
         },
         "git": {

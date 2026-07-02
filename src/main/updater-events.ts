@@ -28,6 +28,7 @@ type UpdaterHandlerContext = {
   getPendingInstallVersion: () => string
   getUserInitiatedCheck: () => boolean
   hasNewerDownloadedVersion: () => boolean
+  maybeAutoDownload: () => void
   shouldHandleUpdaterErrorEvent: () => boolean
   clearUpdateAvailableEventPending: (attemptId: number | null) => void
   isActiveUpdateCheckAttempt: (attemptId: number) => boolean
@@ -65,6 +66,7 @@ export function registerAutoUpdaterHandlers({
   getPendingInstallVersion,
   getUserInitiatedCheck,
   hasNewerDownloadedVersion,
+  maybeAutoDownload,
   shouldHandleUpdaterErrorEvent,
   clearUpdateAvailableEventPending,
   isActiveUpdateCheckAttempt,
@@ -205,6 +207,7 @@ export function registerAutoUpdaterHandlers({
         }
 
         sendStatus({ state: 'available', version: info.version, changelog })
+        maybeAutoDownload()
       } finally {
         clearUpdateAvailableEventPending(attemptId)
       }

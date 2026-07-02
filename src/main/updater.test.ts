@@ -1067,6 +1067,217 @@ describe('updater', () => {
     )
   })
 
+  it('auto-downloads a newer available update when automatic updates are enabled', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
+      autoUpdaterMock.emit('download-progress', { percent: 19 })
+      return Promise.resolve(undefined)
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutomaticUpdates: () => true
+    })
+    expect(autoUpdaterMock.autoDownload).toBe(false)
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'downloading',
+        percent: 19,
+        version: '1.0.61'
+      })
+    })
+
+    const statusStates = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status.state)
+    expect(statusStates).toEqual(['checking', 'available', 'downloading'])
+  })
+
+  it('leaves a newer available update manual when automatic updates are disabled', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutomaticUpdates: () => false
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.autoDownload).toBe(false)
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+  })
+
+  it('starts an available update when automatic updates are enabled live', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
+      autoUpdaterMock.emit('download-progress', { percent: 33 })
+      return Promise.resolve(undefined)
+    })
+    let automaticUpdates = false
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, applyAutomaticUpdatesSetting } =
+      await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutomaticUpdates: () => automaticUpdates
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    automaticUpdates = true
+    applyAutomaticUpdatesSetting(true)
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 33,
+      version: '1.0.61'
+    })
+  })
+
+  it('does not cancel or restart an in-flight download when automatic updates are disabled live', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
+      autoUpdaterMock.emit('download-progress', { percent: 44 })
+      return new Promise(() => {})
+    })
+    let automaticUpdates = true
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, applyAutomaticUpdatesSetting } =
+      await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutomaticUpdates: () => automaticUpdates
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'downloading',
+        percent: 44,
+        version: '1.0.61'
+      })
+    })
+
+    automaticUpdates = false
+    applyAutomaticUpdatesSetting(false)
+
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(sendMock).toHaveBeenLastCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 44,
+      version: '1.0.61'
+    })
+  })
+
+  it('does not auto-download from the helpers in dev or unpackaged runs', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    let automaticUpdates = false
+    const mainWindow = { webContents: { send: vi.fn() } }
+
+    const {
+      setupAutoUpdater,
+      checkForUpdatesFromMenu,
+      applyAutomaticUpdatesSetting,
+      maybeAutoDownload
+    } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      getAutomaticUpdates: () => automaticUpdates
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    automaticUpdates = true
+    isMock.dev = true
+    applyAutomaticUpdatesSetting(true)
+    maybeAutoDownload()
+    isMock.dev = false
+    appMock.isPackaged = false
+    applyAutomaticUpdatesSetting(true)
+    maybeAutoDownload()
+
+    expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+  })
+
   it('defers quitAndInstall through the shared main-process entrypoint', async () => {
     vi.useFakeTimers()
 

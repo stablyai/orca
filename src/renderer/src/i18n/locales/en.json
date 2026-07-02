@@ -5209,6 +5209,8 @@
           "f44299636f": "Restart to Update (",
           "42717918f4": "Install Update (",
           "02dc082e70": "Could not start the update download.",
+          "a73f0c19be": "Automatic updates",
+          "b8e724f0d3": "Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted.",
           "e1a647adc5": "Check for Updates",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "d91ebfb87e": "Current version: {{value0}}",
@@ -7454,7 +7456,9 @@
             "161a86a9da": "Confirm before closing pinned tabs",
             "8e593f04fc": "Show a confirmation dialog before a pinned tab is closed.",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "a1c4e7f209": "Automatic updates",
+            "b2d5f8a310": "Download and install updates automatically in the background."
           }
         },
         "git": {

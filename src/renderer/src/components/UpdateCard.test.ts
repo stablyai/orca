@@ -343,7 +343,11 @@ function computeVisibility(input: VisibilityInput): VisibilityResult {
 
   const effectiveVersion = 'version' in status ? status.version : cachedVersion
   if (effectiveVersion && dismissedVersion === effectiveVersion && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    if (
+      status.state !== 'downloading' &&
+      status.state !== 'downloaded' &&
+      status.state !== 'error'
+    ) {
       return 'hidden'
     }
   }
@@ -463,7 +467,16 @@ describe('UpdateCard visibility gates', () => {
     ).toBe('visible')
   })
 
-  it('hides downloaded when version is dismissed (Settings-initiated, not card)', () => {
+  it('shows auto-staged downloaded when the earlier available nudge was dismissed', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'available', version: '1.2.0', changelog: null },
+        dismissedVersion: '1.2.0',
+        cachedVersion: '1.2.0',
+        hasStartedDownload: false
+      })
+    ).toBe('hidden')
+
     expect(
       computeVisibility({
         status: { state: 'downloaded', version: '1.2.0' },
@@ -471,7 +484,7 @@ describe('UpdateCard visibility gates', () => {
         cachedVersion: '1.2.0',
         hasStartedDownload: false
       })
-    ).toBe('hidden')
+    ).toBe('visible')
   })
 
   it('hides background errors silently', () => {

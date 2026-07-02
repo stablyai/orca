@@ -145,7 +145,8 @@ export function attachMainWindowServices(
     },
     setDismissedUpdateNudgeId: (id) => {
       store.updateUI({ dismissedUpdateNudgeId: id })
-    }
+    },
+    getAutomaticUpdates: () => store.getSettings().automaticUpdates === true
   })
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 

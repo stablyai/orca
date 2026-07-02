@@ -276,7 +276,13 @@ export function UpdateCard() {
   // explicitly asked to check, so they expect to see the result even if they
   // dismissed the same version earlier.
   if (versionRef.current && dismissedVersion === versionRef.current && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    // Why: a downloaded auto-update is newly staged for install-on-quit, so the
+    // restart affordance should surface even if the old available nudge was dismissed.
+    if (
+      status.state !== 'downloading' &&
+      status.state !== 'downloaded' &&
+      status.state !== 'error'
+    ) {
       return null
     }
   }

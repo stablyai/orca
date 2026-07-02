@@ -176,6 +176,21 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
 
 export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
   {
+    // Why: this section is gated on its search descriptor, so the Automatic
+    // updates row needs its own entry here or "automatic" hides the whole section.
+    title: translate('auto.components.settings.general.search.a1c4e7f209', 'Automatic updates'),
+    description: translate(
+      'auto.components.settings.general.search.b2d5f8a310',
+      'Download and install updates automatically in the background.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.c3e6a9b421', 'automatic'),
+      ...translateSearchKeyword('auto.components.settings.general.search.d4f7b0c532', 'auto'),
+      ...translateSearchKeyword('auto.components.settings.general.search.e5a8c1d643', 'background'),
+      ...translateSearchKeyword('auto.components.settings.general.search.f6b9d2e754', 'install')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.e15af4eb64', 'Check for Updates'),
     description: translate(
       'auto.components.settings.general.search.79ff46776e',

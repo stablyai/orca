@@ -5194,6 +5194,8 @@
           "f44299636f": "업데이트하려면 다시 시작하세요(",
           "42717918f4": "업데이트 설치(",
           "02dc082e70": "업데이트 다운로드를 시작할 수 없습니다.",
+          "a73f0c19be": "Automatic updates",
+          "b8e724f0d3": "Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted.",
           "e1a647adc5": "업데이트 확인",
           "ceb579abaf": "앱 업데이트를 확인하고 최신 Orca 버전을 설치하세요.",
           "d91ebfb87e": "현재 버전: {{value0}}",
@@ -7400,7 +7402,9 @@
             "161a86a9da": "고정된 탭을 닫기 전에 확인",
             "8e593f04fc": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
             "defaultProjectRuntime": "기본 프로젝트 런타임",
-            "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다."
+            "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다.",
+            "a1c4e7f209": "Automatic updates",
+            "b2d5f8a310": "Download and install updates automatically in the background."
           }
         },
         "git": {

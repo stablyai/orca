@@ -62,6 +62,7 @@ let backgroundCheckLaunchPending = false
 // Why: a manually promoted background check can emit an error event before the
 // paired promise catch runs; keep the promotion attached to that launch.
 let backgroundCheckPromotedToUserInitiated = false
+let getAutomaticUpdatesEnabled: (() => boolean) | null = null
 let updateCheckStallTimer: ReturnType<typeof setTimeout> | null = null
 let updateCheckSilentSettleTimer: ReturnType<typeof setTimeout> | null = null
 let updateCheckAttemptSequence = 0
@@ -1132,6 +1133,34 @@ export function dismissNudge(): void {
   }
 }
 
+export function maybeAutoDownload(): void {
+  if (!app.isPackaged || is.dev) {
+    return
+  }
+  // Why: this reuses the manual download path without enabling
+  // electron-updater's eager autoDownload behavior. hasNewerDownloadedVersion()
+  // reads availableVersion (set synchronously before the 'available' broadcast
+  // that calls this), so it's true here — it's a defensive guard, not a no-op.
+  if (
+    getAutomaticUpdatesEnabled?.() === true &&
+    currentStatus.state === 'available' &&
+    hasNewerDownloadedVersion()
+  ) {
+    downloadUpdate()
+  }
+}
+
+export function applyAutomaticUpdatesSetting(enabled: boolean): void {
+  if (!app.isPackaged || is.dev) {
+    return
+  }
+  // Why: enabling while an update is already offered should start it now;
+  // disabling leaves any in-flight download alone.
+  if (enabled) {
+    maybeAutoDownload()
+  }
+}
+
 export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
@@ -1142,6 +1171,7 @@ export function setupAutoUpdater(
     getDismissedUpdateNudgeId?: () => string | null
     setPendingUpdateNudgeId?: (id: string | null) => void
     setDismissedUpdateNudgeId?: (id: string | null) => void
+    getAutomaticUpdates?: () => boolean
   }
 ): void {
   mainWindowRef = mainWindow
@@ -1152,6 +1182,7 @@ export function setupAutoUpdater(
   _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
   _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
+  getAutomaticUpdatesEnabled = opts?.getAutomaticUpdates ?? null
 
   if (!app.isPackaged && !is.dev) {
     return
@@ -1232,6 +1263,7 @@ export function setupAutoUpdater(
     recordCompletedUpdateCheck,
     sendStatus,
     scheduleAutomaticUpdateCheck,
+    maybeAutoDownload,
     clearBackgroundCheckLaunchPending,
     setAvailableReleaseUrl: (releaseUrl) => {
       availableReleaseUrl = releaseUrl

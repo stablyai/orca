@@ -5194,6 +5194,8 @@
           "f44299636f": "重新启动以更新（",
           "42717918f4": "安装更新（",
           "02dc082e70": "无法开始更新下载。",
+          "a73f0c19be": "Automatic updates",
+          "b8e724f0d3": "Download new updates automatically in the background. Once an update is downloaded, Orca installs it the next time you quit — your terminal sessions are never interrupted.",
           "e1a647adc5": "检查更新",
           "ceb579abaf": "检查应用程序更新并安装较新的 Orca 版本。",
           "d91ebfb87e": "当前版本：{{value0}}",
@@ -7400,7 +7402,9 @@
             "161a86a9da": "关闭固定标签页前确认",
             "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "默认项目运行时",
-            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。"
+            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。",
+            "a1c4e7f209": "Automatic updates",
+            "b2d5f8a310": "Download and install updates automatically in the background."
           }
         },
         "git": {

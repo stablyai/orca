@@ -2589,6 +2589,9 @@ export type GlobalSettings = {
   /** Why: corporate TLS-intercepting proxies can break Electron HTTP/2 downloads;
    *  this opt-in compatibility mode applies Chromium's process-wide HTTP/1.1 switch. */
   electronHttp1CompatibilityMode?: boolean
+  /** Why: opt-in automatic updates. When on, available updates download in the
+   *  background and install on the next natural quit; off preserves manual flow. */
+  automaticUpdates?: boolean
   /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
