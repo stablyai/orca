@@ -27,7 +27,8 @@ import WorktreeCardAgents from './WorktreeCardAgents'
 import {
   canHoldSpotlight,
   SpotlightPrimaryBadge,
-  SpotlightQuickAction
+  SpotlightQuickAction,
+  SpotlightSnapshotBadge
 } from './WorktreeCardSpotlightControls'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
@@ -1222,6 +1223,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
   const spotlightEligible = canHoldSpotlight(worktree, repo, isFolder)
+  const spotlightActiveForRepo = useAppStore((s) =>
+    repo ? Boolean(s.spotlightByRepo?.[repo.id]) : false
+  )
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction || spotlightEligible
   // Why: the hover owns full identity when the row truncates; normalize once
   // so title/branch de-dupe and identity-only hover eligibility stay in sync.
@@ -1700,12 +1704,18 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   tooltipEnabled={!hasHoverDetails}
                 />
               ) : showDetachedHeadInMetaRow && detachedHeadDisplay ? (
-                <DetachedHeadBadge
-                  display={detachedHeadDisplay}
-                  label="sidebar"
-                  side="right"
-                  className="h-[16px]"
-                />
+                worktree.isMainWorktree && repo && spotlightActiveForRepo ? (
+                  // The detachment is Spotlight's doing — expected and
+                  // temporary; don't alarm the user with a raw detached-HEAD.
+                  <SpotlightSnapshotBadge repo={repo} />
+                ) : (
+                  <DetachedHeadBadge
+                    display={detachedHeadDisplay}
+                    label="sidebar"
+                    side="right"
+                    className="h-[16px]"
+                  />
+                )
               ) : null}
 
               {showConflictOperationBadge && (

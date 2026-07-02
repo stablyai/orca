@@ -45,10 +45,15 @@ function spotlightErrorDescription(error: SpotlightError): string {
   }
 }
 
-function reportSpotlightError(title: string, error: SpotlightError): void {
+function reportSpotlightError(
+  title: string,
+  error: SpotlightError,
+  action?: { label: string; onClick: () => void }
+): void {
   toast.error(title, {
     description: spotlightErrorDescription(error),
-    duration: ERROR_TOAST_DURATION
+    duration: ERROR_TOAST_DURATION,
+    ...(action ? { action } : {})
   })
 }
 
@@ -61,6 +66,9 @@ export type SpotlightSlice = {
   /** `silent` suppresses repeat error toasts — used by the auto-sync watcher
    *  so a persistent failure doesn't toast on every file change. */
   syncSpotlight: (repoId: string, opts?: { silent?: boolean }) => Promise<SpotlightOpResult>
+  /** Recovery for `root-diverged`: overwrite the root's outside changes with
+   *  the holder workspace's snapshot. */
+  forceSyncSpotlight: (repoId: string) => Promise<SpotlightOpResult>
   deactivateSpotlight: (repoId: string) => Promise<SpotlightOpResult>
 }
 
@@ -130,6 +138,31 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
         return result
       }
       if (!result.ok && (!opts?.silent || result.error.code !== previousErrorCode)) {
+        reportSpotlightError(
+          translate('auto.store.slices.spotlight.syncFailed', 'Spotlight sync failed'),
+          result.error,
+          result.error.code === 'root-diverged'
+            ? {
+                label: translate('auto.store.slices.spotlight.forceSync', 'Force sync'),
+                onClick: () => void get().forceSyncSpotlight(repoId)
+              }
+            : undefined
+        )
+      }
+      return result
+    },
+
+    forceSyncSpotlight: async (repoId) => {
+      const result = await window.api.spotlight.sync({ repoId, force: true })
+      applyState(repoId, result.state)
+      if (result.ok) {
+        toast.success(
+          translate(
+            'auto.store.slices.spotlight.forceSynced',
+            'Spotlight re-synced — the root mirrors the workspace again'
+          )
+        )
+      } else {
         reportSpotlightError(
           translate('auto.store.slices.spotlight.syncFailed', 'Spotlight sync failed'),
           result.error

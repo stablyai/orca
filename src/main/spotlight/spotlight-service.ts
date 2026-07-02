@@ -16,6 +16,7 @@ import {
 } from '../../shared/spotlight-sync-core'
 import { createLocalSpotlightGitContext } from '../git/spotlight-sync'
 import { appendSpotlightLogNote } from './spotlight-log-mirror'
+import { writeSpotlightStateFile } from './spotlight-state-file'
 import { getWorktreePathBasenameFromId } from '../../shared/worktree-id'
 import type { Store } from '../persistence'
 
@@ -95,6 +96,7 @@ export class SpotlightService {
         }
         this.store.setSpotlightState(repoId, state)
         this.emitChanged(repoId, state)
+        void writeSpotlightStateFile(resolved.repo.path, state)
         if (previous?.holderWorktreeId !== worktreeId) {
           // Header for agents tailing the log: everything after this line is
           // the output of THIS workspace's code mirrored onto the root.
@@ -146,6 +148,9 @@ export class SpotlightService {
         }
         this.store.setSpotlightState(repoId, next)
         this.emitChanged(repoId, next)
+        if (!outcome.skipped) {
+          void writeSpotlightStateFile(resolved.repo.path, next)
+        }
         return { ok: true, state: next }
       } catch (error) {
         return this.failure(repoId, toSpotlightError(error), state)
@@ -172,6 +177,7 @@ export class SpotlightService {
         })
         this.store.clearSpotlightState(repoId)
         this.emitChanged(repoId, null)
+        void writeSpotlightStateFile(resolved.repo.path, null)
         void appendSpotlightLogNote(
           resolved.repo.path,
           'Spotlight off — the root shows its own code again'

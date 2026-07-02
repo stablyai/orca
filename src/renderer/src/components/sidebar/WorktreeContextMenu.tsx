@@ -440,7 +440,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)
   }, [worktree.id, worktree.isPinned, setWorktreesPinnedAndReveal])
 
-  const spotlightState = useAppStore((s) => (repo ? s.spotlightByRepo[repo.id] : undefined))
+  const spotlightState = useAppStore((s) => (repo ? s.spotlightByRepo?.[repo.id] : undefined))
   const spotlightEligible = repo ? canHoldSpotlight(worktree, repo, isFolderRepo(repo)) : false
   const spotlightHeldHere = spotlightState?.holderWorktreeId === worktree.id
   // The main worktree can't hold the Spotlight, but while it's on its context
@@ -807,6 +807,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                         'auto.components.sidebar.WorktreeContextMenu.spotlightOn',
                         'Spotlight This Workspace'
                       )}
+                </DropdownMenuItem>
+              ) : null}
+              {spotlightHeldHere && spotlightState?.lastError?.code === 'root-diverged' && repo ? (
+                <DropdownMenuItem
+                  onSelect={() => void useAppStore.getState().forceSyncSpotlight(repo.id)}
+                  disabled={isDeleting || spotlightState.status === 'syncing'}
+                >
+                  <Flashlight className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.spotlightForceSync',
+                    'Force Sync Spotlight (overwrite root changes)'
+                  )}
                 </DropdownMenuItem>
               ) : null}
               {repo ? (

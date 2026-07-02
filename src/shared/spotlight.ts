@@ -72,6 +72,11 @@ export type SpotlightRefsSnapshot = {
  *  root. Agents discover it via the ORCA_SPOTLIGHT_LOG env var. */
 export const SPOTLIGHT_LOG_RELATIVE_PATH = '.orca/spotlight.log'
 
+/** Machine-readable Spotlight status next to the log — lets an agent check
+ *  whether ITS workspace currently holds the Spotlight before treating log
+ *  errors as its own. */
+export const SPOTLIGHT_STATE_RELATIVE_PATH = '.orca/spotlight-state.json'
+
 export const SPOTLIGHT_REFS = {
   snapshot: 'refs/orca/spotlight/snapshot',
   backup: 'refs/orca/spotlight/backup',

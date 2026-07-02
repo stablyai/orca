@@ -1,7 +1,8 @@
 // Mirrors the Spotlight terminal's PTY output into <repoRoot>/.orca/spotlight.log
 // so agents running in any worktree can read the dev server's logs (the server
 // runs once, at the repo root, inside the Spotlight terminal tab).
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { watch, type FSWatcher } from 'node:fs'
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { SPOTLIGHT_LOG_RELATIVE_PATH } from '../../shared/spotlight'
 import { gitExecFileAsync } from '../git/runner'
@@ -52,6 +53,9 @@ type LogCapture = {
   pending: string
   writeChain: Promise<void>
   approxBytes: number
+  /** Watches .orca/ for the agent-written restart trigger file. */
+  triggerWatcher: FSWatcher | null
+  restartInFlight: boolean
 }
 
 const capturesByRepoId = new Map<string, LogCapture>()
@@ -149,9 +153,12 @@ export async function startSpotlightLogCapture(args: {
     unsubscribe: () => {},
     pending: '',
     writeChain: Promise.resolve(),
-    approxBytes: 0
+    approxBytes: 0,
+    triggerWatcher: null,
+    restartInFlight: false
   }
   subscribeCapture(capture)
+  watchRestartTrigger(capture)
   capturesByRepoId.set(args.repoId, capture)
 
   if (!providerRebindInstalled) {
@@ -164,6 +171,73 @@ export async function startSpotlightLogCapture(args: {
         subscribeCapture(live)
       }
     })
+  }
+}
+
+export const SPOTLIGHT_RESTART_TRIGGER_FILENAME = 'spotlight-restart'
+// Delay between the interrupt and re-running the command: long enough for the
+// server to release the prompt, short enough to feel immediate.
+const RESTART_RERUN_DELAY_MS = 700
+
+/** Agent-safe server restart: interrupt the Spotlight terminal's foreground
+ *  process and re-run the last command via the shell's in-memory history
+ *  (up-arrow + enter — works in bash/zsh/fish regardless of HISTFILE config). */
+export function restartSpotlightServer(repoId: string): boolean {
+  const capture = capturesByRepoId.get(repoId)
+  if (!capture || capture.restartInFlight) {
+    return false
+  }
+  capture.restartInFlight = true
+  void appendSpotlightLogNote(
+    path.dirname(path.dirname(capture.logPath)),
+    'Restarting the server (requested from a workspace)'
+  )
+  try {
+    getLocalPtyProvider().write(capture.ptyId, '\x03')
+  } catch {
+    capture.restartInFlight = false
+    return false
+  }
+  setTimeout(() => {
+    try {
+      getLocalPtyProvider().write(capture.ptyId, '\x1b[A\r')
+    } catch {
+      // PTY died between interrupt and re-run; nothing else to do.
+    } finally {
+      capture.restartInFlight = false
+    }
+  }, RESTART_RERUN_DELAY_MS)
+  return true
+}
+
+/** Watch .orca/ for the agent trigger: `touch .orca/spotlight-restart` in the
+ *  repo root asks Orca to restart the server. File-based so it works for any
+ *  agent in any worktree with zero CLI installation (the path is derivable
+ *  from $ORCA_SPOTLIGHT_LOG). */
+function watchRestartTrigger(capture: LogCapture): void {
+  const orcaDir = path.dirname(capture.logPath)
+  const triggerPath = path.join(orcaDir, SPOTLIGHT_RESTART_TRIGGER_FILENAME)
+  const consumeTrigger = (): void => {
+    void stat(triggerPath)
+      .then(async () => {
+        // Delete BEFORE acting so a slow restart can't loop on its own trigger.
+        await rm(triggerPath, { force: true })
+        restartSpotlightServer(capture.repoId)
+      })
+      .catch(() => {
+        // Trigger absent — the event was for another file in .orca/.
+      })
+  }
+  try {
+    capture.triggerWatcher = watch(orcaDir, (_event, filename) => {
+      if (filename === SPOTLIGHT_RESTART_TRIGGER_FILENAME) {
+        consumeTrigger()
+      }
+    })
+    // A trigger written while no capture was live should still be honored.
+    consumeTrigger()
+  } catch {
+    capture.triggerWatcher = null
   }
 }
 
@@ -185,5 +259,6 @@ export function stopSpotlightLogCapture(args: { repoId: string; ptyId?: string }
     return
   }
   capture.unsubscribe()
+  capture.triggerWatcher?.close()
   capturesByRepoId.delete(args.repoId)
 }

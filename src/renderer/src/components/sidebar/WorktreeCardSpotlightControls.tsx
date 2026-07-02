@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '@/lib/utils'
 import { openSpotlightTerminalTab } from '@/lib/open-spotlight-terminal-tab'
+import { formatTimeAgo } from '@/components/status-bar/tooltip'
 import { translate } from '@/i18n/i18n'
 
 /** MVP scope: local (and WSL) git repos only; folders and SSH repos are out. */
@@ -37,35 +38,48 @@ export function SpotlightQuickAction({
   worktree: Worktree
   repo: Repo
 }): React.JSX.Element | null {
-  const state = useAppStore((s) => s.spotlightByRepo[repo.id])
+  const state = useAppStore((s) => s.spotlightByRepo?.[repo.id])
   const activateSpotlight = useAppStore((s) => s.activateSpotlight)
   const deactivateSpotlight = useAppStore((s) => s.deactivateSpotlight)
   const holderName = useAppStore((s) =>
     state && state.holderWorktreeId !== worktree.id
-      ? s.worktreesByRepo[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
+      ? s.worktreesByRepo?.[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
           ?.displayName
       : undefined
   )
 
   const heldHere = state?.holderWorktreeId === worktree.id
   const syncing = state?.status === 'syncing'
+  const syncError = heldHere ? state?.lastError : null
 
   const tooltip = syncing
     ? translate('auto.components.sidebar.WorktreeCardSpotlightControls.syncing', 'Syncing…')
-    : heldHere
-      ? translate(
-          'auto.components.sidebar.WorktreeCardSpotlightControls.activeHere',
-          'Spotlight on — this workspace mirrors to the project root. Click to turn off.'
-        )
-      : state
-        ? translate(
-            'auto.components.sidebar.WorktreeCardSpotlightControls.takeover',
-            'Take the Spotlight from "{{holder}}" — the project root will mirror this workspace instead.'
-          ).replace('{{holder}}', holderName ?? '…')
-        : translate(
-            'auto.components.sidebar.WorktreeCardSpotlightControls.activate',
-            'Spotlight this workspace — mirror its changes onto the project root for testing.'
-          )
+    : syncError
+      ? `${translate(
+          'auto.components.sidebar.WorktreeCardSpotlightControls.syncBroken',
+          'Spotlight sync is failing:'
+        )} ${syncError.message}`
+      : heldHere
+        ? `${translate(
+            'auto.components.sidebar.WorktreeCardSpotlightControls.activeHere',
+            'Spotlight on — this workspace mirrors to the project root. Click to turn off.'
+          )}${
+            state?.lastSyncAt
+              ? ` ${translate(
+                  'auto.components.sidebar.WorktreeCardSpotlightControls.lastSynced',
+                  'Last synced {{when}}.'
+                ).replace('{{when}}', formatTimeAgo(state.lastSyncAt))}`
+              : ''
+          }`
+        : state
+          ? translate(
+              'auto.components.sidebar.WorktreeCardSpotlightControls.takeover',
+              'Take the Spotlight from "{{holder}}" — the project root will mirror this workspace instead.'
+            ).replace('{{holder}}', holderName ?? '…')
+          : translate(
+              'auto.components.sidebar.WorktreeCardSpotlightControls.activate',
+              'Spotlight this workspace — mirror its changes onto the project root for testing.'
+            )
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
     stopCardActivation(event)
@@ -101,9 +115,11 @@ export function SpotlightQuickAction({
             heldHere || syncing
               ? 'opacity-100'
               : 'opacity-0 group-hover/worktree-card:opacity-100 group-focus-within/worktree-card:opacity-100 focus-visible:opacity-100',
-            heldHere
-              ? 'text-amber-400 hover:bg-amber-500/10'
-              : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:bg-accent/60 focus-visible:text-foreground'
+            syncError
+              ? 'text-destructive hover:bg-destructive/10'
+              : heldHere
+                ? 'text-amber-400 hover:bg-amber-500/10'
+                : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:bg-accent/60 focus-visible:text-foreground'
           )}
         >
           {syncing && heldHere ? (
@@ -120,15 +136,49 @@ export function SpotlightQuickAction({
   )
 }
 
+/** Replaces the scary "Detached HEAD @ sha" badge on the primary row while
+ *  Spotlight is active — the detachment is expected and temporary. */
+export function SpotlightSnapshotBadge({ repo }: { repo: Repo }): React.JSX.Element {
+  const holderName = useAppStore((s) => {
+    const state = s.spotlightByRepo?.[repo.id]
+    return state
+      ? s.worktreesByRepo?.[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
+          ?.displayName
+      : undefined
+  })
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant="outline"
+          className="h-[16px] gap-1 px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
+        >
+          <Flashlight className="size-2.5" />
+          {translate(
+            'auto.components.sidebar.WorktreeCardSpotlightControls.snapshotBadge',
+            'spotlight snapshot'
+          )}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8} className="max-w-72">
+        {translate(
+          'auto.components.sidebar.WorktreeCardSpotlightControls.snapshotBadgeTooltip',
+          'The project root is temporarily showing "{{holder}}". It returns to its branch when Spotlight turns off.'
+        ).replace('{{holder}}', holderName ?? '…')}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** Shown on the primary-worktree row while Spotlight is active. The chip is
  *  the one-click jump to the repo's server terminal; the small × next to it
  *  turns Spotlight off and restores the root. */
 export function SpotlightPrimaryBadge({ repo }: { repo: Repo }): React.JSX.Element | null {
-  const state = useAppStore((s) => s.spotlightByRepo[repo.id])
+  const state = useAppStore((s) => s.spotlightByRepo?.[repo.id])
   const deactivateSpotlight = useAppStore((s) => s.deactivateSpotlight)
   const holderName = useAppStore((s) =>
     state
-      ? s.worktreesByRepo[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
+      ? s.worktreesByRepo?.[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
           ?.displayName
       : undefined
   )
