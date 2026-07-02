@@ -23,7 +23,6 @@ export function MobileSessionHeaderMoreActionsSheet({
   return (
     <ActionSheetModal
       visible={visible}
-      title="Session Actions"
       actions={[
         ...(showAgentSessionHistory
           ? [

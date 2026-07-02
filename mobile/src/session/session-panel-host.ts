@@ -19,6 +19,14 @@ export type PanelAction =
 
 export const SESSION_DOCK_MIN_MAIN_WIDTH = 360
 
+export function shouldShowSessionHeaderChecksAction(args: {
+  isFolderWorkspaceRoute: boolean
+}): boolean {
+  // Why: match desktop's activity bar semantics: Checks is a stable git-worktree
+  // action, and the panel owns loading/provider/empty states after open.
+  return !args.isFolderWorkspaceRoute
+}
+
 export function canDockSessionPanel(args: {
   isWideLayout: boolean
   availableWidth: number

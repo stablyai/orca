@@ -70,6 +70,7 @@ import {
   type ActivePanel,
   canDockSessionPanel,
   resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
   panelRouteDescriptor
 } from '../../../../src/session/session-panel-host'
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
@@ -899,8 +900,8 @@ export default function SessionScreen() {
       setActivePanel(null)
     }
   }, [canDockPanel, activePanel])
-  // Session-level PR context feeds the docked PR panel and gates the GitHub-only
-  // PR entry so GitLab/other providers do not open a GitHub RPC surface.
+  // Session-level PR context feeds the docked PR panel; the panel itself owns
+  // loading/blocked states for GitLab/other providers, so no auto-close here.
   const {
     branch: prBranch,
     headSha: prHeadSha,
@@ -913,11 +914,6 @@ export default function SessionScreen() {
     connState,
     worktreeId
   })
-  useEffect(() => {
-    if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
-      setActivePanel(null)
-    }
-  }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -4570,7 +4566,7 @@ export default function SessionScreen() {
     router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
   }
   const showAgentSessionHistoryAction = !isFolderWorkspaceRoute
-  const showChecksAction = prRepoContextLoaded && prIsGithubRepo
+  const showChecksAction = shouldShowSessionHeaderChecksAction({ isFolderWorkspaceRoute })
   const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
 
   return (

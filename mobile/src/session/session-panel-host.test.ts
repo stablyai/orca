@@ -4,6 +4,7 @@ import {
   nextActivePanel,
   resolvePanelAction,
   panelRouteDescriptor,
+  shouldShowSessionHeaderChecksAction,
   type ActivePanel
 } from './session-panel-host'
 
@@ -74,6 +75,16 @@ describe('canDockSessionPanel', () => {
     expect(canDockSessionPanel({ isWideLayout: false, availableWidth: 900, dockWidth: 340 })).toBe(
       false
     )
+  })
+})
+
+describe('shouldShowSessionHeaderChecksAction', () => {
+  it('shows Checks immediately for git worktree session routes', () => {
+    expect(shouldShowSessionHeaderChecksAction({ isFolderWorkspaceRoute: false })).toBe(true)
+  })
+
+  it('hides Checks on folder workspace session routes', () => {
+    expect(shouldShowSessionHeaderChecksAction({ isFolderWorkspaceRoute: true })).toBe(false)
   })
 })
 
