@@ -42,6 +42,7 @@ import {
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
   relayEndpointForHost,
@@ -80,11 +81,12 @@ function execHostCommand(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   command: string,
-  options?: { timeoutMs?: number }
+  options?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<string> {
   return execCommand(conn, command, {
     wrapCommand: !isWindowsRemoteHost(hostPlatform),
-    timeoutMs: options?.timeoutMs
+    timeoutMs: options?.timeoutMs,
+    signal: options?.signal
   })
 }
 
@@ -133,12 +135,15 @@ export async function deployAndLaunchRelay(
 async function resolveRemoteInstallState(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  fullVersion: string
+  fullVersion: string,
+  options?: { rethrowSessionLimitErrors?: boolean; signal?: AbortSignal }
 ): Promise<{ remoteHome: string; remoteRelayDir: string; alreadyInstalled: boolean }> {
   // Why: SFTP does not expand `~`, so we must resolve the remote home
   // explicitly with the host's native shell and normalize it before use.
   const remoteHome = normalizeRemoteHome(
-    await execHostCommand(conn, hostPlatform, readRemoteHomeCommand(hostPlatform)),
+    await execHostCommand(conn, hostPlatform, readRemoteHomeCommand(hostPlatform), {
+      signal: options?.signal
+    }),
     hostPlatform
   )
   // Why: we only interpolate $HOME into single-quoted shell strings later, so
@@ -148,8 +153,83 @@ async function resolveRemoteInstallState(
     throw new Error(`Remote home is not a valid path: ${remoteHome.slice(0, 100)}`)
   }
   const remoteRelayDir = computeRemoteRelayDir(remoteHome, fullVersion, hostPlatform.pathFlavor)
-  const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform)
+  const probeOptions =
+    options?.rethrowSessionLimitErrors || options?.signal
+      ? {
+          rethrowSessionLimitErrors: options.rethrowSessionLimitErrors,
+          signal: options.signal
+        }
+      : undefined
+  const alreadyInstalled = await isRelayAlreadyInstalled(
+    conn,
+    remoteRelayDir,
+    hostPlatform,
+    probeOptions
+  )
   return { remoteHome, remoteRelayDir, alreadyInstalled }
+}
+
+type RelayBootstrapState = {
+  remoteHome: string
+  remoteRelayDir: string
+  alreadyInstalled: boolean
+  nodePath: string
+}
+
+async function resolveRelayBootstrapStateSequentially(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  fullVersion: string
+): Promise<RelayBootstrapState> {
+  const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion)
+  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
+  return { ...installState, nodePath }
+}
+
+async function resolveRelayBootstrapState(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  fullVersion: string
+): Promise<RelayBootstrapState> {
+  if (!conn.canRunConcurrentExecCommands()) {
+    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion)
+  }
+  const abortController = new AbortController()
+  const installStatePromise = resolveRemoteInstallState(conn, hostPlatform, fullVersion, {
+    rethrowSessionLimitErrors: true,
+    signal: abortController.signal
+  })
+  const nodePathPromise = resolveRemoteNodePath(conn, hostPlatform, {
+    rethrowSessionLimitErrors: true,
+    signal: abortController.signal
+  })
+  try {
+    const [installState, nodePath] = await Promise.all([installStatePromise, nodePathPromise])
+    return { ...installState, nodePath }
+  } catch (err) {
+    abortController.abort()
+    const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
+    if (!isSshSessionLimitError(err)) {
+      throw err
+    }
+    const nonSessionFailure = settled.find(
+      (result) =>
+        result.status === 'rejected' &&
+        !isSshSessionLimitError(result.reason) &&
+        !isAbortError(result.reason)
+    )
+    if (nonSessionFailure?.status === 'rejected') {
+      throw nonSessionFailure.reason
+    }
+    console.warn(
+      '[ssh-relay] Concurrent bootstrap probes hit the remote SSH session limit; retrying sequentially.'
+    )
+    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion)
+  }
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError'
 }
 
 /**
@@ -191,13 +271,11 @@ async function deployAndLaunchRelayInner(
   // Why: the remote-home -> install-check chain and node resolution are
   // independent (both only need hostPlatform, not each other's results), yet
   // each is a separate SSH exec round trip. Run them concurrently so the deploy
-  // pays one round trip instead of two for this phase. Promise.all fails fast if
-  // either rejects; a lingering channel from the other branch is torn down by
-  // closeTransportsForReconnect on the failed attempt.
-  const [{ remoteHome, remoteRelayDir, alreadyInstalled }, nodePath] = await Promise.all([
-    resolveRemoteInstallState(conn, hostPlatform, fullVersion),
-    resolveRemoteNodePath(conn, hostPlatform)
-  ])
+  // pays one round trip instead of two for this phase. Most failures stay
+  // fail-fast; remotes that reject overlapping session channels retry the old
+  // sequential order so restrictive SSH servers keep working.
+  const { remoteHome, remoteRelayDir, alreadyInstalled, nodePath } =
+    await resolveRelayBootstrapState(conn, hostPlatform, fullVersion)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 

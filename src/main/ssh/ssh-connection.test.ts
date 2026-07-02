@@ -302,6 +302,14 @@ describe('SshConnection', () => {
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
   })
 
+  it('allows concurrent exec commands for ssh2 transport', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(conn.canRunConcurrentExecCommands()).toBe(true)
+  })
+
   it('removes startup listeners after ssh2 connect succeeds', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
 
@@ -762,8 +770,36 @@ describe('SshConnection', () => {
     )
   })
 
+  it('allows concurrent exec commands for system SSH with an Orca ControlMaster socket', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/live-socket')
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.canRunConcurrentExecCommands()).toBe(true)
+  })
+
+  it('keeps concurrent exec commands disabled for system SSH without a reusable socket', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue(null)
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(
+      createTarget({ configHost: 'fdpass-host', systemSshConnectionReuse: false }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.canRunConcurrentExecCommands()).toBe(false)
+  })
+
   it('retries a failed system SSH probe without ControlMaster and disables mux for the session', async () => {
-    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    getOrcaControlSocketPathMock.mockImplementation(
+      (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
+        options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+    )
     spawnSystemSshCommandMock
       .mockImplementationOnce(() => createFailingSystemCommandChannel(255, 'mux client failed'))
       .mockImplementation(() => createSystemCommandChannel())
@@ -812,6 +848,7 @@ describe('SshConnection', () => {
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
+    expect(conn.canRunConcurrentExecCommands()).toBe(false)
   })
 
   it('uses system SSH transport for ProxyCommand targets before ssh2 auth', async () => {
@@ -952,7 +989,10 @@ describe('SshConnection', () => {
   })
 
   it('retries direct system SSH connections without ControlMaster after mux startup failure', async () => {
-    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    getOrcaControlSocketPathMock.mockImplementation(
+      (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
+        options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+    )
     spawnSystemSshMock
       .mockReturnValueOnce(createFailingSystemSshProcess(255))
       .mockImplementation(() => createSystemSshProcess())
@@ -977,6 +1017,7 @@ describe('SshConnection', () => {
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       }
     )
+    expect(conn.canRunConcurrentExecCommands()).toBe(false)
   })
 
   it('kills delayed direct system SSH startup on disconnect and ignores late stdout', async () => {
