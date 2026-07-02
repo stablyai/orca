@@ -8,6 +8,11 @@ export type TerminalCommandFinishedEventDetail = {
 // decoupled consumers (e.g. git status refresh) react to shell commands
 // finishing without reaching into terminal internals.
 export function dispatchTerminalCommandFinishedEvent(worktreeId: string): void {
+  // Why: unit tests and non-DOM renderer shims may expose only the preload API.
+  if (typeof window.dispatchEvent !== 'function') {
+    return
+  }
+
   window.dispatchEvent(
     new CustomEvent<TerminalCommandFinishedEventDetail>(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, {
       detail: { worktreeId }
