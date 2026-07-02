@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "area": "src/renderer",
+    "filePath": "src/renderer/src/components/database/data-grid-filters.ts",
+    "kind": "object-property:label",
+    "text": "LIKE",
+    "dynamic": false,
+    "count": 1,
+    "reason": "SQL operator keyword shown verbatim in the filter dropdown; not translatable copy."
+  },
+  {
+    "area": "src/renderer",
+    "filePath": "src/renderer/src/components/database/data-grid-filters.ts",
+    "kind": "object-property:label",
+    "text": "ILIKE",
+    "dynamic": false,
+    "count": 1,
+    "reason": "SQL operator keyword shown verbatim in the filter dropdown; not translatable copy."
+  },
+  {
+    "area": "src/renderer",
+    "filePath": "src/renderer/src/components/database/data-grid-filters.ts",
+    "kind": "object-property:label",
+    "text": "IS NULL",
+    "dynamic": false,
+    "count": 1,
+    "reason": "SQL operator keyword shown verbatim in the filter dropdown; not translatable copy."
+  },
+  {
+    "area": "src/renderer",
+    "filePath": "src/renderer/src/components/database/data-grid-filters.ts",
+    "kind": "object-property:label",
+    "text": "IS NOT NULL",
+    "dynamic": false,
+    "count": 1,
+    "reason": "SQL operator keyword shown verbatim in the filter dropdown; not translatable copy."
+  }
+]

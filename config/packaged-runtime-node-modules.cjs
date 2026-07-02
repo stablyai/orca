@@ -20,7 +20,12 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'electron-updater',
   'i18next',
   'jsonc-parser',
+  'mysql2',
   'node-pty',
+  // Database client drivers — bundled + lazy-imported (await import) from the main
+  // process; absent from this allowlist => MODULE_NOT_FOUND in packaged builds. The
+  // graph walk pulls their transitive deps (pg-*, denque, named-placeholders, …).
+  'pg',
   'posthog-node',
   // serve-sim (for CLI JS entry + closure + state/middleware + to make packaged require('serve-sim') + its internal relatives work; mirrors other runtime JS like ws/yaml/zod. Natives/dylibs still via extraResources + the node_modules/serve-sim copy in resources from builder. Client if added too.
   'serve-sim',

@@ -1,0 +1,219 @@
+// Postgres query execution + cancellation, kept out of the driver file so the
+// transaction / cursor / cancel logic stays focused and testable.
+//
+// Read-only enforcement (red-team F3): reads run inside `BEGIN` +
+// `SET TRANSACTION READ ONLY`, so the database — not a keyword check — rejects
+// single-statement writes and writing CTEs. Multi-statement input is rejected
+// up-front for read-only connections by the manager (a simple query runs every
+// statement, so it could otherwise flip the txn back to read-write first).
+// A writable, non-cursorable statement runs in autocommit (no explicit BEGIN)
+// so transaction-block-unsafe commands (VACUUM, CREATE DATABASE, REINDEX
+// CONCURRENTLY) aren't rejected with "cannot run inside a transaction block".
+// Result bounding (red-team F9): a SELECT runs through a server-side cursor,
+// fetching only rowLimit+1 rows; the user's SQL is never rewritten (no appended
+// LIMIT), so trailing semicolons / existing LIMIT / multi-statement stay intact.
+// Cancellation (red-team F10): the backend PID is captured at start and cancelled
+// from a separate short-lived connection.
+
+import { isCursorableRead } from '../../shared/sql-statement-classifier'
+import { DbBatchError } from './db-driver'
+import type {
+  DbStatement,
+  QueryHandle,
+  QueryOptions,
+  QueryResult
+} from '../../shared/database-types'
+import type { Client, Pool, PoolClient } from 'pg'
+
+const CURSOR_NAME = 'orca_query_cursor'
+
+type BoundedRows = { columns: { name: string }[]; rows: unknown[][]; rowCount: number; truncated: boolean }
+
+async function fetchBounded(
+  client: PoolClient,
+  sql: string,
+  rowLimit: number,
+  params?: unknown[]
+): Promise<BoundedRows> {
+  if (isCursorableRead(sql)) {
+    // DECLARE the query as a cursor, then FETCH one more than the cap to detect
+    // overflow. Any bind params attach to the cursor's query via the extended
+    // protocol; the SQL text is embedded verbatim (the cursor query itself can't
+    // be otherwise parameterized) — safe: it's the user's own SQL on their own DB.
+    await client.query({ text: `DECLARE ${CURSOR_NAME} NO SCROLL CURSOR FOR ${sql}`, values: params })
+    const fetched = await client.query({
+      text: `FETCH FORWARD ${rowLimit + 1} FROM ${CURSOR_NAME}`,
+      rowMode: 'array'
+    })
+    await client.query(`CLOSE ${CURSOR_NAME}`)
+    const truncated = fetched.rows.length > rowLimit
+    const rows = truncated ? fetched.rows.slice(0, rowLimit) : fetched.rows
+    return {
+      columns: (fetched.fields ?? []).map((f) => ({ name: f.name })),
+      rows,
+      rowCount: rows.length,
+      truncated
+    }
+  }
+  // Writes / non-cursorable statements: run directly (they return few/no rows).
+  const result = await client.query({ text: sql, values: params, rowMode: 'array' })
+  const rows = (result.rows ?? []) as unknown[][]
+  return {
+    columns: (result.fields ?? []).map((f) => ({ name: f.name })),
+    rows,
+    rowCount: result.rowCount ?? rows.length,
+    truncated: false
+  }
+}
+
+export async function runPostgresQuery(
+  pool: Pool,
+  connectionId: string,
+  sql: string,
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<QueryResult> {
+  const client = await pool.connect()
+  // Evict the client from the pool if ROLLBACK fails (it may still hold an open
+  // transaction) rather than returning a poisoned connection.
+  let evict = false
+  try {
+    const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
+    const backendPid = Number(pidResult.rows[0]?.pid) || null
+    onStart({ connectionId, backendPid })
+
+    await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
+
+    // A cursor must live inside a transaction, and a read-only connection must
+    // run inside a read-only transaction (the write guard). A writable,
+    // non-cursorable statement gets no explicit transaction so it may be a
+    // transaction-block-unsafe command.
+    if (opts.allowWrite && !isCursorableRead(sql)) {
+      const startedAt = Date.now()
+      const bounded = await fetchBounded(client, sql, opts.rowLimit)
+      return { ...bounded, durationMs: Date.now() - startedAt }
+    }
+
+    await client.query('BEGIN')
+    if (!opts.allowWrite) {
+      await client.query('SET TRANSACTION READ ONLY')
+    }
+    const startedAt = Date.now()
+    try {
+      const bounded = await fetchBounded(client, sql, opts.rowLimit)
+      await client.query('COMMIT')
+      return { ...bounded, durationMs: Date.now() - startedAt }
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {
+        evict = true
+      })
+      throw err
+    }
+  } finally {
+    client.release(evict)
+  }
+}
+
+// Runs one parameterized statement (Data-tab select/count/mutation or wrapped
+// free-form re-query). Always inside a transaction — read-only when !allowWrite —
+// so a value-bound read on a read-only connection is DB-enforced. The statement's
+// own LIMIT bounds the page; rowLimit is a defensive server-side cap.
+export async function runPostgresExecute(
+  pool: Pool,
+  connectionId: string,
+  statement: DbStatement,
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<QueryResult> {
+  const client = await pool.connect()
+  // Evict the client from the pool if ROLLBACK fails (it may still hold an open
+  // transaction) rather than returning a poisoned connection.
+  let evict = false
+  try {
+    const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
+    onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
+    await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
+    await client.query('BEGIN')
+    if (!opts.allowWrite) {
+      await client.query('SET TRANSACTION READ ONLY')
+    }
+    const startedAt = Date.now()
+    try {
+      // Bound the fetch (cursor for row-producing reads) so a statement that ever
+      // ships without its own LIMIT still can't materialize the whole result set.
+      const bounded = await fetchBounded(client, statement.sql, opts.rowLimit, statement.params)
+      await client.query('COMMIT')
+      return { ...bounded, durationMs: Date.now() - startedAt }
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {
+        evict = true
+      })
+      throw err
+    }
+  } finally {
+    client.release(evict)
+  }
+}
+
+// Applies staged writes atomically: BEGIN, run each statement in order, COMMIT.
+// Any failure rolls back the whole batch and throws DbBatchError(failedIndex).
+export async function runPostgresBatch(
+  pool: Pool,
+  connectionId: string,
+  statements: DbStatement[],
+  opts: QueryOptions,
+  onStart: (handle: QueryHandle) => void
+): Promise<number[]> {
+  const client = await pool.connect()
+  // Evict the client from the pool if ROLLBACK fails (it may still hold an open
+  // transaction) rather than returning a poisoned connection.
+  let evict = false
+  try {
+    const pidResult = await client.query('SELECT pg_backend_pid() AS pid')
+    onStart({ connectionId, backendPid: Number(pidResult.rows[0]?.pid) || null })
+    await client.query(`SET statement_timeout = ${Math.trunc(opts.timeoutMs)}`)
+    await client.query('BEGIN')
+    // Defense in depth: a read-only connection stays DB-enforced even if this
+    // write path is somehow reached (the manager already rejects !allowWrite).
+    if (!opts.allowWrite) {
+      await client.query('SET TRANSACTION READ ONLY')
+    }
+    const rowCounts: number[] = []
+    for (let i = 0; i < statements.length; i++) {
+      try {
+        const result = await client.query({
+          text: statements[i].sql,
+          values: statements[i].params
+        })
+        rowCounts.push(result.rowCount ?? 0)
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {
+          evict = true
+        })
+        throw new DbBatchError(i, err)
+      }
+    }
+    // A failing COMMIT leaves the transaction in an unknown state — roll back and
+    // evict on failure rather than returning the client to the pool.
+    try {
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {
+        evict = true
+      })
+      throw err
+    }
+    return rowCounts
+  } finally {
+    client.release(evict)
+  }
+}
+
+export async function cancelPostgresBackend(client: Client, backendPid: number): Promise<void> {
+  await client.connect()
+  try {
+    await client.query('SELECT pg_cancel_backend($1)', [backendPid])
+  } finally {
+    await client.end().catch(() => {})
+  }
+}

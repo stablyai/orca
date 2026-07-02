@@ -37,7 +37,8 @@ describe('right sidebar visibility helpers', () => {
       'automations',
       'space',
       'skills',
-      'mobile'
+      'mobile',
+      'database'
     ]) {
       expect(canShowRightSidebarForView(view as AppState['activeView'])).toBe(false)
     }

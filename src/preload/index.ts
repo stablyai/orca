@@ -124,6 +124,22 @@ import type {
   EnrichedDetectedPort
 } from '../shared/ssh-types'
 import type {
+  DbBatchResult,
+  DbColumnListResult,
+  DbConnectionInput,
+  DbConnectionRuntimeState,
+  DbConnectionSummary,
+  DbConnectionUpdate,
+  DbEncryptionStatus,
+  DbExecuteResult,
+  DbIntrospectResult,
+  DbQueryResult,
+  DbStatement,
+  DbTableListResult,
+  DbTableRef,
+  DbTestResult
+} from '../shared/database-types'
+import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
@@ -2002,6 +2018,50 @@ const api = {
   skills: {
     discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
       ipcRenderer.invoke('skills:discover', target)
+  },
+
+  database: {
+    list: (): Promise<DbConnectionSummary[]> => ipcRenderer.invoke('database:list'),
+    add: (args: { input: DbConnectionInput }): Promise<DbConnectionSummary> =>
+      ipcRenderer.invoke('database:add', args),
+    update: (args: {
+      id: string
+      updates: DbConnectionUpdate
+    }): Promise<DbConnectionSummary | null> => ipcRenderer.invoke('database:update', args),
+    remove: (args: { id: string }): Promise<void> => ipcRenderer.invoke('database:remove', args),
+    encryptionStatus: (): Promise<DbEncryptionStatus> =>
+      ipcRenderer.invoke('database:encryptionStatus'),
+    test: (args: { input: DbConnectionInput; id?: string }): Promise<DbTestResult> =>
+      ipcRenderer.invoke('database:test', args),
+    connect: (args: { id: string }): Promise<DbConnectionRuntimeState> =>
+      ipcRenderer.invoke('database:connect', args),
+    disconnect: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('database:disconnect', args),
+    statuses: (): Promise<DbConnectionRuntimeState[]> => ipcRenderer.invoke('database:statuses'),
+    onStatusChanged: (
+      callback: (state: DbConnectionRuntimeState) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        state: DbConnectionRuntimeState
+      ): void => callback(state)
+      ipcRenderer.on('database:status-changed', listener)
+      return () => ipcRenderer.removeListener('database:status-changed', listener)
+    },
+    introspect: (args: { id: string }): Promise<DbIntrospectResult> =>
+      ipcRenderer.invoke('database:introspect', args),
+    introspectSchemaTables: (args: { id: string; schema: string }): Promise<DbTableListResult> =>
+      ipcRenderer.invoke('database:introspectSchemaTables', args),
+    introspectTableColumns: (args: { id: string; ref: DbTableRef }): Promise<DbColumnListResult> =>
+      ipcRenderer.invoke('database:introspectTableColumns', args),
+    query: (args: { id: string; sql: string }): Promise<DbQueryResult> =>
+      ipcRenderer.invoke('database:query', args),
+    cancelQuery: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('database:cancelQuery', args),
+    execute: (args: { id: string; statement: DbStatement }): Promise<DbExecuteResult> =>
+      ipcRenderer.invoke('database:execute', args),
+    executeBatch: (args: { id: string; statements: DbStatement[] }): Promise<DbBatchResult> =>
+      ipcRenderer.invoke('database:executeBatch', args)
   },
 
   pet: {

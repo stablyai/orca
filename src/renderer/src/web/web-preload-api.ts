@@ -647,6 +647,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     updater: createUpdaterApi(),
     shell: createShellApi(),
     skills: createSkillsApi(),
+    database: createDatabaseApi(),
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: {
@@ -2582,6 +2583,33 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })
     }
+  }
+}
+
+function createDatabaseApi(): NonNullable<Partial<PreloadApi>['database']> {
+  // Why: the database client runs in the desktop main process (raw TCP); the web
+  // client has no such surface, so connection management is unavailable here.
+  const unavailable = { code: 'unknown', safeMessage: 'Database client is unavailable in the web client.' }
+  return {
+    list: () => Promise.resolve([]),
+    add: () =>
+      Promise.reject(new Error('Database connections are unavailable in the web client.')),
+    update: () =>
+      Promise.reject(new Error('Database connections are unavailable in the web client.')),
+    remove: () => Promise.resolve(),
+    encryptionStatus: () => Promise.resolve({ backend: 'unavailable', isStrong: false }),
+    test: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    connect: (args) => Promise.resolve({ id: args.id, status: 'error' as const, error: unavailable }),
+    disconnect: () => Promise.resolve(),
+    statuses: () => Promise.resolve([]),
+    onStatusChanged: () => () => {},
+    introspect: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    introspectSchemaTables: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    introspectTableColumns: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    query: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    cancelQuery: () => Promise.resolve(),
+    execute: () => Promise.resolve({ ok: false as const, error: unavailable }),
+    executeBatch: () => Promise.resolve({ ok: false as const, error: unavailable, failedIndex: -1 })
   }
 }
 

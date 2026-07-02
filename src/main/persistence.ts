@@ -81,6 +81,15 @@ import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
+  encryptDbSecret,
+  ensureDbSecretAtRest
+} from './database/db-credential-store'
+import type {
+  DbConnection,
+  DbConnectionInput,
+  DbConnectionUpdate
+} from '../shared/database-types'
+import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type SshRemotePtyLease,
   type SshTarget
@@ -1019,6 +1028,40 @@ type LegacySshTarget = SshTarget & {
 
 // Why: old persisted targets predate configHost. Default to label-based lookup
 // so imported SSH aliases keep resolving through ssh -G after upgrade.
+const DB_SSL_MODES = new Set(['disable', 'verify-full', 'insecure-no-verify'])
+
+// Why: older/partial records must load without crashing. readOnly defaults to
+// FALSE (writable — validated decision; the Phase 5 confirm dialog is the write
+// safety net). An invalid/absent ssl is dropped to undefined, which means
+// smart-by-host (localhost → disable, remote → verify-full) at connect time.
+function normalizeDbConnection(c: DbConnection): DbConnection {
+  return {
+    ...c,
+    readOnly: c.readOnly ?? false,
+    ssl: c.ssl && DB_SSL_MODES.has(c.ssl) ? c.ssl : undefined
+  }
+}
+
+// Why: guarantee no plaintext password reaches disk. Normal flow already holds
+// tagged at-rest values (encrypt-on-mutation), so this is a pass-through; the
+// try/catch fails CLOSED — a strong-backend encrypt hiccup drops the secret from
+// disk (re-enter next session) rather than persisting it recoverable.
+function encryptDbConnectionForDisk(c: DbConnection): DbConnection {
+  if (!c.password) {
+    return c
+  }
+  try {
+    return { ...c, password: ensureDbSecretAtRest(c.password) }
+  } catch (err) {
+    console.error(
+      '[persistence] DB secret encryption failed; omitting password on disk for',
+      c.id,
+      err
+    )
+    return { ...c, password: undefined }
+  }
+}
+
 function normalizeSshTarget(t: SshTarget): SshTarget {
   const target = { ...(t as LegacySshTarget) }
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
@@ -3200,6 +3243,10 @@ export class Store {
             defaults.workspaceSession
           ),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
+          // Why: passwords stay in tagged at-rest form in memory and are
+          // decrypted strictly at point-of-use (connect), so load never touches
+          // the keystore and can't crash on a keychain reset.
+          dbConnections: (parsed.dbConnections ?? []).map(normalizeDbConnection),
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
@@ -3403,6 +3450,16 @@ export class Store {
     }
   }
 
+  // Why: a warn-and-store DB password (weak/absent OS crypto backend) lands as
+  // recoverable text in orca-data.json, which the plain write path leaves
+  // world-readable. Restrict the published file's ACL to the current user.
+  // hardenExistingSecureFile caches the applied path, so repeated saves are cheap.
+  private maybeHardenDataFileForDbSecrets(dataFile: string): void {
+    if (this.state.dbConnections.some((c) => c.password)) {
+      hardenExistingSecureFile(dataFile)
+    }
+  }
+
   private computeStateHash(): string {
     return createHash('sha1').update(JSON.stringify(this.state)).digest('hex')
   }
@@ -3423,7 +3480,8 @@ export class Store {
       ui: {
         ...this.state.ui,
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
-      }
+      },
+      dbConnections: this.state.dbConnections.map(encryptDbConnectionForDisk)
     }
     return JSON.stringify(stateToSave, null, 2)
   }
@@ -3469,6 +3527,9 @@ export class Store {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
       }
+    }
+    if (renamed) {
+      this.maybeHardenDataFileForDbSecrets(dataFile)
     }
     // Why (issue #1158): rotate only after the atomic rename succeeded; then
     // re-check the generation so a concurrent flush owns any backup rotation.
@@ -3519,6 +3580,9 @@ export class Store {
           // Best-effort cleanup; the write already failed, swallow secondary error.
         }
       }
+    }
+    if (renamed) {
+      this.maybeHardenDataFileForDbSecrets(dataFile)
     }
     const now = Date.now()
     if (this.shouldRotateBackups(now, dataFile)) {
@@ -5738,6 +5802,61 @@ export class Store {
       return
     }
     this.state.sshTargets = this.state.sshTargets.filter((t) => t.id !== id)
+    this.scheduleSave()
+  }
+
+  // ── Database Connections ───────────────────────────────────────────
+  // Passwords are kept in tagged at-rest form (encrypt-on-mutation) so they are
+  // never plaintext in memory; decrypt strictly at point-of-use (connect).
+
+  getDbConnections(): DbConnection[] {
+    return (this.state.dbConnections ?? []).map(normalizeDbConnection)
+  }
+
+  getDbConnection(id: string): DbConnection | undefined {
+    const connection = this.state.dbConnections?.find((c) => c.id === id)
+    return connection ? normalizeDbConnection(connection) : undefined
+  }
+
+  addDbConnection(input: DbConnectionInput): DbConnection {
+    const now = Date.now()
+    const connection = normalizeDbConnection({
+      ...input,
+      id: randomUUID(),
+      readOnly: input.readOnly ?? false,
+      password: input.password ? encryptDbSecret(input.password) : undefined,
+      createdAt: now,
+      updatedAt: now
+    })
+    this.state.dbConnections ??= []
+    this.state.dbConnections.push(connection)
+    this.scheduleSave()
+    return connection
+  }
+
+  updateDbConnection(id: string, updates: DbConnectionUpdate): DbConnection | null {
+    const connection = this.state.dbConnections?.find((c) => c.id === id)
+    if (!connection) {
+      return null
+    }
+    const { password, ...rest } = updates
+    Object.assign(connection, rest)
+    // Why: an omitted password leaves the stored secret unchanged; a non-empty
+    // password replaces it (re-encrypted to tagged at-rest form).
+    if (password) {
+      connection.password = encryptDbSecret(password)
+    }
+    connection.updatedAt = Date.now()
+    Object.assign(connection, normalizeDbConnection(connection))
+    this.scheduleSave()
+    return normalizeDbConnection(connection)
+  }
+
+  removeDbConnection(id: string): void {
+    if (!this.state.dbConnections) {
+      return
+    }
+    this.state.dbConnections = this.state.dbConnections.filter((c) => c.id !== id)
     this.scheduleSave()
   }
 

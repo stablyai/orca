@@ -23,6 +23,7 @@ import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon, shutdownDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
+import { dbConnectionManager } from './database/db-connection-manager'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { startSpan } from './observability/tracer'
@@ -2045,6 +2046,11 @@ app.on('will-quit', (e) => {
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   serveSimStateWatcher.stop()
   killAllPty()
+  // Why (red-team F12): SSH's manager is never disposed on quit; the DB manager
+  // must be wired explicitly so held pools/sockets are torn down on exit. Awaited
+  // in the teardown chain below so pools close before the process exits
+  // (disconnectAll never rejects and is idempotent on the guarded second pass).
+  const dbShutdown = dbConnectionManager.disconnectAll()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
 
@@ -2094,7 +2100,7 @@ app.on('will-quit', (e) => {
     // Why: normal quits preserve the detached daemon for warm reattach, but a
     // dev parent dying means the temp/dev profile has no owner left to reattach.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
+    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown, dbShutdown])
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
       .catch(() => {
