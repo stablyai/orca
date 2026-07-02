@@ -8,6 +8,7 @@ import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktrees } from '../repo-worktrees'
 import type { FolderWorkspace, GitWorktreeInfo, ProjectGroup, Repo } from '../../shared/types'
 import {
+  authorizeExactExternalPath,
   invalidateAuthorizedRootsCache,
   isDescendantOrEqual,
   rebuildAuthorizedRootsCache,
@@ -138,6 +139,21 @@ describe('filesystem auth worktree roots', () => {
 })
 
 describe('filesystem-auth path containment', () => {
+  it('authorizes exact external paths without authorizing descendants', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-exact-'))
+    const store = makeStore([])
+    const release = authorizeExactExternalPath(tempRoot)
+    try {
+      await expect(resolveAuthorizedPath(tempRoot, store)).resolves.toBe(await realpath(tempRoot))
+      await expect(resolveAuthorizedPath(join(tempRoot, 'child.txt'), store)).rejects.toThrow(
+        'Access denied'
+      )
+    } finally {
+      release()
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('authorizes missing nested descendants under an allowed repo', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-missing-'))
     try {

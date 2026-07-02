@@ -2323,6 +2323,14 @@ export function registerPtyHandlers(
         return null
       }
     },
+    getCwd: async (ptyId) => {
+      try {
+        const cwd = await getProviderForPty(ptyId).getCwd(ptyId)
+        return cwd || null
+      } catch {
+        return null
+      }
+    },
     hasChildProcesses: async (ptyId) => {
       try {
         return await getProviderForPty(ptyId).hasChildProcesses(ptyId)

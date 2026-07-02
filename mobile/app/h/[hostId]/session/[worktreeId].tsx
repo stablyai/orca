@@ -48,7 +48,6 @@ import {
   X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
-import type { RuntimeTerminalPathResolution } from '../../../../../src/shared/runtime-types'
 import { loadHosts } from '../../../../src/transport/host-store'
 import {
   loadTerminalAutocompleteEnabled,
@@ -172,6 +171,7 @@ import { useMobileImageAttachment } from '../../../../src/session/use-mobile-ima
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import { openMobileTerminalFileTap } from '../../../../src/session/mobile-terminal-file-tap-open'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import {
   acceptSessionSnapshot,
@@ -835,6 +835,21 @@ function FileReader({
   return renderSourceText(doc.content)
 }
 
+function updateTerminalCwdFromStreamEvent(
+  handle: string,
+  data: Record<string, unknown>,
+  terminalCwd: Map<string, string>
+): void {
+  if (!('cwd' in data)) {
+    return
+  }
+  if (typeof data.cwd === 'string' && data.cwd.trim().length > 0) {
+    terminalCwd.set(handle, data.cwd)
+    return
+  }
+  terminalCwd.delete(handle)
+}
+
 export default function SessionScreen() {
   const {
     hostId,
@@ -1023,6 +1038,7 @@ export default function SessionScreen() {
   const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
   const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
   const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
+  const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
@@ -1361,6 +1377,7 @@ export default function SessionScreen() {
     webReadyHandlesRef.current.clear()
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
+    terminalCwdRef.current.clear()
     setTerminalKeyboardMetrics(new Map())
     for (const term of terminalRefs.current.values()) {
       term.clear()
@@ -1460,6 +1477,7 @@ export default function SessionScreen() {
             if (initializedHandlesRef.current.has(handle)) {
               return
             }
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             const cols = (data.cols as number) || 80
             const rows = (data.rows as number) || 24
             const scrollbackCols = cols
@@ -1555,7 +1573,10 @@ export default function SessionScreen() {
                 }
               })()
             }
+          } else if (data.type === 'metadata') {
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
           } else if (data.type === 'data') {
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             // Why: log when data arrives but the WebView ref is missing
             // — this is the most likely cause of "blank but input works":
             // server stream is alive, sends flow, but writes are dropped
@@ -1578,6 +1599,7 @@ export default function SessionScreen() {
             }
             dataRef.write(data.chunk as string)
           } else if (data.type === 'resized') {
+            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
             // Why: inline resize event — the server changed the PTY dimensions
             // (mode toggle, desktop restore, or a width reflow). When the server
             // includes a fresh full-buffer snapshot (width reflow), reinitialize
@@ -3238,82 +3260,42 @@ export default function SessionScreen() {
   // Tap on a file path in terminal output → resolve it on the host and open it
   // as a file tab (mirrors desktop Cmd/Ctrl-click). Silent on a miss; the
   // WebView only emits this when the tap landed on a detected path.
+  const handleFileTapActivationSeqRef = useRef(0)
   const handleFileTap = useCallback(
-    (handle: string, pathText: string) => {
+    (handle: string, pathText: string, line: number | null, column: number | null) => {
       if (handle !== activeHandleRef.current || !client) {
         return
       }
-      void (async () => {
-        try {
-          const worktree = `id:${worktreeId}`
-          const response = await client.sendRequest(
-            'files.resolveTerminalPath',
-            { worktree, pathText },
-            { timeoutMs: 10_000 }
-          )
-          if (!response.ok) {
-            return
-          }
-          const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
-          if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
-            return
-          }
-          // Confirm the tap landed on something openable before giving feedback.
-          triggerSelection()
-          // Why: HTML opens in a browser pane (streamed from the desktop),
-          // matching desktop's terminal-click behavior, instead of a file view.
-          if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
-            void handleCreateBrowser('file://' + resolved.absolutePath)
-            return
-          }
-          const openResponse = await client.sendRequest(
-            'files.open',
-            { worktree, relativePath: resolved.relativePath },
-            { timeoutMs: 15_000 }
-          )
-          if (!openResponse.ok) {
-            return
-          }
-          // Why: the host opens the file as a markdown/file/image tab (the type
-          // depends on the file — .md opens as a 'markdown' tab), and from a terminal
-          // the active tab stays on the terminal. Once the new tab syncs in, switch to
-          // it by relativePath across ANY openable type. Poll since it arrives async.
-          const openedPath = resolved.relativePath
-          // Why: retries poll for the async-arriving tab, but once activation lands
-          // a later retry would steal focus back from the user — short-circuit the
-          // remaining ones once the opened tab is (or becomes) the active tab.
-          let activated = false
-          const activateOpenedTab = async (): Promise<void> => {
-            if (activated) {
-              return
-            }
-            await fetchSessionTabs()
-            if (activated) {
-              return
-            }
-            const opened = sessionTabsRef.current.find(
-              (tab): tab is Extract<MobileSessionTab, { relativePath?: string }> =>
-                'relativePath' in tab && tab.relativePath === openedPath
-            )
-            if (!opened) {
-              return
-            }
-            if (activeSessionTabIdRef.current === opened.id) {
-              activated = true
-              return
-            }
-            switchSessionTabRef.current?.(opened)
-            activated = true
-          }
-          scheduleDelayedAction(() => void activateOpenedTab(), 300)
-          scheduleDelayedAction(() => void activateOpenedTab(), 900)
-          scheduleDelayedAction(() => void activateOpenedTab(), 1800)
-        } catch {
-          // Resolution/open is best-effort; a failed tap silently no-ops.
-        }
-      })()
+      const activationSeq = ++handleFileTapActivationSeqRef.current
+      openMobileTerminalFileTap<MobileSessionTab>({
+        client,
+        hostId,
+        worktreeId,
+        worktreeName: routeWorktreeName,
+        terminalHandle: handle,
+        pathText,
+        cwd: terminalCwdRef.current.get(handle) ?? null,
+        line,
+        column,
+        pushPreviewRoute: (href) => router.push(href),
+        openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
+        triggerOpenFeedback: triggerSelection,
+        fetchSessionTabs,
+        getSessionTabs: () => sessionTabsRef.current,
+        getActiveSessionTabId: () => activeSessionTabIdRef.current,
+        getActivationState: (activated) => ({
+          activated,
+          activationSeq,
+          latestActivationSeq: handleFileTapActivationSeqRef.current,
+          sourceTerminalHandle: handle,
+          activeTerminalHandle: activeHandleRef.current,
+          activeTabType: activeSessionTabTypeRef.current
+        }),
+        switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
+        scheduleDelayedAction
+      })
     },
-    [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+    [client, fetchSessionTabs, hostId, routeWorktreeName, router, scheduleDelayedAction, worktreeId]
   )
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)

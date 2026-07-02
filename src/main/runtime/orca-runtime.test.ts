@@ -44,8 +44,11 @@ import type { MessagePriority, MessageRow, MessageType } from './orchestration/t
 import {
   appendNormalizedToTailBuffer,
   appendRecentPtyOutput,
+  appendRecentPtyPathCandidates,
   buildPreview,
   OrcaRuntimeService,
+  recentTerminalPathCandidatesIncludePath,
+  recentTerminalOutputIncludesPath,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
@@ -5408,8 +5411,9 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {
+    const artifactPath = '/tmp/renderer-seeded-artifact.json'
     const serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'renderer scrollback\n',
+      data: `renderer scrollback\nwrote ${artifactPath}\n`,
       cols: 100,
       rows: 30,
       lastTitle: 'Renderer seeded Codex'
@@ -5424,6 +5428,7 @@ describe('OrcaRuntimeService', () => {
       getSize: () => ({ cols: 100, rows: 30 })
     })
     syncSinglePty(runtime, 'pty-1')
+    const [terminal] = (await runtime.listTerminals()).terminals
 
     runtime.onPtyData('pty-1', 'live output without title\n', 100)
 
@@ -5436,14 +5441,20 @@ describe('OrcaRuntimeService', () => {
       scrollbackRows: expect.any(Number),
       altScreenForcesZeroRows: true
     })
+    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
+      true
+    )
   })
 
   it('returns cwd metadata from seeded headless main terminal snapshots', async () => {
     const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const artifactPath = '/tmp/restored-scrollback-artifact.json'
 
     runtime.seedHeadlessTerminal(
       'pty-1',
-      'restored scrollback\n',
+      `restored scrollback\nwrote ${artifactPath}\n`,
       { cols: 100, rows: 30 },
       {
         cwd: '/projects/restored'
@@ -5455,6 +5466,23 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       cwd: '/projects/restored'
     })
+    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
+      true
+    )
+  })
+
+  it('adopts OSC7 host metadata from seeded headless terminal scrollback', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    runtime.seedHeadlessTerminal(
+      'pty-1',
+      '\x1b]7;file://remote-host/tmp\x07restored scrollback\n',
+      { cols: 100, rows: 30 }
+    )
+
+    expect(runtime.resolveTerminalFileUriHostname(terminal.handle)).toBe('remote-host')
   })
 
   it('falls back to the renderer snapshot for hidden-output recovery without headless state', async () => {
@@ -5637,6 +5665,87 @@ describe('OrcaRuntimeService', () => {
         })
       })
     ])
+  })
+
+  it('keeps SSH OSC7 cwd POSIX when the desktop runtime is on Windows', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-conn-1')
+
+    runtime.onPtyData('pty-ssh', '\x1b]7;file://remote-host/home/me/repo/src\x07', 123)
+
+    const internals = runtime as unknown as {
+      terminalCwdByPtyId: Map<string, string>
+      terminalFileUriHostnameByPtyId: Map<string, string>
+    }
+    expect(internals.terminalCwdByPtyId.get('pty-ssh')).toBe('/home/me/repo/src')
+    expect(internals.terminalFileUriHostnameByPtyId.get('pty-ssh')).toBe('remote-host')
+  })
+
+  it('clears stale terminal file URI hostnames after empty-host OSC7 cwd updates', () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-conn-1')
+
+    runtime.onPtyData('pty-ssh', '\x1b]7;file://remote-host/home/me/repo/src\x07', 123)
+    runtime.onPtyData('pty-ssh', '\x1b]7;file:///home/me/repo/src\x07', 124)
+
+    const internals = runtime as unknown as {
+      terminalCwdByPtyId: Map<string, string>
+      terminalFileUriHostnameByPtyId: Map<string, string>
+    }
+    expect(internals.terminalCwdByPtyId.get('pty-ssh')).toBe('/home/me/repo/src')
+    expect(internals.terminalFileUriHostnameByPtyId.has('pty-ssh')).toBe(false)
+  })
+
+  it('serializes SSH headless OSC7 cwd as POSIX when the desktop runtime is on Windows', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-conn-1')
+
+    runtime.onPtyData('pty-ssh', '\x1b]7;file://remote-host/home/me/repo/src\x07hello', 123)
+
+    const snapshot = await (
+      runtime as unknown as {
+        serializeHeadlessTerminalBuffer: (
+          ptyId: string,
+          opts: { includeEmpty?: boolean }
+        ) => Promise<{ cwd?: string | null } | null>
+      }
+    ).serializeHeadlessTerminalBuffer('pty-ssh', { includeEmpty: true })
+
+    expect(snapshot?.cwd).toBe('/home/me/repo/src')
+  })
+
+  it('keeps Windows SSH OSC7 cwd as a drive path when the desktop runtime is POSIX', () => {
+    setPlatform('darwin')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-ssh-win', `${TEST_REPO_ID}::C:/Users/me/repo`, 'ssh-conn-1')
+
+    runtime.onPtyData('pty-ssh-win', '\x1b]7;file:///C:/Users/me/repo/src\x07', 123)
+
+    const internals = runtime as unknown as {
+      terminalCwdByPtyId: Map<string, string>
+    }
+    expect(internals.terminalCwdByPtyId.get('pty-ssh-win')).toBe('C:/Users/me/repo/src')
+  })
+
+  it('serializes Windows SSH headless OSC7 cwd as a drive path on POSIX desktops', async () => {
+    setPlatform('darwin')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-ssh-win', `${TEST_REPO_ID}::C:/Users/me/repo`, 'ssh-conn-1')
+
+    runtime.onPtyData('pty-ssh-win', '\x1b]7;file:///C:/Users/me/repo/src\x07hello', 123)
+
+    const snapshot = await (
+      runtime as unknown as {
+        serializeHeadlessTerminalBuffer: (
+          ptyId: string,
+          opts: { includeEmpty?: boolean }
+        ) => Promise<{ cwd?: string | null } | null>
+      }
+    ).serializeHeadlessTerminalBuffer('pty-ssh-win', { includeEmpty: true })
+
+    expect(snapshot?.cwd).toBe('C:/Users/me/repo/src')
   })
 
   it('infers restored SSH connection identity from app-scoped PTY ids', () => {
@@ -7667,7 +7776,7 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData(
       'pty-bg',
-      `${Array.from({ length: 20 }, (_, i) => `line-${i}`).join('\n')}`,
+      `${Array.from({ length: 20 }, (_, i) => `line-${i}`).join('\n')}\nwrote /tmp/exited-result.json\n`,
       100
     )
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
@@ -7688,6 +7797,7 @@ describe('OrcaRuntimeService', () => {
             tailTruncated: boolean
           }
         >
+        recentPtyPathCandidatesById: Map<string, string[]>
       }
     ).ptysById.get('pty-bg')
     expect(pty).toMatchObject({
@@ -7700,6 +7810,11 @@ describe('OrcaRuntimeService', () => {
       status: 'exited',
       tail: []
     })
+    expect(
+      (
+        runtime as unknown as { recentPtyPathCandidatesById: Map<string, string[]> }
+      ).recentPtyPathCandidatesById.has('pty-bg')
+    ).toBe(false)
   })
 
   it('bounds disconnected background PTY records and their synthetic handles', async () => {
@@ -7718,6 +7833,7 @@ describe('OrcaRuntimeService', () => {
     for (let index = 0; index < 140; index += 1) {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
       handles.push(handle)
+      runtime.onPtyData(`pty-bg-${index}`, `wrote /tmp/result-${index}.json\n`, 100 + index)
       runtime.onPtyExit(`pty-bg-${index}`, 0)
     }
 
@@ -7725,12 +7841,14 @@ describe('OrcaRuntimeService', () => {
       ptysById: Map<string, unknown>
       handles: Map<string, unknown>
       handleByPtyId: Map<string, string>
+      recentPtyPathCandidatesById: Map<string, string[]>
     }
     expect(internals.ptysById.size).toBeLessThanOrEqual(128)
     expect(internals.ptysById.has('pty-bg-0')).toBe(false)
     expect(internals.ptysById.has('pty-bg-139')).toBe(true)
     expect(internals.handleByPtyId.has('pty-bg-0')).toBe(false)
     expect(internals.handles.has(handles[0]!)).toBe(false)
+    expect(internals.recentPtyPathCandidatesById.has('pty-bg-0')).toBe(false)
 
     await expect(runtime.readTerminal(handles[0]!)).rejects.toThrow('terminal_handle_stale')
     await expect(runtime.readTerminal(handles.at(-1)!)).resolves.toMatchObject({
@@ -9272,11 +9390,207 @@ describe('OrcaRuntimeService', () => {
   it('keeps recent PTY replay output capped without needing previous data for large chunks', () => {
     const previous = 'old-output'.repeat(1000)
     const data = 'new-output'.repeat(1000)
-    const expected = `${previous}${data}`.slice(-4096)
+    const outputLimit = 64 * 1024
+    const expected = `${previous}${data}`.slice(-outputLimit)
 
-    expect(appendRecentPtyOutput(previous, 'tail')).toBe(`${previous}tail`.slice(-4096))
+    expect(appendRecentPtyOutput(previous, 'tail')).toBe(`${previous}tail`.slice(-outputLimit))
     expect(appendRecentPtyOutput(previous, data)).toBe(expected)
-    expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-4096))
+    expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-outputLimit))
+  })
+
+  it('keeps mobile-visible artifact paths in bounded PTY path candidates', () => {
+    const artifactPath = '/tmp/result-visible-in-mobile-scrollback.json'
+    const prefix = 'x'.repeat(8 * 1024)
+    const candidates = appendRecentPtyPathCandidates(undefined, `${artifactPath}\n${prefix}`)
+
+    expect(candidates.length).toBeGreaterThan(0)
+    expect(recentTerminalPathCandidatesIncludePath(candidates, artifactPath, artifactPath)).toBe(
+      true
+    )
+  })
+
+  it('keeps dotted spaced artifact paths in bounded PTY path candidates', () => {
+    const artifactPath = '/tmp/v1.2 reports/result.json'
+    const prefix = 'x'.repeat(8 * 1024)
+    const candidates = appendRecentPtyPathCandidates(undefined, `wrote ${artifactPath}\n${prefix}`)
+
+    expect(recentTerminalPathCandidatesIncludePath(candidates, artifactPath, artifactPath)).toBe(
+      true
+    )
+    expect(recentTerminalPathCandidatesIncludePath(candidates, '/tmp/v1.2', '/tmp/v1.2')).toBe(
+      false
+    )
+  })
+
+  it('strips retained terminal path line and hash locators before matching', () => {
+    const colonPath = '/tmp/orca report/result.json'
+    const hashPath = '/tmp/result-hash.json'
+    const candidates = appendRecentPtyPathCandidates(
+      undefined,
+      `wrote ${colonPath}:12:3 for you\nfile://${hashPath}#L12C3 generated\n`
+    )
+
+    expect(recentTerminalPathCandidatesIncludePath(candidates, colonPath, colonPath)).toBe(true)
+    expect(recentTerminalPathCandidatesIncludePath(candidates, hashPath, hashPath)).toBe(true)
+  })
+
+  it('keeps non-loopback file URI authorities in retained PTY path candidates', () => {
+    const candidates = appendRecentPtyPathCandidates(
+      undefined,
+      'wrote file://remote-host/tmp/result.json\n'
+    )
+
+    expect(
+      recentTerminalPathCandidatesIncludePath(
+        candidates,
+        '//remote-host/tmp/result.json',
+        '//remote-host/tmp/result.json'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalPathCandidatesIncludePath(candidates, '/tmp/result.json', '/tmp/result.json')
+    ).toBe(false)
+  })
+
+  it('keeps loopback file URI paths as local retained PTY path candidates', () => {
+    const candidates = appendRecentPtyPathCandidates(
+      undefined,
+      'wrote file://localhost/tmp/result.json#L12\n'
+    )
+
+    expect(
+      recentTerminalPathCandidatesIncludePath(candidates, '/tmp/result.json', '/tmp/result.json')
+    ).toBe(true)
+  })
+
+  it('keeps tmpdir artifact paths in bounded PTY path candidates', () => {
+    const artifactPath = join(tmpdir(), 'orca-runtime-retained-result.json')
+    const candidates = appendRecentPtyPathCandidates(undefined, `wrote ${artifactPath}\n`)
+
+    expect(recentTerminalPathCandidatesIncludePath(candidates, artifactPath, artifactPath)).toBe(
+      true
+    )
+  })
+
+  it('matches WSL UNC artifact paths against POSIX terminal output candidates', () => {
+    const candidates = appendRecentPtyPathCandidates(undefined, 'wrote /tmp/result.json\n')
+
+    expect(
+      recentTerminalPathCandidatesIncludePath(
+        candidates,
+        '\\\\wsl.localhost\\Ubuntu\\tmp\\result.json',
+        '\\\\wsl.localhost\\Ubuntu\\tmp\\result.json'
+      )
+    ).toBe(true)
+  })
+
+  it('keeps bounded PTY path candidates under a total byte budget', () => {
+    const longCandidate = `/tmp/${'x'.repeat(5 * 1024)}.json`
+    const candidates = appendRecentPtyPathCandidates(undefined, `${longCandidate}\n`)
+
+    expect(candidates).toEqual([])
+
+    let retained: string[] | undefined
+    for (let index = 0; index < 200; index += 1) {
+      retained = appendRecentPtyPathCandidates(retained, `/tmp/${'a'.repeat(900)}-${index}.json\n`)
+    }
+    const totalBytes = (retained ?? []).reduce(
+      (sum, candidate) => sum + Buffer.byteLength(candidate, 'utf8'),
+      0
+    )
+    expect(totalBytes).toBeLessThanOrEqual(64 * 1024)
+  })
+
+  it('keeps Windows file URI drive paths in bounded PTY path candidates', () => {
+    const artifactPath = 'C:/Users/me/AppData/Local/Temp/result.json'
+    const prefix = 'x'.repeat(8 * 1024)
+    const candidates = appendRecentPtyPathCandidates(
+      undefined,
+      `file:///C:/Users/me/AppData/Local/Temp/result.json\n${prefix}`
+    )
+
+    expect(recentTerminalPathCandidatesIncludePath(candidates, artifactPath, artifactPath)).toBe(
+      true
+    )
+  })
+
+  it('matches terminal artifact paths only when they appear in recent terminal output', () => {
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote /tmp/orca report/result.json:12:3',
+        '/tmp/orca report/result.json',
+        '/tmp/orca report/result.json'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalOutputIncludesPath(
+        '\x1b]8;;file:///tmp/orca%20report/result.json\x1b\\result\x1b]8;;\x1b\\',
+        '/tmp/orca report/result.json',
+        '/tmp/orca report/result.json'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalOutputIncludesPath(
+        '\x1b]8;;file:///tmp/caf%C3%A9.txt\x1b\\result\x1b]8;;\x1b\\',
+        '/tmp/café.txt',
+        '/tmp/café.txt'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote /tmp/orca report/other.json',
+        '/tmp/orca report/result.json',
+        '/tmp/orca report/result.json'
+      )
+    ).toBe(false)
+  })
+
+  it('does not match terminal artifact path prefixes as provenance', () => {
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote /tmp/result.json.bak',
+        '/tmp/result.json',
+        '/tmp/result.json'
+      )
+    ).toBe(false)
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote /tmp/result.json:12:3',
+        '/tmp/result.json',
+        '/tmp/result.json'
+      )
+    ).toBe(true)
+  })
+
+  it('matches terminal artifact paths inside loopback file URI output', () => {
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote file://127.0.0.1/tmp/result.json',
+        '/tmp/result.json',
+        '/tmp/result.json'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote file://[::1]/tmp/result.json',
+        '/tmp/result.json',
+        '/tmp/result.json'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote file:///C:/Users/me/AppData/Local/Temp/result.json',
+        'C:/Users/me/AppData/Local/Temp/result.json',
+        'C:/Users/me/AppData/Local/Temp/result.json'
+      )
+    ).toBe(true)
+    expect(
+      recentTerminalOutputIncludesPath(
+        'wrote file://localhost/C:/Users/me/AppData/Local/Temp/result.json',
+        'C:/Users/me/AppData/Local/Temp/result.json',
+        'C:/Users/me/AppData/Local/Temp/result.json'
+      )
+    ).toBe(true)
   })
 
   it('applies terminal redraw controls before retaining previews', async () => {

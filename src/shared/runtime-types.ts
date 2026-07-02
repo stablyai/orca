@@ -319,6 +319,24 @@ export type RuntimeFileReadResult = {
   byteLength: number
 }
 
+export type RuntimeTerminalPathOpenTarget =
+  | {
+      kind: 'worktree-file'
+      provider: 'local' | 'ssh'
+      relativePath: string
+      absolutePath: string
+    }
+  | {
+      kind: 'absolute-file'
+      provider: 'local' | 'ssh'
+      absolutePath: string
+      grantId: string
+    }
+  | {
+      kind: 'unsupported'
+      reason: string
+    }
+
 /** Result of resolving a file path tapped in the mobile terminal against the
  *  worktree root (+ optional cwd). relativePath is null when the path resolves
  *  outside the worktree (not openable via the worktree-scoped file RPCs). */
@@ -330,6 +348,7 @@ export type RuntimeTerminalPathResolution = {
   absolutePath: string | null
   exists: boolean
   isDirectory: boolean
+  openTarget?: RuntimeTerminalPathOpenTarget
 }
 
 export type RuntimeFilePreviewResult = {

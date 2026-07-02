@@ -12,6 +12,8 @@ export type HeadlessEmulatorOptions = {
   cols: number
   rows: number
   scrollback?: number
+  pathFlavor?: 'posix' | 'win32'
+  remotePosixFileUriAuthority?: boolean
 }
 
 type TerminalWithSynchronousWrite = Terminal & {
@@ -25,7 +27,6 @@ const OSC_SCAN_TAIL_LIMIT = 4096
 // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
 // Keep parser state far beyond normal mode lists while still bounding memory.
 const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
-type MouseTrackingMode = NonNullable<TerminalModes['mouseTrackingMode']>
 
 export class HeadlessEmulator {
   private terminal: Terminal
@@ -34,13 +35,17 @@ export class HeadlessEmulator {
   private lastTitle: string | null = null
   private oscScanTail = ''
   private privateModeScanTail = ''
-  private mouseTrackingMode: MouseTrackingMode = 'none'
+  private mouseTrackingMode: NonNullable<TerminalModes['mouseTrackingMode']> = 'none'
   private sgrMouseMode = false
   private sgrMousePixelsMode = false
   private restoredOscLinks: TerminalOscLinkRange[] = []
   private disposed = false
+  private readonly pathFlavor?: 'posix' | 'win32'
+  private readonly remotePosixFileUriAuthority: boolean
 
   constructor(opts: HeadlessEmulatorOptions) {
+    this.pathFlavor = opts.pathFlavor
+    this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
     this.terminal = new Terminal({
       cols: opts.cols,
       rows: opts.rows,
@@ -295,7 +300,10 @@ export class HeadlessEmulator {
   }
 
   private parseOsc7Uri(uri: string): void {
-    const parsed = parseFileUriPath(uri)
+    const parsed = parseFileUriPath(uri, {
+      pathFlavor: this.pathFlavor,
+      remotePosixAuthority: this.remotePosixFileUriAuthority
+    })
     if (parsed) {
       this.cwd = parsed
     }

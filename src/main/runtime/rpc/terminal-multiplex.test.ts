@@ -1383,14 +1383,14 @@ describe('terminal multiplex RPC', () => {
       >()
       const cleanups = new Map<string, () => void>()
       const dataListenerRef: { current?: (data: string) => void } = {}
-      let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+      const snapshotResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn(
           () =>
             new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
-              resolveSnapshot = resolve
+              snapshotResolves.push(resolve)
             })
         ),
         getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
@@ -1451,7 +1451,9 @@ describe('terminal multiplex RPC', () => {
         dataListenerRef.current?.(`${String(index).padStart(3, '0')}${'x'.repeat(1021)}`)
       }
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
-      resolveSnapshot({ data: '', cols: 120, rows: 40 })
+      snapshotResolves.shift()?.({ data: '', cols: 120, rows: 40 })
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
+      snapshotResolves.shift()?.({ data: '399', cols: 120, rows: 40 })
       await vi.waitFor(() =>
         expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
       )
@@ -1463,8 +1465,14 @@ describe('terminal multiplex RPC', () => {
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
+      expect(output).toBe('')
+      const snapshotPayload = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .join('')
+      expect(snapshotPayload).toBe('399')
       expect(output).not.toContain('000')
-      expect(output).toContain('399')
 
       cleanups.get('terminal-multiplex:conn-buffered')?.()
       await dispatchPromise
@@ -1484,14 +1492,14 @@ describe('terminal multiplex RPC', () => {
       >()
       const cleanups = new Map<string, () => void>()
       const dataListenerRef: { current?: (data: string) => void } = {}
-      let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+      const snapshotResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn(
           () =>
             new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
-              resolveSnapshot = resolve
+              snapshotResolves.push(resolve)
             })
         ),
         getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
@@ -1552,7 +1560,9 @@ describe('terminal multiplex RPC', () => {
         dataListenerRef.current?.(`${String(index).padStart(3, '0')}${'界'.repeat(341)}`)
       }
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
-      resolveSnapshot({ data: '', cols: 120, rows: 40 })
+      snapshotResolves.shift()?.({ data: '', cols: 120, rows: 40 })
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
+      snapshotResolves.shift()?.({ data: '399', cols: 120, rows: 40 })
       await vi.waitFor(() =>
         expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
       )
@@ -1564,8 +1574,14 @@ describe('terminal multiplex RPC', () => {
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
       expect(new TextEncoder().encode(output).byteLength).toBeLessThanOrEqual(256 * 1024)
+      expect(output).toBe('')
+      const snapshotPayload = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .join('')
+      expect(snapshotPayload).toBe('399')
       expect(output).not.toContain('000')
-      expect(output).toContain('399')
 
       cleanups.get('terminal-multiplex:conn-buffered-multibyte')?.()
       await dispatchPromise
