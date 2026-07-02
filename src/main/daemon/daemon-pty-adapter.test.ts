@@ -15,7 +15,7 @@ const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
 }))
 
-const itOnPosix = process.platform === 'win32' ? it.skip : it
+const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
@@ -71,7 +71,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void
   }
 }
 
-describe('DaemonPtyAdapter (IPtyProvider)', () => {
+describeOnPosix('DaemonPtyAdapter (IPtyProvider)', () => {
   let dir: string
   let socketPath: string
   let tokenPath: string
@@ -127,7 +127,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.id).toContain('wt-1')
     })
 
-    itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
+    it('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
       await adapter.spawn({
         cols: 80,
         rows: 24,
@@ -139,7 +139,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.write).toHaveBeenCalledWith('codex\n')
     })
 
-    itOnPosix('waits for shell-ready for delivery-hinted Codex startup', async () => {
+    it('waits for shell-ready for delivery-hinted Codex startup', async () => {
       await adapter.spawn({
         cols: 80,
         rows: 24,
