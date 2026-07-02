@@ -163,11 +163,7 @@ describe('ClaudeHookService.install', () => {
       )
       expect(legacyCommands).toContain('/usr/local/bin/user-hook')
       expect(
-        legacyCommands.some((command: string) =>
-          process.platform === 'win32'
-            ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
-            : command.includes(CLAUDE_SCRIPT_FILE_NAME)
-        )
+        legacyCommands.some((command: string) => command.includes(CLAUDE_SCRIPT_FILE_NAME))
       ).toBe(true)
       expect(
         legacyCommands.some((command: string) =>
@@ -175,9 +171,7 @@ describe('ClaudeHookService.install', () => {
         )
       ).toBe(false)
       expect(legacy.hooks.StopFailure[0].hooks[0].command).toMatch(
-        process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER
-          : new RegExp(CLAUDE_SCRIPT_FILE_NAME)
+        new RegExp(CLAUDE_SCRIPT_FILE_NAME)
       )
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
@@ -351,10 +345,8 @@ describe('OpenClaudeHookService-compatible install', () => {
       const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
-        if (process.platform === 'win32') {
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        } else {
-          expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+        expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
+        if (process.platform !== 'win32') {
           expect(command).toMatch(/^if \[ -x /)
         }
       }
