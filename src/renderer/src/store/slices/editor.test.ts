@@ -447,7 +447,7 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         id: 'wt-1::diff::unstaged::file.ts',
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       }),
       expect.objectContaining({
         id: 'editor-diff:wt-1:env-1:unstaged:file.ts',
@@ -487,6 +487,48 @@ describe('createEditorSlice openDiff', () => {
         runtimeEnvironmentId: 'env-1'
       })
     )
+  })
+
+  it('pins a local-owned worktree diff to local even when a runtime environment is globally active', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'remote-env' } as AppState['settings'],
+      repos: [{ id: 'repo-1', executionHostId: 'local' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::/local/worktree',
+            repoId: 'repo-1',
+            hostId: 'local'
+          }
+        ]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff(
+        'repo-1::/local/worktree',
+        '/local/worktree/src/file.ts',
+        'src/file.ts',
+        'typescript',
+        false
+      )
+    store.getState().openFile({
+      filePath: '/local/worktree/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'repo-1::/local/worktree',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    // Why: a local-owned worktree must never inherit the globally-active runtime
+    // environment, or its diff/content RPCs route to a remote runtime that does
+    // not know the worktree and fail with `selector_not_found`.
+    expect(store.getState().openFiles.map((file) => file.runtimeEnvironmentId)).toEqual([
+      null,
+      null
+    ])
   })
 
   it('repairs an existing diff tab entry to the correct mode and staged state', () => {
