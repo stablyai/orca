@@ -63,16 +63,16 @@ export function guardPinnedTabClose(params: {
       kind: 'spotlight',
       onConfirm: () => {
         const repoId = getRepoIdFromWorktreeId(worktreeId)
+        // Close the tab regardless of the deactivate outcome. Closing a
+        // terminal is not destructive to git state (the root restore is
+        // independent), and gating the close on success made the tab
+        // unclosable when restore persistently failed (e.g. a merge in the
+        // root). On failure the slice already toasts the reason, and the
+        // holder button/context menu can retry the restore.
         void useAppStore
           .getState()
           .deactivateSpotlight(repoId)
-          .then((result) => {
-            // Only close once the root is restored; a failed restore keeps the
-            // terminal (and the server) alive so nothing is lost.
-            if (result.ok) {
-              onClose()
-            }
-          })
+          .finally(() => onClose())
       },
       ...(onCancel ? { onCancel } : {})
     })

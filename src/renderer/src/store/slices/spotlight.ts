@@ -33,6 +33,16 @@ function spotlightErrorDescription(error: SpotlightError): string {
         'auto.store.slices.spotlight.unsupportedHost',
         'Spotlight testing is not available for this project host yet.'
       )
+    case 'untracked-collision':
+      return translate(
+        'auto.store.slices.spotlight.untrackedCollision',
+        'Untracked files in the project root would be overwritten. Move or delete them, or force the sync.'
+      )
+    case 'not-enabled':
+      return translate(
+        'auto.store.slices.spotlight.notEnabled',
+        'Spotlight testing is not enabled for this project.'
+      )
     case 'bare-root':
     case 'branch-missing':
     case 'git-failed':
@@ -106,7 +116,22 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
     activateSpotlight: async (repoId, worktreeId) => {
       const result = await window.api.spotlight.activate({ repoId, worktreeId })
       applyState(repoId, result.state)
-      if (result.ok) {
+      if (!result.ok) {
+        reportSpotlightError(
+          translate('auto.store.slices.spotlight.activateFailed', 'Failed to start Spotlight'),
+          result.error
+        )
+        return result
+      }
+      // Open/adopt the repo's server terminal. Only claim logs are mirrored
+      // when a terminal actually exists to feed them (C13: a missing main
+      // worktree would otherwise leave agents tailing an empty file).
+      // Dynamic import: open-spotlight-terminal-tab reaches back into this
+      // store, so a static import would create an init-time cycle that leaves
+      // createSpotlightSlice undefined.
+      const { openSpotlightTerminalTab } = await import('@/lib/open-spotlight-terminal-tab')
+      const opened = openSpotlightTerminalTab({ repoId, reveal: false })
+      if (opened.ok) {
         toast.success(
           translate(
             'auto.store.slices.spotlight.activated',
@@ -120,9 +145,11 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
           }
         )
       } else {
-        reportSpotlightError(
-          translate('auto.store.slices.spotlight.activateFailed', 'Failed to start Spotlight'),
-          result.error
+        toast.success(
+          translate(
+            'auto.store.slices.spotlight.activatedNoTerminal',
+            'Spotlight on — open the primary workspace and start your server there'
+          )
         )
       }
       return result

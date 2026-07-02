@@ -1,88 +1,76 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { shouldRefreshGitStatusForFileChange } from '@/components/right-sidebar/git-status-file-watch-refresh'
+import { splitWorktreeId } from '../../../shared/worktree-id'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import {
+  ORCA_WORKTREE_FILE_CHANGE_EVENT,
+  type WorktreeFileChangeEventDetail
+} from './worktree-file-change-event'
 
 // Why 300ms: agents and editors write files in bursts; one sync per burst is
 // enough since the engine also skips no-op syncs by comparing trees.
 const SPOTLIGHT_SYNC_DEBOUNCE_MS = 300
 
-type SpotlightHolder = {
-  repoId: string
-  /** Filesystem path of the worktree holding the Spotlight. */
-  path: string
-}
-
 /**
  * The automatic half of Spotlight testing: while a workspace holds the
- * Spotlight, watch its files and mirror every change onto the repo root
- * without the user clicking anything (Conductor-style continuous sync).
- * Mounted once at the app root.
+ * Spotlight, mirror every change onto the repo root without the user clicking
+ * anything (Conductor-style continuous sync). Mounted once at the app root.
+ *
+ * Why it does NOT watch the filesystem itself: `useEditorExternalWatch` is the
+ * single renderer owner of worktree watch/unwatch (main keys listeners by
+ * sender with no refcount, so a second owner's unwatch starves the first). It
+ * already includes Spotlight holders in its watch set and re-broadcasts every
+ * change as `ORCA_WORKTREE_FILE_CHANGE_EVENT`; this hook only listens.
  */
 export function useSpotlightAutoSync(): void {
-  const spotlightByRepo = useAppStore((s) => s.spotlightByRepo)
-
-  const holders = useMemo<SpotlightHolder[]>(() => {
-    return Object.values(spotlightByRepo).flatMap((state) => {
-      const prefix = `${state.repoId}::`
-      if (!state.holderWorktreeId.startsWith(prefix)) {
-        return []
-      }
-      return [{ repoId: state.repoId, path: state.holderWorktreeId.slice(prefix.length) }]
-    })
-  }, [spotlightByRepo])
-  // Why a string key: `holders` is a fresh array each store change; keying the
-  // effect on identity would tear down and re-create watchers on every sync.
-  const holdersKey = holders.map((holder) => `${holder.repoId}::${holder.path}`).join('\n')
-
   useEffect(() => {
-    if (holders.length === 0) {
-      return
-    }
-    for (const holder of holders) {
-      void window.api.fs.watchWorktree({ worktreePath: holder.path }).catch(() => {
-        // Non-fatal: without a watcher the user can still re-sync by toggling.
-      })
-    }
-
     const timers = new Map<string, ReturnType<typeof setTimeout>>()
-    const unsubscribe = window.api.fs.onFsChanged((payload) => {
-      const holder = holders.find(
-        (entry) =>
-          normalizeRuntimePathForComparison(payload.worktreePath) ===
-          normalizeRuntimePathForComparison(entry.path)
-      )
-      if (!holder || !shouldRefreshGitStatusForFileChange(payload, holder.path)) {
+
+    const handleFileChange = (event: Event): void => {
+      const detail = (event as CustomEvent<WorktreeFileChangeEventDetail>).detail
+      if (!detail) {
         return
       }
-      const pending = timers.get(holder.repoId)
-      if (pending) {
-        clearTimeout(pending)
+      const { payload } = detail
+      // Find the repo whose holder worktree this change belongs to.
+      const holders = useAppStore.getState().spotlightByRepo
+      for (const spotlight of Object.values(holders)) {
+        const holderPath = splitWorktreeId(spotlight.holderWorktreeId)?.worktreePath
+        if (
+          !holderPath ||
+          normalizeRuntimePathForComparison(payload.worktreePath) !==
+            normalizeRuntimePathForComparison(holderPath)
+        ) {
+          continue
+        }
+        if (!shouldRefreshGitStatusForFileChange(payload, holderPath)) {
+          return
+        }
+        const repoId = spotlight.repoId
+        const pending = timers.get(repoId)
+        if (pending) {
+          clearTimeout(pending)
+        }
+        timers.set(
+          repoId,
+          setTimeout(() => {
+            timers.delete(repoId)
+            // The holder may have changed or Spotlight turned off during the
+            // debounce; sync() no-ops safely (silent 'not-active').
+            void useAppStore.getState().syncSpotlight(repoId, { silent: true })
+          }, SPOTLIGHT_SYNC_DEBOUNCE_MS)
+        )
+        return
       }
-      timers.set(
-        holder.repoId,
-        setTimeout(() => {
-          timers.delete(holder.repoId)
-          const current = useAppStore.getState().spotlightByRepo[holder.repoId]
-          // The user may have turned Spotlight off (or moved it) between the
-          // file event and this debounce firing — don't sync a stale holder.
-          if (current?.holderWorktreeId !== `${holder.repoId}::${holder.path}`) {
-            return
-          }
-          void useAppStore.getState().syncSpotlight(holder.repoId, { silent: true })
-        }, SPOTLIGHT_SYNC_DEBOUNCE_MS)
-      )
-    })
+    }
 
+    window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleFileChange as EventListener)
     return () => {
-      unsubscribe()
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleFileChange as EventListener)
       for (const timer of timers.values()) {
         clearTimeout(timer)
       }
-      for (const holder of holders) {
-        void window.api.fs.unwatchWorktree({ worktreePath: holder.path }).catch(() => {})
-      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- holdersKey encodes holders
-  }, [holdersKey])
+  }, [])
 }

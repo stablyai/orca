@@ -9,6 +9,10 @@ export type SpotlightErrorCode =
   | 'operation-in-progress'
   /** Root HEAD moved off the snapshot or picked up changes while active. */
   | 'root-diverged'
+  /** Untracked root files would be overwritten by newly tracked snapshot paths. */
+  | 'untracked-collision'
+  /** The repo has not opted into Spotlight testing (settings toggle off). */
+  | 'not-enabled'
   /** Restoring the root's uncommitted changes conflicted on deactivate. */
   | 'restore-conflict'
   /** The root's original branch was deleted while Spotlight was active. */

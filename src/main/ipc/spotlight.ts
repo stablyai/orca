@@ -7,15 +7,24 @@ import {
   stopSpotlightLogCapture
 } from '../spotlight/spotlight-log-mirror'
 
+// Why a module singleton with a mutable window ref: attachMainWindowServices
+// re-runs on macOS dock re-activation. Reconstructing the service there would
+// discard its per-repo mutex/syncing overlay while old-instance git operations
+// may still be in flight, letting two instances race destructive git commands
+// on the same root. Keep ONE service for the process lifetime; only retarget
+// the window it notifies.
 let service: SpotlightService | null = null
+let currentWindow: BrowserWindow | null = null
 let reconciled = false
 
-export function getSpotlightService(): SpotlightService | null {
-  return service
-}
-
 export function registerSpotlightHandlers(mainWindow: BrowserWindow, store: Store): void {
-  service = new SpotlightService(store, () => (mainWindow.isDestroyed() ? null : mainWindow))
+  currentWindow = mainWindow
+  if (!service) {
+    service = new SpotlightService(store, () =>
+      currentWindow && !currentWindow.isDestroyed() ? currentWindow : null
+    )
+  }
+  const spotlight = service
 
   ipcMain.removeHandler('spotlight:getState')
   ipcMain.removeHandler('spotlight:activate')
@@ -24,22 +33,24 @@ export function registerSpotlightHandlers(mainWindow: BrowserWindow, store: Stor
   ipcMain.removeHandler('spotlight:setLogPty')
   ipcMain.removeHandler('spotlight:clearLogPty')
 
-  ipcMain.handle('spotlight:getState', () => service!.getStateSnapshot())
+  ipcMain.handle('spotlight:getState', () => spotlight.getStateSnapshot())
   ipcMain.handle('spotlight:activate', (_event, args: { repoId: string; worktreeId: string }) =>
-    service!.activate(args.repoId, args.worktreeId)
+    spotlight.activate(args.repoId, args.worktreeId)
   )
   ipcMain.handle('spotlight:sync', (_event, args: { repoId: string; force?: boolean }) =>
-    service!.sync(args.repoId, { force: args.force })
+    spotlight.sync(args.repoId, { force: args.force })
   )
   ipcMain.handle(
     'spotlight:deactivate',
     (_event, args: { repoId: string; discardBackup?: boolean }) =>
-      service!.deactivate(args.repoId, { discardBackup: args.discardBackup })
+      spotlight.deactivate(args.repoId, { discardBackup: args.discardBackup })
   )
   ipcMain.handle('spotlight:setLogPty', async (_event, args: { repoId: string; ptyId: string }) => {
     const repo = store.getRepo(args.repoId)
-    // Local repos only — same MVP scope as the sync engine.
-    if (!repo || repo.connectionId?.trim()) {
+    // Only mirror while Spotlight is actually active for a local repo — the
+    // spotlightRepoRoot tab flag persists across sessions, so without this a
+    // once-Spotlight terminal would keep being captured after turn-off.
+    if (!repo || repo.connectionId?.trim() || !spotlight.getState(args.repoId)) {
       return
     }
     await startSpotlightLogCapture({ repoId: args.repoId, ptyId: args.ptyId, rootPath: repo.path })
@@ -52,7 +63,7 @@ export function registerSpotlightHandlers(mainWindow: BrowserWindow, store: Stor
   // was closed (manual git use, crashes). One reconcile pass per app run.
   if (!reconciled) {
     reconciled = true
-    void service.reconcileAll().catch((error) => {
+    void spotlight.reconcileAll().catch((error) => {
       console.warn(
         '[spotlight] Startup reconcile failed:',
         error instanceof Error ? error.message : String(error)

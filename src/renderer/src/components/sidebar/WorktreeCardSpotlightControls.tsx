@@ -1,10 +1,12 @@
 import { Flashlight, Loader2, ScrollText, X } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { Badge } from '../ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { cn } from '@/lib/utils'
 import { openSpotlightTerminalTab } from '@/lib/open-spotlight-terminal-tab'
+import { useSpotlightHolderName } from './spotlight-row-hooks'
 import { formatTimeAgo } from '@/components/status-bar/tooltip'
 import { translate } from '@/i18n/i18n'
 
@@ -38,19 +40,33 @@ export function SpotlightQuickAction({
   worktree: Worktree
   repo: Repo
 }): React.JSX.Element | null {
-  const state = useAppStore((s) => s.spotlightByRepo?.[repo.id])
   const activateSpotlight = useAppStore((s) => s.activateSpotlight)
   const deactivateSpotlight = useAppStore((s) => s.deactivateSpotlight)
-  const holderName = useAppStore((s) =>
-    state && state.holderWorktreeId !== worktree.id
-      ? s.worktreesByRepo?.[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
-          ?.displayName
-      : undefined
+  // Why useShallow + a per-row view: every row of the repo subscribes to the
+  // spotlight state, which main replaces twice per debounced sync. Selecting a
+  // shallow-equal view keyed on THIS worktree means non-holder rows compute a
+  // stable { held:false, ... } and skip re-rendering on sync churn.
+  const view = useAppStore(
+    useShallow((s) => {
+      const st = s.spotlightByRepo?.[repo.id]
+      if (!st) {
+        return { held: false, active: false, syncing: false, lastSyncAt: null, errorMsg: null }
+      }
+      const held = st.holderWorktreeId === worktree.id
+      return {
+        held,
+        active: true,
+        syncing: held && st.status === 'syncing',
+        lastSyncAt: held ? st.lastSyncAt : null,
+        errorMsg: held ? (st.lastError?.message ?? null) : null
+      }
+    })
   )
+  const holderName = useSpotlightHolderName(repo.id)
 
-  const heldHere = state?.holderWorktreeId === worktree.id
-  const syncing = state?.status === 'syncing'
-  const syncError = heldHere ? state?.lastError : null
+  const heldHere = view.held
+  const syncing = view.syncing
+  const syncError = view.errorMsg
 
   const tooltip = syncing
     ? translate('auto.components.sidebar.WorktreeCardSpotlightControls.syncing', 'Syncing…')
@@ -58,20 +74,20 @@ export function SpotlightQuickAction({
       ? `${translate(
           'auto.components.sidebar.WorktreeCardSpotlightControls.syncBroken',
           'Spotlight sync is failing:'
-        )} ${syncError.message}`
+        )} ${syncError}`
       : heldHere
         ? `${translate(
             'auto.components.sidebar.WorktreeCardSpotlightControls.activeHere',
             'Spotlight on — this workspace mirrors to the project root. Click to turn off.'
           )}${
-            state?.lastSyncAt
+            view.lastSyncAt
               ? ` ${translate(
                   'auto.components.sidebar.WorktreeCardSpotlightControls.lastSynced',
                   'Last synced {{when}}.'
-                ).replace('{{when}}', formatTimeAgo(state.lastSyncAt))}`
+                ).replace('{{when}}', formatTimeAgo(view.lastSyncAt))}`
               : ''
           }`
-        : state
+        : view.active
           ? translate(
               'auto.components.sidebar.WorktreeCardSpotlightControls.takeover',
               'Take the Spotlight from "{{holder}}" — the project root will mirror this workspace instead.'
@@ -90,13 +106,8 @@ export function SpotlightQuickAction({
       void deactivateSpotlight(repo.id)
       return
     }
-    void activateSpotlight(repo.id, worktree.id).then((result) => {
-      if (result.ok) {
-        // Ensure the repo's single server terminal exists (in the main
-        // worktree's workspace) without pulling the user away from here.
-        openSpotlightTerminalTab({ repoId: repo.id, reveal: false })
-      }
-    })
+    // activateSpotlight opens/adopts the repo's server terminal on success.
+    void activateSpotlight(repo.id, worktree.id)
   }
 
   return (
@@ -140,19 +151,16 @@ export function SpotlightQuickAction({
  *  the one-click jump to the repo's server terminal; the small × next to it
  *  turns Spotlight off and restores the root. */
 export function SpotlightPrimaryBadge({ repo }: { repo: Repo }): React.JSX.Element | null {
-  const state = useAppStore((s) => s.spotlightByRepo?.[repo.id])
   const deactivateSpotlight = useAppStore((s) => s.deactivateSpotlight)
-  const holderName = useAppStore((s) =>
-    state
-      ? s.worktreesByRepo?.[repo.id]?.find((entry) => entry.id === state.holderWorktreeId)
-          ?.displayName
-      : undefined
-  )
+  // Narrow primitive selects so the primary row re-renders only on real state
+  // transitions, not on every sync's lastSyncAt bump.
+  const active = useAppStore((s) => Boolean(s.spotlightByRepo?.[repo.id]))
+  const syncing = useAppStore((s) => s.spotlightByRepo?.[repo.id]?.status === 'syncing')
+  const holderName = useSpotlightHolderName(repo.id)
 
-  if (!state) {
+  if (!active) {
     return null
   }
-  const syncing = state.status === 'syncing'
 
   return (
     <span className="inline-flex shrink-0 items-center gap-0.5">

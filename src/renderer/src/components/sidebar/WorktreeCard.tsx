@@ -1186,16 +1186,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel
-  const spotlightActiveForRepo = useAppStore((s) =>
-    repo ? Boolean(s.spotlightByRepo?.[repo.id]) : false
-  )
-  // Why: while Spotlight owns the root, its detachment is expected and already
-  // signaled by the amber spotlight chip — a second badge would just be noise.
+  // Suppress the raw detached-HEAD badge only while Spotlight cleanly owns the
+  // root — the amber spotlight chip already signals that expected detachment.
+  // But if the root DIVERGED (someone checked out/committed in it directly),
+  // keep the badge: that detachment is real and the chip's tooltip would lie.
+  const spotlightCleanlyOwnsRoot = useAppStore((s) => {
+    if (!repo) {
+      return false
+    }
+    const spotlight = s.spotlightByRepo?.[repo.id]
+    return Boolean(spotlight) && spotlight?.lastError?.code !== 'root-diverged'
+  })
   const showDetachedHeadInMetaRow =
     !compactCards &&
     !isFolder &&
     detachedHeadDisplay !== null &&
-    !(worktree.isMainWorktree && spotlightActiveForRepo)
+    !(worktree.isMainWorktree && spotlightCleanlyOwnsRoot)
   const showBranch =
     !isFolder &&
     branch.length > 0 &&

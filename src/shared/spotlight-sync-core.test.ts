@@ -225,5 +225,94 @@ describe('spotlight-sync-core', () => {
     const head = run(worktreePath, 'rev-parse', 'HEAD')
     const checkpoint = await createCheckpointCommit(ctx, worktreePath)
     expect(checkpoint.sha).toBe(head)
+    expect(checkpoint.headSha).toBe(head)
+  })
+
+  it('takeover refuses when the root diverged, and force overwrites', async () => {
+    const worktree2 = path.join(baseDir, 'wt2')
+    run(rootPath, 'worktree', 'add', worktree2, '-b', 'feature-2')
+    await activateSpotlightCore(ctx, rootPath, worktreePath)
+
+    // A tracked edit made directly in the root while Spotlight is active.
+    write(rootPath, 'a.txt', 'edited-directly-in-root\n')
+    write(worktree2, 'a.txt', 'wt2-version\n')
+    await expect(activateSpotlightCore(ctx, rootPath, worktree2)).rejects.toMatchObject({
+      code: 'root-diverged'
+    })
+    // The root edit survived the refusal.
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('edited-directly-in-root\n')
+
+    const forced = await activateSpotlightCore(ctx, rootPath, worktree2, { force: true })
+    expect(forced.alreadyActive).toBe(true)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('wt2-version\n')
+  })
+
+  it('refuses to overwrite an untracked root file that collides with a new tracked path', async () => {
+    // Untracked scratch file in the root the user expects to keep.
+    write(rootPath, 'scratch.txt', 'precious-untracked\n')
+    // The workspace tracks a file at the same path.
+    write(worktreePath, 'scratch.txt', 'workspace-version\n')
+    run(worktreePath, 'add', 'scratch.txt')
+
+    await expect(activateSpotlightCore(ctx, rootPath, worktreePath)).rejects.toMatchObject({
+      code: 'untracked-collision'
+    })
+    // Refusal left the untracked file and the root's branch untouched.
+    expect(readFileSync(path.join(rootPath, 'scratch.txt'), 'utf-8')).toBe('precious-untracked\n')
+    expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+
+    const forced = await activateSpotlightCore(ctx, rootPath, worktreePath, { force: true })
+    expect(forced.alreadyActive).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'scratch.txt'), 'utf-8')).toBe('workspace-version\n')
+  })
+
+  it('does not mutate the root when the worktree checkpoint fails (unborn HEAD)', async () => {
+    // A fresh worktree on an orphan branch has no commit — checkpoint throws.
+    const orphan = path.join(baseDir, 'orphan')
+    mkdirSync(orphan)
+    run(rootPath, 'worktree', 'add', '--detach', orphan)
+    run(orphan, 'checkout', '--orphan', 'orphan-branch')
+    run(orphan, 'rm', '-rf', '.')
+
+    await expect(activateSpotlightCore(ctx, rootPath, orphan)).rejects.toMatchObject({
+      code: 'unborn-head'
+    })
+    // Root untouched: still on its branch, no spotlight refs written.
+    expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+    const refs = await inspectSpotlightRefsCore(ctx, rootPath)
+    expect(refs.originalHeadSha).toBeNull()
+    expect(refs.snapshotSha).toBeNull()
+  })
+
+  it('rejects a worktree that does not belong to the repo', async () => {
+    const otherBase = mkdtempSync(path.join(tmpdir(), 'orca-spotlight-other-'))
+    try {
+      run(otherBase, 'init', '-b', 'main')
+      run(otherBase, 'config', 'user.name', 'Test')
+      run(otherBase, 'config', 'user.email', 'test@example.com')
+      write(otherBase, 'x.txt', 'x\n')
+      run(otherBase, 'add', '-A')
+      run(otherBase, 'commit', '-m', 'other')
+      await expect(activateSpotlightCore(ctx, rootPath, otherBase)).rejects.toMatchObject({
+        code: 'worktree-not-found'
+      })
+      expect(run(rootPath, 'symbolic-ref', '--short', 'HEAD')).toBe('main')
+    } finally {
+      rmSync(otherBase, { recursive: true, force: true })
+    }
+  })
+
+  it('reuses the temp index across syncs without corrupting the tree', async () => {
+    write(worktreePath, 'a.txt', 'v1\n')
+    const activated = await activateSpotlightCore(ctx, rootPath, worktreePath)
+
+    write(worktreePath, 'a.txt', 'v2\n')
+    write(worktreePath, 'new.txt', 'brand-new\n')
+    const synced = await syncSpotlightCore(ctx, rootPath, worktreePath, {
+      reuseIndexForHead: activated.checkpointHeadSha
+    })
+    expect(synced.skipped).toBe(false)
+    expect(readFileSync(path.join(rootPath, 'a.txt'), 'utf-8')).toBe('v2\n')
+    expect(readFileSync(path.join(rootPath, 'new.txt'), 'utf-8')).toBe('brand-new\n')
   })
 })

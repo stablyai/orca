@@ -1,49 +1,37 @@
 // Mirrors the Spotlight terminal's PTY output into <repoRoot>/.orca/spotlight.log
 // so agents running in any worktree can read the dev server's logs (the server
 // runs once, at the repo root, inside the Spotlight terminal tab).
-import { watch, type FSWatcher } from 'node:fs'
-import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import type { FSWatcher } from 'node:fs'
+import {
+  appendFile,
+  mkdir,
+  open,
+  readFile,
+  stat,
+  writeFile,
+  type FileHandle
+} from 'node:fs/promises'
 import path from 'node:path'
 import { SPOTLIGHT_LOG_RELATIVE_PATH } from '../../shared/spotlight'
+import { stripTerminalSequences } from '../../shared/terminal-escape-stripping'
 import { gitExecFileAsync } from '../git/runner'
 import { getLocalPtyProvider, onLocalPtyProviderChanged } from '../ipc/pty'
+import {
+  SPOTLIGHT_RESTART_TRIGGER_FILENAME,
+  sendServerRestart,
+  watchRestartTrigger
+} from './spotlight-restart-trigger'
+
+export { stripTerminalSequences }
+export { SPOTLIGHT_RESTART_TRIGGER_FILENAME }
 
 // Keep the log useful for `tail`/`grep` without growing unbounded: once it
 // passes MAX, rewrite it down to the most recent TRIM bytes.
 const MAX_LOG_BYTES = 4 * 1024 * 1024
 const TRIM_LOG_BYTES = 1 * 1024 * 1024
-
-// CSI (colors/cursor), OSC (titles/hyperlinks), and stray escapes — logs must
-// be plain text so agents can grep them without terminal-control noise.
-const CSI_RE =
-  // eslint-disable-next-line no-control-regex
-  /\u001b\[[0-?]*[ -/]*[@-~]/g
-const OSC_RE =
-  // eslint-disable-next-line no-control-regex
-  /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g
-// Remaining two-byte Fe escapes; any stray lone ESC falls into the final
-// control-char sweep below.
-const OTHER_ESC_RE =
-  // eslint-disable-next-line no-control-regex
-  /\u001b[@-Z\\-_]/g
-// Everything below 0x20 except \n and \t, plus DEL.
-const RESIDUAL_CONTROL_RE =
-  // eslint-disable-next-line no-control-regex
-  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g
-
-export function stripTerminalSequences(data: string): string {
-  return (
-    data
-      .replace(OSC_RE, '')
-      .replace(CSI_RE, '')
-      .replace(OTHER_ESC_RE, '')
-      // Progress spinners rewrite lines with bare \r; in a file each rewrite
-      // becomes its own line so the final state is still readable.
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
-      .replace(RESIDUAL_CONTROL_RE, '')
-  )
-}
+// Coalesce bursty PTY output into one flush so a chatty server doesn't cause
+// an fs write + regex pass per chunk.
+const FLUSH_DEBOUNCE_MS = 60
 
 type LogCapture = {
   repoId: string
@@ -51,11 +39,15 @@ type LogCapture = {
   logPath: string
   unsubscribe: () => void
   pending: string
-  writeChain: Promise<void>
-  approxBytes: number
+  flushTimer: ReturnType<typeof setTimeout> | null
+  flushing: boolean
+  /** Persistent append handle for the capture's lifetime (avoids open/close per flush). */
+  handle: FileHandle | null
+  bytesOnDisk: number
   /** Watches .orca/ for the agent-written restart trigger file. */
   triggerWatcher: FSWatcher | null
   restartInFlight: boolean
+  stopped: boolean
 }
 
 const capturesByRepoId = new Map<string, LogCapture>()
@@ -72,34 +64,69 @@ function subscribeCapture(capture: LogCapture): void {
 }
 
 function scheduleFlush(capture: LogCapture): void {
-  capture.writeChain = capture.writeChain.then(async () => {
-    if (!capture.pending) {
-      return
+  if (capture.flushTimer || capture.flushing) {
+    return
+  }
+  capture.flushTimer = setTimeout(() => {
+    capture.flushTimer = null
+    void flushCapture(capture)
+  }, FLUSH_DEBOUNCE_MS)
+}
+
+async function flushCapture(capture: LogCapture): Promise<void> {
+  if (capture.flushing || capture.stopped) {
+    return
+  }
+  const chunk = stripTerminalSequences(capture.pending)
+  capture.pending = ''
+  if (!chunk) {
+    return
+  }
+  capture.flushing = true
+  try {
+    if (!capture.handle) {
+      capture.handle = await open(capture.logPath, 'a')
     }
-    const chunk = stripTerminalSequences(capture.pending)
-    capture.pending = ''
-    if (!chunk) {
-      return
+    await capture.handle.write(chunk)
+    capture.bytesOnDisk += Buffer.byteLength(chunk)
+    if (capture.bytesOnDisk > MAX_LOG_BYTES) {
+      await trimLog(capture)
     }
-    try {
-      await appendFile(capture.logPath, chunk, 'utf-8')
-      capture.approxBytes += Buffer.byteLength(chunk)
-      if (capture.approxBytes > MAX_LOG_BYTES) {
-        const content = await readFile(capture.logPath, 'utf-8')
-        const trimmed = content.slice(-TRIM_LOG_BYTES)
-        const firstNewline = trimmed.indexOf('\n')
-        await writeFile(
-          capture.logPath,
-          `[log trimmed by Orca]\n${firstNewline === -1 ? trimmed : trimmed.slice(firstNewline + 1)}`,
-          'utf-8'
-        )
-        capture.approxBytes = TRIM_LOG_BYTES
-      }
-    } catch {
-      // Non-fatal: the log dir may have been removed mid-session; the next
-      // capture start recreates it.
+  } catch {
+    // Non-fatal: the log dir may have been removed mid-session. Drop the
+    // stale handle so the next flush reopens (recreating the file).
+    await capture.handle?.close().catch(() => {})
+    capture.handle = null
+  } finally {
+    capture.flushing = false
+    // Output that arrived while flushing still needs to land.
+    if (capture.pending && !capture.stopped) {
+      scheduleFlush(capture)
     }
-  })
+  }
+}
+
+/** Trim by copying only the last TRIM_LOG_BYTES via a positional read — never
+ *  loads the whole (multi-MB) file into memory on the main process. */
+async function trimLog(capture: LogCapture): Promise<void> {
+  await capture.handle?.close().catch(() => {})
+  capture.handle = null
+  let tail = ''
+  const reader = await open(capture.logPath, 'r')
+  try {
+    const { size } = await reader.stat()
+    const start = Math.max(0, size - TRIM_LOG_BYTES)
+    const length = size - start
+    const buffer = Buffer.alloc(length)
+    await reader.read(buffer, 0, length, start)
+    tail = buffer.toString('utf-8')
+  } finally {
+    await reader.close().catch(() => {})
+  }
+  const firstNewline = tail.indexOf('\n')
+  const body = firstNewline === -1 ? tail : tail.slice(firstNewline + 1)
+  await writeFile(capture.logPath, `[log trimmed by Orca]\n${body}`, 'utf-8')
+  capture.bytesOnDisk = Buffer.byteLength(`[log trimmed by Orca]\n${body}`)
 }
 
 /** Make sure `.orca/` is ignored in the root checkout without touching the
@@ -132,7 +159,11 @@ export async function startSpotlightLogCapture(args: {
   if (existing?.ptyId === args.ptyId) {
     return
   }
-  existing?.unsubscribe()
+  // Fully tear down the previous capture (listener, flush handle, AND the
+  // trigger watcher) before replacing it, or PTY respawns leak fs watchers.
+  if (existing) {
+    teardownCapture(existing)
+  }
 
   const logPath = path.join(args.rootPath, ...SPOTLIGHT_LOG_RELATIVE_PATH.split('/'))
   await mkdir(path.dirname(logPath), { recursive: true })
@@ -140,6 +171,14 @@ export async function startSpotlightLogCapture(args: {
     // Best-effort: without the exclude the log shows up as untracked in the
     // root, which is cosmetic — never block capture on it.
   })
+  // Seed byte count from the actual on-disk size so the trim threshold is
+  // measured across sessions, not reset to 0 each start (else it never fires).
+  let bytesOnDisk = 0
+  try {
+    bytesOnDisk = (await stat(logPath)).size
+  } catch {
+    // No file yet.
+  }
   await appendFile(
     logPath,
     `\n──── Orca Spotlight terminal capture started ${new Date().toISOString()} ────\n`,
@@ -152,13 +191,18 @@ export async function startSpotlightLogCapture(args: {
     logPath,
     unsubscribe: () => {},
     pending: '',
-    writeChain: Promise.resolve(),
-    approxBytes: 0,
+    flushTimer: null,
+    flushing: false,
+    handle: null,
+    bytesOnDisk,
     triggerWatcher: null,
-    restartInFlight: false
+    restartInFlight: false,
+    stopped: false
   }
   subscribeCapture(capture)
-  watchRestartTrigger(capture)
+  capture.triggerWatcher = watchRestartTrigger(path.dirname(logPath), () =>
+    restartSpotlightServer(capture.repoId)
+  )
   capturesByRepoId.set(args.repoId, capture)
 
   if (!providerRebindInstalled) {
@@ -174,71 +218,22 @@ export async function startSpotlightLogCapture(args: {
   }
 }
 
-export const SPOTLIGHT_RESTART_TRIGGER_FILENAME = 'spotlight-restart'
-// Delay between the interrupt and re-running the command: long enough for the
-// server to release the prompt, short enough to feel immediate.
-const RESTART_RERUN_DELAY_MS = 700
-
-/** Agent-safe server restart: interrupt the Spotlight terminal's foreground
- *  process and re-run the last command via the shell's in-memory history
- *  (up-arrow + enter — works in bash/zsh/fish regardless of HISTFILE config). */
+/** Restart the repo's Spotlight server (interrupt + history recall) and log the
+ *  attempt. Public so an in-process caller can drive it; the file trigger below
+ *  is the agent-facing path. */
 export function restartSpotlightServer(repoId: string): boolean {
   const capture = capturesByRepoId.get(repoId)
-  if (!capture || capture.restartInFlight) {
+  if (!capture) {
     return false
   }
-  capture.restartInFlight = true
-  void appendSpotlightLogNote(
-    path.dirname(path.dirname(capture.logPath)),
-    'Restarting the server (requested from a workspace)'
-  )
-  try {
-    getLocalPtyProvider().write(capture.ptyId, '\x03')
-  } catch {
-    capture.restartInFlight = false
-    return false
+  const started = sendServerRestart(capture)
+  if (started) {
+    void appendSpotlightLogNote(
+      path.dirname(path.dirname(capture.logPath)),
+      'Server restart requested from a workspace (interrupt + history recall sent)'
+    )
   }
-  setTimeout(() => {
-    try {
-      getLocalPtyProvider().write(capture.ptyId, '\x1b[A\r')
-    } catch {
-      // PTY died between interrupt and re-run; nothing else to do.
-    } finally {
-      capture.restartInFlight = false
-    }
-  }, RESTART_RERUN_DELAY_MS)
-  return true
-}
-
-/** Watch .orca/ for the agent trigger: `touch .orca/spotlight-restart` in the
- *  repo root asks Orca to restart the server. File-based so it works for any
- *  agent in any worktree with zero CLI installation (the path is derivable
- *  from $ORCA_SPOTLIGHT_LOG). */
-function watchRestartTrigger(capture: LogCapture): void {
-  const orcaDir = path.dirname(capture.logPath)
-  const triggerPath = path.join(orcaDir, SPOTLIGHT_RESTART_TRIGGER_FILENAME)
-  const consumeTrigger = (): void => {
-    void stat(triggerPath)
-      .then(async () => {
-        // Delete BEFORE acting so a slow restart can't loop on its own trigger.
-        await rm(triggerPath, { force: true })
-        restartSpotlightServer(capture.repoId)
-      })
-      .catch(() => {
-        // Trigger absent — the event was for another file in .orca/.
-      })
-  }
-  try {
-    capture.triggerWatcher = watch(orcaDir, (_event, filename) => {
-      if (filename === SPOTLIGHT_RESTART_TRIGGER_FILENAME) {
-        consumeTrigger()
-      }
-    })
-    // A trigger written while no capture was live should still be honored.
-    consumeTrigger()
-  } catch {
-    capture.triggerWatcher = null
-  }
+  return started
 }
 
 /** Write a marker line into the log (holder switches, spotlight off) so agents
@@ -253,12 +248,24 @@ export async function appendSpotlightLogNote(rootPath: string, note: string): Pr
   }
 }
 
+function teardownCapture(capture: LogCapture): void {
+  capture.stopped = true
+  capture.unsubscribe()
+  capture.triggerWatcher?.close()
+  capture.triggerWatcher = null
+  if (capture.flushTimer) {
+    clearTimeout(capture.flushTimer)
+    capture.flushTimer = null
+  }
+  void capture.handle?.close().catch(() => {})
+  capture.handle = null
+}
+
 export function stopSpotlightLogCapture(args: { repoId: string; ptyId?: string }): void {
   const capture = capturesByRepoId.get(args.repoId)
   if (!capture || (args.ptyId !== undefined && capture.ptyId !== args.ptyId)) {
     return
   }
-  capture.unsubscribe()
-  capture.triggerWatcher?.close()
+  teardownCapture(capture)
   capturesByRepoId.delete(args.repoId)
 }

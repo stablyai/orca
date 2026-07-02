@@ -1,5 +1,4 @@
 import type { BrowserWindow } from 'electron'
-import type { Repo } from '../../shared/types'
 import type {
   SpotlightError,
   SpotlightOpResult,
@@ -10,27 +9,19 @@ import {
   activateSpotlightCore,
   deactivateSpotlightCore,
   inspectSpotlightRefsCore,
-  syncSpotlightCore,
-  SpotlightCoreError,
-  type SpotlightGitContext
+  syncSpotlightCore
 } from '../../shared/spotlight-sync-core'
-import { createLocalSpotlightGitContext } from '../git/spotlight-sync'
-import { appendSpotlightLogNote } from './spotlight-log-mirror'
+import { appendSpotlightLogNote, stopSpotlightLogCapture } from './spotlight-log-mirror'
 import { writeSpotlightStateFile } from './spotlight-state-file'
+import {
+  pendingSpotlightState,
+  resolveRepoContext,
+  toSpotlightError,
+  worktreePathFromId,
+  type ResolvedRepoContext
+} from './spotlight-service-state'
 import { getWorktreePathBasenameFromId } from '../../shared/worktree-id'
 import type { Store } from '../persistence'
-
-function toSpotlightError(error: unknown): SpotlightError {
-  if (error instanceof SpotlightCoreError) {
-    return { code: error.code, message: error.message }
-  }
-  return { code: 'git-failed', message: error instanceof Error ? error.message : String(error) }
-}
-
-function worktreePathFromId(repoId: string, worktreeId: string): string | null {
-  const prefix = `${repoId}::`
-  return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : null
-}
 
 export class SpotlightService {
   private readonly store: Store
@@ -41,10 +32,19 @@ export class SpotlightService {
   private readonly locks = new Map<string, Promise<unknown>>()
   /** In-memory status overlay: persisted state never stores 'syncing'. */
   private readonly syncingRepoIds = new Set<string>()
+  /** Worktree HEAD each repo's last checkpoint was built on, so the next
+   *  checkpoint can reuse the temp index (skip a full-worktree rescan) when
+   *  HEAD hasn't moved. In-memory only — a miss just costs one extra rescan. */
+  private readonly lastCheckpointHeadByRepo = new Map<string, string>()
 
   constructor(store: Store, getMainWindow: () => BrowserWindow | null) {
     this.store = store
     this.getMainWindow = getMainWindow
+  }
+
+  /** Current persisted state for a repo, or null when Spotlight is off. */
+  getState(repoId: string): SpotlightRepoState | null {
+    return this.store.getSpotlightState(repoId)
   }
 
   getStateSnapshot(): SpotlightStateSnapshot {
@@ -77,11 +77,19 @@ export class SpotlightService {
 
       const previous = this.store.getSpotlightState(repoId)
       this.emitSyncing(repoId, {
-        ...(previous ?? this.pendingState(repoId, worktreeId)),
+        ...(previous ?? pendingSpotlightState(repoId, worktreeId, Date.now())),
         holderWorktreeId: worktreeId
       })
       try {
-        const outcome = await activateSpotlightCore(resolved.ctx, resolved.repo.path, worktreePath)
+        const outcome = await activateSpotlightCore(
+          resolved.ctx,
+          resolved.repo.path,
+          worktreePath,
+          {
+            reuseIndexForHead: this.lastCheckpointHeadByRepo.get(repoId) ?? null
+          }
+        )
+        this.lastCheckpointHeadByRepo.set(repoId, outcome.checkpointHeadSha)
         const state: SpotlightRepoState = {
           repoId,
           holderWorktreeId: worktreeId,
@@ -137,8 +145,10 @@ export class SpotlightService {
       this.emitSyncing(repoId, state)
       try {
         const outcome = await syncSpotlightCore(resolved.ctx, resolved.repo.path, worktreePath, {
-          force: opts.force
+          force: opts.force,
+          reuseIndexForHead: this.lastCheckpointHeadByRepo.get(repoId) ?? null
         })
+        this.lastCheckpointHeadByRepo.set(repoId, outcome.checkpointHeadSha)
         const next: SpotlightRepoState = {
           ...state,
           status: 'active',
@@ -175,6 +185,12 @@ export class SpotlightService {
         await deactivateSpotlightCore(resolved.ctx, resolved.repo.path, {
           discardBackup: opts.discardBackup
         })
+        // Why here (not the renderer): log capture + the restart-trigger watcher
+        // are tied to the Spotlight LIFECYCLE, which main owns. Stopping them on
+        // PTY death alone left a turned-off Spotlight still mirroring the
+        // terminal and honoring restart triggers.
+        stopSpotlightLogCapture({ repoId })
+        this.lastCheckpointHeadByRepo.delete(repoId)
         this.store.clearSpotlightState(repoId)
         this.emitChanged(repoId, null)
         void writeSpotlightStateFile(resolved.repo.path, null)
@@ -187,8 +203,11 @@ export class SpotlightService {
         const spotlightError = toSpotlightError(error)
         if (spotlightError.code === 'not-active') {
           // The refs are already gone (manual cleanup); drop the stale record.
+          stopSpotlightLogCapture({ repoId })
+          this.lastCheckpointHeadByRepo.delete(repoId)
           this.store.clearSpotlightState(repoId)
           this.emitChanged(repoId, null)
+          void writeSpotlightStateFile(resolved.repo.path, null)
           return { ok: true, state: null }
         }
         return this.failure(repoId, spotlightError, state)
@@ -221,6 +240,9 @@ export class SpotlightService {
           // Spotlight mode, so the persisted record is stale.
           this.store.clearSpotlightState(repoId)
           this.emitChanged(repoId, null)
+          // Why: keep the agent-facing state file from claiming active:true
+          // forever after the refs vanish (agents read it before trusting logs).
+          void writeSpotlightStateFile(resolved.repo.path, null)
           return
         }
         if (refs.rootHeadSha !== refs.snapshotSha) {
@@ -233,6 +255,7 @@ export class SpotlightService {
           }
           this.store.setSpotlightState(repoId, next)
           this.emitChanged(repoId, next)
+          void writeSpotlightStateFile(resolved.repo.path, next)
         }
       } catch {
         // Repo unreadable right now (e.g. missing disk); keep the record and
@@ -241,41 +264,8 @@ export class SpotlightService {
     })
   }
 
-  private resolveRepoContext(
-    repoId: string
-  ): { repo: Repo; ctx: SpotlightGitContext } | { error: SpotlightError } {
-    const repo = this.store.getRepo(repoId)
-    if (!repo) {
-      return { error: { code: 'repo-not-found', message: `Unknown repository: ${repoId}` } }
-    }
-    if (repo.connectionId?.trim()) {
-      return {
-        error: {
-          code: 'unsupported-host',
-          message: 'Spotlight testing is not available for SSH repositories yet.'
-        }
-      }
-    }
-    try {
-      return { repo, ctx: createLocalSpotlightGitContext(this.store, repo) }
-    } catch (error) {
-      return { error: toSpotlightError(error) }
-    }
-  }
-
-  private pendingState(repoId: string, worktreeId: string): SpotlightRepoState {
-    return {
-      repoId,
-      holderWorktreeId: worktreeId,
-      status: 'syncing',
-      originalBranch: null,
-      originalHeadSha: '',
-      backupSha: '',
-      lastSnapshotSha: null,
-      activatedAt: Date.now(),
-      lastSyncAt: null,
-      lastError: null
-    }
+  private resolveRepoContext(repoId: string): ResolvedRepoContext {
+    return resolveRepoContext(this.store, repoId)
   }
 
   private withLiveStatus(repoId: string, state: SpotlightRepoState): SpotlightRepoState {

@@ -271,7 +271,10 @@
           "deactivateFailed": "Failed to turn off Spotlight",
           "activatedLogs": "Server logs are mirrored for agents at .orca/spotlight.log",
           "forceSync": "Force sync",
-          "forceSynced": "Spotlight re-synced — the root mirrors the workspace again"
+          "forceSynced": "Spotlight re-synced — the root mirrors the workspace again",
+          "untrackedCollision": "Untracked files in the project root would be overwritten. Move or delete them, or force the sync.",
+          "notEnabled": "Spotlight testing is not enabled for this project.",
+          "activatedNoTerminal": "Spotlight on — open the primary workspace and start your server there"
         }
       }
     },

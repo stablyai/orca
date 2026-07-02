@@ -73,6 +73,7 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
     gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
     sshConnectionStates: args.sshConnectionStates ?? new Map(),
+    spotlightByRepo: {},
     settings:
       args.runtimeEnvironmentId === undefined
         ? null

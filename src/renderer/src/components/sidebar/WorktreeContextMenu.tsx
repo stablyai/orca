@@ -811,6 +811,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               ) : null}
               {spotlightHeldHere && spotlightState?.lastError?.code === 'root-diverged' && repo ? (
                 <DropdownMenuItem
+                  variant="destructive"
                   onSelect={() => void useAppStore.getState().forceSyncSpotlight(repo.id)}
                   disabled={isDeleting || spotlightState.status === 'syncing'}
                 >

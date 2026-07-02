@@ -1,7 +1,11 @@
 import { useAppStore } from '@/store'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { appendTerminalToPersistedTabOrder } from '@/components/tab-bar/reconcile-order'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
+
+export type OpenSpotlightTerminalTabResult =
+  | { ok: true; tabId: string }
+  | { ok: false; reason: 'no-main-worktree' }
 
 export type OpenSpotlightTerminalTabArgs = {
   repoId: string
@@ -9,6 +13,14 @@ export type OpenSpotlightTerminalTabArgs = {
    *  the "jump to server" gesture. When false, just make sure the tab exists
    *  without pulling the user away from their current workspace. */
   reveal: boolean
+}
+
+/** A terminal that already runs the server (or a plain shell) at the root is
+ *  safe to adopt as the Spotlight terminal. An agent/chat tab is NOT — adopting
+ *  it would rename it, mirror its transcript as "server logs", and expose it to
+ *  the Ctrl-C restart trigger. */
+function isAdoptableTerminal(tab: { viewMode?: string; launchAgent?: unknown }): boolean {
+  return tab.viewMode !== 'chat' && tab.launchAgent === undefined
 }
 
 /**
@@ -20,11 +32,11 @@ export type OpenSpotlightTerminalTabArgs = {
 export function openSpotlightTerminalTab({
   repoId,
   reveal
-}: OpenSpotlightTerminalTabArgs): { tabId: string } | null {
+}: OpenSpotlightTerminalTabArgs): OpenSpotlightTerminalTabResult {
   const store = useAppStore.getState()
   const mainWorktree = store.worktreesByRepo[repoId]?.find((entry) => entry.isMainWorktree)
   if (!mainWorktree) {
-    return null
+    return { ok: false, reason: 'no-main-worktree' }
   }
   const worktreeId = mainWorktree.id
 
@@ -41,14 +53,18 @@ export function openSpotlightTerminalTab({
       store.setActiveTabForWorktree(worktreeId, existing.id)
       store.setActiveTabType('terminal')
     }
-    return { tabId: existing.id }
+    return { ok: true, tabId: existing.id }
   }
 
-  // The user often already has a terminal running the server at the root —
-  // adopt it instead of opening an empty duplicate next to it. Every terminal
-  // in the main workspace already has the root as cwd, so adoption is safe.
+  // The user often already has a plain terminal running the server at the root
+  // — adopt it instead of opening an empty duplicate. Never adopt an agent/chat
+  // tab. Every terminal in the main workspace has the root as its spawn cwd.
   const activeMainTabId = store.activeTabIdByWorktree[worktreeId]
-  const adopted = mainTabs.find((tab) => tab.id === activeMainTabId) ?? mainTabs[0]
+  const preferred = mainTabs.find((tab) => tab.id === activeMainTabId)
+  const adopted =
+    preferred && isAdoptableTerminal(preferred)
+      ? preferred
+      : mainTabs.find((tab) => isAdoptableTerminal(tab))
   if (adopted) {
     store.markTabSpotlightRepoRoot(adopted.id)
     store.setTabCustomTitle(
@@ -66,7 +82,7 @@ export function openSpotlightTerminalTab({
       store.setActiveTabForWorktree(worktreeId, adopted.id)
       store.setActiveTabType('terminal')
     }
-    return { tabId: adopted.id }
+    return { ok: true, tabId: adopted.id }
   }
 
   const tab = store.createTab(worktreeId, undefined, undefined, {
@@ -79,29 +95,14 @@ export function openSpotlightTerminalTab({
     translate('auto.lib.open.spotlight.terminal.tab.title', 'Spotlight'),
     { recordInteraction: false }
   )
-
-  // Why: persist tab-bar order with the new terminal appended. Without this,
-  // reconcileTabOrder falls back to terminals-first when the stored order is
-  // unset, jumping the new tab to index 0.
-  const fresh = useAppStore.getState()
-  const termIds = (fresh.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
-  const editorIds = fresh.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-  const browserIds = (fresh.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
-  const base = reconcileTabOrder(
-    fresh.tabBarOrderByWorktree[worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tab.id)
-  order.push(tab.id)
-  fresh.setTabBarOrder(worktreeId, order)
+  store.setActiveTabType('terminal')
+  appendTerminalToPersistedTabOrder(useAppStore.getState(), worktreeId, tab.id)
 
   if (reveal) {
     activateAndRevealWorktree(worktreeId)
-    fresh.setActiveTabForWorktree(worktreeId, tab.id)
-    fresh.setActiveTabType('terminal')
+    useAppStore.getState().setActiveTabForWorktree(worktreeId, tab.id)
+    useAppStore.getState().setActiveTabType('terminal')
   }
 
-  return { tabId: tab.id }
+  return { ok: true, tabId: tab.id }
 }
