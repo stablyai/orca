@@ -27,8 +27,15 @@ export function gitResponder(opts: {
       }
       throw noUpstreamError
     }
-    if (args[0] === 'rev-parse') {
+    if (args[0] === 'symbolic-ref') {
       return { stdout: `${opts.currentBranch}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args.includes('--verify')) {
+      const ref = args.at(-1) ?? ''
+      if ((opts.existingRefs ?? []).includes(ref)) {
+        return { stdout: '', stderr: '' }
+      }
+      throw new Error('not found')
     }
     if (args[0] === 'show-ref') {
       const ref = args.at(-1) ?? ''
