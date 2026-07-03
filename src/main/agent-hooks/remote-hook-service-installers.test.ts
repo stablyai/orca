@@ -21,6 +21,7 @@ import { HermesHookService } from '../hermes/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { verbooHookService } from '../verboo/hook-service'
 
 type FakeFs = {
   files: Map<string, string>
@@ -129,6 +130,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/openclaude-hook.sh',
           install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/verboo-hook.sh',
+          install: (sftp: SFTPWrapper) => verbooHookService.installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/codex-hook.sh',

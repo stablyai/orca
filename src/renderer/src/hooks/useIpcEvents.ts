@@ -3425,14 +3425,17 @@ function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
   terminalTitle: string | undefined
 ): ParsedAgentStatusPayload {
-  if (
-    payload.agentType !== 'claude' ||
-    !terminalTitle ||
-    !titleHasAgentName(terminalTitle, 'openclaude')
-  ) {
+  if (payload.agentType !== 'claude' || !terminalTitle) {
     return payload
   }
-  // Why: OpenClaude emits Claude-compatible hooks, so title identity is the
-  // renderer's last chance to keep OpenClaude out of Claude-only status paths.
-  return { ...payload, agentType: 'openclaude' }
+  // Why: OpenClaude and Verboo both emit Claude-compatible hooks (posted on the
+  // /hook/claude route), so title identity is the renderer's last chance to keep
+  // these Claude-family agents out of Claude-only status paths.
+  if (titleHasAgentName(terminalTitle, 'openclaude')) {
+    return { ...payload, agentType: 'openclaude' }
+  }
+  if (titleHasAgentName(terminalTitle, 'verboo')) {
+    return { ...payload, agentType: 'verboo' }
+  }
+  return payload
 }

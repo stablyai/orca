@@ -41,6 +41,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { verbooHookService } from '../verboo/hook-service'
 
 type FakeFs = {
   files: Map<string, string>
@@ -146,6 +147,12 @@ const JSON_INSTALLERS = [
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
     configPath: `${REMOTE_HOME}/.openclaude/settings.json`,
     install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'verboo',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.verboo/settings.json`,
+    install: (sftp: SFTPWrapper) => verbooHookService.installRemote(sftp, REMOTE_HOME)
   },
   {
     agent: 'codex',

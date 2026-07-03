@@ -64,6 +64,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://openclaude.gitlawb.com/'
   },
   {
+    id: 'verboo',
+    label: translate('auto.lib.agent.catalog.b3c1c7a4d5', 'Verboo'),
+    cmd: 'verboo',
+    faviconDomain: 'code.verboo.ai',
+    homepageUrl: 'https://code.verboo.ai'
+  },
+  {
     id: 'codex',
     label: translate('auto.lib.agent.catalog.760bc6883d', 'Codex'),
     cmd: 'codex',

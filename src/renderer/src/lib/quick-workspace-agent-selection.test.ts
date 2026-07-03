@@ -18,6 +18,9 @@ describe('pickQuickWorkspaceAgent', () => {
     expect(pickQuickWorkspaceAgent(null, null, ['claude', 'claude-agent-teams'])).toBe('openclaude')
     expect(
       pickQuickWorkspaceAgent(null, null, ['claude', 'claude-agent-teams', 'openclaude'])
+    ).toBe('verboo')
+    expect(
+      pickQuickWorkspaceAgent(null, null, ['claude', 'claude-agent-teams', 'openclaude', 'verboo'])
     ).toBe('codex')
   })
 

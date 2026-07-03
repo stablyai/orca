@@ -134,6 +134,16 @@ describe('resolveGroupAddress', () => {
       expect(result).toEqual([])
     })
 
+    it('matches @verboo by terminal title', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Verboo' }),
+        makeSummary('term_b', { title: 'Verboo running' }),
+        makeSummary('term_c', { title: 'Claude Code' })
+      ]
+      const result = resolveGroupAddress('@verboo', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
+    })
+
     it('matches @codex by terminal title', () => {
       const terminals = [
         makeSummary('term_a', { title: 'Codex CLI' }),

@@ -7,6 +7,7 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--dangerously-skip-permissions',
   'claude-agent-teams': '--dangerously-skip-permissions',
   openclaude: '--dangerously-skip-permissions',
+  verboo: '--dangerously-skip-permissions',
   codex: '--dangerously-bypass-approvals-and-sandbox',
   gemini: '--yolo',
   antigravity: '--dangerously-skip-permissions',

@@ -12,8 +12,8 @@ import {
 } from '../agent-hooks/installer-utils'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  configDirName: '.claude' | '.openclaude' | '.verboo'
+  scriptBaseName: 'claude-hook' | 'openclaude-hook' | 'verboo-hook'
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
@@ -24,6 +24,13 @@ export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
   scriptBaseName: 'openclaude-hook'
+}
+
+// Why: Verboo is Claude-family and stores managed hooks in ~/.verboo/settings.json
+// using the Claude settings shape, so it reuses ClaudeHookService verbatim.
+export const VERBOO_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.verboo',
+  scriptBaseName: 'verboo-hook'
 }
 
 export const CLAUDE_EVENTS = [

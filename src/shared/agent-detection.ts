@@ -286,7 +286,7 @@ export function isClaudeAgent(title: string): boolean {
   if (containsBrailleSpinner(title)) {
     // Why: named non-Claude agents can carry braille spinners too; Claude-only
     // prompt-cache paths must not fire for those explicit agent titles.
-    return !lower.includes('cursor') && !lower.includes('openclaude')
+    return !lower.includes('cursor') && !lower.includes('openclaude') && !lower.includes('verboo')
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -344,6 +344,9 @@ export function getAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'openclaude')) {
     return 'OpenClaude'
+  }
+  if (titleHasAgentName(title, 'verboo')) {
+    return 'Verboo'
   }
   if (titleHasAgentName(title, 'copilot')) {
     return 'GitHub Copilot'
