@@ -18,6 +18,14 @@ import { I18nProvider } from './I18nProvider'
 const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 
+// Why: the 'system' UI language resolves through navigator.language; stubbing it
+// lets these tests simulate a non-English OS locale (the #7188 repro) without
+// depending on the host machine's locale.
+const ORIGINAL_SYSTEM_LOCALE = navigator.language
+function stubSystemLocale(tag: string): void {
+  Object.defineProperty(navigator, 'language', { value: tag, configurable: true })
+}
+
 async function renderProvider(): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -40,6 +48,7 @@ afterEach(async () => {
   }
   roots.length = 0
   useAppStore.setState(initialAppState, true)
+  stubSystemLocale(ORIGINAL_SYSTEM_LOCALE)
   vi.restoreAllMocks()
 })
 
@@ -79,6 +88,28 @@ describe('I18nProvider startup language', () => {
     })
 
     expect(changeLanguage).toHaveBeenCalledWith('en')
+  })
+
+  it('never applies the OS locale on a non-English system when English is persisted (#7188)', async () => {
+    // Why: on a Spanish OS the pre-fix provider kicked off changeLanguage('es')
+    // while settings were still null, and the in-flight OS switch then beat the
+    // persisted English preference. The fix applies nothing until settings load.
+    stubSystemLocale('es-ES')
+    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
+
+    await renderProvider()
+    // No OS-locale switch is kicked off while settings are still loading.
+    expect(changeLanguage).not.toHaveBeenCalled()
+
+    await act(async () => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_ENGLISH }
+      })
+    })
+
+    // English wins and the Spanish OS locale is never requested.
+    expect(changeLanguage).toHaveBeenCalledWith('en')
+    expect(changeLanguage).not.toHaveBeenCalledWith('es')
   })
 
   it('switches language when the setting changes after startup', async () => {
