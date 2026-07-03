@@ -1,6 +1,6 @@
-import { mkdtempSync, statSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtempSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
 import {

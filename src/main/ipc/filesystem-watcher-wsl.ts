@@ -5,8 +5,8 @@
  * `wsl --shutdown`, which can make WSL look wedged. Keep the polling process
  * inside the distro so shutdown kills it instead of Orca restarting WSL.
  */
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
-import { StringDecoder } from 'string_decoder'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import { queueWatcherEvents } from './filesystem-watcher-event-batch'

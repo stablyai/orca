@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this file keeps git worktree create/remove behavior together so local cleanup and creation invariants stay in one place. */
-import { stat } from 'fs/promises'
-import { join, posix, win32 } from 'path'
+import { stat } from 'node:fs/promises'
+import { join, posix, win32 } from 'node:path'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
   getBranchCleanupTargetRefs,
@@ -104,9 +104,13 @@ function isNotGitRepositoryError(error: unknown): boolean {
 }
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
-    getErrorText(error)
-  )
+  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage
+  // exit 129 signals the rejection in any locale; stderr match is a fallback.
+  if (getErrorCode(error) === '129') {
+    return true
+  }
+
+  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
 }
 
 function isUnsupportedRevParsePathFormatError(error: unknown): boolean {

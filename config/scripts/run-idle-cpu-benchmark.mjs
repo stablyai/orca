@@ -4,7 +4,6 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { installSyntheticVisibleSpinners } from './idle-cpu-synthetic-spinners.mjs'
 
 const DEFAULT_WARMUP_MS = 15_000
@@ -454,7 +453,7 @@ function terminateProcesses(processes) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2))
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+  const root = path.resolve(import.meta.dirname, '..', '..')
   const mainPath = buildAppIfNeeded(root, options.skipBuild)
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-idle-cpu-userdata-'))
   const { repoDir, cleanupDirs } = createIdleRepo(options.worktrees)

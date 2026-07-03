@@ -1,5 +1,5 @@
-import { sep } from 'path'
-import type { ChildProcess } from 'child_process'
+import { sep } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'

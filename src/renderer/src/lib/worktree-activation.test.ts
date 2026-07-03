@@ -2,7 +2,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SetupScriptLaunchMode } from '../../../shared/types'
 import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
+import { resetHookCommandDelayedDeliveryForTests } from './hook-command-delayed-delivery'
 import { useAppStore } from '@/store'
+
+type AppStoreState = ReturnType<typeof useAppStore.getState>
+
+const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
+const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
+const initialPendingIssueCommandSplitByTabId =
+  useAppStore.getState().pendingIssueCommandSplitByTabId
 
 function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
   useAppStore.setState((state) => ({
@@ -22,6 +30,12 @@ afterEach(() => {
       : ({ activeRuntimeEnvironmentId: null } as unknown as typeof state.settings)
   }))
   setSetupScriptLaunchMode('new-tab')
+  resetHookCommandDelayedDeliveryForTests()
+  useAppStore.setState({
+    tabsByWorktree: initialTabsByWorktree,
+    getKnownWorktreeById: initialGetKnownWorktreeById,
+    pendingIssueCommandSplitByTabId: initialPendingIssueCommandSplitByTabId
+  } as Partial<AppStoreState>)
 })
 
 function createMockStore(overrides: Record<string, unknown> = {}) {
@@ -264,6 +278,40 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         command: expect.stringContaining('printf')
       })
     )
+  })
+
+  it('holds the issue command for the first mirrored web runtime tab when none exists yet', () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+    }))
+    useAppStore.setState({
+      tabsByWorktree: {},
+      getKnownWorktreeById: ((id: string) =>
+        id === 'wt-1'
+          ? { id: 'wt-1' }
+          : undefined) as unknown as AppStoreState['getKnownWorktreeById']
+    } as Partial<AppStoreState>)
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
+      command: 'gh issue view 42'
+    })
+
+    // Why: runtime session tabs mirror in asynchronously — the command must be
+    // held for the first mirrored tab rather than silently dropped.
+    expect(result).toBeNull()
+    expect(useAppStore.getState().pendingIssueCommandSplitByTabId).toEqual({})
+
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }
+    } as unknown as Partial<AppStoreState>)
+
+    expect(useAppStore.getState().pendingIssueCommandSplitByTabId['mirror-tab-1']).toEqual({
+      command: 'gh issue view 42'
+    })
   })
 
   it('creates a local initial terminal for explicitly local worktrees while a runtime is focused', () => {

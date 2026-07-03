@@ -6,12 +6,6 @@ export type PRCommentPresentationVariant = 'flat' | 'cards' | 'focus'
 
 export const DEFAULT_PR_COMMENT_PRESENTATION_VARIANT: PRCommentPresentationVariant = 'cards'
 
-export const PR_COMMENT_PRESENTATION_VARIANTS: PRCommentPresentationVariant[] = [
-  'flat',
-  'cards',
-  'focus'
-]
-
 const STORAGE_KEY = 'orca:pr-comment-presentation'
 
 export type PRCommentPresentationClasses = {

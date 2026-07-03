@@ -151,6 +151,7 @@ export function useTabGroupWorkspaceModel({
             createdAt: item.createdAt,
             generation: terminalTab?.generation,
             shellOverride: terminalTab?.shellOverride,
+            startupCwd: terminalTab?.startupCwd,
             // Why: carry the launched agent through the rebuilt tab so the tab
             // bar can show the provider icon before the agent's first hook —
             // this object is reconstructed from the unified-tab model, so any

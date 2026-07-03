@@ -15,11 +15,9 @@ import {
   decryptBytes
 } from './e2ee'
 import {
-  TerminalStreamOpcode,
-  decodeTerminalStreamFrame,
-  decodeTerminalStreamJson,
-  decodeTerminalStreamText
-} from './terminal-stream-protocol'
+  handleTerminalBinaryFrame,
+  type TerminalSnapshotState
+} from './rpc-client-terminal-binary-frame'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
@@ -29,6 +27,8 @@ import {
   updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { describeSocketEvent } from './socket-event-debug'
+import { isRpcResponse } from './rpc-response-shape'
+import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -59,12 +59,6 @@ type StreamRequest = {
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
-}
-
-type TerminalSnapshotState = {
-  streamId: number
-  meta: Record<string, unknown>
-  chunks: string[]
 }
 
 export type RpcClient = {
@@ -135,17 +129,10 @@ const HANDSHAKE_TIMEOUT_MS = 5_000
 // constants, but the protocol value for CONNECTING is stable across runtimes.
 const WEBSOCKET_CONNECTING_STATE = 0
 
-// Why: app-level liveness probe. The server runs its own ping/pong sweep
-// at 15s, but RN's WebSocket runtime auto-pongs at the native layer
-// without surfacing anything to JS — so the mobile side can't *see* that
-// the server thinks the link is fine. To detect a half-open socket from
-// the mobile direction (e.g. server crashed, phone moved between wifi
-// and cellular without TCP RST) we periodically round-trip a tiny RPC.
-// If two consecutive probes time out we force-close the WS, which fires
-// the existing reconnect path. 20s cadence + the 30s request timeout =
-// worst-case ~50s before mobile decides the link is dead and kicks
-// reconnect, which is still inside the user's perceived "responsive"
-// window and well below iOS's typical background-disconnect window.
+// Why: RN auto-pongs WebSocket pings natively, so JS needs an app-level
+// liveness probe to detect half-open sockets. Any inbound app traffic after
+// a probe starts proves the link is alive; otherwise an unanswered probe
+// force-closes the socket so the reconnect path can recover.
 const ACTIVITY_PROBE_INTERVAL_MS = 20_000
 
 export type ConnectOptions = {
@@ -197,15 +184,10 @@ export function connect(
   // every 'connected'.
   let authRejectionCount = 0
   let lastConnectedAt: number | null = null
-  // Why: diagnostic — when the rpc-client gets stuck in a state where every
-  // openConnection fails with code 1006 and only a force-quit recovers, we
-  // need to see whether (a) the new attempts even differ from the old ones,
-  // (b) anything is happening at the OS / RN-bridge layer between attempts,
-  // and (c) what the timing pattern is (instant 1006 = port closed / route
-  // dead, slow 1006 = packet drop / timeout). These three timestamps + the
-  // ws-construction counter are the cheapest visibility into RN/OkHttp
-  // process-state poisoning hypotheses.
+  // Why: cheap diagnostics for RN/OkHttp process-state poisoning: do retry
+  // attempts differ, is anything inbound, and are closes instant or slow?
   let lastInboundAt: number | null = null
+  let inboundSequence = 0
   let lastWsClosedAt: number | null = null
   let wsConstructionCounter = 0
   let currentWsOpenedAt: number | null = null
@@ -443,8 +425,6 @@ export function connect(
     }
 
     async function handleSocketMessage(rawData: unknown) {
-      // Why: track last-inbound for the openConnection diagnostic. Server
-      // pongs and stream events both bump this — anything from the wire.
       lastInboundAt = Date.now()
       const raw = typeof rawData === 'string' ? rawData : null
 
@@ -502,6 +482,7 @@ export function connect(
                 pendingBrowserScreencastRequestId = id
                 activeBrowserScreencastRequestId = null
               }
+              resetTerminalStreamRoutingForRequest(id)
               if (
                 sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
               ) {
@@ -552,12 +533,16 @@ export function connect(
         return
       }
 
-      let response: RpcResponse
+      let response: unknown
       try {
         response = JSON.parse(plaintext)
       } catch {
         return
       }
+      if (!isRpcResponse(response)) {
+        return
+      }
+      recordValidatedInboundTraffic()
 
       // Why: a mid-session unauthorized may be a transient glitch, not a dead
       // pairing (issue #5200). handleAuthRejection retries the handshake a few
@@ -716,7 +701,7 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
-    streamListeners.forEach((stream) => (stream.sent = false))
+    markStreamsForReplay()
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -767,7 +752,7 @@ export function connect(
       ws = null
       sharedKey = null
       // Why: close cleanup stale-bails here, so mark active streams for replay.
-      streamListeners.forEach((stream) => (stream.sent = false))
+      markStreamsForReplay()
       rejectAllPending(reason)
       if (closing) {
         closing.close()
@@ -827,30 +812,21 @@ export function connect(
   // state, sends a tiny status.get, and force-closes the WS if the probe
   // fails (which the existing onclose path then turns into a reconnect).
   function runActivityProbe() {
-    // Why: only probe while the channel is actually in 'connected'. The
-    // sendRequest path itself waits for connected, but a probe scheduled
-    // during a reconnect would just stack up timeouts and confuse logs.
     if (state !== 'connected' || !ws) {
       return
     }
     const probeWs = ws
-    // Why: short timeout (8s) — server's heartbeat is 15s, so if we
-    // don't see *anything* back within 8s the link is almost certainly
-    // half-open. Using REQUEST_TIMEOUT_MS (30s) here would make the
-    // user wait nearly a minute before reconnect kicks in.
     const id = nextId()
-    const probeStart = Date.now()
+    const probeInboundSequence = inboundSequence
     let timedOut = false
     const timeout = setTimeout(() => {
       timedOut = true
       pending.delete(id)
-      console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
-        waitedMs: Date.now() - probeStart,
-        state
-      })
-      // Why: only force-close if this is still the same socket the
-      // probe was sent on; a normal close that already swapped `ws`
-      // shouldn't trigger a redundant terminate.
+      if (inboundSequence > probeInboundSequence) {
+        return
+      }
+      console.log('[net] activity-probe TIMEOUT — forcing reconnect', { state })
+      // Why: stale probe timers must not close a replacement socket.
       if (probeWs === ws && probeWs.readyState === WebSocket.OPEN) {
         probeWs.close()
       }
@@ -917,6 +893,25 @@ export function connect(
     }
   }
 
+  function markStreamsForReplay(): void {
+    for (const [id, stream] of streamListeners) {
+      stream.sent = false
+      resetTerminalStreamRoutingForRequest(id)
+    }
+  }
+
+  function resetTerminalStreamRoutingForRequest(id: string): void {
+    const terminalStreamIds = terminalStreamIdsByRequest.get(id)
+    if (!terminalStreamIds) {
+      return
+    }
+    for (const streamId of terminalStreamIds) {
+      terminalStreamListeners.delete(streamId)
+      terminalSnapshots.delete(streamId)
+    }
+    terminalStreamIdsByRequest.delete(id)
+  }
+
   function emitStreamError(stream: StreamRequest, message: string, error?: unknown): void {
     if (stream.cancelled) {
       return
@@ -948,13 +943,22 @@ export function connect(
     }
   }
 
-  function handleBinaryFrame(bytes: Uint8Array) {
+  function recordValidatedInboundTraffic(): void {
+    inboundSequence++
+  }
+
+  function handleBinaryFrame(bytes: Uint8Array): void {
     const browserFrame = decodeBrowserScreencastFrame(bytes)
     if (browserFrame) {
+      recordValidatedInboundTraffic()
       handleBrowserBinaryFrame(browserFrame)
       return
     }
-    handleTerminalBinaryFrame(bytes)
+    handleTerminalBinaryFrame(bytes, {
+      terminalSnapshots,
+      getListener: (streamId) => terminalStreamListeners.get(streamId),
+      recordValidatedInboundTraffic
+    })
   }
 
   function handleBrowserBinaryFrame(frame: BrowserScreencastFrame) {
@@ -966,75 +970,6 @@ export function connect(
       return
     }
     stream.onBinaryFrame?.(frame)
-  }
-
-  function handleTerminalBinaryFrame(bytes: Uint8Array) {
-    const frame = decodeTerminalStreamFrame(bytes)
-    if (!frame) {
-      return
-    }
-    const listener = terminalStreamListeners.get(frame.streamId)
-    if (!listener) {
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Output) {
-      listener({
-        type: 'data',
-        streamId: frame.streamId,
-        chunk: decodeTerminalStreamText(frame.payload)
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
-      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
-      if (!meta) {
-        return
-      }
-      terminalSnapshots.set(frame.streamId, { streamId: frame.streamId, meta, chunks: [] })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
-      const snapshot = terminalSnapshots.get(frame.streamId)
-      if (!snapshot) {
-        return
-      }
-      snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
-      const snapshot = terminalSnapshots.get(frame.streamId)
-      if (!snapshot) {
-        return
-      }
-      terminalSnapshots.delete(frame.streamId)
-      const kind = snapshot.meta.kind === 'resized' ? 'resized' : 'scrollback'
-      listener({
-        ...snapshot.meta,
-        type: kind,
-        streamId: frame.streamId,
-        serialized: snapshot.chunks.join('')
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Resized) {
-      const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
-      if (!meta) {
-        return
-      }
-      listener({
-        ...meta,
-        type: 'resized',
-        streamId: frame.streamId
-      })
-      return
-    }
-    if (frame.opcode === TerminalStreamOpcode.Error) {
-      listener({
-        type: 'error',
-        streamId: frame.streamId,
-        message: decodeTerminalStreamText(frame.payload)
-      })
-    }
   }
 
   function sendEncrypted(request: unknown): boolean {
@@ -1301,28 +1236,4 @@ function isBrowserScreencastReadyResult(
     (value as { type?: unknown }).type === 'ready' &&
     typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string'
   )
-}
-
-async function websocketPayloadToUint8(value: unknown): Promise<Uint8Array | null> {
-  if (value instanceof Uint8Array) {
-    return value
-  }
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value)
-  }
-  if (value && typeof value === 'object' && 'arrayBuffer' in value) {
-    const blob = value as { arrayBuffer: () => Promise<ArrayBuffer> }
-    return new Uint8Array(await blob.arrayBuffer())
-  }
-  if (typeof FileReader !== 'undefined' && value instanceof Blob) {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        resolve(reader.result instanceof ArrayBuffer ? new Uint8Array(reader.result) : null)
-      }
-      reader.onerror = () => resolve(null)
-      reader.readAsArrayBuffer(value)
-    })
-  }
-  return null
 }

@@ -30,6 +30,14 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
+function isConfigListSnapshotCommand(args: string[]): boolean {
+  return args[0] === 'config' && args[1] === '--list' && args[2] === '-z'
+}
+
+function emptyGitConfigSnapshot(): { stdout: string } {
+  return { stdout: 'core.repositoryformatversion\n0\0' }
+}
+
 import {
   clearEffectiveUpstreamNegativeStatusCache,
   clearEffectiveUpstreamStatusCacheForTests,
@@ -61,6 +69,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
@@ -105,6 +116,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
@@ -165,6 +179,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
@@ -227,6 +244,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
@@ -282,6 +302,9 @@ describe('local upstream negative cache', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
+      }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         throw new Error('missing remote branch')
       }
@@ -312,6 +335,9 @@ describe('local upstream negative cache', () => {
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
+      }
+      if (isConfigListSnapshotCommand(args)) {
+        return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${currentBranch}`)) {
         return { stdout: 'abc123\n' }

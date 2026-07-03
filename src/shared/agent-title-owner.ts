@@ -44,6 +44,14 @@ function getProfileForTitle(title: string): TitleProfileMatch | null {
 }
 
 /**
+ * Why: unknown-launch remote sessions need to wait for foreground ownership
+ * before publishing title frames whose identity can be re-owned.
+ */
+export function hasCompatibleAgentTitleIdentity(title: string): boolean {
+  return Boolean(getProfileForTitle(title)?.profile.titleIdentityGroup)
+}
+
+/**
  * Detects the agent status (working, permission, idle) from a terminal title,
  * accounting for legacy Pi titles.
  */

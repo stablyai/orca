@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: terminal link parsing depends on ordered passes sharing range state. */
+import { normalizeAbsolutePath } from './terminal-path-normalization'
 import {
-  joinAbsolutePath,
-  normalizeAbsolutePath,
-  resolveTildePath
-} from './terminal-path-normalization'
+  parseExplicitFileLinkTarget,
+  resolveExplicitFileLinkTarget
+} from './explicit-file-link-target'
 
 export type ParsedTerminalFileLink = {
   pathText: string
@@ -86,43 +86,6 @@ function trimBoundaryPunctuation(
     startIndex: startIndex + start,
     endIndex: startIndex + end
   }
-}
-
-function parsePathWithOptionalLineColumn(value: string): {
-  pathText: string
-  line: number | null
-  column: number | null
-} | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
-  if (!match) {
-    return null
-  }
-  const pathText = match[1]
-  const hasLineOrColumn = Boolean(match[2] || match[3])
-  if (!pathText) {
-    return null
-  }
-  if (/^[\\/]\s/.test(pathText)) {
-    return null
-  }
-  if (/[\\/]$/.test(pathText) && (hasLineOrColumn || !canKeepTrailingSeparator(pathText))) {
-    return null
-  }
-
-  const line = match[2] ? Number.parseInt(match[2], 10) : null
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
-  if ((line !== null && line < 1) || (column !== null && column < 1)) {
-    return null
-  }
-
-  return { pathText, line, column }
-}
-
-function canKeepTrailingSeparator(pathText: string): boolean {
-  if (/^[\\/]+$/.test(pathText) || /^~[\\/]$/.test(pathText) || /^[A-Za-z]:[\\/]$/.test(pathText)) {
-    return false
-  }
-  return /^(?:~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(pathText)
 }
 
 // Project files that look like filenames despite having no extension. The
@@ -292,19 +255,45 @@ function insertClaimedRange(claimedRanges: [number, number][], range: [number, n
 }
 
 function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
-  const filenameBeforeProseMatch = /^(.+\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?)(?:\s+.+)$/.exec(
-    range.text
-  )
-  if (!filenameBeforeProseMatch) {
+  // Why: keep one extension-terminated path, but drop trailing prose or a
+  // second unrelated path that the broad spaced-path scan also captured. A
+  // line-end extension token only extends the span when the added segment is
+  // path-like (contains a separator) — "v1.2 reports/result.json" extends,
+  // prose like "failed to start app.py" must not be swallowed.
+  let selected: string | null = null
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  let match: RegExpExecArray | null
+  while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
+    const end = match.index + match[0].length
+    const text = range.text.slice(0, end)
+    if (countPathStarts(text) > 1) {
+      continue
+    }
+    if (
+      end < range.text.length ||
+      selected === null ||
+      /[\\/]/.test(range.text.slice(selected.length, end))
+    ) {
+      selected = text
+    }
+  }
+  if (!selected) {
     return range
   }
-
-  const text = filenameBeforeProseMatch[1]
   return {
-    text,
+    text: selected,
     startIndex: range.startIndex,
-    endIndex: range.startIndex + text.length
+    endIndex: range.startIndex + selected.length
   }
+}
+
+function countPathStarts(text: string): number {
+  let count = 0
+  for (const match of text.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
+    void match
+    count += 1
+  }
+  return count
 }
 
 function trimTrailingWhitespace(range: DetectedRange): DetectedRange {
@@ -329,11 +318,11 @@ function buildLineEndingSpacedPathPrefixRanges(range: DetectedRange): DetectedRa
       })
     }
   }
-  return ranges.reverse()
+  return ranges.toReversed()
 }
 
 function toParsedLink(range: DetectedRange): ParsedTerminalFileLink | null {
-  const parsed = parsePathWithOptionalLineColumn(range.text)
+  const parsed = parseExplicitFileLinkTarget(range.text)
   if (!parsed) {
     return null
   }
@@ -492,18 +481,7 @@ export function resolveTerminalFileLink(
   cwd: string,
   homePath?: string | null
 ): ResolvedTerminalFileLink | null {
-  const absolutePath = /^~[\\/]/.test(parsed.pathText)
-    ? resolveTildePath(parsed.pathText, cwd, homePath)
-    : (normalizeAbsolutePath(parsed.pathText)?.normalized ?? joinAbsolutePath(cwd, parsed.pathText))
-  if (!absolutePath) {
-    return null
-  }
-
-  return {
-    absolutePath,
-    line: parsed.line,
-    column: parsed.column
-  }
+  return resolveExplicitFileLinkTarget(parsed, cwd, homePath)
 }
 
 export function resolveTerminalFileLinkText(

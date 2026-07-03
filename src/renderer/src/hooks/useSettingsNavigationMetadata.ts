@@ -9,6 +9,7 @@ import {
   Bell,
   Blocks,
   Bot,
+  Bug,
   Cable,
   FlaskConical,
   GitBranch,
@@ -80,17 +81,44 @@ import { translate } from '@/i18n/i18n'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
 
+function getDevToolsPaneSearchEntries(): SettingsNavSection['searchEntries'] {
+  return [
+    {
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlayground',
+        'Notification playground'
+      ),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlaygroundDescription',
+        'Trigger representative toast and notification UI states.'
+      ),
+      keywords: [
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordDev', 'dev'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordToast', 'toast'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner', 'sonner'),
+        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordError', 'error'),
+        translate(
+          'auto.hooks.useSettingsNavigationMetadata.devSearchKeywordNotification',
+          'notification'
+        )
+      ]
+    }
+  ]
+}
+
 export function buildSettingsNavigationMetadata({
   isMac,
   isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
+  isDev = import.meta.env.DEV,
   repos
 }: {
   isMac: boolean
   isWindows: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
+  isDev?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -402,20 +430,6 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
-    {
-      id: 'servers',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
-      ),
-      description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
-      icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
-    },
     ...(showDesktopOnlySettings
       ? [
           {
@@ -431,6 +445,20 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    {
+      id: 'servers',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
+        'Remote Orca Servers'
+      ),
+      description: isWebClient
+        ? 'Connect this browser to a saved Orca server.'
+        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+      icon: Server,
+      searchEntries: [runtimeEnvironmentsSearchEntry],
+      group: 'remote',
+      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
     ...(showDesktopOnlySettings && isMac
       ? [
           {
@@ -475,6 +503,26 @@ export function buildSettingsNavigationMetadata({
             icon: Wrench,
             searchEntries: getAdvancedPaneSearchEntries(),
             group: 'advanced'
+          }
+        ]
+      : []),
+    // Why: dev tooling must not be reachable from packaged/web builds even if
+    // this pure metadata builder is called manually with isDev=true.
+    ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
+      ? [
+          {
+            id: 'dev',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.devDescription',
+              'Dev-only tools for exercising UI states.'
+            ),
+            // Why: distinct from the sibling Advanced section's Wrench so the two
+            // entries in the same 'advanced' group stay visually distinguishable.
+            icon: Bug,
+            searchEntries: getDevToolsPaneSearchEntries(),
+            group: 'advanced',
+            badge: translate('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
           }
         ]
       : []),
@@ -533,6 +581,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindows,
         isWindowsTerminalHost,
         isWebClient,
+        isDev: import.meta.env.DEV,
         repos
       }),
     [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]

@@ -1,5 +1,5 @@
-import { homedir } from 'os'
-import { basename, join } from 'path'
+import { homedir } from 'node:os'
+import { basename, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'

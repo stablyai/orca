@@ -6,8 +6,8 @@
  * and git grep as universal fallbacks — git is always available since this is
  * a git-focused app.
  */
-import { spawn } from 'child_process'
-import { type SearchOptions, type SearchResult } from './fs-handler-utils'
+import { spawn } from 'node:child_process'
+import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import { buildGitLsFilesArgsForQuickOpen } from '../shared/quick-open-filter'
 import { expandQuickOpenGitFilesWithNestedRepos } from '../shared/quick-open-readdir-walk'
 import {

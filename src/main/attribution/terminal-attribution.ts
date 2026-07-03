@@ -2,8 +2,8 @@
 scripts for both POSIX shells and Windows shells. Keeping the scripts adjacent
 to the env injection code makes the attribution behavior auditable as one unit
 instead of scattering generated shell fragments across files. */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, win32 as pathWin32 } from 'path'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, win32 as pathWin32 } from 'node:path'
 import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
 
 const ATTRIBUTION_ROOT_DIR = 'orca-terminal-attribution'

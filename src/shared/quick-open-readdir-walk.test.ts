@@ -13,9 +13,9 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import {
   classifyQuickOpenGitEntry,
   createQuickOpenReaddirBudget,

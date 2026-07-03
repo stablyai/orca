@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'child_process'
-import { connect, createServer } from 'net'
-import { buildSshArgs, findSystemSsh } from './ssh-system-fallback'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { connect, createServer } from 'node:net'
+import { buildSshArgs, findSystemSsh, type SystemSshBuildArgsOptions } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
 
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
@@ -18,7 +18,8 @@ export function spawnSystemSshPortForward(
   target: SshTarget,
   localPort: number,
   remoteHost: string,
-  remotePort: number
+  remotePort: number,
+  options?: SystemSshBuildArgsOptions
 ): ChildProcess {
   const sshPath = findSystemSsh()
   if (!sshPath) {
@@ -27,7 +28,7 @@ export function spawnSystemSshPortForward(
     )
   }
 
-  const args = buildSshArgs(target)
+  const args = buildSshArgs(target, { ...options, suppressOrcaControlMaster: true })
   const destinationIndex = args.lastIndexOf('--')
   const forwardArgs = [
     '-N',
@@ -56,10 +57,11 @@ export function startSystemSshPortForwardProcess(
   target: SshTarget,
   localPort: number,
   remoteHost: string,
-  remotePort: number
+  remotePort: number,
+  options?: SystemSshBuildArgsOptions
 ): Promise<SystemSshPortForwardProcess> {
   return assertLocalForwardPortAvailable(localPort).then(() => {
-    const process = spawnSystemSshPortForward(target, localPort, remoteHost, remotePort)
+    const process = spawnSystemSshPortForward(target, localPort, remoteHost, remotePort, options)
     return {
       process,
       waitForStartup: () => waitForSystemSshForwardStartup(process, localPort),

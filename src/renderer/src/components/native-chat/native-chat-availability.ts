@@ -1,8 +1,29 @@
 import type { Tab, TuiAgent } from '../../../../shared/types'
+import type { AgentType } from '../../../../shared/agent-status-types'
+
+/** Agents whose transcripts the native chat view can actually parse and render.
+ *  Native chat depends on provider-specific transcript/streaming parsing, so the
+ *  toggle must stay limited to the providers we support — currently Claude
+ *  (including the OpenClaude variant) and Codex. Other agents (Grok, Gemini, …)
+ *  run fine in the terminal but have no native-chat rendering, so they must not
+ *  show the toggle. */
+const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set<string>([
+  'claude',
+  'openclaude',
+  'codex'
+])
+
+/** Whether the given agent identity (from any signal: launch hint, live
+ *  detection, or title resolution) is one native chat can render. */
+export function isNativeChatSupportedAgent(
+  agent: TuiAgent | AgentType | null | undefined
+): boolean {
+  return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
+}
 
 /** Inputs that decide whether a tab may toggle into the native chat view.
  *  Kept as a plain shape (not the live store) so the decision stays pure and
- *  unit-testable; call sites resolve `launchAgent`/`hasDetectedAgent` from the
+ *  unit-testable; call sites resolve `launchAgent`/`detectedAgent` from the
  *  terminal tab + agent-status before calling. */
 export type NativeChatAvailabilityInput = {
   /** Feature flag: hidden unless enabled from Settings > Experimental. */
@@ -10,23 +31,26 @@ export type NativeChatAvailabilityInput = {
   contentType: Tab['contentType']
   /** The coding-agent Orca launched in this terminal, if any (from TerminalTab). */
   launchAgent?: TuiAgent | null
-  /** True when a live agent-status entry exists for any pane of this tab — i.e.
-   *  an agent was detected at runtime even though `launchAgent` was not set
-   *  (manually-started agents, resumed sessions). */
-  hasDetectedAgent?: boolean
-  /** True when another trusted tab signal (for example the terminal title
-   *  resolver) identifies the foreground as an agent before hooks arrive. */
-  hasResolvedAgent?: boolean
+  /** The agent identity from a live agent-status entry for any pane of this tab,
+   *  when one exists — i.e. an agent detected at runtime even though
+   *  `launchAgent` was not set (manually-started agents, resumed sessions). */
+  detectedAgent?: AgentType | null
+  /** The agent identity from another trusted tab signal (for example the
+   *  terminal title resolver) when it identifies the foreground as an agent
+   *  before hooks arrive. */
+  resolvedAgent?: TuiAgent | null
   /** Already-chat tabs must always be allowed to toggle back to terminal, even
    *  if live hook state was lost during a dev/app restart. */
   isChatViewMode?: boolean
 }
 
 /** Native chat is a rendering of a coding-agent conversation, so the toggle is
- *  only meaningful on terminals that actually run an agent. Plain shells and
- *  non-terminal surfaces (editor, browser, …) never qualify. Eligibility is the
- *  union of the launch-time hint and live detection so the control appears both
- *  for Orca-launched agents and for agents the user started themselves. */
+ *  only meaningful on terminals that actually run an agent we can parse. Plain
+ *  shells, non-terminal surfaces (editor, browser, …), and unsupported agents
+ *  (Grok, Gemini, …) never qualify. Eligibility is the union of the launch-time
+ *  hint, live detection, and title resolution — but only when that signal names
+ *  a supported agent — so the control appears for both Orca-launched and
+ *  user-started Claude/Codex sessions. */
 export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
   if (input.experimentalNativeChatEnabled !== true) {
     return false
@@ -36,8 +60,8 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   }
   return (
     input.isChatViewMode === true ||
-    Boolean(input.launchAgent) ||
-    input.hasDetectedAgent === true ||
-    input.hasResolvedAgent === true
+    isNativeChatSupportedAgent(input.launchAgent) ||
+    isNativeChatSupportedAgent(input.detectedAgent) ||
+    isNativeChatSupportedAgent(input.resolvedAgent)
   )
 }

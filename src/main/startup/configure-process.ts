@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
@@ -306,6 +306,12 @@ export function enableMainProcessGpuFeatures(): void {
     app.commandLine.appendSwitch('disable-gpu')
     return
   }
+
+  // Why: Blink force-loses the oldest WebGL context past 16 per renderer, and
+  // each attached terminal pane holds one — a busy worktree (tabs × splits)
+  // can exceed that, silently downgrading evicted panes to the DOM renderer.
+  // 128 covers real layouts while keeping a bound so context leaks surface.
+  app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
   const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
   const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()

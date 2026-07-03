@@ -27,6 +27,15 @@ export function formatShortcutLabel(
   )
 }
 
+export function formatPrimaryShortcutLabel(
+  actionId: KeybindingActionId,
+  overrides?: KeybindingOverrides
+): string {
+  const platform = getShortcutPlatform()
+  const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+  return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+}
+
 export function useShortcutLabel(actionId: KeybindingActionId): string {
   const keybindings = useAppStore((state) => state.keybindings)
   return formatShortcutLabel(actionId, keybindings)

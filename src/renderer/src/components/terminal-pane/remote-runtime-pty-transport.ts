@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type {
+  RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeTerminalCreate,
   RuntimeTerminalSend
@@ -22,7 +23,10 @@ import {
   getRemoteRuntimeTerminalMultiplexer,
   type RemoteRuntimeMultiplexedTerminal
 } from '../../runtime/remote-runtime-terminal-multiplexer'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import {
+  toRuntimeTerminalWorktreeSelector,
+  toRuntimeWorktreeSelector
+} from '../../runtime/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
@@ -45,6 +49,11 @@ function isRemoteTerminalGoneMessage(message: string): boolean {
   )
 }
 
+/**
+ * PTY transport backing a renderer terminal pane with a terminal on a remote Orca
+ * runtime, over runtime RPC plus the multiplexed stream (create, subscribe, input,
+ * resize, close, reattach).
+ */
 export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
   opts: IpcPtyTransportOptions = {}
@@ -93,7 +102,9 @@ export function createRemoteRuntimePtyTransport(
     snapshot: RuntimeMobileSessionTabsResult,
     hostTabId: string
   ): string | null {
-    const terminalTabs = snapshot.tabs.filter((tab) => tab.type === 'terminal')
+    const terminalTabs = getHostSessionTerminalSurfaces(snapshot, hostTabId, {
+      matchRequestedLeaf: false
+    })
     if (leafId) {
       const requestedLeaf = terminalTabs.find(
         (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.leafId === leafId
@@ -107,15 +118,27 @@ export function createRemoteRuntimePtyTransport(
     return preferred?.terminal ?? null
   }
 
+  function getHostSessionTerminalSurfaces(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string,
+    options: { matchRequestedLeaf: boolean }
+  ): RuntimeMobileSessionTerminalClientTab[] {
+    return snapshot.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+        tab.type === 'terminal' &&
+        (tab.parentTabId === hostTabId || tab.id === hostTabId) &&
+        (!options.matchRequestedLeaf || !leafId || tab.leafId === leafId)
+    )
+  }
+
   function hasHostSessionTerminalSurface(
     snapshot: RuntimeMobileSessionTabsResult,
     hostTabId: string
   ): boolean {
-    return snapshot.tabs.some(
-      (tab) =>
-        tab.type === 'terminal' &&
-        (tab.parentTabId === hostTabId || tab.id === hostTabId) &&
-        (!leafId || tab.leafId === leafId)
+    return (
+      getHostSessionTerminalSurfaces(snapshot, hostTabId, {
+        matchRequestedLeaf: true
+      }).length > 0
     )
   }
 
@@ -467,7 +490,7 @@ export function createRemoteRuntimePtyTransport(
         const launchTokenToSend = options.launchToken ?? launchToken
         const launchAgentToSend = options.launchAgent ?? launchAgent
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-          worktree: toRuntimeWorktreeSelector(worktreeId),
+          worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
           ...(commandToSend !== undefined ? { command: commandToSend } : {}),
           ...(startupCommandDeliveryToSend !== undefined
             ? { startupCommandDelivery: startupCommandDeliveryToSend }

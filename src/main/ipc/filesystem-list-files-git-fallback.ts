@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'child_process'
+import type { ChildProcess } from 'node:child_process'
 import { gitSpawn } from '../git/runner'
 import { buildGitLsFilesArgsForQuickOpen } from '../../shared/quick-open-filter'
 import {

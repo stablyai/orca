@@ -10,7 +10,7 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import { type PrimaryAction, type PrimaryActionInputs } from './source-control-primary-action-types'
+import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
 import {
   describeForcePushWithLease,
   describePullCount,

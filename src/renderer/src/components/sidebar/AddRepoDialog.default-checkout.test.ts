@@ -1,16 +1,15 @@
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const ADD_REPO_DIALOG_PATH = join(dirname(fileURLToPath(import.meta.url)), 'AddRepoDialog.tsx')
+const ADD_REPO_DIALOG_PATH = join(import.meta.dirname, 'AddRepoDialog.tsx')
 const ADD_REPO_FLOW_PATHS = [
   ADD_REPO_DIALOG_PATH,
-  join(dirname(fileURLToPath(import.meta.url)), 'AddRepoSteps.tsx'),
-  join(dirname(fileURLToPath(import.meta.url)), 'useAddRepoCloneFlow.ts'),
-  join(dirname(fileURLToPath(import.meta.url)), 'useAddRepoLocalFolderFlow.ts'),
-  join(dirname(fileURLToPath(import.meta.url)), 'useAddRepoServerPathFlow.ts'),
-  join(dirname(fileURLToPath(import.meta.url)), 'useAddRepoNestedImportFlow.ts')
+  join(import.meta.dirname, 'AddRepoSteps.tsx'),
+  join(import.meta.dirname, 'useAddRepoCloneFlow.ts'),
+  join(import.meta.dirname, 'useAddRepoLocalFolderFlow.ts'),
+  join(import.meta.dirname, 'useAddRepoServerPathFlow.ts'),
+  join(import.meta.dirname, 'useAddRepoNestedImportFlow.ts')
 ]
 
 function readAddRepoFlowSource(): string {

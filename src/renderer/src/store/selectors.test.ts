@@ -299,6 +299,82 @@ describe('store selectors', () => {
     })
   })
 
+  it('groups hydrated VM project setups under the repo-derived project identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      }),
+      makeRepo({
+        id: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        executionHostId: toRuntimeExecutionHostId('vm-env')
+      })
+    ]
+    const projects = [
+      {
+        id: 'github:stablyai/orca',
+        displayName: 'orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['local-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'repo:vm-orca',
+        displayName: 'vercel/sandbox/orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['vm-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'local-setup',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local' as const,
+        repoId: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'legacy-repo' as const,
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'vm-setup',
+        projectId: 'repo:vm-orca',
+        hostId: toRuntimeExecutionHostId('vm-env'),
+        repoId: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'provisioned' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+
+    expect(projection.projects.map((project) => project.id)).toEqual(['github:stablyai/orca'])
+    expect(projection.setups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'local-setup', projectId: 'github:stablyai/orca' }),
+        expect.objectContaining({ id: 'vm-setup', projectId: 'github:stablyai/orca' })
+      ])
+    )
+  })
+
   it('falls back to repo compatibility projection when hydrated setup state is empty', () => {
     const repos = [
       makeRepo({

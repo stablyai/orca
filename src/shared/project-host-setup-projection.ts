@@ -21,24 +21,31 @@ function normalizeIdentityPart(value: string): string {
 }
 
 function getProjectProviderIdentity(
-  repo: Pick<Repo, 'upstream' | 'repoIcon'>
+  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): ProjectProviderIdentity | null {
   const owner = typeof repo.upstream?.owner === 'string' ? repo.upstream.owner.trim() : ''
   const name = typeof repo.upstream?.repo === 'string' ? repo.upstream.repo.trim() : ''
   if (owner && name) {
     return { provider: 'github', owner, repo: name }
   }
-  if (repo.repoIcon?.type !== 'image' || repo.repoIcon.source !== 'github') {
-    return null
+  if (repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github') {
+    const parts = (repo.repoIcon.label?.trim() ?? '').split('/')
+    const iconOwner = parts[0]?.trim()
+    const iconRepo = parts[1]?.trim()
+    // Why: repo auto-detect can know the GitHub slug through the generated
+    // avatar icon even when legacy `upstream` has not been backfilled yet.
+    if (iconOwner && iconRepo && parts.length === 2) {
+      return { provider: 'github', owner: iconOwner, repo: iconRepo }
+    }
   }
-  const parts = (repo.repoIcon.label?.trim() ?? '').split('/')
-  const iconOwner = parts[0]?.trim()
-  const iconRepo = parts[1]?.trim()
-  // Why: repo auto-detect can know the GitHub slug through the generated
-  // avatar icon even when legacy `upstream` has not been backfilled yet.
-  return iconOwner && iconRepo && parts.length === 2
-    ? { provider: 'github', owner: iconOwner, repo: iconRepo }
-    : null
+  const canonicalKey = repo.gitRemoteIdentity?.canonicalKey.trim()
+  if (canonicalKey?.startsWith('github.com/')) {
+    const [, remoteOwner, remoteRepo, ...rest] = canonicalKey.split('/')
+    if (remoteOwner?.trim() && remoteRepo?.trim() && rest.length === 0) {
+      return { provider: 'github', owner: remoteOwner.trim(), repo: remoteRepo.trim() }
+    }
+  }
+  return parseGitHubRemoteUrl(repo.gitRemoteIdentity?.remoteUrl)
 }
 
 function getProjectGitRemoteIdentity(
@@ -55,7 +62,9 @@ function getProjectGitRemoteIdentity(
 /** True when the repo resolves to a GitHub provider identity (via explicit
  *  upstream or a GitHub-sourced avatar icon). Used to scope GitHub-CLI setup
  *  prompts to users who actually have GitHub-backed projects. */
-export function isGitHubBackedRepo(repo: Pick<Repo, 'upstream' | 'repoIcon'>): boolean {
+export function isGitHubBackedRepo(
+  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+): boolean {
   return getProjectProviderIdentity(repo) !== null
 }
 
@@ -77,6 +86,20 @@ function getProjectId(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
   return getProjectIdentityKey(repo)
+}
+
+function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIdentity | null {
+  const trimmed = remoteUrl?.trim()
+  if (!trimmed) {
+    return null
+  }
+  const match =
+    trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i) ??
+    trimmed.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i)
+  if (!match?.[1] || !match[2]) {
+    return null
+  }
+  return { provider: 'github', owner: match[1], repo: match[2] }
 }
 
 function createProjectFromRepo(repo: Repo, now: number): Project {

@@ -1,6 +1,6 @@
-import { exec, spawn } from 'child_process'
+import { exec, spawn } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ChildProcess from 'child_process'
+import type * as ChildProcess from 'node:child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
 
 vi.mock('child_process', async (importOriginal) => {

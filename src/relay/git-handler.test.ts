@@ -5,11 +5,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { execFileSync } from 'child_process'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../shared/large-diff-render-limit'
 import {
   createMockDispatcher,
