@@ -351,6 +351,33 @@ describe('GitHandler', () => {
       expect(result.hasMore).toBe(false)
       expect(result.limit).toBe(10)
     })
+
+    it('forwards allRefs over the wire so the repo-wide graph spans all branches', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      const baseBranch = currentBranch(tmpDir)
+      execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'feature.txt'), 'feature')
+      gitCommit(tmpDir, 'feature only')
+      // Return to the base branch so the feature commit is NOT in linear history.
+      execFileSync('git', ['checkout', baseBranch], { cwd: tmpDir, stdio: 'pipe' })
+
+      const linear = (await dispatcher.callRequest('git.history', {
+        worktreePath: tmpDir,
+        limit: 10
+      })) as { items: { subject: string }[] }
+      expect(linear.items.map((item) => item.subject)).toEqual(['initial'])
+
+      // Why: the relay handler must forward allRefs; otherwise this returns the
+      // same linear result and the SSH Git Graph silently shows one branch.
+      const allRefs = (await dispatcher.callRequest('git.history', {
+        worktreePath: tmpDir,
+        limit: 10,
+        allRefs: true
+      })) as { items: { subject: string }[] }
+      expect(allRefs.items.map((item) => item.subject)).toContain('feature only')
+    })
   })
 
   describe('status', () => {

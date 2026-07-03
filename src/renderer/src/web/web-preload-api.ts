@@ -1505,12 +1505,15 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     // in the web runtime there's no offer, so return no candidates / no-op.
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
-    history: async ({ worktreePath, limit, baseRef }) => {
+    history: async ({ worktreePath, limit, baseRef, allRefs }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         limit,
-        baseRef
+        baseRef,
+        // Why: forward the repo-wide Git Graph scope so the web runtime path
+        // enumerates all refs instead of silently falling back to linear history.
+        allRefs
       })
     },
     conflictOperation: async ({ worktreePath }) => {

@@ -244,6 +244,66 @@ describe('git history loader', () => {
     expect(result.hasMore).toBe(true)
   })
 
+  it('scopes the log to all refs (branches/remotes/tags/HEAD) in allRefs mode', async () => {
+    const { executor, calls } = createHistoryExecutor()
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 50,
+      allRefs: true
+    })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).toEqual(
+      expect.arrayContaining([
+        `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+        '-z',
+        '--topo-order',
+        '--decorate=full',
+        '-n51',
+        '--branches',
+        '--remotes',
+        '--tags',
+        'HEAD'
+      ])
+    )
+    // Must not fall back to the linear single-headOid scope.
+    expect(logCall).not.toContain(HEAD_OID)
+    expect(result.currentRef?.name).toBe('feature')
+  })
+
+  it('emits no incoming/outgoing boundary rows and no remote/base refs in allRefs mode', async () => {
+    const { executor, calls } = createHistoryExecutor()
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 50,
+      allRefs: true
+    })
+
+    expect(result.hasIncomingChanges).toBe(false)
+    expect(result.hasOutgoingChanges).toBe(false)
+    expect(result.remoteRef).toBeUndefined()
+    expect(result.baseRef).toBeUndefined()
+    expect(result.mergeBase).toBeUndefined()
+    // Forked early: no upstream/merge-base round-trips.
+    expect(calls.some((args) => args[0] === 'for-each-ref')).toBe(false)
+    expect(calls.some((args) => args[0] === 'merge-base')).toBe(false)
+  })
+
+  it('still clamps oversized limits in allRefs mode', async () => {
+    const { executor, calls } = createHistoryExecutor(GIT_HISTORY_MAX_LIMIT + 1)
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 500,
+      allRefs: true
+    })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).toContain(`-n${GIT_HISTORY_MAX_LIMIT + 1}`)
+    expect(result.items).toHaveLength(GIT_HISTORY_MAX_LIMIT)
+    expect(result.limit).toBe(GIT_HISTORY_MAX_LIMIT)
+    expect(result.hasMore).toBe(true)
+  })
+
   it('returns an empty result for unborn repositories without running git log', async () => {
     const executor = vi.fn(async (args: string[]) => {
       if (args[0] === 'rev-parse') {

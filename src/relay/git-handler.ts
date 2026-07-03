@@ -347,7 +347,10 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
       limit: typeof params.limit === 'number' ? params.limit : undefined,
-      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
+      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null,
+      // Why: the repo-wide Git Graph passes allRefs over the SSH wire; without
+      // forwarding it here the relay host silently runs current-branch history.
+      allRefs: typeof params.allRefs === 'boolean' ? params.allRefs : undefined
     })
   }
 

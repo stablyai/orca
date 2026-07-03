@@ -195,6 +195,40 @@ describe('git history graph model', () => {
     )
   })
 
+  it('keeps divergent multi-tip branches on separate lanes (repo-wide all-refs)', () => {
+    // Two branch tips with independent roots and no shared history — the shape an
+    // all-refs Git Graph query produces. The current branch lane must stay put
+    // while the second tip occupies its own lane, and both roots terminate cleanly.
+    const currentRef = branch('main', 'A1')
+    const otherRef = branch('experiment', 'B1')
+    const viewModels = buildGitHistoryViewModels(
+      [
+        item('A1', ['A2'], [currentRef]),
+        item('B1', ['B2'], [otherRef]),
+        item('A2', []),
+        item('B2', [])
+      ],
+      buildDefaultGitHistoryColorMap({ currentRef }),
+      currentRef
+    )
+
+    // A1 is HEAD and feeds its parent into the first lane.
+    expect(viewModels[0]!.kind).toBe('HEAD')
+    expect(viewModels[0]!.outputSwimlanes).toEqual([{ id: 'A2', color: GIT_HISTORY_REF_COLOR }])
+    // B1's parent joins as a distinct second lane that does not collide with A2's.
+    expect(viewModels[1]!.outputSwimlanes).toContainEqual({
+      id: 'A2',
+      color: GIT_HISTORY_REF_COLOR
+    })
+    const b2Lane = viewModels[1]!.outputSwimlanes.find((node) => node.id === 'B2')
+    expect(b2Lane).toBeDefined()
+    expect(b2Lane!.color).not.toBe(GIT_HISTORY_REF_COLOR)
+    // Each root has no parents, so its lane drains rather than continuing.
+    expect(viewModels[2]!.historyItem.parentIds).toEqual([])
+    expect(viewModels[3]!.historyItem.parentIds).toEqual([])
+    expect(viewModels[3]!.outputSwimlanes).toEqual([])
+  })
+
   it('assigns stable colors to current, remote, and base refs', () => {
     const currentRef = branch('feature', 'A')
     const remoteRef = remote('origin/feature', 'R')

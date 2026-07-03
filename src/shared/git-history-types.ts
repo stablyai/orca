@@ -56,6 +56,9 @@ export type GitHistoryItem = {
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  // When true, scope the log to all refs (local + remote + tags + HEAD) for the
+  // repo-wide Git Graph view instead of the active branch's linear history.
+  allRefs?: boolean
 }
 
 export type GitHistoryResult = {

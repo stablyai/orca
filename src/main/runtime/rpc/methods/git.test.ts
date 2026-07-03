@@ -187,7 +187,38 @@ describe('git RPC methods', () => {
 
     expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith('id:wt-1', {
       limit: 25,
-      baseRef: 'origin/main'
+      baseRef: 'origin/main',
+      allRefs: undefined
+    })
+    expect(response).toMatchObject({ ok: true, result: history })
+  })
+
+  it('forwards allRefs to the runtime git history for the repo-wide graph', async () => {
+    const history = {
+      items: [],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 200
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn().mockResolvedValue(history)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 200,
+        allRefs: true
+      })
+    )
+
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith('id:wt-1', {
+      limit: 200,
+      baseRef: undefined,
+      allRefs: true
     })
     expect(response).toMatchObject({ ok: true, result: history })
   })

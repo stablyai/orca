@@ -35,6 +35,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { translate } from '@/i18n/i18n'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -173,6 +174,10 @@ export type TabsSlice = {
     activeRenderableTabId: string | null
   }
   hydrateTabsSession: (session: WorkspaceSessionState) => void
+  // Opens (or reuses) the single repo-wide Git Graph tab for a worktree. With a
+  // targetGroupId (Cmd/Ctrl-click split), re-homes the existing tab into that
+  // group rather than duplicating it — one git-graph tab per worktree.
+  openGitGraph: (worktreeId: string, options?: { targetGroupId?: string }) => Tab | null
 }
 
 // Why: keep the TerminalTab (tabsByWorktree) pin in sync with the unified-tab
@@ -1899,6 +1904,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (tab.contentType === 'simulator') {
         return true
       }
+      // Repo-wide Git Graph has no backing OpenFile/entity (synthetic entityId),
+      // so it must survive reconcile like simulator or it is pruned each pass.
+      if (tab.contentType === 'git-graph') {
+        return true
+      }
       return liveEditorIds.has(tab.entityId)
     }
 
@@ -2034,6 +2044,37 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       renderableTabCount: validTabs.length,
       activeRenderableTabId
     }
+  },
+
+  openGitGraph: (worktreeId, options) => {
+    const entityId = `${worktreeId}::git-graph`
+    const existing =
+      get().unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.contentType === 'git-graph') ??
+      null
+
+    if (existing) {
+      // One git-graph tab per worktree: re-home it on Cmd/Ctrl-click split
+      // instead of duplicating the (repo-wide, group-independent) view.
+      if (options?.targetGroupId && existing.groupId !== options.targetGroupId) {
+        get().moveUnifiedTabToGroup(existing.id, options.targetGroupId, { activate: true })
+      }
+      get().activateTab(existing.id)
+      const surfaced = get().getTab(existing.id)
+      if (surfaced) {
+        get().focusGroup(worktreeId, surfaced.groupId)
+      }
+      return surfaced
+    }
+
+    const created = get().createUnifiedTab(worktreeId, 'git-graph', {
+      entityId,
+      label: translate('auto.store.slices.tabs.7c3f1a9e0d', 'Git Graph'),
+      ...(options?.targetGroupId ? { targetGroupId: options.targetGroupId } : {}),
+      activate: true
+    })
+    get().activateTab(created.id)
+    get().focusGroup(worktreeId, created.groupId)
+    return created
   },
 
   hydrateTabsSession: (session) => {

@@ -13,6 +13,7 @@ export type ActiveTabNavOrderIds = {
   editorIds?: string[]
   browserIds?: string[]
   simulatorIds?: string[]
+  gitGraphIds?: string[]
 }
 
 /**
@@ -88,6 +89,16 @@ export function getGroupVisibleTabOrder(
       }
       seenSimulators.add(tab.id)
       result.push({ type: 'simulator', id: tab.id, tabId: tab.id })
+    } else if (tab.contentType === 'git-graph') {
+      // git-graph has no backing entity in editorEntityIds, but it is a real
+      // visible chip that routes through activeTabType 'editor'. Emit it as an
+      // editor-typed ref keyed by the unified tab id so keyboard cycling lands
+      // on it and activateCyclableTab's editor branch re-activates it via tabId.
+      if (seenEditors.has(tab.id)) {
+        continue
+      }
+      seenEditors.add(tab.id)
+      result.push({ type: 'editor', id: tab.id, tabId: tab.id })
     } else {
       if (!editorEntityIds.has(tab.entityId) || seenEditors.has(tab.id)) {
         continue
@@ -137,6 +148,11 @@ export function getActiveTabNavOrder(
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter((tab) => tab.contentType === 'simulator')
       .map((tab) => tab.id)
+  const gitGraphIds =
+    ids.gitGraphIds ??
+    (state.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((tab) => tab.contentType === 'git-graph')
+      .map((tab) => tab.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = activeGroupId
@@ -163,12 +179,14 @@ export function getActiveTabNavOrder(
     terminalIds,
     editorIds,
     browserIds,
-    simulatorIds
+    simulatorIds,
+    gitGraphIds
   )
   const terminalIdSet = new Set(terminalIds)
   const editorIdSet = new Set(editorIds)
   const browserIdSet = new Set(browserIds)
   const simulatorIdSet = new Set(simulatorIds)
+  const gitGraphIdSet = new Set(gitGraphIds)
   const result: VisibleTabRef[] = []
   for (const id of visibleIds) {
     if (terminalIdSet.has(id)) {
@@ -179,6 +197,9 @@ export function getActiveTabNavOrder(
       result.push({ type: 'browser', id })
     } else if (simulatorIdSet.has(id)) {
       result.push({ type: 'simulator', id })
+    } else if (gitGraphIdSet.has(id)) {
+      // git-graph routes through the editor activation path keyed by tab id.
+      result.push({ type: 'editor', id })
     }
   }
   return result

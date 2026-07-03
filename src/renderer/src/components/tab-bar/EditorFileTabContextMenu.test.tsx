@@ -172,7 +172,7 @@ function extractText(node: unknown): string {
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
-async function renderMenu(): Promise<unknown> {
+async function renderMenu(overrides: Record<string, unknown> = {}): Promise<unknown> {
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -204,7 +204,8 @@ async function renderMenu(): Promise<unknown> {
     onClose: vi.fn(),
     onCloseAll: vi.fn(),
     onCloseToRight: vi.fn(),
-    onOpenMarkdownPreview: vi.fn()
+    onOpenMarkdownPreview: vi.fn(),
+    ...overrides
   })
 }
 
@@ -259,6 +260,23 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     }
 
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
+  })
+
+  it('hides path-based actions for a virtual (non-file) tab', async () => {
+    // A synthetic tab (Git Graph, mobile emulator) has a label, not an on-disk
+    // path, so Copy Path / Copy Relative Path / Reveal must not be offered.
+    const tree = expandNode(await renderMenu({ isVirtual: true, canRename: false }))
+    const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(labels.some((label) => label.includes('Copy Path'))).toBe(false)
+    expect(labels.some((label) => label.includes('Copy Relative Path'))).toBe(false)
+    expect(
+      labels.some((label) => label.includes('Reveal') || label.includes('Open Containing'))
+    ).toBe(false)
+    // Tab-management actions remain available.
+    expect(labels.some((label) => label.includes('Close'))).toBe(true)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {

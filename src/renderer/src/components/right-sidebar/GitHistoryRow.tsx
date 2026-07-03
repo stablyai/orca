@@ -36,6 +36,9 @@ type GitHistoryRowProps = React.HTMLAttributes<HTMLElement> & {
   viewModel: GitHistoryItemViewModel
   expanded?: boolean
   preserveRefIds?: readonly string[]
+  // 'pane' is the wide full-pane Git Graph layout (adds author + short-hash
+  // columns); 'sidebar' (default) keeps the original narrow row unchanged.
+  layout?: 'sidebar' | 'pane'
   onOpenCommit?: (item: GitHistoryItem) => void
   onToggleExpand?: (item: GitHistoryItem) => void
 }
@@ -46,6 +49,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
       viewModel,
       expanded = false,
       preserveRefIds,
+      layout = 'sidebar',
       onOpenCommit,
       onToggleExpand,
       className,
@@ -53,6 +57,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     },
     ref
   ): React.JSX.Element {
+    const isPaneLayout = layout === 'pane'
     const item = viewModel.historyItem
     const isBoundaryNode =
       viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
@@ -69,7 +74,12 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const hiddenRefs = refs.slice(2)
     const rowTooltip = item.message || item.subject
     const rowClassName = cn(
-      'grid min-h-[26px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
+      'grid min-h-[26px] w-full min-w-0 items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
+      // Pane adds author + short-hash trailing columns; sidebar keeps the
+      // original 3-column (graph | subject | refs) template byte-identical.
+      isPaneLayout
+        ? 'grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]'
+        : 'grid-cols-[auto_minmax(0,1fr)_auto]',
       isInteractive && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
       !isInteractive && 'cursor-default',
       isBoundaryNode && 'text-muted-foreground',
@@ -77,7 +87,15 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     )
     const rowContent = (
       <>
-        <GitHistoryGraphSvg viewModel={viewModel} />
+        {isPaneLayout ? (
+          // Cap the graph column and scroll within it so a many-lane repo-wide
+          // graph can't push the subject/author/hash columns out of alignment.
+          <div className="max-w-[200px] overflow-x-auto scrollbar-none">
+            <GitHistoryGraphSvg viewModel={viewModel} />
+          </div>
+        ) : (
+          <GitHistoryGraphSvg viewModel={viewModel} />
+        )}
         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
           {canExpand && (
             <ChevronDown
@@ -99,7 +117,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
             </TooltipContent>
           </Tooltip>
         </div>
-        {refs.length > 0 && (
+        {(refs.length > 0 || isPaneLayout) && (
           <div className="flex shrink-0 items-center gap-1 overflow-hidden">
             {visibleRefs.map((ref) => (
               <GitHistoryRefBadge key={ref.id} itemRef={ref} />
@@ -120,6 +138,19 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
               </Tooltip>
             )}
           </div>
+        )}
+        {isPaneLayout && (
+          <span
+            className="ml-2 max-w-[10rem] shrink-0 truncate text-right text-[11px] text-muted-foreground"
+            title={item.author}
+          >
+            {item.author}
+          </span>
+        )}
+        {isPaneLayout && (
+          <span className="shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+            {item.displayId}
+          </span>
         )}
       </>
     )

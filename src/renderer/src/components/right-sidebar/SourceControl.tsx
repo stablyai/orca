@@ -883,6 +883,7 @@ function SourceControlInner(): React.JSX.Element {
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const createEmptySplitGroup = useAppStore((s) => s.createEmptySplitGroup)
+  const openGitGraph = useAppStore((s) => s.openGitGraph)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
@@ -4244,6 +4245,17 @@ function SourceControlInner(): React.JSX.Element {
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
+  const handleOpenGitGraph = useCallback(
+    (event: SourceControlRowOpenEvent): void => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const targetGroupId = resolveSplitTargetGroupId(event)
+      openGitGraph(activeWorktreeId, targetGroupId ? { targetGroupId } : undefined)
+    },
+    [activeWorktreeId, openGitGraph, resolveSplitTargetGroupId]
+  )
+
   // Why: a stable string signature keeps this selector referentially stable so
   // the panel only re-renders when the active editor file (or its diff source)
   // actually changes. Gated on the visible tab being an editor so the highlight
@@ -6109,6 +6121,7 @@ function SourceControlInner(): React.JSX.Element {
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
+                onOpenGraph={handleOpenGitGraph}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}

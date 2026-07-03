@@ -173,6 +173,41 @@ export async function loadGitHistoryFromExecutor(
   }
 
   const { currentRef, branchName } = await resolveCurrentRef(git, cwd, headOid)
+
+  // Repo-wide Git Graph: fork early so the upstream/merge-base/incoming-outgoing
+  // computation (a "your branch vs upstream" sidebar affordance) never runs — it
+  // is meaningless across all refs. Still resolve currentRef above for the HEAD
+  // marker + color-map key.
+  if (options.allRefs) {
+    const { stdout } = await git(
+      [
+        'log',
+        `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+        '-z',
+        '--topo-order',
+        '--decorate=full',
+        `-n${limit + 1}`,
+        '--branches',
+        '--remotes',
+        '--tags',
+        'HEAD'
+      ],
+      cwd
+    )
+    const parsed = parseGitHistoryLog(stdout)
+    return {
+      items: parsed.slice(0, limit),
+      currentRef,
+      remoteRef: undefined,
+      baseRef: undefined,
+      mergeBase: undefined,
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: parsed.length > limit,
+      limit
+    }
+  }
+
   const [remoteRef, rawBaseRef] = await Promise.all([
     resolveUpstreamRef(git, cwd, branchName),
     resolveNamedRef(git, cwd, options.baseRef)

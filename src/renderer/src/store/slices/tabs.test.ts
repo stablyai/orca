@@ -1847,7 +1847,85 @@ describe('TabsSlice', () => {
     })
   })
 
+  describe('openGitGraph', () => {
+    it('creates exactly one git-graph tab and re-activates it without duplicating', () => {
+      const first = store.getState().openGitGraph(WT)
+      expect(first).not.toBeNull()
+      expect(first!.contentType).toBe('git-graph')
+      expect(first!.entityId).toBe(`${WT}::git-graph`)
+
+      // Activate a different tab, then reopen — must reuse the same tab.
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().openGitGraph(WT)
+
+      expect(second!.id).toBe(first!.id)
+      const graphTabs = store
+        .getState()
+        .unifiedTabsByWorktree[WT].filter((tab) => tab.contentType === 'git-graph')
+      expect(graphTabs).toHaveLength(1)
+      expect(store.getState().getActiveTab(WT)?.id).toBe(first!.id)
+    })
+
+    it('re-homes the existing git-graph tab into a split target instead of duplicating', () => {
+      const created = store.getState().openGitGraph(WT)
+      const sourceGroupId = created!.groupId
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).not.toBeNull()
+
+      const moved = store.getState().openGitGraph(WT, { targetGroupId: targetGroupId! })
+
+      expect(moved!.id).toBe(created!.id)
+      expect(moved!.groupId).toBe(targetGroupId)
+      const graphTabs = store
+        .getState()
+        .unifiedTabsByWorktree[WT].filter((tab) => tab.contentType === 'git-graph')
+      expect(graphTabs).toHaveLength(1)
+    })
+  })
+
   describe('reconcileWorktreeTabModel', () => {
+    it('keeps git-graph tabs because they have no backing OpenFile entity', () => {
+      const groupId = 'g-graph'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'git-graph-1',
+              entityId: `${WT}::git-graph`,
+              groupId,
+              worktreeId: WT,
+              contentType: 'git-graph',
+              label: 'Git Graph',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'git-graph-1',
+              tabOrder: ['git-graph-1']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe('git-graph-1')
+      expect(store.getState().unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([
+        'git-graph-1'
+      ])
+    })
+
     it('drops unified tabs whose backing content no longer exists', () => {
       const groupId = 'g-1'
       store.setState({

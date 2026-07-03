@@ -258,6 +258,9 @@
         },
         "linear": {
           "37d36984d0": "Linear 接続は新しいリクエストに置き換えられました。"
+        },
+        "tabs": {
+          "7c3f1a9e0d": "Git Graph"
         }
       }
     },
@@ -2577,7 +2580,8 @@
             "1ff1c77616": "ブラウザ",
             "586d2ac445": "ターミナル",
             "addSplitPane": "分割ペインを追加",
-            "closePaneColumn": "分割ペインを閉じる"
+            "closePaneColumn": "分割ペインを閉じる",
+            "6b2f0a1c9d": "Loading graph..."
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "このセッションを再開するにはターミナルペインにドロップしてください。",
@@ -8852,7 +8856,8 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "エラー",
             "e5e81e59a6": "commits のサイズ変更",
-            "6d1e0a7c3b": "commit ファイルを読み込めませんでした"
+            "6d1e0a7c3b": "commit ファイルを読み込めませんでした",
+            "4b8e2f1a06": "Open Git Graph"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "閉じる",
@@ -12292,6 +12297,21 @@
       "nativeChat": {
         "contextMenu": {
           "copy": "コピー"
+        }
+      },
+      "git": {
+        "graph": {
+          "GitGraphPane": {
+            "6f0a2d1b84": "Git Graph",
+            "b71e9c4d22": "Refresh graph",
+            "9a3f5c2e70": "Showing first {{value0}} commits across all branches",
+            "2c8b1f0a93": "Loading graph...",
+            "4e7d6a1c08": "No commits yet",
+            "5d2e9b7a14": "Retry"
+          },
+          "useGitGraphHistory": {
+            "3d9c2e7b41": "Failed to load git graph"
+          }
         }
       }
     },

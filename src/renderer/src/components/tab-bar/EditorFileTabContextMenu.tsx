@@ -35,6 +35,9 @@ type EditorFileTabContextMenuProps = {
   isRenaming: boolean
   hasTabsToRight: boolean
   canRename: boolean
+  // Why: synthetic non-file tabs (Git Graph, mobile emulator) have a label, not
+  // an on-disk path, so path-based actions (copy path, reveal) must be hidden.
+  isVirtual?: boolean
   canShowMarkdownPreview: boolean
   resolvedLanguage: string
   repoConnectionId: string | null
@@ -68,6 +71,7 @@ export function EditorFileTabContextMenu({
   isRenaming,
   hasTabsToRight,
   canRename,
+  isVirtual = false,
   canShowMarkdownPreview,
   resolvedLanguage,
   repoConnectionId,
@@ -147,7 +151,9 @@ export function EditorFileTabContextMenu({
             'Close Tabs To The Right'
           )}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {/* Only separate the close actions from a section that actually follows;
+            a fully virtual tab has neither markdown preview nor path actions. */}
+        {canShowMarkdownPreview || !isVirtual ? <DropdownMenuSeparator /> : null}
         {canShowMarkdownPreview ? (
           <>
             <DropdownMenuItem
@@ -173,44 +179,53 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.filePath)
-          }}
-        >
-          <Copy className="w-3.5 h-3.5 mr-1.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.relativePath)
-          }}
-        >
-          <Copy className="w-3.5 h-3.5 mr-1.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
-            'Copy Relative Path'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
-            if (
-              shouldBlockEditorTabLocalOpen(
-                useAppStore.getState().settings,
-                file.runtimeEnvironmentId,
-                repoConnectionId
-              )
-            ) {
-              showLocalPathOpenBlockedToast()
-              return
-            }
-            window.api.shell.openPath(file.filePath)
-          }}
-        >
-          <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-          {revealLabel}
-        </DropdownMenuItem>
+        {/* Path-based actions are meaningless for synthetic non-file tabs whose
+            filePath is a display label, not an on-disk path. */}
+        {!isVirtual ? (
+          <>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.filePath)
+              }}
+            >
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.5b85754786',
+                'Copy Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.relativePath)
+              }}
+            >
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
+                'Copy Relative Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                if (
+                  shouldBlockEditorTabLocalOpen(
+                    useAppStore.getState().settings,
+                    file.runtimeEnvironmentId,
+                    repoConnectionId
+                  )
+                ) {
+                  showLocalPathOpenBlockedToast()
+                  return
+                }
+                window.api.shell.openPath(file.filePath)
+              }}
+            >
+              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+              {revealLabel}
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

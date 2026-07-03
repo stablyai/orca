@@ -21,6 +21,7 @@ import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const GitGraphPane = lazy(() => import('../git-graph/GitGraphPane'))
 
 export default function TabGroupPanel({
   groupId,
@@ -338,10 +339,27 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
+        {activeTab && activeTab.contentType === 'git-graph' && (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.tab.group.TabGroupPanel.6b2f0a1c9d',
+                    'Loading graph...'
+                  )}
+                </div>
+              }
+            >
+              <GitGraphPane worktreeId={activeTab.worktreeId} />
+            </Suspense>
+          </div>
+        )}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'git-graph' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content inside a plain relative pane body
                   instead of the legacy flex column in Terminal.tsx. */}

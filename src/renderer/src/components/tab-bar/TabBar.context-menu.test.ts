@@ -513,6 +513,55 @@ describe('TabBar context menu wiring', () => {
     expect(tooltip).toBeTruthy()
   })
 
+  it('renders a git-graph unified tab as an ordered, activatable, closeable chip', async () => {
+    // Why: git-graph is a no-OpenFile full-pane tab. Without a TabBar render
+    // branch it had no chip and vanished from the strip once another tab was
+    // active. It must render like simulator: a draggable EditorFileTab chip.
+    appStoreSnapshot.activeTabId = null
+    appStoreSnapshot.activeTabType = 'editor'
+    appStoreSnapshot.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'gg-1',
+          entityId: 'wt-1::git-graph',
+          groupId: 'wt-1',
+          worktreeId: 'wt-1',
+          contentType: 'git-graph',
+          label: 'Git Graph',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    }
+
+    const onActivateFile = vi.fn()
+    const onCloseFile = vi.fn()
+    const element = await renderTabBar({
+      tabs: [],
+      editorFiles: [],
+      browserTabs: [],
+      tabBarOrder: ['gg-1'],
+      // git-graph routes through activeTabType 'editor' with activeFileId set
+      // to the unified tab id (see TabGroupPanel).
+      activeTabType: 'editor',
+      activeFileId: 'gg-1',
+      onActivateFile,
+      onCloseFile
+    })
+
+    const chips = findChildrenByType(element, 'EditorFileTab')
+    expect(chips).toHaveLength(1)
+    expect(chips[0].props.isActive).toBe(true)
+    expect((chips[0].props.file as { language: string }).language).toBe('git-graph')
+
+    ;(chips[0].props.onActivate as () => void)()
+    expect(onActivateFile).toHaveBeenCalledWith('gg-1')
+    ;(chips[0].props.onClose as () => void)()
+    expect(onCloseFile).toHaveBeenCalledWith('gg-1')
+  })
+
   it('cancels delayed menu focus when the tab bar root unmounts', async () => {
     vi.useFakeTimers()
     Object.assign(window, { setTimeout, clearTimeout })

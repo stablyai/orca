@@ -2316,4 +2316,32 @@ describe('registerFilesystemHandlers', () => {
       excludePaths: ['/home/user/repo/worktrees/feature']
     })
   })
+
+  // Guards the git:history handler's explicit `{ limit, baseRef, allRefs }`
+  // rebuild — it re-destructures rather than spreading, so a dropped allRefs
+  // would silently break the repo-wide Git Graph on the SSH path.
+  it('git:history forwards allRefs to the SSH git provider', async () => {
+    const getHistoryMock = vi.fn().mockResolvedValue({
+      items: [],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 200
+    })
+    getSshGitProviderMock.mockReturnValue({ getHistory: getHistoryMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:history')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1',
+      limit: 200,
+      allRefs: true
+    })
+
+    expect(getHistoryMock).toHaveBeenCalledWith(
+      '/remote/repo',
+      expect.objectContaining({ limit: 200, allRefs: true })
+    )
+  })
 })

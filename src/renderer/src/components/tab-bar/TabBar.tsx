@@ -176,6 +176,13 @@ type TabItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'git-graph'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -186,6 +193,9 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   }
   if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'git-graph') {
+    return item.data.label || 'Git Graph'
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -856,6 +866,13 @@ function TabBarInner({
         .map((t) => t.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const gitGraphTabIds = useMemo(
+    () =>
+      (unifiedTabs ?? [])
+        .filter((t) => t.groupId === resolvedGroupId && t.contentType === 'git-graph')
+        .map((t) => t.id),
+    [unifiedTabs, resolvedGroupId]
+  )
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
@@ -864,7 +881,8 @@ function TabBarInner({
       terminalIds,
       editorFileIds,
       browserTabIds,
-      simulatorTabIds
+      simulatorTabIds,
+      gitGraphTabIds
     )
     const items: TabItem[] = []
     for (const id of ids) {
@@ -915,6 +933,17 @@ function TabBarInner({
         })
         continue
       }
+      const gitGraphUnified = unifiedTabByVisibleId.get(id)
+      if (gitGraphUnified && gitGraphUnified.contentType === 'git-graph') {
+        items.push({
+          type: 'git-graph',
+          id,
+          unifiedTabId: gitGraphUnified.id,
+          isPinned: gitGraphUnified.isPinned === true,
+          data: gitGraphUnified
+        })
+        continue
+      }
     }
     return items
   }, [
@@ -923,6 +952,7 @@ function TabBarInner({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
+    gitGraphTabIds,
     terminalMap,
     editorMap,
     browserMap,
@@ -956,6 +986,11 @@ function TabBarInner({
       }
       if (item.type === 'simulator') {
         return activeTabType === 'simulator' && item.id === activeSimulatorTabId
+      }
+      if (item.type === 'git-graph') {
+        // git-graph routes through activeTabType 'editor' with activeFileId set
+        // to the unified tab id (see TabGroupPanel), so match that pairing.
+        return activeTabType === 'editor' && activeFileId === item.id
       }
       return (
         (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
@@ -1202,6 +1237,45 @@ function TabBarInner({
                     dragData={dragData}
                     dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                     includeTopTabBorder={includeTopTabBorder}
+                    isVirtual
+                  />
+                )
+              }
+              if (item.type === 'git-graph') {
+                // Why: git-graph is a no-OpenFile full-pane tab (like simulator),
+                // so synthesize a minimal OpenFile to reuse the editor chip. It
+                // routes through activeTabType 'editor' with activeFileId === the
+                // unified tab id (see TabGroupPanel).
+                const gitGraphLabel = item.data.label || 'Git Graph'
+                const gitGraphFile: OpenFile & { tabId: string } = {
+                  id: item.id,
+                  tabId: item.id,
+                  filePath: gitGraphLabel,
+                  relativePath: gitGraphLabel,
+                  worktreeId,
+                  language: 'git-graph',
+                  isPreview: false,
+                  isDirty: false,
+                  mode: 'edit'
+                }
+                return (
+                  <EditorFileTab
+                    key={item.id}
+                    file={gitGraphFile}
+                    isActive={activeTabType === 'editor' && activeFileId === item.id}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    statusByRelativePath={statusByRelativePath}
+                    onActivate={() => onActivateFile?.(item.id)}
+                    onClose={() => onCloseFile?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                    onCloseAll={() => onCloseAllFiles?.()}
+                    onMakePermanent={() => {}}
+                    onTogglePin={() => togglePinned(item)}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                    isVirtual
                   />
                 )
               }
