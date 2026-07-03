@@ -1,3 +1,4 @@
+import { normalizeExecutionHostId } from './execution-host'
 import type { Repo, ProjectGroup, ProjectGroupCreatedFrom } from './types'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
@@ -56,6 +57,7 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
     }
     seen.add(raw.id)
     const now = Date.now()
+    const executionHostId = normalizeExecutionHostId(raw.executionHostId)
     groups.push({
       id: raw.id,
       name: normalizeProjectGroupName(typeof raw.name === 'string' ? raw.name : ''),
@@ -80,7 +82,9 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
-        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      // Why: runtime-owned groups otherwise look local after persistence reload.
+      ...(executionHostId ? { executionHostId } : {})
     })
   }
   groups.sort(
@@ -133,6 +137,31 @@ export function getProjectGroupSubtreeIds(
     }
   }
   return subtreeIds
+}
+
+/** Manual rank for a project inside a group bucket. Explicit
+ *  `projectGroupOrder` wins; otherwise fall back to global repo order so drag
+ *  midpoint math and sidebar sorting stay aligned. */
+export function getEffectiveProjectGroupManualRank(
+  repo: Pick<Repo, 'id' | 'projectGroupOrder'> | undefined,
+  repoOrderRankById?: ReadonlyMap<string, number>,
+  siblingFallbackIndex?: number
+): number {
+  if (!repo) {
+    return Number.POSITIVE_INFINITY
+  }
+  const order = repo.projectGroupOrder
+  if (typeof order === 'number' && Number.isFinite(order)) {
+    return order
+  }
+  const repoRank = repoOrderRankById?.get(repo.id)
+  if (repoRank !== undefined) {
+    return repoRank * 1000
+  }
+  if (siblingFallbackIndex !== undefined) {
+    return siblingFallbackIndex * 1000
+  }
+  return Number.POSITIVE_INFINITY
 }
 
 export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string | null): number {

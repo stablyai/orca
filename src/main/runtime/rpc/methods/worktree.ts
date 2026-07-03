@@ -7,6 +7,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import {
   WorktreeCreate,
   WorktreeDetectedListParams,
+  WorktreeActivate,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
   WorktreePrefetchCreateBase,
@@ -57,8 +58,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.activate',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.activateManagedWorktree(params.worktree)
+    params: WorktreeActivate,
+    handler: async (params, { runtime }) =>
+      runtime.activateManagedWorktree(params.worktree, {
+        notifyClients: params.notifyClients !== false
+      })
   }),
   defineMethod({
     name: 'worktree.create',
@@ -106,6 +110,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             ? {
                 command: params.startupCommand,
                 ...(params.startupEnv ? { env: params.startupEnv } : {}),
+                ...(params.startupLaunchConfig ? { launchConfig: params.startupLaunchConfig } : {}),
                 ...(params.startupCommandDelivery
                   ? { startupCommandDelivery: params.startupCommandDelivery }
                   : {})

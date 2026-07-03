@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/types'
+import { getRepoHostIdentity } from './repo-host-identity'
 
 // Why: after a drag-reorder we optimistically set `repos`, persist, and main
 // broadcasts `repos:changed`. The renderer's own echo handler refetches, which
@@ -27,10 +28,10 @@ function areReposEqual(a: Repo, b: Repo): boolean {
 }
 
 export function reconcileFetchedRepos(previous: readonly Repo[], next: Repo[]): Repo[] {
-  const previousById = new Map(previous.map((repo) => [repo.id, repo]))
+  const previousById = new Map(previous.map((repo) => [getRepoHostIdentity(repo), repo]))
   let identical = next.length === previous.length
   const reconciled = next.map((repo, index) => {
-    const existing = previousById.get(repo.id)
+    const existing = previousById.get(getRepoHostIdentity(repo))
     if (existing && areReposEqual(existing, repo)) {
       if (existing !== previous[index]) {
         identical = false

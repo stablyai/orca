@@ -19,6 +19,7 @@ import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
 import { DevinHookService } from '../devin/hook-service'
+import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 type FakeFs = {
@@ -191,7 +192,16 @@ describe('remote hook service installers', () => {
   })
 
   it('installs remote Codex hooks with matching trust entries', async () => {
-    const { sftp, fs } = createFakeSftp()
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.codex/hooks.json': `${JSON.stringify({
+        hooks: {},
+        _managed: {
+          'external-manager': {
+            Stop: [0]
+          }
+        }
+      })}\n`
+    })
 
     const status = await new CodexHookService().installRemote(sftp, '/home/dev/')
 
@@ -199,7 +209,9 @@ describe('remote hook service installers', () => {
     expect(status.configPath).toBe('/home/dev/.codex/hooks.json')
     const hooks = JSON.parse(fs.files.get('/home/dev/.codex/hooks.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
+      _managed?: unknown
     }
+    expect(hooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -373,6 +385,34 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
+  })
+
+  it('installs remote Kimi hooks as a managed config.toml block preserving user config', async () => {
+    const userConfig = 'default_model = "kimi-k2.6"\n\n[providers."mine"]\napi_key = "sk-secret"\n'
+    const { sftp, fs } = createFakeSftp({ '/home/dev/.kimi-code/config.toml': userConfig })
+
+    const status = await new KimiHookService().installRemote(sftp, '/home/dev')
+    expect(status.state).toBe('installed')
+
+    const config = fs.files.get('/home/dev/.kimi-code/config.toml')!
+    // User config above the managed block is preserved.
+    expect(config).toContain('default_model = "kimi-k2.6"')
+    expect(config).toContain('api_key = "sk-secret"')
+    for (const eventName of [
+      'UserPromptSubmit',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PermissionRequest',
+      'Stop',
+      'StopFailure'
+    ]) {
+      expect(config).toContain(`event = "${eventName}"`)
+    }
+    // The command points at the POSIX managed script via the `[ -x ]` guard.
+    expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
+    expect(config).toMatch(/command = "if \[ -x /)
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
   it('does not overwrite malformed remote Devin JSONC', async () => {

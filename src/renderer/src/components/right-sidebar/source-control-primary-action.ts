@@ -1,25 +1,22 @@
 // Why: split from the combined primary+dropdown module because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
 
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
+import {
+  resolveSourceControlCommitAreaPrimaryActionDecision,
+  resolveSourceControlPrimaryActionDecision
+} from '../../../../shared/source-control-primary-action-decision'
+import type { SourceControlPrimaryActionDecision } from '../../../../shared/source-control-primary-action-decision-types'
 import { translate } from '@/i18n/i18n'
 import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import { type PrimaryAction, type PrimaryActionInputs } from './source-control-primary-action-types'
-import { resolvePrimaryActionDuringRemoteOp } from './source-control-primary-action-in-flight'
+import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
 import {
   describeForcePushWithLease,
   describePullCount,
   describePushCount,
   describeSyncCounts
 } from './source-control-primary-action-titles'
-import { resolveLinkedReviewPrimaryAction } from './source-control-linked-review-primary-action'
-import {
-  resolveCreatePrIntentInFlightPrimaryAction,
-  resolveCreatePrIntentPrimaryAction
-} from './source-control-primary-create-pr-intent-action'
-import { resolveUnpublishedPrimaryAction } from './source-control-primary-unpublished-action'
 
 export type {
   PrimaryActionKind,
@@ -28,10 +25,8 @@ export type {
   PrimaryActionInputs
 } from './source-control-primary-action-types'
 
-// Why: this module owns the pure state-machine logic for the Source Control
-// primary action (split button). Keeping the logic outside the React component
-// makes it straightforward to unit-test each row of the priority table without
-// spinning up a renderer.
+// Why: the shared module owns the pure state-machine logic; this renderer
+// adapter keeps localized copy and the historical exported shape in place.
 
 /**
  * Resolve the primary split-button action.
@@ -42,13 +37,11 @@ export type {
  *   3. Unresolved conflicts block the commit path entirely.
  *   4. Create PR intent can own the primary; manual prerequisites are
  *      exposed as a visible sibling action by CommitArea.
- *   5. Has partially staged files → "Stage All" to avoid hook-time partial
- *      stash conflicts.
- *   6. Has staged files + message → plain "Commit" (compound flows live in
+ *   5. Has staged files + message → plain "Commit" (compound flows live in
  *      the dropdown; after the commit lands, the clean-tree rung rotates
  *      the primary to the appropriate single remote action).
- *   7. Has staged files + no message → disabled "Commit" with a reason.
- *   8. Clean tree → adaptive remote action (or disabled "Commit" no-op).
+ *   6. Has staged files + no message → disabled "Commit" with a reason.
+ *   7. Clean tree → adaptive remote action (or disabled "Commit" no-op).
  *
  * An undefined upstream status means fetchUpstreamStatus has not resolved
  * yet for this worktree. We return a disabled Commit so the button has a
@@ -56,269 +49,209 @@ export type {
  * through "Publish Branch" on every worktree switch.
  */
 export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction {
-  const {
-    stagedCount,
-    hasUnstagedChanges,
-    hasStageableChanges,
-    hasPartiallyStagedChanges,
-    hasMessage,
-    hasUnresolvedConflicts,
-    isCommitting,
-    isRemoteOperationActive,
-    upstreamStatus,
-    prState,
-    isPRStateLoading,
-    hostedReviewCreation,
-    branchCommitsAhead,
-    hasCurrentBranch = true,
-    canPushLinkedReviewWithoutUpstream = false,
-    isPrIntentInFlight = false
-  } = inputs
-
-  if (isPrIntentInFlight) {
-    return resolveCreatePrIntentInFlightPrimaryAction(inputs)
-  }
-
-  // 1. Commit in flight — lock the primary no matter what else is true.
-  if (isCommitting) {
-    return {
-      kind: 'commit',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        'Commit'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.16aee3a5c1',
-        'Commit in progress…'
-      ),
-      disabled: true
-    }
-  }
-
-  if (isRemoteOperationActive) {
-    return resolvePrimaryActionDuringRemoteOp(inputs, resolvePrimaryAction)
-  }
-
-  // 3. Unresolved conflicts block any commit path.
-  if (hasUnresolvedConflicts) {
-    return {
-      kind: 'commit',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        'Commit'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.a6457b46a7',
-        'Resolve conflicts before committing'
-      ),
-      disabled: true
-    }
-  }
-
-  const createPrIntent = resolveCreatePrIntentPrimaryAction(inputs)
-  if (createPrIntent) {
-    return createPrIntent
-  }
-
-  const hasStaged = stagedCount > 0
-  const hasOpenHostedReview = prState === 'open' || prState === 'draft'
-
-  // Why: partial staging can break hook-time restores during the intent flow;
-  // keep Stage All visible as a sibling prerequisite without replacing Create PR.
-  if (hasStaged && hasPartiallyStagedChanges) {
-    return {
-      kind: 'stage',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.18a0fca877',
-        'Stage All'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.2d8f185fbc',
-        'Stage all changes before committing partially staged files'
-      ),
-      disabled: false
-    }
-  }
-
-  // 5. Has staged files + message → plain Commit. The primary button never
-  //    compounds ("Commit & Push" etc.) — after the commit lands, the primary
-  //    naturally rotates to the appropriate remote action (Push / Sync /
-  //    Publish Branch) via step 7 below. Users who want the one-click
-  //    compound flow can still reach it from the dropdown.
-  if (hasStaged && hasMessage) {
-    return {
-      kind: 'commit',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        'Commit'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ab41fb926b',
-        'Commit staged changes'
-      ),
-      disabled: false
-    }
-  }
-
-  // 6. Has staged files but no message — user just needs to type something.
-  if (hasStaged && !hasMessage) {
-    return {
-      kind: 'commit',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        'Commit'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.f01f16d77f',
-        'Enter a commit message to commit'
-      ),
-      disabled: true
-    }
-  }
-
-  // 6b. Nothing staged but local changes exist — surface staging as the
-  //     primary so dirty trees don't invite a remote op (pull/sync would fail
-  //     with uncommitted changes; push/publish skips the actual user need).
-  //     Sits before the upstream-status checks so it works regardless of
-  //     whether upstream has resolved yet.
-  if (!hasStaged && hasStageableChanges) {
-    return {
-      kind: 'stage',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.18a0fca877',
-        'Stage All'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.5a477d80cb',
-        'Stage all changes'
-      ),
-      disabled: false
-    }
-  }
-
-  // 7. Clean tree + no staged files → adaptive remote action.
-  if (!upstreamStatus) {
-    return {
-      kind: 'commit',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-        'Commit'
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.fa3bd4f40c',
-        'Stage at least one file to commit'
-      ),
-      disabled: true
-    }
-  }
-
-  if (!upstreamStatus.hasUpstream) {
-    const unpublishedAction = resolveUnpublishedPrimaryAction({
-      hasCurrentBranch,
-      branchCommitsAhead,
-      isPRStateLoading,
-      prState
-    })
-
-    if (unpublishedAction.kind === 'publish') {
-      const linkedReviewAction = resolveLinkedReviewPrimaryAction({
-        hasOpenHostedReview,
-        canPushLinkedReviewWithoutUpstream
-      })
-      if (linkedReviewAction) {
-        return linkedReviewAction
-      }
-    }
-
-    return unpublishedAction
-  }
-
-  if (upstreamStatus.ahead > 0 && upstreamStatus.behind > 0) {
-    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
-      return {
-        kind: 'push',
-        label: translate(
-          'auto.components.right.sidebar.source.control.primary.action.390abeab93',
-          'Force Push'
-        ),
-        title: describeForcePushWithLease(branchCommitsAhead, upstreamStatus.upstreamName),
-        disabled: false
-      }
-    }
-    return {
-      kind: 'sync',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.795f1509c5',
-        'Sync'
-      ),
-      title: describeSyncCounts(upstreamStatus.ahead, upstreamStatus.behind),
-      disabled: false
-    }
-  }
-  if (upstreamStatus.behind > 0) {
-    return {
-      kind: 'pull',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.d64292a938',
-        'Pull'
-      ),
-      title: describePullCount(upstreamStatus.behind),
-      disabled: false
-    }
-  }
-  if (upstreamStatus.ahead > 0) {
-    return {
-      kind: 'push',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.95550cff15',
-        'Push'
-      ),
-      title: describePushCount(upstreamStatus.ahead),
-      disabled: false
-    }
-  }
-
-  if (hostedReviewCreation?.canCreate) {
-    const copy = localizedHostedReviewCopy(
-      resolveSupportedHostedReviewCopyProvider(hostedReviewCreation.provider)
-    )
-    return {
-      kind: 'create_pr',
-      label: translate(
-        'auto.components.right.sidebar.source.control.primary.action.e7ffa46946',
-        'Create {{value0}}',
-        { value0: copy.shortLabel }
-      ),
-      title: translate(
-        'auto.components.right.sidebar.source.control.primary.action.946a8a05ea',
-        'Create a {{value0}} for this branch',
-        { value0: copy.reviewLabel }
-      ),
-      disabled: false
-    }
-  }
-
-  // Clean + tracked + in sync — distinguish truly clean from work that still
-  // needs staging before commit can proceed.
-  return {
-    kind: 'commit',
-    label: translate(
-      'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
-      'Commit'
-    ),
-    title: hasUnstagedChanges
-      ? 'Stage at least one file to commit'
-      : 'Nothing to commit. Branch is up to date.',
-    disabled: true
-  }
+  return toRendererPrimaryAction(resolveSourceControlPrimaryActionDecision(inputs), inputs)
 }
 
 export function resolveCommitAreaPrimaryAction(inputs: PrimaryActionInputs): PrimaryAction {
-  // Why: review creation is additive chrome. The commit area should keep the
-  // same local/remote primary action it would have without review eligibility.
-  return resolvePrimaryAction({
-    ...inputs,
-    hostedReviewCreation: null,
-    isPrIntentInFlight: false
-  })
+  return toRendererPrimaryAction(
+    resolveSourceControlCommitAreaPrimaryActionDecision(inputs),
+    inputs
+  )
+}
+
+function toRendererPrimaryAction(
+  decision: SourceControlPrimaryActionDecision,
+  inputs: PrimaryActionInputs
+): PrimaryAction {
+  return {
+    kind: decision.kind,
+    label: resolvePrimaryActionLabel(decision, inputs),
+    title: resolvePrimaryActionTitle(decision, inputs),
+    disabled: decision.disabled
+  }
+}
+
+function resolvePrimaryActionLabel(
+  decision: SourceControlPrimaryActionDecision,
+  inputs: PrimaryActionInputs
+): string {
+  if (decision.labelIntent === 'force_push') {
+    return translate(
+      'auto.components.right.sidebar.source.control.primary.action.390abeab93',
+      'Force Push'
+    )
+  }
+  if (decision.labelIntent === 'create_pr') {
+    const copy = localizedHostedReviewCopy(
+      resolveSupportedHostedReviewCopyProvider(inputs.hostedReviewCreation?.provider)
+    )
+    return translate(
+      'auto.components.right.sidebar.source.control.primary.action.e7ffa46946',
+      'Create {{value0}}',
+      { value0: copy.shortLabel }
+    )
+  }
+  switch (decision.labelIntent) {
+    case 'commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.ed93b4f14f',
+        'Commit'
+      )
+    case 'stage':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.18a0fca877',
+        'Stage All'
+      )
+    case 'push':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.95550cff15',
+        'Push'
+      )
+    case 'pull':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.d64292a938',
+        'Pull'
+      )
+    case 'sync':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.795f1509c5',
+        'Sync'
+      )
+    case 'publish':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.7b4d02e6b8',
+        'Publish Branch'
+      )
+    case 'create_pr_intent':
+      return resolvePrimaryActionLabel({ ...decision, labelIntent: 'create_pr' }, inputs)
+  }
+}
+
+function resolvePrimaryActionTitle(
+  decision: SourceControlPrimaryActionDecision,
+  inputs: PrimaryActionInputs
+): string {
+  const copy = localizedHostedReviewCopy(
+    resolveSupportedHostedReviewCopyProvider(inputs.hostedReviewCreation?.provider)
+  )
+  switch (decision.titleIntent) {
+    case 'commit_in_progress':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.16aee3a5c1',
+        'Commit in progress…'
+      )
+    case 'force_push_in_progress':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.74fc171e99',
+        'Force Push in progress…'
+      )
+    case 'action_in_progress':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.484f45c439',
+        '{{value0}} in progress…',
+        { value0: resolvePrimaryActionLabel(decision, inputs) }
+      )
+    case 'remote_operation_in_progress':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.6f7a8b9c0d',
+        'Remote operation in progress…'
+      )
+    case 'remote_operation_blocks_commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.7f8a9b0c1d',
+        'Remote operation in progress — try again once it finishes'
+      )
+    case 'resolve_conflicts_before_commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.a6457b46a7',
+        'Resolve conflicts before committing'
+      )
+    case 'prepare_review':
+      if (decision.disabled) {
+        return translate(
+          'auto.components.right.sidebar.source.control.primary.action.d37e68f61d',
+          'Preparing branch for review…'
+        )
+      }
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.c72e5e65d1',
+        'Prepare this branch and create a {{value0}}',
+        { value0: copy.reviewLabel }
+      )
+    case 'commit_staged_changes':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.ab41fb926b',
+        'Commit staged changes'
+      )
+    case 'enter_commit_message':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.f01f16d77f',
+        'Enter a commit message to commit'
+      )
+    case 'stage_all_changes':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.5a477d80cb',
+        'Stage all changes'
+      )
+    case 'stage_file_to_commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.fa3bd4f40c',
+        'Stage at least one file to commit'
+      )
+    case 'checkout_branch_before_publish':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.e61b0d7a3c',
+        'Check out a branch before publishing commits.'
+      )
+    case 'checking_review_status':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.41d4bcf157',
+        'Checking PR status…'
+      )
+    case 'review_already_merged':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.3d5dccef0b',
+        'Nothing to commit. PR is already merged.'
+      )
+    case 'publish_branch':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.1884cf34af',
+        'Publish this branch to origin'
+      )
+    case 'push_linked_review':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.1d47e850cf',
+        'Push updates to the linked review branch'
+      )
+    case 'linked_review_target_unavailable':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.c39d0c75c3',
+        'Linked review branch target is unavailable.'
+      )
+    case 'force_push_with_lease':
+      return describeForcePushWithLease(decision.count, decision.upstreamName)
+    case 'sync_counts':
+      return describeSyncCounts(decision.ahead ?? 0, decision.behind ?? 0)
+    case 'pull_count':
+      return describePullCount(decision.count ?? 0)
+    case 'push_count':
+      return describePushCount(decision.count ?? 0)
+    case 'create_review':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.946a8a05ea',
+        'Create a {{value0}} for this branch',
+        { value0: copy.reviewLabel }
+      )
+    case 'nothing_to_commit_up_to_date':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.8f9a0b1c2d',
+        'Nothing to commit. Branch is up to date.'
+      )
+    case 'checking_review_creation':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.h3i4j5k607',
+        'Checking whether this branch can create a {{value0}}…',
+        { value0: copy.reviewLabel }
+      )
+  }
 }

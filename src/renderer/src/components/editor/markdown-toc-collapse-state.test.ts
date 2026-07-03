@@ -23,7 +23,21 @@ const sampleToc: MarkdownTocItem[] = [
             id: 'install',
             level: 3,
             title: 'Install',
-            children: []
+            children: [
+              {
+                id: 'configure',
+                level: 4,
+                title: 'Configure',
+                children: [
+                  {
+                    id: 'options',
+                    level: 5,
+                    title: 'Options',
+                    children: []
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -39,13 +53,28 @@ const sampleToc: MarkdownTocItem[] = [
 
 describe('markdown toc collapse state', () => {
   it('collects parent ids for nested headings', () => {
-    expect([...collectMarkdownTocParentIds(sampleToc)].sort()).toEqual(['intro', 'setup'])
+    expect([...collectMarkdownTocParentIds(sampleToc)].sort()).toEqual([
+      'configure',
+      'install',
+      'intro',
+      'setup'
+    ])
   })
 
   it('collapses parents at and below the selected level', () => {
-    expect([...collapseMarkdownTocToLevel(sampleToc, 1)].sort()).toEqual(['intro', 'setup'])
-    expect([...collapseMarkdownTocToLevel(sampleToc, 2)].sort()).toEqual(['setup'])
-    expect([...collapseMarkdownTocToLevel(sampleToc, 3)]).toEqual([])
+    expect([...collapseMarkdownTocToLevel(sampleToc, 1)].sort()).toEqual([
+      'configure',
+      'install',
+      'intro',
+      'setup'
+    ])
+    expect([...collapseMarkdownTocToLevel(sampleToc, 2)].sort()).toEqual([
+      'configure',
+      'install',
+      'setup'
+    ])
+    expect([...collapseMarkdownTocToLevel(sampleToc, 4)]).toEqual(['configure'])
+    expect([...collapseMarkdownTocToLevel(sampleToc, 5)]).toEqual([])
   })
 
   it('toggles and prunes stale collapsed ids', () => {

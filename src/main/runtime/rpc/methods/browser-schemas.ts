@@ -9,6 +9,7 @@ import {
   OptionalFiniteNumber,
   OptionalPlainString,
   OptionalString,
+  requiredStringAllowingEmpty,
   requiredString
 } from '../schemas'
 
@@ -22,9 +23,7 @@ export const Goto = BrowserTarget.extend({
 
 export const Fill = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
-  value: z.custom<string>((v) => typeof v === 'string', {
-    message: 'Missing required --value'
-  })
+  value: requiredStringAllowingEmpty('Missing required --value')
 })
 
 export const Type = BrowserTarget.extend({

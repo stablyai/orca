@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -87,19 +87,20 @@ describe('AntigravityHookService', () => {
     )
     expect(script).toContain('/hook/antigravity')
     if (process.platform === 'win32') {
+      expect(script).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
       expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
       expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')
     } else {
       expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-      // Why: payload is streamed to a temp file and posted via name@file so it
-      // never lands on the curl command line (MDE oversized-command-line FP).
-      expect(script).toContain('cat > "$payload_file"')
-      expect(script).toContain('--data-urlencode "payload@${payload_file}"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-      // Empty-stdin events still post {} so a status row shows.
-      expect(script).toContain("printf '%s' '{}' > \"$payload_file\"")
+      expect(script).toContain('payload=$(cat)')
+      expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
+      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+      // on the curl command line (EDR oversized-command-line false positive).
+      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('--data-urlencode "payload@-"')
+      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     }
     expect(script).toContain('{"decision":""}')
   })
@@ -179,6 +180,7 @@ describe('AntigravityHookService', () => {
         'utf8'
       )
       expect(script).toContain('/hook/antigravity')
+      expect(script).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
       expect(script).toContain('hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT')
       expect(script).toContain('[string]::IsNullOrWhiteSpace($inputData)) { @{} }')
       expect(script).not.toContain('[string]::IsNullOrWhiteSpace($inputData)) { exit 0 }')

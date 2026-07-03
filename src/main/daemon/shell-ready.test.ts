@@ -2,10 +2,10 @@
    bash, marker scanning, and env restoration cases in one suite so the
    generated wrapper contract is reviewed as a unit. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnSync } from 'child_process'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 
@@ -472,6 +472,8 @@ describePosix('daemon shell-ready launch config', () => {
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+    const mimoRestoreLine =
+      '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
@@ -479,6 +481,9 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
+    expect(zshrc).toContain(mimoRestoreLine)
+    expect(zlogin).toContain(mimoRestoreLine)
+    expect(bashRc).toContain(mimoRestoreLine)
     expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')

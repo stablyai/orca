@@ -300,19 +300,78 @@ describe('file RPC methods', () => {
       makeRequest('files.resolveTerminalPath', {
         worktree: 'id:wt-1',
         pathText: '/repo/src/index.ts',
-        cwd: '/repo'
+        cwd: '/repo',
+        terminal: 'term-1'
       })
     )
 
     expect(runtime.resolveTerminalPath).toHaveBeenCalledWith(
       'id:wt-1',
       '/repo/src/index.ts',
-      '/repo'
+      '/repo',
+      undefined,
+      'term-1'
     )
     expect(response).toMatchObject({
       ok: true,
       result: { relativePath: 'src/index.ts', exists: true, isDirectory: false }
     })
+  })
+
+  it('reads a terminal artifact through a grant-scoped method', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      readTerminalArtifactFile: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        relativePath: '/tmp/result.json',
+        content: '{}',
+        truncated: false,
+        byteLength: 2
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.readTerminalArtifact', {
+        worktree: 'id:wt-1',
+        absolutePath: '/tmp/result.json',
+        grantId: 'grant-1'
+      })
+    )
+
+    expect(runtime.readTerminalArtifactFile).toHaveBeenCalledWith(
+      'id:wt-1',
+      'grant-1',
+      '/tmp/result.json',
+      undefined
+    )
+    expect(response).toMatchObject({ ok: true, result: { content: '{}' } })
+  })
+
+  it('writes a terminal artifact through a grant-scoped method', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      writeTerminalArtifactFile: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.writeTerminalArtifact', {
+        worktree: 'id:wt-1',
+        absolutePath: '/tmp/result.json',
+        grantId: 'grant-1',
+        content: '{}'
+      })
+    )
+
+    expect(runtime.writeTerminalArtifactFile).toHaveBeenCalledWith(
+      'id:wt-1',
+      'grant-1',
+      '/tmp/result.json',
+      '{}',
+      undefined
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
   it('reads a preview file for a selected worktree', async () => {
@@ -335,6 +394,33 @@ describe('file RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { content: 'base64', isBinary: true, mimeType: 'image/png' }
+    })
+  })
+
+  it('reads a file chunk for a selected worktree', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      readFileExplorerChunk: vi.fn().mockResolvedValue({
+        contentBase64: 'YWJj',
+        bytesRead: 3,
+        eof: true
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.readChunk', {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 0,
+        length: 1024
+      })
+    )
+
+    expect(runtime.readFileExplorerChunk).toHaveBeenCalledWith('id:wt-1', 'archive.zip', 0, 1024)
+    expect(response).toMatchObject({
+      ok: true,
+      result: { contentBase64: 'YWJj', bytesRead: 3, eof: true }
     })
   })
 

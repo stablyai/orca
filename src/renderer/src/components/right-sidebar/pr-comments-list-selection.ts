@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  getPRCommentGroupId,
-  getPRCommentGroupRoot,
-  groupPRComments,
-  type PRCommentGroup
-} from '@/lib/pr-comment-groups'
+import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { isPRCommentGroupQueueableForAI } from '@/lib/pr-comment-action-state'
 import type { PRComment } from '../../../../shared/types'
 
 export type PRCommentsListSelection = {
@@ -101,7 +97,7 @@ export function usePRCommentsListSelection(
   // audience filter doesn't silently drop already-selected comments.
   const canonicalGroups = useMemo(() => groupPRComments(comments), [comments])
   const selectableGroups = useMemo(
-    () => canonicalGroups.filter((group) => getPRCommentGroupRoot(group).isResolved !== true),
+    () => canonicalGroups.filter(isPRCommentGroupQueueableForAI),
     [canonicalGroups]
   )
   const selectableGroupsById = useMemo(() => {

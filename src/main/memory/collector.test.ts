@@ -81,6 +81,25 @@ describe('parsePsOutput', () => {
     expect(rows[0].cpu).toBe(0)
     expect(rows[0].memory).toBe(0)
   })
+
+  it('parses process rows without line-array or whitespace-regex splitting', async () => {
+    const { parsePsOutput } = await loadCollector()
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    const rows = parsePsOutput('10 1 0.5 256\r\n11 10 0 128')
+
+    const usedUnboundedSplit = splitSpy.mock.calls.some(
+      ([separator]) =>
+        (typeof separator === 'string' && separator === '\n') ||
+        (separator instanceof RegExp && separator.source.includes('\\s+'))
+    )
+    splitSpy.mockRestore()
+    expect(rows).toEqual([
+      { pid: 10, ppid: 1, cpu: 0.5, memory: 256 * 1024 },
+      { pid: 11, ppid: 10, cpu: 0, memory: 128 * 1024 }
+    ])
+    expect(usedUnboundedSplit).toBe(false)
+  })
 })
 
 describe('parseWmicOutput', () => {

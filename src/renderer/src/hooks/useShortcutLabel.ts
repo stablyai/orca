@@ -27,9 +27,38 @@ export function formatShortcutLabel(
   )
 }
 
+export function formatPrimaryShortcutLabel(
+  actionId: KeybindingActionId,
+  overrides?: KeybindingOverrides
+): string {
+  const platform = getShortcutPlatform()
+  const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+  return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+}
+
 export function useShortcutLabel(actionId: KeybindingActionId): string {
   const keybindings = useAppStore((state) => state.keybindings)
   return formatShortcutLabel(actionId, keybindings)
+}
+
+// Why: returns null for unbound actions instead of the display sentinel
+// 'Unassigned', so callers decide whether to render a hint without coupling
+// UI logic to formatter copy (which may change or become localized).
+export function formatOptionalShortcutLabel(
+  actionId: KeybindingActionId,
+  overrides?: KeybindingOverrides
+): string | null {
+  const platform = getShortcutPlatform()
+  const bindings = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+  if (bindings.length === 0) {
+    return null
+  }
+  return formatKeybindingList(bindings, platform)
+}
+
+export function useOptionalShortcutLabel(actionId: KeybindingActionId): string | null {
+  const keybindings = useAppStore((state) => state.keybindings)
+  return formatOptionalShortcutLabel(actionId, keybindings)
 }
 
 export function formatShortcutKeys(

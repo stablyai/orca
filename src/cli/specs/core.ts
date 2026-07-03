@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { SERVE_COMMAND_SPECS } from './serve'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -9,25 +10,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS],
     examples: ['orca open', 'orca open --json']
   },
-  {
-    path: ['serve'],
-    summary: 'Start an Orca runtime server without opening a desktop window',
-    usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'port', 'pairing-address', 'mobile-pairing', 'no-pairing'],
-    notes: [
-      'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
-      'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
-      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
-    ],
-    examples: [
-      'orca serve',
-      'orca serve --json',
-      'orca serve --port 6768 --pairing-address 100.64.1.20',
-      'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
-    ]
-  },
+  ...SERVE_COMMAND_SPECS,
   {
     path: ['status'],
     summary: 'Show app/runtime/graph readiness',
@@ -129,6 +112,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<id> to make the relationship explicit.',
       'Use --no-parent when the new worktree should be independent of the current context.',
+      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
       'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',

@@ -9,6 +9,7 @@ import {
   type TerminalPaneSplitSource
 } from '../../../shared/feature-education-telemetry'
 import {
+  getFeatureWallSetupSectionId,
   isFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../shared/feature-wall-setup-steps'
@@ -17,10 +18,6 @@ import { track } from './telemetry'
 const SETUP_GUIDE_TELEMETRY_COMPLETED_STEPS_STORAGE_KEY =
   'orca.setupGuideTelemetryCompletedSteps.v1'
 const TERMINAL_PANE_SPLIT_TELEMETRY_STORAGE_KEY = 'orca.terminalPaneSplitTelemetry.v1'
-const SETUP_GUIDE_PARALLEL_WORK_STEP_IDS = new Set<FeatureWallSetupStepId>([
-  'split-terminal',
-  'two-worktrees'
-])
 
 type FeatureEducationTelemetryEventName = Extract<
   EventName,
@@ -195,7 +192,7 @@ export function reserveTerminalPaneSplitTelemetry(
 }
 
 export function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
-  return SETUP_GUIDE_PARALLEL_WORK_STEP_IDS.has(id) ? 'parallel-work' : 'setup'
+  return getFeatureWallSetupSectionId(id)
 }
 
 function emitFeatureEducationTelemetry<N extends FeatureEducationTelemetryEventName>(

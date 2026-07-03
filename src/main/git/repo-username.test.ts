@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ChildProcess from 'child_process'
+import type * as ChildProcess from 'node:child_process'
 import type * as RepoModule from './repo'
 
 const execSyncMock = vi.hoisted(() => vi.fn())

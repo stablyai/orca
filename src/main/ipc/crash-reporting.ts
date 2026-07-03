@@ -24,6 +24,10 @@ import { collectDiagnosticBundle, getDiagnosticsStatus } from '../observability'
 import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
 import { startSpan } from '../observability/tracer'
 import type { FeedbackDiagnosticBundleAttachment } from './feedback'
+import {
+  assertClipboardTextWriteWithinLimit,
+  isClipboardTextWriteTooLargeError
+} from '../../shared/clipboard-text'
 
 const inFlightSubmissions = new Set<string>()
 const submittedReportIds = new Set<string>()
@@ -414,7 +418,16 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         clipboard.writeText(buildUncapturedCrashReportText(args?.notes))
         return { ok: true as const }
       }
-      clipboard.writeText(formatCrashReportText(report, args?.notes))
+      try {
+        clipboard.writeText(
+          assertClipboardTextWriteWithinLimit(formatCrashReportText(report, args?.notes))
+        )
+      } catch (error) {
+        if (isClipboardTextWriteTooLargeError(error)) {
+          return { ok: false as const, error: 'Crash diagnostics are too large to copy safely.' }
+        }
+        throw error
+      }
       return { ok: true as const }
     }
   )

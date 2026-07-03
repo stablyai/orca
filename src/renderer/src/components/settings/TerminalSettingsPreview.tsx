@@ -260,6 +260,9 @@ export function TerminalSettingsPreview({
       try {
         terminal.loadAddon(addon)
         ligaturesAddonRef.current = addon
+        // Why: the preview writes its sample before this effect runs; repaint
+        // so already-rendered operators switch to ligature glyphs immediately.
+        terminal.refresh(0, terminal.rows - 1)
       } catch (err) {
         addon.dispose()
         console.warn('[settings preview] ligatures addon failed to attach', err)

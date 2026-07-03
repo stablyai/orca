@@ -1,13 +1,13 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
-import { mkdtemp } from 'fs/promises'
-import os from 'os'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
 
-const IMPORT_AS_MONOREPO_BUTTON_NAME = 'Yes, import as monorepo'
+const IMPORT_AS_GROUP_BUTTON_NAME = 'Yes, import as group'
 
 const tempRoots: string[] = []
 
@@ -29,7 +29,11 @@ async function createNestedRepoFixture(): Promise<{
   projectPaths: string[]
   groupName: string
 }> {
-  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-folder-setup-'))
+  // Why: realpathSync so the projectPaths the test asserts on match the store's
+  // canonicalized repo.path / projectGroup.parentPath on macOS, where
+  // os.tmpdir() (/var/...) symlinks to /private/var/... and the app canonicalizes
+  // imported paths via `git rev-parse --show-toplevel`.
+  const parentPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-folder-setup-')))
   tempRoots.push(parentPath)
   const repoNames = ['api-service', 'web-client']
   const projectPaths = repoNames.map((name) => path.join(parentPath, name))
@@ -51,7 +55,12 @@ async function createLargeNestedRepoFixture(): Promise<{
   groupName: string
   selectedProjectPaths: string[]
 }> {
-  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-large-folder-setup-'))
+  // Why: realpathSync so the projectPaths the test asserts on match the store's
+  // canonicalized repo.path on macOS (os.tmpdir() /var/... symlinks to
+  // /private/var/...).
+  const parentPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-large-folder-setup-'))
+  )
   tempRoots.push(parentPath)
   const nestedParent = path.join(
     parentPath,
@@ -95,11 +104,11 @@ async function chooseFolderInNativeDialog(
   }, folderPath)
 }
 
-function getImportAsMonorepoButton(importDialog: Locator): Locator {
+function getImportAsGroupButton(importDialog: Locator): Locator {
   // Why: the current accessible action is intentional; accepting retired
   // labels would hide deterministic dialog copy drift.
   return importDialog.getByRole('button', {
-    name: IMPORT_AS_MONOREPO_BUTTON_NAME,
+    name: IMPORT_AS_GROUP_BUTTON_NAME,
     exact: true
   })
 }
@@ -129,8 +138,8 @@ test.describe('Folder setup', () => {
     ).toBeVisible()
     await expect(importDialog.getByText('api-service', { exact: true }).first()).toBeVisible()
     await expect(importDialog.getByText('web-client', { exact: true }).first()).toBeVisible()
-    await expect(getImportAsMonorepoButton(importDialog)).toBeEnabled()
-    await getImportAsMonorepoButton(importDialog).click()
+    await expect(getImportAsGroupButton(importDialog)).toBeEnabled()
+    await getImportAsGroupButton(importDialog).click()
 
     await expect
       .poll(
@@ -217,7 +226,7 @@ test.describe('Folder setup', () => {
         .locator('input[type="checkbox"]')
         .check()
     }
-    await getImportAsMonorepoButton(importDialog).click()
+    await getImportAsGroupButton(importDialog).click()
 
     await expect
       .poll(

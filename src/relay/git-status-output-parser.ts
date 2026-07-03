@@ -69,7 +69,6 @@ export function parseStatusOutput(stdout: string): {
     if (line.startsWith('1 ') || line.startsWith('2 ')) {
       const parts = line.split(' ')
       const xy = parts[1]
-      const submodule = parseSubmoduleStatus(parts[2])
       const indexStatus = xy[0]
       const worktreeStatus = xy[1]
 
@@ -85,7 +84,7 @@ export function parseStatusOutput(stdout: string): {
             status: parseStatusChar(indexStatus),
             area: 'staged',
             oldPath,
-            ...(submodule ? { submodule } : {})
+            ...submoduleStatusField(parts[2], indexStatus)
           })
         }
         if (worktreeStatus !== '.') {
@@ -94,7 +93,7 @@ export function parseStatusOutput(stdout: string): {
             status: parseStatusChar(worktreeStatus),
             area: 'unstaged',
             oldPath,
-            ...(submodule ? { submodule } : {})
+            ...submoduleStatusField(parts[2], worktreeStatus)
           })
         }
       } else {
@@ -104,7 +103,7 @@ export function parseStatusOutput(stdout: string): {
             path: filePath,
             status: parseStatusChar(indexStatus),
             area: 'staged',
-            ...(submodule ? { submodule } : {})
+            ...submoduleStatusField(parts[2], indexStatus)
           })
         }
         if (worktreeStatus !== '.') {
@@ -112,7 +111,7 @@ export function parseStatusOutput(stdout: string): {
             path: filePath,
             status: parseStatusChar(worktreeStatus),
             area: 'unstaged',
-            ...(submodule ? { submodule } : {})
+            ...submoduleStatusField(parts[2], worktreeStatus)
           })
         }
       }
@@ -143,16 +142,27 @@ export function parseStatusOutput(stdout: string): {
 }
 
 function parseSubmoduleStatus(
-  submoduleField: string | undefined
+  submoduleField: string | undefined,
+  statusChar = '.'
 ): { commitChanged: boolean; trackedChanges: boolean; untrackedChanges: boolean } | undefined {
   if (!submoduleField?.startsWith('S')) {
     return undefined
   }
   return {
-    commitChanged: submoduleField[1] === 'C',
+    commitChanged: submoduleField[1] === 'C' || (submoduleField === 'S...' && statusChar === 'M'),
     trackedChanges: submoduleField[2] === 'M',
     untrackedChanges: submoduleField[3] === 'U'
   }
+}
+
+function submoduleStatusField(
+  submoduleField: string | undefined,
+  statusChar: string
+):
+  | { submodule: { commitChanged: boolean; trackedChanges: boolean; untrackedChanges: boolean } }
+  | {} {
+  const submodule = parseSubmoduleStatus(submoduleField, statusChar)
+  return submodule ? { submodule } : {}
 }
 
 function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {

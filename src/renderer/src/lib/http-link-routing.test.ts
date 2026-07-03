@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { openHttpLink, registerHttpLinkStoreAccessor } from './http-link-routing'
+import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import {
+  openHttpLink,
+  registerHttpLinkStoreAccessor,
+  resolveLocalhostHttpLinkDisplayUrl
+} from './http-link-routing'
 
 const openUrlMock = vi.fn()
+const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 
@@ -12,10 +18,21 @@ const storeState = {
         openLinksInApp?: boolean
         openLinksInAppPreferencePrompted?: boolean
         activeRuntimeEnvironmentId?: string | null
+        localhostWorktreeLabelsEnabled?: boolean
       }
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
-  createBrowserTab: createBrowserTabMock
+  createBrowserTab: createBrowserTabMock,
+  repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
+  projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
+  worktreesByRepo: {} as Record<
+    string,
+    { id: string; projectId?: string; repoId?: string; displayName?: string }[]
+  >,
+  allWorktrees: vi.fn(
+    () => [] as { id: string; projectId?: string; repoId?: string; displayName?: string }[]
+  ),
+  workspacePortScan: null as { result: WorkspacePortScanResult } | null
 }
 
 beforeEach(() => {
@@ -26,6 +43,9 @@ beforeEach(() => {
     api: {
       shell: {
         openUrl: openUrlMock
+      },
+      localhostWorktreeLabels: {
+        register: registerLocalhostLabelMock
       }
     }
   })
@@ -107,5 +127,154 @@ describe('openHttpLink', () => {
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('labels localhost links from terminal output before opening the system browser', async () => {
+    storeState.settings = { openLinksInApp: false, localhostWorktreeLabelsEnabled: true }
+    storeState.repos = [
+      {
+        id: 'repo-1',
+        displayName: 'snapstudio',
+        repoIcon: null,
+        badgeColor: '#f97316'
+      }
+    ]
+    storeState.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-analytics',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          displayName: 'analytics'
+        }
+      ]
+    }
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-analytics',
+              displayName: 'analytics',
+              path: '/repo/analytics',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+    registerLocalhostLabelMock.mockResolvedValue({
+      url: 'http://analytics.orca.localhost:60016/episodes'
+    })
+
+    openHttpLink('http://localhost:5180/episodes', { worktreeId: 'wt-analytics' })
+    await Promise.resolve()
+
+    expect(registerLocalhostLabelMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetUrl: 'http://localhost:5180/episodes',
+        projectName: 'snapstudio',
+        worktreeName: 'analytics',
+        worktreePath: '/repo/analytics',
+        worktreeId: 'wt-analytics'
+      })
+    )
+    expect(openUrlMock).toHaveBeenCalledWith('http://analytics.orca.localhost:60016/episodes')
+  })
+
+  it('resolves display URLs for labeled localhost links without opening them', async () => {
+    storeState.settings = { localhostWorktreeLabelsEnabled: true }
+    storeState.repos = [
+      {
+        id: 'repo-1',
+        displayName: 'snapstudio',
+        repoIcon: null,
+        badgeColor: '#f97316'
+      }
+    ]
+    storeState.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-main',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          displayName: 'main'
+        }
+      ]
+    }
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-main',
+              displayName: 'main',
+              path: '/repo/main',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+    registerLocalhostLabelMock.mockResolvedValue({
+      url: 'http://snapstudio-main.orca.localhost:60016/'
+    })
+
+    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(
+      'http://snapstudio-main.orca.localhost:60016/'
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('does not label localhost links while a remote runtime is active', async () => {
+    storeState.settings = {
+      localhostWorktreeLabelsEnabled: true,
+      activeRuntimeEnvironmentId: 'web-runtime'
+    }
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-main',
+              displayName: 'main',
+              path: '/repo/main',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+
+    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(null)
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 })

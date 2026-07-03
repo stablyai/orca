@@ -50,7 +50,10 @@ import { ActivityTitlebarControls } from './components/activity/ActivityTitlebar
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
-import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
+import {
+  getSystemPrefersDarkSnapshot,
+  useSystemPrefersDark
+} from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
@@ -61,7 +64,10 @@ import { onOnboardingReopened } from './components/onboarding/show-onboarding-ev
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import {
+  TOGGLE_FLOATING_TERMINAL_EVENT,
+  requestFloatingTerminalOpenMaximized
+} from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspacePanelShortcut,
@@ -86,6 +92,8 @@ import {
   resolvePrimarySelectionMiddleClickPaste,
   usePrimarySelectionPaste
 } from './hooks/usePrimarySelectionPaste'
+import { useAppMenuPaste } from './hooks/useAppMenuPaste'
+import { useLargeTextControlPaste } from './hooks/useLargeTextControlPaste'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
@@ -112,9 +120,13 @@ import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
 } from './lib/startup-ui-hydration'
+import {
+  logRendererStartupDiagnostic,
+  timeRendererStartupStep,
+  timeRendererStartupSyncStep
+} from './startup/startup-diagnostics'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
-import { getSystemPrefersDark } from './lib/terminal-theme'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -128,6 +140,7 @@ import {
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
 import { selectFloatingVisibleTabCount } from './store/selectors'
+import { selectActiveTerminalChromeState } from './store/active-terminal-chrome-selector'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState, UpdateStatus } from '../../shared/types'
@@ -385,8 +398,11 @@ function App(): React.JSX.Element {
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
+      fetchReposForAllHosts: s.fetchReposForAllHosts,
       fetchProjectGroups: s.fetchProjectGroups,
+      fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
+      fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
@@ -428,7 +444,13 @@ function App(): React.JSX.Element {
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const {
+    activeWorktreeId,
+    tabCount,
+    effectiveActiveTabId,
+    activeTabCanExpand,
+    effectiveActiveTabExpanded
+  } = useAppStore(useShallow(selectActiveTerminalChromeState))
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Why: the creation surface owns the tab strip from the first pending frame.
   // Gating it on the delayed loader flag made the tab bar swap in mid-create.
@@ -442,11 +464,7 @@ function App(): React.JSX.Element {
   // that remount so the left workspace list doesn't restart at scrollTop 0.
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
-  const activeTabId = useAppStore((s) => s.activeTabId)
-  const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
-  const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -614,6 +632,8 @@ function App(): React.JSX.Element {
     settings?.primarySelectionMiddleClickPaste
   )
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
+  useAppMenuPaste()
+  useLargeTextControlPaste()
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
   const renderPetOverlay = shouldRenderPetOverlay({
@@ -828,36 +848,50 @@ function App(): React.JSX.Element {
     // UI mounts.
     let reconnectStarted = false
     void (async () => {
+      const startupStartedAt = performance.now()
+      logRendererStartupDiagnostic('startup-chain-start')
       try {
         // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
-        await actions.fetchSettings()
-        await actions.fetchRepos()
-        await actions.fetchProjectGroups()
-        await actions.fetchFolderWorkspaces()
-        await actions.fetchAllWorktrees()
-        await actions.fetchWorktreeLineage()
-        const persistedUI = await window.api.ui.get()
-        uiHydrated = hydratePersistedUIAfterStartupRead({
-          persistedUI,
-          cancelled,
-          hydratePersistedUI: actions.hydratePersistedUI
-        })
+        await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why: load local + every configured runtime environment (not just the
+        // active one) so a cold start that restored a remote workspace doesn't
+        // hide local repos. The sidebar "All hosts" scope then shows them all.
+        await timeRendererStartupStep('fetch-repos', () => actions.fetchReposForAllHosts())
+        await timeRendererStartupStep('fetch-project-groups', () =>
+          actions.fetchProjectGroupsForAllHosts()
+        )
+        await timeRendererStartupStep('fetch-folder-workspaces', () =>
+          actions.fetchFolderWorkspacesForAllHosts()
+        )
+        await timeRendererStartupStep('fetch-worktrees', () => actions.fetchAllWorktrees())
+        await timeRendererStartupStep('fetch-worktree-lineage', () =>
+          actions.fetchWorktreeLineage()
+        )
+        const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
+          hydratePersistedUIAfterStartupRead({
+            persistedUI,
+            cancelled,
+            hydratePersistedUI: actions.hydratePersistedUI
+          })
+        )
         // Why: runtime-owned worktree slices live in per-host partitions.
         // Repos were fetched above, so the known runtime hosts are derivable
         // here; merge their slices into the unified session the hydrators
         // expect. An unreadable host partition is skipped (fail-soft).
-        const session = await fetchWorkspaceSessionFromHosts(
-          window.api.session,
-          useAppStore.getState().repos
+        const session = await timeRendererStartupStep('session-get', () =>
+          fetchWorkspaceSessionFromHosts(window.api.session, useAppStore.getState().repos)
         )
-        await actions.fetchKeybindings()
+        await timeRendererStartupStep('fetch-keybindings', () => actions.fetchKeybindings())
         if (!cancelled) {
-          actions.hydrateWorkspaceSession(session)
-          actions.hydrateTabsSession(session)
-          actions.hydrateEditorSession(session)
-          actions.hydrateBrowserSession(session)
+          timeRendererStartupSyncStep('hydrate-session-stores', () => {
+            actions.hydrateWorkspaceSession(session)
+            actions.hydrateTabsSession(session)
+            actions.hydrateEditorSession(session)
+            actions.hydrateBrowserSession(session)
+          })
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
           // async repo loads may not have populated worktreesByRepo yet and
@@ -866,10 +900,16 @@ function App(): React.JSX.Element {
           // so users upgrading from a pre-feature build don't see the active
           // worktree sink in the empty-query list.
           // See docs/cmd-j-empty-query-ordering.md.
-          actions.pruneLastVisitedTimestamps()
-          actions.seedActiveWorktreeLastVisitedIfMissing()
-          await actions.fetchBrowserSessionProfiles()
-          const onboardingState = await window.api.onboarding.get()
+          timeRendererStartupSyncStep('visit-timestamp-prune', () => {
+            actions.pruneLastVisitedTimestamps()
+            actions.seedActiveWorktreeLastVisitedIfMissing()
+          })
+          await timeRendererStartupStep('fetch-browser-session-profiles', () =>
+            actions.fetchBrowserSessionProfiles()
+          )
+          const onboardingState = await timeRendererStartupStep('onboarding-get', () =>
+            window.api.onboarding.get()
+          )
           if (!cancelled) {
             setOnboarding(onboardingState)
             setOnboardingLoaded(true)
@@ -884,7 +924,9 @@ function App(): React.JSX.Element {
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
-              const allTargets = await window.api.ssh.listTargets()
+              const allTargets = await timeRendererStartupStep('ssh-list-targets', () =>
+                window.api.ssh.listTargets()
+              )
               const targetMap = new Map(allTargets.map((t) => [t.id, t]))
               const targets = connectionIds.map((targetId) => ({
                 targetId,
@@ -905,25 +947,33 @@ function App(): React.JSX.Element {
               // reattached when the user focuses the tab (by which time the
               // slow connect will likely have succeeded).
               const timedOutTargets: string[] = []
-              await Promise.allSettled(
-                eagerTargets.map(({ targetId }) =>
-                  Promise.race([
-                    window.api.ssh.connect({ targetId }),
-                    new Promise((_, reject) =>
-                      setTimeout(
-                        () => reject(new Error('SSH reconnect timeout')),
-                        SSH_RECONNECT_TIMEOUT_MS
-                      )
+              await timeRendererStartupStep(
+                'ssh-reconnect',
+                () =>
+                  Promise.allSettled(
+                    eagerTargets.map(({ targetId }) =>
+                      Promise.race([
+                        window.api.ssh.connect({ targetId }),
+                        new Promise((_, reject) =>
+                          setTimeout(
+                            () => reject(new Error('SSH reconnect timeout')),
+                            SSH_RECONNECT_TIMEOUT_MS
+                          )
+                        )
+                      ]).catch((err) => {
+                        const isTimeout =
+                          err instanceof Error && err.message === 'SSH reconnect timeout'
+                        if (isTimeout) {
+                          timedOutTargets.push(targetId)
+                        }
+                        console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                      })
                     )
-                  ]).catch((err) => {
-                    const isTimeout =
-                      err instanceof Error && err.message === 'SSH reconnect timeout'
-                    if (isTimeout) {
-                      timedOutTargets.push(targetId)
-                    }
-                    console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
-                  })
-                )
+                  ),
+                {
+                  eagerTargets: eagerTargets.length,
+                  deferredTargets: deferredTargets.length
+                }
               )
               if (timedOutTargets.length > 0) {
                 actions.setDeferredSshReconnectTargets([
@@ -956,14 +1006,20 @@ function App(): React.JSX.Element {
             } catch (err) {
               console.warn('SSH startup reconnect failed:', err)
             }
+          } else {
+            logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
           // Why: main overlaps daemon/hook startup with renderer hydration for
           // first paint, but restored terminals still need those services ready
           // before they mount and spawn/reconnect PTYs.
-          await window.api.app.awaitFirstWindowStartupServices()
+          await timeRendererStartupStep('first-window-services-await', () =>
+            window.api.app.awaitFirstWindowStartupServices()
+          )
           reconnectStarted = true
-          await actions.reconnectPersistedTerminals(abortController.signal)
+          await timeRendererStartupStep('reconnect-terminals', () =>
+            actions.reconnectPersistedTerminals(abortController.signal)
+          )
           syncZoomCSSVar()
           // Why (issue #1158): unlock the debounced session writer only after
           // hydration AND all dependent startup steps (SSH reconnect, terminal
@@ -973,6 +1029,9 @@ function App(): React.JSX.Element {
           // and the writer would serialize a partially-mutated store back to
           // disk — the exact data-loss mode this PR fixes.
           actions.setHydrationSucceeded(true)
+          logRendererStartupDiagnostic('startup-hydration-done', {
+            durationMs: Math.round(performance.now() - startupStartedAt)
+          })
         }
       } catch (error) {
         // Why (issue #1158): previously this catch called hydrateWorkspaceSession
@@ -1097,7 +1156,12 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      const systemPrefersDark = getSystemPrefersDark()
+      // Why: this subscriber fires on every store mutation (PTY/agent-status
+      // ticks). Read the cached prefers-dark snapshot — kept fresh by the shared
+      // listener that useSystemPrefersDark() below already mounts — instead of
+      // allocating a throwaway MediaQueryList via matchMedia on every tick,
+      // before the skip-gate even runs.
+      const systemPrefersDark = getSystemPrefersDarkSnapshot()
       // Why: skip the key build entirely when every input field is unchanged
       // by reference. Mirrors every field used by
       // getRuntimeMobileSessionSyncKey so this gate covers every "could the
@@ -1341,15 +1405,7 @@ function App(): React.JSX.Element {
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
-  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
-  const hasTabBar = tabs.length >= 2
-  const effectiveActiveTabId = activeTabId ?? tabs[0]?.id ?? null
-  const activeTabCanExpand = effectiveActiveTabId
-    ? (canExpandPaneByTabId[effectiveActiveTabId] ?? false)
-    : false
-  const effectiveActiveTabExpanded = effectiveActiveTabId
-    ? (expandedPaneByTabId[effectiveActiveTabId] ?? false)
-    : false
+  const hasTabBar = tabCount >= 2
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
@@ -1386,10 +1442,53 @@ function App(): React.JSX.Element {
     )
   }
 
+  const globalShortcutStateRef = useRef({
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalEnabled,
+    floatingTerminalOpen,
+    floatingVisibleTabCount,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus,
+    workspaceChromeActive,
+    creationLayoutActive
+  })
+  // Why: window key listeners are global and long-lived; keep one registration
+  // while letting the handler read current shortcut state on each key event.
+  globalShortcutStateRef.current = {
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalEnabled,
+    floatingTerminalOpen,
+    floatingVisibleTabCount,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus,
+    workspaceChromeActive,
+    creationLayoutActive
+  }
+
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
+      const {
+        activeView,
+        activeWorktreeId,
+        actions,
+        floatingTerminalEnabled,
+        floatingTerminalOpen,
+        floatingVisibleTabCount,
+        keybindings,
+        terminalShortcutPolicy,
+        setFloatingTerminalOpenWithFocus,
+        workspaceChromeActive,
+        creationLayoutActive
+      } = globalShortcutStateRef.current
+
       // Why: child-component handlers (e.g. terminal search Cmd+G / Cmd+Shift+G)
       // register on the same window capture phase and fire first. If they already
       // called preventDefault, this handler must not also act on the event —
@@ -1415,13 +1514,10 @@ function App(): React.JSX.Element {
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
           context,
-          terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          terminalShortcutPolicy
         })
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
-        if (
-          context !== 'terminal' ||
-          (settings?.terminalShortcutPolicy ?? 'orca-first') !== 'orca-first'
-        ) {
+        if (context !== 'terminal' || (terminalShortcutPolicy ?? 'orca-first') !== 'orca-first') {
           return
         }
         showTerminalShortcutCaptureNotification({
@@ -1479,6 +1575,22 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Why: when the floating workspace is closed, its own keydown handler is
+      // unmounted and cannot claim Cmd+Opt+Shift+A. Honor the maximize chord
+      // here by opening the panel with a one-shot intent so it mounts straight
+      // into the maximized state. While the panel is open, this is a no-op: the
+      // panel's handler owns the maximize/restore toggle.
+      if (
+        !floatingTerminalOpen &&
+        matchShortcut('floatingWorkspace.maximize') &&
+        floatingTerminalEnabled
+      ) {
+        input.preventDefault()
+        requestFloatingTerminalOpenMaximized()
+        setFloatingTerminalOpenWithFocus(true)
+        return
+      }
+
       // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
       // window-level handler *not* toggling the sidebar when focus lives in an
       // editable surface. The main-process before-input-event already carves out
@@ -1525,7 +1637,7 @@ function App(): React.JSX.Element {
         if (
           isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
             context,
-            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+            terminalShortcutPolicy
           })
         ) {
           return
@@ -1537,6 +1649,21 @@ function App(): React.JSX.Element {
         input.preventDefault()
         notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
+        return
+      }
+
+      // Toggle the "show sleeping workspaces" sidebar filter without opening the
+      // filters menu (issue #5209). When revealing them, open the left sidebar
+      // so the now-visible sleeping worktrees are actually reachable.
+      if (matchShortcut('sidebar.sleepingWorkspaces.toggle')) {
+        input.preventDefault()
+        notifyTerminalCapture('sidebar.sleepingWorkspaces.toggle')
+        const store = useAppStore.getState()
+        const nextShowSleeping = !store.showSleepingWorkspaces
+        store.setShowSleepingWorkspaces(nextShowSleeping)
+        if (nextShowSleeping) {
+          store.setSidebarOpen(true)
+        }
         return
       }
 
@@ -1727,18 +1854,7 @@ function App(): React.JSX.Element {
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)
     }
-  }, [
-    activeView,
-    activeWorktreeId,
-    actions,
-    floatingTerminalOpen,
-    floatingVisibleTabCount,
-    keybindings,
-    settings?.terminalShortcutPolicy,
-    setFloatingTerminalOpenWithFocus,
-    workspaceChromeActive,
-    creationLayoutActive
-  ])
+  }, [])
 
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current

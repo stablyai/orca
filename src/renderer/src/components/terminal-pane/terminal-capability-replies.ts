@@ -1,11 +1,17 @@
 import type { IDisposable, IParser, Terminal } from '@xterm/xterm'
+import {
+  sendTerminalOscColorQueryReplies as sendTerminalOscColorQueryRepliesForColors,
+  terminalOscColorQueryReplies,
+  terminalOscColorQuerySlotsForBody,
+  type TerminalOscColorQuerySlot
+} from '../../../../shared/terminal-osc-color-reply'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 type TerminalCapabilityRepliesDeps = {
-  terminal: Pick<Terminal, 'cols' | 'rows' | 'element'>
-  parser: Pick<IParser, 'registerCsiHandler'>
+  terminal: Pick<Terminal, 'cols' | 'rows' | 'element' | 'options'>
+  parser: Pick<IParser, 'registerCsiHandler' | 'registerOscHandler'>
   sendInput: (data: string) => boolean | void
   isReplaying: () => boolean
   da1Response?: string
@@ -44,6 +50,29 @@ function disposeAll(disposables: IDisposable[]): void {
   for (const disposable of disposables) {
     disposable.dispose()
   }
+}
+
+export function sendTerminalOscColorQueryReplies(
+  data: string,
+  terminal: Pick<Terminal, 'options'>,
+  sendInput: (data: string) => boolean | void
+): boolean {
+  return sendTerminalOscColorQueryRepliesForColors(data, terminal.options.theme ?? {}, sendInput)
+}
+
+function sendTerminalOscColorQueryRepliesForSlots(
+  slots: readonly TerminalOscColorQuerySlot[],
+  terminal: Pick<Terminal, 'options'>,
+  sendInput: (data: string) => boolean | void
+): boolean {
+  const replies = terminalOscColorQueryReplies(terminal.options.theme ?? {}, slots)
+  if (!replies) {
+    return false
+  }
+  for (const reply of replies) {
+    sendInput(reply)
+  }
+  return true
 }
 
 export function createTerminalPixelSizeQueryResponder(
@@ -99,6 +128,26 @@ export function installTerminalCapabilityReplyHandlers(
         deps.sendInput(deps.da1Response ?? DEFAULT_DA1_RESPONSE)
       }
       return true
+    }),
+    deps.parser.registerOscHandler(10, (data) => {
+      const slots = terminalOscColorQuerySlotsForBody(10, data.trim())
+      if (!slots) {
+        return false
+      }
+      if (deps.isReplaying()) {
+        return true
+      }
+      return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+    }),
+    deps.parser.registerOscHandler(11, (data) => {
+      const slots = terminalOscColorQuerySlotsForBody(11, data.trim())
+      if (!slots) {
+        return false
+      }
+      if (deps.isReplaying()) {
+        return true
+      }
+      return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
     })
   ]
 

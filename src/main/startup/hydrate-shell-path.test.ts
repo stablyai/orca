@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { delimiter } from 'node:path'
-import type { ChildProcessWithoutNullStreams } from 'child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   _resetHydrateShellPathCache,
   hydrateShellPath,

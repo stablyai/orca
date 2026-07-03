@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('createCommandCodeOutputStatusDetector', () => {
   it('marks Command Code working with the submitted prompt when the TUI starts thinking', () => {
@@ -209,6 +213,26 @@ describe('createCommandCodeOutputStatusDetector', () => {
     expect(onWorking).toHaveBeenCalledWith('Fix the status row')
   })
 
+  it('folds whitespace-heavy submitted prompts without whitespace regex replacement', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: 'command-code --trust',
+      onWorking
+    })
+    const nonBreakingSpace = String.fromCharCode(160)
+    const prompt = `❯ Fix\t  the${nonBreakingSpace}${nonBreakingSpace}status   row\r\n✻ Thinking...`
+
+    expect(detector.observe(prompt)).toBe(true)
+
+    expect(onWorking).toHaveBeenCalledWith('Fix the status row')
+    expect(
+      replaceSpy.mock.calls.filter(
+        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+      )
+    ).toHaveLength(0)
+  })
+
   it('marks Command Code done when a no-tool turn returns to the idle prompt', () => {
     const onWorking = vi.fn()
     const onDone = vi.fn()
@@ -252,4 +276,42 @@ describe('createCommandCodeOutputStatusDetector', () => {
     expect(detector.observe('❯ Fix the yellow spinner\r\nThought for 1 second')).toBe(false)
     expect(onWorking).not.toHaveBeenCalled()
   })
+
+  it('bounds scan work for large echoed paste output in Command Code terminals', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const matchAllSpy = vi.spyOn(String.prototype, 'matchAll')
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: 'command-code --trust',
+      onWorking
+    })
+    const largeEchoedPaste = `${'pasted Command Code \x1b[35mnoise\r\n'.repeat(10_000)}❯ Fix bounded scans\r\n✻ Thinking...`
+
+    expect(detector.observe(largeEchoedPaste)).toBe(true)
+
+    expect(onWorking).toHaveBeenCalledWith('Fix bounded scans')
+    expect(maxStringContextLength(replaceSpy.mock.contexts)).toBeLessThan(10_000)
+    expect(maxStringContextLength(matchAllSpy.mock.contexts)).toBeLessThan(10_000)
+  })
+
+  it('bounds pre-banner scans for large non-Command-Code terminal output', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const matchAllSpy = vi.spyOn(String.prototype, 'matchAll')
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking: vi.fn()
+    })
+
+    expect(detector.observe(`${'Coded shell output\r\n'.repeat(10_000)}`)).toBe(false)
+
+    expect(maxStringContextLength(replaceSpy.mock.contexts)).toBeLessThan(10_000)
+    expect(maxStringContextLength(matchAllSpy.mock.contexts)).toBe(0)
+  })
 })
+
+function maxStringContextLength(contexts: unknown[]): number {
+  return Math.max(
+    0,
+    ...contexts.map((context) => (typeof context === 'string' ? context.length : 0))
+  )
+}

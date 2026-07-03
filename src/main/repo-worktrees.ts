@@ -6,6 +6,7 @@ import { areWorktreePathsEqual } from './ipc/worktree-logic'
 
 type LocalRepoWorktreeListOptions = {
   wslDistro?: string
+  signal?: AbortSignal
 }
 
 export function isRepoRoot(repos: Repo[], resolvedTarget: string): boolean {

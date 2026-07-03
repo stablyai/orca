@@ -66,7 +66,7 @@ describe('source-control AI resolution', () => {
     expect(resolve('branchName').params.model).toBe('gpt-5.5')
   })
 
-  it('resolves PR defaults even when Source Control AI generation is disabled', () => {
+  it('resolves generation config and PR defaults when Source Control AI actions are hidden', () => {
     const base = settings()
     base.sourceControlAi = {
       ...base.sourceControlAi!,
@@ -84,7 +84,8 @@ describe('source-control AI resolution', () => {
       repo: null,
       operation: 'pullRequest'
     })
-    expect(generation.ok).toBe(false)
+    expect(generation.ok).toBe(true)
+    expect(generation.ok && generation.value.params.model).toBe('gpt-5.5')
     expect(
       resolveSourceControlAiPrCreationDefaults({
         settings: base,
@@ -112,7 +113,19 @@ describe('source-control AI resolution', () => {
     })
   })
 
-  it('lets repo enablement override the global default', () => {
+  it('lets repo-hidden Source Control AI actions keep operation generation valid', () => {
+    const result = resolveSourceControlAiForOperation({
+      settings: settings(),
+      repo: { sourceControlAi: { enabled: false } },
+      operation: 'branchName',
+      discoveryHostKey: 'local'
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.value.params.model).toBe('gpt-5.5')
+  })
+
+  it('lets repo action visibility override the global default', () => {
     const base = settings()
     base.sourceControlAi = {
       ...base.sourceControlAi!,

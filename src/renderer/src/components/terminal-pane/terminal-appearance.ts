@@ -11,7 +11,11 @@ import {
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
 import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
-import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
+import {
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle
+} from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -235,6 +239,12 @@ export function applyTerminalAppearance(
     pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
     pane.terminal.options.fontWeight = terminalFontWeights.fontWeight
     pane.terminal.options.fontWeightBold = terminalFontWeights.fontWeightBold
+    pane.terminal.options.scrollSensitivity = normalizeTerminalScrollSensitivity(
+      settings.terminalScrollSensitivity
+    )
+    pane.terminal.options.fastScrollSensitivity = normalizeTerminalFastScrollSensitivity(
+      settings.terminalFastScrollSensitivity
+    )
     // Why: xterm's macOptionIsMeta only flips on the 'true' mode. 'left' and
     // 'right' are handled in the keydown policy (terminal-shortcut-policy),
     // which needs Option to stay composable at the xterm level for the

@@ -1,14 +1,14 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
-import { mkdtemp } from 'fs/promises'
-import os from 'os'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
 const tempRoots: string[] = []
-const IMPORT_AS_MONOREPO_BUTTON_NAME = 'Yes, import as monorepo'
+const IMPORT_AS_GROUP_BUTTON_NAME = 'Yes, import as group'
 
 function initializeGitRepo(repoPath: string): void {
   mkdirSync(repoPath, { recursive: true })
@@ -28,7 +28,12 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   webClientPath: string
   groupName: string
 }> {
-  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
+  // Why: realpathSync so the paths the test asserts on match the store's
+  // repo.path / projectGroup.parentPath on macOS, where os.tmpdir() (/var/...)
+  // symlinks to /private/var/... and the app canonicalizes paths on import.
+  const parentPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
+  )
   tempRoots.push(parentPath)
   const archivePath = path.join(parentPath, 'archive')
   const webClientPath = path.join(parentPath, 'z-web-client')
@@ -54,7 +59,12 @@ async function createCancellableScanFixture(): Promise<{
   webPath: string
   groupName: string
 }> {
-  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
+  // Why: realpathSync so the paths the test asserts on match the store's
+  // canonicalized repo.path / projectGroup.parentPath on macOS (os.tmpdir()
+  // /var/... symlinks to /private/var/...).
+  const parentPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
+  )
   tempRoots.push(parentPath)
   const apiPath = path.join(parentPath, 'api')
   const webPath = path.join(parentPath, 'web')
@@ -133,11 +143,11 @@ async function installCancellableNestedScanMock(
   }, scan)
 }
 
-function getImportAsMonorepoButton(importDialog: Locator): Locator {
+function getImportAsGroupButton(importDialog: Locator): Locator {
   // Why: this test should fail on import-dialog copy drift instead of falling
   // back to a retired accessible label.
   return importDialog.getByRole('button', {
-    name: IMPORT_AS_MONOREPO_BUTTON_NAME,
+    name: IMPORT_AS_GROUP_BUTTON_NAME,
     exact: true
   })
 }
@@ -177,7 +187,7 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
     .filter({ hasText: 'z-web-client' })
     .locator('input[type="checkbox"]')
     .check()
-  await getImportAsMonorepoButton(importDialog).click()
+  await getImportAsGroupButton(importDialog).click()
 
   await expect
     .poll(
@@ -257,13 +267,13 @@ test('can stop a nested repo scan and import repositories found so far', async (
     name: /Import repositories from folder/i
   })
   await expect(importDialog.getByText(/Scanning\.\.\.\s*Found 1 repository in/)).toBeVisible()
-  await expect(getImportAsMonorepoButton(importDialog)).toBeDisabled()
+  await expect(getImportAsGroupButton(importDialog)).toBeDisabled()
   await importDialog.getByRole('button', { name: /Stop scan/i }).click()
   await expect(importDialog.getByText('Scan stopped early.')).toBeVisible()
   await expect(importDialog.getByText(/Found 1 repository in/)).toBeVisible()
-  await expect(getImportAsMonorepoButton(importDialog)).toBeEnabled()
+  await expect(getImportAsGroupButton(importDialog)).toBeEnabled()
 
-  await getImportAsMonorepoButton(importDialog).click()
+  await getImportAsGroupButton(importDialog).click()
 
   await expect
     .poll(

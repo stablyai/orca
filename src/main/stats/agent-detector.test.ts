@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentDetector } from './agent-detector'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function oscTitle(title: string): string {
   return `\x1b]0;${title}\x07`
@@ -149,6 +153,47 @@ describe('AgentDetector', () => {
 
     expect(stats.onAgentStop).toHaveBeenCalledTimes(1)
     expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
+  })
+
+  it('detects meaningful output in large CRLF chunks without regex replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const stats = {
+      onAgentStart: vi.fn(),
+      onAgentStop: vi.fn()
+    }
+    const detector = new AgentDetector(stats as never)
+
+    detector.onData('pty-1', oscTitle('Codex working'), 100)
+    detector.onData('pty-1', `${'\r\n'.repeat(20_000)}done`, 120)
+    detector.onData('pty-1', oscTitle('Codex done'), 140)
+
+    expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
+    const usedFullReplacement = replaceSpy.mock.calls.some(
+      ([pattern]) =>
+        pattern instanceof RegExp &&
+        (pattern.source === '\\r\\n' || pattern.source.includes('\\x1b'))
+    )
+    expect(usedFullReplacement).toBe(false)
+  })
+
+  it('ignores large incomplete OSC payloads without regex replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const stats = {
+      onAgentStart: vi.fn(),
+      onAgentStop: vi.fn()
+    }
+    const detector = new AgentDetector(stats as never)
+
+    detector.onData('pty-1', oscTitle('Codex working'), 100)
+    detector.onData('pty-1', 'real output', 120)
+    detector.onData('pty-1', `\x1b]0;${'pasted noise'.repeat(20_000)}`, 140)
+    detector.onData('pty-1', oscTitle('Codex done'), 160)
+
+    expect(stats.onAgentStop).toHaveBeenCalledWith('pty-1', 120)
+    const usedAnsiReplacement = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source.includes('\\x1b')
+    )
+    expect(usedAnsiReplacement).toBe(false)
   })
 
   it('keeps capped split OSC title tails from becoming meaningful output', () => {

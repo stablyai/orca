@@ -89,6 +89,17 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).not.toContain('`e]133')
   })
 
+  it('normalizes MSYS drive cwd before spawning native PowerShell', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\project')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+  })
+
   it('embeds short PowerShell startup commands after the OSC 133 bootstrap', () => {
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
@@ -187,6 +198,33 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // user's Windows home and we inject the Linux cd into the shellArgs above.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+  })
+
+  it('translates MSYS drive cwd to /mnt/<drive>/... for wsl.exe', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice',
+      undefined,
+      'codex'
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/project'))
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
+  })
+
+  it('does not treat MSYS drive cwd as a WSL POSIX cwd', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'wsl.exe',
+      '/c/Users/alice/project',
+      'C:\\Users\\alice',
+      { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
+    )
+
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/project', 'Ubuntu'))
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\project')
   })
 
   it('escapes single quotes when translating a WSL cwd', () => {

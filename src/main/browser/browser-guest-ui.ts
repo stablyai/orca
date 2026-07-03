@@ -279,11 +279,11 @@ export function setupGuestShortcutForwarding(args: {
   ): boolean => {
     const keybindings = getKeybindings?.()
     if (action?.type === 'zoom') {
-      // Why: browser page zoom must consume repeats and teardown races before
-      // Chromium or the guest page can apply its own shortcut behavior.
+      // Why: keyboard zoom is Orca chrome zoom. Focused guests bypass the
+      // main-window shortcut path, so forward to the shared renderer zoom router.
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:zoomBrowserPage', action.direction)
+      renderer?.send('terminal:zoom', action.direction)
       return true
     }
     if (input.isAutoRepeat) {
@@ -426,6 +426,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:toggleWorktreePalette')
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
+    } else if (action?.type === 'toggleQuickCommandsMenu') {
+      renderer.send('ui:toggleQuickCommandsMenu')
     } else if (action?.type === 'openNewWorkspace') {
       renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'openWorkspaceBoard') {

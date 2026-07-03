@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import type * as Os from 'os'
-import { join } from 'path'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import type * as Os from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const OLD_FETCH = globalThis.fetch
@@ -168,6 +168,37 @@ describe('Jira client credential storage', () => {
     expect(headers.get('Authorization')).toBe(
       `Basic ${Buffer.from('ada@example.com:token-alpha').toString('base64')}`
     )
+  })
+
+  it('sends a non-browser User-Agent on Jira POST requests', async () => {
+    // Why: Electron's net.fetch defaults to a Chrome User-Agent, which trips
+    // Atlassian's XSRF filter on POST/PUT REST calls (issue search, create,
+    // update, comment) even under API-token auth, surfacing as a 403.
+    const siteId = 'site-alpha'
+    writeJiraFiles(siteId, 'token-alpha')
+    netFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ issues: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    const jira = await loadClientModule({ encryptionAvailable: true })
+    const client = jira.getClients(siteId)[0]
+
+    if (!client) {
+      throw new Error('Expected stored Jira client')
+    }
+
+    await jira.jiraRequest(client, '/rest/api/3/search/jql', {
+      method: 'POST',
+      body: JSON.stringify({ jql: 'project = ALP' })
+    })
+
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    const userAgent = headers.get('User-Agent') ?? ''
+    expect(netFetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
+    expect(userAgent).toBe('Orca')
+    expect(userAgent).not.toMatch(/Mozilla|Chrome|Safari|AppleWebKit/i)
   })
 
   it('does not pass encrypted safeStorage bytes to Jira when encryption is unavailable', async () => {
@@ -394,6 +425,8 @@ describe('Jira client credential storage', () => {
 
     expect(resolveProxyMock).toHaveBeenCalledWith('https://example.atlassian.net/rest/api/3/myself')
     expect(netFetchMock).toHaveBeenCalledTimes(1)
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('User-Agent')).toBe('Orca')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

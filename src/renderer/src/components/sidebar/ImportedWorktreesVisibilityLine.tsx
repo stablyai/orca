@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ChevronRight, EyeOff, X } from 'lucide-react'
+import { ChevronRight, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -143,7 +143,6 @@ export default function ImportedWorktreesVisibilityLine({
             aria-hidden="true"
           />
         </Button>
-        <EyeOff className="size-3 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{lineText}</span>
         {onKeepHidden ? (
           <Tooltip>

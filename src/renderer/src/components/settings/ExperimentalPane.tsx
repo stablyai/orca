@@ -7,6 +7,8 @@ import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
+import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -34,6 +36,9 @@ export function ExperimentalPane({
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showAgentsView = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentsView
+  ])
+  const showNativeChat = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().nativeChat
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
@@ -146,6 +151,10 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
+      {showNativeChat ? (
+        <NativeChatExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
       {showTerminalAttention ? (
         <SearchableSetting
           title={translate(
@@ -222,7 +231,7 @@ export function ExperimentalPane({
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.agentHibernation.copy',
-                  'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.'
+                  'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Agent sleep preserves launch options for agents started by Orca. Manually started agents may resume with your current Orca defaults. Experimental while we tune the safety model.'
                 )}
               </p>
             </div>
@@ -363,6 +372,8 @@ export function ExperimentalPane({
           </div>
         </SearchableSetting>
       ) : null}
+
+      <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
     </div>

@@ -9,9 +9,17 @@ const reactHookRuntime = vi.hoisted(() => ({
 const appStoreMocks = vi.hoisted(() => ({
   openMarkdownPreview: vi.fn(),
   getState: vi.fn(() => ({
-    settings: {}
+    settings: {},
+    unifiedTabsByWorktree: {
+      'wt-1': [{ id: '/repo/untitled-5.md', groupId: 'group-1' }]
+    },
+    groupsByWorktree: {
+      'wt-1': [{ id: 'group-1', tabOrder: ['/repo/untitled-5.md', 'tab-2'] }]
+    }
   }))
 }))
+
+const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -101,6 +109,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
     return { type: 'DropdownMenuShortcut', props }
   },
+  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
+    return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSub', props }
+  },
+  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubContent', props }
+  },
+  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'DropdownMenuSubTrigger', props }
+  },
   DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
     return { type: 'DropdownMenuTrigger', props }
   }
@@ -129,7 +149,7 @@ vi.mock('@/components/editor/editor-labels', () => ({
 }))
 
 vi.mock('@/lib/rename-file', () => ({
-  renameFileOnDisk: vi.fn()
+  renameFileOnDisk: renameFileOnDiskMock
 }))
 
 vi.mock('@/lib/file-type-icons', () => ({
@@ -217,7 +237,6 @@ async function renderEditorFileTab(
     onCloseAll: () => {},
     onMakePermanent,
     onTogglePin: () => {},
-    onSplitGroup: () => {},
     dragData: {
       kind: 'tab',
       worktreeId: file.worktreeId,
@@ -309,6 +328,27 @@ function findSpanByText(node: unknown, label: string): ReactElementLike {
   return span
 }
 
+function pressInputKey(
+  input: ReactElementLike,
+  key: string,
+  options?: { isComposing?: boolean; keyCode?: number }
+): {
+  preventDefault: ReturnType<typeof vi.fn>
+  stopPropagation: ReturnType<typeof vi.fn>
+} {
+  const event = {
+    key,
+    nativeEvent: {
+      isComposing: options?.isComposing ?? false,
+      keyCode: options?.keyCode ?? 13
+    },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
+  }
+  ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+  return event
+}
+
 describe('EditorFileTab rename menu', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -352,6 +392,38 @@ describe('EditorFileTab rename menu', () => {
     expect(focus).toHaveBeenCalledTimes(1)
     expect(setSelectionRange).toHaveBeenCalledWith(0, 'untitled-5'.length)
     expect(select).not.toHaveBeenCalled()
+  })
+
+  it('ignores IME composition Enter before renaming the editor file tab', async () => {
+    const file = baseFile()
+    const firstRender = expandNode((await renderEditorFileTab(file)).element)
+    const renameItem = findMenuItemByText(firstRender, 'Rename')
+
+    ;(renameItem.props.onSelect as () => void)()
+
+    const secondRender = expandNode((await renderEditorFileTab(file)).element)
+    const input = findElementsByType(secondRender, 'input')[0]
+    const setInputRef = input.props.ref as (input: HTMLInputElement | null) => void
+    setInputRef({
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      value: '日本語.md'
+    } as unknown as HTMLInputElement)
+
+    const composingEvent = pressInputKey(input, 'Enter', { isComposing: true })
+
+    expect(composingEvent.preventDefault).not.toHaveBeenCalled()
+    expect(renameFileOnDiskMock).not.toHaveBeenCalled()
+
+    pressInputKey(input, 'Enter')
+
+    expect(renameFileOnDiskMock).toHaveBeenCalledWith({
+      oldPath: '/repo/untitled-5.md',
+      newName: '日本語.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
   })
 
   it('disables Rename for diff tabs that do not map to one writable file', async () => {

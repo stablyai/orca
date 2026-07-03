@@ -97,6 +97,19 @@ function writeStoredRuntimeEnvironment(storage: Storage): void {
   )
 }
 
+function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
+  let settled = false
+  void promise.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    }
+  )
+  return () => settled
+}
+
 function installClipboardImageBase64(contentBase64: string): void {
   vi.stubGlobal(
     'FileReader',
@@ -125,6 +138,28 @@ function installClipboardImageBase64(contentBase64: string): void {
       ])
     }
   })
+}
+
+function installClipboardImageBlob(blob: Blob): {
+  getType: ReturnType<typeof vi.fn>
+  read: ReturnType<typeof vi.fn>
+} {
+  const getType = vi.fn().mockResolvedValue(blob)
+  const read = vi.fn().mockResolvedValue([
+    {
+      types: [blob.type || 'image/png'],
+      getType
+    }
+  ])
+  vi.stubGlobal('navigator', {
+    userAgent: 'Linux',
+    hardwareConcurrency: 8,
+    clipboard: {
+      readText: vi.fn().mockResolvedValue(''),
+      read
+    }
+  })
+  return { getType, read }
 }
 
 describe('web keybindings preload API', () => {
@@ -451,8 +486,88 @@ describe('web UI preload API', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
+  })
+
+  it('writes bounded clipboard text through the browser clipboard API', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { writeText }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
+    expect(writeText).toHaveBeenCalledWith('copy me')
+  })
+
+  it('yields while reading accepted large browser clipboard text', async () => {
+    vi.useFakeTimers()
+    const text = 'é'.repeat(300_000)
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { readText: vi.fn().mockResolvedValue(text) }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = globals.window.api.ui.readClipboardText({ maxBytes: text.length * 3 })
+    const isSettled = trackPromiseSettled(result)
+
+    await Promise.resolve()
+
+    expect(isSettled()).toBe(false)
+    await vi.runOnlyPendingTimersAsync()
+    await expect(result).resolves.toBe(text)
+  })
+
+  it('yields before writing accepted large browser clipboard text', async () => {
+    vi.useFakeTimers()
+    const text = 'é'.repeat(300_000)
+    const globals = installBrowserGlobals('Linux')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { writeText }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const result = globals.window.api.ui.writeClipboardText(text)
+    const isSettled = trackPromiseSettled(result)
+
+    await Promise.resolve()
+
+    expect(isSettled()).toBe(false)
+    expect(writeText).not.toHaveBeenCalled()
+    await vi.runOnlyPendingTimersAsync()
+    await expect(result).resolves.toBeUndefined()
+    expect(writeText).toHaveBeenCalledWith(text)
+  })
+
+  it('rejects oversized clipboard text writes before calling the browser clipboard API', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', {
+      userAgent: 'Linux',
+      hardwareConcurrency: 8,
+      clipboard: { writeText }
+    })
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.ui.writeClipboardText('copied-secret-token-value'.repeat(900_000))
+    ).rejects.toThrow('Clipboard text is too large to copy safely.')
+    expect(writeText).not.toHaveBeenCalled()
   })
 
   it('saves browser clipboard images through bounded upload chunks', async () => {
@@ -745,6 +860,101 @@ describe('web UI preload API', () => {
     expect(runtimeCalls).toEqual([])
   })
 
+  it('rejects oversized clipboard image source blobs before FileReader or upload work', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const readAsDataURL = vi.fn(() => {
+      throw new Error('FileReader should not receive oversized clipboard image data')
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: null,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { MAX_CLIPBOARD_IMAGE_SOURCE_BYTES, installWebPreloadApi } =
+      await import('./web-preload-api')
+    const clipboard = installClipboardImageBlob(
+      new Blob([new Uint8Array(MAX_CLIPBOARD_IMAGE_SOURCE_BYTES + 1)], { type: 'image/png' })
+    )
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        readAsDataURL = readAsDataURL
+      }
+    )
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'Clipboard image is too large'
+    )
+    expect(clipboard.read).toHaveBeenCalledTimes(1)
+    expect(clipboard.getType).toHaveBeenCalledTimes(1)
+    expect(readAsDataURL).not.toHaveBeenCalled()
+    expect(runtimeCalls).toEqual([])
+  })
+
+  it('rejects oversized decoded clipboard images before canvas conversion', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const close = vi.fn()
+    const readAsDataURL = vi.fn(() => {
+      throw new Error('FileReader should not receive oversized decoded image data')
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: null,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { MAX_CLIPBOARD_IMAGE_PIXELS, installWebPreloadApi } = await import('./web-preload-api')
+    installClipboardImageBlob(new Blob(['small'], { type: 'image/jpeg' }))
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({
+        close,
+        height: 1,
+        width: MAX_CLIPBOARD_IMAGE_PIXELS + 1
+      })
+    )
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        readAsDataURL = readAsDataURL
+      }
+    )
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
+      'Clipboard image is too large'
+    )
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(readAsDataURL).not.toHaveBeenCalled()
+    expect(runtimeCalls).toEqual([])
+  })
+
   it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
     const { api } = await installApi('Linux')
 
@@ -760,6 +970,90 @@ describe('web UI preload API', () => {
     const ui = await api.ui.get()
 
     expect(ui.rightSidebarOpen).toBe(true)
+  })
+
+  it('seeds missing local card display properties from runtime-backed compact settings when ui.get is unavailable', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'settings.get') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { settings: { compactWorktreeCards: true } },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.worktreeCardProperties).toEqual(['status', 'unread'])
+    expect(ui.worktreeCardProperties).not.toContain('ports')
+    expect(ui.worktreeCardProperties).not.toContain('inline-agents')
+    expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])
+  })
+
+  it('preserves explicit local card display properties when compact fallback settings are present', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'settings.get') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { settings: { compactWorktreeCards: true } },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ worktreeCardProperties: ['status', 'pr'] })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
+    expect(ui.worktreeCardProperties).not.toContain('ports')
+    expect(ui.worktreeCardProperties).not.toContain('inline-agents')
+    expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])
   })
 
   it('keeps newer feature interaction counts when runtime responses resolve out of order', async () => {
@@ -1083,7 +1377,9 @@ describe('web UI preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    await expect(globals.window.api.skills.discover()).resolves.toMatchObject({
+    await expect(
+      globals.window.api.skills.discover({ cwd: '/repo/worktree' })
+    ).resolves.toMatchObject({
       skills: [{ name: 'computer-use', installed: true }],
       scannedAt: 123
     })
@@ -1099,7 +1395,7 @@ describe('web UI preload API', () => {
     })
     expect(calls).toEqual(
       expect.arrayContaining([
-        { method: 'skills.discover', params: undefined },
+        { method: 'skills.discover', params: { cwd: '/repo/worktree' } },
         { method: 'computer.permissionsStatus', params: {} },
         { method: 'computer.permissions', params: { id: 'accessibility' } }
       ])
@@ -1312,7 +1608,18 @@ describe('web worktree preload API', () => {
       name: 'review-pr-42',
       baseBranch: TEST_COMMIT_OID,
       compareBaseRef: 'refs/remotes/origin/main',
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      createdWithAgent: 'codex',
+      startup: {
+        command: "codex 'summarize repo'",
+        env: { ORCA_AGENT_MODE: 'direct' },
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ORCA_AGENT_MODE: 'direct' }
+        },
+        startupCommandDelivery: 'shell-ready'
+      }
     })
     await globals.window.api.worktrees.resolvePrBase({
       repoId: 'repo-1',
@@ -1335,7 +1642,17 @@ describe('web worktree preload API', () => {
         params: expect.objectContaining({
           repo: 'repo-1',
           baseBranch: TEST_COMMIT_OID,
-          compareBaseRef: 'refs/remotes/origin/main'
+          compareBaseRef: 'refs/remotes/origin/main',
+          createdWithAgent: 'codex',
+          startupCommand: "codex 'summarize repo'",
+          startupEnv: { ORCA_AGENT_MODE: 'direct' },
+          startupLaunchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '--model gpt-5',
+            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+          },
+          startupCommandDelivery: 'shell-ready',
+          activate: true
         })
       },
       {
@@ -1356,6 +1673,48 @@ describe('web worktree preload API', () => {
           sourceBranch: 'feature/mr',
           targetBranch: 'release',
           isCrossRepository: false
+        }
+      }
+    ])
+  })
+
+  it('encodes explicit push target clears for runtime worktree updates', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              worktree: { id: 'repo-1::/workspace/review', path: '/workspace/review' }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.updateMeta({
+      worktreeId: 'repo-1::/workspace/review',
+      updates: { linkedPR: null, pushTarget: undefined }
+    })
+
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.set',
+        params: {
+          worktree: 'id:repo-1::/workspace/review',
+          linkedPR: null,
+          pushTarget: null
         }
       }
     ])
@@ -1595,6 +1954,7 @@ describe('web GitHub preload API', () => {
         'listProjectViews',
         'listWorkItems',
         'mergePR',
+        'notifyWorkItemMutated',
         'onPRRefreshEvent',
         'onWorkItemMutated',
         'prCheckDetails',
@@ -2037,7 +2397,8 @@ describe('web GitHub preload API', () => {
           repo: 'id:repo-1',
           branch: 'feature',
           linkedPRNumber: null,
-          fallbackPRNumber: 9
+          fallbackPRNumber: 9,
+          acceptMergedFallbackPR: true
         }
       }
     ])

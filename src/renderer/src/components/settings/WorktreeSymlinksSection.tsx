@@ -7,6 +7,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { SearchableSetting } from './SearchableSetting'
+import {
+  getWorktreeSymlinkPathFilterState,
+  type WorktreeSymlinkPathSuggestion
+} from './worktree-symlink-path-filter'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
@@ -15,10 +19,12 @@ type WorktreeSymlinksSectionProps = {
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }
 
-type DirEntry = { name: string; isDirectory: boolean }
-type DirectorySuggestionState = { requestKey: string; entries: DirEntry[] }
+type DirectorySuggestionState = {
+  requestKey: string
+  entries: WorktreeSymlinkPathSuggestion[]
+}
 
-const MAX_SUGGESTIONS = 50
+const EMPTY_WORKTREE_SYMLINK_PATHS: readonly string[] = []
 
 export function WorktreeSymlinksSection({
   repo,
@@ -28,8 +34,7 @@ export function WorktreeSymlinksSection({
   const [query, setQuery] = useState('')
   const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
-  const paths = repo.symlinkPaths ?? []
-  const queryTrimmed = query.trim().replace(/^\/+/, '')
+  const paths = repo.symlinkPaths ?? EMPTY_WORKTREE_SYMLINK_PATHS
   const useLocalDirectorySuggestions = !activeRuntimeEnvironmentId?.trim()
   const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
   const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
@@ -64,20 +69,17 @@ export function WorktreeSymlinksSection({
     }
   }, [useLocalDirectorySuggestions, repo.path, repo.connectionId, directorySuggestionKey])
 
-  const filtered = useMemo(() => {
-    const q = queryTrimmed.toLowerCase()
+  const { queryTrimmed, filtered, showLiteralItem } = useMemo(() => {
     const suggestionEntries =
       useLocalDirectorySuggestions && directorySuggestions.requestKey === directorySuggestionKey
         ? directorySuggestions.entries
         : []
-    const base = q
-      ? suggestionEntries.filter((e) => e.name.toLowerCase().includes(q))
-      : suggestionEntries
-    return base.slice(0, MAX_SUGGESTIONS)
-  }, [queryTrimmed, directorySuggestionKey, directorySuggestions, useLocalDirectorySuggestions])
-
-  const hasExactMatch = filtered.some((e) => e.name === queryTrimmed)
-  const showLiteralItem = queryTrimmed.length > 0 && !hasExactMatch && !paths.includes(queryTrimmed)
+    return getWorktreeSymlinkPathFilterState({
+      query,
+      suggestions: suggestionEntries,
+      existingPaths: paths
+    })
+  }, [query, paths, directorySuggestionKey, directorySuggestions, useLocalDirectorySuggestions])
 
   const commit = (rawName: string): void => {
     const trimmed = rawName.trim().replace(/^\/+/, '')

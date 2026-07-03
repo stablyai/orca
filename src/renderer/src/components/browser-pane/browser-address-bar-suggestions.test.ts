@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserHistoryEntry } from '../../../../shared/types'
-import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
+import {
+  BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES,
+  buildBrowserAddressBarSuggestions,
+  isBrowserAddressBarQueryTooLarge
+} from './browser-address-bar-suggestions'
 
 function historyEntry(overrides: Partial<BrowserHistoryEntry>): BrowserHistoryEntry {
   return {
@@ -74,5 +78,47 @@ describe('browser address bar suggestions', () => {
     })
 
     expect(suggestions).toEqual([])
+  })
+
+  it('rejects oversized pasted values before scoring history or building a search URL', () => {
+    const oversizedValue = 'secret-browser-address'.repeat(BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES)
+    const throwingHistory = [
+      {
+        get url(): string {
+          throw new Error('oversized address-bar values must not scan history urls')
+        },
+        get title(): string {
+          throw new Error('oversized address-bar values must not scan history titles')
+        },
+        lastVisitedAt: 1,
+        visitCount: 1,
+        normalizedUrl: 'https://example.com'
+      }
+    ] as BrowserHistoryEntry[]
+
+    expect(isBrowserAddressBarQueryTooLarge(oversizedValue)).toBe(true)
+    expect(
+      buildBrowserAddressBarSuggestions({
+        value: oversizedValue,
+        browserUrlHistory: throwingHistory
+      })
+    ).toEqual([])
+  })
+
+  it('rejects oversized whitespace before trimming', () => {
+    expect(
+      buildBrowserAddressBarSuggestions({
+        value: ' '.repeat(BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES + 1),
+        browserUrlHistory: [
+          {
+            url: 'https://example.com',
+            title: 'Example',
+            lastVisitedAt: 1,
+            visitCount: 1,
+            normalizedUrl: 'https://example.com'
+          }
+        ]
+      })
+    ).toEqual([])
   })
 })

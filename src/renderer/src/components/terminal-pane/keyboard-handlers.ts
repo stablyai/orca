@@ -4,6 +4,7 @@
 import { useEffect } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
@@ -12,14 +13,20 @@ import {
   type KeybindingPlatform,
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
-import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import type { PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
-import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import {
+  markTerminalFollowOutput,
+  markTerminalPinnedViewport,
+  syncTerminalScrollIntentFromViewport
+} from '@/lib/pane-manager/terminal-scroll-intent'
 
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -59,6 +66,8 @@ export type SearchState = {
   regex: boolean
 }
 
+export type SearchNavigationDirection = 'next' | 'previous'
+
 /**
  * Pure decision function for Cmd+G / Cmd+Shift+G search navigation.
  * Returns 'next', 'previous', or null (no match).
@@ -69,7 +78,7 @@ export function matchSearchNavigate(
   isMac: boolean,
   searchOpen: boolean,
   searchState: SearchState
-): 'next' | 'previous' | null {
+): SearchNavigationDirection | null {
   if (e.altKey) {
     return null
   }
@@ -86,7 +95,29 @@ export function matchSearchNavigate(
   if (!searchState.query) {
     return null
   }
+  if (isFindQueryTooLarge(searchState.query)) {
+    return null
+  }
   return e.shiftKey ? 'previous' : 'next'
+}
+
+export function runTerminalSearchNavigation(
+  pane: Pick<ManagedPane, 'searchAddon'>,
+  direction: SearchNavigationDirection,
+  searchState: SearchState
+): boolean {
+  const { query, caseSensitive, regex } = searchState
+  const options = { caseSensitive, regex }
+
+  // Why: Cmd/Ctrl+G hits the same xterm decoration path as the search panel,
+  // so narrow-viewport highlight failures need the same containment.
+  return direction === 'next'
+    ? safeFind((term, findOptions) => pane.searchAddon.findNext(term, findOptions), query, options)
+    : safeFind(
+        (term, findOptions) => pane.searchAddon.findPrevious(term, findOptions),
+        query,
+        options
+      )
 }
 
 export function matchFileSearchShortcut(
@@ -123,6 +154,8 @@ type KeyboardHandlersDeps = {
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
+  onSetTitle: (paneId: number) => void
+  onClearPaneTitle: (paneId: number) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
@@ -130,6 +163,11 @@ type KeyboardHandlersDeps = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
+/**
+ * Installs terminal-pane shortcuts on the tab keyboard scope.
+ * Uses the shared shortcut policy before forwarding unmatched input to xterm
+ * so configurable Orca actions remain consistent across local and SSH panes.
+ */
 export function useTerminalKeyboardShortcuts({
   tabId,
   isActive,
@@ -148,6 +186,8 @@ export function useTerminalKeyboardShortcuts({
   onSearchSelectedText,
   onRequestClosePane,
   onClearPaneScrollback,
+  onSetTitle,
+  onClearPaneTitle,
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
@@ -215,12 +255,7 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const { query, caseSensitive, regex } = searchStateRef.current
-        if (direction === 'next') {
-          pane.searchAddon.findNext(query, { caseSensitive, regex })
-        } else {
-          pane.searchAddon.findPrevious(query, { caseSensitive, regex })
-        }
+        runTerminalSearchNavigation(pane, direction, searchStateRef.current)
         pane.terminal.focus()
         return
       }
@@ -302,6 +337,25 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'scrollViewport') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        if (action.position === 'top') {
+          markTerminalPinnedViewport(pane.terminal)
+          pane.terminal.scrollToLine(0)
+          syncTerminalScrollIntentFromViewport(pane.terminal)
+        } else {
+          markTerminalFollowOutput(pane.terminal)
+          pane.terminal.scrollToBottom()
+          syncTerminalScrollIntentFromViewport(pane.terminal)
+        }
+        return
+      }
+
       // Cmd+[ / Cmd+] cycles active split pane focus.
       if (action.type === 'focusPane') {
         const panes = manager.getPanes()
@@ -361,6 +415,28 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'setTitle') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        onSetTitle(pane.id)
+        return
+      }
+
+      if (action.type === 'clearPaneTitle') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        onClearPaneTitle(pane.id)
+        return
+      }
+
       // Cmd+W closes the active split pane (or the whole tab when only one
       // pane remains). Always intercepted here so the tab-level handler in
       // Terminal.tsx never closes the entire tab directly — that would kill
@@ -392,41 +468,16 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-        const telemetrySource = getKeyboardSplitTelemetrySource()
-        if (splitWebRuntimeTerminal(ptyId, action.direction, telemetrySource)) {
-          return
-        }
-        // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
-        // if we have a confirmed live OSC 7 for the source pane, split
-        // synchronously to preserve chaining on rapid Cmd+D. Otherwise fall
-        // back to an async resolve that queries pty.getCwd.
-        const cached = paneCwdRef.current.get(pane.id)
-        if (cached?.confirmed && cached.cwd) {
-          const createdPane = manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
-          recordKeyboardCreatedTerminalPaneSplit(createdPane, {
-            source: telemetrySource,
-            direction: action.direction
-          })
-          return
-        }
-        const paneIdAtDispatch = pane.id
-        const directionAtDispatch = action.direction
-        void (async () => {
-          const cwd = await resolveSplitCwd({
-            paneCwdMap: paneCwdRef.current,
-            sourcePaneId: paneIdAtDispatch,
-            sourcePtyId: ptyId,
-            fallbackCwd
-          })
-          const createdPane = managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, {
-            cwd
-          })
-          recordKeyboardCreatedTerminalPaneSplit(createdPane, {
-            source: telemetrySource,
-            direction: directionAtDispatch
-          })
-        })()
+        splitTerminalPaneWithInheritedCwd({
+          manager,
+          getManager: () => managerRef.current,
+          paneTransports: paneTransportsRef.current,
+          paneCwdMap: paneCwdRef.current,
+          fallbackCwd,
+          pane,
+          direction: action.direction,
+          source: getKeyboardSplitTelemetrySource()
+        })
       }
     }
 
@@ -455,6 +506,8 @@ export function useTerminalKeyboardShortcuts({
     onSearchSelectedText,
     onRequestClosePane,
     onClearPaneScrollback,
+    onSetTitle,
+    onClearPaneTitle,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,

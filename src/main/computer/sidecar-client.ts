@@ -1,5 +1,5 @@
-import { fork, type ChildProcess } from 'child_process'
-import { join } from 'path'
+import { fork, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -8,6 +8,7 @@ import type {
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
 
 type ComputerSidecarMethod =
@@ -48,16 +49,6 @@ let sidecar: ComputerSidecarProcess | null = null
 // stale children keep a no-op listener that does not retain the sidecar owner.
 function ignoreStaleChildError(): void {}
 
-export function shouldUseComputerSidecar(): boolean {
-  return (
-    (process.platform === 'darwin' ||
-      process.platform === 'linux' ||
-      process.platform === 'win32') &&
-    typeof process.versions.electron === 'string' &&
-    process.env.ORCA_COMPUTER_SIDECAR !== '1'
-  )
-}
-
 export async function callComputerSidecarListApps(): Promise<ComputerListAppsResult> {
   return (await getComputerSidecar().call('listApps', {})) as ComputerListAppsResult
 }
@@ -85,6 +76,10 @@ export async function callComputerSidecarAction(
   >,
   params: unknown
 ): Promise<ComputerActionResult> {
+  const validation = validateComputerSidecarPasteText(method, params)
+  if (validation) {
+    await validation
+  }
   return normalizeComputerActionResult(
     (await getComputerSidecar().call(method, params)) as ComputerActionResult
   )

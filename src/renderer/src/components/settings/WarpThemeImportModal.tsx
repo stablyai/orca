@@ -86,7 +86,7 @@ export function WarpThemeImportModal({
                 )
               : translate(
                   'auto.components.settings.WarpThemeImportModal.title',
-                  'Import themes from Warp'
+                  'Import from Warp'
                 )}
           </DialogTitle>
           <DialogDescription className="text-xs">

@@ -10,7 +10,11 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
+import {
+  emitCodexHookStatus,
+  emitGrokHookPayload,
+  readHookEndpoint
+} from './helpers/agent-hook-endpoint'
 
 type NotificationDispatch = {
   source?: string
@@ -250,6 +254,106 @@ test.describe('Droid notifications', () => {
         timeout: 10_000,
         message: 'Codex hook Stop did not mark the inactive worktree unread'
       })
+      .toBe(true)
+  })
+
+  test('Grok routine permission prompt hooks stay working and do not notify', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await installMainProcessNotificationDispatchSpy(electronApp)
+    const endpoint = await readHookEndpoint(electronApp)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const readyMarker = `__GROK_HOOK_NOTIFY_READY_${Date.now()}__`
+    await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
+    await waitForTerminalOutput(orcaPage, readyMarker)
+
+    const { paneKey, worktreeId } = await waitForActivePaneHookDescriptor(orcaPage)
+    const prompt = `grok-hook-notify-${Date.now()}`
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'user_prompt_submit',
+        prompt
+      }
+    })
+    await expect
+      .poll(
+        async () =>
+          (await getAgentStatuses(orcaPage)).some(
+            (status) =>
+              status.agentType === 'grok' && status.state === 'working' && status.prompt === prompt
+          ),
+        {
+          timeout: 30_000,
+          message: 'Grok UserPromptSubmit hook did not reach renderer agent status'
+        }
+      )
+      .toBe(true)
+
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'pre_tool_use',
+        toolName: 'Shell',
+        toolInput: { command: 'echo hi' }
+      }
+    })
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'notification',
+        notificationType: 'permission_prompt',
+        message: 'Tool permission requested',
+        level: 'info'
+      }
+    })
+
+    await orcaPage.waitForTimeout(500)
+    expect(
+      (await getAgentStatuses(orcaPage)).some(
+        (status) =>
+          status.agentType === 'grok' && status.prompt === prompt && status.state === 'waiting'
+      )
+    ).toBe(false)
+    expect(
+      (await getNotificationDispatches(electronApp)).filter(
+        (dispatch) => dispatch.source === 'agent-task-complete'
+      )
+    ).toEqual([])
+
+    const finalMessage = `Grok hook completed ${Date.now()}`
+    await emitGrokHookPayload(endpoint, {
+      paneKey,
+      worktreeId,
+      payload: {
+        hookEventName: 'stop',
+        lastAssistantMessage: finalMessage
+      }
+    })
+    await expect
+      .poll(
+        async () =>
+          (await getAgentStatuses(orcaPage)).some(
+            (status) =>
+              status.agentType === 'grok' &&
+              status.state === 'done' &&
+              status.prompt === prompt &&
+              status.lastAssistantMessage === finalMessage
+          ),
+        {
+          timeout: 30_000,
+          message: 'Grok Stop hook did not reach renderer agent status'
+        }
+      )
       .toBe(true)
   })
 

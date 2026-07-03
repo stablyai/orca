@@ -7,7 +7,7 @@ import {
   closeWebRuntimeSessionTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
-  isWebTerminalSurfaceTabId
+  toHostSessionTabId
 } from '@/runtime/web-runtime-session'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -101,7 +101,8 @@ function isPinnedVisibleTab(
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
-  shellOverride?: string
+  shellOverride?: string,
+  options?: { startupCwd?: string }
 ): void {
   if (!activeWorktreeId) {
     return
@@ -116,11 +117,17 @@ export function createNewTerminalTab(
       worktreeId: activeWorktreeId,
       environmentId: runtimeEnvironmentId,
       command: shellOverride,
+      ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
     })
     return
   }
-  const newTab = state.createTab(activeWorktreeId, undefined, shellOverride)
+  const newTab = state.createTab(
+    activeWorktreeId,
+    undefined,
+    shellOverride,
+    options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
+  )
   state.setActiveTabType('terminal')
   // Why: persist the tab bar order with the new terminal at the end of the
   // current visual order. Without this, reconcileTabOrder falls back to
@@ -163,25 +170,30 @@ export function closeTerminalTab(tabId: string, options?: { force?: boolean }): 
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    // Why: a remote-owned worktree's tabs are host-authoritative, so the close
+    // MUST reach the host or its next snapshot re-adds the tab (the "close then
+    // snaps back" bug). When the local→host map has no entry, decode the id
+    // itself (toHostSessionTabId is a no-op for non-mirrored host ids like plain
+    // UUIDs) — mirroring what activate/move do. The old
+    // `isWebTerminalSurfaceTabId ? id : null` gate returned null for plain-UUID
+    // host tabs, so close silently fell back to a local-only prune and the host's
+    // next snapshot re-added the tab. A truly local id the host doesn't know is
+    // harmless: the host close no-ops and the local prune still stands.
     const hostBackedTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
         environmentId: runtimeEnvironmentId,
         worktreeId: owningWorktreeId,
         tabId: terminalTabId
-      }) ?? (isWebTerminalSurfaceTabId(terminalTabId) ? terminalTabId : null)
-    if (hostBackedTabId) {
-      // Why: prune local mirrors immediately so close feels responsive while the
-      // host session snapshot catches up.
-      closeLocalTerminalTabState(terminalTabId)
-      void closeWebRuntimeSessionTab({
-        worktreeId: owningWorktreeId,
-        tabId: hostBackedTabId,
-        environmentId: runtimeEnvironmentId
-      })
-      return
-    }
-    // Why: legacy local-only tabs (e.g. agent quick launch before host routing)
-    // have no host session binding and must still close locally.
+      }) ?? toHostSessionTabId(terminalTabId)
+    // Why: prune local mirrors immediately so close feels responsive while the
+    // host session snapshot catches up.
+    closeLocalTerminalTabState(terminalTabId)
+    void closeWebRuntimeSessionTab({
+      worktreeId: owningWorktreeId,
+      tabId: hostBackedTabId,
+      environmentId: runtimeEnvironmentId
+    })
+    return
   }
 
   const currentTerminalTabIds = getWorktreeTerminalTabIds(state, owningWorktreeId)

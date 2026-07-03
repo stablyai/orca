@@ -2,8 +2,13 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Timer } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { useShallow } from 'zustand/react/shallow'
 import { usePromptCacheCountdownNow } from './prompt-cache-countdown-clock'
-import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selection'
+import {
+  getMostUrgentPromptCacheStartedAt,
+  getPromptCacheCountdownForPane,
+  type PromptCacheCountdownSelection
+} from './prompt-cache-timer-selection'
 
 /**
  * The most-urgent cache start time when a countdown should show, else null.
@@ -14,13 +19,43 @@ import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selectio
  * (shortest remaining) start time — if any tab's cache is about to expire, the
  * user should know.
  */
-export function usePromptCacheCountdownStartedAt(worktreeId: string): number | null {
-  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
-  const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
-  const startedAt = useAppStore((s) =>
-    getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
+export function usePromptCacheCountdownStartedAt(worktreeId: string, active = true): number | null {
+  const [enabled, ttlMs, startedAt] = useAppStore(
+    useShallow((s) => {
+      if (!active) {
+        return [false, 0, null] as const
+      }
+      const enabled = s.settings?.promptCacheTimerEnabled ?? false
+      const ttlMs = s.settings?.promptCacheTtlMs ?? 0
+      if (!enabled || ttlMs <= 0) {
+        return [enabled, ttlMs, null] as const
+      }
+      return [
+        enabled,
+        ttlMs,
+        getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
+      ] as const
+    })
   )
   return enabled && ttlMs > 0 && startedAt != null ? startedAt : null
+}
+
+export function usePromptCacheCountdownForPane(
+  paneKey: string,
+  active = true
+): PromptCacheCountdownSelection | null {
+  return useAppStore(
+    useShallow((s) => {
+      if (!active || !(s.settings?.promptCacheTimerEnabled ?? false)) {
+        return null
+      }
+      return getPromptCacheCountdownForPane(
+        paneKey,
+        s.cacheTimerByKey,
+        s.settings?.promptCacheTtlMs ?? 0
+      )
+    })
+  )
 }
 
 /**

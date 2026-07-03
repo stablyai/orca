@@ -668,6 +668,59 @@ describe('repo slice runtime routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('drops persisted visit timestamps for removed unhydrated SSH repos', async () => {
+    const store = createTestStore()
+    const sshWorktreeId = `${sshRepo.id}::/home/orca/wt`
+    const localWorktreeId = `${localRepo.id}::/local/wt`
+    store.setState({
+      repos: [sshRepo, localRepo],
+      activeRepoId: sshRepo.id,
+      lastVisitedAtByWorktreeId: {
+        [sshWorktreeId]: 100,
+        [localWorktreeId]: 200
+      }
+    })
+
+    await store.getState().removeProject(sshRepo.id)
+
+    expect(store.getState().repos).toEqual([localRepo])
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+  })
+
+  it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-remove-runtime-unhydrated',
+      ok: true,
+      result: { removed: true },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    const remoteWorktreeId = `${remoteRepo.id}::/srv/orca/wt`
+    const localWorktreeId = `${localRepo.id}::/local/wt`
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [remoteRepo, localRepo],
+      activeRepoId: remoteRepo.id,
+      lastVisitedAtByWorktreeId: {
+        [remoteWorktreeId]: 100,
+        [localWorktreeId]: 200
+      }
+    })
+
+    await store.getState().removeProject(remoteRepo.id)
+
+    expect(store.getState().repos).toEqual([localRepo])
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.rm',
+      params: { repo: remoteRepo.id },
+      timeoutMs: 15_000
+    })
+    expect(reposRemove).not.toHaveBeenCalled()
+  })
+
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {
     const store = createTestStore()
     store.setState({

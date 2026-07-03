@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { QUICK_OPEN_QUERY_MAX_BYTES } from '../quick-open-search'
 import {
   classifyTabEntryQuery,
   getTabEntryOptions,
@@ -129,6 +130,37 @@ describe('tab create entry classification', () => {
       { kind: 'new-file', relativePath: 'read.md' },
       { kind: 'existing-file', matchKind: 'fuzzy', relativePath: 'README.md' }
     ])
+  })
+
+  it('blocks oversized pasted file-entry queries before reading listed files', () => {
+    const oversizedQuery = `src/${'secret-tab-create'.repeat(QUICK_OPEN_QUERY_MAX_BYTES)}.ts`
+    const fileList = {
+      get files(): string[] {
+        throw new Error('oversized queries must not read file lists')
+      },
+      loading: false,
+      loadError: null
+    }
+
+    expect(classifyTabEntryQuery(oversizedQuery, fileList)).toEqual({
+      kind: 'blocked',
+      message: 'Search text is too large.'
+    })
+  })
+
+  it('blocks oversized whitespace before trimming file-entry queries', () => {
+    const fileList = {
+      get files(): string[] {
+        throw new Error('oversized whitespace queries must not read file lists')
+      },
+      loading: false,
+      loadError: null
+    }
+
+    expect(classifyTabEntryQuery(' '.repeat(QUICK_OPEN_QUERY_MAX_BYTES + 1), fileList)).toEqual({
+      kind: 'blocked',
+      message: 'Search text is too large.'
+    })
   })
 
   it('offers both exact file and URL actions for host-like filenames', () => {

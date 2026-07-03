@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput,
-  pasteTerminalText
+  pasteTerminalText,
+  sanitizeTerminalPasteText
 } from './terminal-bracketed-paste'
 
 function createTerminal(bracketedPasteMode = true) {
@@ -210,5 +211,34 @@ describe('terminal bracketed paste policy', () => {
     pasteTerminalText(terminal, 'before\x1b[201~after')
 
     expect(terminal.paste).toHaveBeenCalledWith('before\u241b[201~after')
+  })
+
+  it('sanitizes escape-heavy paste text without split arrays', () => {
+    const text = Array.from({ length: 512 }, (_value, index) => `part-${index}\x1b[201~`).join('')
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    const sanitized = sanitizeTerminalPasteText(text)
+    const splitCallCount = splitSpy.mock.calls.length
+    splitSpy.mockRestore()
+
+    expect(sanitized).not.toContain('\x1b')
+    expect(sanitized).toContain('\u241b[201~')
+    expect(splitCallCount).toBe(0)
+  })
+
+  it('detects escape-heavy bracketed mode output without split arrays', () => {
+    const terminal = createTerminal(true)
+    markTerminalBracketedPasteInterrupted(terminal)
+    const output = `${Array.from({ length: 512 }, () => '\x1b]noise').join('')}\x1b[?25;2004h`
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    observeTerminalBracketedPasteModeOutput(terminal, output)
+    const splitCallCount = splitSpy.mock.calls.length
+    splitSpy.mockRestore()
+
+    pasteTerminalText(terminal, 'commit')
+    expect(terminal.paste).toHaveBeenCalledWith('commit')
+    expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
+    expect(splitCallCount).toBe(0)
   })
 })

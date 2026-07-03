@@ -34,6 +34,13 @@ describe('source-control-commit-eligibility', () => {
     expect(isCommitMessageFieldDisabled(inputs)).toBe(false)
   })
 
+  it('allows committing the staged index when files are partially staged', () => {
+    const inputs = baseInputs({ hasPartiallyStagedChanges: true })
+    expect(resolveCommitDisabledReason(inputs)).toBeNull()
+    expect(canSubmitCommit(inputs)).toBe(true)
+    expect(isCommitMessageFieldDisabled(inputs)).toBe(false)
+  })
+
   it('disables the message field when nothing is staged', () => {
     const inputs = baseInputs({ stagedCount: 0 })
     expect(isCommitMessageFieldDisabled(inputs)).toBe(true)

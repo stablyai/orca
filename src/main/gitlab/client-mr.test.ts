@@ -381,6 +381,26 @@ describe('gitlab client — MR operations', () => {
       )
     })
 
+    it('preserves merged state when falling back to a linked MR iid', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 10,
+          title: 'Merged linked MR',
+          state: 'merged',
+          pipeline: { status: 'success' }
+        })
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'local-review-branch', 10)
+
+      expect(mr).toMatchObject({
+        number: 10,
+        state: 'merged',
+        pipelineStatus: 'success'
+      })
+    })
+
     it('routes local WSL merge-request branch lookup through the selected distro', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({
@@ -535,6 +555,20 @@ describe('gitlab client — MR operations', () => {
       }
     })
 
+    it('appends an encoded &search= param when a query is supplied', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+      await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
+      const callArgs = glabApiWithHeadersMock.mock.calls[0][0] as string[]
+      expect(callArgs[0]).toContain('&search=fix%20login')
+    })
+
+    it('omits &search= for an empty or whitespace-only query', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
+      await listMergeRequests('/repo', 'opened', 1, 20, undefined, '   ')
+      const callArgs = glabApiWithHeadersMock.mock.calls[0][0] as string[]
+      expect(callArgs[0]).not.toContain('search=')
+    })
+
     it('flags fork MRs as cross-repository', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify([
@@ -596,6 +630,32 @@ describe('gitlab client — MR operations', () => {
         ],
         { cwd: '/repo' }
       )
+    })
+
+    it('threads --search into the cwd fallback when a query is supplied', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+      await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      // Why (#6263): the cwd-inferred fallback must honor the typed query too.
+      const searchIdx = callArgs.indexOf('--search')
+      expect(searchIdx).toBeGreaterThanOrEqual(0)
+      expect(callArgs[searchIdx + 1]).toBe('fix login')
+    })
+
+    it('omits --search from the cwd fallback for a whitespace-only query', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+      await listMergeRequests('/repo', 'opened', 1, 20, undefined, '   ')
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      expect(callArgs).not.toContain('--search')
     })
 
     it('classifies fallback errors into the result envelope', async () => {

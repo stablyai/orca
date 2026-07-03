@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/types'
 import { AutomationService } from './service'
 

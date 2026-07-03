@@ -27,6 +27,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
@@ -44,6 +45,9 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
+const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
+  ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
+> = {}
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 
@@ -67,6 +71,7 @@ export function useTabGroupWorkspaceModel({
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
       mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
     }))
@@ -97,7 +102,6 @@ export function useTabGroupWorkspaceModel({
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
-  const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
@@ -148,6 +152,7 @@ export function useTabGroupWorkspaceModel({
             createdAt: item.createdAt,
             generation: terminalTab?.generation,
             shellOverride: terminalTab?.shellOverride,
+            startupCwd: terminalTab?.startupCwd,
             // Why: carry the launched agent through the rebuilt tab so the tab
             // bar can show the provider icon before the agent's first hook —
             // this object is reconstructed from the unified-tab model, so any
@@ -377,11 +382,21 @@ export function useTabGroupWorkspaceModel({
       }
       setActiveTab(terminalId)
       setActiveTabType('terminal')
-      // Why: clicking the tab button gives the browser focus to the tab strip
-      // after pointerdown; explicitly return it to xterm on the next frames.
-      focusTerminalTabSurface(terminalId)
+      const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
+      // Why: split terminal tab activation must restore xterm focus to the
+      // store-active leaf so keyboard input cannot drift to a sibling pane.
+      focusTerminalTabSurface(terminalId, activeLeafId)
     },
-    [activateTab, focusGroup, groupId, groupTabs, setActiveTab, setActiveTabType, worktreeId]
+    [
+      activateTab,
+      focusGroup,
+      groupId,
+      groupTabs,
+      setActiveTab,
+      setActiveTabType,
+      worktreeState.terminalLayoutsByTabId,
+      worktreeId
+    ]
   )
 
   const toggleTerminalPaneExpand = useCallback(
@@ -456,52 +471,25 @@ export function useTabGroupWorkspaceModel({
   )
 
   const createSplitGroup = useCallback(
-    (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId?: string) => {
-      const sourceTab =
-        groupTabs.find((candidate) =>
-          candidate.contentType === 'terminal' || candidate.contentType === 'browser'
-            ? candidate.entityId === sourceVisibleTabId
-            : candidate.id === sourceVisibleTabId
-        ) ?? activeTab
-
+    (direction: 'left' | 'right' | 'up' | 'down') => {
       focusGroup(worktreeId, groupId)
-      if (!sourceTab) {
+      const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
+      if (!newGroupId) {
         return
       }
-
-      // Why: for terminals specifically, splitting a single-tab group should
-      // still produce a useful split — spawn a fresh terminal in the new pane
-      // and leave the existing one behind. Moving the only tab would collapse
-      // the split immediately (see the same-group guard in dropUnifiedTab),
-      // giving the user nothing; a new terminal preserves the old shortcut
-      // flow without duplicating a persistent tab like editors/browsers would.
-      if (sourceTab.contentType === 'terminal' && groupTabs.length <= 1) {
-        const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
-        if (!newGroupId) {
-          return
-        }
-        const terminal = createTab(worktreeId, newGroupId)
-        recordTerminalTabGroupSplit(terminal)
-        setActiveTab(terminal.id)
-        setActiveTabType('terminal')
-        return
-      }
-
-      // Why: split actions MOVE the source tab into the new pane rather than
-      // leaving a duplicate in the origin. Delegating to dropUnifiedTab reuses
-      // the same split+move path as drag-to-split so keyboard/menu splits and
-      // drag splits stay behaviorally identical, including collapsing the
-      // origin group if its last tab is the one we just moved.
-      dropUnifiedTab(sourceTab.id, { groupId, splitDirection: direction })
+      // Why: the tab-strip Split pane control adds a split pane to the right of
+      // the group that owns the button. Dragging tabs can still open other
+      // directions; this entry point always seeds a fresh terminal.
+      const terminal = createTab(worktreeId, newGroupId)
+      recordTerminalTabGroupSplit(terminal)
+      setActiveTab(terminal.id)
+      setActiveTabType('terminal')
     },
     [
-      activeTab,
       createEmptySplitGroup,
       createTab,
-      dropUnifiedTab,
       focusGroup,
       groupId,
-      groupTabs,
       setActiveTab,
       setActiveTabType,
       worktreeId
@@ -653,8 +641,7 @@ export function useTabGroupWorkspaceModel({
             return
           }
           createBrowserTab(worktreeId, source.url, {
-            title: source.title,
-            sessionProfileId: source.sessionProfileId,
+            ...buildDuplicatedBrowserTabOptions(source),
             targetGroupId: groupId
           })
         })()

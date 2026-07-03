@@ -3,7 +3,15 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
+import { EMULATOR_KEYBOARD_PASTE_MAX_BYTES } from './emulator-keyboard-paste'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn()
+  }
+}))
 
 type PointerInit = {
   button?: number
@@ -163,6 +171,16 @@ function keyEvent(
   return event
 }
 
+function pasteEvent(text: string): Event {
+  const event = new Event('paste', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      getData: vi.fn((type: string) => (type === 'text' ? text : ''))
+    }
+  })
+  return event
+}
+
 function decodedSentMessages(tag: number): unknown[] {
   const ws = FakeWebSocket.instances[0]
   if (!ws) {
@@ -249,6 +267,54 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'up', usage: 4 },
       { type: 'up', usage: 225 }
     ])
+  })
+
+  it('forwards focused paste text as bounded serve-sim HID frames', () => {
+    vi.useFakeTimers()
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const paste = pasteEvent('ab')
+
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(paste)
+    })
+
+    expect(paste.defaultPrevented).toBe(true)
+    expect(decodedSentKeyboardFrames()).toEqual([{ type: 'down', usage: 4 }])
+
+    act(() => {
+      vi.advanceTimersByTime(12)
+    })
+
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 4 },
+      { type: 'up', usage: 4 },
+      { type: 'down', usage: 5 },
+      { type: 'up', usage: 5 }
+    ])
+  })
+
+  it('rejects oversized screen paste without scheduling keyboard frames', async () => {
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const paste = pasteEvent('a'.repeat(EMULATOR_KEYBOARD_PASTE_MAX_BYTES + 1))
+
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+      screen.dispatchEvent(paste)
+      await Promise.resolve()
+    })
+
+    expect(paste.defaultPrevented).toBe(true)
+    expect(decodedSentKeyboardFrames()).toEqual([])
+    expect(toast.error).toHaveBeenCalledWith('Paste is too large for emulator keyboard input.')
   })
 
   it('releases pressed keyboard usages when delayed frames are canceled by cleanup', () => {

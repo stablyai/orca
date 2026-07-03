@@ -1,4 +1,5 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
 
 /**
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
@@ -11,6 +12,17 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
  * other agent's user extensions).
  */
 export type PiAgentKind = 'pi' | 'omp'
+
+/**
+ * True when `agentType` names a Pi-compatible (goal/mission) kind. These agents
+ * emit milestone `agent_end` events between steps while still working, so they
+ * are treated differently from agents that only signal completion at turn end.
+ */
+export function isPiCompatibleAgentType(
+  agentType: string | null | undefined
+): agentType is PiAgentKind {
+  return agentType === 'pi' || agentType === 'omp'
+}
 
 const OMP_LAUNCH_CMD = TUI_AGENT_CONFIG.omp.launchCmd
 
@@ -27,7 +39,7 @@ const PATH_PREFIX = `(?:[^\\s;&|('"\`]*[\\\\/])?`
 function makeLaunchCmdRegex(launchCmd: string): RegExp {
   // Why: launchCmd may be a multi-token string ("hermes --tui"); only the
   // first token is the binary name. Use that for matching.
-  const binary = launchCmd.split(/\s+/, 1)[0]
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCmd))
   const escaped = binary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(
     `${BOUNDARY_BEFORE}${PATH_PREFIX}${escaped}(?:\\.cmd|\\.exe|\\.sh)?${BOUNDARY_AFTER}`,

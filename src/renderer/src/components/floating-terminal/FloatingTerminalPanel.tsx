@@ -6,7 +6,7 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
-import BrowserPane from '@/components/browser-pane/BrowserPane'
+import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
@@ -28,6 +28,7 @@ import { appendUniqueOpenFileIds } from '@/components/terminal/unsaved-close-que
 import { getConnectionId } from '@/lib/connection-context'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { detectLanguage } from '@/lib/language-detect'
+import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import {
@@ -47,16 +48,10 @@ import {
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
-import {
-  activateWebRuntimeSessionTab,
-  closeWebRuntimeSessionTab,
-  createWebRuntimeSessionBrowserTab,
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   keybindingMatchesAction,
+  matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingContext,
   type KeybindingMatchOptions,
@@ -73,6 +68,7 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { FloatingBrowserSlot } from './FloatingBrowserSlot'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
@@ -93,6 +89,7 @@ import {
   type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
 import { translate } from '@/i18n/i18n'
+import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
 const EMPTY_GROUPS: TabGroup[] = []
@@ -184,6 +181,7 @@ export function FloatingTerminalPanel({
   const closeTab = useAppStore((s) => s.closeTab)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const closeFile = useAppStore((s) => s.closeFile)
+  const closeUnifiedTab = useAppStore((s) => s.closeUnifiedTab)
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const activateTab = useAppStore((s) => s.activateTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
@@ -277,11 +275,17 @@ export function FloatingTerminalPanel({
   const activeTerminalId = activeTab?.contentType === 'terminal' ? activeTab.entityId : null
   const activeBrowserId = activeTab?.contentType === 'browser' ? activeTab.entityId : null
   const activeEditorUnifiedId =
-    activeTab && activeTab.contentType !== 'terminal' && activeTab.contentType !== 'browser'
+    activeTab &&
+    activeTab.contentType !== 'terminal' &&
+    activeTab.contentType !== 'browser' &&
+    activeTab.contentType !== 'simulator'
       ? activeTab.id
       : null
   const activeEditorFileId =
-    activeTab && activeTab.contentType !== 'terminal' && activeTab.contentType !== 'browser'
+    activeTab &&
+    activeTab.contentType !== 'terminal' &&
+    activeTab.contentType !== 'browser' &&
+    activeTab.contentType !== 'simulator'
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
@@ -331,7 +335,12 @@ export function FloatingTerminalPanel({
   const editorItems = useMemo(
     () =>
       groupTabs
-        .filter((tab) => tab.contentType !== 'terminal' && tab.contentType !== 'browser')
+        .filter(
+          (tab) =>
+            tab.contentType !== 'terminal' &&
+            tab.contentType !== 'browser' &&
+            tab.contentType !== 'simulator'
+        )
         .map((tab) => {
           const file = floatingFiles.find((candidate) => candidate.id === tab.entityId)
           return file ? { ...file, tabId: tab.id } : null
@@ -339,11 +348,19 @@ export function FloatingTerminalPanel({
         .filter((file): file is OpenFile & { tabId: string } => file !== null),
     [floatingFiles, groupTabs]
   )
-  // Why: restored sessions can retain unified tabs whose backing terminal/file/browser
-  // records are gone; the empty landing should follow what the user can see.
+  const simulatorItems = useMemo(
+    () => groupTabs.filter((tab) => tab.contentType === 'simulator'),
+    [groupTabs]
+  )
+  // Why: restored sessions can retain unified tabs whose backing records are
+  // gone; the empty landing should follow what the user can see.
   const hasVisibleFloatingTabs =
-    terminalItems.length > 0 || browserItems.length > 0 || editorItems.length > 0
-  const visibleFloatingItemCount = terminalItems.length + browserItems.length + editorItems.length
+    terminalItems.length > 0 ||
+    browserItems.length > 0 ||
+    editorItems.length > 0 ||
+    simulatorItems.length > 0
+  const visibleFloatingItemCount =
+    terminalItems.length + browserItems.length + editorItems.length + simulatorItems.length
   const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
   const tabBarOrder = useMemo(
     () =>
@@ -354,6 +371,26 @@ export function FloatingTerminalPanel({
           : tabId
       }),
     [activeGroup, groupTabs]
+  )
+  const visibleFloatingTabOrder = useMemo(
+    () =>
+      tabBarOrder.filter((visibleId) => {
+        const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+        if (!tab) {
+          return false
+        }
+        if (tab.contentType === 'terminal') {
+          return terminalItems.some((item) => item.unifiedTabId === tab.id)
+        }
+        if (tab.contentType === 'browser') {
+          return browserItems.some((item) => item.tabId === tab.id)
+        }
+        if (tab.contentType === 'simulator') {
+          return simulatorItems.some((item) => item.id === tab.id)
+        }
+        return editorItems.some((item) => item.tabId === tab.id)
+      }),
+    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
   )
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
@@ -366,7 +403,9 @@ export function FloatingTerminalPanel({
       ? 'browser'
       : activeTab?.contentType === 'terminal'
         ? 'terminal'
-        : 'editor'
+        : activeTab?.contentType === 'simulator'
+          ? 'simulator'
+          : 'editor'
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
@@ -613,27 +652,10 @@ export function FloatingTerminalPanel({
         return
       }
       activateTab(item.id)
-      const runtimeEnvironmentId = useAppStore
-        .getState()
-        .settings?.activeRuntimeEnvironmentId?.trim()
       if (item.contentType === 'terminal') {
-        if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-          void activateWebRuntimeSessionTab({
-            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-            tabId: item.entityId,
-            environmentId: runtimeEnvironmentId
-          })
-        }
         setActiveTab(item.entityId)
         focusTerminalTabSurface(item.entityId)
       } else if (item.contentType === 'browser') {
-        if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-          void activateWebRuntimeSessionTab({
-            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-            tabId: item.id,
-            environmentId: runtimeEnvironmentId
-          })
-        }
         const workspace = useAppStore
           .getState()
           .browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
@@ -649,50 +671,28 @@ export function FloatingTerminalPanel({
 
   const createFloatingTerminalTab = useCallback(
     (shellOverride?: string) => {
-      void (async () => {
-        if (
-          await createWebRuntimeSessionTerminal({
-            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-            targetGroupId: activeGroup?.id,
-            command: shellOverride,
-            activate: true,
-            selectWorktree: false
-          })
-        ) {
-          return
-        }
-        const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, {
-          activate: false
-        })
-        activateTab(tab.id)
-        focusTerminalTabSurface(tab.id)
-      })()
+      // Why: the floating workspace is a local scratchpad; a focused remote
+      // runtime must not own tabs users keep there for manual SSH/tmux work.
+      const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, {
+        activate: false
+      })
+      activateTab(tab.id)
+      focusTerminalTabSurface(tab.id)
     },
     [activateTab, activeGroup, createTab]
   )
 
   const createFloatingBrowserTab = useCallback(() => {
-    void (async () => {
-      const url = browserDefaultUrl ?? 'about:blank'
-      if (
-        await createWebRuntimeSessionBrowserTab({
-          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-          url,
-          targetGroupId: activeGroup?.id,
-          selectWorktree: false
-        })
-      ) {
-        return
-      }
-      createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-        title: translate(
-          'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
-          'New Browser Tab'
-        ),
-        focusAddressBar: true,
-        targetGroupId: activeGroup?.id
-      })
-    })()
+    const url = browserDefaultUrl ?? 'about:blank'
+    createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
+      title: translate(
+        'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
+        'New Browser Tab'
+      ),
+      focusAddressBar: true,
+      targetGroupId: activeGroup?.id,
+      browserRuntimeEnvironmentId: null
+    })
   }, [activeGroup, browserDefaultUrl, createBrowserTab])
 
   const createFloatingMarkdownTab = useCallback(() => {
@@ -764,26 +764,14 @@ export function FloatingTerminalPanel({
         return
       }
       const dirtyEditorFileIds: string[] = []
-      const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
       for (const item of items) {
-        if (
-          (item.contentType === 'terminal' || item.contentType === 'browser') &&
-          isWebRuntimeSessionActive(runtimeEnvironmentId)
-        ) {
-          // Why: paired web clients mirror host-owned tabs; ask the runtime to
-          // close the host tab instead of deleting the local mirror directly.
-          void closeWebRuntimeSessionTab({
-            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-            tabId: item.contentType === 'browser' ? item.id : item.entityId,
-            environmentId: runtimeEnvironmentId
-          })
-          continue
-        }
         if (item.contentType === 'terminal') {
           closeTab(item.entityId)
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
+        } else if (item.contentType === 'simulator') {
+          closeUnifiedTab(item.id)
         } else {
           const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
           if (file?.isDirty) {
@@ -797,7 +785,7 @@ export function FloatingTerminalPanel({
         queueEditorCloseRequests(dirtyEditorFileIds)
       }
     },
-    [activeGroup, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [activeGroup, closeBrowserTab, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
   )
 
   const closeFloatingItem = useCallback(
@@ -868,7 +856,13 @@ export function FloatingTerminalPanel({
     closeFloatingItems(
       currentGroupTabs
         .filter(
-          (tab) => tab.contentType !== 'terminal' && tab.contentType !== 'browser' && !tab.isPinned
+          (tab) =>
+            tab.contentType !== 'terminal' &&
+            tab.contentType !== 'browser' &&
+            // Why: simulator tabs are not files; "Close All Files" must leave
+            // the Mobile Emulator open like terminal/browser tabs do.
+            tab.contentType !== 'simulator' &&
+            !tab.isPinned
         )
         .map((tab) => tab.id)
     )
@@ -932,21 +926,91 @@ export function FloatingTerminalPanel({
     setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(target))
   }, [])
 
+  const toggleMaximized = useCallback(() => {
+    if (maximized) {
+      const restoredState = restoreBoundsRef.current ?? {
+        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
+        renderedBounds: getDefaultFloatingTerminalBounds(),
+        source: 'default' as const
+      }
+      restoreBoundsRef.current = null
+      boundsSourceRef.current = restoredState.source
+      committedBoundsRef.current = restoredState.committedBounds
+      const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
+        ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
+        : restoredState.renderedBounds
+      stagedBoundsRef.current = null
+      setBounds(restoredBounds)
+      setMaximized(false)
+      return
+    }
+    restoreBoundsRef.current = {
+      committedBounds: committedBoundsRef.current,
+      renderedBounds: bounds,
+      source: boundsSourceRef.current
+    }
+    stagedBoundsRef.current = null
+    setBounds(getMaximizedFloatingTerminalBounds())
+    setMaximized(true)
+  }, [bounds, maximized])
+
+  const maximizePanel = useCallback(() => {
+    // Why: idempotent maximize used by the open-into-maximized intent. Unlike
+    // toggleMaximized it never restores, and only stashes restore bounds on the
+    // first transition so a redundant call cannot clobber the saved size.
+    if (maximized) {
+      return
+    }
+    restoreBoundsRef.current = {
+      committedBounds: committedBoundsRef.current,
+      renderedBounds: bounds,
+      source: boundsSourceRef.current
+    }
+    stagedBoundsRef.current = null
+    setBounds(getMaximizedFloatingTerminalBounds())
+    setMaximized(true)
+  }, [bounds, maximized])
+
+  useEffect(() => {
+    // Why: when App opens the panel via Cmd+Opt+Shift+A while it was closed,
+    // it records a one-shot intent; honor it once the panel is open so it
+    // starts maximized regardless of its last saved size.
+    if (open && consumeFloatingTerminalOpenMaximizedIntent()) {
+      maximizePanel()
+    }
+  }, [open, maximizePanel])
+
   const handleFloatingPanelShortcutAction = useCallback(
     (input: FloatingPanelShortcutInput, consume: () => void): boolean => {
       const state = useAppStore.getState()
       const platform = getShortcutPlatform()
+      const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
+      const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(input.target)
       const context: KeybindingContext = input.doubleTapModifier
         ? 'app'
-        : isFloatingWorkspaceTerminalInputTarget(input.target)
+        : isFloatingTerminalInput
           ? 'terminal'
           : 'app'
       const matchOptions: KeybindingMatchOptions = {
         context,
-        terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+        terminalShortcutPolicy
       }
+      // Floating panel chrome owns these controls even when xterm has DOM focus;
+      // keep the rest of the shortcut table in terminal context for terminal-first.
+      const floatingChromeMatchOptions: KeybindingMatchOptions =
+        isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
+          ? { context: 'app', terminalShortcutPolicy }
+          : matchOptions
       const matches = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
+      const matchesFloatingChrome = (actionId: KeybindingActionId): boolean =>
+        keybindingMatchesAction(
+          actionId,
+          input,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        )
 
       if (matches('tab.newTerminal')) {
         consume()
@@ -982,10 +1046,43 @@ export function FloatingTerminalPanel({
         }
         return true
       }
+      if (matchesFloatingChrome('tab.rename') && activeTab) {
+        consume()
+        state.setRenamingTabId(activeTab.id)
+        return true
+      }
+      const selectedTabIndex = matchKeybindingDigitIndex(
+        'tab.selectByIndex',
+        input,
+        platform,
+        state.keybindings,
+        matchOptions
+      )
+      if (selectedTabIndex !== null) {
+        const visibleId = visibleFloatingTabOrder[selectedTabIndex]
+        if (!visibleId) {
+          return false
+        }
+        consume()
+        activateFloatingItem(visibleId)
+        return true
+      }
+      if (matchesFloatingChrome('floatingWorkspace.maximize')) {
+        consume()
+        toggleMaximized()
+        return true
+      }
+      if (matchesFloatingChrome('floatingWorkspace.minimize')) {
+        consume()
+        onOpenChange(false)
+        return true
+      }
       return false
     },
     [
       activeClosableTab,
+      activeTab,
+      activateFloatingItem,
       closeFloatingItem,
       createFloatingBrowserTab,
       createFloatingMarkdownTab,
@@ -993,7 +1090,9 @@ export function FloatingTerminalPanel({
       focusPanelForShortcutsAfterClose,
       onOpenChange,
       openFloatingMarkdownTab,
-      visibleFloatingItemCount
+      toggleMaximized,
+      visibleFloatingItemCount,
+      visibleFloatingTabOrder
     ]
   )
 
@@ -1013,14 +1112,47 @@ export function FloatingTerminalPanel({
 
       const state = useAppStore.getState()
       const platform = getShortcutPlatform()
-      const context: KeybindingContext = isFloatingWorkspaceTerminalInputTarget(event.target)
-        ? 'terminal'
-        : 'app'
+      const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
+      const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(event.target)
+      const context: KeybindingContext = isFloatingTerminalInput ? 'terminal' : 'app'
       const matchOptions: KeybindingMatchOptions = {
         context,
-        terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+        terminalShortcutPolicy
       }
+      const floatingChromeMatchOptions: KeybindingMatchOptions =
+        isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
+          ? { context: 'app', terminalShortcutPolicy }
+          : matchOptions
       const nativeEvent = event.nativeEvent
+      const isFloatingChromeShortcut =
+        keybindingMatchesAction(
+          'tab.rename',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        ) ||
+        matchKeybindingDigitIndex(
+          'tab.selectByIndex',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          matchOptions
+        ) !== null ||
+        keybindingMatchesAction(
+          'floatingWorkspace.maximize',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        ) ||
+        keybindingMatchesAction(
+          'floatingWorkspace.minimize',
+          nativeEvent,
+          platform,
+          state.keybindings,
+          floatingChromeMatchOptions
+        )
 
       if (
         !isFloatingWorkspacePanelShortcut(
@@ -1029,7 +1161,8 @@ export function FloatingTerminalPanel({
           panelRef.current,
           state.keybindings,
           matchOptions
-        )
+        ) &&
+        !isFloatingChromeShortcut
       ) {
         return
       }
@@ -1214,35 +1347,6 @@ export function FloatingTerminalPanel({
       window.removeEventListener('blur', handleWindowBlur)
     }
   }, [open])
-
-  const toggleMaximized = useCallback(() => {
-    if (maximized) {
-      const restoredState = restoreBoundsRef.current ?? {
-        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
-        renderedBounds: getDefaultFloatingTerminalBounds(),
-        source: 'default' as const
-      }
-      restoreBoundsRef.current = null
-      boundsSourceRef.current = restoredState.source
-      committedBoundsRef.current = restoredState.committedBounds
-      const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
-        ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
-        : restoredState.renderedBounds
-      stagedBoundsRef.current = null
-      setBounds(restoredBounds)
-      setMaximized(false)
-      return
-    }
-    restoreBoundsRef.current = {
-      committedBounds: committedBoundsRef.current,
-      renderedBounds: bounds,
-      source: boundsSourceRef.current
-    }
-    stagedBoundsRef.current = null
-    setBounds(getMaximizedFloatingTerminalBounds())
-    setMaximized(true)
-  }, [bounds, maximized])
-
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
       return
@@ -1375,34 +1479,22 @@ export function FloatingTerminalPanel({
               browserTabs={browserItems}
               activeFileId={activeEditorUnifiedId}
               activeBrowserTabId={activeBrowserId}
+              activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
               activeTabType={activeTabType}
               onActivateFile={activateFloatingItem}
               onCloseFile={closeFloatingItem}
               onActivateBrowserTab={activateFloatingItem}
               onCloseBrowserTab={closeFloatingItem}
               onDuplicateBrowserTab={(browserTabId) => {
-                void (async () => {
-                  const source = browserTabs.find((tab) => tab.id === browserTabId)
-                  if (!source) {
-                    return
-                  }
-                  if (
-                    await createWebRuntimeSessionBrowserTab({
-                      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-                      url: source.url,
-                      profileId: source.sessionProfileId,
-                      targetGroupId: activeGroup?.id,
-                      selectWorktree: false
-                    })
-                  ) {
-                    return
-                  }
-                  createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
-                    title: source.title,
-                    sessionProfileId: source.sessionProfileId,
-                    targetGroupId: activeGroup?.id
-                  })
-                })()
+                const source = browserTabs.find((tab) => tab.id === browserTabId)
+                if (!source) {
+                  return
+                }
+                createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
+                  ...buildDuplicatedBrowserTabOptions(source),
+                  targetGroupId: activeGroup?.id,
+                  browserRuntimeEnvironmentId: null
+                })
               }}
               onCloseAllFiles={closeAllFiles}
               onMakePreviewFilePermanent={makePreviewFilePermanent}
@@ -1460,7 +1552,19 @@ export function FloatingTerminalPanel({
                 className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
                 aria-hidden={!isActive}
               >
-                <BrowserPane browserTab={tab} isActive={open && isActive} />
+                <FloatingBrowserSlot browserTab={tab} isActive={open && isActive} />
+              </div>
+            )
+          })}
+          {simulatorItems.map((tab) => {
+            const isActive = tab.id === activeTab?.id
+            return (
+              <div
+                key={tab.id}
+                className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+                aria-hidden={!isActive}
+              >
+                <EmulatorPane tab={tab} worktreeId={tab.worktreeId} isActive={open && isActive} />
               </div>
             )
           })}

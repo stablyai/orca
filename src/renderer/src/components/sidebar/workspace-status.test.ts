@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  WORKSPACE_STATUS_DRAG_ID_MAX_COUNT,
   WORKSPACE_STATUS_DRAG_IDS_TYPE,
+  WORKSPACE_STATUS_DRAG_PAYLOAD_MAX_BYTES,
   WORKSPACE_STATUS_DRAG_TYPE,
   hasWorkspaceDragData,
   readWorkspaceDragData,
@@ -53,5 +55,65 @@ describe('workspace status drag data', () => {
 
     expect(readWorkspaceDragDataIds(dataTransfer)).toEqual(['wt-1'])
     expect(hasWorkspaceDragData(dataTransfer)).toBe(true)
+  })
+
+  it('ignores invalid decoded worktree ids while preserving valid batch ids', () => {
+    const dataTransfer = new TestDataTransfer() as unknown as DataTransfer
+    dataTransfer.setData(
+      WORKSPACE_STATUS_DRAG_IDS_TYPE,
+      JSON.stringify(['wt-1', null, '', 7, 'wt-2'])
+    )
+
+    expect(readWorkspaceDragDataIds(dataTransfer)).toEqual(['wt-1', 'wt-2'])
+  })
+
+  it('ignores oversized plain-text workspace drag fallbacks', () => {
+    const dataTransfer = new TestDataTransfer() as unknown as DataTransfer
+    const secret = 'workspace-drag-secret'
+    dataTransfer.setData('text/plain', secret + 'x'.repeat(WORKSPACE_STATUS_DRAG_PAYLOAD_MAX_BYTES))
+
+    expect(readWorkspaceDragData(dataTransfer)).toBeNull()
+    expect(readWorkspaceDragDataIds(dataTransfer)).toEqual([])
+    expect(hasWorkspaceDragData(dataTransfer)).toBe(false)
+  })
+
+  it('ignores multibyte oversized workspace drag fallbacks', () => {
+    const dataTransfer = new TestDataTransfer() as unknown as DataTransfer
+    dataTransfer.setData('text/plain', '😀'.repeat(4097))
+
+    expect(readWorkspaceDragData(dataTransfer)).toBeNull()
+    expect(readWorkspaceDragDataIds(dataTransfer)).toEqual([])
+    expect(hasWorkspaceDragData(dataTransfer)).toBe(false)
+  })
+
+  it('does not fall back to plain text when the typed id batch is oversized', () => {
+    const dataTransfer = new TestDataTransfer() as unknown as DataTransfer
+    dataTransfer.setData(
+      WORKSPACE_STATUS_DRAG_IDS_TYPE,
+      JSON.stringify(['wt-1']) + 'x'.repeat(WORKSPACE_STATUS_DRAG_PAYLOAD_MAX_BYTES)
+    )
+    dataTransfer.setData('text/plain', 'wt-fallback')
+
+    expect(readWorkspaceDragDataIds(dataTransfer)).toEqual([])
+  })
+
+  it('rejects oversized selected worktree id batches', () => {
+    const dataTransfer = new TestDataTransfer() as unknown as DataTransfer
+    dataTransfer.setData(
+      WORKSPACE_STATUS_DRAG_IDS_TYPE,
+      JSON.stringify(
+        Array.from({ length: WORKSPACE_STATUS_DRAG_ID_MAX_COUNT + 1 }, (_value, index) =>
+          String(index)
+        )
+      )
+    )
+
+    const filterSpy = vi.spyOn(Array.prototype, 'filter')
+    const result = readWorkspaceDragDataIds(dataTransfer)
+    const filterCallCount = filterSpy.mock.calls.length
+    filterSpy.mockRestore()
+
+    expect(result).toEqual([])
+    expect(filterCallCount).toBe(0)
   })
 })

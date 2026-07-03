@@ -24,10 +24,6 @@ type WorktreeCreateBasePrefetchRuntime = {
   fetchRemoteWithCache: (repoPath: string, remote: string) => Promise<void>
 }
 
-function getFallbackRemoteForBase(baseBranch: string): string {
-  return baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-}
-
 async function prefetchLocalWorktreeCreateBase(
   repo: Repo,
   baseBranch: string | undefined,
@@ -50,7 +46,7 @@ async function prefetchLocalWorktreeCreateBase(
 
   // Why: keep optimistic prefetch on the same best-effort fallback path as
   // create so the real create can reuse the runtime's remote fetch cache.
-  await runtime.fetchRemoteWithCache(repo.path, getFallbackRemoteForBase(resolvedBaseBranch))
+  await runtime.fetchRemoteWithCache(repo.path, 'origin')
 }
 
 export async function prefetchWorktreeCreateBase(args: {

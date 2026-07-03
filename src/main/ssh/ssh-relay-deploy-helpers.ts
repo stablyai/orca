@@ -1,6 +1,6 @@
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
-import type { SshExecOptions } from './ssh-connection-utils'
+import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
@@ -247,6 +247,10 @@ export async function execCommand(
   options?: ExecCommandOptions
 ): Promise<string> {
   const { timeoutMs = EXEC_TIMEOUT_MS, ...execOptions } = options ?? {}
+  const signal = options?.signal
+  if (signal?.aborted) {
+    throw createSshOperationAbortError()
+  }
   const channel = await conn.exec(command, execOptions)
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -255,6 +259,7 @@ export async function execCommand(
 
     const cleanup = (): void => {
       clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
       channel.off('error', fail)
       channel.stderr.off('error', fail)
       channel.off('data', onStdoutData)
@@ -271,6 +276,10 @@ export async function execCommand(
     }
     const fail = (err: Error): void => {
       settle(reject, err)
+    }
+    const onAbort = (): void => {
+      channel.close()
+      settle(reject, createSshOperationAbortError())
     }
     const onStdoutData = (data: Buffer): void => {
       stdout += data.toString('utf-8')
@@ -293,10 +302,14 @@ export async function execCommand(
 
     // Why: remote reboot tears down exec channels with stream errors. Without
     // scoped listeners, Node treats those as uncaught exceptions.
+    signal?.addEventListener('abort', onAbort, { once: true })
     channel.on('error', fail)
     channel.stderr.on('error', fail)
     channel.on('data', onStdoutData)
     channel.stderr.on('data', onStderrData)
     channel.on('close', onClose)
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }

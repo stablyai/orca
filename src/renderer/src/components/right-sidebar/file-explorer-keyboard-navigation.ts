@@ -158,8 +158,8 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
   if (resolved.type === 'toggle-expand' || resolved.type === 'toggle-collapse') {
     e.preventDefault()
     e.stopPropagation()
-    // Why: name-filtered rows are a projection, so toggles should not mutate
-    // persisted expansion state while filtering is suppressing directory toggles.
+    // Why: callers can disable directory toggles for projected or transient trees
+    // where mutating persisted expansion state would be misleading.
     if (ctx.activeWorktreeId && ctx.canToggleDirectories !== false) {
       ctx.handlers.toggleDir(ctx.activeWorktreeId, resolved.dirPath)
     }

@@ -6,6 +6,7 @@ import type {
   OrcaHooks,
   Repo,
   RepoHookSettings,
+  SetupAgentStartupPolicy,
   SetupRunPolicy
 } from '../../../../shared/types'
 import { AlertTriangle, ChevronRight, Plus } from 'lucide-react'
@@ -14,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSwitch } from './SettingsFormControls'
 import { useAppStore } from '@/store'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
@@ -21,6 +23,7 @@ import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-
 import { getRepositoryLocalCommandsSectionId } from './repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -38,7 +41,7 @@ type PolicyOption<P> = { policy: P; label: string; description: string }
 const LOCAL_HOOK_NAMES = ['setup', 'archive'] as const
 type LocalHookName = (typeof LOCAL_HOOK_NAMES)[number]
 type HookSettingsPolicyDraft = Partial<
-  Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy'>
+  Pick<RepoHookSettings, 'setupRunPolicy' | 'setupAgentStartupPolicy' | 'commandSourcePolicy'>
 >
 
 // Why: this is a literal issue-command template token, not app data for i18next to fill.
@@ -74,6 +77,7 @@ function areHookSettingsDraftsEqual(a: RepoHookSettings, b: RepoHookSettings): b
   return (
     a.mode === b.mode &&
     a.setupRunPolicy === b.setupRunPolicy &&
+    a.setupAgentStartupPolicy === b.setupAgentStartupPolicy &&
     a.commandSourcePolicy === b.commandSourcePolicy &&
     a.scripts.setup === b.scripts.setup &&
     a.scripts.archive === b.scripts.archive
@@ -633,7 +637,7 @@ function ScriptEditor({
   }, [value])
 
   const showLocalEditor = showLocal || value.length > 0 || !hasShared
-  const lineCount = value ? value.split('\n').length : 0
+  const editorRows = getRepositoryHookScriptTextareaRows(value)
 
   return (
     <div
@@ -702,7 +706,7 @@ function ScriptEditor({
             onBlur={onCommit}
             placeholder={field.placeholder}
             spellCheck={false}
-            rows={Math.min(Math.max(lineCount + 1, 4), 14)}
+            rows={editorRows}
             className="w-full min-w-0 resize-y rounded-lg border border-input bg-muted/20 px-3 py-2 font-mono text-[12px] leading-[1.55] shadow-xs transition-[color,box-shadow] outline-none placeholder:italic placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/40"
           />
           <p className="text-[11px] text-muted-foreground">
@@ -769,6 +773,8 @@ export function RepositoryHooksSection({
 
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
+  const selectedSetupAgentStartupPolicy: SetupAgentStartupPolicy =
+    hookSettingsDraft.setupAgentStartupPolicy ?? 'start-immediately'
   const setupRunPolicyOptions = getSetupRunPolicyOptions()
   const commandSourcePolicyOptions = getCommandSourcePolicyOptions()
   const localHookFields = getLocalHookFields()
@@ -1042,26 +1048,59 @@ export function RepositoryHooksSection({
         forceVisible={forceVisible}
         keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
-          <div className="min-w-0">
-            <h5 className="text-sm font-semibold">
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.793dcee97d',
-                'When to run'
-              )}
-            </h5>
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.21fb607a87',
-                'Default behavior when a new worktree is created.'
-              )}
-            </p>
+        <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h5 className="text-sm font-semibold">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.793dcee97d',
+                  'When to run'
+                )}
+              </h5>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.21fb607a87',
+                  'Default behavior when a new worktree is created.'
+                )}
+              </p>
+            </div>
+            <SegmentedPolicyToggle
+              options={setupRunPolicyOptions}
+              selected={selectedSetupRunPolicy}
+              onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
+            />
           </div>
-          <SegmentedPolicyToggle
-            options={setupRunPolicyOptions}
-            selected={selectedSetupRunPolicy}
-            onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
-          />
+          <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-4">
+            <div className="min-w-0 space-y-1">
+              <h5 className="text-sm font-semibold">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+                  'Wait for setup to complete before starting agent'
+                )}
+              </h5>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgentHelp',
+                  'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={selectedSetupAgentStartupPolicy === 'wait-for-setup'}
+              onChange={() =>
+                updateHookSettingsPolicyDraft({
+                  setupAgentStartupPolicy:
+                    selectedSetupAgentStartupPolicy === 'wait-for-setup'
+                      ? 'start-immediately'
+                      : 'wait-for-setup'
+                })
+              }
+              ariaLabel={translate(
+                'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+                'Wait for setup to complete before starting agent'
+              )}
+            />
+          </div>
         </div>
       </SearchableSetting>
 

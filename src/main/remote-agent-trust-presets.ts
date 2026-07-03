@@ -83,7 +83,11 @@ async function markRemoteCodexProjectTrusted(
   const codexDir = `${remoteHome}/.codex`
   const configPath = `${codexDir}/config.toml`
   const existing = await readRemoteTextFile(fsProvider, configPath)
-  const updated = upsertProjectTrustLevelInContent(existing, workspacePath, 'trusted')
+  const updated = upsertProjectTrustLevelInContent(existing, workspacePath, 'trusted', {
+    // Why: workspacePath was resolved by the remote filesystem provider; local
+    // realpath would canonicalize the wrong machine on SSH.
+    alreadyCanonical: true
+  })
   if (updated === existing) {
     return
   }

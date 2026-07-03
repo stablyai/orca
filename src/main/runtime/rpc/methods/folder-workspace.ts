@@ -58,6 +58,11 @@ const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
   z.object({
     scope: z.literal('project-group'),
     projectGroupId: requiredString('Missing project group id')
+  }),
+  z.object({
+    scope: z.literal('path'),
+    path: requiredString('Missing folder path'),
+    connectionId: OptionalString.nullable().optional()
   })
 ])
 

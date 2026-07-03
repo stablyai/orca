@@ -1,3 +1,8 @@
+import {
+  cleanCommandCodePromptCandidate,
+  isCommandCodeIdlePromptCandidate
+} from './command-code-prompt-text'
+
 type CommandCodeOutputStatusDetector = {
   observe: (data: string) => boolean
 }
@@ -12,8 +17,8 @@ const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
   `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
   'g'
 )
-const ORPHAN_SGR_RE = /\[(?:\d{1,3}(?:;\d{1,3})*)?m/g
 const RECENT_TEXT_LIMIT = 300
+const STATUS_SCAN_TEXT_LIMIT = 4096
 const COMMAND_CODE_STATUS_GLYPH_RE_SOURCE = '[·○◇☆✧⌘✻⎿]'
 // Why: Command Code 0.27.3 randomizes its in-flight LLM status from this
 // package-local list, so checking only a few examples misses real active turns.
@@ -141,11 +146,11 @@ function terminalControlMayAffectText(data: string): boolean {
 }
 
 function cleanPromptCandidate(value: string): string {
-  return stripTerminalControl(value).replace(/\s+/g, ' ').trim()
+  return cleanCommandCodePromptCandidate(stripTerminalControl(value))
 }
 
 function isIdlePromptCandidate(value: string): boolean {
-  return value.replace(ORPHAN_SGR_RE, '').replace(/\s+/g, '') === 'Askyourquestion...'
+  return isCommandCodeIdlePromptCandidate(value)
 }
 
 function isCommandCodeLaunchCommand(command: string | null | undefined): boolean {
@@ -160,6 +165,35 @@ function rawTextMayContainCommandCodeBanner(rawText: string): boolean {
   // panes need the ANSI/control stripping path. Use a broad no-false-negative
   // letter prefilter so ANSI styling inside the banner words still works.
   return rawText.includes('C') && rawText.includes('o') && rawText.includes('d')
+}
+
+function appendRecentRawText(previousRawText: string, data: string): string {
+  if (data.length >= RECENT_TEXT_LIMIT) {
+    return data.slice(-RECENT_TEXT_LIMIT)
+  }
+  return (previousRawText + data).slice(-RECENT_TEXT_LIMIT)
+}
+
+function buildStatusScanRawText(prefix: string, data: string): string {
+  const boundedPrefix =
+    prefix.length > RECENT_TEXT_LIMIT + 1 ? prefix.slice(-(RECENT_TEXT_LIMIT + 1)) : prefix
+  const dataBudget = STATUS_SCAN_TEXT_LIMIT - boundedPrefix.length
+
+  if (dataBudget <= 0) {
+    return boundedPrefix.slice(-STATUS_SCAN_TEXT_LIMIT)
+  }
+  if (data.length <= dataBudget) {
+    return boundedPrefix + data
+  }
+
+  const headBudget = Math.max(0, Math.floor((dataBudget - 1) / 2))
+  const tailBudget = Math.max(0, dataBudget - headBudget - 1)
+  const head = headBudget > 0 ? data.slice(0, headBudget) : ''
+  const tail = tailBudget > 0 ? data.slice(-tailBudget) : ''
+  // Why: pasted terminal echoes can produce megabyte-sized chunks. Status
+  // detection only needs chunk-boundary context plus recent output, so scan the
+  // start and end windows instead of regex-stripping the full PTY payload.
+  return `${boundedPrefix}${head}\n${tail}`
 }
 
 function patternOverlapsSanitizedText(
@@ -218,17 +252,21 @@ export function createCommandCodeOutputStatusDetector(args: {
   return {
     observe(data: string): boolean {
       const previousRawText = recentRawText
-      const rawText = previousRawText + data
-      recentRawText = rawText.slice(-RECENT_TEXT_LIMIT)
+      recentRawText = appendRecentRawText(previousRawText, data)
+      const scanRawText = buildStatusScanRawText(previousRawText, data)
+      const scanRawTextWithChunkBoundary = previousRawText
+        ? buildStatusScanRawText(`${previousRawText}\n`, data)
+        : scanRawText
 
       if (!hasSeenCommandCodeUi) {
-        if (!rawTextMayContainCommandCodeBanner(rawText)) {
+        if (
+          !rawTextMayContainCommandCodeBanner(scanRawText) &&
+          !rawTextMayContainCommandCodeBanner(scanRawTextWithChunkBoundary)
+        ) {
           return false
         }
-        const scanText = stripTerminalControl(rawText)
-        const scanTextWithChunkBoundary = previousRawText
-          ? stripTerminalControl(`${previousRawText}\n${data}`)
-          : scanText
+        const scanText = stripTerminalControl(scanRawText)
+        const scanTextWithChunkBoundary = stripTerminalControl(scanRawTextWithChunkBoundary)
         if (
           !COMMAND_CODE_BANNER_RE.test(scanText) &&
           !COMMAND_CODE_BANNER_RE.test(scanTextWithChunkBoundary)
@@ -238,10 +276,8 @@ export function createCommandCodeOutputStatusDetector(args: {
         hasSeenCommandCodeUi = true
       }
 
-      const scanText = stripTerminalControl(rawText)
-      const scanTextWithChunkBoundary = previousRawText
-        ? stripTerminalControl(`${previousRawText}\n${data}`)
-        : scanText
+      const scanText = stripTerminalControl(scanRawText)
+      const scanTextWithChunkBoundary = stripTerminalControl(scanRawTextWithChunkBoundary)
       const previousTextLength = previousRawText ? stripTerminalControl(previousRawText).length : 0
       const previousTextWithChunkBoundaryLength = previousRawText
         ? stripTerminalControl(`${previousRawText}\n`).length

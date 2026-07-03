@@ -3,6 +3,9 @@
 // RPCs). Keeping these settings in the same global store is what lets a grouping
 // or filter change on the phone show up on desktop and vice-versa.
 
+import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
+
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
 // Desktop sort adds 'manual'; mobile renders it but sorts by server order.
 export type MobileSortMode = 'smart' | 'name' | 'recent' | 'repo' | 'manual'
@@ -15,6 +18,9 @@ export type WorkspaceViewSettings = {
   hideDefaultBranchWorkspace?: boolean
   filterRepoIds?: string[]
   collapsedGroups?: string[]
+  workspaceHostScope?: string
+  visibleWorkspaceHostIds?: string[] | null
+  workspaceStatuses?: WorkspaceStatusDefinition[]
 }
 
 const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSettings['groupBy']>> = {
@@ -58,6 +64,9 @@ export type MobileViewState = {
   hideDefaultBranch: boolean
   filterRepoIds: string[]
   collapsedGroups: string[]
+  workspaceHostScope?: string
+  visibleWorkspaceHostIds?: string[] | null
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }
 
 // Apply a desktop PersistedUIState onto the local view state, leaving any field
@@ -68,12 +77,29 @@ export function applyDesktopViewSettings(
 ): MobileViewState {
   const groupMode = groupModeFromDesktop(settings.groupBy)
   const sortMode = sortModeFromDesktop(settings.sortBy)
-  return {
+  // Why: a partially hydrated desktop settings payload may carry an empty
+  // status catalog; mobile must keep renderable groups instead of hiding rows.
+  const workspaceStatuses = settings.workspaceStatuses
+    ? coerceMobileWorkspaceStatuses(settings.workspaceStatuses)
+    : current.workspaceStatuses
+  const next: MobileViewState = {
     groupMode: groupMode ?? current.groupMode,
     sortMode: sortMode ?? current.sortMode,
     hideSleeping: settings.hideSleepingWorkspaces ?? current.hideSleeping,
     hideDefaultBranch: settings.hideDefaultBranchWorkspace ?? current.hideDefaultBranch,
     filterRepoIds: settings.filterRepoIds ?? current.filterRepoIds,
-    collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups
+    collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
+    workspaceStatuses
   }
+  if (settings.workspaceHostScope !== undefined) {
+    next.workspaceHostScope = settings.workspaceHostScope
+  } else if (current.workspaceHostScope !== undefined) {
+    next.workspaceHostScope = current.workspaceHostScope
+  }
+  if (settings.visibleWorkspaceHostIds !== undefined) {
+    next.visibleWorkspaceHostIds = settings.visibleWorkspaceHostIds
+  } else if (current.visibleWorkspaceHostIds !== undefined) {
+    next.visibleWorkspaceHostIds = current.visibleWorkspaceHostIds
+  }
+  return next
 }

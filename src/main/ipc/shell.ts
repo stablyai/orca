@@ -65,7 +65,9 @@ async function launchExternalEditor(pathValue: string, command?: string): Promis
     const child = spawn(spawnCmd, spawnArgs, {
       detached: true,
       stdio: 'ignore',
-      windowsHide: true
+      // Why: terminal editors such as nvim need a visible console on Windows;
+      // GUI editor launches stay hidden to avoid command-shim flashes.
+      windowsHide: launchSpec.hideWindowsConsole
     })
     let settled = false
 
@@ -126,8 +128,10 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
 }
 
 export function registerShellHandlers(): void {
-  ipcMain.handle('shell:openPath', (_event, path: string) => {
-    shell.showItemInFolder(path)
+  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
+    // Why: keep the legacy fire-and-forget renderer contract while reusing the
+    // same absolute/existing path validation as the explicit file-manager API.
+    void (await openInFileManager(path))
   })
 
   ipcMain.handle(
@@ -201,7 +205,9 @@ export function registerShellHandlers(): void {
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
         defaultPath: args.defaultPath,
-        properties: ['openDirectory', 'createDirectory']
+        // Why: callers only need an existing folder grant; enabling native
+        // creation can leave typed prefix directories behind on macOS.
+        properties: ['openDirectory']
       })
       if (result.canceled || result.filePaths.length === 0) {
         return null

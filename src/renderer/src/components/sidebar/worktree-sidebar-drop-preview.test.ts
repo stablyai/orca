@@ -38,6 +38,80 @@ describe('computeWorktreeSidebarDropPreview', () => {
       })
     ).toBeNull()
   })
+
+  it('collapses lineage child rects into the parent drag unit for preview offsets', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 430,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 90 },
+        { worktreeId: 'child-a', groupIndex: 1, top: 96, bottom: 186 },
+        { worktreeId: 'child-b', groupIndex: 2, top: 192, bottom: 282 },
+        { worktreeId: 'sibling', groupIndex: 3, top: 288, bottom: 388 }
+      ],
+      groupIds: ['parent', 'sibling'],
+      draggedIds: ['parent']
+    })
+
+    expect(preview).toMatchObject({
+      dropIndex: 2,
+      dropIndicatorY: 391
+    })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([['sibling', -288]])
+  })
+
+  it('uses one card-height placeholder for multi-select reorder previews', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 280,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ],
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'b'
+    })
+
+    expect(preview).toMatchObject({
+      dropIndex: 5,
+      dropIndicatorY: 277
+    })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([
+      ['c', -56],
+      ['d', -56],
+      ['e', -56]
+    ])
+  })
+
+  it('uses the grabbed selected card as the multi-select preview placeholder', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 280,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [
+        { worktreeId: 'a', groupIndex: 0, top: 0, bottom: 50 },
+        { worktreeId: 'b', groupIndex: 1, top: 56, bottom: 106 },
+        { worktreeId: 'c', groupIndex: 2, top: 112, bottom: 162 },
+        { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
+        { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 }
+      ],
+      groupIds: ['a', 'b', 'c', 'd', 'e'],
+      draggedIds: ['b', 'c', 'd'],
+      draggingWorktreeId: 'd'
+    })
+
+    expect(preview).toMatchObject({
+      dropIndex: 5,
+      dropIndicatorY: 277
+    })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([['e', -56]])
+  })
 })
 
 describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {

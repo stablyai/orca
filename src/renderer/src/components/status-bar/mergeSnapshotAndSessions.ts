@@ -31,6 +31,7 @@ import type {
   UnifiedSessionRow,
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
+import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -124,34 +125,6 @@ function resolveDaemonSessionLabel(
   return 'unknown'
 }
 
-// Why: the previous implementation did O(N) linear scans over
-// ptyIdsByTabId / tabsByWorktree for *every* session it processed. With a
-// large workspace that's S * (T + W) work per merge — and the merge runs on
-// every snapshot poll plus every store mutation. Pre-build O(1) lookup
-// indices once per merge instead.
-type MergeIndex = {
-  ptyIdToTabId: Map<string, string>
-  tabIdToWorktreeId: Map<string, string>
-}
-
-function buildMergeIndex(ctx: MergeContext): MergeIndex {
-  const ptyIdToTabId = new Map<string, string>()
-  for (const [tabId, ptyIds] of Object.entries(ctx.ptyIdsByTabId)) {
-    for (const ptyId of ptyIds) {
-      if (ptyId) {
-        ptyIdToTabId.set(ptyId, tabId)
-      }
-    }
-  }
-  const tabIdToWorktreeId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(ctx.tabsByWorktree)) {
-    for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
-    }
-  }
-  return { ptyIdToTabId, tabIdToWorktreeId }
-}
-
 // ─── Public merge function ─────────────────────────────────────────
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
@@ -164,13 +137,11 @@ export function mergeSnapshotAndSessions(
 ): UnifiedProjectGroup[] {
   const repos = new Map<string, UnifiedProjectGroup>()
   const seenSessionIds = new Set<string>()
-  const index = buildMergeIndex(ctx)
-  // Why: bound = the daemon session id appears as a pty id under some tab.
-  // ptyIdToTabId already encodes that membership in O(1), so the bound set
-  // is just its keys.
-  const boundPtyIds = ctx.workspaceSessionReady
-    ? new Set(index.ptyIdToTabId.keys())
-    : new Set<string>()
+  // Why: pre-build O(1) lookup indices once per merge. This includes live
+  // ptyIdsByTabId plus deferred-reattach wake hints, so restored inactive
+  // sessions do not appear as Resource Manager orphans before their pane mounts.
+  const index = buildResourceSessionBindingIndex(ctx)
+  const boundPtyIds = index.boundPtyIds
 
   function isRepoRemote(repoId: string): boolean {
     // Why: missing entry === we don't know about this repo (typically the

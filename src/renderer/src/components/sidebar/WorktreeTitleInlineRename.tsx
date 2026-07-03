@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
@@ -29,6 +30,7 @@ type WorktreeTitleInlineRenameProps = {
   displayName: string
   disabled?: boolean
   showUnreadEmphasis?: boolean
+  dimReadTitle?: boolean
   className?: string
   editingClassName?: string
   inputClassName?: string
@@ -46,6 +48,7 @@ export function WorktreeTitleInlineRename({
   displayName,
   disabled = false,
   showUnreadEmphasis = false,
+  dimReadTitle = false,
   className,
   editingClassName,
   inputClassName,
@@ -209,6 +212,11 @@ export function WorktreeTitleInlineRename({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       event.stopPropagation()
+      // Why: an Enter that only confirms a CJK IME candidate must not commit the
+      // rename; wait for a non-composition Enter.
+      if (isImeCompositionKeyDown(event)) {
+        return
+      }
       if (event.key === 'Enter') {
         event.preventDefault()
         void commitRename()
@@ -269,13 +277,19 @@ export function WorktreeTitleInlineRename({
     )
   }
 
+  const titleEmphasisClassName = showUnreadEmphasis
+    ? 'font-semibold text-foreground'
+    : dimReadTitle
+      ? 'font-normal text-foreground/80'
+      : 'font-normal text-foreground'
+
   const title = (
     <span
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
-        showUnreadEmphasis ? 'font-semibold' : 'font-normal',
+        'block min-w-0 truncate leading-tight focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        titleEmphasisClassName,
         className
       )}
       data-worktree-title-inline-rename=""

@@ -1,7 +1,7 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  buildWindowsAgentHookPostCommand,
+  buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
   writeManagedScript
@@ -63,7 +63,12 @@ function getManagedScript(
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      buildWindowsAgentHookPostCommand('claude'),
+      // Why: post via curl.exe, not a second PowerShell. Claude's launcher is
+      // already an encoded PowerShell command (Git Bash needs it to survive
+      // spaces); a PowerShell post on top of that meant two interpreter
+      // startups per hook. The post runs inside the .cmd (cmd.exe context), so
+      // curl works the same here as for the POSIX/Codex hooks.
+      buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -100,34 +105,28 @@ function getManagedScript(
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    // Why: stream the hook payload to a temp file and have curl read it via
-    // `--data-urlencode name@file`, instead of inlining `payload=$VALUE` on the
-    // command line. The payload is the only unbounded field — tool output can be
-    // tens of KB — and inlining it produced multi-KB `curl` command lines that
-    // endpoint security tools (e.g. Microsoft Defender) flag as oversized /
-    // suspicious process command lines. The urlencoded body on the wire is
-    // identical, so the agent-hook receiver needs no change. `trap ... EXIT`
-    // removes the temp file on every exit path.
-    'payload_file=$(mktemp "${TMPDIR:-/tmp}/orca-agent-hook.XXXXXX") || exit 0',
-    'trap \'rm -f "$payload_file"\' EXIT',
-    'cat > "$payload_file"',
-    'if [ ! -s "$payload_file" ]; then',
+    'payload=$(cat)',
+    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
     // Timeout caps best-effort hook posts if the local listener stalls.
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
+    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
+    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
+    // command line (EDR command-line false positives). Wire body is identical.
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@${payload_file}" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
   ].join('\n')

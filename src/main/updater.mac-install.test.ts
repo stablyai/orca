@@ -145,6 +145,10 @@ describe('updater mac install handoff', () => {
       const { setupAutoUpdater } = await import('./updater')
 
       setupAutoUpdater(mainWindow as never)
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       // Why: the update-available handler is now async (it awaits fetchChangelog).
       // Flush microtasks so setAvailableVersion runs before update-downloaded fires.
@@ -193,6 +197,10 @@ describe('updater mac install handoff', () => {
       const { setupAutoUpdater, quitAndInstall } = await import('./updater')
 
       setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       await vi.advanceTimersByTimeAsync(0)
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
@@ -271,6 +279,10 @@ describe('updater mac install handoff', () => {
       const { setupAutoUpdater } = await import('./updater')
 
       setupAutoUpdater(mainWindow as never)
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       // Why: the update-available handler is now async (it awaits fetchChangelog).
       // Flush microtasks so setAvailableVersion runs before update-downloaded fires.

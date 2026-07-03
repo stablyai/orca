@@ -21,7 +21,6 @@ import {
 } from 'lucide-react-native'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
 import { getWorktreeLabel } from '../session/worktree-label'
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import {
   buildTree,
   flattenTree,
@@ -31,9 +30,13 @@ import {
   type TreeNode
 } from './file-tree'
 import type { RpcSuccess } from '../transport/types'
-import { triggerError, triggerSelection } from '../platform/haptics'
+import { triggerSelection } from '../platform/haptics'
 import { colors, spacing } from '../theme/mobile-theme'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import {
+  canPreviewMobileFileRow,
+  navigateToMobileFilePreview
+} from './mobile-file-preview-navigation'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -50,7 +53,6 @@ export function MobileFileExplorerPanel(props: {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [openingPath, setOpeningPath] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
@@ -96,36 +98,22 @@ export function MobileFileExplorerPanel(props: {
     })
   }, [])
 
-  const openFile = useCallback(
-    async (relativePath: string) => {
-      if (!client) {
-        return
-      }
-      setOpeningPath(relativePath)
-      try {
-        const response = await client.sendRequest('files.open', {
-          worktree: `id:${worktreeId}`,
-          relativePath
-        })
-        if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to open file')
-        }
-        triggerSelection()
-        // The file now opens in the session. Full-screen pops back to it; when
-        // docked the session is already visible, so just close the panel.
-        if (embedded) {
-          onRequestClose?.()
-        } else {
-          router.back()
-        }
-      } catch (err) {
-        triggerError()
-        setError(err instanceof Error ? err.message : 'Unable to open file')
-      } finally {
-        setOpeningPath(null)
-      }
+  const previewFile = useCallback(
+    (relativePath: string, displayName: string) => {
+      triggerSelection()
+      navigateToMobileFilePreview(
+        router,
+        {
+          hostId,
+          worktreeId,
+          relativePath,
+          name: displayName,
+          worktreeName: name
+        },
+        { embedded, onRequestClose }
+      )
     },
-    [client, embedded, onRequestClose, router, worktreeId]
+    [embedded, hostId, name, onRequestClose, router, worktreeId]
   )
 
   const renderItem: ListRenderItem<TreeNode> = ({ item }) => {
@@ -133,8 +121,11 @@ export function MobileFileExplorerPanel(props: {
     const isExpanded = expanded.has(item.relativePath)
     // Images render in the mobile viewer (via files.readPreview), so a binary
     // image is openable; only non-previewable binaries are unavailable.
-    const isImage = item.kind === 'binary' && classifyMobileArtifact(item.relativePath) === 'image'
-    const disabled = item.kind === 'binary' && !isImage
+    const previewable =
+      item.kind !== 'directory' &&
+      canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })
+    const isImage = item.kind === 'binary' && previewable
+    const disabled = item.kind === 'binary' && !previewable
     const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
     return (
       <Pressable
@@ -144,12 +135,12 @@ export function MobileFileExplorerPanel(props: {
           pressed && !disabled && styles.rowPressed,
           disabled && styles.rowDisabled
         ]}
-        disabled={disabled || openingPath !== null}
+        disabled={disabled}
         onPress={() => {
           if (isDirectory) {
             toggleDirectory(item.relativePath)
           } else if (!disabled) {
-            void openFile(item.relativePath)
+            previewFile(item.relativePath, item.name)
           }
         }}
         accessibilityLabel={
@@ -157,7 +148,7 @@ export function MobileFileExplorerPanel(props: {
             ? `Open folder ${item.name}`
             : disabled
               ? `${item.name} unavailable on mobile`
-              : `Open file ${item.name}`
+              : `Preview file ${item.name}`
         }
       >
         {isDirectory ? (
@@ -184,9 +175,6 @@ export function MobileFileExplorerPanel(props: {
           </Text>
           {disabled ? <Text style={styles.rowMeta}>Unavailable on mobile</Text> : null}
         </View>
-        {openingPath === item.relativePath ? (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        ) : null}
       </Pressable>
     )
   }

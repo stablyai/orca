@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -19,7 +19,7 @@ import { DevinHookService } from './hook-service'
 import {
   getDevinConfigPath,
   getDevinManagedCommand,
-  getDevinManagedScriptFileName
+  getDevinManagedScriptPath
 } from './hook-settings'
 
 describe('DevinHookService', () => {
@@ -28,12 +28,13 @@ describe('DevinHookService', () => {
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-devin-home-'))
     homedirMock.mockReturnValue(homeDir)
-    vi.stubEnv('APPDATA', join(homeDir, '.config'))
+    vi.stubEnv('APPDATA', join(homeDir, 'AppData', 'Roaming'))
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
     rmSync(homeDir, { recursive: true, force: true })
   })
 
@@ -42,12 +43,10 @@ describe('DevinHookService', () => {
 
     expect(status.state).toBe('installed')
     expect(status.agent).toBe('devin')
-    expect(status.configPath).toBe(join(homeDir, '.config', 'devin', 'config.json'))
+    expect(status.configPath).toBe(getDevinConfigPath())
     expect(status.managedHooksPresent).toBe(true)
 
-    const config = JSON.parse(
-      readFileSync(join(homeDir, '.config', 'devin', 'config.json'), 'utf8')
-    ) as {
+    const config = JSON.parse(readFileSync(getDevinConfigPath(), 'utf8')) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
       agent?: { model: string }
     }
@@ -63,15 +62,17 @@ describe('DevinHookService', () => {
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       expect(config.hooks[eventName][0].matcher).toBeUndefined()
     }
-    const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', getDevinManagedScriptFileName()),
-      'utf8'
-    )
+    const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/devin')
+    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
+    // on the curl command line (EDR oversized-command-line false positive).
+    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
   })
 
   it('preserves unrelated keys in Devin config when installing hooks', () => {
-    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const configPath = getDevinConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
       configPath,
@@ -89,7 +90,7 @@ describe('DevinHookService', () => {
   })
 
   it('installs when Devin config uses JSONC comments', () => {
-    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const configPath = getDevinConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
       configPath,
@@ -107,7 +108,7 @@ describe('DevinHookService', () => {
   })
 
   it('surfaces read_config_from overlap in status detail', () => {
-    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const configPath = getDevinConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
       configPath,
@@ -134,7 +135,7 @@ describe('DevinHookService', () => {
   })
 
   it('reports not_installed when Devin config has no managed hooks', () => {
-    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const configPath = getDevinConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(configPath, `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
 
@@ -152,7 +153,7 @@ describe('DevinHookService', () => {
     const removed = service.remove()
 
     expect(removed.state).toBe('not_installed')
-    const configPath = join(homeDir, '.config', 'devin', 'config.json')
+    const configPath = getDevinConfigPath()
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
@@ -163,8 +164,8 @@ describe('DevinHookService', () => {
   })
 
   it('returns partial status when some managed hooks are missing', () => {
-    const configPath = join(homeDir, '.config', 'devin', 'config.json')
-    const scriptPath = join(homeDir, '.orca', 'agent-hooks', getDevinManagedScriptFileName())
+    const configPath = getDevinConfigPath()
+    const scriptPath = getDevinManagedScriptPath()
     const command = getDevinManagedCommand(scriptPath)
     mkdirSync(dirname(configPath), { recursive: true })
     mkdirSync(dirname(scriptPath), { recursive: true })

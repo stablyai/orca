@@ -1,14 +1,17 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
+  MANAGED_HOOK_TIMEOUT_MILLISECONDS,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -43,7 +46,9 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -84,29 +89,28 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    // Why: see claude/hook-service.ts — stream the payload to a temp file and
-    // post it with `--data-urlencode name@file` so it never lands on the curl
-    // command line (endpoint security tools flag oversized/inline process args).
-    'payload_file=$(mktemp "${TMPDIR:-/tmp}/orca-agent-hook.XXXXXX") || exit 0',
-    'trap \'rm -f "$payload_file"\' EXIT',
-    'cat > "$payload_file"',
-    'if [ ! -s "$payload_file" ]; then',
+    'payload=$(cat)',
+    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
     // Timeout caps best-effort hook posts if the local listener stalls.
-    'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/gemini" \\',
+    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
+    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
+    // command line (EDR command-line false positives). Wire body is identical.
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/gemini" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@${payload_file}" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
   ].join('\n')
@@ -205,7 +209,8 @@ export class GeminiHookService {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {
-        hooks: [{ type: 'command', command }]
+        // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
+        hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
       }
       nextHooks[eventName] = [...cleaned, definition]
     }
@@ -262,7 +267,8 @@ export class GeminiHookService {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         const cleaned = removeManagedCommands(current, isManagedCommand)
         const definition: HookDefinition = {
-          hooks: [{ type: 'command', command }]
+          // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
+          hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
         }
         nextHooks[eventName] = [...cleaned, definition]
       }

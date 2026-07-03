@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getMobileEnableSearchEntry = createLocalizedCatalog(
+export const getMobileOverviewSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate('auto.components.settings.mobile.settings.search.ffd52a96e4', 'Mobile'),
     description: translate(
@@ -49,14 +49,54 @@ export const getMobileEnableSearchEntry = createLocalizedCatalog(
         'auto.components.settings.mobile.settings.search.8d4ba0ef09',
         'beta'
       ),
+      ...translateSearchKeyword('auto.components.settings.mobile.settings.search.b730ff7049', 'app')
+    ]
+  })
+)
+
+export const getMobileSidebarShortcutSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.mobile.settings.search.1de96ec8a6',
+      'Show Orca Mobile Button'
+    ),
+    description: translate(
+      'auto.components.settings.mobile.settings.search.682293cadf',
+      'Show the Orca Mobile button at the top of the left sidebar.'
+    ),
+    keywords: [
       ...translateSearchKeyword(
-        'auto.components.settings.mobile.settings.search.b730ff7049',
-        'experimental'
+        'auto.components.settings.mobile.settings.search.74618577c7',
+        'mobile'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.5e5b8878bf',
+        'phone'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.5bff6a2ef0',
+        'sidebar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.6cf5f54ce1',
+        'button'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.648eeada79',
+        'hide'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.ac79fe4a04',
+        'show'
       )
     ]
   })
 )
 
 export const getMobileSettingsPaneSearchEntries = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [getMobileEnableSearchEntry(), ...getMobilePaneSearchEntries()]
+  (): SettingsSearchEntry[] => [
+    getMobileOverviewSearchEntry(),
+    getMobileSidebarShortcutSearchEntry(),
+    ...getMobilePaneSearchEntries()
+  ]
 )

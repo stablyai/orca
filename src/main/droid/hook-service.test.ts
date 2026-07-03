@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -23,6 +23,9 @@ vi.mock('os', async () => {
 })
 
 import { DroidHookService } from './hook-service'
+
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
 describe('DroidHookService', () => {
   let homeDir: string
@@ -70,10 +73,41 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].matcher).toBe('*')
     expect(config.hooks.PermissionRequest[0].matcher).toBe('*')
     expect(config.hooks.UserPromptSubmit[0].matcher).toBeUndefined()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('droid-hook')
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
+      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /droid-hook/
+    )
+    if (process.platform !== 'win32') {
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+    }
     expect(config.hooks.PreToolUse[0].hooks[0].command).not.toContain(userDataDir)
   })
+
+  // Why: #6078 — a Windows user profile path with a space used to be written
+  // verbatim as the hook command, so the agent split it at the space. The
+  // managed command must use an encoded launcher so the path never appears raw
+  // on the cmd.exe command line.
+  it.skipIf(process.platform !== 'win32')(
+    'wraps the managed hook command to survive spaces in the profile path (#6078)',
+    () => {
+      const spaceHome = join(tmpdir(), 'orca droid home with spaces')
+      mkdirSync(spaceHome, { recursive: true })
+      homedirMock.mockReturnValue(spaceHome)
+      try {
+        expect(new DroidHookService().install().state).toBe('installed')
+
+        const config = JSON.parse(
+          readFileSync(join(spaceHome, '.factory', 'settings.json'), 'utf8')
+        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+
+        for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
+          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+        }
+      } finally {
+        rmSync(spaceHome, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('reports partial when Factory has hooks disabled globally', () => {
     const configPath = join(homeDir, '.factory', 'settings.json')

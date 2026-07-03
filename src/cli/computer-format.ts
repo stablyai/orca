@@ -1,6 +1,14 @@
-import { chmodSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { formatBase64PayloadByteCount } from './base64-payload-byte-count'
 import { quoteCliCommandArgument } from './shell-command-quote'
 import type {
