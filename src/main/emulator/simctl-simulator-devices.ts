@@ -191,10 +191,10 @@ export async function shutdownSimulatorDevice(udid: string): Promise<void> {
           resolve()
           return
         }
-        // Why: execFile's message echoes the command line, so it always contains
-        // "shutdown"; only "current state" reliably means the device was already off.
-        const message = error.message.toLowerCase()
-        if (message.includes('current state')) {
+        // Why: execFile's message echoes the command line, so only the actual
+        // already-off state is idempotent; other current states are real failures.
+        const message = `${error.message}\n${stderr?.toString() ?? ''}`.toLowerCase()
+        if (/\bcurrent state:\s*shutdown\b/.test(message)) {
           resolve()
           return
         }

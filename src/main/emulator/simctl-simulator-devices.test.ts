@@ -106,9 +106,7 @@ describe('shutdownSimulatorDevice', () => {
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(
         Object.assign(
-          new Error(
-            'Command failed: xcrun simctl shutdown AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE\nUnable to shutdown device in current state: Shutdown'
-          ),
+          new Error('Command failed: xcrun simctl shutdown AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'),
           { code: 164 }
         ),
         '',
@@ -123,7 +121,7 @@ describe('shutdownSimulatorDevice', () => {
 
   it('propagates real shutdown failures instead of swallowing them', async () => {
     // execFile's message echoes the command line, which always contains
-    // "shutdown" — a hung device (timeout kill) must still reject.
+    // "shutdown"; a hung device (timeout kill) must still reject.
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(
         Object.assign(
@@ -132,6 +130,23 @@ describe('shutdownSimulatorDevice', () => {
         ),
         '',
         ''
+      )
+    })
+
+    await expect(
+      shutdownSimulatorDevice('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
+    ).rejects.toMatchObject({ code: 'emulator_error' })
+  })
+
+  it('rejects current-state failures that are not already shut down', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        Object.assign(
+          new Error('Command failed: xcrun simctl shutdown AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'),
+          { code: 164 }
+        ),
+        '',
+        'Unable to shutdown device in current state: Booting'
       )
     })
 

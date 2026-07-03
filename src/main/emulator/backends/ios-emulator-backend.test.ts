@@ -14,7 +14,7 @@ const {
   parseServeSimDetachedSessionMock
 } = vi.hoisted(() => ({
   ensureSimulatorBootedMock: vi.fn(async () => {}),
-  execServeSimCommandMock: vi.fn(async () => ({})),
+  execServeSimCommandMock: vi.fn(async (_executable?: unknown, _args?: string[]) => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
   listSimulatorDevicesMock: vi.fn(async (): Promise<SimulatorDevice[]> => []),
@@ -259,9 +259,43 @@ describe('IosEmulatorBackend', () => {
       // Actionable headline plus the raw helper log for diagnosis.
       message: expect.stringMatching(/simctl erase[\s\S]*No framebuffer display descriptor found/)
     })
-    // Exactly one recycle attempt — no shutdown/boot loop against a broken device.
+    // Exactly one recycle attempt; no shutdown/boot loop against a broken device.
     expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
     expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not recycle more than once during one start attempt', async () => {
+    let detachCalls = 0
+    execServeSimCommandMock.mockImplementation(
+      async (_executable?: unknown, args: string[] = []) => {
+        if (args[0] !== '--detach') {
+          return {}
+        }
+        detachCalls += 1
+        if (detachCalls === 2) {
+          return {}
+        }
+        throw new EmulatorError(
+          'emulator_error',
+          'Helper failed:\n[main] Failed to start capture: No framebuffer display descriptor found'
+        )
+      }
+    )
+    parseServeSimDetachedSessionMock.mockReturnValue({
+      deviceUdid: 'device-1',
+      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3102',
+      helperPid: 1234
+    })
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => false })
+
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      code: 'emulator_helper_failed',
+      message: expect.stringContaining('even after a reboot')
+    })
+    expect(detachCalls).toBe(3)
+    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
+    expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(2)
   })
 
   it('stops a helper via serve-sim kill plus the orphan sweep', async () => {

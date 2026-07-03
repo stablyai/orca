@@ -190,8 +190,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
       return false
     }
 
+    const throwPersistentMissingFramebuffer = (error: EmulatorError): never => {
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        `Simulator ${udid} keeps booting without a working display (no framebuffer descriptor), even after a reboot. Erase it with \`xcrun simctl erase ${udid}\` or recreate it in Xcode > Window > Devices and Simulators.\n\n${error.message}`
+      )
+    }
+
     // Why: CoreSimulator can report "Booted" with the display IO ports down
     // (HID alive, no framebuffer); a shutdown/boot recycle is the only recovery.
+    let didRecycleWedgedBoot = false
     const startHelperRecyclingWedgedBoot = async (): Promise<EmulatorSessionInfo> => {
       try {
         return await startDetachedHelper()
@@ -199,6 +207,10 @@ export class IosEmulatorBackend implements EmulatorBackend {
         if (!isMissingFramebufferError(error)) {
           throw error
         }
+        if (didRecycleWedgedBoot) {
+          return throwPersistentMissingFramebuffer(error)
+        }
+        didRecycleWedgedBoot = true
         await shutdownSimulatorDevice(udid)
         await ensureSimulatorBooted(udid)
         try {
@@ -207,10 +219,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
           if (!isMissingFramebufferError(retryError)) {
             throw retryError
           }
-          throw new EmulatorError(
-            'emulator_helper_failed',
-            `Simulator ${udid} keeps booting without a working display (no framebuffer descriptor), even after a reboot. Erase it with \`xcrun simctl erase ${udid}\` or recreate it in Xcode > Window > Devices and Simulators.\n\n${retryError.message}`
-          )
+          return throwPersistentMissingFramebuffer(retryError)
         }
       }
     }
@@ -268,7 +277,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
 }
 
 // Why: serve-sim's capture helper prints exactly this when a booted device has
-// no com.apple.framebuffer.display IO port — the signature of a wedged boot.
+// no com.apple.framebuffer.display IO port: the signature of a wedged boot.
 const MISSING_FRAMEBUFFER_RE = /No framebuffer display descriptor found/i
 
 function isMissingFramebufferError(error: unknown): error is EmulatorError {
