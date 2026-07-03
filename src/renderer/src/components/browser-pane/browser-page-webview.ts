@@ -22,21 +22,22 @@ export function ensureBrowserPageWebview({
   let created = false
   let activeContainer = container
 
-  if (webview && webview.parentElement !== container) {
+  // Why: a persisted guest must be torn down and rebuilt when its DOM parent
+  // drifted (moving a <webview> across parents can recreate the guest document)
+  // or when its partition no longer matches — Electron partitions are immutable
+  // after creation, so reuse would keep the stale session. Re-resolve the
+  // viewport container the teardown may have detached; bail if it is gone.
+  if (
+    webview &&
+    (webview.parentElement !== container || webview.getAttribute('partition') !== webviewPartition)
+  ) {
     destroyPersistentWebview(browserTabId)
     webview = undefined
-    activeContainer = resolveContainer() ?? container
-    if (!activeContainer.isConnected) {
+    const refreshedContainer = resolveContainer()
+    if (!refreshedContainer) {
       return null
     }
-  }
-  if (webview && webview.getAttribute('partition') !== webviewPartition) {
-    destroyPersistentWebview(browserTabId)
-    webview = undefined
-    activeContainer = resolveContainer() ?? container
-    if (!activeContainer.isConnected) {
-      return null
-    }
+    activeContainer = refreshedContainer
   }
   if (webview) {
     webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
