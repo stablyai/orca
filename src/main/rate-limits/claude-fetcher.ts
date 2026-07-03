@@ -518,6 +518,64 @@ async function fetchClaudeUsageViaCli(input: {
   )
 }
 
+function isManagedClaudeAuth(authPreparation: ClaudeRuntimeAuthPreparation | undefined): boolean {
+  return authPreparation?.provenance.startsWith('managed:') === true
+}
+
+function canSupplementOAuthUsageFromCli(input: {
+  oauthLimits: ProviderRateLimits
+  authPreparation?: ClaudeRuntimeAuthPreparation
+  allowUsagePanelSupplement: boolean
+}): boolean {
+  // Why: Fable is visible in Claude's interactive /usage panel even when the
+  // OAuth usage endpoint only reports documented 5h/7d windows. This runs only
+  // after OAuth succeeds, so it must not become a broad auth-recovery fallback.
+  return Boolean(
+    input.allowUsagePanelSupplement &&
+    !input.authPreparation?.managedRefreshDeferredByLivePty &&
+    !input.oauthLimits.fableWeekly &&
+    (input.oauthLimits.session || input.oauthLimits.weekly)
+  )
+}
+
+function mergeClaudeUsageWindows(
+  primary: ProviderRateLimits,
+  supplement: ProviderRateLimits | null
+): ProviderRateLimits {
+  if (!supplement) {
+    return primary
+  }
+  return {
+    ...primary,
+    session: primary.session ?? supplement.session,
+    weekly: primary.weekly ?? supplement.weekly,
+    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null
+  }
+}
+
+async function supplementOAuthUsageFromCli(input: {
+  oauthLimits: ProviderRateLimits
+  authPreparation?: ClaudeRuntimeAuthPreparation
+  oauthCredentials: OAuthCredentialReadResult
+  attempts: ClaudeUsageAttemptState
+  allowUsagePanelSupplement: boolean
+}): Promise<ProviderRateLimits> {
+  if (!canSupplementOAuthUsageFromCli(input)) {
+    return input.oauthLimits
+  }
+  try {
+    const cliLimits = await fetchClaudeUsageViaCli({
+      authPreparation: input.authPreparation,
+      oauthCredentials: input.oauthCredentials,
+      attempts: input.attempts
+    })
+    return mergeClaudeUsageWindows(input.oauthLimits, cliLimits)
+  } catch (err) {
+    warnClaudeUsageFetchFailure(input.authPreparation, input.oauthCredentials, err)
+    return input.oauthLimits
+  }
+}
+
 function shouldDeferForLiveClaude(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined,
   classification: ClaudeUsageErrorClassification
@@ -588,8 +646,9 @@ async function attemptCliRepairThenRetryOAuth(input: {
     recordAttempt(input.attempts, 'oauth')
     try {
       const oauthRetry = await fetchViaOAuth(refreshedCredentials.token)
+      const supplemented = mergeClaudeUsageWindows(oauthRetry, cliResult)
       return withClaudeUsageMetadata(
-        oauthRetry,
+        supplemented,
         metadataForAttempt({
           attemptedSources: input.attempts.attemptedSources,
           oauthCredentials: refreshedCredentials,
@@ -612,6 +671,7 @@ async function attemptCliRepairThenRetryOAuth(input: {
 export type FetchClaudeRateLimitsOptions = {
   authPreparation?: ClaudeRuntimeAuthPreparation
   allowPtyFallback?: boolean
+  allowUsagePanelSupplement?: boolean
 }
 
 export async function fetchClaudeRateLimits(
@@ -643,7 +703,15 @@ export async function fetchClaudeRateLimits(
   if (plan.steps.some((step) => step.source === 'oauth') && oauthCredentials.token) {
     recordAttempt(attempts, 'oauth')
     try {
-      const limits = await fetchViaOAuth(oauthCredentials.token)
+      const oauthLimits = await fetchViaOAuth(oauthCredentials.token)
+      const limits = await supplementOAuthUsageFromCli({
+        oauthLimits,
+        authPreparation: options?.authPreparation,
+        oauthCredentials,
+        attempts,
+        allowUsagePanelSupplement:
+          options?.allowUsagePanelSupplement ?? isManagedClaudeAuth(options?.authPreparation)
+      })
       return withClaudeUsageMetadata(
         limits,
         metadataForAttempt({
