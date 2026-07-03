@@ -4033,7 +4033,11 @@
           "setParentWorkspace": "상위 워크트리 설정...",
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
-          "deleteWorktree": "작업 트리 삭제"
+          "deleteWorktree": "작업 트리 삭제",
+          "8938e51bab": "Copy",
+          "9b0a2d280c": "Copy Branch Name",
+          "42049bf2d3": "Copy Pull Request URL",
+          "d94dc7c103": "Copy Merge Request URL"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",

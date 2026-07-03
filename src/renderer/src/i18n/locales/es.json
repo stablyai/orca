@@ -4052,7 +4052,11 @@
           "setParentWorkspace": "Establecer árbol de trabajo padre...",
           "workspaceSection": "Espacio de trabajo",
           "primaryDeleteDisabled": "El árbol de trabajo principal no se puede eliminar. Elimina el proyecto en su lugar.",
-          "deleteWorktree": "Eliminar árbol de trabajo"
+          "deleteWorktree": "Eliminar árbol de trabajo",
+          "8938e51bab": "Copy",
+          "9b0a2d280c": "Copy Branch Name",
+          "42049bf2d3": "Copy Pull Request URL",
+          "d94dc7c103": "Copy Merge Request URL"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",

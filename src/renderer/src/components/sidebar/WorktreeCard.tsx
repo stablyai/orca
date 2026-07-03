@@ -1912,6 +1912,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
           worktree={worktree}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
+          pullRequestUrl={prDisplay?.url ?? null}
+          pullRequestProvider={prDisplay?.provider ?? null}
         >
           {cardBody}
         </WorktreeContextMenu>

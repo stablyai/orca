@@ -4033,7 +4033,11 @@
           "setParentWorkspace": "设置父工作树...",
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主要工作树无法删除，请改为删除项目。",
-          "deleteWorktree": "删除工作树"
+          "deleteWorktree": "删除工作树",
+          "8938e51bab": "Copy",
+          "9b0a2d280c": "Copy Branch Name",
+          "42049bf2d3": "Copy Pull Request URL",
+          "d94dc7c103": "Copy Merge Request URL"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
