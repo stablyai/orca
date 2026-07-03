@@ -10,6 +10,7 @@ type TerminalLiveInputCommitHarness = {
   readonly captures: readonly string[]
   readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
   readonly sent: readonly string[]
+  readonly setActiveSessionTabType: (next: string | undefined) => void
   readonly unmount: () => void
 }
 
@@ -36,6 +37,9 @@ function createTerminalLiveInputCommitHarness({
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
   const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
   const captures: string[] = []
+  const setLiveInputCapture = (text: string): void => {
+    captures.push(text)
+  }
   const liveInputRef: RefObject<TextInput | null> = { current: null }
   const liveInputTerminalHandles = new Set([activeHandle])
   const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
@@ -48,6 +52,9 @@ function createTerminalLiveInputCommitHarness({
       return sendResult
     }
   }
+  // The hook keeps live-input state in refs, so a change handler alone never
+  // re-renders; only a prop change (this variable) re-runs the pending-clear effect.
+  let currentActiveSessionTabType: string | undefined = 'terminal'
   let handlers: ReturnType<typeof useTerminalLiveInputCommit<string>> | null = null
   let renderer: ReactTestRenderer | null = null
 
@@ -55,13 +62,13 @@ function createTerminalLiveInputCommitHarness({
     handlers = useTerminalLiveInputCommit({
       activeHandle,
       activeHandleRef,
-      activeSessionTabType: 'terminal',
+      activeSessionTabType: currentActiveSessionTabType,
       activeSessionTabTypeRef,
       liveInputRef,
       liveInputTerminalHandles,
       liveInputTerminalHandlesRef,
       sendLiveTerminalInputRef,
-      setLiveInputCapture: (text) => captures.push(text)
+      setLiveInputCapture
     })
     return null
   }
@@ -82,6 +89,12 @@ function createTerminalLiveInputCommitHarness({
     captures,
     handlers,
     sent,
+    setActiveSessionTabType: (next: string | undefined): void => {
+      currentActiveSessionTabType = next
+      act(() => {
+        renderer?.update(createElement(Harness))
+      })
+    },
     unmount: () => {
       act(() => renderer?.unmount())
     }
@@ -271,5 +284,31 @@ describe('terminal live input commit hook', () => {
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['한', '\t']))
+  })
+
+  it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
+    // Given: '한' held while the active tab is still a terminal
+    const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('한')
+
+    // When: the mobile tab list momentarily yields no active tab object
+    setActiveSessionTabType(undefined)
+    handlers.handleLiveInputSubmit()
+
+    // Then: an unknown tab type is not "left the terminal", so pending still flushes
+    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+  })
+
+  it('Given Hangul pending When the tab genuinely changes to non-terminal Then clears the composition state', async () => {
+    // Given: '한' held while the active tab is still a terminal
+    const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
+    handlers.handleLiveInputChange('한')
+
+    // When: the active tab actually becomes a non-terminal (chat) tab
+    setActiveSessionTabType('chat')
+    handlers.handleLiveInputSubmit()
+
+    // Then: pending was dropped, so submit sends only the carriage return
+    await vi.waitFor(() => expect(sent).toEqual(['\r']))
   })
 })
