@@ -2,7 +2,7 @@
    owner reset safety, dirty worktree, diverged branch, custom remote) that each
    need dedicated test coverage. Splitting into separate files would scatter related tests
    without a meaningful boundary. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
   () => ({
@@ -22,10 +22,79 @@ import {
   addSparseWorktree,
   addWorktree,
   listWorktreeGraph,
+  listWorktrees,
   moveWorktree,
   parseWorktreeList,
   removeWorktree
 } from './worktree'
+
+describe('listWorktrees in-flight sharing', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  // Later describes in this file assume a pristine mock (no global reset).
+  afterEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('shares one scan across concurrent calls for the same repo', async () => {
+    let resolveScan!: () => void
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = () => resolve({ stdout: scanOutput })
+        })
+    )
+
+    const first = listWorktrees('/repo')
+    const second = listWorktrees('/repo')
+    resolveScan()
+    const [a, b] = await Promise.all([first, second])
+
+    expect(a).toEqual(b)
+    expect(a[0]?.path).toBe('/repo')
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs a fresh scan once the shared one has settled', async () => {
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
+
+    await listWorktrees('/repo')
+    await listWorktrees('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not share scans across different repos', async () => {
+    gitExecFileAsyncMock.mockImplementation((_args: string[], options: { cwd: string }) =>
+      Promise.resolve({
+        stdout: `worktree ${options.cwd}\nHEAD abc123\nbranch refs/heads/main\n`
+      })
+    )
+
+    await Promise.all([listWorktrees('/repo-one'), listWorktrees('/repo-two')])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not share scans for callers with an AbortSignal', async () => {
+    const scanOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: scanOutput })
+    const controller = new AbortController()
+
+    // Why: an aborted shared scan would reject for every caller, so signal
+    // callers must keep a private scan.
+    await Promise.all([
+      listWorktrees('/repo'),
+      listWorktrees('/repo', { signal: controller.signal })
+    ])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {

@@ -976,6 +976,13 @@ export async function gitStreamStdout(
   })
 }
 
+// Why: sync git calls run on the Electron main thread. Local git is normally
+// fast, but a repo on a dead network drive / cloud-placeholder path can hang
+// git on filesystem timeouts for minutes with no timeout set — the leading
+// explanation for issue #7225's 127s "Not Responding" freeze. Callers needing
+// longer operations should use the async runners instead.
+const GIT_EXEC_SYNC_TIMEOUT_MS = 15_000
+
 /**
  * Sync git command execution. Drop-in replacement for
  * `execFileSync('git', args, { cwd, encoding, ... })`.
@@ -988,13 +995,15 @@ export function gitExecFileSync(
     cwd: string
     encoding?: BufferEncoding
     stdio?: SpawnOptions['stdio']
+    timeout?: number
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
   return execFileSync(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: options.encoding ?? 'utf-8',
-    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe']
+    stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
+    timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
   }) as string
 }
 
