@@ -18,7 +18,11 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { hasLiveClaudePtys } from './live-pty-gate'
-import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
+import {
+  INTERACTIVE_REFRESH_TIMEOUT_MS,
+  isOauthTokenExpiring,
+  refreshClaudeOauthCredentials
+} from './oauth-refresh'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
@@ -1076,7 +1080,16 @@ export class ClaudeRuntimeAuthService {
     if (!isOauthTokenExpiring(credentialsJson)) {
       return null
     }
-    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+    // Why: this refresh sits on the interactive launch / account-switch path
+    // (prepareForClaudeLaunch awaits it before the PTY spawns). Bound it tightly
+    // so a slow/unreachable token endpoint cannot hang the spawn for the full
+    // 10s budget; on timeout we return null and materialize the existing token,
+    // which the CLI then refreshes lazily — the pre-PR (instant) behavior.
+    const refreshed = await refreshClaudeOauthCredentials(
+      credentialsJson,
+      undefined,
+      INTERACTIVE_REFRESH_TIMEOUT_MS
+    )
     if (!refreshed || !this.isValidCredentialsJsonObject(refreshed)) {
       return null
     }

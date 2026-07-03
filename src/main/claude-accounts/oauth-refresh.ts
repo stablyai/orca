@@ -13,6 +13,13 @@ const OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
 // CLI uses the same 5-minute skew for its own refresh decision.
 const OAUTH_EXPIRY_BUFFER_MS = 5 * 60 * 1000
 const REFRESH_TIMEOUT_MS = 10_000
+// Why: on the interactive launch / account-switch critical path the user is
+// waiting for a terminal, so the proactive refresh must not stall the spawn.
+// A successful refresh is sub-second on a normal network; on a slow/unreachable
+// endpoint the call returns null after the timeout and the caller materializes
+// the existing token anyway (the CLI then refreshes it lazily), so a long wait
+// buys nothing here. Background inactive-account refreshes keep the full budget.
+export const INTERACTIVE_REFRESH_TIMEOUT_MS = 2_000
 
 type ClaudeOauthBlob = {
   accessToken?: unknown
@@ -120,10 +127,15 @@ export function applyRefreshedToken(
  * access token) on success, or null on any failure. Never throws — callers
  * treat null as "keep the existing credentials", so a transient network error
  * is never worse than today's behavior.
+ *
+ * `timeoutMs` bounds the network round trip. Callers on the interactive launch
+ * path pass INTERACTIVE_REFRESH_TIMEOUT_MS so a slow endpoint cannot stall the
+ * PTY spawn; background callers use the default full budget.
  */
 export async function refreshClaudeOauthCredentials(
   credentialsJson: string,
-  now: number = Date.now()
+  now: number = Date.now(),
+  timeoutMs: number = REFRESH_TIMEOUT_MS
 ): Promise<string | null> {
   const refreshToken = readRefreshToken(credentialsJson)
   if (!refreshToken) {
@@ -136,7 +148,7 @@ export async function refreshClaudeOauthCredentials(
   }).catch(() => {})
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     // Why: the `claude` CLI posts grant_type=refresh_token as
     // application/x-www-form-urlencoded with the public client id. net.fetch

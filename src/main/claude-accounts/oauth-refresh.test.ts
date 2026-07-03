@@ -183,4 +183,30 @@ describe('refreshClaudeOauthCredentials', () => {
     netFetchMock.mockRejectedValue(new Error('network down'))
     await expect(refreshClaudeOauthCredentials(credentials(), NOW)).resolves.toBeNull()
   })
+
+  it('aborts a slow endpoint at the caller-supplied interactive timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      // Simulate an unreachable token endpoint: the fetch only settles when its
+      // AbortController fires, so the timeout is what bounds the call.
+      netFetchMock.mockImplementation(
+        (_url: string, init: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+          })
+      )
+
+      const interactiveTimeoutMs = 2_000
+      const pending = refreshClaudeOauthCredentials(credentials(), NOW, interactiveTimeoutMs)
+
+      // Before the interactive timeout elapses, the call is still pending and
+      // would have hung for the full 10s default prior to this fix.
+      await vi.advanceTimersByTimeAsync(interactiveTimeoutMs - 1)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await expect(pending).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

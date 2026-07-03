@@ -50,6 +50,7 @@ vi.mock('electron', () => ({
 // to "not expiring" so the proactive switch-in refresh never fires here and
 // existing expectations hold; individual tests can override these mocks.
 vi.mock('./oauth-refresh', () => ({
+  INTERACTIVE_REFRESH_TIMEOUT_MS: 2_000,
   isOauthTokenExpiring: vi.fn(() => false),
   refreshClaudeOauthCredentials: vi.fn(async () => null)
 }))
@@ -3703,7 +3704,9 @@ describe('ClaudeRuntimeAuthService', () => {
     store.updateSettings({ activeClaudeManagedAccountId: 'account-1' })
     await service.syncForCurrentSelection()
 
-    expect(refreshClaudeOauthCredentials).toHaveBeenCalledWith(account1Stale)
+    // Why: the proactive refresh on the interactive launch path passes a short
+    // timeout so a slow token endpoint cannot stall the PTY spawn.
+    expect(refreshClaudeOauthCredentials).toHaveBeenCalledWith(account1Stale, undefined, 2_000)
     expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Refreshed)
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1Refreshed)
   })
