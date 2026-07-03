@@ -13,6 +13,7 @@ describe('validateGitExecArgs', () => {
   describe('allowed read-only subcommands', () => {
     it.each([
       [['rev-parse', '--show-toplevel']],
+      [['rev-parse', '--show-object-format']],
       [['branch', '--list']],
       [['log', '--oneline', '-10']],
       [['show-ref', '--heads']],
@@ -64,7 +65,9 @@ describe('validateGitExecArgs', () => {
       'reflog',
       'tag',
       'fetch',
-      'worktree'
+      'worktree',
+      'commit-tree',
+      'update-ref'
     ])('rejects %s', (cmd) => {
       expectBlocked([cmd], 'git subcommand not allowed')
     })

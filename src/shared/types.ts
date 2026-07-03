@@ -420,6 +420,13 @@ export type BaseRefSearchResult = {
   localBranchName: string
 }
 
+/**
+ * Result of the first-commit recovery action for unborn repos. `baseRef` is
+ * the explicit base the renderer must pass on the retried submit - re-probing
+ * the default would miss custom default-branch names (trunk/develop).
+ */
+export type CreateInitialCommitResult = { ok: true; baseRef: string } | { ok: false; error: string }
+
 // ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string

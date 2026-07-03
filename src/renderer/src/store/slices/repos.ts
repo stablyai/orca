@@ -61,6 +61,10 @@ import {
   getActiveRuntimeTarget
 } from '../../runtime/runtime-rpc-client'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
+import {
+  getRuntimeRepoBaseRefDefault,
+  searchRuntimeRepoBaseRefs
+} from '../../runtime/runtime-repo-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
@@ -188,6 +192,29 @@ function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
     delete sanitized.forkSyncMode
   }
   return sanitized
+}
+
+async function showUnbornRepoHintIfNeeded(
+  settings: AppState['settings'],
+  repoId: string
+): Promise<void> {
+  try {
+    const base = await getRuntimeRepoBaseRefDefault(settings, repoId)
+    if (base.defaultBaseRef) {
+      return
+    }
+    // Why: a null default base is not proof of an unborn repo - commits may
+    // exist only on a custom branch like develop, which searchRefs can see.
+    const refs = await searchRuntimeRepoBaseRefs(settings, repoId, '', 1)
+    if (refs.length > 0) {
+      return
+    }
+    toast.info('This repository has no commits yet', {
+      description: 'Create an initial commit before adding parallel workspaces.'
+    })
+  } catch {
+    // The add already succeeded; this best-effort hint must never break it.
+  }
 }
 
 const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
@@ -2054,6 +2081,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             description: repo.displayName
           }
         )
+        if (isGitRepoKind(repo)) {
+          void showUnbornRepoHintIfNeeded(get().settings, repo.id)
+        }
       }
       return repo
     } catch (err) {

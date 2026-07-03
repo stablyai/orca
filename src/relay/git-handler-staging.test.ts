@@ -77,6 +77,69 @@ describe('GitHandler — commit & staging', () => {
     })
   })
 
+  describe('createInitialCommit', () => {
+    it('creates the initial branch ref through the dedicated relay RPC', async () => {
+      execFileSync('git', ['init', '--bare', '--quiet'], { cwd: tmpDir, stdio: 'pipe' })
+      // Why: CI git lacks init.defaultBranch, so bare init lands on master there.
+      execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: tmpDir, stdio: 'pipe' })
+
+      const result = await dispatcher.callRequest('git.createInitialCommit', {
+        worktreePath: tmpDir
+      })
+
+      expect(result).toEqual({ ok: true, baseRef: 'main' })
+      const sha = execFileSync('git', ['rev-parse', '--verify', 'refs/heads/main^{commit}'], {
+        cwd: tmpDir,
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }).trim()
+      expect(sha).toMatch(/^[0-9a-f]{40}$/)
+    })
+
+    it('returns an existing local branch without creating HEAD', async () => {
+      execFileSync('git', ['init', '--bare', '--quiet'], { cwd: tmpDir, stdio: 'pipe' })
+      // Why: CI git lacks init.defaultBranch, so bare init lands on master there.
+      execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: tmpDir, stdio: 'pipe' })
+      const sha = execFileSync(
+        'git',
+        ['commit-tree', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-m', 'existing'],
+        { cwd: tmpDir, encoding: 'utf-8', stdio: 'pipe' }
+      ).trim()
+      execFileSync('git', ['update-ref', 'refs/heads/develop', sha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+
+      const result = await dispatcher.callRequest('git.createInitialCommit', {
+        worktreePath: tmpDir
+      })
+
+      expect(result).toEqual({ ok: true, baseRef: 'develop' })
+      expect(() =>
+        execFileSync('git', ['rev-parse', '--verify', 'refs/heads/main'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+      ).toThrow()
+    })
+  })
+
   describe('bulkStage and bulkUnstage', () => {
     it('stages multiple files', async () => {
       gitInit(tmpDir)

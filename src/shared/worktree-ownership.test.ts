@@ -331,6 +331,28 @@ describe('worktree ownership classification', () => {
     expect(gitMain.visible).toBe(false)
     expect(gitMain.ownership).toBe('external')
   })
+
+  it('keeps bare selected repos hidden because they have no checkout to open', () => {
+    const repo = makeRepo({ path: '/repos/app.git', externalWorktreeVisibility: 'show' })
+    const settings = makeSettings()
+
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({
+        id: 'repo-1::/repos/app.git',
+        path: '/repos/app.git',
+        branch: '',
+        head: '',
+        isBare: true,
+        isMainWorktree: true
+      }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+
+    expect(detected.selectedCheckout).toBe(true)
+    expect(detected.visible).toBe(false)
+  })
 })
 
 describe('external worktree visibility policy', () => {

@@ -57,6 +57,7 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import { createInitialCommitSerialized } from '../shared/git-initial-commit'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
@@ -189,6 +190,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
+    this.dispatcher.onRequest('git.createInitialCommit', (p) => this.createInitialCommit(p))
     this.dispatcher.onRequest('git.diff', (p) => this.getDiff(p))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
@@ -454,6 +456,11 @@ export class GitHandler {
     } finally {
       this.gitDiffReadDedupe.clear()
     }
+  }
+
+  private async createInitialCommit(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    return createInitialCommitSerialized(worktreePath, (argv) => this.git(argv, worktreePath))
   }
 
   private async unstage(params: Record<string, unknown>) {
@@ -1203,6 +1210,16 @@ export class GitHandler {
       const { stdout } = await this.git(['rev-parse', '--show-toplevel'], dirPath)
       return { isRepo: true, rootPath: stdout.trim() }
     } catch {
+      // Why: local repo detection accepts bare repos; SSH project adds must
+      // preserve that contract even though bare repos have no worktree root.
+      try {
+        const { stdout } = await this.git(['rev-parse', '--is-bare-repository'], dirPath)
+        if (stdout.trim() === 'true') {
+          return { isRepo: true, rootPath: dirPath }
+        }
+      } catch {
+        // Fall through to the non-repo result below.
+      }
       return { isRepo: false, rootPath: null }
     }
   }

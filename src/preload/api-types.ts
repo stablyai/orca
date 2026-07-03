@@ -36,6 +36,7 @@ import type {
   ClaudeRateLimitAccountsState,
   ClassifiedError,
   CodexRateLimitAccountsState,
+  CreateInitialCommitResult,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
@@ -916,6 +917,7 @@ export type PreloadApi = {
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
+    createInitialCommit: (args: { repoId: string }) => Promise<CreateInitialCommitResult>
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
     searchBaseRefDetails: (args: {
       repoId: string

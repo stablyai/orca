@@ -37,6 +37,23 @@ export function resolveComposerBranchSelection(args: {
 }
 
 /**
+ * Base branch passed to createWorktree on submit. The initial-commit retry
+ * supplies an explicit override - React state set during the recovery action
+ * is not visible to the in-flight submit closure, and re-probing the default
+ * would miss custom default-branch names.
+ */
+export function resolveComposerSubmitBaseBranch(args: {
+  selectedRepoIsGit: boolean
+  baseBranch: string | undefined
+  baseBranchOverride: string | undefined
+}): string | undefined {
+  if (!args.selectedRepoIsGit) {
+    return undefined
+  }
+  return args.baseBranchOverride ?? args.baseBranch
+}
+
+/**
  * True when `branchName` is already checked out in one of the given worktree
  * branch refs (which may be `refs/heads/foo` or short `foo`). Git refuses to
  * check out a branch in two worktrees, so such a branch cannot be reused.

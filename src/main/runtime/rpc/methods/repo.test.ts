@@ -249,6 +249,24 @@ describe('repo RPC methods', () => {
     expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')
   })
 
+  it('routes initial-commit creation to the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createInitialCommit: vi.fn().mockResolvedValue({ ok: true, baseRef: 'trunk' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.createInitialCommit', { repo: 'repo-1' })
+    )
+
+    expect(runtime.createInitialCommit).toHaveBeenCalledWith('repo-1')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: true, baseRef: 'trunk' }
+    })
+  })
+
   it('persists GitHub issue source preference updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

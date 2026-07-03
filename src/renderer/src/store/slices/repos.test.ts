@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { toast } from 'sonner'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { workItemsCacheKey } from './github'
 import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
@@ -7,6 +8,15 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn()
+  }
+}))
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -41,6 +51,8 @@ const reposCloneRemote = vi.fn()
 const reposRemove = vi.fn()
 const reposUpdate = vi.fn()
 const reposReorder = vi.fn()
+const reposGetBaseRefDefault = vi.fn()
+const reposSearchBaseRefs = vi.fn()
 const projectsCreateHostSetup = vi.fn()
 const projectsSetupExistingFolder = vi.fn()
 const projectsUpdateHostSetup = vi.fn()
@@ -61,6 +73,8 @@ beforeEach(() => {
   reposRemove.mockReset()
   reposUpdate.mockReset()
   reposReorder.mockReset()
+  reposGetBaseRefDefault.mockReset()
+  reposSearchBaseRefs.mockReset()
   projectsCreateHostSetup.mockReset()
   projectsSetupExistingFolder.mockReset()
   projectsUpdateHostSetup.mockReset()
@@ -68,6 +82,10 @@ beforeEach(() => {
   projectsUpdate.mockReset()
   projectGroupsMoveProject.mockReset()
   ptyKill.mockReset()
+  vi.mocked(toast.error).mockReset()
+  vi.mocked(toast.info).mockReset()
+  vi.mocked(toast.success).mockReset()
+  vi.mocked(toast.warning).mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -83,7 +101,9 @@ beforeEach(() => {
         pickFolder: reposPickFolder,
         remove: reposRemove,
         update: reposUpdate,
-        reorder: reposReorder
+        reorder: reposReorder,
+        getBaseRefDefault: reposGetBaseRefDefault,
+        searchBaseRefs: reposSearchBaseRefs
       },
       projects: {
         update: projectsUpdate,

@@ -16,6 +16,7 @@ import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
   BrowserViewportOverride,
+  CreateInitialCommitResult,
   CustomPet,
   FsChangedPayload,
   GetRateLimitResult,
@@ -554,6 +555,9 @@ const api = {
 
     getBaseRefDefault: (args: { repoId: string }): Promise<BaseRefDefaultResult> =>
       ipcRenderer.invoke('repos:getBaseRefDefault', args),
+
+    createInitialCommit: (args: { repoId: string }): Promise<CreateInitialCommitResult> =>
+      ipcRenderer.invoke('repos:createInitialCommit', args),
 
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>
       ipcRenderer.invoke('repos:searchBaseRefs', args),

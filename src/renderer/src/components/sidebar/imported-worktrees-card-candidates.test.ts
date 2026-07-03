@@ -75,7 +75,8 @@ describe('getHiddenImportedWorktrees', () => {
         hidden,
         detectedWorktree({ id: 'visible', visible: true }),
         detectedWorktree({ id: 'selected', selectedCheckout: true }),
-        detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' })
+        detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' }),
+        detectedWorktree({ id: 'bare', isBare: true })
       ])
     )
 

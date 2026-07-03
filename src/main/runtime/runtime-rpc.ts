@@ -187,6 +187,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.status',
   'git.unstage',
   'git.upstreamStatus',
+  'repo.createInitialCommit',
   'github.createIssue',
   'github.addIssueComment',
   'github.addPRReviewComment',

@@ -84,6 +84,7 @@ import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-foc
 import {
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
+  retryBackgroundWorktreeCreation,
   runBackgroundWorktreeCreation
 } from './worktree-creation-flow'
 
@@ -396,6 +397,25 @@ describe('runBackgroundWorktreeCreation', () => {
     expect(JSON.stringify(store.updatePendingWorktreeCreation.mock.calls)).not.toContain(
       'ignore me'
     )
+  })
+})
+
+describe('retryBackgroundWorktreeCreation', () => {
+  it('does not start a parallel retry while initial-commit recovery is pending', () => {
+    store.pendingWorktreeCreations = {
+      'creation-1': {
+        ...makePendingCreation(makeRequest()),
+        status: 'error',
+        errorAction: 'create-initial-commit',
+        initialCommitPending: true
+      }
+    }
+
+    retryBackgroundWorktreeCreation('creation-1')
+
+    expect(store.updatePendingWorktreeCreation).not.toHaveBeenCalled()
+    expect(store.createWorktree).not.toHaveBeenCalled()
+    expect(store.setActivePendingWorktreeCreation).not.toHaveBeenCalled()
   })
 })
 

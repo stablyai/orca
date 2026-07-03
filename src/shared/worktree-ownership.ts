@@ -202,13 +202,18 @@ export function toDetectedWorktree(args: {
 }
 
 export function shouldShowWorktree(args: {
-  worktree: Pick<Worktree, 'path'>
+  worktree: Pick<Worktree, 'path' | 'isBare'>
   ownership: WorktreeOwnership
   repo: Repo
   isLegacyRepoForVisibility: boolean
   isSelectedCheckout: boolean
   importedExternalWorktreePaths?: readonly string[] | undefined
 }): boolean {
+  // Why: bare repos are addable projects, but they have no working tree to
+  // activate. Let the project render as empty instead of a fake workspace row.
+  if (args.worktree.isBare) {
+    return false
+  }
   if (args.isSelectedCheckout) {
     return true
   }

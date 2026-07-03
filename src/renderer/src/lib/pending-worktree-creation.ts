@@ -113,6 +113,8 @@ export type PendingWorktreeCreation = {
    *  from create start through terminal handoff. */
   loaderVisible: boolean
   error?: string
+  errorAction?: 'create-initial-commit'
+  initialCommitPending?: boolean
   provisioningLog?: string
   request: WorktreeCreationRequest
 }

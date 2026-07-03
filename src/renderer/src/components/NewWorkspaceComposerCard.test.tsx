@@ -155,6 +155,8 @@ function renderCard(
         shouldWaitForSetupCheck={false}
         resolvedSetupDecision={null}
         createError={null}
+        createInitialCommitPending={false}
+        onCreateInitialCommit={() => {}}
         selectedRepoConnectionId={null}
         selectedRepoSshStatus={null}
         selectedRepoRequiresConnection={false}

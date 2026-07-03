@@ -23,6 +23,7 @@ import type {
 import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 import type {
   PendingWorktreeCreation,
+  WorktreeCreationRequest,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
@@ -164,8 +165,10 @@ export type WorktreeSlice = {
       status?: 'creating' | 'error'
       startedAt?: number
       error?: string
+      errorAction?: PendingWorktreeCreation['errorAction']
+      initialCommitPending?: boolean
       loaderVisible?: boolean
-      request?: PendingWorktreeCreation['request']
+      request?: WorktreeCreationRequest
       provisioningLog?: string
     }
   ) => void

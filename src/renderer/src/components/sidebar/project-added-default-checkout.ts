@@ -13,7 +13,7 @@ import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
 export function getProjectDefaultCheckout(worktrees: readonly Worktree[]): Worktree | null {
-  return worktrees.find((worktree) => worktree.isMainWorktree) ?? null
+  return worktrees.find((worktree) => worktree.isMainWorktree && !worktree.isBare) ?? null
 }
 
 function getDetectedProjectDefaultCheckout(
@@ -22,7 +22,7 @@ function getDetectedProjectDefaultCheckout(
   if (detected?.authoritative !== true) {
     return null
   }
-  return detected.worktrees.find((worktree) => worktree.isMainWorktree) ?? null
+  return detected.worktrees.find((worktree) => worktree.isMainWorktree && !worktree.isBare) ?? null
 }
 
 function hasDetectedHiddenLinkedExternalWorktrees(

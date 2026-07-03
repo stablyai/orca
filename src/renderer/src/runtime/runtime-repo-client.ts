@@ -1,4 +1,8 @@
-import type { BaseRefSearchResult, GlobalSettings } from '../../../shared/types'
+import type {
+  BaseRefSearchResult,
+  CreateInitialCommitResult,
+  GlobalSettings
+} from '../../../shared/types'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from './runtime-repo-search-bounds'
@@ -19,6 +23,22 @@ export async function getRuntimeRepoBaseRefDefault(
   return callRuntimeRpc<RuntimeRepoBaseRefDefault>(
     target,
     'repo.baseRefDefault',
+    { repo: repoId },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function createRuntimeRepoInitialCommit(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  repoId: string
+): Promise<CreateInitialCommitResult> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind !== 'environment') {
+    return window.api.repos.createInitialCommit({ repoId })
+  }
+  return callRuntimeRpc<CreateInitialCommitResult>(
+    target,
+    'repo.createInitialCommit',
     { repo: repoId },
     { timeoutMs: 15_000 }
   )

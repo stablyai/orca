@@ -242,6 +242,18 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(commitResult)
   })
 
+  it('createInitialCommit sends git.createInitialCommit request', async () => {
+    const commitResult = { ok: true, baseRef: 'main' }
+    mux.request.mockResolvedValue(commitResult)
+
+    const result = await provider.createInitialCommit('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('git.createInitialCommit', {
+      worktreePath: '/home/user/repo'
+    })
+    expect(result).toEqual(commitResult)
+  })
+
   it('execNonInteractive delegates fixed binary commands to the relay', async () => {
     const execResult = {
       stdout: '10.0.0\n',

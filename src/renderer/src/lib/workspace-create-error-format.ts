@@ -3,6 +3,8 @@ export type WorkspaceCreateErrorDisplay = {
   title: string
   message: string
   help?: string
+  /** Recovery affordance the composer renders inside the error box. */
+  action?: 'create-initial-commit'
 }
 
 const MISSING_BASE_REF_ANCHOR = 'could not resolve a default base ref'
@@ -17,7 +19,8 @@ export function formatWorkspaceCreateError(error: unknown): WorkspaceCreateError
         'auto.lib.workspace.create.error.format.37cf0bc991',
         'Orca could not resolve a usable base ref for this workspace.'
       ),
-      help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.'
+      help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.',
+      action: 'create-initial-commit'
     }
   }
 

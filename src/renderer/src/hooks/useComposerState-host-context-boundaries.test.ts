@@ -264,7 +264,7 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).toContain("smartGitHubResolution.kind === 'pr-start-point'")
     expect(quickSubmit).toContain("smartGitHubResolution.kind === 'metadata-only'")
     expect(quickSubmit).toContain('effectiveLinkedPR !== null || linkedGitLabMR !== null')
-    expect(quickSubmit).toContain('explicitBaseBranch: smartSubmitBaseBranch')
+    expect(quickSubmit).toContain('explicitBaseBranch: baseBranchOverride ?? smartSubmitBaseBranch')
     expect(quickSubmit).toContain('pushTarget: submitPushTarget')
     expect(quickSubmit).toContain('compareBaseRef: submitCompareBaseRef')
     expect(quickSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
@@ -488,7 +488,7 @@ describe('useComposerState host-context boundaries', () => {
     )
 
     expect(section).toContain('resolveWorktreeCreateBaseBranch')
-    expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
+    expect(section).toContain('explicitBaseBranch: baseBranchOverride ?? smartSubmitBaseBranch')
     expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
     expect(section).toContain('getRuntimeRepoBaseRefDefault')
   })

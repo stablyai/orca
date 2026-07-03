@@ -419,6 +419,49 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     expect(setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 
+  it('reveals the project when Git only reports a bare main repo entry', async () => {
+    const closeModal = vi.fn()
+    const setHideDefaultBranchWorkspace = vi.fn()
+    const bareRepoEntry = makeWorktree({
+      branch: '',
+      head: '',
+      isBare: true,
+      isMainWorktree: true
+    })
+    mocks.state.detectedWorktreesByRepo = {
+      'repo-1': {
+        repoId: 'repo-1',
+        authoritative: true,
+        source: 'git',
+        worktrees: [
+          {
+            ...bareRepoEntry,
+            ownership: 'unknown-legacy',
+            selectedCheckout: true,
+            visible: false
+          }
+        ]
+      }
+    }
+
+    await finishProjectAddWithDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'local_folder_picker',
+      closeModal,
+      setHideDefaultBranchWorkspace
+    })
+
+    expect(closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.state.updateRepo).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
+      source: 'local_folder_picker',
+      result: 'revealed_project',
+      reason: 'no_default_checkout'
+    })
+    expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
+  })
+
   it('reveals the project even when no worktrees are loaded', async () => {
     mocks.state.activeRepoId = 'repo-2'
     mocks.state.filterRepoIds = ['repo-2']

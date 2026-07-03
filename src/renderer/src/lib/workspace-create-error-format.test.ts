@@ -15,7 +15,8 @@ describe('formatWorkspaceCreateError', () => {
     expect(formatted).toEqual({
       title: 'No base branch found',
       message: 'Orca could not resolve a usable base ref for this workspace.',
-      help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.'
+      help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.',
+      action: 'create-initial-commit'
     })
     expect(getWorkspaceCreateErrorToastMessage(formatted)).toBe('No base branch found')
   })
@@ -27,6 +28,7 @@ describe('formatWorkspaceCreateError', () => {
 
     expect(formatted.title).toBe('No base branch found')
     expect(formatted.help).toBeDefined()
+    expect(formatted.action).toBe('create-initial-commit')
   })
 
   it('passes unknown errors through unchanged', () => {
@@ -37,5 +39,11 @@ describe('formatWorkspaceCreateError', () => {
       message: 'fatal: not a git repository'
     })
     expect(getWorkspaceCreateErrorToastMessage(formatted)).toBe('fatal: not a git repository')
+  })
+
+  it('does not attach the create-initial-commit action to unrelated errors', () => {
+    expect(formatWorkspaceCreateError(new Error('fatal: not a git repository')).action).toBe(
+      undefined
+    )
   })
 })

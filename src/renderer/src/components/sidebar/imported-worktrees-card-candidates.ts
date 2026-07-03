@@ -10,7 +10,9 @@ import type { ImportedWorktreesCardCandidate } from './worktree-list-groups'
 export function getHiddenImportedWorktrees(
   detected: DetectedWorktreeListResult | undefined
 ): ReturnType<typeof getHiddenExternalWorktrees> {
-  return getHiddenExternalWorktrees(detected)
+  // Why: bare entries have no working tree, so "Show in worktree list" would be
+  // a dead-end affordance for them — keep them out of the hidden-imports card.
+  return getHiddenExternalWorktrees(detected).filter((worktree) => worktree.isBare !== true)
 }
 
 export function buildImportedWorktreesCardCandidates(args: {

@@ -14,6 +14,7 @@ import type {
   WorktreeLineage,
   WorkspaceLineage
 } from '../../../../shared/types'
+import { shouldShowWorktree } from '../../../../shared/worktree-ownership'
 import { toast } from 'sonner'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -422,6 +423,54 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
     expect(store.getState().sortEpoch).toBe(8)
+  })
+
+  it('keeps a bare repo add as an empty project instead of a visible workspace row', async () => {
+    const store = createTestStore()
+    const bareRepoEntry = makeWorktree({
+      id: 'repo1::/repos/app.git',
+      repoId: 'repo1',
+      path: '/repos/app.git',
+      branch: '',
+      head: '',
+      isBare: true,
+      isMainWorktree: true
+    })
+    const bareRepoVisible = shouldShowWorktree({
+      worktree: bareRepoEntry,
+      ownership: 'unknown-legacy',
+      repo: {
+        id: 'repo1',
+        path: '/repos/app.git',
+        displayName: 'app.git',
+        badgeColor: '#999999',
+        addedAt: 1,
+        kind: 'git'
+      },
+      isLegacyRepoForVisibility: true,
+      isSelectedCheckout: true
+    })
+    const detected: DetectedWorktreeListResult = {
+      repoId: 'repo1',
+      authoritative: true,
+      source: 'git',
+      worktrees: [
+        {
+          ...bareRepoEntry,
+          ownership: 'unknown-legacy',
+          selectedCheckout: true,
+          visible: bareRepoVisible
+        }
+      ]
+    }
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(detected)
+
+    const result = await store.getState().fetchWorktrees('repo1')
+
+    expect(result).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1).toEqual([])
+    expect(store.getState().detectedWorktreesByRepo.repo1).toEqual(detected)
   })
 
   it('updates the repo entry when only prior worktree id aliases change', async () => {

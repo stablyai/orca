@@ -100,6 +100,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.checkIgnored')
     expect(methods).toContain('git.history')
     expect(methods).toContain('git.commit')
+    expect(methods).toContain('git.createInitialCommit')
     expect(methods).toContain('git.diff')
     expect(methods).toContain('git.stage')
     expect(methods).toContain('git.unstage')
@@ -133,6 +134,38 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  describe('isGitRepo', () => {
+    it('accepts a normal repo and returns its worktree root', async () => {
+      gitInit(tmpDir)
+      await fs.mkdir(path.join(tmpDir, 'src'))
+      const expectedRoot = await fs.realpath(tmpDir)
+
+      const result = await dispatcher.callRequest('git.isGitRepo', {
+        dirPath: path.join(tmpDir, 'src')
+      })
+
+      expect(result).toEqual({ isRepo: true, rootPath: expectedRoot })
+    })
+
+    it('accepts a bare repo and uses the repo dir as the root path', async () => {
+      const bareRepo = path.join(tmpDir, 'bare-unborn.git')
+      execFileSync('git', ['init', '--bare', bareRepo], { stdio: 'pipe' })
+
+      const result = await dispatcher.callRequest('git.isGitRepo', { dirPath: bareRepo })
+
+      expect(result).toEqual({ isRepo: true, rootPath: bareRepo })
+    })
+
+    it('rejects a non-repo directory', async () => {
+      const notRepo = path.join(tmpDir, 'not-repo')
+      await fs.mkdir(notRepo)
+
+      const result = await dispatcher.callRequest('git.isGitRepo', { dirPath: notRepo })
+
+      expect(result).toEqual({ isRepo: false, rootPath: null })
+    })
   })
 
   describe('abortMerge', () => {

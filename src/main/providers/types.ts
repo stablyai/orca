@@ -1,6 +1,7 @@
 import type {
   DirEntry,
   FsChangeEvent,
+  CreateInitialCommitResult,
   GitStatusResult,
   GitDiffResult,
   GitBranchCompareResult,
@@ -223,6 +224,7 @@ export type IGitProvider = {
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  createInitialCommit(worktreePath: string): Promise<CreateInitialCommitResult>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,

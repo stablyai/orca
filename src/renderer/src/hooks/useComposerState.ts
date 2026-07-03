@@ -170,6 +170,8 @@ import {
   collectComposerDropUploadResult,
   shouldReportComposerDropUploadFailure
 } from './composer-drop-upload-result'
+import { createRuntimeRepoInitialCommit } from '@/runtime/runtime-repo-client'
+import { runComposerInitialCommitAction } from './composer-initial-commit-action'
 import { translate } from '@/i18n/i18n'
 
 export function canResolveFolderSmartGitHubSubmit({
@@ -355,6 +357,9 @@ export type ComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: WorkspaceCreateErrorDisplay | null
+  /** True while the "Create initial commit" recovery action is running. */
+  createInitialCommitPending: boolean
+  onCreateInitialCommit: () => void
   canUseSparseCheckout: boolean
   /** Saved presets for the currently-selected repo. Empty array when no
    *  presets exist or when the repo is remote. */
@@ -373,8 +378,11 @@ export type UseComposerStateResult = {
   onComposerNodeChange: (node: HTMLDivElement | null) => void
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
-  submit: () => Promise<void>
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  /** `baseBranchOverride` is the explicit base used by the initial-commit
+   *  retry — state set during the recovery action is not visible to the
+   *  in-flight closure. */
+  submit: (baseBranchOverride?: string) => Promise<void>
+  submitQuick: (agent: TuiAgent | null, baseBranchOverride?: string) => Promise<void>
   /** Invoked by the Enter handler to re-check whether submission should fire. */
   createDisabled: boolean
 }
@@ -497,6 +505,7 @@ export function getInitialAutoManagedWorkspaceName({
 // closes.
 const composerDropStack: symbol[] = []
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
+type LastComposerSubmit = { kind: 'full' } | { kind: 'quick'; agent: TuiAgent | null }
 
 export function useComposerState(options: UseComposerStateOptions): UseComposerStateResult {
   const {
@@ -879,6 +888,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     })
   const repoIdRef = useRef(repoId)
   repoIdRef.current = repoId
+  const lastComposerSubmitRef = useRef<LastComposerSubmit>({ kind: 'full' })
   const setRepoId = useCallback(
     (value: string) => {
       if (onRepoIdOverrideChange) {
@@ -1105,6 +1115,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   } | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
+  const [creatingInitialCommit, setCreatingInitialCommit] = useState(false)
+  const creatingRef = useRef(false)
+  creatingRef.current = creating
+  const creatingInitialCommitRef = useRef(false)
+  creatingInitialCommitRef.current = creatingInitialCommit
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   // Why: when checked, a successful worktree create keeps the modal open and
   // resets identity fields so the user can queue another worktree without
   // reopening. Defaults off; the modal unmounts on close, so reopening always
@@ -2523,6 +2547,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
       const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
+      // Why: a fresh repo invalidates the pending initial-commit recovery target.
+      setCreateError(null)
+      lastComposerSubmitRef.current = { kind: 'full' }
       setRepoId(value)
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
@@ -3287,7 +3314,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     ]
   )
 
-  const submit = useCallback(async (): Promise<void> => {
+  const submit = useCallback(async (baseBranchOverride?: string): Promise<void> => {
+    lastComposerSubmitRef.current = { kind: 'full' }
     if (isProjectGroupTarget) {
       await submitFolderTarget(tuiAgent)
       return
@@ -3318,6 +3346,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
 
     setCreateError(null)
+    creatingRef.current = true
     setCreating(true)
     try {
       const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
@@ -3358,12 +3387,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       const submitBaseBranch =
-        smartGitHubResolution.kind === 'pr-start-point'
+        // Why: the initial-commit recovery supplies an explicit base ref that
+        // React state hasn't yet propagated to this closure; honor it first.
+        baseBranchOverride ??
+        (smartGitHubResolution.kind === 'pr-start-point'
           ? smartGitHubResolution.baseBranch
           : smartGitHubResolution.kind === 'metadata-only' &&
               (effectiveLinkedPR !== null || linkedGitLabMR !== null)
             ? undefined
-            : baseBranch
+            : baseBranch)
       const submitCompareBaseRef =
         smartGitHubResolution.kind === 'pr-start-point'
           ? smartGitHubResolution.compareBaseRef
@@ -3616,6 +3648,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(formattedError)
       toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
     } finally {
+      creatingRef.current = false
       setCreating(false)
     }
   }, [
@@ -3706,7 +3739,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [])
 
   const submitQuick = useCallback(
-    async (requestedAgent: TuiAgent | null): Promise<void> => {
+    async (requestedAgent: TuiAgent | null, baseBranchOverride?: string): Promise<void> => {
+      lastComposerSubmitRef.current = { kind: 'quick', agent: requestedAgent }
       if (isProjectGroupTarget) {
         await submitFolderTarget(requestedAgent)
         return
@@ -3732,6 +3766,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
 
       setCreateError(null)
+      creatingRef.current = true
       setCreating(true)
       try {
         const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
@@ -3859,7 +3894,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         })
         const submitBaseBranch = selectedRepoIsGit
           ? await resolveWorktreeCreateBaseBranch({
-              explicitBaseBranch: smartSubmitBaseBranch,
+              // Why: the initial-commit recovery supplies an explicit base ref not
+              // yet reflected in this closure's state; honor it over the smart pick.
+              explicitBaseBranch: baseBranchOverride ?? smartSubmitBaseBranch,
               repoWorktreeBaseRef: selectedRepo.worktreeBaseRef,
               loadDefaultBaseRef: async () =>
                 (await getRuntimeRepoBaseRefDefault(selectedRepoSettings, repoId).catch(() => null))
@@ -4066,6 +4103,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setCreateError(formattedError)
         toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
       } finally {
+        creatingRef.current = false
         setCreating(false)
       }
     },
@@ -4127,6 +4165,32 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     ]
   )
 
+  // Why: the explicitly-labeled error-box button IS the confirmation —
+  // nothing runs automatically. The pending flag guards double-clicks; any
+  // call that slips through coalesces in the main process per-repo map.
+  const handleCreateInitialCommit = useCallback(async (): Promise<void> => {
+    const targetRepoId = repoIdRef.current
+    if (!targetRepoId || creatingInitialCommitRef.current) {
+      return
+    }
+    await runComposerInitialCommitAction({
+      sourceRepoId: targetRepoId,
+      createInitialCommit: () => createRuntimeRepoInitialCommit(settingsRef.current, targetRepoId),
+      getCurrentRepoId: () => repoIdRef.current,
+      isSubmitInFlight: () => creatingRef.current,
+      isCancelled: () => !mountedRef.current,
+      setPending: setCreatingInitialCommit,
+      setCreateError,
+      setBaseBranch,
+      resubmit: (baseRef) => {
+        const lastSubmit = lastComposerSubmitRef.current
+        return lastSubmit.kind === 'quick'
+          ? submitQuick(lastSubmit.agent, baseRef)
+          : submit(baseRef)
+      }
+    })
+  }, [submit, submitQuick])
+
   const createGateInput = {
     repoId,
     workspaceSeedName,
@@ -4142,7 +4206,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createGateMode === 'quick'
       ? getQuickComposerCreateDisabled(createGateInput)
       : getFullComposerCreateDisabled(createGateInput)
-  const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
+  const createDisabled =
+    (isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled) || creatingInitialCommit
   const cardProps: ComposerCardProps = {
     eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
     repoId,
@@ -4251,6 +4316,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForSetupCheck: isProjectGroupTarget ? false : shouldWaitForSetupCheck,
     resolvedSetupDecision: isProjectGroupTarget ? null : resolvedSetupDecision,
     createError,
+    createInitialCommitPending: creatingInitialCommit,
+    onCreateInitialCommit: () => void handleCreateInitialCommit(),
     canUseSparseCheckout: isProjectGroupTarget
       ? false
       : selectedRepoIsGit && !selectedRepo?.connectionId,

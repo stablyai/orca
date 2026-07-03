@@ -173,12 +173,16 @@ async function executeWorktreeCreation(
       return
     }
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
-    const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    // Why: an error must stay on the same creation surface that owns the faux
-    // tab strip, rather than falling back to stale previous-workspace tabs.
+    const formattedError = formatWorkspaceCreateError(error)
+    const message = getWorkspaceCreateErrorToastMessage(formattedError)
+    // Why: an error must surface immediately even if it lands before the loader
+    // debounce fired (force the loader visible) and must stay on the same creation
+    // surface that owns the faux tab strip rather than stale previous-workspace tabs.
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
       error: message,
+      errorAction: formattedError.action,
+      loaderVisible: true,
       ...(preparedRequest.ephemeralVmRecipe ? { request } : {})
     })
     // Why: only toast when the panel isn't already showing this error (the user
@@ -328,7 +332,7 @@ export function continueBackgroundWorktreeCreation(
 export function retryBackgroundWorktreeCreation(creationId: string): void {
   const store = useAppStore.getState()
   const entry = store.pendingWorktreeCreations[creationId]
-  if (!entry) {
+  if (!entry || entry.initialCommitPending) {
     return
   }
   store.updatePendingWorktreeCreation(creationId, {
@@ -339,7 +343,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
         ? 'provisioning-vm'
         : 'fetching',
     error: undefined,
-    provisioningLog: undefined
+    provisioningLog: undefined,
+    initialCommitPending: false
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

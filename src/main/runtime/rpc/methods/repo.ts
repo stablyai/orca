@@ -237,6 +237,11 @@ export const REPO_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.getRepoBaseRefDefault(params.repo)
   }),
   defineMethod({
+    name: 'repo.createInitialCommit',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.createInitialCommit(params.repo)
+  }),
+  defineMethod({
     name: 'repo.searchRefs',
     params: RepoSearchRefs,
     handler: async (params, { runtime }) =>
