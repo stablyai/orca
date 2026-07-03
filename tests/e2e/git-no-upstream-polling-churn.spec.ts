@@ -2,6 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import {
+  findPrimaryWorktreeSnapshot,
+  findRepoSnapshotByRuntimePath,
+  formatRepoPathSnapshots
+} from './helpers/e2e-runtime-path-matching'
 
 // Repro command:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/git-no-upstream-polling-churn.spec.ts --config tests/playwright.config.ts --project electron-headless --reporter=json
@@ -55,35 +60,58 @@ async function selectRepoForActivePolling(
   repoPath: string,
   worktreePath: string
 ): Promise<void> {
+  const repoCandidates = await page.evaluate(async () => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('Expected e2e store to be exposed')
+    }
+
+    await store.getState().fetchRepos()
+    return store.getState().repos.map((repo) => ({ id: repo.id, path: repo.path }))
+  })
+  const repo = findRepoSnapshotByRuntimePath(repoCandidates, repoPath)
+  if (!repo) {
+    throw new Error(
+      `Expected repo to be loaded: ${repoPath}; candidates: ${formatRepoPathSnapshots(
+        repoCandidates
+      )}`
+    )
+  }
+
+  const worktreeCandidates = await page.evaluate(async (repoId) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('Expected e2e store to be exposed')
+    }
+
+    await store.getState().fetchWorktrees(repoId)
+    return (store.getState().worktreesByRepo[repoId] ?? []).map((worktree) => ({
+      id: worktree.id,
+      path: worktree.path
+    }))
+  }, repo.id)
+  const worktree = findPrimaryWorktreeSnapshot(worktreeCandidates, worktreePath)
+  if (!worktree) {
+    throw new Error(
+      `Expected active-polling worktree to exist: ${worktreePath}; saw ${worktreeCandidates
+        .map((candidate) => candidate.path)
+        .join(', ')}`
+    )
+  }
+
   await page.evaluate(
-    async ({ targetRepoPath, targetWorktreePath }) => {
+    ({ worktreeId }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Expected e2e store to be exposed')
       }
 
-      let state = store.getState()
-      const repo = state.repos.find((candidate) => candidate.path === targetRepoPath)
-      if (!repo) {
-        throw new Error(`Expected repo to be loaded: ${targetRepoPath}`)
-      }
-      await state.fetchWorktrees(repo.id)
-
-      state = store.getState()
-      const worktrees = Object.values(state.worktreesByRepo).flat()
-      const worktree = worktrees.find((candidate) => candidate.path === targetWorktreePath)
-      if (!worktree) {
-        throw new Error(
-          `Expected active-polling worktree to exist: ${targetWorktreePath}; saw ${worktrees
-            .map((candidate) => candidate.path)
-            .join(', ')}`
-        )
-      }
-      state.setActiveWorktree(worktree.id)
+      const state = store.getState()
+      state.setActiveWorktree(worktreeId)
       state.setRightSidebarOpen(true)
       state.setRightSidebarTab('source-control')
     },
-    { targetRepoPath: repoPath, targetWorktreePath: worktreePath }
+    { worktreeId: worktree.id }
   )
 }
 
