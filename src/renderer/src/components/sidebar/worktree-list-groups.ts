@@ -35,6 +35,7 @@ import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slic
 import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
 export { branchName }
 
@@ -152,9 +153,31 @@ type WorktreeGroupEntry = {
 type ProjectGroupingIndex = {
   projectById: Map<string, Project>
   setupByRepoId: Map<string, ProjectHostSetup>
+  projectIdsRequiringSetupGroups: Set<string>
 }
 
 const projectGroupingIndexCache = new WeakMap<ProjectGroupingModel, ProjectGroupingIndex | null>()
+
+// Why: `provisioned` setups are recipe-created ephemeral runtime copies of a
+// project; they nest under the project header. Only real user checkouts
+// (legacy-repo / imported-existing-folder / cloned) count as distinct sidebar
+// entries when duplicated on one host surface. See #5374.
+function isDistinctUserCheckout(setup: ProjectHostSetup): boolean {
+  return setup.setupMethod !== 'provisioned'
+}
+
+function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
+  const wslPath = parseWslUncPath(setup.path)
+  if (wslPath) {
+    // Why: Windows host and WSL on one machine are separate execution surfaces;
+    // only duplicate checkouts within the same surface make project grouping ambiguous.
+    return `${setup.projectId}::${setup.hostId}::wsl:${wslPath.distro.toLowerCase()}`
+  }
+  if (/^[A-Za-z]:[\\/]/.test(setup.path)) {
+    return `${setup.projectId}::${setup.hostId}::windows-host`
+  }
+  return `${setup.projectId}::${setup.hostId}::default`
+}
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
   if (!model) {
@@ -170,9 +193,27 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
     projectGroupingIndexCache.set(model, null)
     return null
   }
+  const setupCountByProjectSurface = new Map<string, number>()
+  for (const setup of projectHostSetups) {
+    if (!isDistinctUserCheckout(setup)) {
+      continue
+    }
+    const key = getProjectSetupSurfaceKey(setup)
+    setupCountByProjectSurface.set(key, (setupCountByProjectSurface.get(key) ?? 0) + 1)
+  }
+  const projectIdsRequiringSetupGroups = new Set<string>()
+  for (const setup of projectHostSetups) {
+    if (!isDistinctUserCheckout(setup)) {
+      continue
+    }
+    if ((setupCountByProjectSurface.get(getProjectSetupSurfaceKey(setup)) ?? 0) > 1) {
+      projectIdsRequiringSetupGroups.add(setup.projectId)
+    }
+  }
   const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
-    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup]))
+    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
+    projectIdsRequiringSetupGroups
   }
   projectGroupingIndexCache.set(model, index)
   return index
@@ -200,9 +241,23 @@ function getProjectGroupingForRepo(
       repo
     }
   }
-  // Why: recipe-created runtimes and local worktrees can be separate checkouts
-  // of the same Git project; the sidebar should follow project identity rather
-  // than path-scoped setup identity so those workspaces stay in one project.
+  if (
+    projectIndex?.projectIdsRequiringSetupGroups.has(setup.projectId) &&
+    isDistinctUserCheckout(setup)
+  ) {
+    // Why: once a project has multiple independent user checkouts on one host
+    // surface, each must stay its own sidebar entry; they cannot be safely
+    // attached to one another without explicit linking. See #5374.
+    return {
+      key: `project:${project.id}::setup:${repoId}`,
+      label: repo?.displayName ?? setup.displayName,
+      repo,
+      projectId: project.id
+    }
+  }
+  // Why: recipe-created runtime copies (`provisioned`) and local worktrees can be
+  // separate checkouts of the same Git project; those follow project identity
+  // rather than path-scoped setup identity so they stay in one project.
   return {
     key: `project:${project.id}`,
     label: project.displayName,
