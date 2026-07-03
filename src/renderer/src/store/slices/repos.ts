@@ -257,20 +257,6 @@ function getSafeAutoForkSyncKey(repo: Repo): string {
   return `${getRepoExecutionHostId(repo)}:${repo.id}:${repo.path}`
 }
 
-// Why: a `repos:changed` burst (e.g. deleting a project group and its contained
-// projects) starts one fetchRepos per event; an earlier fetch that read
-// pre-removal state can resolve last and resurrect deleted projects until
-// restart (#7020). This generation guard drops a fetch's result once a newer
-// one has superseded it, so only the latest (final-state) fetch applies.
-let reposFetchGeneration = 0
-function beginReposFetch(): number {
-  reposFetchGeneration += 1
-  return reposFetchGeneration
-}
-function isCurrentReposFetch(generation: number): boolean {
-  return generation === reposFetchGeneration
-}
-
 function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
   for (const repo of repos) {
     if (repo.kind === 'folder' || repo.forkSyncMode !== 'safe-auto' || !repo.upstream) {
@@ -1166,6 +1152,8 @@ export type RepoSlice = {
   folderWorkspaces: FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
+  // Monotonic sequence so an overlapping fetchRepos can drop its own stale result (#7020).
+  reposFetchGeneration: number
   fetchRepos: () => Promise<void>
   fetchReposForAllHosts: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
@@ -1284,9 +1272,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   folderWorkspaces: [],
   folderWorkspacePathStatuses: {},
   activeRepoId: null,
+  reposFetchGeneration: 0,
 
   fetchRepos: async () => {
-    const generation = beginReposFetch()
+    // Why: overlapping repos:changed fetches can resolve out of order; an earlier
+    // one must not overwrite a newer result and resurrect deleted projects (#7020).
+    let generation = 0
+    set((s) => {
+      generation = s.reposFetchGeneration + 1
+      return { reposFetchGeneration: generation }
+    })
     try {
       const target = getActiveRuntimeTarget(get().settings)
       const {
@@ -1294,9 +1289,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         projectCompatibility,
         hostId
       } = await fetchReposForTarget(target, get().repos)
-      // Why: a newer fetchRepos started while we awaited — dropping this stale
-      // result avoids reintroducing repos it removed (#7020).
-      if (!isCurrentReposFetch(generation)) {
+      // A newer fetchRepos superseded us while we awaited — drop this stale result.
+      if (get().reposFetchGeneration !== generation) {
         return
       }
       set((s) => {

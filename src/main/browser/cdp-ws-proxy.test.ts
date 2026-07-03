@@ -43,6 +43,7 @@ function createMockWebContents() {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
       focus: vi.fn(),
+      printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),
       reloadIgnoringCache: vi.fn(),
       getTitle: vi.fn(() => 'Example'),
@@ -108,6 +109,15 @@ describe('CdpWsProxy', () => {
     const calls = getSendCommandCalls()
     return calls.map((call) => call[0])
   }
+
+  function expectPdfStreamHandle(response: Record<string, unknown>): string {
+    const result = response.result as Record<string, unknown>
+    expect(result.data).toBe('')
+    expect(result.stream).toEqual(expect.stringMatching(/^orca-pdf-[\da-f-]{36}-\d+$/))
+    return result.stream as string
+  }
+
+  const defaultPdfMarginInches = 1 / 2.54
 
   it('starts on a random port and returns ws:// URL', () => {
     expect(endpoint).toMatch(/^ws:\/\/127\.0\.0\.1:\d+$/)
@@ -490,6 +500,209 @@ describe('CdpWsProxy', () => {
       'Page.addScriptToEvaluateOnNewDocument',
       'Runtime.evaluate'
     ])
+    client.close()
+  })
+
+  it('prints PDF data through native webContents printToPDF', async () => {
+    const client = await connect()
+
+    const response = await sendAndReceive(client, {
+      id: 19,
+      method: 'Page.printToPDF',
+      params: {
+        landscape: true,
+        printBackground: true,
+        paperWidth: 8.5,
+        paperHeight: 11,
+        marginTop: 0.25,
+        marginBottom: 0.5,
+        marginLeft: 0.75,
+        marginRight: 1,
+        pageRanges: '1-2',
+        preferCSSPageSize: true
+      }
+    })
+
+    expect(response).toEqual({
+      id: 19,
+      result: { data: Buffer.from('%PDF-test').toString('base64') }
+    })
+    expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
+      landscape: true,
+      printBackground: true,
+      pageSize: { width: 8.5, height: 11 },
+      margins: {
+        marginType: 'custom',
+        top: 0.25,
+        bottom: 0.5,
+        left: 0.75,
+        right: 1
+      },
+      pageRanges: '1-2',
+      preferCSSPageSize: true
+    })
+    expect(getSendCommandMethods()).not.toContain('Page.printToPDF')
+    client.close()
+  })
+
+  it('keeps default PDF margins for omitted sides', async () => {
+    const client = await connect()
+
+    await sendAndReceive(client, {
+      id: 20,
+      method: 'Page.printToPDF',
+      params: {
+        marginTop: 0.25
+      }
+    })
+
+    expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
+      margins: {
+        marginType: 'custom',
+        top: 0.25,
+        bottom: defaultPdfMarginInches,
+        left: defaultPdfMarginInches,
+        right: defaultPdfMarginInches
+      }
+    })
+    client.close()
+  })
+
+  it('supports streamed Page.printToPDF results for Playwright page.pdf', async () => {
+    mock.webContents.printToPDF.mockResolvedValueOnce(Buffer.from('abcdef'))
+    const client = await connect()
+
+    const printResponse = await sendAndReceive(client, {
+      id: 21,
+      method: 'Page.printToPDF',
+      params: { transferMode: 'ReturnAsStream' }
+    })
+    const handle = expectPdfStreamHandle(printResponse)
+
+    const firstRead = await sendAndReceive(client, {
+      id: 22,
+      method: 'IO.read',
+      params: { handle, size: 2 }
+    })
+    const secondRead = await sendAndReceive(client, {
+      id: 23,
+      method: 'IO.read',
+      params: { handle }
+    })
+    const closeResponse = await sendAndReceive(client, {
+      id: 24,
+      method: 'IO.close',
+      params: { handle }
+    })
+    const readAfterClose = await sendAndReceive(client, {
+      id: 25,
+      method: 'IO.read',
+      params: { handle }
+    })
+
+    expect(printResponse.id).toBe(21)
+    expect(firstRead).toEqual({
+      id: 22,
+      result: { base64Encoded: true, data: Buffer.from('ab').toString('base64'), eof: false }
+    })
+    expect(secondRead).toEqual({
+      id: 23,
+      result: { base64Encoded: true, data: Buffer.from('cdef').toString('base64'), eof: true }
+    })
+    expect(closeResponse).toEqual({ id: 24, result: {} })
+    expect(readAfterClose).toEqual({
+      id: 25,
+      error: { code: -32000, message: 'Invalid stream handle' }
+    })
+    client.close()
+  })
+
+  it('clears streamed PDF data when the client disconnects', async () => {
+    mock.webContents.printToPDF.mockResolvedValueOnce(Buffer.from('abcdef'))
+    const client = await connect()
+
+    const printResponse = await sendAndReceive(client, {
+      id: 26,
+      method: 'Page.printToPDF',
+      params: { transferMode: 'ReturnAsStream' }
+    })
+    const handle = expectPdfStreamHandle(printResponse)
+
+    expect(printResponse.id).toBe(26)
+    client.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const nextClient = await connect()
+    const staleRead = await sendAndReceive(nextClient, {
+      id: 27,
+      method: 'IO.read',
+      params: { handle }
+    })
+
+    expect(staleRead).toEqual({
+      id: 27,
+      error: { code: -32000, message: 'Invalid stream handle' }
+    })
+    nextClient.close()
+  })
+
+  it('does not register a PDF stream when the client disconnects mid-print', async () => {
+    let resolvePrint: (buf: Buffer) => void = () => {}
+    mock.webContents.printToPDF.mockImplementationOnce(
+      () =>
+        new Promise<Buffer>((resolve) => {
+          resolvePrint = resolve
+        })
+    )
+    const store = (proxy as unknown as { pdfStreams: { create: (b: Buffer) => string } }).pdfStreams
+    const createSpy = vi.spyOn(store, 'create')
+
+    const client = await connect()
+    client.send(
+      JSON.stringify({
+        id: 30,
+        method: 'Page.printToPDF',
+        params: { transferMode: 'ReturnAsStream' }
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    client.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Print resolves only after the client is gone: no stream must be created.
+    resolvePrint(Buffer.from('%PDF-late'))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(createSpy).not.toHaveBeenCalled()
+    createSpy.mockRestore()
+  })
+
+  it('forwards non-PDF IO streams to the debugger', async () => {
+    mock.webContents.debugger.sendCommand
+      .mockResolvedValueOnce({ data: 'trace-data', eof: false })
+      .mockResolvedValueOnce({})
+    const client = await connect()
+
+    const readResponse = await sendAndReceive(client, {
+      id: 28,
+      method: 'IO.read',
+      params: { handle: 'trace-stream', size: 64 }
+    })
+    const closeResponse = await sendAndReceive(client, {
+      id: 29,
+      method: 'IO.close',
+      params: { handle: 'trace-stream' }
+    })
+
+    expect(readResponse).toEqual({ id: 28, result: { data: 'trace-data', eof: false } })
+    expect(closeResponse).toEqual({ id: 29, result: {} })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith('IO.read', {
+      handle: 'trace-stream',
+      size: 64
+    })
+    expect(mock.webContents.debugger.sendCommand).toHaveBeenCalledWith('IO.close', {
+      handle: 'trace-stream'
+    })
     client.close()
   })
 
