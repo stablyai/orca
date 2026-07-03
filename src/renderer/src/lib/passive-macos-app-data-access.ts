@@ -30,6 +30,10 @@ export type ActiveGitStatusPollingArgs = {
   userAgent?: string
 }
 
+function hasOpenFileInActiveWorktree(args: ActiveGitStatusPollingArgs): boolean {
+  return (args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)
+}
+
 export function hasInteractiveActiveGitStatusConsumer(args: ActiveGitStatusPollingArgs): boolean {
   if (!args.activeWorktreeId || !args.worktreePath) {
     return false
@@ -42,9 +46,6 @@ export function hasInteractiveActiveGitStatusConsumer(args: ActiveGitStatusPolli
   ) {
     return true
   }
-  if ((args.openFiles ?? []).some((file) => file.worktreeId === args.activeWorktreeId)) {
-    return true
-  }
   return false
 }
 
@@ -53,6 +54,9 @@ export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boo
     return false
   }
   if (hasInteractiveActiveGitStatusConsumer(args)) {
+    return true
+  }
+  if (hasOpenFileInActiveWorktree(args)) {
     return true
   }
   // Why: macOS app-container paths can trigger the "data from other apps"
