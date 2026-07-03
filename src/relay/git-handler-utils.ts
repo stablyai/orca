@@ -147,10 +147,20 @@ function getErrorText(error: unknown): string {
   return String(error)
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
+
 export function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
-    getErrorText(error)
-  )
+  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage exit
+  // 129 signals the rejection in any locale; key for SSH remotes on old Git.
+  if (getErrorCode(error) === '129') {
+    return true
+  }
+
+  return /(?:unknown|invalid|unrecognized) (?:switch|option).*`?-?z'?/i.test(getErrorText(error))
 }
 
 export function parseWorktreeList(

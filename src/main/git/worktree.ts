@@ -104,9 +104,8 @@ function isNotGitRepositoryError(error: unknown): boolean {
 }
 
 function isUnsupportedWorktreeListZError(error: unknown): boolean {
-  // Older Git (<2.36) rejects `-z`, this command's only version-sensitive flag,
-  // so Git's usage exit 129 identifies it regardless of locale. The stderr
-  // matcher is a fallback for runners that drop the numeric exit code.
+  // `-z` is this command's only flag older Git (<2.36) lacks, so its usage
+  // exit 129 signals the rejection in any locale; stderr match is a fallback.
   if (getErrorCode(error) === '129') {
     return true
   }
