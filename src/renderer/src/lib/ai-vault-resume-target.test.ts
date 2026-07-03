@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
+  canResumeAiVaultSessionOnTarget,
   getAiVaultResumeRepoTargetStatus,
   getAiVaultResumeWorktreeTargetStatus,
   getAiVaultResumeWorkspaceTargetStatus,
   isSupportedAiVaultResumeRepo,
-  isUnsupportedAiVaultResumeRepo
+  isUnsupportedAiVaultResumeRepo,
+  isWslStoredAiVaultSessionFile
 } from './ai-vault-resume-target'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
@@ -25,6 +27,56 @@ function makeState(
     ...overrides
   } as unknown as ResumeTargetState
 }
+
+describe('ai vault session storage compatibility', () => {
+  const hostSessionFile = '/Users/ada/.claude/projects/-Users-ada-repo/session-1.jsonl'
+  const windowsHostSessionFile = 'C:\\Users\\ada\\.claude\\projects\\C--repo\\session-1.jsonl'
+  const wslSessionFile = '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
+  const wslLocalhostSessionFile =
+    '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
+
+  it('detects WSL-stored session files', () => {
+    expect(isWslStoredAiVaultSessionFile(wslSessionFile)).toBe(true)
+    expect(isWslStoredAiVaultSessionFile(wslLocalhostSessionFile)).toBe(true)
+    expect(isWslStoredAiVaultSessionFile(hostSessionFile)).toBe(false)
+    expect(isWslStoredAiVaultSessionFile(windowsHostSessionFile)).toBe(false)
+    expect(isWslStoredAiVaultSessionFile(null)).toBe(false)
+    expect(isWslStoredAiVaultSessionFile(undefined)).toBe(false)
+  })
+
+  it('allows host-stored sessions on local targets only', () => {
+    expect(
+      canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'local' })
+    ).toBe(true)
+    expect(
+      canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'ssh' })
+    ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: windowsHostSessionFile,
+        targetStatus: 'ssh'
+      })
+    ).toBe(false)
+  })
+
+  it('allows WSL-stored sessions on local and SSH targets', () => {
+    expect(
+      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'local' })
+    ).toBe(true)
+    expect(
+      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'ssh' })
+    ).toBe(true)
+  })
+
+  it('never allows runtime or unknown targets', () => {
+    expect(
+      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'runtime' })
+    ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'unknown' })
+    ).toBe(false)
+  })
+})
 
 describe('ai vault resume target ownership', () => {
   it('classifies local, SSH, runtime, and unknown repo owners', () => {

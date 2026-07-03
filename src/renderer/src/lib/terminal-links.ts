@@ -255,19 +255,45 @@ function insertClaimedRange(claimedRanges: [number, number][], range: [number, n
 }
 
 function trimSpacedPathTrailingProse(range: DetectedRange): DetectedRange {
-  const filenameBeforeProseMatch = /^(.+\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?)(?:\s+.+)$/.exec(
-    range.text
-  )
-  if (!filenameBeforeProseMatch) {
+  // Why: keep one extension-terminated path, but drop trailing prose or a
+  // second unrelated path that the broad spaced-path scan also captured. A
+  // line-end extension token only extends the span when the added segment is
+  // path-like (contains a separator) — "v1.2 reports/result.json" extends,
+  // prose like "failed to start app.py" must not be swallowed.
+  let selected: string | null = null
+  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
+  let match: RegExpExecArray | null
+  while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
+    const end = match.index + match[0].length
+    const text = range.text.slice(0, end)
+    if (countPathStarts(text) > 1) {
+      continue
+    }
+    if (
+      end < range.text.length ||
+      selected === null ||
+      /[\\/]/.test(range.text.slice(selected.length, end))
+    ) {
+      selected = text
+    }
+  }
+  if (!selected) {
     return range
   }
-
-  const text = filenameBeforeProseMatch[1]
   return {
-    text,
+    text: selected,
     startIndex: range.startIndex,
-    endIndex: range.startIndex + text.length
+    endIndex: range.startIndex + selected.length
   }
+}
+
+function countPathStarts(text: string): number {
+  let count = 0
+  for (const match of text.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
+    void match
+    count += 1
+  }
+  return count
 }
 
 function trimTrailingWhitespace(range: DetectedRange): DetectedRange {

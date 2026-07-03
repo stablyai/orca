@@ -1351,6 +1351,7 @@ export function useIpcEvents(): void {
           requestId,
           worktreeId,
           command,
+          cwd,
           env,
           launchConfig,
           launchToken,
@@ -1426,6 +1427,7 @@ export function useIpcEvents(): void {
                           ...initialAgentTabViewModeProps(store.settings)
                         }
                       : {}),
+                    ...(cwd ? { startupCwd: cwd } : {}),
                     // Why: tabId hint comes from CLI-spawned PTYs whose env
                     // already has the pane key baked in. Adopting the tab under
                     // the same id keeps hook-event attribution working.
@@ -1435,7 +1437,15 @@ export function useIpcEvents(): void {
                     worktreeId,
                     undefined,
                     undefined,
-                    shouldActivate ? undefined : { activate: false, recordInteraction: false }
+                    shouldActivate
+                      ? cwd
+                        ? { startupCwd: cwd }
+                        : undefined
+                      : {
+                          activate: false,
+                          recordInteraction: false,
+                          ...(cwd ? { startupCwd: cwd } : {})
+                        }
                   ))
             // Why: when an existing tab already owns this ptyId, we reuse it instead of
             // minting a new one — but the PTY env already carries a paneKey from main.
@@ -1602,11 +1612,18 @@ export function useIpcEvents(): void {
             ? {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
-                ...initialAgentTabViewModeProps(store.settings)
+                ...initialAgentTabViewModeProps(store.settings),
+                ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
             : shouldActivate
-              ? undefined
-              : { activate: false, recordInteraction: false }
+              ? data.cwd
+                ? { startupCwd: data.cwd }
+                : undefined
+              : {
+                  activate: false,
+                  recordInteraction: false,
+                  ...(data.cwd ? { startupCwd: data.cwd } : {})
+                }
           const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore

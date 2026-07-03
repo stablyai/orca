@@ -5,7 +5,10 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone
+  DropZone,
+  PaneExternalDropHandler,
+  PaneExternalDropResolver,
+  PaneExternalDropTarget
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -38,12 +41,25 @@ import {
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import { schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
-import { closeManagedPane, splitManagedPane } from './pane-split-close'
+import {
+  closeManagedPane,
+  detachManagedPaneForExternalMove,
+  splitManagedPane
+} from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
 
-export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
+export type {
+  PaneManagerOptions,
+  PaneStyleOptions,
+  ManagedPane,
+  DropZone,
+  PaneExternalDropTarget,
+  PaneExternalDropResolver,
+  PaneExternalDropHandler
+}
 
 export class PaneManager {
   private root: HTMLElement
@@ -143,6 +159,22 @@ export class PaneManager {
 
   closePane(paneId: number): void {
     closeManagedPane({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
+  detachPaneForExternalMove(paneId: number): boolean {
+    return detachManagedPaneForExternalMove({
       paneId,
       activePaneId: this.activePaneId,
       panes: this.panes,
@@ -290,6 +322,13 @@ export class PaneManager {
     resetPaneWebglTextureAtlases(this.panes.values())
   }
 
+  scheduleRevealRepaint(): void {
+    // Why: the settled-frame callback can fire after destroy(); repainting
+    // disposed panes could throw in attach and latch the global WebGL
+    // attach backoff, downgrading unrelated new panes to the DOM renderer.
+    schedulePaneRevealRepaint(() => (this.destroyed ? [] : this.panes.values()))
+  }
+
   suspendRendering(): void {
     this.renderingSuspended = true
     suspendPaneRendering(this.panes.values())
@@ -396,7 +435,9 @@ export class PaneManager {
         this.requestPaneReparentFrame(callback)
       },
       onLayoutChanged: this.options.onLayoutChanged,
-      onDragActiveChange: this.options.onPaneDragActiveChange
+      onDragActiveChange: this.options.onPaneDragActiveChange,
+      resolveExternalDropTarget: this.options.resolveExternalPaneDropTarget,
+      onExternalPaneDrop: this.options.onExternalPaneDrop
     }
   }
 

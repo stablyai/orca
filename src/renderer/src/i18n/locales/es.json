@@ -2586,7 +2586,8 @@
             "openLocalWorkspace": "Abre un espacio de trabajo local antes de reanudar una sesión.",
             "sessionQueued": "Sesión en cola",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, suéltala en un espacio de trabajo local."
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "Nueva división"
@@ -2903,7 +2904,9 @@
             "c35af53b73": "Iniciar sesión",
             "f19a63e7cd": "Inicia sesión para ver el uso",
             "5c938d39ac": "% semana",
+            "54e8d6bb2d": "% Fable",
             "d79c3362c4": "% 5h",
+            "a79c64f87e": "Fable",
             "8295903d17": "Reinicie los terminales Claude en vivo antes de continuar conversaciones antiguas después de cambiar.",
             "c98ea88392": "Ninguna otra cuenta",
             "9332ba8684": "Cambiar a",
@@ -3067,6 +3070,7 @@
             "6d6df77f41": "No hay datos disponibles",
             "7f7f208060": "Mensual",
             "252c096536": "Semanalmente",
+            "a79c64f87e": "Fable",
             "94038ad2fa": "Sesión",
             "2c35eca8d4": "No se puede recuperar el uso",
             "1292d4f2ee": "Indisponible",
@@ -4092,7 +4096,8 @@
           "hostAuthNeeded": "Autenticación requerida",
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
-          "sidebarRowMissing": "El destino ya no existe"
+          "sidebarRowMissing": "El destino ya no existe",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -5159,7 +5164,9 @@
           "8f1afdfbd8": "Ajuste de palabras diferencial",
           "4aa4d9fb73": "Ajuste líneas largas en editores de diferencias en lugar de requerir desplazamiento horizontal.",
           "bf16ef0af2": "Apagado",
-          "3f6892f307": "En"
+          "3f6892f307": "En",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "host local, 127.0.0.1, *.interno",
@@ -6363,7 +6370,11 @@
           "29af933cd5": "Nuevo destino SSH",
           "f2331ce599": "Editar destino SSH",
           "7c13f58c91": "Hasta restablecer",
-          "55c56cf2c7": "Tiempo de espera tras desconectar (segundos)"
+          "55c56cf2c7": "Tiempo de espera tras desconectar (segundos)",
+          "4a342f44c1": "Conexión avanzada",
+          "e9609ddca6": "Proxy, host de salto y reutilización de conexión",
+          "8c922dffba": "Reutilizar la conexión SSH para configurar más rápido",
+          "53e9aabfc0": "Usa multiplexación de OpenSSH cuando está disponible. Desactívalo para hosts con restricciones SSH personalizadas."
         },
         "TasksPane": {
           "3a72b9745e": "Elija qué proveedores de tareas aparecen en la página Tareas y en los accesos directos de la barra lateral.",
@@ -7408,7 +7419,9 @@
             "161a86a9da": "Confirmar antes de cerrar pestañas fijadas",
             "8e593f04fc": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8812,7 +8825,8 @@
             "98a79948b3": "Copiar",
             "b234ab25b4": "No se pudo copiar el archivo al portapapeles",
             "f9d7ca753d": "Copiar rutas",
-            "3161c4e425": "carpeta"
+            "3161c4e425": "carpeta",
+            "e887fa4b2e": "Abrir en terminal"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados de Git",
@@ -9559,7 +9573,8 @@
             "worktreeUnavailable": "Worktree is no longer available.",
             "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
             "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session."
+            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "localSessionSshWorkspaceUnsupported": "El historial de esta sesión está almacenado en este equipo, por lo que no se puede reanudar en un espacio de trabajo SSH. En su lugar, abre un espacio de trabajo local."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",

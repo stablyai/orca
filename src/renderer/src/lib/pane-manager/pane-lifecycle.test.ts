@@ -444,14 +444,32 @@ describe('openTerminal — Unicode 11 ordering', () => {
       }
     }
 
-    const fakeContainer = {
+    const fakePaneContainer = {
       appendChild: vi.fn(),
       addEventListener: vi.fn()
     } as unknown as HTMLDivElement
+    const fakeXtermContainer = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as HTMLDivElement
     const fakeTooltip = {} as unknown as HTMLDivElement
+    const fakeTerminalElement = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      querySelector: vi.fn(() => null),
+      classList: { contains: vi.fn(() => false) }
+    } as unknown as HTMLElement
+    vi.stubGlobal(
+      'MutationObserver',
+      vi.fn(function MutationObserver() {
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      })
+    )
 
     const terminal = {
-      element: null as HTMLElement | null,
+      element: fakeTerminalElement,
       textarea: null,
       cols: 80,
       rows: 24,
@@ -485,8 +503,8 @@ describe('openTerminal — Unicode 11 ordering', () => {
       leafId,
       stablePaneId: leafId,
       terminal,
-      container: fakeContainer,
-      xtermContainer: fakeContainer,
+      container: fakePaneContainer,
+      xtermContainer: fakeXtermContainer,
       linkTooltip: fakeTooltip,
       terminalGpuAcceleration: 'off',
       gpuRenderingEnabled: false,
@@ -507,19 +525,26 @@ describe('openTerminal — Unicode 11 ordering', () => {
       debugLabel: null
     }
 
-    openTerminal(pane)
+    try {
+      openTerminal(pane)
 
-    expect(events).toContain('loadAddon:unicode11')
-    expect(events).toContain('activeVersion=11')
+      expect(fakePaneContainer.appendChild).toHaveBeenCalledWith(fakeTooltip)
+      expect(fakeXtermContainer.appendChild).not.toHaveBeenCalled()
+      expect(fakeTerminalElement.appendChild).not.toHaveBeenCalled()
+      expect(events).toContain('loadAddon:unicode11')
+      expect(events).toContain('activeVersion=11')
 
-    const unicodeIdx = events.indexOf('activeVersion=11')
-    const writeIdx = events.indexOf('write')
-    if (writeIdx !== -1) {
-      expect(unicodeIdx).toBeLessThan(writeIdx)
+      const unicodeIdx = events.indexOf('activeVersion=11')
+      const writeIdx = events.indexOf('write')
+      if (writeIdx !== -1) {
+        expect(unicodeIdx).toBeLessThan(writeIdx)
+      }
+
+      const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
+      expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
+      expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
+    } finally {
+      vi.unstubAllGlobals()
     }
-
-    const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
-    expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
-    expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
   })
 })

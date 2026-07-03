@@ -252,6 +252,7 @@ function registerRuntimeWindowLifecycle(
       send('ui:createTerminal', {
         worktreeId,
         command: opts.command,
+        ...(opts.cwd ? { cwd: opts.cwd } : {}),
         ...(opts.env ? { env: opts.env } : {}),
         title: opts.title,
         ...(opts.presentation ? { presentation: opts.presentation } : {})
@@ -286,6 +287,7 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
+          ...(opts.cwd ? { cwd: opts.cwd } : {}),
           ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
           ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
