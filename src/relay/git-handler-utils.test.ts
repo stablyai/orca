@@ -3,9 +3,10 @@ import { parseStatusOutput } from './git-status-output-parser'
 import { isUnsupportedWorktreeListZError } from './git-handler-utils'
 
 describe('isUnsupportedWorktreeListZError', () => {
-  it('detects an English unknown-switch usage error', () => {
+  it('detects an unknown-switch usage error from stderr when the exit code is absent', () => {
+    // Isolates the regex fallback: no numeric code, so only the stderr text
+    // (a runner that dropped the exit code) can classify the rejection.
     const error = Object.assign(new Error('worktree list -z'), {
-      code: 129,
       stderr: "error: unknown switch `z'\nusage: git worktree list [<options>]\n"
     })
     expect(isUnsupportedWorktreeListZError(error)).toBe(true)
