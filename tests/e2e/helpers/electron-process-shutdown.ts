@@ -44,6 +44,18 @@ function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
   })
 }
 
+function describeAbnormalExit(proc: ChildProcess): string | null {
+  if (proc.exitCode === null && proc.signalCode === null) {
+    return null
+  }
+  if (proc.exitCode === 0 && proc.signalCode === null) {
+    return null
+  }
+  return `Electron app exited abnormally during e2e shutdown: code=${String(
+    proc.exitCode
+  )} signal=${String(proc.signalCode)}`
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timeout: NodeJS.Timeout | null = null
   try {
@@ -146,11 +158,20 @@ export async function closeElectronAppForE2E(app: ElectronApplication): Promise<
       const exited = await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
       if (!exited) {
         await forceKillProcessTree(proc)
+        return
+      }
+      const abnormalExit = describeAbnormalExit(proc)
+      if (abnormalExit) {
+        throw new Error(abnormalExit)
       }
     }
-  } catch {
+  } catch (error) {
+    const abnormalExit = proc ? describeAbnormalExit(proc) : null
     if (proc) {
       await forceKillProcessTree(proc)
+    }
+    if (abnormalExit) {
+      throw new Error(abnormalExit, { cause: error })
     }
   }
 }
