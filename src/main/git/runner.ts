@@ -1425,9 +1425,13 @@ export function redirectPortedHostnameToEnv(
   options: GlabExecOptions
 ): { args: string[]; options: GlabExecOptions } {
   const i = args.indexOf('--hostname')
-  if (i === -1 || i + 1 >= args.length) return { args, options }
+  if (i === -1 || i + 1 >= args.length) {
+    return { args, options }
+  }
   const host = args[i + 1]
-  if (!/^[^/\s]+:\d+$/.test(host)) return { args, options }
+  if (!/^[^/\s]+:\d+$/.test(host)) {
+    return { args, options }
+  }
   return {
     args: [...args.slice(0, i), ...args.slice(i + 2)],
     options: { ...options, env: { ...(options.env ?? process.env), GITLAB_HOST: host } }

@@ -459,10 +459,7 @@ describe('getGlabKnownHosts', () => {
       stderr: ''
     })
 
-    await expect(getGlabKnownHosts()).resolves.toEqual([
-      'gitlab.com',
-      'gitlab.example.com:8080'
-    ])
+    await expect(getGlabKnownHosts()).resolves.toEqual(['gitlab.com', 'gitlab.example.com:8080'])
   })
 
   it('caches per connection — the local probe does not satisfy a connection probe', async () => {

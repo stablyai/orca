@@ -76,9 +76,9 @@ describe('gitlab project ref parsing', () => {
     // different services. With only the GitLab port in known hosts, the Gitea
     // remote must NOT be classified as GitLab.
     const knownHosts = ['gitlab.com', 'gitea.example.com:8443']
-    expect(
-      parseGitLabProjectRef('http://gitea.example.com:8443/team/api.git', knownHosts)
-    ).toEqual({ host: 'gitea.example.com:8443', path: 'team/api' })
+    expect(parseGitLabProjectRef('http://gitea.example.com:8443/team/api.git', knownHosts)).toEqual(
+      { host: 'gitea.example.com:8443', path: 'team/api' }
+    )
     expect(
       parseGitLabProjectRef('http://gitea.example.com:3030/team/api.git', knownHosts)
     ).toBeNull()

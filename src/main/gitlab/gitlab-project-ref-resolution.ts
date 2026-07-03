@@ -263,9 +263,7 @@ async function isGlabConfiguredForRemoteHost(
   }
 }
 
-export async function getGlabKnownHosts(
-  connectionId?: string | null
-): Promise<readonly string[]> {
+export async function getGlabKnownHosts(connectionId?: string | null): Promise<readonly string[]> {
   const key = connectionCacheKey(connectionId)
   const cached = knownHostsCacheByConnection.get(key)
   if (cached) {
