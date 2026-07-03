@@ -1,9 +1,43 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import WebSocket from 'ws'
 
 type DebuggerListener = (...args: unknown[]) => void
 
-export function createMockWebContents() {
+type MockDebugger = {
+  isAttached: Mock<() => boolean>
+  attach: Mock<() => void>
+  detach: Mock<() => void>
+  sendCommand: Mock<
+    (
+      method?: string,
+      params?: Record<string, unknown>,
+      sessionId?: string
+    ) => Promise<Record<string, unknown>>
+  >
+  on: Mock<(event: string, handler: DebuggerListener) => void>
+  removeListener: Mock<(event: string, handler: DebuggerListener) => void>
+}
+
+// Why: annotate the return explicitly so the exported inferred type stays nameable under
+// composite declaration emit — otherwise the vi.fn() mocks leak @vitest/spy's Procedure
+// and tsgo reports TS2883.
+export type MockWebContents = {
+  webContents: {
+    debugger: MockDebugger
+    isDestroyed: () => boolean
+    focus: Mock<() => void>
+    printToPDF: Mock<() => Promise<Buffer>>
+    reload: Mock<() => void>
+    reloadIgnoringCache: Mock<() => void>
+    getTitle: Mock<() => string>
+    getURL: Mock<() => string>
+  }
+  listeners: Map<string, DebuggerListener[]>
+  destroy: () => void
+  emit: (event: string, ...args: unknown[]) => void
+}
+
+export function createMockWebContents(): MockWebContents {
   const listeners = new Map<string, DebuggerListener[]>()
   let debuggerAttached = false
   let destroyed = false
@@ -56,7 +90,6 @@ export function createMockWebContents() {
   }
 }
 
-export type MockWebContents = ReturnType<typeof createMockWebContents>
 export type SendCommandCall = [string, Record<string, unknown>?, string?]
 
 export function connect(endpoint: string): Promise<WebSocket> {
