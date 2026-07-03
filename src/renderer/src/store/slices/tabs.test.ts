@@ -851,6 +851,48 @@ describe('TabsSlice', () => {
   // on that group's active terminal tab. Without this, the bell lingers
   // until the tab is clicked a second time.
   describe('focusGroup', () => {
+    it('does not broadcast active-surface writes when the focused group is already current', () => {
+      const editorFileId = '/tmp/feature/src/main.ts'
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'editor-tab-1',
+        entityId: editorFileId,
+        label: 'main.ts'
+      })
+      const groupId = store.getState().groupsByWorktree[WT][0].id
+      store.setState({
+        activeWorktreeId: WT,
+        openFiles: [makeOpenFile({ id: editorFileId, worktreeId: WT })],
+        activeGroupIdByWorktree: { [WT]: groupId },
+        activeFileId: editorFileId,
+        activeFileIdByWorktree: { [WT]: editorFileId },
+        activeBrowserTabId: null,
+        activeBrowserTabIdByWorktree: { [WT]: null },
+        activeTabId: null,
+        activeTabIdByWorktree: { [WT]: null },
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              ...store.getState().groupsByWorktree[WT][0],
+              activeTabId: tab.id
+            }
+          ]
+        }
+      })
+      const before = store.getState()
+      const listener = vi.fn()
+      const unsubscribe = store.subscribe(listener)
+
+      store.getState().focusGroup(WT, groupId)
+      unsubscribe()
+
+      expect(listener).not.toHaveBeenCalled()
+      expect(store.getState().activeGroupIdByWorktree).toBe(before.activeGroupIdByWorktree)
+      expect(store.getState().activeFileIdByWorktree).toBe(before.activeFileIdByWorktree)
+      expect(store.getState().activeTabTypeByWorktree).toBe(before.activeTabTypeByWorktree)
+    })
+
     // Why: focusGroup is fired on every pointerdown within a split group's
     // chrome (onPointerDown + onFocusCapture in TabGroupPanel). Clearing the
     // tab-level bell here is fine — the user is now looking at this group.
@@ -2081,6 +2123,32 @@ describe('TabsSlice', () => {
         type: 'leaf',
         groupId: restoredGroup?.id
       })
+    })
+
+    it('keeps a sole terminal renderable after its PTY exits so a failed direnv does not strand the worktree', () => {
+      // Why (regression): a PR worktree's only terminal can die on startup (a
+      // failing .envrc/direnv). pty-connection keeps that dead pane mounted
+      // instead of bouncing to Landing; this asserts the supporting invariant —
+      // once a terminal is promoted to a unified tab, clearing its PTY does NOT
+      // make it an orphan, so reconcile still reports it renderable (count 1).
+      // If this regressed to 0, the worktree would auto-respawn or get torn
+      // down (setActiveWorktree(null)), reintroducing the Landing bounce.
+      const tab = store
+        .getState()
+        .createTab(WT, undefined, undefined, { pendingActivationSpawn: true })
+      store.getState().updateTabPtyId(tab.id, 'pty-died')
+      // First reconcile promotes the legacy runtime tab into the unified model.
+      expect(store.getState().reconcileWorktreeTabModel(WT).renderableTabCount).toBe(1)
+
+      // The newborn PTY exits: pty-connection clears the binding but keeps the pane.
+      store.getState().clearTabPtyId(tab.id, 'pty-died')
+      const clearedTab = store.getState().tabsByWorktree[WT]?.find((t) => t.id === tab.id)
+      expect(store.getState().ptyIdsByTabId[tab.id] ?? []).toEqual([])
+      expect(clearedTab?.ptyId ?? null).toBeNull()
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe(tab.id)
     })
   })
 })

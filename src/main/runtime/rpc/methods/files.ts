@@ -31,11 +31,33 @@ const ResolveTerminalPath = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing path text')),
+  terminal: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
+    .nullable()
+    .optional(),
   cwd: z
     .unknown()
     .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
     .nullable()
     .optional()
+})
+
+const TerminalArtifactFile = WorktreeSelector.extend({
+  grantId: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing terminal artifact grant')),
+  absolutePath: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing terminal artifact path'))
+})
+
+const TerminalArtifactFileWrite = TerminalArtifactFile.extend({
+  content: z
+    .unknown()
+    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
 
 const FileOpenDiff = FileOpen.extend({
@@ -76,6 +98,15 @@ const FileWriteBase64 = FileOpen.extend({
 
 const FileWriteBase64Chunk = FileWriteBase64.extend({
   append: z.boolean().optional()
+})
+
+const FileReadChunk = FileOpen.extend({
+  offset: z.number().int().nonnegative(),
+  length: z
+    .number()
+    .int()
+    .positive()
+    .max(512 * 1024)
 })
 
 const FileRename = WorktreeSelector.extend({
@@ -166,14 +197,65 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.resolveTerminalPath',
     params: ResolveTerminalPath,
-    handler: async (params, { runtime }) =>
-      runtime.resolveTerminalPath(params.worktree, params.pathText, params.cwd ?? null)
+    handler: async (params, { runtime, clientId }) =>
+      runtime.resolveTerminalPath(
+        params.worktree,
+        params.pathText,
+        params.cwd ?? null,
+        clientId,
+        params.terminal ?? null
+      )
+  }),
+  defineMethod({
+    name: 'files.readTerminalArtifact',
+    params: TerminalArtifactFile,
+    handler: async (params, { runtime, clientId }) =>
+      runtime.readTerminalArtifactFile(
+        params.worktree,
+        params.grantId,
+        params.absolutePath,
+        clientId
+      )
+  }),
+  defineMethod({
+    name: 'files.readTerminalArtifactPreview',
+    params: TerminalArtifactFile,
+    handler: async (params, { runtime, clientId }) =>
+      runtime.readTerminalArtifactPreview(
+        params.worktree,
+        params.grantId,
+        params.absolutePath,
+        clientId
+      )
+  }),
+  defineMethod({
+    name: 'files.writeTerminalArtifact',
+    params: TerminalArtifactFileWrite,
+    handler: async (params, { runtime, clientId }) =>
+      runtime.writeTerminalArtifactFile(
+        params.worktree,
+        params.grantId,
+        params.absolutePath,
+        params.content,
+        clientId
+      )
   }),
   defineMethod({
     name: 'files.readPreview',
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.readChunk',
+    params: FileReadChunk,
+    handler: async (params, { runtime }) =>
+      runtime.readFileExplorerChunk(
+        params.worktree,
+        params.relativePath,
+        params.offset,
+        params.length
+      )
   }),
   defineMethod({
     name: 'files.readDir',

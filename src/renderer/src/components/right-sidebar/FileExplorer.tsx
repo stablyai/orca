@@ -53,6 +53,8 @@ import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRow
 import { translate } from '@/i18n/i18n'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { createNewTerminalTab } from '@/components/terminal/terminal-tab-actions'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -78,6 +80,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRuntimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+  )
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
@@ -99,6 +104,18 @@ function FileExplorerFiles(): React.JSX.Element {
   const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
   const worktreePath = activeWorktree?.path ?? null
+  const runtimeDownloadContext = useMemo(
+    () =>
+      activeRuntimeEnvironmentId && activeWorktreeId && worktreePath
+        ? {
+            settings: { activeRuntimeEnvironmentId },
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId: activeRepo?.connectionId ?? undefined
+          }
+        : null,
+    [activeRepo?.connectionId, activeRuntimeEnvironmentId, activeWorktreeId, worktreePath]
+  )
   const isFilesViewActive = explorerView === 'files'
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView,
@@ -463,6 +480,7 @@ function FileExplorerFiles(): React.JSX.Element {
   }, [])
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
+    runtimeEnvironmentId: activeRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
@@ -559,6 +577,15 @@ function FileExplorerFiles(): React.JSX.Element {
       )
     },
     [activeRepo, openModal]
+  )
+  const handleOpenInTerminal = useCallback(
+    (node: TreeNode) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      createNewTerminalTab(activeWorktreeId, undefined, { startupCwd: node.path })
+    },
+    [activeWorktreeId]
   )
 
   if (!worktreePath) {
@@ -716,6 +743,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 flashingPath={flashingPath}
                 deleteShortcutLabel={deleteShortcutLabel}
                 connectionId={activeRepo?.connectionId ?? null}
+                runtimeDownloadContext={runtimeDownloadContext}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onContextMenuSelect={preserveSelectionForContextMenu}
@@ -725,6 +753,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
                 canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
+                onOpenInTerminal={handleOpenInTerminal}
                 onRequestDelete={handleContextMenuDelete}
                 onCollapseFolderSubtree={handleCollapseFolderSubtree}
                 onFindInFolder={handleFindInFolder}

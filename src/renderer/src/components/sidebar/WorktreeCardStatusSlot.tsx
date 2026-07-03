@@ -1,6 +1,7 @@
 import React from 'react'
 import { Bell, GitBranch } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { FilledBellIcon } from './WorktreeCardHelpers'
@@ -20,13 +21,16 @@ type WorktreeCardStatusSlotProps = {
   prDisplay?: WorktreeCardPrDisplay | null
   newCardStyle?: boolean
   hasBranchIdentity?: boolean
+  branchIdentityLabel?: string
   className?: string
 }
 
 const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
 // Why: a missing review display can also mean provider state is unavailable,
-// so the passive label names the branch cue without claiming no review exists.
-const BRANCH_STATUS_LABEL = 'Branch'
+// so the passive label names the identity cue without claiming no review exists.
+function getDefaultBranchIdentityLabel(): string {
+  return translate('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
+}
 // Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
 // the centered activity dots in the shared status column.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
@@ -61,15 +65,6 @@ function overlayNewCardUnreadStatus(
 
 function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
-  if (review.status === 'failure') {
-    return `${label} checks: Failed`
-  }
-  if (review.status === 'pending') {
-    return `${label} checks: Pending`
-  }
-  if (review.status === 'success') {
-    return `${label} checks: Passing`
-  }
   if (review.state === 'merged') {
     return `${label}: Merged`
   }
@@ -78,6 +73,15 @@ function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   }
   if (review.state === 'draft') {
     return `${label}: Draft`
+  }
+  if (review.status === 'failure') {
+    return `${label} checks: Failed`
+  }
+  if (review.status === 'pending') {
+    return `${label} checks: Pending`
+  }
+  if (review.status === 'success') {
+    return `${label} checks: Passing`
   }
   return `${label}: Open`
 }
@@ -93,6 +97,7 @@ export function WorktreeCardStatusSlot({
   prDisplay = null,
   newCardStyle = false,
   hasBranchIdentity = false,
+  branchIdentityLabel,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
@@ -112,10 +117,14 @@ export function WorktreeCardStatusSlot({
     canShowReviewStatus && prDisplay
       ? getReviewStatusTooltip(prDisplay)
       : canShowBranchStatus
-        ? BRANCH_STATUS_LABEL
+        ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
         : statusLabel
   const passiveStatusTooltip =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
+  // Why: working and permission already own the new-card status lane, but
+  // unread state should still surface in tooltip/sr-only copy and reappear afterward.
+  const showNewCardUnreadAlert =
+    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
@@ -168,7 +177,7 @@ export function WorktreeCardStatusSlot({
   }
 
   if (!unreadActionEnabled) {
-    return overlayNewCardUnreadStatus(passiveStatus, newCardStyle && isUnread && showStatus)
+    return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'

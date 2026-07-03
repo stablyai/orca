@@ -55,6 +55,36 @@ describe('getRuntimeEnvironmentIdForRepo', () => {
     ).toBe('focused-runtime')
   })
 
+  it('uses the focused host row when duplicate repo ids exist', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBe('owner-runtime')
+  })
+
+  it('does not silently choose a duplicate repo row when the focused host does not match', () => {
+    expect(
+      getRuntimeEnvironmentIdForRepo(
+        {
+          settings: { activeRuntimeEnvironmentId: 'other-runtime' },
+          repos: [
+            { id: 'repo-1', connectionId: null, executionHostId: 'local' },
+            { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }
+          ]
+        },
+        'repo-1'
+      )
+    ).toBe('other-runtime')
+  })
+
   it('returns settings scoped to an explicit local repo owner', () => {
     expect(
       getSettingsForRepoRuntimeOwner(

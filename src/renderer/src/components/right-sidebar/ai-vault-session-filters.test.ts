@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
-  deriveAiVaultWorkspaceScopePaths,
   filterAiVaultSessions,
   folderLabel,
   groupAiVaultSessions,
   isAiVaultSessionFilterQueryTooLarge,
   parseVaultQuery
 } from './ai-vault-session-filters'
+import {
+  deriveAiVaultScopeSessionPaths,
+  deriveAiVaultWorkspaceScopePaths
+} from './ai-vault-scope-paths'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -251,6 +254,62 @@ describe('filterAiVaultSessions', () => {
       })
     ).toEqual([])
   })
+
+  it('filters project scope by the resolved active project key', () => {
+    const projectSession = { ...baseSession, id: 'claude:project', cwd: '/repo/project' }
+    const otherSession = { ...baseSession, id: 'claude:other', cwd: '/repo/other' }
+    const sessionProjectById = new Map([
+      [projectSession.id, { kind: 'repo' as const, key: 'project:orca', label: 'Orca' }],
+      [otherSession.id, { kind: 'repo' as const, key: 'project:other', label: 'Other' }]
+    ])
+
+    expect(
+      filterAiVaultSessions([projectSession, otherSession], {
+        query: '',
+        agents: ['claude'],
+        scope: 'project',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        activeProjectKey: 'project:orca',
+        sessionProjectById,
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['claude:project'])
+  })
+
+  it('does not show all sessions for project scope without an active project key', () => {
+    expect(
+      filterAiVaultSessions([baseSession], {
+        query: '',
+        agents: ['claude'],
+        scope: 'project',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        activeProjectKey: null,
+        hideEmptySessions: true
+      })
+    ).toEqual([])
+  })
+
+  it('matches repo: queries against resolved project labels before folder fallback', () => {
+    const sessionProjectById = new Map([
+      [baseSession.id, { kind: 'repo' as const, key: 'project:orca', label: 'Canonical Orca' }]
+    ])
+    const projectLabelByKey = new Map([['project:orca', 'Canonical Orca']])
+
+    expect(
+      filterAiVaultSessions([baseSession], {
+        query: 'repo:canonical',
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePaths: [],
+        sessionProjectById,
+        projectLabelByKey,
+        hideEmptySessions: true
+      }).map((session) => session.id)
+    ).toEqual(['claude:1'])
+  })
 })
 
 describe('deriveAiVaultWorkspaceScopePaths', () => {
@@ -359,6 +418,176 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
   })
 })
 
+describe('deriveAiVaultScopeSessionPaths', () => {
+  it('adds same-repo sibling worktrees on top of the workspace paths', () => {
+    expect(
+      deriveAiVaultScopeSessionPaths(
+        {
+          id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+          repoId: 'repo1',
+          path: '/Users/ada/workspaces/orca/fix-agent-history',
+          priorWorktreeIds: []
+        },
+        [
+          {
+            id: 'repo1::/Users/ada/workspaces/orca/fix-agent-history',
+            repoId: 'repo1',
+            path: '/Users/ada/workspaces/orca/fix-agent-history'
+          },
+          {
+            id: 'repo1::/Users/ada/workspaces/orca/sibling',
+            repoId: 'repo1',
+            path: '/Users/ada/workspaces/orca/sibling'
+          },
+          {
+            id: 'repo2::/Users/ada/workspaces/other/elsewhere',
+            repoId: 'repo2',
+            path: '/Users/ada/workspaces/other/elsewhere'
+          }
+        ]
+      )
+    ).toEqual([
+      '/Users/ada/workspaces/orca/fix-agent-history',
+      '/Users/ada/workspaces/orca/sibling'
+    ])
+  })
+
+  it('returns no paths without an active worktree', () => {
+    expect(deriveAiVaultScopeSessionPaths(null, [])).toEqual([])
+  })
+
+  it('adds active project setup paths across repos', () => {
+    expect(
+      deriveAiVaultScopeSessionPaths(
+        {
+          id: 'repo1::/Users/ada/workspaces/orca/app',
+          repoId: 'repo1',
+          path: '/Users/ada/workspaces/orca/app',
+          priorWorktreeIds: []
+        },
+        [
+          {
+            id: 'repo1::/Users/ada/workspaces/orca/app',
+            repoId: 'repo1',
+            path: '/Users/ada/workspaces/orca/app'
+          },
+          {
+            id: 'repo2::/Users/ada/workspaces/orca/docs',
+            repoId: 'repo2',
+            path: '/Users/ada/workspaces/orca/docs'
+          }
+        ],
+        {
+          activeProjectKey: 'project:orca',
+          projectHostSetupProjection: {
+            projects: [
+              {
+                id: 'orca',
+                displayName: 'Orca',
+                badgeColor: '#2563eb',
+                sourceRepoIds: ['repo1', 'repo2'],
+                createdAt: 1,
+                updatedAt: 1
+              }
+            ],
+            setups: [
+              {
+                id: 'setup-1',
+                projectId: 'orca',
+                hostId: 'local',
+                repoId: 'repo1',
+                displayName: 'App',
+                path: '/Users/ada/workspaces/orca/app',
+                setupState: 'ready',
+                setupMethod: 'imported-existing-folder',
+                createdAt: 1,
+                updatedAt: 1
+              },
+              {
+                id: 'setup-2',
+                projectId: 'orca',
+                hostId: 'local',
+                repoId: 'repo2',
+                displayName: 'Docs',
+                path: '/Users/ada/workspaces/orca/docs',
+                setupState: 'ready',
+                setupMethod: 'imported-existing-folder',
+                createdAt: 1,
+                updatedAt: 1
+              }
+            ]
+          }
+        }
+      )
+    ).toEqual(['/Users/ada/workspaces/orca/app', '/Users/ada/workspaces/orca/docs'])
+  })
+
+  it('keeps live worktree paths when another setup shares the repo id', () => {
+    expect(
+      deriveAiVaultScopeSessionPaths(
+        {
+          id: 'repo1::/Users/ada/workspaces/orca/app',
+          repoId: 'repo1',
+          path: '/Users/ada/workspaces/orca/app',
+          priorWorktreeIds: []
+        },
+        [
+          {
+            id: 'repo2::/Users/ada/workspaces/orca/docs-worktree',
+            repoId: 'repo2',
+            path: '/Users/ada/workspaces/orca/docs-worktree'
+          }
+        ],
+        {
+          activeProjectKey: 'project:orca',
+          projectHostSetupProjection: {
+            projects: [
+              {
+                id: 'orca',
+                displayName: 'Orca',
+                badgeColor: '#2563eb',
+                sourceRepoIds: ['repo1', 'repo2'],
+                createdAt: 1,
+                updatedAt: 1
+              }
+            ],
+            setups: [
+              {
+                id: 'setup-1',
+                projectId: 'orca',
+                hostId: 'local',
+                repoId: 'repo2',
+                displayName: 'Docs',
+                path: '/Users/ada/workspaces/orca/docs',
+                setupState: 'ready',
+                setupMethod: 'imported-existing-folder',
+                createdAt: 1,
+                updatedAt: 1
+              },
+              {
+                id: 'setup-2',
+                projectId: 'other',
+                hostId: 'local',
+                repoId: 'repo2',
+                displayName: 'Other',
+                path: '/Users/ada/workspaces/other',
+                setupState: 'ready',
+                setupMethod: 'imported-existing-folder',
+                createdAt: 1,
+                updatedAt: 1
+              }
+            ]
+          }
+        }
+      )
+    ).toEqual([
+      '/Users/ada/workspaces/orca/app',
+      '/Users/ada/workspaces/orca/docs-worktree',
+      '/Users/ada/workspaces/orca/docs'
+    ])
+  })
+})
+
 describe('isAiVaultSessionFilterQueryTooLarge', () => {
   it('counts UTF-8 bytes rather than UTF-16 code units', () => {
     expect(
@@ -382,6 +611,33 @@ describe('groupAiVaultSessions', () => {
     expect(groupAiVaultSessions(sessions, 'agent').map((group) => group.label)).toEqual([
       'Claude',
       'Codex'
+    ])
+  })
+
+  it('groups sibling worktree sessions by project label when resolved', () => {
+    const sessions: AiVaultSession[] = [
+      { ...baseSession, id: 'claude:1', cwd: '/repo/main' },
+      { ...baseSession, id: 'codex:2', agent: 'codex', cwd: '/repo/worktree' }
+    ]
+    const sessionProjectById = new Map(
+      sessions.map((session) => [
+        session.id,
+        { kind: 'repo' as const, key: 'project:orca', label: 'Orca' }
+      ])
+    )
+    const projectLabelByKey = new Map([['project:orca', 'Canonical Orca']])
+
+    expect(
+      groupAiVaultSessions(sessions, 'project', {
+        sessionProjectById,
+        projectLabelByKey
+      })
+    ).toEqual([{ key: 'project:orca', label: 'Canonical Orca', sessions }])
+  })
+
+  it('falls back to folder grouping when project metadata is unavailable', () => {
+    expect(groupAiVaultSessions([baseSession], 'project')).toEqual([
+      { key: '/users/ada/repo/app', label: 'repo/app', sessions: [baseSession] }
     ])
   })
 })

@@ -1,4 +1,4 @@
-import net from 'net'
+import net from 'node:net'
 import { RuntimeClientError } from './runtime-client-error'
 
 export async function connectMacOSProviderSocket(

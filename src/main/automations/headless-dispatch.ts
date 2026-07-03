@@ -11,6 +11,8 @@ export type HeadlessAutomationDispatchLaunch = {
   workspaceId: string
   workspaceDisplayName?: string | null
   terminalSessionId: string | null
+  terminalPaneKey?: string | null
+  terminalPtyId?: string | null
   completion?: Promise<{
     status: 'completed' | 'dispatch_failed'
     outputSnapshot?: AutomationRunOutputSnapshot | null

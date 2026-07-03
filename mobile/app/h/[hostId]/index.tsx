@@ -44,6 +44,7 @@ import {
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
+import { NewWorkspaceFab, FAB_SIZE } from '../../../src/components/NewWorkspaceFab'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -83,6 +84,7 @@ import {
   type Worktree
 } from '../../../src/worktree/workspace-list-sections'
 import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
+import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
@@ -90,6 +92,8 @@ import {
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../../../src/worktree/workspace-list-picker-options'
 import type { DesktopStatus, RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
+import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
+import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
@@ -168,6 +172,9 @@ export function HostScreen({
     hideDefaultBranch: false
   })
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
+  const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
+    DEFAULT_MOBILE_WORKSPACE_STATUSES
+  )
   // displayName → repo id, populated from repo.list. The filter model keys on
   // repo ids (desktop's PersistedUIState), but the section headers/rows key on
   // displayName, so we bridge the two here.
@@ -198,6 +205,7 @@ export function HostScreen({
     hideDefaultBranch: false,
     filterRepoIds: [],
     collapsedGroups: [],
+    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES,
     workspaceHostScope: undefined,
     visibleWorkspaceHostIds: undefined
   })
@@ -210,10 +218,11 @@ export function HostScreen({
       hideDefaultBranch: filters.hideDefaultBranch,
       filterRepoIds: [...filters.filterRepoIds],
       collapsedGroups: [...collapsedGroups],
+      workspaceStatuses,
       workspaceHostScope: viewStateRef.current.workspaceHostScope,
       visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
     }
-  }, [groupMode, sortMode, filters, collapsedGroups])
+  }, [groupMode, sortMode, filters, collapsedGroups, workspaceStatuses])
 
   // Apply a MobileViewState (e.g. from a desktop ui.get) onto the individual
   // states and the snapshot ref in one shot.
@@ -221,6 +230,7 @@ export function HostScreen({
     viewStateRef.current = next
     setGroupMode(next.groupMode)
     setSortMode(next.sortMode)
+    setWorkspaceStatuses(next.workspaceStatuses)
     setCollapsedGroups(new Set(next.collapsedGroups))
     setFilters({
       filterRepoIds: new Set(next.filterRepoIds),
@@ -701,9 +711,12 @@ export function HostScreen({
       // Highlight the row immediately; the next worktree.ps poll confirms it.
       setOptimisticActiveWorktreeId(item.worktreeId)
       if (client && connState === 'connected') {
+        // Why: opening a mobile session should hydrate host-owned tabs without
+        // pulling other paired clients, especially desktop, into this worktree.
         void client
           .sendRequest('worktree.activate', {
-            worktree: `id:${item.worktreeId}`
+            worktree: `id:${item.worktreeId}`,
+            notifyClients: false
           })
           .catch(() => null)
       }
@@ -756,6 +769,8 @@ export function HostScreen({
     count += filters.filterRepoIds.size
     return count
   }, [filters])
+  const selectedSortLabel =
+    SORT_OPTIONS.find((option) => option.value === sortMode)?.label ?? 'Recent'
 
   const handleGroupChange = useCallback(
     (value: MobileGroupMode) => {
@@ -787,12 +802,12 @@ export function HostScreen({
   }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeId])
 
   const toggleCollapsed = useCallback(
-    (title: string) => {
+    (key: string) => {
       const next = new Set(viewStateRef.current.collapsedGroups)
-      if (next.has(title)) {
-        next.delete(title)
+      if (next.has(key)) {
+        next.delete(key)
       } else {
-        next.add(title)
+        next.add(key)
       }
       persistViewSettings({ collapsedGroups: [...next] })
     },
@@ -810,7 +825,8 @@ export function HostScreen({
     repoColorsByName,
     collapsedGroups,
     workspaceHostScope: viewStateRef.current.workspaceHostScope,
-    visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds
+    visibleWorkspaceHostIds: viewStateRef.current.visibleWorkspaceHostIds,
+    workspaceStatuses
   })
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
 
@@ -927,19 +943,19 @@ export function HostScreen({
               </Pressable>
 
               <Pressable
-                style={[styles.sortButton, styles.embeddedModeButton]}
+                style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowSortPicker(true)}
                 accessibilityRole="button"
-                accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}`}
+                accessibilityLabel={`Sort by ${selectedSortLabel}`}
               >
                 <SlidersHorizontal size={14} color={colors.textSecondary} />
                 <Text style={styles.sortLabel} numberOfLines={1}>
-                  {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+                  {selectedSortLabel}
                 </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.groupButton, styles.embeddedModeButton]}
+                style={[styles.modeButton, styles.embeddedModeButton]}
                 onPress={() => setShowGroupPicker(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Group workspaces"
@@ -1040,16 +1056,16 @@ export function HostScreen({
               </Text>
             </Pressable>
 
-            <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
+            <Pressable style={styles.modeButton} onPress={() => setShowSortPicker(true)}>
               <SlidersHorizontal size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel}>
-                {SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Recent'}
+              <Text style={styles.sortLabel} numberOfLines={1}>
+                {selectedSortLabel}
               </Text>
             </Pressable>
 
-            <Pressable style={styles.groupButton} onPress={() => setShowGroupPicker(true)}>
+            <Pressable style={styles.modeButton} onPress={() => setShowGroupPicker(true)}>
               <Layers size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel}>
+              <Text style={styles.sortLabel} numberOfLines={1}>
                 {groupMode === 'none'
                   ? 'Group'
                   : groupMode === 'workspaceStatus'
@@ -1081,17 +1097,6 @@ export function HostScreen({
               <List
                 size={16}
                 color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-              />
-            </Pressable>
-
-            <Pressable
-              style={styles.newButton}
-              onPress={openNewWorktreeModal}
-              disabled={connState !== 'connected'}
-            >
-              <Plus
-                size={16}
-                color={connState === 'connected' ? colors.textPrimary : colors.textMuted}
               />
             </Pressable>
 
@@ -1160,12 +1165,11 @@ export function HostScreen({
         </View>
       )}
 
-      {/* Worktree list */}
       {sections.length > 0 && (
         <SectionList
           ref={sectionListRef}
           sections={sections}
-          keyExtractor={(w) => w.worktreeId}
+          keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
           stickySectionHeadersEnabled={false}
           onScrollToIndexFailed={onScrollToIndexFailed}
           // Why: edge-to-edge — the list scrolls under the system nav bar
@@ -1173,7 +1177,9 @@ export function HostScreen({
           // above the Samsung 3-button nav / iOS home indicator.
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: spacing.lg + insets.bottom },
+            // Phone shows a floating "+" button bottom-right; reserve room so the
+            // last row stays tappable above it. Embedded sidebars keep the toolbar +.
+            { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
@@ -1181,17 +1187,14 @@ export function HostScreen({
             if (!section.title) {
               return null
             }
-            const isCollapsed = collapsedGroups.has(section.title)
-            const rawSection = rawSections.find((s) => s.title === section.title)
+            const isCollapsed = collapsedGroups.has(section.key)
+            const rawSection = rawSections.find((s) => s.key === section.key)
             const count = rawSection?.data.length ?? 0
             const repoSectionColor =
               groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
             const repoSectionIcon = groupMode === 'repo' ? repoIconsByName.get(section.title) : null
             return (
-              <Pressable
-                style={styles.sectionHeader}
-                onPress={() => toggleCollapsed(section.title)}
-              >
+              <Pressable style={styles.sectionHeader} onPress={() => toggleCollapsed(section.key)}>
                 {isCollapsed ? (
                   <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
                 ) : (
@@ -1226,12 +1229,19 @@ export function HostScreen({
               hideRepo={groupMode === 'repo'}
               onPress={openWorktreeSession}
               onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
+              onToggleLineage={(row) =>
+                toggleCollapsed(getMobileWorkspaceLineageGroupKey(row.worktreeId))
+              }
             />
           )}
         />
       )}
 
-      {/* Sort picker modal */}
+      {/* Floating "new workspace" button — phone only; embedded sidebars keep the toolbar +. */}
+      {!embedded && (
+        <NewWorkspaceFab onPress={openNewWorktreeModal} disabled={connState !== 'connected'} />
+      )}
+
       <PickerModal
         visible={showSortPicker}
         title="Sort By"
@@ -1241,7 +1251,6 @@ export function HostScreen({
         onClose={() => setShowSortPicker(false)}
       />
 
-      {/* Group picker modal */}
       <PickerModal
         visible={showGroupPicker}
         title="Group By"
@@ -1251,7 +1260,6 @@ export function HostScreen({
         onClose={() => setShowGroupPicker(false)}
       />
 
-      {/* Filter modal — matches desktop's Status + Repositories dropdown */}
       <BottomDrawer visible={showFilterModal} onClose={() => setShowFilterModal(false)}>
         <View style={styles.filterModalHeader}>
           <Text style={styles.filterModalTitle}>Filter</Text>
@@ -1564,21 +1572,18 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: colors.textPrimary
   },
-  sortButton: {
+  modeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  groupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexShrink: 1,
+    minWidth: 0,
     gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
   sortLabel: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 12,
     color: colors.textSecondary
   },
@@ -1601,9 +1606,6 @@ const styles = StyleSheet.create({
   },
   toolbarIconDisabled: {
     opacity: 0.6
-  },
-  newButton: {
-    padding: spacing.xs
   },
   searchToggle: {
     padding: spacing.xs

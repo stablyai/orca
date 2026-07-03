@@ -93,6 +93,33 @@ describe('insertRichMarkdownImageFromPath', () => {
     )
   })
 
+  it('inserts markdown-safe image src values for screenshot filenames with spaces', async () => {
+    vi.mocked(importExternalPathsToRuntime).mockResolvedValue({
+      results: [
+        {
+          status: 'imported',
+          destPath: '/repo/Screenshot 2026-06-22 at 3.37.19 PM copy.png'
+        }
+      ]
+    } as never)
+    const { editor, insertContentAt } = editorWithRunResult(true)
+
+    await insertRichMarkdownImageFromPath({
+      editor: editor as never,
+      filePath: '/repo/note.md',
+      sourcePath: '/tmp/image.png',
+      worktreeId: 'wt-1',
+      insertPos: 4
+    })
+
+    expect(insertContentAt).toHaveBeenCalledWith(4, {
+      type: 'image',
+      attrs: {
+        src: 'Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png'
+      }
+    })
+  })
+
   it('skips editor mutation when the caller rejects the stale target after import', async () => {
     const { editor, chain } = editorWithRunResult(true)
 

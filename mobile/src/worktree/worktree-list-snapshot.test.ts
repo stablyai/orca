@@ -29,6 +29,7 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     repo: 'orca',
     branch: 'feature/mobile-lag',
     displayName: 'manta',
+    workspaceStatus: 'in-progress',
     path: worktreePath,
     liveTerminalCount: 1,
     hasAttachedPty: true,
@@ -75,6 +76,37 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual([worktree()], [worktree({ hasHostSidebarActivity: true })])).toBe(
       false
     )
+  })
+
+  it('detects workspace status changes', () => {
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ workspaceStatus: 'in-progress' })],
+        [worktree({ workspaceStatus: 'in-review' })]
+      )
+    ).toBe(false)
+  })
+
+  it('detects manual order changes', () => {
+    expect(
+      areWorktreeListsEqual(
+        [worktree({ manualOrder: 10, sortOrder: 1 })],
+        [worktree({ manualOrder: 20, sortOrder: 1 })]
+      )
+    ).toBe(false)
+  })
+
+  it('detects lineage changes', () => {
+    const base = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-a' })
+    const changedParent = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-b' })
+    const changedChildren = worktree({
+      worktreeId: 'child',
+      parentWorktreeId: 'parent-a',
+      childWorktreeIds: ['grandchild']
+    })
+
+    expect(areWorktreeListsEqual([base], [changedParent])).toBe(false)
+    expect(areWorktreeListsEqual([base], [changedChildren])).toBe(false)
   })
 
   it('detects agent status changes', () => {

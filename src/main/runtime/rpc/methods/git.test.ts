@@ -55,6 +55,32 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('forwards upstream-negative-cache bypass for status requests', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.status', {
+        worktree: 'id:wt-1',
+        bypassEffectiveUpstreamNegativeCache: true
+      })
+    )
+
+    expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', {
+      bypassEffectiveUpstreamNegativeCache: true
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { entries: [] }
+    })
+  })
+
   it('returns ignored paths for selected explorer rows', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -76,6 +102,35 @@ describe('git RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: ['dist/bundle.js']
+    })
+  })
+
+  it('returns submodule status for a selected worktree area', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitSubmoduleStatus: vi.fn().mockResolvedValue({
+        entries: [{ path: 'lib.ts', status: 'modified', area: 'unstaged' }],
+        conflictOperation: 'unknown'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.submoduleStatus', {
+        worktree: 'id:wt-1',
+        submodulePath: 'vendor/lib',
+        area: 'staged'
+      })
+    )
+
+    expect(runtime.getRuntimeGitSubmoduleStatus).toHaveBeenCalledWith(
+      'id:wt-1',
+      'vendor/lib',
+      'staged'
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { entries: [{ path: 'lib.ts' }] }
     })
   })
 

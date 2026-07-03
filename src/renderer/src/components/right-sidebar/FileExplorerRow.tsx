@@ -20,6 +20,7 @@ import {
   Loader2,
   Pencil,
   Search,
+  SquareTerminal,
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -50,6 +51,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
+import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -270,6 +272,7 @@ type FileExplorerRowProps = {
   isIgnored: boolean
   deleteShortcutLabel: string
   connectionId?: string | null
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
   canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
@@ -283,6 +286,7 @@ type FileExplorerRowProps = {
   onDuplicate: (node: TreeNode) => void
   onAddFolderAsProject: () => void
   canAddAsProject: boolean
+  onOpenInTerminal: () => void
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -302,14 +306,19 @@ export function shouldShowFindInFolderAction(node: TreeNode): boolean {
   return node.isDirectory
 }
 
+export function shouldShowOpenInTerminalAction(node: TreeNode): boolean {
+  return node.isDirectory
+}
+
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
-  connectionId?: string | null
+  connectionId?: string | null,
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
 ): boolean {
   // Why: Desktop-only because download depends on Electron's native save dialog.
   return (
     !node.isDirectory &&
-    Boolean(connectionId) &&
+    Boolean(connectionId || runtimeDownloadContext) &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
 }
@@ -328,9 +337,18 @@ export function shouldShowCopyFileAction(
   )
 }
 
-export async function downloadRemoteFile(node: TreeNode, connectionId: string): Promise<void> {
+export async function downloadRemoteFile(
+  node: TreeNode,
+  connectionIdOrRuntimeContext: string | RuntimeFileOperationArgs
+): Promise<void> {
   try {
-    const result = await window.api.fs.downloadFile({ filePath: node.path, connectionId })
+    const result =
+      typeof connectionIdOrRuntimeContext === 'string'
+        ? await window.api.fs.downloadFile({
+            filePath: node.path,
+            connectionId: connectionIdOrRuntimeContext
+          })
+        : await downloadRuntimeFile(connectionIdOrRuntimeContext, node.path, node.name)
     // Why: Suppress toasts when the user cancels the native save dialog per design.
     if (result.canceled) {
       return
@@ -396,6 +414,7 @@ export function FileExplorerRow({
   isIgnored,
   deleteShortcutLabel,
   connectionId,
+  runtimeDownloadContext,
   canCollapseFolderSubtree,
   targetDir,
   targetDepth,
@@ -409,6 +428,7 @@ export function FileExplorerRow({
   onDuplicate,
   onAddFolderAsProject,
   canAddAsProject,
+  onOpenInTerminal,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -426,7 +446,11 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const showRemoteDownloadAction = shouldShowRemoteDownloadAction(node, connectionId)
+  const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
+    node,
+    connectionId,
+    runtimeDownloadContext
+  )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
@@ -450,11 +474,12 @@ export function FileExplorerRow({
     }
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
-    if (!connectionId) {
+    const downloadTarget = connectionId || runtimeDownloadContext
+    if (!downloadTarget) {
       return
     }
-    void downloadRemoteFile(node, connectionId)
-  }, [connectionId, node])
+    void downloadRemoteFile(node, downloadTarget)
+  }, [connectionId, node, runtimeDownloadContext])
   const handleCopyFile = useCallback(() => {
     void copyFileToOsClipboard(node, connectionId)
   }, [connectionId, node])
@@ -675,6 +700,15 @@ export function FileExplorerRow({
             {translate(
               'auto.components.right.sidebar.FileExplorerRow.1bb9be455c',
               'Add as Project...'
+            )}
+          </ContextMenuItem>
+        )}
+        {shouldShowOpenInTerminalAction(node) && (
+          <ContextMenuItem onSelect={onOpenInTerminal}>
+            <SquareTerminal />
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.e887fa4b2e',
+              'Open in Terminal'
             )}
           </ContextMenuItem>
         )}

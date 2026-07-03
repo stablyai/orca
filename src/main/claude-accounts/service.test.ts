@@ -1099,4 +1099,195 @@ describe('ClaudeAccountService credential capture', () => {
       vi.doUnmock('node:child_process')
     }
   })
+
+  it('cancels an in-flight Claude account add', async () => {
+    vi.resetModules()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => child)
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      let settings = {
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: null,
+        activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      }
+      const store = {
+        getSettings: vi.fn(() => settings),
+        updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+          settings = { ...settings, ...updates }
+          return settings
+        })
+      }
+      const runtimeAuth = {
+        clearLastWrittenCredentialsJson: vi.fn(),
+        forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+      }
+      const rateLimits = {
+        evictInactiveClaudeCache: vi.fn(),
+        refreshForClaudeAccountChange: vi.fn()
+      }
+      const service = new ClaudeAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeAuth as never
+      )
+
+      const addPromise = service.addAccount()
+      await vi.waitFor(() => {
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+      })
+
+      expect(service.cancelPendingLogin()).toBe(true)
+      await expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(service.cancelPendingLogin()).toBe(false)
+      expect(settings.claudeManagedAccounts).toEqual([])
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
+  it('honors cancel before Claude login command starts', async () => {
+    setPlatform('linux')
+    vi.resetModules()
+    let releaseKeychainRead: (value: string | null) => void = () => {}
+    vi.mocked(readActiveClaudeKeychainCredentials).mockReturnValue(
+      new Promise<string | null>((resolve) => {
+        releaseKeychainRead = resolve
+      })
+    )
+    const spawnMock = vi.fn()
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      let settings = {
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: null,
+        activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      }
+      const store = {
+        getSettings: vi.fn(() => settings),
+        updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+          settings = { ...settings, ...updates }
+          return settings
+        })
+      }
+      const runtimeAuth = {
+        clearLastWrittenCredentialsJson: vi.fn(),
+        forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+      }
+      const rateLimits = {
+        evictInactiveClaudeCache: vi.fn(),
+        refreshForClaudeAccountChange: vi.fn()
+      }
+      const service = new ClaudeAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeAuth as never
+      )
+
+      const addPromise = service.addAccount()
+      await vi.waitFor(() => {
+        expect(readActiveClaudeKeychainCredentials).toHaveBeenCalled()
+      })
+
+      expect(service.cancelPendingLogin()).toBe(true)
+      expect(service.cancelPendingLogin()).toBe(false)
+      expect(spawnMock).not.toHaveBeenCalled()
+      releaseKeychainRead(null)
+      await expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(service.cancelPendingLogin()).toBe(false)
+      expect(settings.claudeManagedAccounts).toEqual([])
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
+  it('uses taskkill to cancel the Windows Claude login process tree', async () => {
+    setPlatform('win32')
+    vi.resetModules()
+    vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
+    const child = new EventEmitter() as EventEmitter & {
+      pid: number
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: ReturnType<typeof vi.fn>
+    }
+    child.pid = 1234
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const taskkill = new EventEmitter() as EventEmitter & {
+      unref: ReturnType<typeof vi.fn>
+    }
+    taskkill.unref = vi.fn()
+    const spawnMock = vi.fn((command: string) => (command === 'taskkill.exe' ? taskkill : child))
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      let settings = {
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: null,
+        activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      }
+      const store = {
+        getSettings: vi.fn(() => settings),
+        updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+          settings = { ...settings, ...updates }
+          return settings
+        })
+      }
+      const runtimeAuth = {
+        clearLastWrittenCredentialsJson: vi.fn(),
+        forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+      }
+      const rateLimits = {
+        evictInactiveClaudeCache: vi.fn(),
+        refreshForClaudeAccountChange: vi.fn()
+      }
+      const service = new ClaudeAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeAuth as never
+      )
+
+      const addPromise = service.addAccount()
+      await vi.waitFor(() => {
+        expect(spawnMock).toHaveBeenCalledWith(
+          'claude',
+          ['auth', 'login', '--claudeai'],
+          expect.objectContaining({ shell: true })
+        )
+      })
+
+      expect(service.cancelPendingLogin()).toBe(true)
+      await expect(addPromise).rejects.toThrow('Claude sign-in was cancelled.')
+      expect(child.kill).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledWith(
+        'taskkill.exe',
+        ['/pid', '1234', '/t', '/f'],
+        expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+      )
+      expect(taskkill.unref).toHaveBeenCalled()
+      expect(service.cancelPendingLogin()).toBe(false)
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
 })

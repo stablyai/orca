@@ -18,7 +18,8 @@ const storeMock = vi.hoisted(() => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  formatShortcutLabel: () => '⌘D'
+  formatShortcutLabel: () => '⌘D',
+  useOptionalShortcutLabel: () => '⌘D'
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({

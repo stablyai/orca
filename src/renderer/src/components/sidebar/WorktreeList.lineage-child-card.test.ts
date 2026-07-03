@@ -10,6 +10,7 @@ import type {
   WorktreeLineage
 } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>
@@ -33,13 +34,17 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
 }
 
 vi.mock('@/store', () => {
+  const getMockState = (): Record<string, unknown> => ({
+    detectedWorktreesByRepo: {},
+    ...mockStore.state
+  })
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
+    selector(getMockState())) as ((
     selector: (state: Record<string, unknown>) => unknown
   ) => unknown) & {
     getState: () => Record<string, unknown>
   }
-  useAppStore.getState = () => mockStore.state
+  useAppStore.getState = () => getMockState()
   return { useAppStore }
 })
 
@@ -340,6 +345,7 @@ function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
 function setFolderWorkspaceFixtureState(
   options: {
     createdFrom?: ProjectGroup['createdFrom']
+    experimentalNewWorktreeCardStyle?: boolean
     nestedGroup?: boolean
   } = {}
 ): void {
@@ -405,7 +411,9 @@ function setFolderWorkspaceFixtureState(
     setRenamingWorktreeId: vi.fn(),
     setShowSleepingWorkspaces: vi.fn(),
     setSortBy: vi.fn(),
-    settings: null,
+    settings: options.experimentalNewWorktreeCardStyle
+      ? { experimentalNewWorktreeCardStyle: true }
+      : null,
     renamingWorktreeId: null,
     showSleepingWorkspaces: true,
     sortBy: 'manual',
@@ -501,7 +509,7 @@ function setPinnedDuplicateFixtureState(): void {
 }
 
 function setLineageFixtureState(
-  groupBy: 'none' | 'repo' = 'none',
+  groupBy: 'none' | 'repo' | 'workspace-status' = 'none',
   options: {
     childWorktreeOverrides?: Partial<Worktree>
     deletingWorktreeIds?: string[]
@@ -624,7 +632,7 @@ function setLineageFixtureState(
     // Why: multi-host added a host scope filter; 'all' (the store default)
     // bypasses it so the fixture's worktrees aren't dropped before rendering.
     workspaceHostScope: 'all',
-    workspaceStatuses: [],
+    workspaceStatuses: groupBy === 'workspace-status' ? cloneDefaultWorkspaceStatuses() : [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {
       [child.id]: makeLineage(child, parent),
@@ -877,6 +885,16 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).not.toContain('data-repo-header-collapse-affordance=""')
   })
 
+  it('renders a collapse chevron on status group headers with worktrees', async () => {
+    setLineageFixtureState('workspace-status')
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('In progress')
+    expect(markup).toContain('data-workspace-status-drop-target=""')
+    expect(markup).toContain('data-repo-header-collapse-affordance=""')
+    expect(markup).toContain('aria-expanded="true"')
+  })
+
   it('renders a collapse chevron on grouped repo headers with worktrees', async () => {
     setLineageFixtureState('repo')
     const markup = await renderWorktreeListMarkup()
@@ -1038,6 +1056,25 @@ describe('WorktreeList lineage child card renderer', () => {
         surfaceInset: getPaddingLeft(surfaceOpeningTag)
       })
     ).toBe(20)
+  })
+
+  it('uses comparable new-card worktree geometry for experimental folder workspace rows', async () => {
+    setFolderWorkspaceFixtureState({ experimentalNewWorktreeCardStyle: true })
+    const markup = await renderWorktreeListMarkup()
+    const folderWorktreeId = folderWorkspaceKey('folder-workspace-1')
+    const cardOpeningTag = getCardOpeningTag(markup, folderWorktreeId)
+    const surfaceOpeningTag = getFolderWorkspaceSurfaceOpeningTag(markup, 'folder-workspace-1')
+    const cardContentIndent = getDataNumber(cardOpeningTag, 'data-content-indent')
+
+    expect(surfaceOpeningTag).toContain('padding-left:14px')
+    expect(cardOpeningTag).toContain('data-content-indent="16"')
+    expect(cardOpeningTag).toContain('data-flush-surface="true"')
+    expect(
+      getFlushCardContentStart({
+        cardContentIndent,
+        surfaceInset: getPaddingLeft(surfaceOpeningTag)
+      })
+    ).toBe(30)
   })
 
   it('preserves manual folder workspace indentation outside folder-scanned groups', async () => {

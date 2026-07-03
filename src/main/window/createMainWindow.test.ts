@@ -225,6 +225,11 @@ describe('createMainWindow', () => {
       { src: 'data:text/html,' } as never
     )
     expect(allowBlankEvent.preventDefault).not.toHaveBeenCalled()
+    expect(allowBlankPrefs).toMatchObject({
+      disableHtmlFullscreenWindowResize: true,
+      partition: 'persist:orca-browser',
+      sandbox: true
+    })
 
     const denyInlineHtmlEvent = { preventDefault: vi.fn() }
     windowHandlers['will-attach-webview'](
@@ -892,6 +897,70 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledTimes(2)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:toggleWorktreePalette')
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
+  })
+
+  it('suppresses auto-repeat quick-command menu toggles from before-input-event', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, {
+      getKeybindings: () => ({
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    })
+
+    const isDarwin = process.platform === 'darwin'
+    const input = {
+      type: 'keyDown',
+      code: 'KeyQ',
+      key: 'q',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: true
+    }
+    const firstPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: firstPreventDefault } as never, input)
+    expect(firstPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
+
+    webContents.send.mockClear()
+    const repeatPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: repeatPreventDefault } as never, {
+      ...input,
+      isAutoRepeat: true
+    })
+
+    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).not.toHaveBeenCalled()
   })
 
   it('lets Terminal-first pass risky app shortcuts through when terminal input is focused', () => {
@@ -2546,10 +2615,45 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
-  it('ignores duplicate ready-to-show events after startup maximize has already run', () => {
+  it('stops auto-reloading after a rapid renderer crash loop trips the breaker', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+
+    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    // Each cycle: renderer dies, breaker allows the first 3 reloads, then opens.
+    const driveCrashCycle = (): void => {
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+    }
+    driveCrashCycle()
+    driveCrashCycle()
+    driveCrashCycle()
+    // 1 initial load + 3 recoveries.
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
+
+    // 4th crash within the window: breaker is open, no further reload.
+    driveCrashCycle()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({ recentRecoveryCount: 3 })
+    )
+
+    consoleError.mockRestore()
+  })
+
+  function createStartupRevealWindowFixture() {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
-      on: vi.fn(),
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
@@ -2576,6 +2680,23 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
+    return { browserWindowInstance, windowHandlers }
+  }
+
+  function createStartupRevealStore(savedMaximized: boolean) {
+    return {
+      getUI: () =>
+        ({
+          windowMaximized: savedMaximized
+        }) as never,
+      getSettings: () => ({ windowBackgroundBlur: false }) as never,
+      updateUI: vi.fn()
+    }
+  }
+
+  it('ignores duplicate ready-to-show events after startup maximize has already run', () => {
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
     createMainWindow({
       getUI: () =>
         ({
@@ -2590,6 +2711,98 @@ describe('createMainWindow', () => {
 
     expect(browserWindowInstance.maximize).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+  })
+
+  it('reveals the startup window on Windows when ready-to-show never fires', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('win32', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(9_999)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('cancels the Windows startup reveal fallback after ready-to-show', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('win32', () => {
+      createMainWindow(null)
+      windowHandlers['ready-to-show']()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not install the startup reveal fallback off Windows', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('keeps the headless E2E window hidden when the Windows fallback fires', () => {
+    vi.useFakeTimers()
+    const previousHeadless = process.env.ORCA_E2E_HEADLESS
+    process.env.ORCA_E2E_HEADLESS = '1'
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    try {
+      withPlatform('win32', () => {
+        createMainWindow(createStartupRevealStore(true) as never)
+        vi.advanceTimersByTime(10_000)
+
+        expect(browserWindowInstance.show).not.toHaveBeenCalled()
+        expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+      })
+    } finally {
+      if (previousHeadless === undefined) {
+        delete process.env.ORCA_E2E_HEADLESS
+      } else {
+        process.env.ORCA_E2E_HEADLESS = previousHeadless
+      }
+    }
+  })
+
+  it('clears the Windows startup reveal fallback when the window is closed', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('win32', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers.closed()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not show or maximize a destroyed window when the Windows fallback fires', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('win32', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      browserWindowInstance.isDestroyed.mockReturnValue(true)
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
   })
 
   describe('minimize to tray on close (win32)', () => {

@@ -5,7 +5,6 @@ import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
-  confirmAgentHibernationCandidates,
   getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
   type AgentHibernationPlannerSnapshot
@@ -65,7 +64,7 @@ function snapshot(
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
     },
     activeWorktreeId: 'wt-active',
-    foregroundWorktreeIds: ['wt-active'],
+    foregroundTerminalTabIds: [],
     tabsByWorktree: { 'wt-bg': [tab()] },
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
@@ -73,6 +72,7 @@ function snapshot(
     agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
     sleepingAgentSessionsByPaneKey: {},
     lastTerminalInputAtByPaneKey: {},
+    foregroundTerminalLastSeenAtByTabId: {},
     now: NOW,
     ...overrides
   }
@@ -99,9 +99,7 @@ describe('agent sleep planner', () => {
       )
     ).toEqual([])
     expect(plannedWorktrees(snapshot({ activeWorktreeId: 'wt-bg' }))).toEqual([])
-    expect(plannedWorktrees(snapshot({ foregroundWorktreeIds: ['wt-active', 'wt-bg'] }))).toEqual(
-      []
-    )
+    expect(plannedWorktrees(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toEqual([])
   })
 
   it('requires done resumable provider-session entries', () => {
@@ -134,6 +132,89 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
     ).toEqual(['wt-bg'])
+  })
+
+  it('uses foreground terminal tab last-seen as the idle baseline when it is newer', () => {
+    expect(
+      plannedWorktrees(
+        snapshot({
+          foregroundTerminalLastSeenAtByTabId: {
+            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
+          }
+        })
+      )
+    ).toEqual([])
+    expect(
+      plannedWorktrees(
+        snapshot({
+          foregroundTerminalLastSeenAtByTabId: {
+            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
+          }
+        })
+      )
+    ).toEqual(['wt-bg'])
+    expect(
+      plannedWorktrees(
+        snapshot({
+          foregroundTerminalLastSeenAtByTabId: {
+            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
+          },
+          lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD + 1 }
+        })
+      )
+    ).toEqual([])
+  })
+
+  it('does not let one foreground terminal tab reset a sibling tab in the same worktree', () => {
+    const siblingEntry = entry({
+      paneKey: `tab-2:${OTHER_LEAF}`,
+      tabId: 'tab-2',
+      providerSession: { key: 'session_id', id: 'session-2' }
+    })
+
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          foregroundTerminalTabIds: ['tab-1'],
+          foregroundTerminalLastSeenAtByTabId: {
+            'tab-1': NOW
+          },
+          tabsByWorktree: { 'wt-bg': [tab('tab-1'), tab('tab-2')] },
+          terminalLayoutsByTabId: {
+            'tab-1': layout(),
+            'tab-2': layout(OTHER_LEAF, 'pty-2')
+          },
+          ptyIdsByTabId: {
+            'tab-1': ['pty-1'],
+            'tab-2': ['pty-2']
+          },
+          agentStatusByPaneKey: {
+            [`tab-1:${LEAF}`]: entry(),
+            [siblingEntry.paneKey]: siblingEntry
+          }
+        })
+      )
+    ).toEqual([`tab-2:${OTHER_LEAF}`])
+  })
+
+  it('includes the effective idle start in the candidate signature', () => {
+    const oldEntry = entry({
+      updatedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000,
+      stateStartedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000
+    })
+    const [withoutVisit] = planAgentHibernationCandidates(
+      snapshot({ agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry } })
+    )
+    const [withVisit] = planAgentHibernationCandidates(
+      snapshot({
+        agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry },
+        foregroundTerminalLastSeenAtByTabId: {
+          'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
+        }
+      })
+    )
+
+    expect(withoutVisit.signature).not.toEqual(withVisit.signature)
   })
 
   it('emits a pane candidate when a sibling shell PTY is live', () => {
@@ -307,19 +388,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
-  })
-
-  it('requires two stable ticks and resets on signature changes', () => {
-    const [candidate] = planAgentHibernationCandidates(snapshot())
-    const first = confirmAgentHibernationCandidates({}, [candidate])
-    expect(first.candidates).toEqual([])
-    expect(
-      confirmAgentHibernationCandidates(first.confirmationState, [candidate]).candidates
-    ).toEqual([candidate])
-    const changed = { ...candidate, signature: `${candidate.signature}:changed` }
-    expect(
-      confirmAgentHibernationCandidates(first.confirmationState, [changed]).candidates
-    ).toEqual([])
   })
 
   it('clamps corrupt or out-of-range idle durations to the default', () => {

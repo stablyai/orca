@@ -1,32 +1,34 @@
 import { useCallback, useRef, useState } from 'react'
 
+type WorktreeCardDetailMenu = 'issue' | 'review'
+
 export function useWorktreeCardDetailsHoverControl() {
   const [open, setOpen] = useState(false)
-  const [reviewMenuOpen, setReviewMenuOpen] = useState(false)
+  const [openMenu, setOpenMenu] = useState<WorktreeCardDetailMenu | null>(null)
   const pendingHoverCloseRef = useRef(false)
 
   const closeHover = useCallback(() => {
     pendingHoverCloseRef.current = false
-    setReviewMenuOpen(false)
+    setOpenMenu(null)
     setOpen(false)
   }, [])
 
   const handleHoverOpenChange = useCallback(
     (next: boolean) => {
-      // Why: the portaled PR menu sits outside HoverCardContent — keep the card
-      // mounted until the menu closes so the unlink item stays clickable.
-      if (reviewMenuOpen) {
+      // Why: portaled detail menus sit outside HoverCardContent — keep the card
+      // mounted until the menu closes so the menu items stay clickable.
+      if (openMenu) {
         pendingHoverCloseRef.current = !next
         return
       }
       pendingHoverCloseRef.current = false
       setOpen(next)
     },
-    [reviewMenuOpen]
+    [openMenu]
   )
 
-  const handleReviewMenuOpenChange = useCallback((next: boolean) => {
-    setReviewMenuOpen(next)
+  const setDetailMenuOpen = useCallback((menu: WorktreeCardDetailMenu, next: boolean) => {
+    setOpenMenu(next ? menu : null)
     if (!next && pendingHoverCloseRef.current) {
       pendingHoverCloseRef.current = false
       setOpen(false)
@@ -34,10 +36,12 @@ export function useWorktreeCardDetailsHoverControl() {
   }, [])
 
   return {
-    hoverOpen: open || reviewMenuOpen,
-    reviewMenuOpen,
+    hoverOpen: open || Boolean(openMenu),
+    issueMenuOpen: openMenu === 'issue',
+    reviewMenuOpen: openMenu === 'review',
     handleHoverOpenChange,
-    handleReviewMenuOpenChange,
+    handleIssueMenuOpenChange: (next: boolean) => setDetailMenuOpen('issue', next),
+    handleReviewMenuOpenChange: (next: boolean) => setDetailMenuOpen('review', next),
     closeHover
   }
 }

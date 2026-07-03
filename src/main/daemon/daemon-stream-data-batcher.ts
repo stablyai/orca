@@ -1,4 +1,4 @@
-import type { Socket } from 'net'
+import type { Socket } from 'node:net'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
 
 type StreamDataClient = {

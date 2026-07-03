@@ -1,4 +1,11 @@
-import { PanelBottomClose, PanelRightClose, Pin, PinOff } from 'lucide-react'
+import {
+  MessageSquare,
+  PanelBottomClose,
+  PanelRightClose,
+  Pin,
+  PinOff,
+  SquareTerminal
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
@@ -95,6 +102,14 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
+  /** True when this tab is an agent terminal that can switch to the native chat
+   *  view; gates the "Switch view" menu item. */
+  canToggleViewMode?: boolean
+  /** True when the tab is currently showing the native chat view (drives the
+   *  item's label/icon between "chat" and "terminal"). */
+  isChatView?: boolean
+  /** Toggle the tab between terminal and native chat view. */
+  onToggleViewMode?: () => void
 }
 
 export function SortableTabContextMenu({
@@ -114,7 +129,10 @@ export function SortableTabContextMenu({
   onCloseToRight,
   onRenameOpen,
   onSetTabColor,
-  onTogglePin
+  onTogglePin,
+  canToggleViewMode = false,
+  isChatView = false,
+  onToggleViewMode
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -126,6 +144,8 @@ export function SortableTabContextMenu({
     }
     requestActiveTerminalPaneSplit({ tabId: tab.id, direction })
   }
+  const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const renameShortcut = useOptionalShortcutLabel('tab.rename')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -138,6 +158,27 @@ export function SortableTabContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+        {canToggleViewMode && onToggleViewMode && (
+          <>
+            <DropdownMenuItem onSelect={onToggleViewMode}>
+              {isChatView ? (
+                <SquareTerminal className="mr-1.5 size-3.5" />
+              ) : (
+                <MessageSquare className="mr-1.5 size-3.5" />
+              )}
+              {isChatView
+                ? translate(
+                    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                    'Switch to terminal view'
+                  )
+                : translate(
+                    'components.tab.bar.SortableTabContextMenu.switchToChatView',
+                    'Switch to chat view'
+                  )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
           <PanelRightClose />
           {translate(
@@ -165,6 +206,7 @@ export function SortableTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
+          {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
@@ -178,6 +220,7 @@ export function SortableTabContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onRenameOpen}>
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
+          {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <div className="px-2 pt-1.5 pb-1">
           <div className="text-xs font-medium text-muted-foreground mb-1.5">

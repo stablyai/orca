@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
   focusActiveTerminalInput,
@@ -112,6 +112,62 @@ async function rightClickActiveTerminalSurface(page: Page): Promise<void> {
   await page.mouse.click(point.x, point.y, { button: 'right' })
 }
 
+async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ BrowserWindow, ipcMain }) => {
+    type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+    const global = globalThis as unknown as {
+      __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
+    }
+    const invokeHandlers = (
+      ipcMain as unknown as {
+        _invokeHandlers?: Map<string, ClipboardReadHandler>
+      }
+    )._invokeHandlers
+    const handler = invokeHandlers?.get('clipboard:readText')
+    if (!invokeHandlers || !handler || global.__orcaOriginalClipboardReadTextHandler) {
+      return
+    }
+    global.__orcaOriginalClipboardReadTextHandler = handler
+    invokeHandlers.set('clipboard:readText', async (event, ...args) => {
+      const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
+      await Promise.all(
+        windows.map((window) =>
+          window.webContents
+            .executeJavaScript(
+              `
+              (document.activeElement && document.activeElement.blur && document.activeElement.blur());
+              document.body.tabIndex = -1;
+              document.body.focus();
+            `
+            )
+            .catch(() => undefined)
+        )
+      )
+      // Why: reproduce the focus churn window before the async clipboard read resolves.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return global.__orcaOriginalClipboardReadTextHandler!(event, ...args)
+    })
+  })
+}
+
+async function restoreClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }) => {
+    type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => Promise<unknown> | unknown
+    const global = globalThis as unknown as {
+      __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
+    }
+    const invokeHandlers = (
+      ipcMain as unknown as {
+        _invokeHandlers?: Map<string, ClipboardReadHandler>
+      }
+    )._invokeHandlers
+    if (invokeHandlers && global.__orcaOriginalClipboardReadTextHandler) {
+      invokeHandlers.set('clipboard:readText', global.__orcaOriginalClipboardReadTextHandler)
+      delete global.__orcaOriginalClipboardReadTextHandler
+    }
+  })
+}
+
 async function openTerminalContextMenu(page: Page): Promise<void> {
   const isWindows = await page.evaluate(() => navigator.userAgent.includes('Windows'))
   const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
@@ -164,6 +220,49 @@ test.describe('terminal paste ownership', () => {
         expect(countOccurrences(writes, payload), `${chord} PTY write count`).toBe(1)
       }
     } finally {
+      if (scriptStarted) {
+        await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      }
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('keyboard paste survives transient terminal blur during clipboard read', async ({
+    electronApp,
+    orcaPage,
+    testRepoPath
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await installTerminalPtyWriteSpy(electronApp)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-paste-blur-${runId}.mjs`)
+    writeFileSync(scriptPath, pasteEchoScript(runId))
+    let scriptStarted = false
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      scriptStarted = true
+      await waitForTerminalOutput(orcaPage, `PASTE_READY_${runId}`, 10_000)
+
+      const payload = `ORCA_E2E_TRANSIENT_BLUR_PASTE_${runId}`
+      const encodedPayload = Buffer.from(payload, 'utf8').toString('base64')
+      await clearTerminalPtyWriteLog(electronApp)
+      await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), payload)
+      await focusActiveTerminalInput(orcaPage)
+      await installClipboardReadTerminalBlurRepro(electronApp)
+
+      await orcaPage.keyboard.press(keyboardPasteChords()[0])
+      await waitForTerminalOutput(orcaPage, encodedPayload, 10_000, 12_000)
+
+      const writes = (await readTerminalPtyWrites(electronApp)).join('')
+      expect(countOccurrences(writes, payload), 'transient blur PTY write count').toBe(1)
+    } finally {
+      await restoreClipboardReadTerminalBlurRepro(electronApp).catch(() => undefined)
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }

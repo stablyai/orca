@@ -43,6 +43,7 @@ import { getHostedReviewCacheKey } from '../../store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '../../store/slices/github'
 import { refreshGitStatusForWorktree } from '../right-sidebar/git-status-refresh'
 import { runWorktreeBatchDelete } from '../sidebar/delete-worktree-flow'
+import { prepareActiveWorktreeFocusAfterDelete } from '../sidebar/active-worktree-focus-after-delete'
 import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -182,7 +183,7 @@ function getBranchStatus(
   return parts.join(', ')
 }
 
-function getWorkspaceDecisionDetails(
+export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
   inputs: WorkspaceDecisionInputs
 ): WorkspaceDecisionDetails {
@@ -196,11 +197,15 @@ function getWorkspaceDecisionDetails(
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
     : getWorkspaceSpaceBranchLabel(worktree)
+  const repo = inputs.repoMap.get(worktree.repoId)
   const reviewCacheKey = getHostedReviewCacheKey(
     worktree.repoPath,
     branch,
     inputs.settings,
-    worktree.repoId
+    worktree.repoId,
+    repo?.connectionId,
+    repo?.executionHostId,
+    repo !== undefined
   )
   const hostedReview = inputs.hostedReviewCache[reviewCacheKey]?.data
   const linkedPR = workspaceRecord?.linkedPR ?? null
@@ -213,7 +218,6 @@ function getWorkspaceDecisionDetails(
         ? `PR #${linkedPR}`
         : null
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
-  const repo = inputs.repoMap.get(worktree.repoId)
   const issue =
     linkedIssue && repo
       ? inputs.issueCache[
@@ -223,7 +227,8 @@ function getWorkspaceDecisionDetails(
             linkedIssue,
             inputs.settings,
             repo.connectionId,
-            repo.executionHostId
+            repo.executionHostId,
+            true
           )
         ]?.data
       : null
@@ -1592,6 +1597,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     (worktree: WorkspaceSpaceWorktree): void => {
       // Why: Space keeps normal deletes non-force so uncommitted work is not
       // discarded silently; a failed row gets this explicit recovery path.
+      const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktree.worktreeId)
       void removeWorktree(worktree.worktreeId, true)
         .then((result) => {
           if (!result.ok) {
@@ -1606,6 +1612,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
             )
             return
           }
+          commitFocus()
           handleDeletedWorktrees([worktree.worktreeId])
         })
         .catch((error: unknown) => {

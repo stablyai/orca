@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this prototype keeps the real-data adapter
 and current visual skeleton together until the next refinement pass decides
 which pieces become production modules. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Bell,
@@ -873,6 +873,61 @@ function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
   )
 }
 
+export function ActivityThreadOptionsMenu({
+  compactMode,
+  hasUnreadThreads,
+  onCompactModeChange,
+  onMarkAllThreadsRead
+}: {
+  compactMode: boolean
+  hasUnreadThreads: boolean
+  onCompactModeChange: (compactMode: boolean) => void
+  onMarkAllThreadsRead: () => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Why: keep Tooltip and Dropdown from composing refs onto the same
+              button; the crash report's stack loops through Radix setRef. */}
+          <span className="inline-flex shrink-0">
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
+                aria-label={translate(
+                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
+                  'Thread list options'
+                )}
+              >
+                <MoreVertical className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {translate('auto.components.activity.ActivityPrototypePage.a472a14700', 'More options')}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" sideOffset={6}>
+        <DropdownMenuCheckboxItem
+          checked={compactMode}
+          onCheckedChange={(checked) => onCompactModeChange(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onMarkAllThreadsRead} disabled={!hasUnreadThreads}>
+          {translate('auto.components.activity.ActivityPrototypePage.023ff75afe', 'Mark all read')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | null {
   if (!repo) {
     return null
@@ -1026,6 +1081,70 @@ export function activityThreadMatchesSearchQuery({
     return true
   }
   return threadSearchText(thread).includes(trimmedQuery.toLowerCase())
+}
+
+export function isActivityFilterFocusShortcut(
+  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
+  isMac = navigator.userAgent.includes('Mac')
+): boolean {
+  if (event.key.toLowerCase() !== 'f' || event.shiftKey || event.altKey) {
+    return false
+  }
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
+export function shouldIgnoreActivityFilterFocusShortcutTarget(
+  target: Element | null,
+  terminalPortalTargets: (HTMLElement | null)[]
+): boolean {
+  if (!target) {
+    return false
+  }
+  // Why: the workspace terminal stays mounted while Activity is open; only the
+  // Activity-portaled terminal should keep Cmd/Ctrl+F for terminal search.
+  return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
+}
+
+export function handleActivityFilterFocusShortcut({
+  activeElement,
+  event,
+  input,
+  isMac,
+  terminalPortalTargets
+}: {
+  activeElement: Element | null
+  event: Pick<
+    KeyboardEvent,
+    | 'altKey'
+    | 'ctrlKey'
+    | 'key'
+    | 'metaKey'
+    | 'preventDefault'
+    | 'shiftKey'
+    | 'stopImmediatePropagation'
+    | 'stopPropagation'
+  >
+  input: Pick<HTMLInputElement, 'focus' | 'select'> | null
+  isMac?: boolean
+  terminalPortalTargets: (HTMLElement | null)[]
+}): boolean {
+  if (shouldIgnoreActivityFilterFocusShortcutTarget(activeElement, terminalPortalTargets)) {
+    return false
+  }
+  if (!isActivityFilterFocusShortcut(event, isMac)) {
+    return false
+  }
+  if (!input) {
+    return false
+  }
+  event.preventDefault()
+  // Why: hidden workspace xterms can retain focus behind Activity; capture-phase
+  // handling must stop the chord before xterm forwards it to a local/SSH PTY.
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  input.focus()
+  input.select()
+  return true
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -1283,6 +1402,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
+  const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
@@ -1555,6 +1675,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    const focusActivityFilter = (event: KeyboardEvent): void => {
+      handleActivityFilterFocusShortcut({
+        activeElement: document.activeElement,
+        event,
+        input: activityFilterInputRef.current,
+        terminalPortalTargets: [activePortalTargetEl, inactivePortalTargetEl]
+      })
+    }
+
+    window.addEventListener('keydown', focusActivityFilter, { capture: true })
+    return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
+  }, [activePortalTargetEl, inactivePortalTargetEl])
+
   const markThreadRead = (thread: AgentPaneThread): void => {
     storeData.acknowledgeAgents([thread.paneKey])
   }
@@ -1660,6 +1794,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={activityFilterInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={translate(
@@ -1743,54 +1878,12 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   the toolbar focused on the high-frequency Filter + unread
                   toggle while still giving the action a stable home next to
                   the list it acts on (rather than the titlebar). */}
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
-                        aria-label={translate(
-                          'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                          'Thread list options'
-                        )}
-                      >
-                        <MoreVertical className="size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.a472a14700',
-                      'More options'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" sideOffset={6}>
-                  <DropdownMenuCheckboxItem
-                    checked={compactMode}
-                    onCheckedChange={(checked) => setCompactMode(checked === true)}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.f70e4bec47',
-                      'Compact mode'
-                    )}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => markAllThreadsRead()}
-                    disabled={!hasUnreadThreads}
-                  >
-                    {translate(
-                      'auto.components.activity.ActivityPrototypePage.023ff75afe',
-                      'Mark all read'
-                    )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ActivityThreadOptionsMenu
+                compactMode={compactMode}
+                hasUnreadThreads={hasUnreadThreads}
+                onCompactModeChange={setCompactMode}
+                onMarkAllThreadsRead={markAllThreadsRead}
+              />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">

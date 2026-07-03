@@ -218,7 +218,7 @@ describe('mobile presence lock — driver state machine', () => {
 
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     // The last emitted event for pty-1 must be idle.
-    const last = [...driverEvents].reverse().find((e) => e.ptyId === 'pty-1')
+    const last = [...driverEvents].toReversed().find((e) => e.ptyId === 'pty-1')
     expect(last?.driver).toEqual({ kind: 'idle' })
   })
 })

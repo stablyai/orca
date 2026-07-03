@@ -1,6 +1,23 @@
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+
 const TERMINAL_STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 // Why: startup commands can carry pasted scripts; classifier work should stay bounded.
 export const TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS = 4096
+
+const KNOWN_TUI_AGENT_EXECUTABLES = new Set<string>()
+
+for (const config of Object.values(TUI_AGENT_CONFIG)) {
+  for (const candidate of [
+    config.detectCmd,
+    config.expectedProcess,
+    ...getTuiAgentDetectCommands(config)
+  ]) {
+    const executable = normalizeTerminalStartupCommandExecutableName(candidate)
+    if (executable) {
+      KNOWN_TUI_AGENT_EXECUTABLES.add(executable)
+    }
+  }
+}
 
 export function getTerminalStartupCommandToken(command: string): string {
   const scanLimit = Math.min(command.length, TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS)
@@ -38,10 +55,23 @@ export function isCodexTerminalStartupCommand(command: string): boolean {
   return executable === 'codex' || executable.startsWith('codex-')
 }
 
+export function isKnownTuiAgentTerminalStartupCommand(command: string): boolean {
+  const executable = getTerminalStartupCommandExecutableName(command)
+  return (
+    KNOWN_TUI_AGENT_EXECUTABLES.has(executable) ||
+    executable.startsWith('codex-') ||
+    executable.startsWith('grok-')
+  )
+}
+
 function getTerminalStartupCommandExecutableName(command: string): string {
   const token = getTerminalStartupCommandToken(command)
   const segmentStart = getTerminalStartupCommandPathSegmentStart(token)
-  return token.slice(segmentStart).toLowerCase().replace(TERMINAL_STARTUP_COMMAND_EXTENSION_RE, '')
+  return normalizeTerminalStartupCommandExecutableName(token.slice(segmentStart))
+}
+
+function normalizeTerminalStartupCommandExecutableName(executable: string): string {
+  return executable.toLowerCase().replace(TERMINAL_STARTUP_COMMAND_EXTENSION_RE, '')
 }
 
 function getTerminalStartupCommandPathSegmentStart(token: string): number {

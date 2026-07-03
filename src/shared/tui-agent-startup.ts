@@ -25,6 +25,7 @@ export type AgentStartupPlan = {
   expectedProcess: string
   followupPrompt: string | null
   launchConfig: SleepingAgentLaunchConfig
+  launchToken?: string
   draftPrompt?: string | null
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
@@ -36,9 +37,14 @@ function resolveBaseCommand(args: {
   platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
+  isRemote?: boolean
 }): { ok: true; command: string } | { ok: false; error: string } {
   const override = args.cmdOverrides[args.agent]
-  const command = override || getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform)
+  const command =
+    override ||
+    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
+      isRemote: args.isRemote
+    })
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -71,6 +77,9 @@ export function buildAgentStartupPlan(args: {
   allowEmptyPromptLaunch?: boolean
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must be skipped for remote launches. */
+  isRemote?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -81,7 +90,8 @@ export function buildAgentStartupPlan(args: {
     cmdOverrides,
     platform,
     shell,
-    agentArgs: args.agentArgs
+    agentArgs: args.agentArgs,
+    isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
     return null
@@ -171,6 +181,8 @@ export function buildAgentResumeStartupPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
+  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  isRemote?: boolean
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession)
   if (!argv) {
@@ -186,7 +198,8 @@ export function buildAgentResumeStartupPlan(args: {
         cmdOverrides: args.cmdOverrides,
         platform: args.platform,
         shell,
-        agentArgs: args.agentArgs
+        agentArgs: args.agentArgs,
+        isRemote: args.isRemote
       })
   if (!baseCommand.ok) {
     return null
@@ -243,6 +256,8 @@ export function buildAgentDraftLaunchPlan(args: {
   shell?: AgentStartupShell
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
+  isRemote?: boolean
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -256,7 +271,8 @@ export function buildAgentDraftLaunchPlan(args: {
     cmdOverrides,
     platform,
     shell,
-    agentArgs: args.agentArgs
+    agentArgs: args.agentArgs,
+    isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
     return null

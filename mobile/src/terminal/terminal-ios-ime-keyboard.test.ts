@@ -11,4 +11,9 @@ describe('terminal iOS IME keyboard', () => {
     expect(sessionRouteSource).not.toContain("'ascii-capable'")
     expect(sessionRouteSource).not.toContain('"ascii-capable"')
   })
+
+  it('does not put terminal keyboard capture behind iOS textContentType semantics', () => {
+    expect(sessionRouteSource).not.toContain('textContentType="none"')
+    expect(sessionRouteSource).toContain('autoComplete="off"')
+  })
 })

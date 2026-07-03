@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   Braces,
@@ -30,6 +31,7 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
+  GitPullRequestDraft,
   ListChecks,
   LoaderCircle,
   MessageSquare,
@@ -40,7 +42,6 @@ import {
   RefreshCw,
   Send,
   UndoDot,
-  Users,
   Wrench,
   X
 } from 'lucide-react'
@@ -58,7 +59,7 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -155,11 +156,22 @@ import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
+import { githubAvatarUrl } from '@/components/github/github-issue-comment-helpers'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
+import {
+  emitGitHubWorkItemDetailsCacheMutation,
+  onGitHubWorkItemDetailsCacheMutation
+} from '@/lib/github-work-item-details-cache-events'
+import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
+import {
+  canUseGitHubRepoContext,
+  getGitHubRuntimeRepoId,
+  getGitHubSourceRuntimeHost
+} from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
@@ -178,9 +190,9 @@ import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
-import {
-  type SourceControlActionRecipe,
-  type SourceControlLaunchActionId
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
 } from '../../../shared/source-control-ai-actions'
 import {
   saveSourceControlActionRecipe,
@@ -201,6 +213,11 @@ import type {
   PRCheckDetail,
   PRComment
 } from '../../../shared/types'
+import {
+  getTaskSourceCacheScope,
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
@@ -288,6 +305,7 @@ type PullRequestPageProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
@@ -448,25 +466,15 @@ function ReviewerAvatar({
   login: string
   avatarUrl: string
 }): React.JSX.Element {
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        title={login}
-        className="size-6 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
-      />
-    )
-  }
   return (
-    <span
+    <img
+      src={avatarUrl || githubAvatarUrl(login)}
+      alt=""
+      loading="lazy"
+      decoding="async"
       title={login}
-      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[10px] font-medium text-muted-foreground"
-    >
-      {login.slice(0, 1).toUpperCase()}
-    </span>
+      className="size-6 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+    />
   )
 }
 
@@ -509,21 +517,251 @@ function buildRequestedReviewUsers(
   return Array.from(byLogin.values())
 }
 
+function PRAssigneesPanel({
+  item,
+  repoPath,
+  projectOrigin,
+  sourceContext,
+  onMutated
+}: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  projectOrigin: PullRequestPageProjectOrigin | undefined
+  sourceContext?: TaskSourceContext | null
+  onMutated: () => void
+}): React.JSX.Element {
+  const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
+  const [localAssignees, setLocalAssignees] = useState<GitHubAssignableUser[]>(
+    () => item.assignees ?? []
+  )
+  const [assigneesSource, setAssigneesSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    assignees: item.assignees
+  }))
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
+  const { isPending, run } = useImmediateMutation()
+
+  // Why: PR assignees can change through background refetches; sync them
+  // before paint so the right rail never shows a stale reviewer/assignee split.
+  if (
+    assigneesSource.itemId !== item.id ||
+    assigneesSource.repoId !== item.repoId ||
+    assigneesSource.assignees !== item.assignees
+  ) {
+    setAssigneesSource({ itemId: item.id, repoId: item.repoId, assignees: item.assignees })
+    setLocalAssignees(item.assignees ?? [])
+  }
+
+  const patchProjectRowIfNeeded = useCallback(
+    (assignees: string[]) => {
+      if (!projectOrigin) {
+        return
+      }
+      patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { assignees })
+    },
+    [patchProjectRowContent, projectOrigin]
+  )
+  const assigneeLogins = useMemo(() => localAssignees.map((user) => user.login), [localAssignees])
+  const assigneeSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const slugOwner = projectOrigin?.owner ?? assigneeSlug?.owner ?? null
+  const slugRepo = projectOrigin?.repo ?? assigneeSlug?.repo ?? null
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(
+    slugOwner,
+    slugRepo,
+    assigneeLogins,
+    sourceSettings
+  )
+  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
+  const canEditAssignees = Boolean(projectOrigin || repoPath)
+  const assigneesByLogin = useMemo(
+    () => new Map(repoAssignees.data.map((user) => [user.login.toLowerCase(), user])),
+    [repoAssignees.data]
+  )
+
+  const handleAssigneeToggle = useCallback(
+    (login: string) => {
+      const lowerLogin = login.toLowerCase()
+      const isAssigned = localAssignees.some((user) => user.login.toLowerCase() === lowerLogin)
+      const prevAssignees = localAssignees
+      const candidate = assigneesByLogin.get(lowerLogin) ?? { login, name: null, avatarUrl: '' }
+      const nextAssignees = isAssigned
+        ? prevAssignees.filter((user) => user.login.toLowerCase() !== lowerLogin)
+        : [...prevAssignees, candidate]
+      const nextLogins = nextAssignees.map((user) => user.login)
+      const prevLogins = prevAssignees.map((user) => user.login)
+
+      run('assignees', {
+        mutate: () =>
+          runIssueUpdate({
+            repoId: item.repoId,
+            repoPath,
+            sourceContext,
+            projectOrigin,
+            number: item.number,
+            updates: isAssigned ? { removeAssignees: [login] } : { addAssignees: [login] }
+          }),
+        onOptimistic: () => {
+          setLocalAssignees(nextAssignees)
+          patchWorkItem(item.id, { assignees: nextAssignees }, item.repoId, { sourceContext })
+          patchProjectRowIfNeeded(nextLogins)
+        },
+        onRevert: () => {
+          setLocalAssignees(prevAssignees)
+          patchWorkItem(item.id, { assignees: prevAssignees }, item.repoId, { sourceContext })
+          patchProjectRowIfNeeded(prevLogins)
+        },
+        onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
+          onMutated()
+        },
+        onError: (err) => toast.error(err)
+      })
+    },
+    [
+      assigneesByLogin,
+      item.id,
+      item.number,
+      item.repoId,
+      localAssignees,
+      onMutated,
+      patchProjectRowIfNeeded,
+      patchWorkItem,
+      projectOrigin,
+      repoPath,
+      run,
+      sourceContext
+    ]
+  )
+
+  const checkIcon = (
+    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M2 6l3 3 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span>{translate('auto.components.PullRequestPage.8ff5ae8866', 'Assignees')}</span>
+        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={!canEditAssignees || isPending('assignees') || repoAssignees.loading}
+              aria-label={translate('auto.components.PullRequestPage.82c87eceb9', 'Edit assignees')}
+              className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {isPending('assignees') ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Pencil className="size-3" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="popover-scroll-content scrollbar-sleek w-60 p-1" align="end">
+            {repoAssignees.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {repoAssignees.error}
+              </div>
+            ) : (
+              <div>
+                {repoAssignees.data.map((user) => {
+                  const selected = localAssignees.some(
+                    (assignee) => assignee.login.toLowerCase() === user.login.toLowerCase()
+                  )
+                  return (
+                    <button
+                      key={user.login}
+                      type="button"
+                      onClick={() => handleAssigneeToggle(user.login)}
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                    >
+                      <span
+                        className={cn(
+                          'flex size-3.5 items-center justify-center rounded-sm border',
+                          selected
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input'
+                        )}
+                      >
+                        {selected && checkIcon}
+                      </span>
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="size-5 rounded-full" />
+                      ) : null}
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block truncate">{user.login}</span>
+                        {user.name ? (
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {user.name}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      </div>
+      {localAssignees.length === 0 ? (
+        <div className="text-[12px] text-muted-foreground">
+          {translate('auto.components.PullRequestPage.1ff5d979df', 'No one assigned')}
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {localAssignees.map((assignee) => (
+            <li key={assignee.login} className="flex min-w-0 items-center gap-2">
+              <ReviewerAvatar login={assignee.login} avatarUrl={assignee.avatarUrl} />
+              <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                {assignee.login}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function PRReviewersPanel({
   item,
   loading,
   repoPath,
+  sourceContext,
   onReviewersRequested
 }: {
   item: GitHubWorkItem
   loading: boolean
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
-  const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
-  const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({
     resetKey: '',
     index: 0
@@ -540,6 +778,16 @@ function PRReviewersPanel({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
   )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
@@ -615,12 +863,12 @@ function PRReviewersPanel({
     open && reviewSlug ? reviewSlug.owner : null,
     open && reviewSlug ? reviewSlug.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    repoOwnerSettings
+    sourceSettings
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewSlug ? repoPath : null,
     open && !reviewSlug ? item.repoId : null,
-    repoOwnerSettings
+    sourceSettings
   )
   const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -711,27 +959,7 @@ function PRReviewersPanel({
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
   const canRequestReview =
-    !!repoPath || getActiveRuntimeTarget(repoOwnerSettings).kind === 'environment'
-
-  const measureReviewerPickerPlacement = useCallback(() => {
-    const rect = reviewerInputRef.current?.getBoundingClientRect()
-    if (!rect) {
-      setReviewerPickerSide('bottom')
-      setReviewerPickerMaxHeight(null)
-      return
-    }
-
-    const gap = 8
-    const minUsefulHeight = 180
-    const availableBelow = window.innerHeight - rect.bottom - gap
-    const availableAbove = rect.top - gap
-    const nextSide =
-      availableBelow < minUsefulHeight && availableAbove > availableBelow ? 'top' : 'bottom'
-    const available = nextSide === 'top' ? availableAbove : availableBelow
-
-    setReviewerPickerSide(nextSide)
-    setReviewerPickerMaxHeight(Math.max(120, Math.min(330, available)))
-  }, [])
+    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
 
   const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
     if (submitting) {
@@ -754,7 +982,7 @@ function PRReviewersPanel({
       )
       return
     }
-    const target = getActiveRuntimeTarget(repoOwnerSettings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -766,17 +994,19 @@ function PRReviewersPanel({
     }
     setSubmitting(true)
     try {
+      const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.requestPRReviewers',
-              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.requestPRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -796,8 +1026,22 @@ function PRReviewersPanel({
         localReviewRequests
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
+      if (target.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       setReviewerInput('')
       toast.success(
         logins.length === 1
@@ -828,7 +1072,7 @@ function PRReviewersPanel({
     if (logins.length === 0) {
       return
     }
-    const target = getActiveRuntimeTarget(repoOwnerSettings)
+    const target = getActiveRuntimeTarget(sourceSettings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error(
         translate(
@@ -840,17 +1084,19 @@ function PRReviewersPanel({
     }
     setSubmitting(true)
     try {
+      const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
               target,
               'github.removePRReviewers',
-              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { repo: runtimeRepo, prNumber: item.number, reviewers: logins },
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.removePRReviewers({
               repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               reviewers: logins
             })
@@ -869,8 +1115,22 @@ function PRReviewersPanel({
         (reviewer) => !removed.has(reviewer.login.toLowerCase())
       )
       setLocalReviewRequests(nextReviewRequests)
-      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
       onReviewersRequested(nextReviewRequests)
+      if (target.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       setReviewerInput('')
       toast.success(
         logins.length === 1
@@ -898,9 +1158,6 @@ function PRReviewersPanel({
   }
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
-    if (nextOpen) {
-      measureReviewerPickerPlacement()
-    }
     setOpen(nextOpen)
     if (nextOpen) {
       scheduleReviewerInputFocus()
@@ -978,162 +1235,80 @@ function PRReviewersPanel({
   }
 
   return (
-    <aside className="rounded-lg border border-border/50 bg-card shadow-xs">
-      <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
-        <Users className="size-3.5 text-muted-foreground" />
-        <span className="text-[13px] font-medium text-foreground">
-          {translate('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}
-        </span>
-        {reviewers.length > 0 ? (
-          <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-            {reviewers.length}
-          </span>
-        ) : null}
-      </div>
-      <div className="px-3 py-2.5">
-        {loading && !hasReviewerMetadata ? (
-          <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
-            <LoaderCircle className="size-3.5 animate-spin" />
-            {translate('auto.components.PullRequestPage.acbd110867', 'Loading reviewers')}
-          </div>
-        ) : reviewers.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {reviewers.map((reviewer) => {
-              const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
-              return (
-                <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
-                  <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-foreground">
-                      {reviewer.login}
-                    </div>
-                    {reviewer.name ? (
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {reviewer.name}
-                      </div>
-                    ) : null}
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {reviewer.stateLabel}
-                  </span>
-                  {canRemoveReviewer ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
-                          disabled={submitting || !canRequestReview}
-                          aria-label={translate(
-                            'auto.components.PullRequestPage.ae9a38fd4a',
-                            'Remove reviewer {{value0}}',
-                            { value0: reviewer.login }
-                          )}
-                          onClick={() => {
-                            void handleRemoveReviewers([reviewer.login])
-                          }}
-                        >
-                          <X className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {translate('auto.components.PullRequestPage.7f964a365a', 'Remove reviewer')}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="py-1 text-[12px] text-muted-foreground">
-            {translate('auto.components.PullRequestPage.d10b6d5209', 'No reviewers requested.')}
-          </div>
-        )}
+    <section>
+      <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span>{translate('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}</span>
         <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
-          <PopoverAnchor asChild>
-            <Input
-              ref={reviewerInputRef}
-              value={reviewerInput}
-              onChange={(event) => {
-                setReviewerInput(event.target.value)
-                if (!open) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
+          <PopoverTrigger asChild>
+            <button
+              type="button"
               disabled={submitting || !canRequestReview}
-              placeholder={translate(
-                'auto.components.PullRequestPage.3bde131f49',
-                'Type or choose a user'
-              )}
               aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
-              aria-expanded={open}
-              aria-haspopup="listbox"
-              className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
-              onFocus={() => {
-                if (canRequestReview) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
-              onClick={() => {
-                if (canRequestReview) {
-                  handleReviewerPickerOpenChange(true)
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
-                  event.preventDefault()
-                  setOpen(true)
-                  setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
-                  return
-                }
-                if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
-                  event.preventDefault()
-                  setOpen(true)
-                  setActiveReviewerIndex(
-                    (current) =>
-                      (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
-                  )
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  const activeReviewer = actionableReviewerRows[activeReviewerIndex]
-                  if (activeReviewer) {
-                    void requestReviewer(activeReviewer)
-                    return
-                  }
-                  void handleRequestReview()
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  handleReviewerPickerOpenChange(false)
-                }
-              }}
-            />
-          </PopoverAnchor>
+              className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {submitting ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Pencil className="size-3" />
+              )}
+            </button>
+          </PopoverTrigger>
           <PopoverContent
-            className="flex w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
-            align="start"
-            side={reviewerPickerSide}
+            className="flex max-h-[420px] w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
+            align="end"
+            side="bottom"
             sideOffset={6}
-            avoidCollisions={false}
-            style={{
-              maxHeight: reviewerPickerMaxHeight ? `${reviewerPickerMaxHeight}px` : undefined
-            }}
             onOpenAutoFocus={(event) => {
               event.preventDefault()
             }}
           >
-            <div className="border-b border-border/70 px-3 py-2">
-              <div className="text-[13px] font-semibold text-foreground">
-                {translate(
-                  'auto.components.PullRequestPage.805cb72cd4',
-                  'Request up to 15 reviewers'
+            <div className="border-b border-border/70 p-2">
+              <Input
+                ref={reviewerInputRef}
+                value={reviewerInput}
+                onChange={(event) => setReviewerInput(event.target.value)}
+                disabled={submitting || !canRequestReview}
+                placeholder={translate(
+                  'auto.components.PullRequestPage.3bde131f49',
+                  'Type or choose a user'
                 )}
-              </div>
+                aria-label={translate('auto.components.PullRequestPage.a04c137bb7', 'Reviewer')}
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                className="h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                    event.preventDefault()
+                    setActiveReviewerIndex(
+                      (current) => (current + 1) % actionableReviewerRows.length
+                    )
+                    return
+                  }
+                  if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                    event.preventDefault()
+                    setActiveReviewerIndex(
+                      (current) =>
+                        (current - 1 + actionableReviewerRows.length) %
+                        actionableReviewerRows.length
+                    )
+                    return
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                    if (activeReviewer) {
+                      void requestReviewer(activeReviewer)
+                      return
+                    }
+                    void handleRequestReview()
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    handleReviewerPickerOpenChange(false)
+                  }
+                }}
+              />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {reviewerMetadata.loading ? (
@@ -1192,7 +1367,67 @@ function PRReviewersPanel({
           </PopoverContent>
         </Popover>
       </div>
-    </aside>
+      {loading && !hasReviewerMetadata ? (
+        <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          {translate('auto.components.PullRequestPage.acbd110867', 'Loading reviewers')}
+        </div>
+      ) : reviewers.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {reviewers.map((reviewer) => {
+            const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+            return (
+              <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
+                <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-foreground">
+                    {reviewer.login}
+                  </div>
+                  {reviewer.name ? (
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {reviewer.name}
+                    </div>
+                  ) : null}
+                </div>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {reviewer.stateLabel}
+                </span>
+                {canRemoveReviewer ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                        disabled={submitting || !canRequestReview}
+                        aria-label={translate(
+                          'auto.components.PullRequestPage.ae9a38fd4a',
+                          'Remove reviewer {{value0}}',
+                          { value0: reviewer.login }
+                        )}
+                        onClick={() => {
+                          void handleRemoveReviewers([reviewer.login])
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {translate('auto.components.PullRequestPage.7f964a365a', 'Remove reviewer')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="py-1 text-[12px] text-muted-foreground">
+          {translate('auto.components.PullRequestPage.d10b6d5209', 'No reviewers requested.')}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -1209,6 +1444,7 @@ function isPRFileViewed(file: GitHubPRFile): boolean {
 // background refetch on open. See docs/gh-work-item-drawer-cache.md.
 const WORK_ITEM_DETAILS_CACHE_MAX = 50
 const WORK_ITEM_DETAILS_FRESH_MS = 30_000
+const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
 type WorkItemDetailsCacheEntry = {
   details: GitHubWorkItemDetails | null
   fetchedAt: number
@@ -1238,12 +1474,16 @@ function getWorkItemDetailsCacheKey(args: {
   repoPath: string
   repoId: string
   issueSourcePreference: string | undefined
+  sourceCacheScope?: string | null
   type: 'issue' | 'pr'
   number: number
 }): string {
   // Why: include all axes that change which (repo, item) the IPC resolves to.
   // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
-  return [args.repoId, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
+  const keyParts = args.sourceCacheScope
+    ? [args.repoId, args.sourceCacheScope, args.issueSourcePreference ?? 'auto', args.type]
+    : [args.repoId, args.issueSourcePreference ?? 'auto', args.type]
+  return [...keyParts, args.number].join('\0')
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
@@ -1290,7 +1530,6 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   type: 'issue' | 'pr'
   number: number
 }): void {
-  workItemDetailsCacheGeneration += 1
   const suffix = `\0${args.type}\0${args.number}`
   const prefix = `${args.repoId ?? args.repoPath}\0`
   let removed = false
@@ -1301,6 +1540,7 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
     }
   }
   if (removed) {
+    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }
@@ -1385,6 +1625,7 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
 // own cache when any window's mutation lands. We track the unsubscribe so
 // Vite HMR doesn't accumulate listeners across module reloads in dev.
 let workItemMutatedUnsub: (() => void) | undefined
+let workItemDetailsCacheEventUnsub: (() => void) | undefined
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
   workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
     invalidateWorkItemDetailsCacheByMatch({
@@ -1394,10 +1635,14 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
       number: payload.number
     })
   })
+  workItemDetailsCacheEventUnsub = onGitHubWorkItemDetailsCacheMutation((payload) => {
+    invalidateWorkItemDetailsCacheByMatch(payload)
+  })
 }
 if (typeof import.meta !== 'undefined' && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
+    workItemDetailsCacheEventUnsub?.()
   })
 }
 
@@ -1494,14 +1739,20 @@ function touchPRFileContentCache(
 function getPRFileContentCacheKey(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
   baseSha: string
 }): string {
   const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
+  const sourceKey =
+    args.sourceContext?.provider === 'github'
+      ? `source:${getTaskSourceCacheScope(args.sourceContext)}`
+      : 'source:local'
   return [
     repositoryKey,
+    sourceKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -1514,6 +1765,7 @@ function getPRFileContentCacheKey(args: {
 function loadPRFileContents(args: {
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
@@ -1526,17 +1778,35 @@ function loadPRFileContents(args: {
     return Promise.resolve(cached.value)
   }
   let request: Promise<GitHubPRFileContents>
-  request = window.api.gh
-    .prFileContents({
-      repoPath: args.repoPath,
-      repoId: args.repoId,
-      prNumber: args.prNumber,
-      path: args.file.path,
-      oldPath: args.file.oldPath,
-      status: args.file.status,
-      headSha: args.headSha,
-      baseSha: args.baseSha
-    })
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  request = (
+    runtimeHost
+      ? callRuntimeRpc<GitHubPRFileContents>(
+          { kind: 'environment', environmentId: runtimeHost.environmentId },
+          'github.prFileContents',
+          {
+            repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+            prNumber: args.prNumber,
+            path: args.file.path,
+            oldPath: args.file.oldPath,
+            status: args.file.status,
+            headSha: args.headSha,
+            baseSha: args.baseSha
+          },
+          { timeoutMs: 30_000 }
+        )
+      : window.api.gh.prFileContents({
+          repoPath: args.repoPath,
+          repoId: args.repoId,
+          sourceContext: args.sourceContext,
+          prNumber: args.prNumber,
+          path: args.file.path,
+          oldPath: args.file.oldPath,
+          status: args.file.status,
+          headSha: args.headSha,
+          baseSha: args.baseSha
+        })
+  )
     .then((contents) => {
       if (prFileContentCache.get(cacheKey)?.value === request) {
         touchPRFileContentCache(cacheKey, contents)
@@ -1558,13 +1828,42 @@ function loadPRFileContents(args: {
 function addIssueCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   number: number
   body: string
   type?: 'issue' | 'pr'
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
+      'github.addIssueComment',
+      {
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+        number: args.number,
+        body: args.body
+      },
+      { timeoutMs: 30_000 }
+    ).then((result) => {
+      if (result.ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: args.type ?? 'issue',
+            number: args.number
+          },
+          { local: false }
+        )
+      }
+      return result
+    })
+  }
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     number: args.number,
     body: args.body,
     type: args.type
@@ -1574,6 +1873,7 @@ function addIssueCommentForRepo(args: {
 function addPRReviewCommentForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commitId: string
   path: string
@@ -1581,9 +1881,41 @@ function addPRReviewCommentForRepo(args: {
   startLine?: number
   body: string
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>>(
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
+      'github.addPRReviewComment',
+      {
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+        prNumber: args.prNumber,
+        commitId: args.commitId,
+        path: args.path,
+        line: args.line,
+        startLine: args.startLine,
+        body: args.body
+      },
+      { timeoutMs: 30_000 }
+    ).then((result) => {
+      if (result.ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: 'pr',
+            number: args.prNumber
+          },
+          { local: false }
+        )
+      }
+      return result
+    })
+  }
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commitId: args.commitId,
     path: args.path,
@@ -1596,6 +1928,7 @@ function addPRReviewCommentForRepo(args: {
 function addPRReviewCommentReplyForRepo(args: {
   repoId?: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   commentId: number
   body: string
@@ -1603,9 +1936,41 @@ function addPRReviewCommentReplyForRepo(args: {
   path?: string
   line?: number
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>>(
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
+      'github.addPRReviewCommentReply',
+      {
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+        prNumber: args.prNumber,
+        commentId: args.commentId,
+        body: args.body,
+        threadId: args.threadId,
+        path: args.path,
+        line: args.line
+      },
+      { timeoutMs: 30_000 }
+    ).then((result) => {
+      if (result.ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: 'pr',
+            number: args.prNumber
+          },
+          { local: false }
+        )
+      }
+      return result
+    })
+  }
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     commentId: args.commentId,
     body: args.body,
@@ -1615,35 +1980,74 @@ function addPRReviewCommentReplyForRepo(args: {
   })
 }
 
+function notifyWorkItemDetailsMutation(
+  args: {
+    repoPath: string
+    repoId?: string
+    sourceContext?: TaskSourceContext | null
+    type: 'issue' | 'pr'
+    number: number
+  },
+  options: { local?: boolean } = {}
+): void {
+  if (options.local !== false) {
+    emitGitHubWorkItemDetailsCacheMutation(args)
+  }
+  void window.api.gh
+    .notifyWorkItemMutated({
+      repoPath: args.repoPath,
+      repoId: args.repoId,
+      type: args.type,
+      number: args.number
+    })
+    .catch(() => undefined)
+}
+
 function setPRFileViewedForRepo(args: {
-  repoId?: string
+  repoId: string
   repoPath: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   pullRequestId: string
   path: string
   viewed: boolean
 }): Promise<boolean> {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (runtimeHost) {
+    return callRuntimeRpc<boolean>(
+      { kind: 'environment', environmentId: runtimeHost.environmentId },
+      'github.setPRFileViewed',
+      {
+        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+        pullRequestId: args.pullRequestId,
+        path: args.path,
+        viewed: args.viewed
+      },
+      { timeoutMs: 30_000 }
+    ).then((ok) => {
+      if (ok) {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: args.repoPath,
+            repoId: args.repoId,
+            sourceContext: args.sourceContext,
+            type: 'pr',
+            number: args.prNumber
+          },
+          { local: false }
+        )
+      }
+      return ok
+    })
+  }
   return window.api.gh.setPRFileViewed({
     repoPath: args.repoPath,
     repoId: args.repoId,
+    sourceContext: args.sourceContext,
     prNumber: args.prNumber,
     pullRequestId: args.pullRequestId,
     path: args.path,
     viewed: args.viewed
-  })
-}
-
-function getWorkItemDetailsForRepo(args: {
-  repoId?: string
-  repoPath: string
-  number: number
-  type: 'issue' | 'pr'
-}): Promise<GitHubWorkItemDetails | null> {
-  return window.api.gh.workItemDetails({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    number: args.number,
-    type: args.type
   })
 }
 
@@ -1812,6 +2216,7 @@ type PRFilesCombinedDiffViewerProps = {
   comments: PRComment[]
   repoPath: string
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   prUrl: string
   headSha: string | undefined
@@ -1826,6 +2231,7 @@ function PRFilesCombinedDiffViewer({
   comments,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   prUrl,
   headSha,
@@ -2025,6 +2431,7 @@ function PRFilesCombinedDiffViewer({
         const contents = await loadPRFileContents({
           repoPath,
           repoId,
+          sourceContext,
           prNumber,
           file,
           headSha,
@@ -2074,7 +2481,7 @@ function PRFilesCombinedDiffViewer({
           )
         })
     },
-    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath]
+    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
   )
 
   const retrySection = useCallback(
@@ -2307,6 +2714,7 @@ function PRFilesCombinedDiffViewer({
       const result = await addPRReviewCommentForRepo({
         repoPath,
         repoId,
+        sourceContext,
         prNumber,
         commitId: headSha,
         path: section.path,
@@ -2327,7 +2735,7 @@ function PRFilesCombinedDiffViewer({
       )
       return true
     },
-    [headSha, onCommentAdded, prNumber, repoId, repoPath]
+    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
   )
 
   const renderViewedCheckbox = useCallback(
@@ -2473,6 +2881,7 @@ function CommentCodeContext({
   comment,
   repoPath,
   repoId,
+  sourceContext,
   prNumber,
   files,
   headSha,
@@ -2481,6 +2890,7 @@ function CommentCodeContext({
   comment: PRComment
   repoPath: string | null
   repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -2505,7 +2915,7 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, repoId, prNumber, file, headSha, baseSha })
+    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -2519,7 +2929,7 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
+  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
 
   const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
     contextExpansionState,
@@ -2772,6 +3182,7 @@ function ConversationTab({
   item,
   repoPath,
   repoId,
+  sourceContext,
   body,
   comments,
   files,
@@ -2793,6 +3204,7 @@ function ConversationTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
@@ -2819,10 +3231,21 @@ function ConversationTab({
   const [bodySaving, setBodySaving] = useState(false)
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
+  const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId, repoOwnerSettings)
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
@@ -2880,7 +3303,9 @@ function ConversationTab({
     [bodySlug, projectOrigin]
   )
   const canEditBody =
-    item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
+    item.type === 'pr'
+      ? Boolean(projectOrigin || bodySlug)
+      : Boolean(projectOrigin || canUseRepoMutationContext)
   const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
@@ -2893,6 +3318,7 @@ function ConversationTab({
       await runWorkItemBodyUpdate({
         item,
         repoPath,
+        sourceContext,
         projectOrigin,
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
@@ -2917,12 +3343,13 @@ function ConversationTab({
     item,
     onBodyUpdated,
     projectOrigin,
-    repoPath
+    repoPath,
+    sourceContext
   ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
-      if (!repoPath) {
+      if (!canUseRepoMutationContext) {
         toast.error(
           translate(
             'auto.components.PullRequestPage.6885c619e7',
@@ -2934,8 +3361,9 @@ function ConversationTab({
       const result =
         comment.path && item.type === 'pr'
           ? await addPRReviewCommentReplyForRepo({
-              repoPath,
+              repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               commentId: comment.id,
               body: replyBody,
@@ -2944,8 +3372,9 @@ function ConversationTab({
               line: comment.line
             })
           : await addIssueCommentForRepo({
-              repoPath,
+              repoPath: repoPath ?? '',
               repoId: item.repoId,
+              sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
               type: item.type
@@ -2963,25 +3392,42 @@ function ConversationTab({
       toast.success(translate('auto.components.PullRequestPage.11505c7a71', 'Reply posted.'))
       return true
     },
-    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
+    [
+      canUseRepoMutationContext,
+      item.number,
+      item.repoId,
+      item.type,
+      onCommentAdded,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const rightPanel =
     item.type === 'pr' ? (
-      <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
+      <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           onStateChange={onStateChange}
+          onMutated={onMutated}
+        />
+        <PRAssigneesPanel
+          item={item}
+          repoPath={repoPath}
+          projectOrigin={projectOrigin}
+          sourceContext={sourceContext}
           onMutated={onMutated}
         />
         <PRReviewersPanel
           item={item}
           loading={loading}
           repoPath={repoPath}
+          sourceContext={sourceContext}
           onReviewersRequested={onReviewersRequested}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
@@ -2989,6 +3435,7 @@ function ConversationTab({
             item={item}
             repoPath={repoPath}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             headSha={headSha}
             checks={checks}
             loading={loading || !detailsLoaded}
@@ -3094,6 +3541,7 @@ function ConversationTab({
           comment={comment}
           repoPath={repoPath}
           repoId={item.repoId}
+          sourceContext={sourceContext}
           prNumber={item.number}
           files={files}
           headSha={headSha}
@@ -3347,11 +3795,12 @@ function ConversationTab({
           </>
         ) : null}
 
-        {detailsLoaded && repoPath && (
+        {detailsLoaded && canUseRepoMutationContext && (
           <GHCommentComposer
             className="mt-1"
-            repoPath={repoPath}
+            repoPath={repoPath ?? ''}
             repoId={item.repoId}
+            sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
             mentionOptions={mentionOptions}
@@ -3369,6 +3818,7 @@ function PRActionsPanel({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   onStateChange,
@@ -3377,6 +3827,7 @@ function PRActionsPanel({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
@@ -3390,9 +3841,15 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
+  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const mergeTarget = getActiveRuntimeTarget(sourceSettings)
+  const canMutateWithRepoContext =
+    !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
+  const canMutateState = localState !== 'merged' && canMutateWithRepoContext
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
-  const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
+  const canMergeWithRepoContext = !!repoPath || mergeTarget.kind === 'environment'
+  const mergeDisabled =
+    !canMergeWithRepoContext || mergePending || !mergePresentation.directMergeAvailable
 
   const patchProjectRowIfNeeded = useCallback(
     (state: GitHubWorkItem['state']) => {
@@ -3407,10 +3864,10 @@ function PRActionsPanel({
   const applyStatePatch = useCallback(
     (state: GitHubWorkItem['state']) => {
       onStateChange(state)
-      patchWorkItem(item.id, { state }, item.repoId)
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
       patchProjectRowIfNeeded(state)
     },
-    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem]
+    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
   )
 
   const handleStateChange = async (): Promise<void> => {
@@ -3446,6 +3903,7 @@ function PRActionsPanel({
       await runPullRequestStateUpdate({
         repoPath,
         repoId,
+        sourceContext,
         projectOrigin,
         number: item.number,
         updates: { state: nextState }
@@ -3471,7 +3929,7 @@ function PRActionsPanel({
   }
 
   const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
-    if (!repoPath || mergeDisabled) {
+    if (mergeDisabled) {
       return
     }
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
@@ -3491,18 +3949,44 @@ function PRActionsPanel({
     }
     setMergePending(true)
     try {
-      const result = await window.api.gh.mergePR({
-        repoPath,
-        repoId: repoId ?? undefined,
-        prNumber: item.number,
-        method,
-        prRepo: item.prRepo ?? null
-      })
+      const result =
+        mergeTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.mergePR>>>(
+              mergeTarget,
+              'github.mergePR',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                method,
+                prRepo: item.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.mergePR({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              method,
+              prRepo: item.prRepo ?? null
+            })
       if (!result.ok) {
         toast.error(result.error)
         return
       }
       applyStatePatch('merged')
+      if (mergeTarget.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
+      }
       toast.success(translate('auto.components.PullRequestPage.c57873d721', 'Pull request merged'))
       onMutated()
     } catch {
@@ -3515,23 +3999,50 @@ function PRActionsPanel({
   }
 
   const handleAutoMerge = async (): Promise<void> => {
-    if (!repoPath || !mergePresentation.autoMergeAction) {
+    if (!canMergeWithRepoContext || !mergePresentation.autoMergeAction) {
       return
     }
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMergePending(true)
     try {
-      const result = await window.api.gh.setPRAutoMerge({
-        repoPath,
-        repoId: repoId ?? undefined,
-        prNumber: item.number,
-        enabled,
-        method: enabled ? mergeMethods.defaultMethod : undefined,
-        prRepo: item.prRepo ?? null
-      })
+      const result =
+        mergeTarget.kind === 'environment'
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.setPRAutoMerge>>>(
+              mergeTarget,
+              'github.setPRAutoMerge',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                enabled,
+                method: enabled ? mergeMethods.defaultMethod : undefined,
+                prRepo: item.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRAutoMerge({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              enabled,
+              method: enabled ? mergeMethods.defaultMethod : undefined,
+              prRepo: item.prRepo ?? null
+            })
       if (!result.ok) {
         toast.error(result.error)
         return
+      }
+      if (mergeTarget.kind === 'environment') {
+        notifyWorkItemDetailsMutation(
+          {
+            repoPath: repoPath ?? '',
+            repoId: item.repoId,
+            sourceContext,
+            type: 'pr',
+            number: item.number
+          },
+          { local: false }
+        )
       }
       toast.success(
         enabled
@@ -3589,7 +4100,7 @@ function PRActionsPanel({
               </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {!repoPath
+              {!canMergeWithRepoContext
                 ? translate(
                     'auto.components.PullRequestPage.eca289e593',
                     'Merge requires a registered local repo'
@@ -3600,7 +4111,7 @@ function PRActionsPanel({
           <DropdownMenuContent align="start" className="w-52">
             {mergePresentation.autoMergeAction && (
               <DropdownMenuItem
-                disabled={!repoPath || mergePending}
+                disabled={!canMergeWithRepoContext || mergePending}
                 onSelect={() => void handleAutoMerge()}
               >
                 <GitMerge className="size-4" />
@@ -3779,6 +4290,7 @@ function CommentReplyForm({
 const CHECK_SORT_ORDER: Record<string, number> = {
   failure: 0,
   timed_out: 0,
+  action_required: 0,
   cancelled: 1,
   pending: 2,
   neutral: 3,
@@ -3804,6 +4316,9 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
   if (conclusion === 'timed_out') {
     return 'Timed out'
   }
+  if (conclusion === 'action_required') {
+    return 'Action required'
+  }
   if (conclusion === 'neutral') {
     return 'Neutral'
   }
@@ -3822,6 +4337,7 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
 function getCheckCounts(checks: PRCheckDetail[]): {
   passing: number
   failing: number
+  needsAction: number
   pending: number
   skipped: number
   neutral: number
@@ -3831,6 +4347,8 @@ function getCheckCounts(checks: PRCheckDetail[]): {
       const conclusion = getCheckConclusion(check)
       if (conclusion === 'success') {
         counts.passing += 1
+      } else if (conclusion === 'action_required') {
+        counts.needsAction += 1
       } else if (['failure', 'cancelled', 'timed_out'].includes(conclusion)) {
         counts.failing += 1
       } else if (conclusion === 'skipped') {
@@ -3842,7 +4360,7 @@ function getCheckCounts(checks: PRCheckDetail[]): {
       }
       return counts
     },
-    { passing: 0, failing: 0, pending: 0, skipped: 0, neutral: 0 }
+    { passing: 0, failing: 0, needsAction: 0, pending: 0, skipped: 0, neutral: 0 }
   )
 }
 
@@ -3853,6 +4371,11 @@ function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
   }
   if (counts.failing > 0) {
     return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
+  }
+  // Why: action_required (e.g. a workflow awaiting approval) blocks merge but is
+  // not a failure; call it out distinctly so users know a manual step is needed.
+  if (counts.needsAction > 0) {
+    return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
   }
   if (counts.pending > 0) {
     return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
@@ -3887,6 +4410,7 @@ function ChecksTab({
   item,
   repoPath,
   repoId,
+  sourceContext,
   headSha,
   checks,
   loading,
@@ -3896,6 +4420,7 @@ function ChecksTab({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
@@ -4011,6 +4536,8 @@ function ChecksTab({
     [item, targetRepoId]
   )
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
+  const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const sorted = [...list].sort(
     (a, b) =>
       (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
@@ -4022,23 +4549,27 @@ function ChecksTab({
   const SummaryIcon =
     counts.failing > 0
       ? CHECK_ICON.failure
-      : counts.pending > 0
-        ? CHECK_ICON.pending
-        : list.length > 0
-          ? CHECK_ICON.success
-          : CircleDashed
+      : counts.needsAction > 0
+        ? CHECK_ICON.action_required
+        : counts.pending > 0
+          ? CHECK_ICON.pending
+          : list.length > 0
+            ? CHECK_ICON.success
+            : CircleDashed
   const summaryColor =
     counts.failing > 0
       ? CHECK_COLOR.failure
-      : counts.pending > 0
-        ? CHECK_COLOR.pending
-        : list.length > 0
-          ? CHECK_COLOR.success
-          : 'text-muted-foreground'
+      : counts.needsAction > 0
+        ? CHECK_COLOR.action_required
+        : counts.pending > 0
+          ? CHECK_COLOR.pending
+          : list.length > 0
+            ? CHECK_COLOR.success
+            : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
-    if (!repoPath) {
+    if (!canUseChecksRepoContext) {
       toast.error(
         translate(
           'auto.components.PullRequestPage.c057f2fcb0',
@@ -4049,13 +4580,27 @@ function ChecksTab({
     }
     setRefreshing(true)
     try {
-      const nextChecks = (await window.api.gh.prChecks({
-        repoPath,
-        repoId: repoId ?? undefined,
-        prNumber: item.number,
-        headSha,
-        noCache: true
-      })) as PRCheckDetail[]
+      const nextChecks = (await (runtimeHost
+        ? callRuntimeRpc<PRCheckDetail[]>(
+            { kind: 'environment', environmentId: runtimeHost.environmentId },
+            'github.prChecks',
+            {
+              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+              prNumber: item.number,
+              headSha,
+              prRepo,
+              noCache: true
+            },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.prChecks({
+            repoPath: repoPath ?? '',
+            repoId: repoId ?? undefined,
+            sourceContext,
+            prNumber: item.number,
+            headSha,
+            noCache: true
+          }))) as PRCheckDetail[]
       setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
       onChecksUpdated(nextChecks)
       return nextChecks
@@ -4069,22 +4614,46 @@ function ChecksTab({
     } finally {
       setRefreshing(false)
     }
-  }, [headSha, item.number, onChecksUpdated, repoId, repoPath])
+  }, [
+    canUseChecksRepoContext,
+    headSha,
+    item.number,
+    item.repoId,
+    onChecksUpdated,
+    runtimeHost,
+    prRepo,
+    repoId,
+    repoPath,
+    sourceContext
+  ])
 
   const handleRerun = useCallback(
     async (failedOnly: boolean): Promise<void> => {
-      if (!repoPath || rerunning) {
+      if (!canUseChecksRepoContext || rerunning) {
         return
       }
       setRerunning(true)
       try {
-        const result = await window.api.gh.rerunPRChecks({
-          repoPath,
-          repoId: repoId ?? undefined,
-          prNumber: item.number,
-          headSha,
-          failedOnly
-        })
+        const result = runtimeHost
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
+              { kind: 'environment', environmentId: runtimeHost.environmentId },
+              'github.rerunPRChecks',
+              {
+                repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+                prNumber: item.number,
+                headSha,
+                failedOnly
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.rerunPRChecks({
+              repoPath: repoPath ?? '',
+              repoId: repoId ?? undefined,
+              sourceContext,
+              prNumber: item.number,
+              headSha,
+              failedOnly
+            })
         if (!result.ok) {
           toast.error(result.error)
           return
@@ -4105,7 +4674,18 @@ function ChecksTab({
         setRerunning(false)
       }
     },
-    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath]
+    [
+      canUseChecksRepoContext,
+      handleRefresh,
+      headSha,
+      item.number,
+      item.repoId,
+      runtimeHost,
+      rerunning,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
@@ -4166,7 +4746,7 @@ function ChecksTab({
       const key = getCheckDetailsKey(check)
       setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
       if (
-        !repoPath ||
+        !canUseChecksRepoContext ||
         detailsByCheckKey[key] ||
         (!check.checkRunId && !check.workflowRunId && !check.url)
       ) {
@@ -4179,16 +4759,31 @@ function ChecksTab({
           error: null
         })
       )
-      void window.api.gh
-        .prCheckDetails({
-          repoPath,
-          repoId: repoId ?? undefined,
-          checkRunId: check.checkRunId,
-          workflowRunId: check.workflowRunId,
-          checkName: check.name,
-          url: check.url,
-          prRepo
-        })
+      const detailsRequest = runtimeHost
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
+            { kind: 'environment', environmentId: runtimeHost.environmentId },
+            'github.prCheckDetails',
+            {
+              repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo
+            },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.prCheckDetails({
+            repoPath: repoPath ?? '',
+            repoId: repoId ?? undefined,
+            sourceContext,
+            checkRunId: check.checkRunId,
+            workflowRunId: check.workflowRunId,
+            checkName: check.name,
+            url: check.url,
+            prRepo
+          })
+      void detailsRequest
         .then((details) => {
           if (!mountedRef.current) {
             return
@@ -4214,7 +4809,17 @@ function ChecksTab({
           )
         })
     },
-    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
+    [
+      canUseChecksRepoContext,
+      detailsByCheckKey,
+      item.repoId,
+      mountedRef,
+      runtimeHost,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
   )
 
   const refreshAction = (
@@ -4225,7 +4830,7 @@ function ChecksTab({
           variant="ghost"
           size="icon-xs"
           className="size-7 shrink-0"
-          disabled={!repoPath || refreshing}
+          disabled={!canUseChecksRepoContext || refreshing}
           onClick={() => void handleRefresh()}
           aria-label={translate('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
         >
@@ -4276,7 +4881,7 @@ function ChecksTab({
             variant="outline"
             size="xs"
             className="h-7 gap-1 px-2 text-[11px]"
-            disabled={!repoPath || rerunning || list.length === 0}
+            disabled={!canUseChecksRepoContext || rerunning || list.length === 0}
           >
             {rerunning ? (
               <LoaderCircle className="size-3 animate-spin" />
@@ -4558,10 +5163,15 @@ function ChecksTab({
 
             {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
               <div className="text-[12px] text-muted-foreground">
-                {translate(
-                  'auto.components.PullRequestPage.1550675e5f',
-                  'No inline output is available for this check.'
-                )}
+                {getCheckConclusion(check) === 'action_required'
+                  ? translate(
+                      'auto.components.PullRequestPage.checkActionRequiredHint',
+                      'Needs a manual action on GitHub (e.g. approving the run) to unblock merging.'
+                    )
+                  : translate(
+                      'auto.components.PullRequestPage.1550675e5f',
+                      'No inline output is available for this check.'
+                    )}
               </div>
             )}
 
@@ -4681,6 +5291,18 @@ function ChecksTab({
           value0: counts.failing
         }),
         className: CHECK_COLOR.failure
+      })
+    }
+    if (counts.needsAction > 0) {
+      countChips.push({
+        label: translate(
+          'auto.components.PullRequestPage.checksNeedActionChip',
+          '{{value0}} action required',
+          {
+            value0: counts.needsAction
+          }
+        ),
+        className: CHECK_COLOR.action_required
       })
     }
     if (counts.pending > 0) {
@@ -4912,12 +5534,17 @@ function getGitHubMutationSettings(repoId: string | null | undefined) {
 async function runIssueUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
+    const targetSettings =
+      args.sourceContext?.provider === 'github'
+        ? getTaskSourceRuntimeSettings(args.sourceContext)
+        : getGitHubMutationSettings(args.repoId)
+    const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -4938,25 +5565,63 @@ async function runIssueUpdate(args: {
     if (!res.ok) {
       throw new Error(res.error.message)
     }
+    if (target.kind === 'environment') {
+      notifyWorkItemDetailsMutation(
+        {
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          type: 'issue',
+          number: args.number
+        },
+        { local: false }
+      )
+    }
     return
   }
-  if (!args.repoPath) {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (!args.repoPath && !runtimeHost) {
     throw new Error('No repo context available for this edit.')
   }
-  const res = await window.api.gh.updateIssue({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    number: args.number,
-    updates: args.updates
-  })
+  const res = runtimeHost
+    ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssue>>>(
+        { kind: 'environment', environmentId: runtimeHost.environmentId },
+        'github.updateIssue',
+        {
+          repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
+          number: args.number,
+          updates: args.updates
+        },
+        { timeoutMs: 30_000 }
+      )
+    : await window.api.gh.updateIssue({
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        number: args.number,
+        updates: args.updates
+      })
   if (!res.ok) {
     throw new Error(res.error)
+  }
+  if (runtimeHost) {
+    notifyWorkItemDetailsMutation(
+      {
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        type: 'issue',
+        number: args.number
+      },
+      { local: false }
+    )
   }
 }
 
 async function runWorkItemBodyUpdate(args: {
   item: GitHubWorkItem
   repoPath: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   body: string
   parsedSlug: GitHubOwnerRepo | null
@@ -4968,7 +5633,11 @@ async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
+    const targetSettings =
+      args.sourceContext?.provider === 'github'
+        ? getTaskSourceRuntimeSettings(args.sourceContext)
+        : getGitHubMutationSettings(args.item.repoId)
+    const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -4989,12 +5658,25 @@ async function runWorkItemBodyUpdate(args: {
     if (!res.ok) {
       throw new Error(res.error.message)
     }
+    if (target.kind === 'environment') {
+      notifyWorkItemDetailsMutation(
+        {
+          repoPath: args.repoPath ?? '',
+          repoId: args.item.repoId,
+          sourceContext: args.sourceContext,
+          type: 'pr',
+          number: args.item.number
+        },
+        { local: false }
+      )
+    }
     return
   }
 
   await runIssueUpdate({
     repoPath: args.repoPath,
     repoId: args.item.repoId,
+    sourceContext: args.sourceContext,
     projectOrigin: args.projectOrigin,
     number: args.item.number,
     updates: { body: args.body }
@@ -5004,12 +5686,17 @@ async function runWorkItemBodyUpdate(args: {
 async function runPullRequestStateUpdate(args: {
   repoPath: string | null
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   number: number
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
+    const targetSettings =
+      args.sourceContext?.provider === 'github'
+        ? getTaskSourceRuntimeSettings(args.sourceContext)
+        : getGitHubMutationSettings(args.repoId)
+    const target = getActiveRuntimeTarget(targetSettings)
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -5030,19 +5717,56 @@ async function runPullRequestStateUpdate(args: {
     if (!res.ok) {
       throw new Error(res.error.message)
     }
+    if (target.kind === 'environment') {
+      notifyWorkItemDetailsMutation(
+        {
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          type: 'pr',
+          number: args.number
+        },
+        { local: false }
+      )
+    }
     return
   }
-  if (!args.repoPath) {
+  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  if (!args.repoPath && !runtimeHost) {
     throw new Error('No repo context available for this pull request.')
   }
-  const res = await window.api.gh.updatePRState({
-    repoPath: args.repoPath,
-    repoId: args.repoId ?? undefined,
-    prNumber: args.number,
-    updates: args.updates
-  })
+  const res = runtimeHost
+    ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
+        { kind: 'environment', environmentId: runtimeHost.environmentId },
+        'github.updatePRState',
+        {
+          repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
+          prNumber: args.number,
+          updates: args.updates
+        },
+        { timeoutMs: 30_000 }
+      )
+    : await window.api.gh.updatePRState({
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        prNumber: args.number,
+        updates: args.updates
+      })
   if (!res.ok) {
     throw new Error(res.error)
+  }
+  if (runtimeHost) {
+    notifyWorkItemDetailsMutation(
+      {
+        repoPath: args.repoPath ?? '',
+        repoId: args.repoId ?? undefined,
+        sourceContext: args.sourceContext,
+        type: 'pr',
+        number: args.number
+      },
+      { local: false }
+    )
   }
 }
 
@@ -5050,6 +5774,7 @@ function GHEditSection({
   item,
   repoPath,
   repoId,
+  sourceContext,
   projectOrigin,
   localState,
   localLabels,
@@ -5062,6 +5787,7 @@ function GHEditSection({
   item: GitHubWorkItem
   repoPath: string | null
   repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
@@ -5083,6 +5809,16 @@ function GHEditSection({
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
@@ -5108,21 +5844,16 @@ function GHEditSection({
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
-    repoOwnerSettings
+    sourceSettings
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, repoOwnerSettings)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
-    repoOwnerSettings
+    sourceSettings
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(
-    slugOwner,
-    slugRepo,
-    assignees,
-    repoOwnerSettings
-  )
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
@@ -5146,22 +5877,23 @@ function GHEditSection({
           runIssueUpdate({
             repoId: item.repoId,
             repoPath,
+            sourceContext,
             projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState }, item.repoId)
+          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
-          patchWorkItem(item.id, { state: newState }, item.repoId)
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -5174,6 +5906,7 @@ function GHEditSection({
       item.repoId,
       localState,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -5195,13 +5928,14 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
@@ -5209,7 +5943,7 @@ function GHEditSection({
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -5220,18 +5954,19 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels }, item.repoId)
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
@@ -5247,6 +5982,7 @@ function GHEditSection({
       item.repoId,
       localLabels,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -5273,6 +6009,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
@@ -5296,6 +6033,7 @@ function GHEditSection({
             runIssueUpdate({
               repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
@@ -5320,6 +6058,7 @@ function GHEditSection({
       item.repoId,
       assigneesItemKey,
       repoPath,
+      sourceContext,
       projectOrigin,
       localAssignees,
       patchProjectRowIfNeeded,
@@ -5529,6 +6268,7 @@ function GHCommentComposer({
   className,
   repoPath,
   repoId,
+  sourceContext,
   issueNumber,
   itemType,
   mentionOptions,
@@ -5537,6 +6277,7 @@ function GHCommentComposer({
   className?: string
   repoPath: string
   repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
   mentionOptions: MentionOption[]
@@ -5575,6 +6316,7 @@ function GHCommentComposer({
       const result = await addIssueCommentForRepo({
         repoPath,
         repoId: repoId ?? undefined,
+        sourceContext,
         number: issueNumber,
         body: bodyState.body,
         type: itemType
@@ -5607,7 +6349,17 @@ function GHCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [autoGrow, body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [
+    autoGrow,
+    body,
+    mountedRef,
+    repoPath,
+    repoId,
+    sourceContext,
+    issueNumber,
+    itemType,
+    onCommentAdded
+  ])
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
@@ -5621,7 +6373,7 @@ function GHCommentComposer({
   )
 
   return (
-    <div className={cn('flex flex-col items-start gap-2', className)}>
+    <div className={cn('relative', className)}>
       <MentionTextarea
         textareaRef={textareaRef}
         value={body}
@@ -5634,21 +6386,29 @@ function GHCommentComposer({
         rows={4}
         mentionOptions={mentionOptions}
         wrapperClassName="flex min-h-20 w-full items-stretch"
-        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
-      <Button
-        onClick={handleSubmit}
-        disabled={!canSubmitComment || submitting}
-        className="gap-2"
-        aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        {translate('auto.components.PullRequestPage.3450247584', 'Comment')}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon-sm"
+            onClick={handleSubmit}
+            disabled={!canSubmitComment || submitting}
+            className="absolute bottom-3 right-3 shadow-sm"
+            aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+          >
+            {submitting ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }
@@ -5660,6 +6420,7 @@ export default function PullRequestPage({
   workItem,
   repoPath,
   repoId,
+  sourceContext,
   initialTab,
   backLabel = 'Pull requests',
   projectOrigin,
@@ -5708,18 +6469,28 @@ export default function PullRequestPage({
     return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
       ?.issueSourcePreference
   })
+  const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const detailsCacheKey = useMemo(() => {
-    if (!workItem || !repoPath || !effectiveRepoId) {
+    if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
     }
     return getWorkItemDetailsCacheKey({
-      repoPath,
+      repoPath: repoPath ?? '',
       repoId: effectiveRepoId,
       issueSourcePreference,
+      sourceCacheScope:
+        sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null,
       type: workItem.type,
       number: workItem.number
     })
-  }, [repoPath, effectiveRepoId, workItem, issueSourcePreference])
+  }, [
+    canUseDetailsRepoContext,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    workItem,
+    issueSourcePreference
+  ])
 
   // Why: reset lifted edit state when the dialog switches items or when the
   // same item receives an optimistic cache patch from the surrounding table.
@@ -5872,9 +6643,7 @@ export default function PullRequestPage({
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
-  const detailsLoaded =
-    Boolean(cachedEntry?.details) ||
-    Boolean(cachedEntry && !cachedEntry.pending && !cachedEntry.error && cachedEntry.fetchedAt > 0)
+  const detailsLoaded = Boolean(cachedEntry?.details)
 
   // Why: if a cross-window mutation invalidates the open drawer's entry
   // (cachedEntry becomes undefined while workItem is still set), the main
@@ -5888,7 +6657,7 @@ export default function PullRequestPage({
   }, [workItem, detailsCacheKey, cachedEntry])
 
   useEffect(() => {
-    if (!workItem || !repoPath || !detailsCacheKey) {
+    if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
     // Why: only clear optimistic comments when switching to a genuinely
@@ -5914,9 +6683,10 @@ export default function PullRequestPage({
     // racing two `gh` subprocesses against each other.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
-      getWorkItemDetailsForRepo({
-        repoPath,
-        repoId: effectiveRepoId ?? undefined,
+      lookupGitHubWorkItemDetailsForSource({
+        repoPath: repoPath ?? '',
+        repoId: effectiveRepoId,
+        sourceContext,
         number: workItem.number,
         type: workItem.type
       })
@@ -5939,19 +6709,23 @@ export default function PullRequestPage({
       .then((result) => {
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
         const prev = workItemDetailsCache.get(detailsCacheKey)
-        if (invalidatedMidFlight) {
+        if (invalidatedMidFlight && prev?.pending !== inflight) {
           // Why: entry was deliberately dropped; do not recreate it. If the
           // entry still exists (later open repopulated it) leave it alone too.
           return
         }
-        // Why: 404/unauthorized must not overwrite valid cached data. When the
-        // IPC resolves to null and we already have cached details, keep the
-        // stale data — only blank entries get the null payload.
+        // Why: null means unavailable/not found, not loaded empty content.
         if (result === null && prev?.details) {
           touchWorkItemDetailsCache(detailsCacheKey, {
             details: prev.details,
             fetchedAt: prev.fetchedAt,
             error: undefined
+          })
+        } else if (result === null) {
+          touchWorkItemDetailsCache(detailsCacheKey, {
+            details: null,
+            fetchedAt: 0,
+            error: WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE
           })
         } else {
           touchWorkItemDetailsCache(detailsCacheKey, {
@@ -5964,10 +6738,10 @@ export default function PullRequestPage({
       .catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to load details'
         const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
-        if (invalidatedMidFlight) {
+        const prev = workItemDetailsCache.get(detailsCacheKey)
+        if (invalidatedMidFlight && prev?.pending !== inflight) {
           return
         }
-        const prev = workItemDetailsCache.get(detailsCacheKey)
         // Why: stale-on-error — keep cached data if we have it, drop the
         // pending promise so the next open can retry. Only surface the
         // blocking error when nothing is cached.
@@ -5977,9 +6751,28 @@ export default function PullRequestPage({
           error: message
         })
       })
-  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, refetchTick])
+  }, [
+    canUseDetailsRepoContext,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    workItem,
+    detailsCacheKey,
+    refetchTick
+  ])
 
-  const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
+  // Why: the state pill's icon must track the resolved state so a merged PR
+  // reads as merged (purple GitMerge) rather than wearing the open-PR glyph.
+  const Icon =
+    workItem?.type === 'pr'
+      ? localState === 'merged'
+        ? GitMerge
+        : localState === 'closed'
+          ? GitPullRequestClosed
+          : localState === 'draft'
+            ? GitPullRequestDraft
+            : GitPullRequest
+      : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {
       return null
@@ -6093,9 +6886,34 @@ export default function PullRequestPage({
     [detailsCacheKey]
   )
 
+  const invalidateCurrentDetailsCache = useCallback((): void => {
+    if (!workItem) {
+      return
+    }
+    // Why: local repos can invalidate every source-preference variant; runtime-only
+    // entries need their exact source-scoped key because there is no local path.
+    if (repoPath) {
+      invalidateWorkItemDetailsCacheByMatch({
+        repoPath,
+        repoId: effectiveRepoId ?? undefined,
+        type: workItem.type,
+        number: workItem.number
+      })
+      return
+    }
+    if (detailsCacheKey) {
+      invalidateWorkItemDetailsCacheForKey(detailsCacheKey)
+    }
+  }, [detailsCacheKey, effectiveRepoId, repoPath, workItem])
+
   const handlePRFileViewedChange = useCallback(
     async (path: string, viewed: boolean): Promise<boolean> => {
-      if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
+      if (
+        !canUseDetailsRepoContext ||
+        !details?.pullRequestId ||
+        !workItem ||
+        workItem.type !== 'pr'
+      ) {
         toast.error(
           translate(
             'auto.components.PullRequestPage.996a1897d2',
@@ -6112,7 +6930,8 @@ export default function PullRequestPage({
       try {
         const ok = await setPRFileViewedForRepo({
           repoId: workItem.repoId,
-          repoPath,
+          repoPath: repoPath ?? '',
+          sourceContext,
           prNumber: workItem.number,
           pullRequestId: details.pullRequestId,
           path,
@@ -6139,7 +6958,14 @@ export default function PullRequestPage({
         })
       }
     },
-    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
+    [
+      canUseDetailsRepoContext,
+      details?.pullRequestId,
+      detailsCacheKey,
+      repoPath,
+      sourceContext,
+      workItem
+    ]
   )
 
   const ownerRepo = parseOwnerRepoFromItemUrl(workItem?.url ?? '')
@@ -6171,15 +6997,15 @@ export default function PullRequestPage({
             <ChevronLeft className="size-4" />
             {backLabel}
           </Button>
-          <span className="text-border">·</span>
+          <span className="text-muted-foreground/40">·</span>
           {ownerRepo ? (
             <>
               <span className="truncate">
                 <span className="text-muted-foreground">{ownerRepo.owner}</span>
-                <span className="mx-1 text-muted-foreground/60">/</span>
+                <span className="mx-1 text-muted-foreground/40">/</span>
                 <span className="font-medium text-foreground">{ownerRepo.repo}</span>
               </span>
-              <span className="text-muted-foreground/60">·</span>
+              <span className="text-muted-foreground/40">·</span>
             </>
           ) : null}
           <span className="font-mono text-muted-foreground">#{workItem.number}</span>
@@ -6233,11 +7059,13 @@ export default function PullRequestPage({
       </div>
 
       {/* Row 2: PR title block — large weight-400 title + state row, mirrors Primer pr-title-block */}
-      <div className="flex-none border-b border-border/60 px-6 py-4">
+      <div className="flex-none border-b border-border/60 px-6 py-5">
         <div className="flex items-start gap-4">
-          <h1 className="min-w-0 flex-1 text-[28px] font-medium leading-tight text-foreground">
+          <h1 className="min-w-0 flex-1 text-[26px] font-medium leading-snug text-foreground">
             <span className="break-words">{workItem.title}</span>
-            <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
+            <span className="ml-2 align-baseline text-[20px] font-normal text-muted-foreground/70">
+              #{workItem.number}
+            </span>
           </h1>
           <div className="flex shrink-0 items-center gap-2">
             {/* Why: Orca's signature affordance — keep this primary so it stands out
@@ -6246,9 +7074,8 @@ export default function PullRequestPage({
               <ButtonGroup>
                 <Button
                   type="button"
-                  size="sm"
                   onClick={handleOpenOrUsePR}
-                  className="gap-1.5 whitespace-nowrap font-semibold"
+                  className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
                   aria-label={
                     attachedWorkspace
                       ? translate(
@@ -6263,22 +7090,19 @@ export default function PullRequestPage({
                 >
                   {attachedWorkspace
                     ? translate('auto.components.PullRequestPage.c9e7094a7b', 'Resume workspace')
-                    : translate(
-                        'auto.components.PullRequestPage.25690a3855',
-                        'Start workspace from PR'
-                      )}
-                  <ArrowRight className="size-3.5" />
+                    : translate('auto.components.PullRequestPage.71a3c0f9d2', 'Start workspace')}
+                  <ArrowRight className="size-4" />
                 </Button>
                 <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
-                    size="icon-sm"
+                    size="icon"
                     aria-label={translate(
                       'auto.components.PullRequestPage.57c13a5aa4',
                       'More PR workspace actions'
                     )}
                   >
-                    <ChevronDown className="size-3.5" />
+                    <ChevronDown className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
               </ButtonGroup>
@@ -6297,7 +7121,7 @@ export default function PullRequestPage({
             </DropdownMenu>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+        <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[13px] text-muted-foreground">
           <span
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium',
@@ -6307,16 +7131,26 @@ export default function PullRequestPage({
             <Icon className="size-3.5" />
             {stateBadgeLabel}
           </span>
-          <span className="flex flex-wrap items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {workItem.author ? (
+              <img
+                src={githubAvatarUrl(workItem.author)}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="size-5 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+              />
+            ) : null}
             <span className="font-semibold text-foreground">
               {workItem.author ??
                 translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')}
             </span>
-            <span>
-              {translate('auto.components.PullRequestPage.b0e80f083d', 'wants to merge into')}
-            </span>
+          </span>
+          {/* Why: the scannable base ← head idiom reads faster than a prose
+              sentence and matches how reviewers think about merge direction. */}
+          <span className="flex flex-wrap items-center gap-1.5">
             {baseBranch ? (
-              <span className="rounded-md bg-accent/40 px-1.5 py-0.5 font-mono text-[12px] text-accent-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
                 {baseBranch}
               </span>
             ) : (
@@ -6324,9 +7158,9 @@ export default function PullRequestPage({
                 {translate('auto.components.PullRequestPage.c44b70352b', 'base branch')}
               </span>
             )}
-            <span>{translate('auto.components.PullRequestPage.e1f3641bfd', 'from')}</span>
+            <ArrowLeft className="size-3.5 shrink-0 text-muted-foreground/70" />
             {headBranch ? (
-              <span className="rounded-md bg-accent/40 px-1.5 py-0.5 font-mono text-[12px] text-accent-foreground">
+              <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[12px] text-foreground">
                 {headBranch}
               </span>
             ) : (
@@ -6334,45 +7168,37 @@ export default function PullRequestPage({
                 {translate('auto.components.PullRequestPage.00b7b82329', 'head branch')}
               </span>
             )}
-            <span className="text-muted-foreground/80">
-              {translate('auto.components.PullRequestPage.e6996f4024', '· updated')}
-              {formatRelativeTime(workItem.updatedAt)}
-            </span>
+          </span>
+          <span className="text-muted-foreground/40">·</span>
+          <span className="text-muted-foreground/80">
+            {translate('auto.components.PullRequestPage.dd5d9a4f17', 'updated {{value0}}', {
+              value0: formatRelativeTime(workItem.updatedAt)
+            })}
           </span>
           {attachedWorkspaceLabel ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <FolderKanban className="size-3.5 shrink-0" />
-              <span className="truncate">{attachedWorkspaceLabel}</span>
-            </span>
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <FolderKanban className="size-3.5 shrink-0" />
+                <span className="truncate">{attachedWorkspaceLabel}</span>
+              </span>
+            </>
           ) : null}
         </div>
       </div>
 
-      {(repoPath || projectOrigin) && (
+      {(canUseDetailsRepoContext || projectOrigin) && (
         <GHEditSection
           item={workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
+          sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           localState={localState}
           localLabels={localLabels}
           onStateChange={setLocalState}
           onLabelsChange={setLocalLabels}
-          onMutated={() => {
-            // Why: drop the cached details for this item so the next
-            // open issues a fresh fetch instead of painting pre-edit
-            // state. We invalidate by (repoPath, type, number) match
-            // because a single mutation can affect entries across all
-            // issueSourcePreference values for the same number.
-            if (repoPath) {
-              invalidateWorkItemDetailsCacheByMatch({
-                repoPath,
-                repoId: effectiveRepoId ?? undefined,
-                type: workItem.type,
-                number: workItem.number
-              })
-            }
-          }}
+          onMutated={invalidateCurrentDetailsCache}
           assignees={details?.assignees ?? []}
           onUse={onUse}
         />
@@ -6424,6 +7250,7 @@ export default function PullRequestPage({
                   item={displayWorkItem ?? workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   body={body}
                   comments={comments}
                   files={files}
@@ -6436,16 +7263,7 @@ export default function PullRequestPage({
                   localState={localState}
                   onStateChange={setLocalState}
                   projectOrigin={projectOrigin}
-                  onMutated={() => {
-                    if (repoPath) {
-                      invalidateWorkItemDetailsCacheByMatch({
-                        repoPath,
-                        repoId: effectiveRepoId ?? undefined,
-                        type: workItem.type,
-                        number: workItem.number
-                      })
-                    }
-                  }}
+                  onMutated={invalidateCurrentDetailsCache}
                   onChecksUpdated={(nextChecks) => {
                     if (detailsCacheKey) {
                       patchCachedPRChecks(detailsCacheKey, nextChecks)
@@ -6474,6 +7292,7 @@ export default function PullRequestPage({
                   item={workItem}
                   repoPath={repoPath}
                   repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
                   headSha={details?.headSha}
                   checks={checks}
                   loading={loading || !detailsLoaded}
@@ -6501,6 +7320,7 @@ export default function PullRequestPage({
                     comments={comments}
                     repoPath={repoPath ?? ''}
                     repoId={effectiveRepoId ?? ''}
+                    sourceContext={sourceContext}
                     prNumber={workItem.number}
                     prUrl={workItem.url}
                     headSha={details?.headSha}

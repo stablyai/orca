@@ -2,12 +2,13 @@
    Space scans, file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
+import { MAX_TEXT_FILE_SIZE } from './fs-handler-utils'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'fs'
-import { tmpdir } from 'os'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 const { mockSubscribe } = vi.hoisted(() => ({
   mockSubscribe: vi.fn()
@@ -99,6 +100,16 @@ function createMockDispatcher() {
       }
     }
   }
+}
+
+function statIdentity(stats: {
+  dev?: number
+  ino?: number
+  nlink?: number
+  size?: number
+  mtimeMs?: number
+}) {
+  return `${stats.dev}:${stats.ino}:${stats.nlink ?? 'unknown'}:${stats.size}:${stats.mtimeMs}`
 }
 
 describe('FsHandler', () => {
@@ -252,6 +263,157 @@ describe('FsHandler', () => {
 
     const content = await fs.readFile(filePath, 'utf-8')
     expect(content).toBe('new content')
+  })
+
+  it('readTerminalArtifact reads through a verified artifact handle', async () => {
+    const filePath = path.join(tmpDir, 'artifact-read.json')
+    writeFileSync(filePath, '{"ok":true}')
+    const stats = await fs.stat(filePath)
+
+    const result = (await dispatcher.callRequest('fs.readTerminalArtifact', {
+      filePath,
+      expectedRealPath: await fs.realpath(filePath),
+      expectedStatIdentity: statIdentity(stats),
+      maxBytes: 512 * 1024
+    })) as { content: string; isBinary: boolean }
+
+    expect(result).toEqual({ content: '{"ok":true}', isBinary: false })
+  })
+
+  it('readTerminalArtifact treats SVG artifacts as editable text', async () => {
+    const filePath = path.join(tmpDir, 'artifact.svg')
+    writeFileSync(filePath, '<svg><text>ok</text></svg>')
+    const stats = await fs.stat(filePath)
+
+    const result = (await dispatcher.callRequest('fs.readTerminalArtifact', {
+      filePath,
+      expectedRealPath: await fs.realpath(filePath),
+      expectedStatIdentity: statIdentity(stats),
+      maxBytes: 512 * 1024
+    })) as { content: string; isBinary: boolean; isImage?: boolean }
+
+    expect(result).toEqual({ content: '<svg><text>ok</text></svg>', isBinary: false })
+  })
+
+  it('readTerminalArtifact rejects content beyond the requested byte limit', async () => {
+    const filePath = path.join(tmpDir, 'artifact-read-too-large.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.readTerminalArtifact', {
+        filePath,
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: 5
+      })
+    ).rejects.toThrow('file_too_large')
+  })
+
+  it('writeTerminalArtifact writes through a verified artifact handle', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write.json')
+    writeFileSync(filePath, '{"ok":true}')
+    const stats = await fs.stat(filePath)
+
+    const result = (await dispatcher.callRequest('fs.writeTerminalArtifact', {
+      filePath,
+      content: '{"ok":false}',
+      expectedRealPath: await fs.realpath(filePath),
+      expectedStatIdentity: statIdentity(stats),
+      maxBytes: 512 * 1024
+    })) as { stat: { type: string; size: number } }
+
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('{"ok":false}')
+    expect(result.stat).toMatchObject({ type: 'file', size: 12 })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'writeTerminalArtifact preserves executable mode across the atomic rename',
+    async () => {
+      const filePath = path.join(tmpDir, 'artifact-executable.sh')
+      writeFileSync(filePath, '#!/bin/sh\necho ok\n')
+      await fs.chmod(filePath, 0o755)
+      const stats = await fs.stat(filePath)
+
+      await dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: '#!/bin/sh\necho changed\n',
+        expectedRealPath: await fs.realpath(filePath),
+        expectedStatIdentity: statIdentity(stats),
+        maxBytes: 512 * 1024
+      })
+
+      expect((await fs.stat(filePath)).mode & 0o777).toBe(0o755)
+    }
+  )
+
+  it('writeTerminalArtifact rejects oversized existing content before writing', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write-too-large.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: 'ok',
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: 5
+      })
+    ).rejects.toThrow('file_too_large')
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')
+  })
+
+  it('writeTerminalArtifact clamps client-supplied maxBytes to the text-file cap', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write-clamp.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: 'a'.repeat(MAX_TEXT_FILE_SIZE + 1),
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: Number.MAX_SAFE_INTEGER
+      })
+    ).rejects.toThrow('file_too_large')
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')
+  })
+
+  it('writeTerminalArtifact rejects a retargeted symlink before writing outside temp', async () => {
+    const filePath = path.join(tmpDir, 'artifact-link.json')
+    const outsidePath = path.join(tmpDir, 'outside.json')
+    writeFileSync(filePath, '{"ok":true}')
+    writeFileSync(outsidePath, '{"secret":true}')
+    const stats = await fs.stat(filePath)
+    const expectedRealPath = await fs.realpath(filePath)
+    await fs.rm(filePath)
+    symlinkSync(outsidePath, filePath)
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: '{"ok":false}',
+        expectedRealPath,
+        expectedStatIdentity: statIdentity(stats),
+        maxBytes: 512 * 1024
+      })
+    ).rejects.toThrow('terminal_file_grant_stale')
+    await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('{"secret":true}')
+  })
+
+  it('writeTerminalArtifact rejects hard-linked files before writing', async () => {
+    const outsidePath = path.join(tmpDir, 'outside-hardlink.json')
+    const filePath = path.join(tmpDir, 'artifact-hardlink.json')
+    writeFileSync(outsidePath, '{"secret":true}')
+    await fs.link(outsidePath, filePath)
+    const stats = await fs.stat(filePath)
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: '{"ok":false}',
+        expectedRealPath: await fs.realpath(filePath),
+        expectedStatIdentity: statIdentity(stats),
+        maxBytes: 512 * 1024
+      })
+    ).rejects.toThrow('terminal_file_grant_stale')
+    await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('{"secret":true}')
   })
 
   it('stat returns file metadata', async () => {

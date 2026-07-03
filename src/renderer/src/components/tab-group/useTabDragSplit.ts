@@ -45,6 +45,10 @@ export type { HoveredTabInsertion }
 
 export type TabDropZone = 'center' | TabSplitDirection
 
+// Why: tab activation waits for pointerup, so dnd-kit needs enough movement
+// tolerance to avoid treating ordinary click jitter as an intentional drag.
+export const TAB_DRAG_ACTIVATION_DISTANCE_PX = 12
+
 export type TabDragItemData = {
   kind: 'tab'
   worktreeId: string
@@ -145,6 +149,10 @@ export function getTabPaneBodyDroppableId(groupId: string): UniqueIdentifier {
   return `tab-group-pane-body:${groupId}`
 }
 
+export function getTabDragActivationDistance(enabled: boolean): number {
+  return enabled ? TAB_DRAG_ACTIVATION_DISTANCE_PX : Number.MAX_SAFE_INTEGER
+}
+
 export function useTabDragSplit({
   worktreeId,
   enabled = true
@@ -178,6 +186,7 @@ export function useTabDragSplit({
   const lastHoveredTabPreviewRef = useRef<{ groupId: string; tabId: string } | null>(null)
   const tabDragActiveRef = useRef(false)
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
+  const releaseMissedEndFallbackRef = useRef<(() => void) | null>(null)
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
 
   // Why: hidden worktrees stay mounted so their PTYs survive worktree
@@ -187,7 +196,7 @@ export function useTabDragSplit({
   // the sensors array into a useEffect dependency list — changing its
   // length between renders violates React's rules of hooks.
   const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: enabled ? 5 : Number.MAX_SAFE_INTEGER }
+    activationConstraint: { distance: getTabDragActivationDistance(enabled) }
   })
   const sensors = useSensors(pointerSensor)
 
@@ -195,6 +204,44 @@ export function useTabDragSplit({
     releaseWebviewDragPassthroughRef.current?.()
     releaseWebviewDragPassthroughRef.current = null
   }, [])
+
+  const releaseMissedEndFallback = useCallback(() => {
+    releaseMissedEndFallbackRef.current?.()
+    releaseMissedEndFallbackRef.current = null
+  }, [])
+
+  const clearDragStateRef = useRef<() => void>(() => {})
+
+  const installMissedEndFallback = useCallback(() => {
+    releaseMissedEndFallback()
+
+    let cleanupTimer: number | null = null
+    const clearIfDndMissedEnd = (): void => {
+      if (cleanupTimer !== null) {
+        window.clearTimeout(cleanupTimer)
+      }
+      cleanupTimer = window.setTimeout(() => {
+        cleanupTimer = null
+        if (tabDragActiveRef.current) {
+          // Why: Electron/dnd-kit can occasionally miss drag end/cancel; a
+          // stuck drag ref makes all later tab clicks look like drag releases.
+          clearDragStateRef.current()
+        }
+      }, 0)
+    }
+
+    window.addEventListener('pointerup', clearIfDndMissedEnd)
+    window.addEventListener('pointercancel', clearIfDndMissedEnd)
+    window.addEventListener('blur', clearIfDndMissedEnd)
+    releaseMissedEndFallbackRef.current = () => {
+      if (cleanupTimer !== null) {
+        window.clearTimeout(cleanupTimer)
+      }
+      window.removeEventListener('pointerup', clearIfDndMissedEnd)
+      window.removeEventListener('pointercancel', clearIfDndMissedEnd)
+      window.removeEventListener('blur', clearIfDndMissedEnd)
+    }
+  }, [releaseMissedEndFallback])
 
   const acquireWebviewDragPassthrough = useCallback(() => {
     // Why: dnd-kit tab drags are pointer-driven, so the native drag listeners
@@ -209,15 +256,18 @@ export function useTabDragSplit({
         return
       }
       // Why: this root owns the dnd-kit gesture that temporarily puts browser
-      // webviews in pointer passthrough, so root teardown must release it.
+      // webviews in pointer passthrough and installs global fallback listeners,
+      // so root teardown must release both.
       releaseWebviewDragPassthrough()
+      releaseMissedEndFallback()
     },
-    [releaseWebviewDragPassthrough]
+    [releaseMissedEndFallback, releaseWebviewDragPassthrough]
   )
 
   const clearDragState = useCallback(() => {
     tabDragActiveRef.current = false
     releaseWebviewDragPassthrough()
+    releaseMissedEndFallback()
     setActiveDrag(null)
     setHoveredDropTarget(null)
     tabInsertion.clear()
@@ -225,7 +275,8 @@ export function useTabDragSplit({
     lastPreviewRef.current = null
     lastHoveredTabPreviewRef.current = null
     dragGeometryRef.current = null
-  }, [releaseWebviewDragPassthrough, tabInsertion])
+  }, [releaseMissedEndFallback, releaseWebviewDragPassthrough, tabInsertion])
+  clearDragStateRef.current = clearDragState
 
   const restorePreDragActivation = useCallback(() => {
     const snapshot = preDragActivationSnapshotRef.current
@@ -355,11 +406,12 @@ export function useTabDragSplit({
 
       setActiveDrag(dragData)
       tabDragActiveRef.current = true
+      installMissedEndFallback()
       dragGeometryRef.current = captureTabGroupPanelGeometrySnapshot(worktreeId)
       preDragActivationSnapshotRef.current = captureTabDragActivationSnapshot(worktreeId)
       acquireWebviewDragPassthrough()
     },
-    [acquireWebviewDragPassthrough, clearDragState, worktreeId]
+    [acquireWebviewDragPassthrough, clearDragState, installMissedEndFallback, worktreeId]
   )
 
   const onDragMove = useCallback(

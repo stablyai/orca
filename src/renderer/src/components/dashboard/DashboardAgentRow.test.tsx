@@ -239,6 +239,24 @@ describe('DashboardAgentRow', () => {
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
 
+  it('renders waiting rows with the amber permission color', () => {
+    const markup = renderRow(makeAgent({}, { state: 'waiting' }))
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('aria-label="Waiting for input"')
+    expect(tokens).toContain('bg-amber-500')
+    expect(tokens).not.toContain('bg-red-500')
+  })
+
+  it('keeps blocked rows red', () => {
+    const markup = renderRow(makeAgent({}, { state: 'blocked' }))
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('aria-label="Blocked"')
+    expect(tokens).toContain('bg-red-500')
+    expect(tokens).not.toContain('bg-amber-500')
+  })
+
   it('keeps each row hover boundary inside an anonymous ancestor group', () => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>

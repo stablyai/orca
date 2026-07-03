@@ -180,8 +180,13 @@ export function refreshWorktreeSidebarDragSession(args: {
     return null
   }
 
+  const sourceGroupIds = new Set(sourceGroup.worktreeIds)
   const sourceUnitIds = new Set(sourceUnitGroup.worktreeIds)
-  if (args.session.reorderUnitDraggedIds.some((worktreeId) => !sourceUnitIds.has(worktreeId))) {
+  if (
+    args.session.reorderUnitDraggedIds.some(
+      (worktreeId) => !sourceUnitIds.has(worktreeId) && !sourceGroupIds.has(worktreeId)
+    )
+  ) {
     return null
   }
 

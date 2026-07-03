@@ -8,14 +8,21 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Cloud,
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
   PlugZap,
-  Settings2
+  Settings2,
+  Server
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Command, CommandEmpty, CommandItem, CommandList } from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -35,6 +42,8 @@ import type {
   GitHubWorkItem,
   GitLabWorkItem,
   LinearIssue,
+  SetupAgentStartupPolicy,
+  OrcaHooks,
   SparsePreset,
   TuiAgent
 } from '../../../shared/types'
@@ -43,18 +52,22 @@ import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
-import ProjectHostSetupCombobox from '@/components/new-workspace/ProjectHostSetupCombobox'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import type {
+  ProjectHostSetupOption,
+  ReadyProjectHostSetupOption
+} from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
+type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
+const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -74,6 +87,10 @@ type NewWorkspaceComposerCardProps = {
   projectHostSetupOptions?: ProjectHostSetupOption[]
   selectedProjectHostSetupId?: string | null
   onProjectHostSetupChange?: (setupId: string) => void
+  ephemeralVmRecipes?: EphemeralVmRecipeOption[]
+  selectedEphemeralVmRecipeId?: string | null
+  onEphemeralVmRecipeChange?: (recipeId: string | null) => void
+  ephemeralVmRecipeError?: string | null
   repoBackedSearchRepos?: RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean
@@ -95,6 +112,10 @@ type NewWorkspaceComposerCardProps = {
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  /** Shows the footer "Create more" switch — worktree targets only. */
+  showCreateMultiple?: boolean
+  createMultiple?: boolean
+  onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
@@ -112,6 +133,8 @@ type NewWorkspaceComposerCardProps = {
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
+  setupAgentStartupPolicy: SetupAgentStartupPolicy
+  onSetupAgentStartupPolicyChange: (value: SetupAgentStartupPolicy) => void
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: WorkspaceCreateErrorDisplay | null
@@ -173,6 +196,221 @@ const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
 
 function getSshStatusLabel(status: SshConnectionStatus): string {
   return SSH_STATUS_LABELS[status] ?? status
+}
+
+function getRecipeCommandDisplay(command: string): string {
+  const trimmed = command.trim()
+  const quoted = trimmed.match(/^"([^"]+)"/) ?? trimmed.match(/^'([^']+)'/)
+  return quoted?.[1] ?? trimmed.split(/\s+/)[0] ?? trimmed
+}
+
+function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
+  if (recipe.destroyDisabled) {
+    return translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
+  }
+  if (recipe.destroy) {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.destroyConfigured',
+      'destroy configured'
+    )
+  }
+  return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
+}
+
+type WorkspaceRunTargetComboboxProps = {
+  hostOptions: readonly ReadyProjectHostSetupOption[]
+  hostValue: string | null
+  onHostChange?: (setupId: string) => void
+  recipes: EphemeralVmRecipeOption[]
+  recipeValue: string | null
+  onRecipeChange?: (recipeId: string | null) => void
+}
+
+function WorkspaceRunTargetCombobox({
+  hostOptions,
+  hostValue,
+  onHostChange,
+  recipes,
+  recipeValue,
+  onRecipeChange
+}: WorkspaceRunTargetComboboxProps): React.JSX.Element {
+  const [open, setOpen] = React.useState(false)
+  const [vmRecipesOpen, setVmRecipesOpen] = React.useState(false)
+  const selectedHost =
+    hostOptions.find((option) => option.id === hostValue) ?? hostOptions[0] ?? null
+  const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
+  const selectedValue = selectedRecipe
+    ? `recipe:${selectedRecipe.id}`
+    : selectedHost
+      ? `host:${selectedHost.id}`
+      : ''
+  const ephemeralVmLabel = translate(
+    'auto.components.NewWorkspaceComposerCard.ephemeralVm',
+    'Per-Workspace Environment'
+  )
+
+  const handleHostSelect = React.useCallback(
+    (setupId: string): void => {
+      if (!hostOptions.some((candidate) => candidate.id === setupId)) {
+        return
+      }
+      onHostChange?.(setupId)
+      onRecipeChange?.(null)
+      setOpen(false)
+    },
+    [hostOptions, onHostChange, onRecipeChange]
+  )
+
+  const handleRecipeSelect = React.useCallback(
+    (recipeId: string): void => {
+      if (!recipes.some((recipe) => recipe.id === recipeId)) {
+        return
+      }
+      onRecipeChange?.(recipeId)
+      setVmRecipesOpen(false)
+      setOpen(false)
+    },
+    [onRecipeChange, recipes]
+  )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-9 w-full justify-between border-input px-3 text-sm font-normal focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+        >
+          {selectedRecipe ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">
+                {ephemeralVmLabel} / {selectedRecipe.name}
+              </span>
+            </span>
+          ) : selectedHost ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <Server className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{selectedHost.label}</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.chooseRunTarget',
+                'Choose target'
+              )}
+            </span>
+          )}
+          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
+      >
+        <Command value={selectedValue}>
+          <CommandList>
+            <CommandEmpty>
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.noRunTargets',
+                'No run targets are ready for this project.'
+              )}
+            </CommandEmpty>
+            {hostOptions.map((option) => (
+              <CommandItem
+                key={option.id}
+                value={`host:${option.id}`}
+                onSelect={() => handleHostSelect(option.id)}
+                className="items-center gap-2 px-3 py-2"
+              >
+                <Check
+                  className={cn(
+                    'size-4 text-foreground',
+                    !selectedRecipe && option.id === selectedHost?.id ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
+                <Server className="size-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{option.label}</div>
+                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {option.path}
+                  </div>
+                </div>
+              </CommandItem>
+            ))}
+            {recipes.length > 0 ? (
+              <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
+                <PopoverTrigger asChild>
+                  {/* Why: a real CommandItem (not a raw button) so cmdk registers it — fixes the row
+                      only rendering under the first host, the uneven height, and the double-highlight. */}
+                  <CommandItem
+                    value="per-workspace-env"
+                    onSelect={() => setVmRecipesOpen(true)}
+                    className="items-center gap-2 px-3 py-2"
+                  >
+                    <Check
+                      className={cn(
+                        'size-4 text-foreground',
+                        selectedRecipe ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{ephemeralVmLabel}</div>
+                      {/* Why: a second line so this row matches the two-line height of the host
+                          options above, and to hint what choosing it opens. */}
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {translate(
+                          'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
+                          'Provision an on-demand environment from a recipe'
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                  </CommandItem>
+                </PopoverTrigger>
+                <PopoverContent side="right" align="start" sideOffset={6} className="w-72 p-0">
+                  <Command value={selectedRecipe ? `recipe:${selectedRecipe.id}` : ''}>
+                    <CommandList>
+                      {recipes.map((recipe) => (
+                        <CommandItem
+                          key={recipe.id}
+                          value={`recipe:${recipe.id}`}
+                          onSelect={() => handleRecipeSelect(recipe.id)}
+                          className="items-center gap-2 px-3 py-2"
+                        >
+                          <Check
+                            className={cn(
+                              'size-4 text-foreground',
+                              recipe.id === selectedRecipe?.id ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm">{recipe.name}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                              {getRecipeCommandDisplay(recipe.create)} ·{' '}
+                              {getRecipeDestroyLabel(recipe)}
+                            </div>
+                            {recipe.description ? (
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {recipe.description}
+                              </div>
+                            ) : null}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function SetupCommandPreview({
@@ -311,6 +549,10 @@ export default function NewWorkspaceComposerCard({
   projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
   selectedProjectHostSetupId = null,
   onProjectHostSetupChange,
+  ephemeralVmRecipes = EMPTY_EPHEMERAL_VM_RECIPES,
+  selectedEphemeralVmRecipeId = null,
+  onEphemeralVmRecipeChange,
+  ephemeralVmRecipeError = null,
   repoBackedSearchRepos,
   repoBackedSourcesDisabled = false,
   allowSmartNameAddProject = true,
@@ -331,6 +573,9 @@ export default function NewWorkspaceComposerCard({
   canReuseSelectedBranch,
   reuseSelectedBranch,
   onReuseSelectedBranchChange,
+  showCreateMultiple = false,
+  createMultiple = false,
+  onCreateMultipleChange,
   smartNameGitHubSourceContext,
   forkPushWarning,
   detectedAgentIds,
@@ -347,6 +592,8 @@ export default function NewWorkspaceComposerCard({
   requiresExplicitSetupChoice,
   setupDecision,
   onSetupDecisionChange,
+  setupAgentStartupPolicy,
+  onSetupAgentStartupPolicyChange,
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
   createError,
@@ -414,6 +661,10 @@ export default function NewWorkspaceComposerCard({
         ? 'Run commands now'
         : 'Run setup now'
   const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+  // Why: defaultTabs launch commands can be long-running too, but they are not
+  // the setup command this setting gates agent startup on.
+  const showSetupAgentStartupPolicy =
+    setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -602,17 +853,29 @@ export default function NewWorkspaceComposerCard({
                 )}
             </p>
           ) : null}
-          {readyProjectHostSetupOptions.length > 1 ? (
+          {readyProjectHostSetupOptions.length > 1 || ephemeralVmRecipes.length > 0 ? (
             <div className="space-y-1">
               <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
                 {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
               </label>
-              <ProjectHostSetupCombobox
-                options={readyProjectHostSetupOptions}
-                value={selectedProjectHostSetupId ?? null}
-                onValueChange={handleProjectHostSetupChange}
+              <WorkspaceRunTargetCombobox
+                hostOptions={readyProjectHostSetupOptions}
+                hostValue={selectedProjectHostSetupId ?? null}
+                onHostChange={handleProjectHostSetupChange}
+                recipes={ephemeralVmRecipes}
+                recipeValue={selectedEphemeralVmRecipeId}
+                onRecipeChange={onEphemeralVmRecipeChange}
               />
+              {ephemeralVmRecipeError ? (
+                <p className="whitespace-pre-line text-[11px] text-destructive">
+                  {ephemeralVmRecipeError}
+                </p>
+              ) : null}
             </div>
+          ) : ephemeralVmRecipeError ? (
+            <p className="whitespace-pre-line text-[11px] text-destructive">
+              {ephemeralVmRecipeError}
+            </p>
           ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div
@@ -810,7 +1073,10 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
-        <div>
+        {/* Why: Advanced is a disclosure header, so keep it visually grouped
+            with the content or footer below it while preserving normal spacing
+            from the Agent field above. */}
+        <div className="!mb-2">
           <Button
             type="button"
             variant="ghost"
@@ -828,6 +1094,7 @@ export default function NewWorkspaceComposerCard({
         <div
           className={cn(
             'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+            !advancedOpen && '!mt-2',
             advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
@@ -993,6 +1260,39 @@ export default function NewWorkspaceComposerCard({
                       ) : null}
                     </div>
                   ) : null}
+
+                  {showSetupAgentStartupPolicy ? (
+                    <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 bg-muted/25 p-3">
+                      <span className="min-w-0 space-y-1">
+                        <span className="block text-xs font-medium text-foreground">
+                          {translate(
+                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
+                            'Wait for setup to complete before starting agent'
+                          )}
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {translate(
+                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgentHelp',
+                            'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
+                          )}
+                        </span>
+                      </span>
+                      <SettingsSwitch
+                        checked={setupAgentStartupPolicy === 'wait-for-setup'}
+                        onChange={() =>
+                          onSetupAgentStartupPolicyChange(
+                            setupAgentStartupPolicy === 'wait-for-setup'
+                              ? 'start-immediately'
+                              : 'wait-for-setup'
+                          )
+                        }
+                        ariaLabel={translate(
+                          'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
+                          'Wait for setup to complete before starting agent'
+                        )}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1043,7 +1343,39 @@ export default function NewWorkspaceComposerCard({
         </div>
       ) : null}
 
-      <div className="flex justify-end">
+      <div
+        className={cn(
+          'flex items-center gap-3',
+          showCreateMultiple ? 'justify-between' : 'justify-end'
+        )}
+      >
+        {showCreateMultiple ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={createMultiple}
+            onClick={() => onCreateMultipleChange?.(!createMultiple)}
+            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
+                createMultiple ? 'bg-foreground' : 'bg-muted-foreground/30'
+              )}
+            >
+              <span
+                className={cn(
+                  'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
+                  createMultiple ? 'translate-x-4' : 'translate-x-0.5'
+                )}
+              />
+            </span>
+            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+              {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
+            </span>
+          </button>
+        ) : null}
         <Button
           onClick={() => void onCreate()}
           disabled={createDisabled}

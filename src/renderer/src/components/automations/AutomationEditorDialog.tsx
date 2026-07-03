@@ -6,7 +6,15 @@ import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
-import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
+import type {
+  GlobalSettings,
+  OrcaHooks,
+  ProjectHostSetup,
+  Repo,
+  SetupDecision,
+  TuiAgent,
+  Worktree
+} from '../../../../shared/types'
 import {
   isValidAutomationCronSchedule,
   isValidAutomationSchedule
@@ -32,6 +40,7 @@ export type AutomationDraft = {
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
   baseBranch: string
+  setupDecision?: Extract<SetupDecision, 'run' | 'skip'>
   reuseSession: boolean
   precheckCommand: string
   precheckTimeoutSeconds: string
@@ -53,6 +62,9 @@ type AutomationEditorDialogProps = {
   canSave: boolean
   createTarget: AutomationCreateTarget
   repos: Repo[]
+  projectHostSetups: ProjectHostSetup[]
+  automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
+  getAutomationHooksCacheKey: (repoId: string) => string
   repoMap: Map<string, Repo>
   worktrees: Worktree[]
   settings: GlobalSettings | null
@@ -62,6 +74,7 @@ type AutomationEditorDialogProps = {
   onCreateTargetChange: (target: AutomationCreateTarget) => void
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
+  onSetupDecisionTouched: () => void
   onApplyTemplate: (template: AutomationTemplate) => void
   onSave: () => void
 }
@@ -74,6 +87,9 @@ export function AutomationEditorDialog({
   canSave,
   createTarget,
   repos,
+  projectHostSetups,
+  automationYamlHooksByRepoKey,
+  getAutomationHooksCacheKey,
   repoMap,
   worktrees,
   settings,
@@ -83,6 +99,7 @@ export function AutomationEditorDialog({
   onCreateTargetChange,
   onOpenChange,
   onDraftChange,
+  onSetupDecisionTouched,
   onApplyTemplate,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
@@ -159,6 +176,9 @@ export function AutomationEditorDialog({
           isSaving={isSaving}
           canSave={canSave}
           repos={repos}
+          projectHostSetups={projectHostSetups}
+          automationYamlHooksByRepoKey={automationYamlHooksByRepoKey}
+          getAutomationHooksCacheKey={getAutomationHooksCacheKey}
           repoMap={repoMap}
           worktrees={worktrees}
           settings={settings}
@@ -170,6 +190,7 @@ export function AutomationEditorDialog({
           onProjectChange={onProjectChange}
           getRepoHostLabel={getRepoHostLabel}
           onDraftChange={onDraftChange}
+          onSetupDecisionTouched={onSetupDecisionTouched}
           onOpenChange={onOpenChange}
           onSave={onSave}
         />

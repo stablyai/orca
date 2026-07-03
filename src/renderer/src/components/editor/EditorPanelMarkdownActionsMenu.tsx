@@ -2,6 +2,7 @@ import type React from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -11,24 +12,32 @@ import { translate } from '@/i18n/i18n'
 
 type EditorPanelMarkdownActionsMenuProps = {
   isMarkdown: boolean
+  isDiffSurface: boolean
+  diffWordWrap: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
+  onToggleDiffWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
 
 export function EditorPanelMarkdownActionsMenu({
   isMarkdown,
+  isDiffSurface,
+  diffWordWrap,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
+  onToggleDiffWordWrap,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
-  if (!isMarkdown || (!shouldShowMarkdownExportAction && !canShowMarkdownFrontmatterToggle)) {
+  const hasMarkdownActions =
+    isMarkdown && (shouldShowMarkdownExportAction || canShowMarkdownFrontmatterToggle)
+  if (!isDiffSurface && !hasMarkdownActions) {
     return null
   }
 
@@ -51,6 +60,17 @@ export function EditorPanelMarkdownActionsMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={4}>
+        {isDiffSurface ? (
+          <>
+            <DropdownMenuCheckboxItem checked={diffWordWrap} onCheckedChange={onToggleDiffWordWrap}>
+              {translate(
+                'auto.components.editor.EditorPanelMarkdownActionsMenu.1eef809708',
+                'Word Wrap'
+              )}
+            </DropdownMenuCheckboxItem>
+            {hasMarkdownActions ? <DropdownMenuSeparator /> : null}
+          </>
+        ) : null}
         {canShowMarkdownFrontmatterToggle ? (
           <>
             <DropdownMenuItem

@@ -17,7 +17,8 @@ const {
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
   setupAutoUpdaterMock,
-  browserManagerUnregisterAllMock
+  browserManagerUnregisterAllMock,
+  runWorktreeChangeInvalidatorsMock
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
@@ -33,7 +34,8 @@ const {
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
-  browserManagerUnregisterAllMock: vi.fn()
+  browserManagerUnregisterAllMock: vi.fn(),
+  runWorktreeChangeInvalidatorsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -62,6 +64,10 @@ vi.mock('../ipc/repos', () => ({
 
 vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
+}))
+
+vi.mock('../ipc/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
 vi.mock('../ipc/pty', () => ({
@@ -592,5 +598,50 @@ describe('attachMainWindowServices', () => {
         }
       ]
     ])
+    expect(runWorktreeChangeInvalidatorsMock).toHaveBeenCalledWith('repo-1')
+    expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      sendMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('accepts terminal reveal replies only from the main window renderer', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: { ptyId: string; title?: string; cwd?: string; activate?: boolean }
+      ) => Promise<{ tabId: string; title?: string }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-1',
+      title: 'SSH tmux',
+      cwd: '/repo/packages/web'
+    })
+    const sentPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    expect(sentPayload.cwd).toBe('/repo/packages/web')
+
+    handler?.(
+      { sender: { send: vi.fn() } },
+      { requestId: sentPayload.requestId, error: 'spoofed renderer reply' }
+    )
+    expect(removeListenerMock).not.toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+
+    handler?.(
+      { sender: mainWindow.webContents },
+      { requestId: sentPayload.requestId, tabId: 'tab-1', title: 'SSH tmux' }
+    )
+
+    await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
+    expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
   })
 })

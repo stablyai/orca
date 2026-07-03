@@ -41,8 +41,23 @@ describe('CombinedDiffFileTree navigation mapping', () => {
   it('maps branch and commit entries to combined section prefixes', () => {
     const entry: GitBranchChangeEntry = { path: 'src/view.ts', status: 'renamed' }
 
+    expect(getCombinedDiffFileTreeSectionKey('all', entry)).toBe('combined-branch:src/view.ts')
     expect(getCombinedDiffFileTreeSectionKey('branch', entry)).toBe('combined-branch:src/view.ts')
     expect(getCombinedDiffFileTreeSectionKey('commit', entry)).toBe('combined-commit:src/view.ts')
+  })
+
+  it('keeps all-changes local and branch entries separate', () => {
+    const localEntry: GitStatusEntry = {
+      path: 'src/view.ts',
+      status: 'modified',
+      area: 'unstaged'
+    }
+    const branchEntry: GitBranchChangeEntry = { path: 'src/view.ts', status: 'modified' }
+
+    expect(getCombinedDiffFileTreeSectionKey('all', localEntry)).toBe('unstaged:src/view.ts')
+    expect(getCombinedDiffFileTreeSectionKey('all', branchEntry)).toBe(
+      'combined-branch:src/view.ts'
+    )
   })
 
   it('expands a collapsed target section and scrolls to its index', () => {

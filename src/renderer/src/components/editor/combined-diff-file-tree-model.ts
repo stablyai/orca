@@ -2,7 +2,7 @@ import { basename } from '@/lib/path'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
-export type CombinedDiffFileTreeMode = 'uncommitted' | 'branch' | 'commit'
+export type CombinedDiffFileTreeMode = 'all' | 'uncommitted' | 'branch' | 'commit'
 export type CombinedDiffFileTreeEntry = GitStatusEntry | GitBranchChangeEntry
 export type CombinedDiffBranchTreeArea = 'combined-branch' | 'combined-commit'
 
@@ -20,10 +20,10 @@ export function getCombinedDiffFileTreeSectionKey(
   mode: CombinedDiffFileTreeMode,
   entry: CombinedDiffFileTreeEntry
 ): string {
-  if (mode === 'uncommitted' && 'area' in entry) {
+  if ((mode === 'all' || mode === 'uncommitted') && 'area' in entry) {
     return `${entry.area}:${entry.path}`
   }
-  return `${mode === 'branch' ? 'combined-branch' : 'combined-commit'}:${entry.path}`
+  return `${mode === 'commit' ? 'combined-commit' : 'combined-branch'}:${entry.path}`
 }
 
 export function createCombinedDiffSectionIndexMap(

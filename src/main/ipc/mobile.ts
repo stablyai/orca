@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { networkInterfaces } from 'os'
+import { networkInterfaces } from 'node:os'
 import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'

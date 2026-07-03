@@ -79,6 +79,7 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onNestedGroupNameChange: vi.fn(),
     onNestedSelectedPathsChange: vi.fn(),
     onImportNestedRepos: vi.fn(),
+    onOpenNestedRootFolder: vi.fn(),
     onCreateNameChange: vi.fn(),
     onCreateParentChange: vi.fn(),
     onPickCreateParent: vi.fn(),
@@ -100,24 +101,33 @@ function renderNestedStep(repoCount: number): string {
 }
 
 describe('AddRepoDialogStepContent nested imports', () => {
-  it('asks the monorepo question when no repos exist yet', () => {
+  it('asks the grouping question when no repos exist yet', () => {
     const html = renderNestedStep(0)
 
-    expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('aria-label="Monorepo name"')
-    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('Group these repositories?')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Yes, import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
   })
 
-  it('shows the same monorepo import controls after a repo already exists', () => {
+  it('shows the same grouping import controls after a repo already exists', () => {
     const html = renderNestedStep(1)
 
-    expect(html).toContain('Is this a monorepo?')
-    expect(html).toContain('aria-label="Monorepo name"')
-    expect(html).toContain('Yes, import as monorepo')
+    expect(html).toContain('Group these repositories?')
+    expect(html).toContain('aria-label="Group name"')
+    expect(html).toContain('Yes, import as group')
     expect(html).toContain('No, import separately')
     expect(html).not.toContain('>Import</button>')
+  })
+
+  it('offers opening the parent folder when nested import selection is empty', () => {
+    const html = renderStepContent({ nestedSelectedPaths: new Set() })
+
+    expect(html).toContain('No repositories are selected')
+    expect(html).toContain('Open as Folder')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>No, import separately<\/button>/)
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Yes, import as group<\/button>/)
   })
 
   it('offers host browsing for remote create project locations', () => {

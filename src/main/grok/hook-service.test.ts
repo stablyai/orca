@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -18,6 +18,8 @@ vi.mock('os', async () => {
 import { GrokHookService } from './hook-service'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
+const WINDOWS_POWERSHELL_LAUNCHER =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 
 describe('GrokHookService', () => {
   let homeDir: string
@@ -60,9 +62,7 @@ describe('GrokHookService', () => {
     expect(config.hooks.PostToolUseFailure[0].matcher).toBe('*')
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32'
-        ? /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-        : /grok-hook/
+      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
     )
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
@@ -74,7 +74,7 @@ describe('GrokHookService', () => {
     )
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
-      expect(script).toContain('powershell -NoProfile')
+      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
     } else {
       expect(script).toContain('payload=$(cat)')
     }
@@ -99,9 +99,7 @@ describe('GrokHookService', () => {
 
         for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
           const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(
-            /^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-          )
+          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
         }
       } finally {
         rmSync(spaceHome, { recursive: true, force: true })
@@ -137,7 +135,7 @@ describe('GrokHookService', () => {
     expect(
       commands.some((command) =>
         process.platform === 'win32'
-          ? command.startsWith('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+          ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
           : command.includes(GROK_SCRIPT_FILE_NAME)
       )
     ).toBe(true)

@@ -72,6 +72,18 @@ function normalizePollingInterval(ms: number): number {
   return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, ms))
 }
 
+function isSystemDefaultClaudeAuth(
+  authPreparation: ClaudeRuntimeAuthPreparation | undefined
+): boolean {
+  // Why: fetch cycles classify missing Claude auth as system-default; keep the
+  // PTY fallback gate aligned so background refresh cannot trigger auth flows.
+  if (!authPreparation) {
+    return true
+  }
+  const provenance = authPreparation?.provenance
+  return provenance === 'system' || Boolean(provenance?.endsWith(':system'))
+}
+
 export class RateLimitService {
   private state: InternalRateLimitState = {
     claude: null,
@@ -370,7 +382,9 @@ export class RateLimitService {
         continue
       }
       try {
-        const fresh = await fetchManagedAccountUsage(account)
+        const fresh = await fetchManagedAccountUsage(account, {
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
+        })
         if (
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
           !this.isCurrentInactiveClaudeAccount(account.id)
@@ -792,9 +806,23 @@ export class RateLimitService {
     return process.platform !== 'win32'
   }
 
-  private shouldAllowClaudePtyFallback(): boolean {
+  private shouldAllowClaudePtyFallback(
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined
+  ): boolean {
     // Why: automatic recovery uses Claude CLI as the next source, but Windows
     // hidden PTY support remains less reliable than host/WSL shells.
+    if (process.platform === 'win32') {
+      return false
+    }
+    // Why: system-default Claude is not an Orca-managed account. Background
+    // quota refresh may read existing OAuth, but must not launch Claude and
+    // trigger auth/browser flows for users who never configured Claude in Orca.
+    return !isSystemDefaultClaudeAuth(authPreparation)
+  }
+
+  private shouldAllowClaudeUsagePanelSupplement(): boolean {
+    // Why: this supplement runs only after OAuth has already returned usage
+    // data. Keep it off on Windows where hidden PTYs are still less reliable.
     return process.platform !== 'win32'
   }
 
@@ -861,7 +889,8 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback()
+          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1036,7 +1065,8 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback()
+      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
@@ -1090,6 +1120,7 @@ export class RateLimitService {
     const previousHasData = Boolean(
       previous?.session ||
       previous?.weekly ||
+      previous?.fableWeekly ||
       previous?.monthly ||
       (previous?.buckets && previous.buckets.length > 0)
     )

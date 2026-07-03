@@ -36,6 +36,7 @@ export type SidebarFilterState = {
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
+  workspaceHostScope?: ExecutionHostScope
 }
 
 /**
@@ -53,7 +54,8 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     state.filterRepoIds.length > 0 ||
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||
-    state.visibleWorkspaceHostIds != null
+    state.visibleWorkspaceHostIds != null ||
+    (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   )
 }
 
@@ -83,7 +85,9 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetFilterRepoIds: state.filterRepoIds.length > 0,
     resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    resetVisibleWorkspaceHostIds: state.visibleWorkspaceHostIds != null
+    resetVisibleWorkspaceHostIds:
+      state.visibleWorkspaceHostIds != null ||
+      (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   }
 }
 

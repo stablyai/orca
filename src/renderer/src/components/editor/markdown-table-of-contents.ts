@@ -4,7 +4,7 @@ import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 
-export type MarkdownTocLevel = 1 | 2 | 3
+export type MarkdownTocLevel = 1 | 2 | 3 | 4 | 5
 
 export type MarkdownTocItem = {
   children: MarkdownTocItem[]
@@ -23,7 +23,7 @@ const htmlEntitiesForToc = new Map([
 ])
 
 function isMarkdownTocLevel(value: number): value is MarkdownTocLevel {
-  return value === 1 || value === 2 || value === 3
+  return value >= 1 && value <= 5
 }
 
 // Scoped local fork of the tiny entities@6.0.1 surface Orca used here.

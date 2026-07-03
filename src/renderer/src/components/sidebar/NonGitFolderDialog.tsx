@@ -20,10 +20,32 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const addNonGitFolder = useAppStore((s) => s.addNonGitFolder)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
 
   const isOpen = activeModal === 'confirm-non-git-folder'
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
   const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
+  const runtimeEnvironmentId =
+    typeof modalData.runtimeEnvironmentId === 'string' ? modalData.runtimeEnvironmentId : ''
+  const runtimeEnvironmentName =
+    runtimeEnvironmentId &&
+    (runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name ||
+      runtimeEnvironmentId)
+  const checkedHostDescription = connectionId
+    ? translate(
+        'auto.components.sidebar.NonGitFolderDialog.9a766f33ac',
+        'This path was checked on the SSH host.'
+      )
+    : runtimeEnvironmentName
+      ? translate(
+          'auto.components.sidebar.NonGitFolderDialog.79fd02cf5f',
+          'This path was checked on {{hostName}}.',
+          { hostName: runtimeEnvironmentName }
+        )
+      : translate(
+          'auto.components.sidebar.NonGitFolderDialog.8851b77327',
+          'This path was checked locally.'
+        )
 
   const handleConfirm = useCallback(() => {
     if (connectionId && folderPath) {
@@ -79,10 +101,12 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
         }
       })()
     } else if (folderPath) {
-      void addNonGitFolder(folderPath)
+      void addNonGitFolder(folderPath, {
+        runtimeEnvironmentId: runtimeEnvironmentId || null
+      })
     }
     closeModal()
-  }, [addNonGitFolder, closeModal, folderPath, connectionId])
+  }, [addNonGitFolder, closeModal, folderPath, connectionId, runtimeEnvironmentId])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -105,6 +129,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               'auto.components.sidebar.NonGitFolderDialog.8fba4b8cbb',
               "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available."
             )}
+            <span className="mt-2 block">{checkedHostDescription}</span>
           </DialogDescription>
         </DialogHeader>
 

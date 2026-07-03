@@ -3,6 +3,7 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import type { Repo, RepoHookSettings } from '../../../shared/types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
+import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -16,6 +17,13 @@ export type SetupScriptPromptInspection =
     }
   | {
       status: 'error'
+      repoId: string
+    }
+  // Why: a forbidden (mobile-scope) failure is permanent, not transient — the
+  // card must not offer a retry that re-fires repo.hooksCheck on every focus.
+  // The global scope-mismatch banner already explains the cause.
+  | {
+      status: 'forbidden'
       repoId: string
     }
 
@@ -53,6 +61,9 @@ export async function inspectSetupScriptPromptState({
       candidate: candidates[0] ?? null
     }
   } catch (error) {
+    if (isRuntimeScopeForbiddenError(error)) {
+      return { status: 'forbidden', repoId: repo.id }
+    }
     console.warn('[setup-script-prompt] Failed to inspect setup scripts:', error)
     return { status: 'error', repoId: repo.id }
   }

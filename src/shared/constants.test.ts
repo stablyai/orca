@@ -51,6 +51,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
 
+  it('keeps rich Markdown spellcheck enabled by default', () => {
+    expect(getDefaultSettings('/tmp').richMarkdownSpellcheckEnabled).toBe(true)
+  })
+
   it('enables Source Control AI by default without pinning a separate agent', () => {
     expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
       enabled: true,
@@ -71,6 +75,10 @@ describe('getDefaultSettings', () => {
 
   it('keeps compact worktree cards disabled by default', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
+  })
+
+  it('keeps per-workspace environments disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })
 
   it('defaults local Windows projects to the host runtime', () => {

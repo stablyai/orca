@@ -56,6 +56,7 @@ export type SessionOptions = {
   sessionId: string
   cols: number
   rows: number
+  terminalHandle?: string
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
@@ -76,6 +77,7 @@ type AttachedClient = {
 
 export class Session {
   readonly sessionId: string
+  readonly terminalHandle: string | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null
@@ -97,6 +99,7 @@ export class Session {
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
+    this.terminalHandle = opts.terminalHandle ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -224,6 +227,17 @@ export class Session {
       return null
     }
     return this.emulator.getSnapshot()
+  }
+
+  // Why: the size the PTY actually applied (emulator dims, which Session.resize
+  // advances atomically with the subprocess), so the renderer can detect a
+  // resize that was dropped here (exited/disposed/invalid) instead of trusting
+  // its own last-requested size. Null on a disposed session.
+  getAppliedSize(): { cols: number; rows: number } | null {
+    if (this._disposed) {
+      return null
+    }
+    return this.emulator.getAppliedSize()
   }
 
   /** Drains the records accumulated since the last take. Runs synchronously —

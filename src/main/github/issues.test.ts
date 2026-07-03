@@ -251,4 +251,52 @@ describe('issue source operations', () => {
       { cwd: '/repo-root' }
     )
   })
+
+  it('closes issues with completed, not planned, and duplicate reasons', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    await expect(
+      updateIssue('/repo-root', 924, { state: 'closed', stateReason: 'completed' })
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      updateIssue('/repo-root', 925, { state: 'closed', stateReason: 'not_planned' })
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      updateIssue('/repo-root', 926, {
+        state: 'closed',
+        stateReason: 'duplicate',
+        duplicateOf: 99
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['issue', 'close', '924', '--repo', 'stablyai/orca', '--reason', 'completed'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['issue', 'close', '925', '--repo', 'stablyai/orca', '--reason', 'not planned'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      ['issue', 'close', '926', '--repo', 'stablyai/orca', '--duplicate-of', '99'],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('reopens issues through gh issue reopen', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    await expect(updateIssue('/repo-root', 924, { state: 'open' })).resolves.toEqual({
+      ok: true
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['issue', 'reopen', '924', '--repo', 'stablyai/orca'],
+      { cwd: '/repo-root' }
+    )
+  })
 })

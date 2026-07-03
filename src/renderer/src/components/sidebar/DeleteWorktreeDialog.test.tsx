@@ -115,6 +115,10 @@ function buttonText(props: Record<string, unknown>): string {
   return renderToStaticMarkup(<>{props.children as ReactNode}</>)
 }
 
+function visibleMarkupText(markup: string): string {
+  return markup.replace(/<[^>]*>/g, '')
+}
+
 describe('DeleteWorktreeDialog lineage copy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -210,6 +214,20 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     expect(markup).toContain('from Orca. The project folder on disk will not be deleted.')
     expect(markup).not.toContain('including uncommitted or untracked files')
+  })
+
+  it('keeps a space between remove copy and the workspace name', async () => {
+    const workspace = makeWorktree('Hide working dot', '/workspaces/hide-working-dot')
+    mocks.state.modalData = { worktreeId: workspace.id }
+    mocks.state.allWorktrees.mockReturnValue([workspace])
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
+
+    expect(visibleMarkupText(markup)).toContain(
+      'Remove Hide working dot from git and delete its workspace folder.'
+    )
+    expect(markup).not.toContain('RemoveHide working dot')
   })
 
   it('shows an inline warning when the workspace has uncommitted or untracked changes', async () => {

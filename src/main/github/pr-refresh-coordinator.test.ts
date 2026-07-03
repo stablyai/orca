@@ -184,6 +184,326 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('paces a burst of distinct active refreshes', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+    expect(
+      getPRForBranchOutcomeMock.mock.calls.map(([repoPath, branch]) => [repoPath, branch])
+    ).toEqual([
+      ['/repo', 'feature/9'],
+      ['/repo', 'feature/8'],
+      ['/repo', 'feature/7']
+    ])
+
+    await vi.advanceTimersByTimeAsync(29_999)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+    expect(
+      sendMock.mock.calls
+        .map(([, event]) => event)
+        .some((event) => event.reason === 'active' && event.status === 'queued')
+    ).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(6)
+  })
+
+  it('treats a same-key active reactivation as the latest active signal', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: '/repo::feature/0',
+        branch: 'feature/0',
+        worktreeId: 'wt-0'
+      }),
+      'active',
+      80,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(getPRForBranchOutcomeMock.mock.calls[3]?.[1]).toBe('feature/0')
+  })
+
+  it('does not let one capped active window block another window', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: '/repo::feature/other-window',
+        branch: 'feature/other-window',
+        worktreeId: 'wt-other-window'
+      }),
+      'active',
+      80,
+      2
+    )
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toContain(
+      'feature/other-window'
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not let capped host active work block WSL or SSH active scopes', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: 'wsl::repo-1::feature/wsl',
+        branch: 'feature/wsl',
+        localGitOptions: { wslDistro: 'Ubuntu' },
+        worktreeId: 'wt-wsl'
+      }),
+      'active',
+      80,
+      1
+    )
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: 'ssh:ssh-1::repo-1::feature/ssh',
+        branch: 'feature/ssh',
+        connectionId: 'ssh-1',
+        worktreeId: 'wt-ssh'
+      }),
+      'active',
+      80,
+      1
+    )
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    const startedBranches = getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])
+    expect(startedBranches).toContain('feature/wsl')
+    expect(startedBranches).toContain('feature/ssh')
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not let a capped active scope block ready visible work', async () => {
+    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({
+          cacheKey: '/repo::feature/visible',
+          branch: 'feature/visible',
+          worktreeId: 'wt-visible'
+        })
+      ],
+      1,
+      1
+    )
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toContain('feature/visible')
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('wakes for visible budget spacing before a capped active burst opens', async () => {
+    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
+      await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({
+          cacheKey: '/repo::feature/visible-first',
+          branch: 'feature/visible-first',
+          worktreeId: 'wt-visible-first'
+        })
+      ],
+      1,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    for (let index = 0; index < 10; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+    reportVisiblePRRefreshCandidates(
+      [
+        makeCandidate({
+          cacheKey: '/repo::feature/visible-second',
+          branch: 'feature/visible-second',
+          worktreeId: 'wt-visible-second'
+        })
+      ],
+      2,
+      1
+    )
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
+
+    await vi.advanceTimersByTimeAsync(9_999)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(4)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toContain(
+      'feature/visible-second'
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not consume active burst slots for rate-limit pauses', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getRateLimitMock
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValue({ ok: true })
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'missing upstream',
+      fetchedAt: Date.now()
+    })
+
+    for (let index = 0; index < 6; index += 1) {
+      enqueuePRRefresh(
+        makeCandidate({
+          cacheKey: `/repo::feature/${index}`,
+          branch: `feature/${index}`,
+          worktreeId: `wt-${index}`
+        }),
+        'active',
+        80,
+        1
+      )
+    }
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    const pausedEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.status === 'paused' && event.skippedReason === 'rate-limit')
+    expect(pausedEvents).toHaveLength(3)
+    expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toEqual([
+      'feature/2',
+      'feature/1',
+      'feature/0'
+    ])
+  })
+
   it('preserves an active refresh queued while a visible refresh is in flight', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
@@ -596,5 +916,66 @@ describe('pr-refresh-coordinator', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
+  })
+
+  describe('pruneWorktreePRRefreshAliases', () => {
+    // Several local worktrees tracking the same linked PR coalesce into one
+    // queue entry (same refreshKey) whose alias map keeps one entry each.
+    const LINKED_PR_KEY = 'local::runtime:host::/repo::pr::42'
+
+    function makeLinkedCandidate(worktreeId: string): GitHubPRRefreshCandidate {
+      return makeCandidate({
+        worktreeId,
+        cacheKey: `/repo::${worktreeId}`,
+        branch: `feature/${worktreeId}`,
+        linkedPRNumber: 42
+      })
+    }
+
+    it('drops a removed worktree alias and deletes the entry when it was the last', async () => {
+      const { enqueuePRRefresh, pruneWorktreePRRefreshAliases, _getPRRefreshAliasCountForTests } =
+        await import('./pr-refresh-coordinator')
+
+      enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
+      enqueuePRRefresh(makeLinkedCandidate('wt-2'), 'visible', 40, 1)
+      enqueuePRRefresh(makeLinkedCandidate('wt-3'), 'visible', 40, 1)
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(3)
+
+      pruneWorktreePRRefreshAliases('wt-2')
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(2)
+
+      pruneWorktreePRRefreshAliases('wt-1')
+      pruneWorktreePRRefreshAliases('wt-3')
+      // Last alias gone -> the whole queue entry is dropped.
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(0)
+    })
+
+    it('keeps the entry alive and rebinds the candidate when other aliases remain', async () => {
+      const {
+        enqueuePRRefresh,
+        pruneWorktreePRRefreshAliases,
+        _getPRRefreshAliasCountForTests,
+        _getPRRefreshQueueSizeForTests
+      } = await import('./pr-refresh-coordinator')
+
+      // wt-1 becomes the entry's representative candidate (enqueued first).
+      enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
+      enqueuePRRefresh(makeLinkedCandidate('wt-2'), 'visible', 40, 1)
+      expect(_getPRRefreshQueueSizeForTests()).toBe(1)
+
+      // Removing the representative worktree must not orphan the entry.
+      pruneWorktreePRRefreshAliases('wt-1')
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
+      expect(_getPRRefreshQueueSizeForTests()).toBe(1)
+    })
+
+    it('is a no-op for a worktree with no queued aliases', async () => {
+      const { enqueuePRRefresh, pruneWorktreePRRefreshAliases, _getPRRefreshAliasCountForTests } =
+        await import('./pr-refresh-coordinator')
+
+      enqueuePRRefresh(makeLinkedCandidate('wt-1'), 'visible', 40, 1)
+      pruneWorktreePRRefreshAliases('wt-unknown')
+      expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
+    })
   })
 })

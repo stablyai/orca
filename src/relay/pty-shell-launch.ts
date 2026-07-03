@@ -1,6 +1,6 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
@@ -25,7 +25,10 @@ function shellBasename(shellPath: string): string {
   return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
 }
 
-function windowsShellArgs(shellName: string): string[] | null {
+function windowsShellArgs(
+  shellName: string,
+  options: { terminalWindowsWslDistro?: string | null } = {}
+): string[] | null {
   if (shellName === 'powershell.exe' || shellName === 'powershell') {
     return ['-NoLogo']
   }
@@ -35,12 +38,19 @@ function windowsShellArgs(shellName: string): string[] | null {
   if (shellName === 'cmd.exe' || shellName === 'cmd') {
     return []
   }
+  if (shellName === 'wsl.exe' || shellName === 'wsl') {
+    const distro = options.terminalWindowsWslDistro?.trim()
+    return distro ? ['-d', distro] : []
+  }
   return null
 }
 
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
   return Boolean(
-    env.ORCA_OPENCODE_CONFIG_DIR || env.ORCA_REMOTE_CLI_BIN_DIR || env.ORCA_OMP_STATUS_EXTENSION
+    env.ORCA_OPENCODE_CONFIG_DIR ||
+    env.ORCA_MIMOCODE_HOME ||
+    env.ORCA_REMOTE_CLI_BIN_DIR ||
+    env.ORCA_OMP_STATUS_EXTENSION
   )
 }
 
@@ -100,6 +110,7 @@ ${getZshStartupFileSourceBlock({
 if [[ ! -o login ]]; then
   # Why: remote startup files can re-export user defaults after relay spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+  [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
   ${getPosixOmpShellWrapper()}
 fi
@@ -115,6 +126,7 @@ ${getZshStartupFileSourceBlock({
 })}
 # Why: .zlogin is the final zsh login startup file before the prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
@@ -131,6 +143,7 @@ elif [[ -f "$HOME/.profile" ]]; then
 fi
 # Why: remote startup files can re-export user defaults after relay spawn.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 # Why: SSH bash sessions need the same command lifecycle markers as local
@@ -241,14 +254,20 @@ export function getRelayShellLaunchConfig(
   shellPath: string,
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
-  options: { emitReadyMarker?: boolean } = {}
+  options: { emitReadyMarker?: boolean; terminalWindowsWslDistro?: string | null } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
   const emitReadyMarker = options.emitReadyMarker === true
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
-    return { args: windowsShellArgs(shellName) ?? [], env: {} }
+    return {
+      args:
+        windowsShellArgs(shellName, {
+          terminalWindowsWslDistro: options.terminalWindowsWslDistro
+        }) ?? [],
+      env: {}
+    }
   }
 
   if (shellName !== 'zsh' && shellName !== 'bash') {

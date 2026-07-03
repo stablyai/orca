@@ -132,7 +132,6 @@ export class StatusPorcelainParser {
     // "2 XY sub mH mI mW hH X<score> path\torigPath"
     const parts = line.split(' ')
     const xy = parts[1]
-    const submodule = parseSubmoduleStatus(parts[2])
     const indexStatus = xy[0]
     const worktreeStatus = xy[1]
 
@@ -149,7 +148,7 @@ export class StatusPorcelainParser {
           status: parseStatusChar(indexStatus),
           area: 'staged',
           oldPath,
-          ...(submodule ? { submodule } : {})
+          ...submoduleStatusField(parts[2], indexStatus)
         })
       }
       if (worktreeStatus !== '.') {
@@ -158,7 +157,7 @@ export class StatusPorcelainParser {
           status: parseStatusChar(worktreeStatus),
           area: 'unstaged',
           oldPath,
-          ...(submodule ? { submodule } : {})
+          ...submoduleStatusField(parts[2], worktreeStatus)
         })
       }
       return
@@ -170,7 +169,7 @@ export class StatusPorcelainParser {
         path,
         status: parseStatusChar(indexStatus),
         area: 'staged',
-        ...(submodule ? { submodule } : {})
+        ...submoduleStatusField(parts[2], indexStatus)
       })
     }
     if (worktreeStatus !== '.') {
@@ -178,7 +177,7 @@ export class StatusPorcelainParser {
         path,
         status: parseStatusChar(worktreeStatus),
         area: 'unstaged',
-        ...(submodule ? { submodule } : {})
+        ...submoduleStatusField(parts[2], worktreeStatus)
       })
     }
   }
@@ -207,14 +206,23 @@ export function parseStatusChar(char: string): GitStatusEntry['status'] {
 }
 
 export function parseSubmoduleStatus(
-  submoduleField: string | undefined
+  submoduleField: string | undefined,
+  statusChar = '.'
 ): GitStatusEntry['submodule'] {
   if (!submoduleField?.startsWith('S')) {
     return undefined
   }
   return {
-    commitChanged: submoduleField[1] === 'C',
+    commitChanged: submoduleField[1] === 'C' || (submoduleField === 'S...' && statusChar === 'M'),
     trackedChanges: submoduleField[2] === 'M',
     untrackedChanges: submoduleField[3] === 'U'
   }
+}
+
+function submoduleStatusField(
+  submoduleField: string | undefined,
+  statusChar: string
+): { submodule: GitStatusEntry['submodule'] } | {} {
+  const submodule = parseSubmoduleStatus(submoduleField, statusChar)
+  return submodule ? { submodule } : {}
 }

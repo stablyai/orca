@@ -156,20 +156,22 @@ export type WorktreeSlice = {
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
-  /** Merge a status patch (phase/error/status/loaderVisible) into an existing
-   *  pending entry. */
+  /** Merge a status patch into an existing pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,
     patch: {
       phase?: WorktreeCreationPhase
       status?: 'creating' | 'error'
+      startedAt?: number
       error?: string
       loaderVisible?: boolean
+      request?: PendingWorktreeCreation['request']
+      provisioningLog?: string
     }
   ) => void
-  /** Drop a pending entry (on success or dismiss), clearing the active surface
-   *  if it pointed at this creation. */
-  removePendingWorktreeCreation: (creationId: string) => void
+  /** Drop a pending entry, clearing the active surface if it pointed at this
+   *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
+  removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>

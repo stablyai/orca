@@ -35,11 +35,18 @@ export type TerminalShortcutAction =
   | { type: 'focusPane'; direction: 'next' | 'previous' }
   | { type: 'equalizePaneSizes' }
   | { type: 'toggleExpandActivePane' }
+  | { type: 'setTitle' }
+  | { type: 'clearPaneTitle' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
 
+/**
+ * Resolves terminal keyboard events before xterm receives them.
+ * Keeps configurable Orca shortcuts and terminal byte fallbacks in one
+ * platform-aware policy so renderer handlers do not duplicate key checks.
+ */
 export function resolveTerminalShortcutAction(
   event: TerminalShortcutEvent,
   isMac: boolean,
@@ -78,6 +85,14 @@ export function resolveTerminalShortcutAction(
       return { type: 'toggleExpandActivePane' }
     }
 
+    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
+      return { type: 'setTitle' }
+    }
+
+    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
+      return { type: 'clearPaneTitle' }
+    }
+
     if (keybindingMatchesAction('terminal.closePane', event, platform, keybindings)) {
       return { type: 'closeActivePane' }
     }
@@ -101,6 +116,23 @@ export function resolveTerminalShortcutAction(
     // Why: Codex on Windows PowerShell treats CSI-u Shift+Enter as inert,
     // while the Alt+Enter byte path inserts a composer newline.
     return { type: 'sendInput', data: isWindows ? '\x1b\r' : '\x1b[13;2u' }
+  }
+
+  if (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key === 'Enter'
+  ) {
+    // Why: xterm.js collapses Ctrl+Enter to a bare CR, so TUIs that expect
+    // modified Enter chords never receive the distinct input and treat it as
+    // plain Enter. Forward the kitty CSI-u sequence directly (modifier code
+    // 5 = Ctrl; cf. 2 = Shift above) so cue/queue behavior reaches the TUI.
+    // Sibling of the Shift+Enter case; a Windows fallback is not added yet
+    // because, unlike #2418's Codex-on-PowerShell inertness, no Windows TUI is
+    // known to drop the CSI-u form for Ctrl+Enter.
+    return { type: 'sendInput', data: '\x1b[13;5u' }
   }
 
   if (

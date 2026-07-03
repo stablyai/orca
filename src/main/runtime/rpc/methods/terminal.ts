@@ -26,15 +26,11 @@ import {
 } from '../../../../shared/terminal-input'
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import {
+  MOBILE_SNAPSHOT_BYTE_BUDGET,
+  MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
+} from '../../scrollback-limits'
 
-// Why: when a mobile client subscribes the server resizes the PTY to phone
-// dims and serializes the buffer. Sending only the visible screen meant
-// users coming back to the app or switching terminals could no longer scroll
-// up to see prior agent output. Include enough scrollback to keep typical
-// agent runs (Claude Code chats, command output) reachable. The mobile
-// WebView's xterm has a 5000-row buffer so this fits comfortably.
-const MOBILE_SUBSCRIBE_SCROLLBACK_ROWS = 1000
-const MOBILE_SNAPSHOT_BYTE_BUDGET = 512 * 1024
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -54,6 +50,7 @@ type SnapshotFrameOptions = {
   displayMode?: string
   reason?: string
   seq?: number
+  cwd?: string | null
   truncated?: boolean
   truncatedByByteBudget?: boolean
   source?: 'headless' | 'renderer'
@@ -65,6 +62,7 @@ type SerializedSnapshot = {
   cols: number
   rows: number
   seq?: number
+  cwd?: string | null
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
   scrollbackRows: number
@@ -101,24 +99,25 @@ type TerminalMultiplexStream = {
 type TerminalOutputChunk = {
   data: string
   bytes: number
-  meta?: { seq?: number; rawLength?: number }
+  meta?: TerminalOutputMeta
 }
+
+type TerminalOutputMeta = { seq?: number; rawLength?: number; cwd?: string }
 
 type TerminalOutputFrameChunk = {
   bytes: Uint8Array<ArrayBufferLike>
   seq?: number
 }
 
-function createTerminalOutputBatcher(
-  onFlush: (data: string, meta?: { seq?: number; rawLength?: number }) => void
-): {
-  push: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutputMeta) => void): {
+  push: (data: string, meta?: TerminalOutputMeta) => void
   flush: () => void
   dispose: () => void
 } {
   let chunks: string[] = []
   let bytes = 0
   let lastSeq: number | undefined
+  let pendingCwd: string | undefined
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const clearTimer = (): void => {
@@ -135,17 +134,28 @@ function createTerminalOutputBatcher(
       return
     }
     const data = chunks.length === 1 ? chunks[0]! : chunks.join('')
-    const meta = typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: data.length } : undefined
+    const meta =
+      typeof lastSeq === 'number' || pendingCwd !== undefined
+        ? {
+            ...(typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: data.length } : {}),
+            ...(pendingCwd !== undefined ? { cwd: pendingCwd } : {})
+          }
+        : undefined
     chunks = []
     bytes = 0
     lastSeq = undefined
+    pendingCwd = undefined
     onFlush(data, meta)
   }
 
   return {
-    push(data: string, meta?: { seq?: number; rawLength?: number }): void {
+    push(data: string, meta?: TerminalOutputMeta): void {
       if (!data) {
         return
+      }
+      if (meta?.cwd !== undefined) {
+        flush()
+        pendingCwd = meta.cwd
       }
       chunks.push(data)
       const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
@@ -180,7 +190,7 @@ function createTerminalOutputBatcher(
 
 function* iterateTerminalOutputFrameChunks(
   data: string,
-  meta?: { seq?: number; rawLength?: number }
+  meta?: TerminalOutputMeta
 ): Generator<TerminalOutputFrameChunk> {
   if (!terminalStreamByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)) {
     yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
@@ -307,7 +317,7 @@ function isTerminalSendGuardNotWritable(error: unknown): boolean {
 function appendPendingMultiplexOutput(
   stream: TerminalMultiplexStream,
   data: string,
-  meta?: { seq?: number; rawLength?: number }
+  meta?: TerminalOutputMeta
 ): void {
   const remainingBudget = Math.max(
     1,
@@ -321,6 +331,27 @@ function appendPendingMultiplexOutput(
   const trimmed = trimPendingOutputToBudget(stream.pendingOutput, stream.pendingOutputBytes)
   stream.pendingOutputBytes = trimmed.bytes
   stream.pendingOutputOverflowed ||= trimmed.overflowed
+}
+
+function getOutputAfterSnapshotSeq(
+  chunk: TerminalOutputChunk,
+  snapshotSeq: number | undefined
+): string | null {
+  if (
+    typeof snapshotSeq !== 'number' ||
+    typeof chunk.meta?.seq !== 'number' ||
+    typeof chunk.meta.rawLength !== 'number'
+  ) {
+    return chunk.data
+  }
+  if (chunk.meta.seq <= snapshotSeq) {
+    return null
+  }
+  const chunkStartSeq = chunk.meta.seq - chunk.meta.rawLength
+  if (chunkStartSeq >= snapshotSeq) {
+    return chunk.data
+  }
+  return chunk.data.slice(snapshotSeq - chunkStartSeq)
 }
 
 function trimPendingOutputToBudget(
@@ -426,6 +457,7 @@ function sendSnapshotFrames(
       displayMode: options.displayMode,
       reason: options.reason,
       seq: options.seq,
+      cwd: options.cwd,
       source: options.source,
       oscLinks: options.oscLinks,
       truncated: options.truncated === true,
@@ -506,6 +538,7 @@ async function sendMobileResizeRestream(
     reason: event.reason,
     seq: event.seq ?? serialized.seq,
     source: serialized.source,
+    cwd: serialized.cwd,
     oscLinks: serialized.oscLinks,
     truncated: false,
     truncatedByByteBudget: serialized.truncatedByByteBudget,
@@ -628,6 +661,7 @@ const TerminalCreateParams = z.object({
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
   activate: z.unknown().optional(),
+  presentation: z.enum(['background', 'focused']).optional(),
   tabId: OptionalString,
   leafId: OptionalString
 })
@@ -1001,6 +1035,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,
         activate: params.activate === true,
+        presentation: params.presentation,
         tabId: params.tabId,
         leafId: params.leafId
       })
@@ -1351,6 +1386,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             requestId,
             displayMode,
             seq: serialized?.seq,
+            cwd: serialized?.cwd,
             source: serialized?.source,
             oscLinks: serialized?.oscLinks,
             truncated: false,
@@ -1420,6 +1456,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           lastResizeCols: undefined,
           resizeGeneration: 0,
           outputBatcher: createTerminalOutputBatcher((data, meta) => {
+            if (meta?.cwd !== undefined) {
+              sendFrame(
+                request.streamId,
+                TerminalStreamOpcode.Metadata,
+                encodeTerminalStreamJson({ cwd: meta.cwd }),
+                meta.seq
+              )
+            }
             for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
               sendFrame(request.streamId, TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
             }
@@ -1481,15 +1525,33 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             })
           }
 
-          const read = await runtime.readTerminal(request.terminal)
-          const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+          let read = await runtime.readTerminal(request.terminal)
+          let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
           if (closed || streams.get(request.streamId) !== stream) {
             return
+          }
+          let initialOutputOverflowed = false
+          if (stream.pendingOutputOverflowed) {
+            stream.pendingOutput.splice(0)
+            stream.pendingOutputBytes = 0
+            stream.pendingOutputOverflowed = false
+            read = await runtime.readTerminal(request.terminal)
+            serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+            if (closed || streams.get(request.streamId) !== stream) {
+              return
+            }
+            if (stream.pendingOutputOverflowed) {
+              initialOutputOverflowed = true
+              stream.pendingOutput.splice(0)
+              stream.pendingOutputBytes = 0
+              stream.pendingOutputOverflowed = false
+            }
           }
           const size = runtime.getTerminalSize(ptyId)
           const displayMode = runtime.getMobileDisplayMode(ptyId)
           const layoutSeq = runtime.getLayout(ptyId)?.seq
-          const snapshotSeq = serialized?.seq ?? layoutSeq
+          const snapshotFrameSeq = serialized?.seq ?? layoutSeq
+          const snapshotOutputSeq = serialized?.seq
           if (!isMobile) {
             const fitOverride = runtime.getTerminalFitOverride(ptyId)
             emit({
@@ -1513,15 +1575,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             rows: serialized?.rows ?? size?.rows,
             displayMode,
             seq: layoutSeq,
-            truncated: serialized ? read.truncated : isTerminalReadPayloadIncomplete(read)
+            truncated:
+              initialOutputOverflowed ||
+              (serialized ? read.truncated : isTerminalReadPayloadIncomplete(read))
           })
           sendSnapshotFrames((opcode, payload) => sendFrame(request.streamId, opcode, payload), {
             kind: 'scrollback',
             cols: serialized?.cols ?? size?.cols ?? 80,
             rows: serialized?.rows ?? size?.rows ?? 24,
             displayMode,
-            seq: snapshotSeq,
-            truncated: serialized ? read.truncated : isTerminalReadPayloadIncomplete(read),
+            seq: snapshotFrameSeq,
+            cwd: serialized?.cwd,
+            truncated:
+              initialOutputOverflowed ||
+              (serialized ? read.truncated : isTerminalReadPayloadIncomplete(read)),
             truncatedByByteBudget: serialized?.truncatedByByteBudget,
             source: serialized?.source,
             oscLinks: serialized?.oscLinks,
@@ -1531,8 +1598,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // rewrapped to these cols via the initial snapshot replay.
           stream.lastResizeCols = serialized?.cols ?? size?.cols
           stream.buffering = false
-          for (const chunk of stream.pendingOutput.splice(0)) {
-            stream.outputBatcher.push(chunk.data, chunk.meta)
+          const pendingOutput = stream.pendingOutput.splice(0)
+          if (!initialOutputOverflowed) {
+            for (const chunk of pendingOutput) {
+              const uncoveredData = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq)
+              if (uncoveredData) {
+                stream.outputBatcher.push(uncoveredData, chunk.meta)
+              }
+            }
           }
           stream.pendingOutputBytes = 0
           stream.pendingOutputOverflowed = false
@@ -1685,6 +1758,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           truncated: isTerminalReadPayloadIncomplete(read),
           serialized: serialized?.data,
           oscLinks: serialized?.oscLinks,
+          cwd: serialized?.cwd,
           cols: serialized?.cols ?? size?.cols,
           rows: serialized?.rows ?? size?.rows,
           displayMode,
@@ -1741,6 +1815,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let resizeGeneration = 0
       const pendingOutput: TerminalOutputChunk[] = []
       let pendingOutputBytes = 0
+      let pendingOutputOverflowed = false
       let unsubscribeData = (): void => {}
       let unsubscribeResize = (): void => {}
       let unsubscribeFit = (): void => {}
@@ -1778,16 +1853,24 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         .catch(() => runtime.cleanupSubscription(subscriptionId))
       const sendFrame = (
         opcode: TerminalStreamOpcode,
-        payload: Uint8Array<ArrayBufferLike> = new Uint8Array()
+        payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
+        frameSeq = cursor++
       ): void => {
         if (closed || !sendBinary) {
           return
         }
-        sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: cursor++, payload }))
+        sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }))
       }
-      outputBatcher = createTerminalOutputBatcher((data) => {
-        for (const chunk of iterateTerminalOutputFrameChunks(data)) {
-          sendFrame(TerminalStreamOpcode.Output, chunk.bytes)
+      outputBatcher = createTerminalOutputBatcher((data, meta) => {
+        if (meta?.cwd !== undefined) {
+          sendFrame(
+            TerminalStreamOpcode.Metadata,
+            encodeTerminalStreamJson({ cwd: meta.cwd }),
+            meta.seq
+          )
+        }
+        for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+          sendFrame(TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
         }
       })
       unregisterBinaryHandler =
@@ -1842,7 +1925,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
 
-        unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data) => {
+        unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
           if (closed) {
             return
           }
@@ -1854,19 +1937,37 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             const measurement = measureTerminalStreamByteLength(data, {
               stopAfterBytes: remainingBudget
             })
-            pendingOutput.push({ data, bytes: measurement.byteLength })
+            pendingOutput.push({ data, bytes: measurement.byteLength, meta })
             pendingOutputBytes += measurement.byteLength
             const trimmed = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes)
             pendingOutputBytes = trimmed.bytes
+            pendingOutputOverflowed ||= trimmed.overflowed
             return
           }
-          outputBatcher?.push(data)
+          outputBatcher?.push(data, meta)
         })
 
-        const read = await runtime.readTerminal(params.terminal)
-        const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+        let read = await runtime.readTerminal(params.terminal)
+        let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
         if (closed) {
           return
+        }
+        let initialOutputOverflowed = false
+        if (pendingOutputOverflowed) {
+          pendingOutput.splice(0)
+          pendingOutputBytes = 0
+          pendingOutputOverflowed = false
+          read = await runtime.readTerminal(params.terminal)
+          serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+          if (closed) {
+            return
+          }
+          if (pendingOutputOverflowed) {
+            initialOutputOverflowed = true
+            pendingOutput.splice(0)
+            pendingOutputBytes = 0
+            pendingOutputOverflowed = false
+          }
         }
         const size = runtime.getTerminalSize(ptyId)
         const displayMode = runtime.getMobileDisplayMode(ptyId)
@@ -1874,24 +1975,31 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         // the mobile client's stale-event filter knows the high-water mark.
         // Undefined when the PTY has never transitioned (filter is fail-open).
         // See docs/mobile-terminal-layout-state-machine.md.
-        const seq = runtime.getLayout(ptyId)?.seq
+        const layoutSeq = runtime.getLayout(ptyId)?.seq
+        const snapshotFrameSeq = serialized?.seq ?? layoutSeq
+        const snapshotOutputSeq = serialized?.seq
         emit({
           type: 'subscribed',
           streamId,
           lines: read.tail,
-          truncated: isTerminalReadPayloadIncomplete(read),
+          truncated:
+            initialOutputOverflowed ||
+            (serialized ? read.truncated : isTerminalReadPayloadIncomplete(read)),
           cols: serialized?.cols ?? size?.cols,
           rows: serialized?.rows ?? size?.rows,
           displayMode,
-          seq
+          seq: layoutSeq
         })
         const snapshotStats = sendSnapshotFrames(sendFrame, {
           kind: 'scrollback',
           cols: serialized?.cols ?? size?.cols ?? 80,
           rows: serialized?.rows ?? size?.rows ?? 24,
           displayMode,
-          seq,
-          truncated: serialized ? read.truncated : isTerminalReadPayloadIncomplete(read),
+          seq: snapshotFrameSeq,
+          cwd: serialized?.cwd,
+          truncated:
+            initialOutputOverflowed ||
+            (serialized ? read.truncated : isTerminalReadPayloadIncomplete(read)),
           truncatedByByteBudget: serialized?.truncatedByByteBudget,
           oscLinks: serialized?.oscLinks,
           data: serialized?.data ?? ''
@@ -1909,8 +2017,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         // rewrapped to these cols via the initial snapshot replay.
         lastResizeCols = serialized?.cols ?? size?.cols
         buffering = false
-        for (const item of pendingOutput.splice(0)) {
-          outputBatcher.push(item.data, item.meta)
+        const bufferedOutput = pendingOutput.splice(0)
+        if (!initialOutputOverflowed) {
+          for (const item of bufferedOutput) {
+            const uncoveredData = getOutputAfterSnapshotSeq(item, snapshotOutputSeq)
+            if (uncoveredData) {
+              outputBatcher.push(uncoveredData, item.meta)
+            }
+          }
         }
         pendingOutputBytes = 0
         outputBatcher.flush()

@@ -192,7 +192,16 @@ describe('remote hook service installers', () => {
   })
 
   it('installs remote Codex hooks with matching trust entries', async () => {
-    const { sftp, fs } = createFakeSftp()
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.codex/hooks.json': `${JSON.stringify({
+        hooks: {},
+        _managed: {
+          'external-manager': {
+            Stop: [0]
+          }
+        }
+      })}\n`
+    })
 
     const status = await new CodexHookService().installRemote(sftp, '/home/dev/')
 
@@ -200,7 +209,9 @@ describe('remote hook service installers', () => {
     expect(status.configPath).toBe('/home/dev/.codex/hooks.json')
     const hooks = JSON.parse(fs.files.get('/home/dev/.codex/hooks.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
+      _managed?: unknown
     }
+    expect(hooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',

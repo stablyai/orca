@@ -85,7 +85,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-catalog-icon={agent} />
 }))
 
-vi.mock('@/lib/agent-title-decoration', () => ({
+vi.mock('../../../../shared/agent-title-decoration', () => ({
   stripLeadingAgentTitleDecoration: (title: string) =>
     title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
 }))
@@ -171,6 +171,19 @@ function firstOpeningTag(markup: string): string {
     throw new Error(`first opening div not found in ${markup}`)
   }
   return match[0]
+}
+
+function textSpanHtml(markup: string, text: string): string {
+  const textIndex = markup.indexOf(`>${text}</span>`)
+  expect(textIndex).toBeGreaterThanOrEqual(0)
+
+  const tagStart = markup.lastIndexOf('<span', textIndex)
+  expect(tagStart).toBeGreaterThanOrEqual(0)
+
+  const spanEnd = markup.indexOf('</span>', textIndex)
+  expect(spanEnd).toBeGreaterThan(textIndex)
+
+  return markup.slice(tagStart, spanEnd + '</span>'.length)
 }
 
 function expectTabContainerWidth(markup: string, root: string): void {
@@ -357,6 +370,7 @@ describe('tab title tooltips', () => {
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
     expect(root).toContain('data-tab-id="editor-tab-1"')
+    expect(textSpanHtml(markup, 'VeryLongEditorFileName.tsx')).not.toContain('renamed')
     expectTabContainerWidth(markup, root)
   })
 })

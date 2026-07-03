@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the orchestration DB keeps schema creation, message CRUD, task DAG resolution, and dispatch context management in one class so transactional invariants (e.g. promoteReadyTasks running inside the same writer as updateTaskStatus) are enforced by locality. */
-import { randomBytes } from 'crypto'
+import { randomBytes } from 'node:crypto'
 import Database from '../../sqlite/sync-database'
 import type {
   MessageType,

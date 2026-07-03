@@ -238,6 +238,32 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied command.')
   })
 
+  it('shows a visible pending state while CLI setup preflight is running', async () => {
+    let resolvePreflight: (() => void) | null = null
+    const preflight = new Promise<void>((resolve) => {
+      resolvePreflight = resolve
+    })
+
+    await renderInteractivePanel({
+      onBeforeOpenTerminal: () => preflight
+    })
+
+    await clickButton('Install')
+
+    expect(findButton('Preparing...').disabled).toBe(true)
+    expect(container?.textContent).toContain('Preparing setup terminal.')
+    expect(container?.textContent).not.toContain(INSTALL_COMMAND)
+
+    await act(async () => {
+      resolvePreflight?.()
+      await preflight
+    })
+    await act(async () => {})
+
+    expect(container?.textContent).toContain(INSTALL_COMMAND)
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: INSTALL_COMMAND })
+  })
+
   it('opens installed setup with the installed command for preview, copy, and terminal', async () => {
     await renderInteractivePanel({ installed: true, installedCommand: UPDATE_COMMAND })
 

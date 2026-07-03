@@ -6,6 +6,7 @@ import {
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
+  AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
   AGENT_STATUS_STATES,
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
@@ -141,6 +142,41 @@ describe('parseAgentStatusPayload', () => {
       toolInput: '/path/to/file.ts',
       lastAssistantMessage: 'Here is the edit I made.'
     })
+  })
+
+  it('parses interactivePrompt without single-line collapse', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [{ question: 'Pick one', options: ['a', 'b'] }]
+    })
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+    // Why: the value is raw JSON the client parses back — content (including
+    // any embedded newlines) must survive untouched, unlike toolInput.
+    expect(result!.interactivePrompt).toBe(interactivePrompt)
+  })
+
+  it('preserves newlines inside interactivePrompt JSON', () => {
+    const interactivePrompt = '{\n  "questions": []\n}'
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+    expect(result!.interactivePrompt).toBe(interactivePrompt)
+  })
+
+  it('caps interactivePrompt at its generous max length (not the toolInput cap)', () => {
+    const long = 'x'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH + 500)
+    const result = parseAgentStatusPayload(
+      JSON.stringify({ state: 'waiting', interactivePrompt: long })
+    )
+    expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+    expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
+  })
+
+  it('leaves interactivePrompt undefined when absent or non-string', () => {
+    expect(parseAgentStatusPayload('{"state":"working"}')!.interactivePrompt).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","interactivePrompt":42}')!.interactivePrompt
+    ).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","interactivePrompt":""}')!.interactivePrompt
+    ).toBeUndefined()
   })
 
   it('truncates each optional field to its own cap', () => {

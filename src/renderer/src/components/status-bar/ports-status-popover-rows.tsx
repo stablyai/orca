@@ -14,6 +14,7 @@ import {
   resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
+import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -76,6 +77,7 @@ export function PortRow({
   external?: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
   const runtimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(
       s,
@@ -116,7 +118,8 @@ export function PortRow({
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser
+        openInOrcaBrowser,
+        localhostLabelRoute
       }).then((result) => {
         if (!result.ok) {
           toast.error(
@@ -132,6 +135,7 @@ export function PortRow({
     [
       activeWorktreeId,
       createBrowserTab,
+      localhostLabelRoute,
       port,
       recordFeatureInteraction,
       runtimeTarget,

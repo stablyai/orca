@@ -1,7 +1,10 @@
 import type { TuiAgent } from '../../../shared/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import {
+  inspectRuntimeTerminalProcess,
+  sendRuntimePtyInputVerified
+} from '@/runtime/runtime-terminal-inspection'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
@@ -12,6 +15,7 @@ import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
 import type { GlobalSettings } from '../../../shared/types'
 import { sendAgentDraftPasteContent } from './agent-draft-paste-content'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -123,6 +127,45 @@ export async function pasteDraftWhenAgentReady(args: {
   })
 }
 
+export async function pasteDraftToAgentPtyWhenReady(args: {
+  tabId: string
+  ptyId: string
+  content: string
+  agent?: TuiAgent
+  submit?: boolean
+  forcePaste?: boolean
+  timeoutMs?: number
+  onTimeout?: () => void
+}): Promise<boolean> {
+  const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
+  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+
+  if (!forcePaste && (agentConfig?.draftPromptFlag || agentConfig?.draftPromptEnvVar)) {
+    return false
+  }
+
+  const budget = timeoutMs ?? READINESS_TIMEOUT_MS
+  const settings = getSettingsForAgentTabRuntimeOwner(tabId)
+  const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+  const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
+  if (!ready) {
+    const fallbackReady = agentConfig
+      ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
+      : false
+    if (!fallbackReady) {
+      onTimeout?.()
+      return false
+    }
+  }
+
+  return await sendBracketedPasteToAgent({
+    settings,
+    ptyId,
+    content,
+    submit: submit === true
+  })
+}
+
 export async function submitPromptToAgentTab(args: {
   tabId: string
   content: string
@@ -137,6 +180,19 @@ export async function submitPromptToAgentTab(args: {
     settings: getSettingsForAgentTabRuntimeOwner(tabId),
     ptyId,
     content,
+    submit: true
+  })
+}
+
+export async function submitPromptToAgentPty(args: {
+  tabId: string
+  ptyId: string
+  content: string
+}): Promise<boolean> {
+  return await sendBracketedPasteToAgent({
+    settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
+    ptyId: args.ptyId,
+    content: args.content,
     submit: true
   })
 }
@@ -190,4 +246,54 @@ async function waitForPtyId(tabId: string, timeoutMs: number): Promise<string | 
     await new Promise<void>((resolve) => window.setTimeout(resolve, 50))
   }
   return null
+}
+
+async function waitForExpectedAgentOnPty(
+  ptyId: string,
+  expectedProcess: string,
+  timeoutMs: number,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const process = await withDeadline(
+        inspectRuntimeTerminalProcess(settings, ptyId),
+        Math.max(0, deadline - Date.now())
+      )
+      if (!process) {
+        return false
+      }
+      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+      if (isExpectedAgentProcess(foreground, expectedProcess)) {
+        return true
+      }
+    } catch {
+      // Ignore transient PTY inspection failures and keep polling.
+    }
+    const delayMs = Math.min(120, Math.max(0, deadline - Date.now()))
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs))
+    }
+  }
+  return false
+}
+
+function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  if (timeoutMs <= 0) {
+    return Promise.resolve(null)
+  }
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => resolve(null), timeoutMs)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }

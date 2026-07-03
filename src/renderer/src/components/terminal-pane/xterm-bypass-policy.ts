@@ -17,6 +17,7 @@ export type XtermBypassEvent = {
   key: string
   code?: string
   keyCode?: number
+  isComposing?: boolean
   defaultPrevented?: boolean
   metaKey: boolean
   ctrlKey: boolean
@@ -32,8 +33,26 @@ export type XtermBypassOptions = {
   hasSelection: boolean
 }
 
+export type XtermImeKeyboardOptions = {
+  compositionActive: boolean
+}
+
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
+const TERMINAL_IME_OWNED_KEYS = new Set([
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'Backspace',
+  'Delete',
+  'End',
+  'Enter',
+  'Escape',
+  'Home',
+  'PageDown',
+  'PageUp'
+])
 
 function isSingleNonAsciiPrintableText(key: string): boolean {
   const chars = Array.from(key)
@@ -46,6 +65,23 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
 
 function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
+}
+
+export function shouldSuppressTerminalImeKeyboardEvent(
+  event: XtermBypassEvent,
+  options: XtermImeKeyboardOptions = { compositionActive: false }
+): boolean {
+  if (!isXtermHandledKeyEvent(event.type)) {
+    return false
+  }
+  // Why: IMEs own Process-key / composing keystrokes. Letting xterm translate
+  // Backspace/Enter/etc. into PTY bytes makes TUIs delete committed CJK text
+  // while the user is only editing the preedit candidate.
+  return (
+    event.isComposing === true ||
+    event.keyCode === 229 ||
+    (options.compositionActive && TERMINAL_IME_OWNED_KEYS.has(event.key))
+  )
 }
 
 function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {

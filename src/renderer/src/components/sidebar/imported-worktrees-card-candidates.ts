@@ -1,9 +1,5 @@
-import type {
-  DetectedWorktree,
-  DetectedWorktreeListResult,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { DetectedWorktreeListResult, Repo, Worktree } from '../../../../shared/types'
+import { getHiddenExternalWorktrees } from '../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   effectiveExternalWorktreeVisibility,
@@ -13,14 +9,8 @@ import type { ImportedWorktreesCardCandidate } from './worktree-list-groups'
 
 export function getHiddenImportedWorktrees(
   detected: DetectedWorktreeListResult | undefined
-): DetectedWorktree[] {
-  if (detected?.authoritative !== true) {
-    return []
-  }
-  return detected.worktrees.filter(
-    (worktree) =>
-      !worktree.visible && !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
-  )
+): ReturnType<typeof getHiddenExternalWorktrees> {
+  return getHiddenExternalWorktrees(detected)
 }
 
 export function buildImportedWorktreesCardCandidates(args: {

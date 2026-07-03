@@ -13,6 +13,9 @@ import {
 type MockStoreState = {
   activeWorktreeId: string | null
   activeWorkspaceKey: string | null
+  settings?: {
+    experimentalNewWorktreeCardStyle?: boolean
+  }
   folderWorkspaces: {
     id: string
     name: string
@@ -28,6 +31,9 @@ const testState = vi.hoisted(() => ({
   store: {
     activeWorktreeId: null,
     activeWorkspaceKey: null,
+    settings: {
+      experimentalNewWorktreeCardStyle: true
+    },
     folderWorkspaces: [],
     workspaceLineageByChildKey: {},
     worktreeLineageById: {},

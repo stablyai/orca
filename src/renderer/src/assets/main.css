@@ -15,6 +15,15 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Orca Nerd Font Symbols';
+  src: url('./fonts/SymbolsNerdFontMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
@@ -166,15 +175,15 @@
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
-  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
-  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
   --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
   --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
   --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
   --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
   --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
-  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
@@ -234,7 +243,9 @@
   --worktree-sidebar-foreground: #fafafa;
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #fafafa;
-  --worktree-sidebar-border: rgb(255 255 255 / 0.1);
+  /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
+     aren't brighter than the rest of the UI in dark mode (#5906). */
+  --worktree-sidebar-border: rgb(255 255 255 / 0.07);
   --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
   --sidebar-foreground: #fafafa;
@@ -247,15 +258,15 @@
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
-  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
-  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255);
   --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
   --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
   --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
   --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
   --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
-  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
-  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
@@ -282,6 +293,52 @@
 
 .dark .linear-priority-bars {
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
+}
+
+[data-sonner-toaster] {
+  font-family: var(--font-sans);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
+  margin-top: 2px;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-content] {
+  min-width: 0;
+  flex: 1 1 calc(100% - 30px);
+  gap: 6px;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  /* Why: Sonner's native action slots otherwise share the copy row and squeeze
+     long notices; indent the wrapped footer to align with text after the icon. */
+  margin-top: 2px;
+  margin-left: 26px;
+  margin-right: 0;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] ~ [data-button] {
+  margin-left: 0;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+  line-height: 1.35;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
+  /* Why: match the 80% body-copy opacity used by the custom-React toast bodies
+     (delete-worktree-failure, local-base-ref-suggestion) so string and JSX
+     descriptions read at the same weight. */
+  color: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
+  line-height: 1.45;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
@@ -694,6 +751,21 @@
 .right-sidebar-header-drag {
   -webkit-app-region: drag;
   user-select: none;
+}
+
+[data-terminal-focus-release-surface='true'] {
+  -webkit-app-region: drag;
+}
+
+/* Why: Electron drag regions swallow renderer pointer events. While regular
+   xterm owns focus, make the next top-chrome click observable so it can release
+   terminal zoom ownership; after release these surfaces become draggable again. */
+:root[data-regular-terminal-input-focused] .titlebar,
+:root[data-regular-terminal-input-focused] .titlebar-left,
+:root[data-regular-terminal-input-focused] .window-controls-titlebar-spacer,
+:root[data-regular-terminal-input-focused] .right-sidebar-header-drag,
+:root[data-regular-terminal-input-focused] [data-terminal-focus-release-surface='true'] {
+  -webkit-app-region: no-drag;
 }
 
 .right-sidebar-header-no-drag {
@@ -1797,10 +1869,15 @@
   transition: none !important;
 }
 
-/* Specifically for the expand/collapse button icon which is often a nested 'i' or '::before' */
-.monaco-editor .find-widget .button.expand {
-  width: 16px !important;
-  height: 16px !important;
+/* Why: the expand/collapse toggle (the chevron on the far left) is positioned
+   absolutely and relies on Monaco's default height:100% to vertically center
+   its icon over the find row. The generic .button override above forces a fixed
+   20px height, which pins the chevron to the top. Restore Monaco's full-height
+   18px toggle so the chevron centers like the stock find widget. */
+.monaco-editor .find-widget .button.toggle {
+  width: 18px !important;
+  height: 100% !important;
+  top: 0 !important;
 }
 
 .monaco-editor .find-widget .button > .codicon,
