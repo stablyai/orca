@@ -1512,12 +1512,14 @@ describe('agent completion coordinator', () => {
 
   it('still dispatches completion on done after an intervening waiting state in the same turn', () => {
     const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      dispatchAttention,
       isLive: () => true
     })
 
@@ -1527,8 +1529,9 @@ describe('agent completion coordinator', () => {
     }
 
     // Realistic flow: the agent pauses for a permission prompt mid-turn, resumes,
-    // then genuinely finishes. The intervening attention state must not suppress
-    // the final completion. This fails if 'waiting' is treated as a completion state.
+    // then genuinely finishes. The intervening attention state must surface as
+    // attention only and must not suppress the final completion. This fails if
+    // 'waiting' is treated as a completion state (issue #5698).
     coordinator.observeHookStatus({ state: 'working', ...turn })
     coordinator.observeHookStatus({
       state: 'waiting',
@@ -1540,6 +1543,7 @@ describe('agent completion coordinator', () => {
     coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Done.' })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
