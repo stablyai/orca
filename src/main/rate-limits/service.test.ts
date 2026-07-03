@@ -621,6 +621,19 @@ describe('RateLimitService', () => {
     ])
   })
 
+  it('allows usage-panel Fable supplements for inactive Claude account previews', async () => {
+    const service = new RateLimitService()
+    const account = { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    service.setInactiveClaudeAccountsResolver(() => [account])
+    vi.mocked(fetchManagedAccountUsage).mockResolvedValueOnce(okProvider('claude', 33, Date.now()))
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(fetchManagedAccountUsage).toHaveBeenCalledWith(account, {
+      allowUsagePanelSupplement: true
+    })
+  })
+
   it('does not start overlapping inactive Codex preview fetches', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()

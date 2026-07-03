@@ -382,7 +382,9 @@ export class RateLimitService {
         continue
       }
       try {
-        const fresh = await fetchManagedAccountUsage(account)
+        const fresh = await fetchManagedAccountUsage(account, {
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
+        })
         if (
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
           !this.isCurrentInactiveClaudeAccount(account.id)

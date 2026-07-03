@@ -901,70 +901,63 @@ function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
 // Inline usage bars (compact bars for inactive accounts in the switcher)
 // ---------------------------------------------------------------------------
 
-function InlineUsageBars({
+export function InlineUsageBars({
   limits,
   isFetching
 }: {
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
-  const sessionLeft = limits.session
-    ? Math.max(0, Math.round(100 - limits.session.usedPercent))
-    : null
-  const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
-  const fableLeft = limits.fableWeekly
-    ? Math.max(0, Math.round(100 - limits.fableWeekly.usedPercent))
-    : null
+  const usageWindows = [
+    limits.session
+      ? {
+          key: 'session',
+          left: Math.max(0, Math.round(100 - limits.session.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')
+        }
+      : null,
+    limits.weekly
+      ? {
+          key: 'weekly',
+          left: Math.max(0, Math.round(100 - limits.weekly.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')
+        }
+      : null,
+    limits.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          left: Math.max(0, Math.round(100 - limits.fableWeekly.usedPercent)),
+          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', '% Fable')
+        }
+      : null
+  ].filter((window): window is { key: string; left: number; label: string } => window !== null)
 
   return (
-    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
-      {sessionLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+    <div
+      className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse' : ''}`}
+      style={{
+        gridTemplateColumns: `repeat(${Math.max(1, usageWindows.length)}, minmax(0, 1fr))`
+      }}
+    >
+      {usageWindows.map((window) => (
+        <div key={window.key} className="flex min-w-0 items-center gap-1">
+          <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full rounded-full ${barColor(sessionLeft)}`}
-              style={{ width: `${sessionLeft}%` }}
+              className={`h-full rounded-full ${barColor(window.left)}`}
+              style={{ width: `${window.left}%` }}
             />
           </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {sessionLeft}
-            {translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')}
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+            {window.left}
+            {window.label}
           </span>
         </div>
-      )}
-      {weeklyLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full ${barColor(weeklyLeft)}`}
-              style={{ width: `${weeklyLeft}%` }}
-            />
-          </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {weeklyLeft}
-            {translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')}
-          </span>
-        </div>
-      )}
-      {fableLeft !== null && (
-        <div className="flex flex-1 items-center gap-1">
-          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full ${barColor(fableLeft)}`}
-              style={{ width: `${fableLeft}%` }}
-            />
-          </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {fableLeft}
-            {translate('auto.components.status.bar.StatusBar.54e8d6bb2d', '% Fable')}
-          </span>
-        </div>
-      )}
-      {limits.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly && (
+      ))}
+      {usageWindows.length === 0 && limits.status === 'error' ? (
         <span className="text-[10px] text-muted-foreground">
           {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
         </span>
-      )}
+      ) : null}
     </div>
   )
 }

@@ -1,14 +1,17 @@
 /* eslint-disable max-lines -- Why: Claude rate-limit fallback tests share account/keychain/PTY mocks that would be noisier split apart. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import { fetchViaPty } from './claude-pty'
 import {
+  deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentialsStrict,
-  readManagedClaudeKeychainCredentials
+  readManagedClaudeKeychainCredentials,
+  writeActiveClaudeKeychainCredentials,
+  writeManagedClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
@@ -46,9 +49,12 @@ vi.mock('./claude-pty', () => ({
 }))
 
 vi.mock('../claude-accounts/keychain', () => ({
+  deleteActiveClaudeKeychainCredentialsStrict: vi.fn(),
   readActiveClaudeKeychainCredentials: vi.fn(),
   readActiveClaudeKeychainCredentialsStrict: vi.fn(),
-  readManagedClaudeKeychainCredentials: vi.fn()
+  readManagedClaudeKeychainCredentials: vi.fn(),
+  writeActiveClaudeKeychainCredentials: vi.fn(),
+  writeManagedClaudeKeychainCredentials: vi.fn()
 }))
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -71,6 +77,9 @@ describe('fetchClaudeRateLimits', () => {
     vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(null)
     vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue(null)
+    vi.mocked(writeActiveClaudeKeychainCredentials).mockResolvedValue()
+    vi.mocked(deleteActiveClaudeKeychainCredentialsStrict).mockResolvedValue()
+    vi.mocked(writeManagedClaudeKeychainCredentials).mockResolvedValue()
     appGetPathMock.mockReturnValue('/tmp/orca-claude-fetcher-test')
     resolveProxyMock.mockResolvedValue('DIRECT')
     netFetchMock.mockResolvedValue(
@@ -946,6 +955,239 @@ describe('fetchClaudeRateLimits', () => {
 
     expect(netFetchMock).not.toHaveBeenCalled()
     expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('supplements inactive managed account OAuth usage with Fable from its usage panel', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const canonicalAuthPath = realpathSync(ownedAuthPath)
+    writeFileSync(
+      join(ownedAuthPath, '.credentials.json'),
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'inactive-token',
+          expiresAt: Date.now() + 60_000
+        }
+      }),
+      'utf-8'
+    )
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      fableWeekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: '2d'
+      },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+
+    await expect(
+      fetchManagedAccountUsage(
+        { id: 'account-1', managedAuthPath: ownedAuthPath },
+        { allowUsagePanelSupplement: true }
+      )
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 },
+      fableWeekly: { usedPercent: 42, resetDescription: '2d' }
+    })
+    expect(fetchViaPty).toHaveBeenCalledWith({
+      authPreparation: expect.objectContaining({
+        configDir: canonicalAuthPath,
+        envPatch: { CLAUDE_CONFIG_DIR: canonicalAuthPath },
+        provenance: 'managed:account-1:inactive-preview',
+        stripAuthEnv: true
+      })
+    })
+  })
+
+  it('stages macOS inactive account credentials in a scoped Keychain for Fable preview', async () => {
+    setPlatform('darwin')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    const credentialsJson = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: 'managed-keychain-token',
+        expiresAt: Date.now() + 60_000
+      }
+    })
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const canonicalAuthPath = realpathSync(ownedAuthPath)
+    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValueOnce(credentialsJson)
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: {
+        usedPercent: 12,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      weekly: {
+        usedPercent: 34,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      fableWeekly: {
+        usedPercent: 58,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: '3d'
+      },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+
+    const result = await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    expect(result.fableWeekly).toMatchObject({ usedPercent: 58, resetDescription: '3d' })
+    expect(writeActiveClaudeKeychainCredentials).toHaveBeenCalledWith(
+      credentialsJson,
+      canonicalAuthPath
+    )
+    expect(deleteActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(canonicalAuthPath)
+  })
+
+  it('stages refreshed macOS inactive account credentials before Fable preview', async () => {
+    setPlatform('darwin')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    const staleCredentialsJson = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: 'stale-access',
+        refreshToken: 'stale-refresh',
+        expiresAt: Date.now() - 60_000
+      }
+    })
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValueOnce(staleCredentialsJson)
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          access_token: 'fresh-access',
+          expires_in: 3600,
+          refresh_token: 'fresh-refresh'
+        }),
+        { status: 200 }
+      )
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ five_hour: { utilization: 12 }, seven_day: { utilization: 34 } }),
+        {
+          status: 200
+        }
+      )
+    )
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: {
+        usedPercent: 12,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      weekly: {
+        usedPercent: 34,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      fableWeekly: {
+        usedPercent: 58,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: '3d'
+      },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+
+    const result = await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    const stagedCredentialsJson = vi.mocked(writeActiveClaudeKeychainCredentials).mock.calls[0]?.[0]
+    expect(result.fableWeekly).toMatchObject({ usedPercent: 58, resetDescription: '3d' })
+    expect(JSON.parse(stagedCredentialsJson ?? '{}')).toMatchObject({
+      claudeAiOauth: {
+        accessToken: 'fresh-access',
+        refreshToken: 'fresh-refresh'
+      }
+    })
+    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
+      'account-1',
+      stagedCredentialsJson
+    )
+  })
+
+  it('does not merge macOS inactive Fable preview when usage windows belong to another account', async () => {
+    setPlatform('darwin')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'managed-keychain-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    vi.mocked(fetchViaPty).mockResolvedValueOnce({
+      provider: 'claude',
+      session: {
+        usedPercent: 91,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      weekly: {
+        usedPercent: 3,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      fableWeekly: {
+        usedPercent: 58,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: '3d'
+      },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+
+    const result = await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    expect(result.fableWeekly).toBeNull()
   })
 
   it('refreshes and persists an expiring inactive account before fetching usage', async () => {
