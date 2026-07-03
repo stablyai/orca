@@ -257,17 +257,18 @@ function getSafeAutoForkSyncKey(repo: Repo): string {
   return `${getRepoExecutionHostId(repo)}:${repo.id}:${repo.path}`
 }
 
-// Why: `repos:changed` can fire several times in a burst (e.g. deleting a
-// project group and its contained projects), and the renderer starts a repos
-// fetch per event. Those fetches race — an earlier one that read pre-removal
-// state can resolve last and overwrite the newer result, reintroducing deleted
-// projects until restart (#7020). This monotonic token lets a fetch drop its
-// own result once a newer repos fetch has superseded it, so only the latest
-// fetch (which reads the final persisted state) applies.
-let reposFetchToken = 0
-function nextReposFetchToken(): number {
-  reposFetchToken += 1
-  return reposFetchToken
+// Why: a `repos:changed` burst (e.g. deleting a project group and its contained
+// projects) starts one fetchRepos per event; an earlier fetch that read
+// pre-removal state can resolve last and resurrect deleted projects until
+// restart (#7020). This generation guard drops a fetch's result once a newer
+// one has superseded it, so only the latest (final-state) fetch applies.
+let reposFetchGeneration = 0
+function beginReposFetch(): number {
+  reposFetchGeneration += 1
+  return reposFetchGeneration
+}
+function isCurrentReposFetch(generation: number): boolean {
+  return generation === reposFetchGeneration
 }
 
 function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Repo[]): void {
@@ -1285,7 +1286,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   activeRepoId: null,
 
   fetchRepos: async () => {
-    const token = nextReposFetchToken()
+    const generation = beginReposFetch()
     try {
       const target = getActiveRuntimeTarget(get().settings)
       const {
@@ -1293,9 +1294,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         projectCompatibility,
         hostId
       } = await fetchReposForTarget(target, get().repos)
-      // Why: a newer repos fetch started while we awaited — dropping this stale
+      // Why: a newer fetchRepos started while we awaited — dropping this stale
       // result avoids reintroducing repos it removed (#7020).
-      if (token !== reposFetchToken) {
+      if (!isCurrentReposFetch(generation)) {
         return
       }
       set((s) => {
@@ -1379,13 +1380,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // sidebar "All hosts" scope shows them together regardless of which
     // environment is active. Each host fails soft: an unreachable/disconnected
     // host is skipped without blocking the others.
-    const token = nextReposFetchToken()
     const applyResult = (result: Awaited<ReturnType<typeof fetchReposForTarget>>): void => {
-      // Why: bail if a newer repos fetch superseded us mid-load, so this stale
-      // all-host pass can't overwrite it and resurrect removed repos (#7020).
-      if (token !== reposFetchToken) {
-        return
-      }
       const validRepoIds = new Set(result.repos.map((repo) => repo.id))
       set((s) => {
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
