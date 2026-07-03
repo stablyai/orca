@@ -2498,6 +2498,38 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('arms renderer recovery before invoking the crash recorder', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    const { windowHandlers } = createRendererRecoveryWindowHarness()
+    let recoveryTimerWasArmedBeforeRecorder = false
+
+    try {
+      createMainWindow(null, {
+        onRendererProcessGone: () => {
+          recoveryTimerWasArmedBeforeRecorder = setTimeoutSpy.mock.calls.some(
+            (call) => call[1] === 250
+          )
+        }
+      })
+
+      windowHandlers['render-process-gone']?.(
+        {} as never,
+        {
+          reason: 'crashed',
+          exitCode: 5
+        } as Electron.RenderProcessGoneDetails
+      )
+
+      expect(recoveryTimerWasArmedBeforeRecorder).toBe(true)
+    } finally {
+      setTimeoutSpy.mockRestore()
+      consoleError.mockRestore()
+    }
+  })
+
   it('does not reload after renderer loss when recovery is disabled', () => {
     vi.useFakeTimers()
 
