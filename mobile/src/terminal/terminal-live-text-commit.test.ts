@@ -7,9 +7,9 @@ import {
 
 describe('terminal live special key decision', () => {
   it('Given an unmapped key Then ignores it', () => {
-    expect(
-      getTerminalLiveSpecialKeyDecision({ key: 'ㅎ', heldText: '', sentText: '' })
-    ).toEqual({ kind: 'ignore' })
+    expect(getTerminalLiveSpecialKeyDecision({ key: 'ㅎ', heldText: '', sentText: '' })).toEqual({
+      kind: 'ignore'
+    })
   })
 
   it('Given Backspace with any field text Then edits locally so the mirror diff handles the PTY erase', () => {
@@ -102,9 +102,9 @@ describe('terminal live accessory bytes decision', () => {
 
 describe('terminal live accessory local edit text', () => {
   it('Given backspace Then drops the last code point of the field text', () => {
-    expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: '한글' })).toBe(
-      '한'
-    )
+    expect(
+      getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: '한글' })
+    ).toBe('한')
     expect(getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText: '한' })).toBe(
       ''
     )

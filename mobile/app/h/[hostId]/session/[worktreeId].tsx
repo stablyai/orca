@@ -4947,10 +4947,16 @@ export default function SessionScreen() {
                 {liveInputEnabled ? (
                   <View style={[styles.inputBar, styles.liveInputBar]}>
                     <Pressable
-                      style={styles.liveInputFocusTarget}
+                      style={({ pressed }) => [
+                        styles.liveInputFocusTarget,
+                        pressed && styles.liveInputFocusTargetPressed,
+                        !canSend && styles.liveInputFocusTargetDisabled
+                      ]}
                       disabled={!canSend}
                       onPress={focusLiveInput}
-                      accessibilityLabel="Focus live terminal input"
+                      accessibilityRole="button"
+                      accessibilityLabel="Show keyboard for live terminal input"
+                      accessibilityHint="Typed text is sent directly to the active terminal"
                     >
                       <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
                       <MobileTerminalLiveInputStatus
@@ -4981,6 +4987,7 @@ export default function SessionScreen() {
                       onKeyPress={handleLiveInputKeyPress}
                       onSubmitEditing={handleLiveInputSubmit}
                       placeholder=""
+                      showSoftInputOnFocus
                       autoCapitalize="none"
                       autoCorrect={false}
                       spellCheck={false}
