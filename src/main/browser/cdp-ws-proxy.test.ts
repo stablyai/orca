@@ -646,6 +646,37 @@ describe('CdpWsProxy', () => {
     nextClient.close()
   })
 
+  it('does not register a PDF stream when the client disconnects mid-print', async () => {
+    let resolvePrint: (buf: Buffer) => void = () => {}
+    mock.webContents.printToPDF.mockImplementationOnce(
+      () =>
+        new Promise<Buffer>((resolve) => {
+          resolvePrint = resolve
+        })
+    )
+    const store = (proxy as unknown as { pdfStreams: { create: (b: Buffer) => string } }).pdfStreams
+    const createSpy = vi.spyOn(store, 'create')
+
+    const client = await connect()
+    client.send(
+      JSON.stringify({
+        id: 30,
+        method: 'Page.printToPDF',
+        params: { transferMode: 'ReturnAsStream' }
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    client.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Print resolves only after the client is gone: no stream must be created.
+    resolvePrint(Buffer.from('%PDF-late'))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(createSpy).not.toHaveBeenCalled()
+    createSpy.mockRestore()
+  })
+
   it('forwards non-PDF IO streams to the debugger', async () => {
     mock.webContents.debugger.sendCommand
       .mockResolvedValueOnce({ data: 'trace-data', eof: false })

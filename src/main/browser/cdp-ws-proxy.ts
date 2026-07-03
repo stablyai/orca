@@ -478,6 +478,12 @@ export class CdpWsProxy {
     }
     try {
       const pdf = await this.webContents.printToPDF(buildPrintToPdfOptions(params))
+      // Why: printToPDF can resolve after the client disconnected (or was
+      // replaced). Bail before registering a stream so its buffer isn't
+      // orphaned in pdfStreams past the disconnect's clear() until the TTL.
+      if (!this.isActiveClient(client)) {
+        return
+      }
       const buffer = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf)
       if (params.transferMode === 'ReturnAsStream') {
         const handle = this.pdfStreams.create(buffer)
