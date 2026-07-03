@@ -119,6 +119,24 @@ describe('terminal HTTP link hit testing', () => {
     ).toBeNull()
   })
 
+  // Why: the context-menu "Open in Default Browser" item hands this URL to
+  // shell.openExternal, so a dangerous scheme under the cursor must never be
+  // surfaced as an openable link.
+  it.each(['file:///etc/passwd', 'javascript:alert(1)', 'smb://host/share', 'vscode://x'])(
+    'returns null for the non-http scheme %s',
+    (dangerousUrl) => {
+      const line = `Open ${dangerousUrl} now`
+
+      expect(
+        getTerminalHttpLinkAtBufferPosition(
+          makeBuffer([makeBufferLine(line)]),
+          { x: line.indexOf(dangerousUrl) + 1, y: 1 },
+          80
+        )
+      ).toBeNull()
+    }
+  )
+
   it('returns wrapped URLs from mouse coordinates', () => {
     const rows = [
       makeBufferLine('Visit https://exa'),

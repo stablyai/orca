@@ -42,6 +42,7 @@ import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
 import { getTerminalHttpLinkForMouseEvent } from './terminal-url-link-hit-testing'
+import { openHttpLink } from '@/lib/http-link-routing'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -190,7 +191,10 @@ export function useTerminalPaneContextMenu({
     if (!menuLinkUrl) {
       return
     }
-    void window.api.shell.openUrl(menuLinkUrl)
+    // Why: route through the shared funnel (not shell.openUrl directly) so this
+    // matches shift+click's system-browser path, including the loopback
+    // worktree-label rewrite for local dev-server links.
+    openHttpLink(menuLinkUrl, { worktreeId, forceSystemBrowser: true })
     resolveMenuPane()?.terminal.focus()
   }
 
@@ -492,9 +496,6 @@ export function useTerminalPaneContextMenu({
         ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
-    setMenuLinkUrl(
-      clickedPane ? getTerminalHttpLinkForMouseEvent(clickedPane.terminal, event.nativeEvent) : null
-    )
 
     // Why: Windows terminals treat right-click as copy-or-paste depending on
     // whether text is selected. With a selection, right-click copies it and
@@ -515,6 +516,11 @@ export function useTerminalPaneContextMenu({
       return
     }
 
+    // Why: only hit-test the link once the menu is actually opening; the Windows
+    // copy/paste path above returns without a menu and needs no link lookup.
+    setMenuLinkUrl(
+      clickedPane ? getTerminalHttpLinkForMouseEvent(clickedPane.terminal, event.nativeEvent) : null
+    )
     menuOpenedAtRef.current = Date.now()
     const bounds = boundsElement.getBoundingClientRect()
     setPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
