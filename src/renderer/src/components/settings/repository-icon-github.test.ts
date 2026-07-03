@@ -52,9 +52,11 @@ describe('repository GitHub avatar resolution', () => {
     expect(apiMocks.repoSlug).not.toHaveBeenCalled()
   })
 
-  it('force-resolves live origin when stored upstream/avatar are stale', async () => {
+  it('force-resolves the live origin owner when a non-fork repo was transferred', async () => {
+    // Non-fork repo (upstream resolved to null) transferred stablyai -> parkerrex.
+    // The cached avatar is stale; forceLive must consult the live origin slug.
     const repo = makeRepo({
-      upstream: { owner: 'stablyai', repo: 'orca' },
+      upstream: null,
       repoIcon: {
         type: 'image',
         src: 'https://github.com/stablyai.png?size=64',
@@ -86,8 +88,8 @@ describe('repository GitHub avatar resolution', () => {
       repoPath: '/workspace/orca',
       repoId: 'repo-1'
     })
+    // upstream stays null (unchanged); only the avatar advances to the new owner.
     expect(buildRepositoryGitHubAvatarUpdate(repo, resolution)).toEqual({
-      upstream: null,
       repoIcon: {
         type: 'image',
         src: 'https://github.com/parkerrex.png?size=64',
@@ -122,5 +124,40 @@ describe('repository GitHub avatar resolution', () => {
       upstream: null,
       repoIcon: null
     })
+  })
+
+  it('preserves a known fork identity when the live upstream lookup fails', async () => {
+    // A fork whose avatar tracks its parent org. The live upstream probe fails
+    // (offline/unauthed → null), which must NOT downgrade to the origin slug.
+    const repo = makeRepo({
+      upstream: { owner: 'stablyai', repo: 'orca' },
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      }
+    })
+    apiMocks.repoUpstream.mockResolvedValueOnce(null)
+    // The fork's own origin owner — the value we must NOT persist over the parent.
+    apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
+
+    const resolution = await resolveRepositoryGitHubAvatar({ kind: 'local' }, repo, {
+      forceLive: true
+    })
+
+    expect(resolution).toEqual({
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      },
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+    // The origin slug must never be consulted once we fall back to the known parent.
+    expect(apiMocks.repoSlug).not.toHaveBeenCalled()
+    // Nothing changed, so no repo write is produced (no sticky null clobber).
+    expect(buildRepositoryGitHubAvatarUpdate(repo, resolution)).toBeNull()
   })
 })

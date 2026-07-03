@@ -52,6 +52,12 @@ export async function resolveRepositoryGitHubAvatar(
   if (upstream) {
     return { repoIcon: githubAvatarIcon(upstream), upstream }
   }
+  // Why: a null live upstream is ambiguous (offline/unauthed vs genuinely not a
+  // fork). Don't downgrade a known fork identity to the origin slug — keep the
+  // last-known parent avatar so a transient failure can't clobber fork identity.
+  if (repo.upstream) {
+    return { repoIcon: githubAvatarIcon(repo.upstream), upstream: repo.upstream }
+  }
   const slug = await resolveRepositorySlugLive(runtimeTarget, repo)
   return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream: null }
 }

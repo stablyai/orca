@@ -66,8 +66,9 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
 
   it('refreshes stale GitHub avatar metadata lazily when repo settings opens', async () => {
     const updateRepo = vi.fn()
+    // Non-fork repo (upstream resolved to null) transferred stablyai -> parkerrex.
     const repo = makeRepo({
-      upstream: { owner: 'stablyai', repo: 'orca' },
+      upstream: null,
       repoIcon: {
         type: 'image',
         src: 'https://github.com/stablyai.png?size=64',
@@ -84,7 +85,6 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
     await flushEffects()
 
     expect(updateRepo).toHaveBeenCalledExactlyOnceWith('repo-1', {
-      upstream: null,
       repoIcon: {
         type: 'image',
         src: 'https://github.com/parkerrex.png?size=64',
@@ -92,5 +92,31 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
         label: 'parkerrex/orca'
       }
     })
+  })
+
+  it('does not clobber a fork identity when the live upstream lookup fails offline', async () => {
+    const updateRepo = vi.fn()
+    // A fork whose avatar tracks its parent org, resolved earlier while online.
+    const repo = makeRepo({
+      upstream: { owner: 'stablyai', repo: 'orca' },
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      }
+    })
+    // Offline/unauthed: the parent lookup returns null. The fork's own origin
+    // owner must NOT be persisted over the parent identity.
+    apiMocks.repoUpstream.mockResolvedValueOnce(null)
+    apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
+
+    act(() => {
+      root.render(<RepositoryIconPicker repo={repo} updateRepo={updateRepo} />)
+    })
+    await flushEffects()
+
+    expect(updateRepo).not.toHaveBeenCalled()
+    expect(apiMocks.repoSlug).not.toHaveBeenCalled()
   })
 })
