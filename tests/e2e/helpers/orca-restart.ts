@@ -37,6 +37,14 @@ type RestartSession = {
   dispose: () => Promise<void>
 }
 
+type RestartSessionOptions = {
+  /**
+   * Extra Chromium/Electron switches prepended to every launch, e.g.
+   * `--lang=zh-CN` to simulate a non-English system locale on both launches.
+   */
+  extraElectronArgs?: string[]
+}
+
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timeout = setTimeout(resolve, ms)
@@ -82,10 +90,14 @@ function launchEnv(userDataDir: string, headful: boolean): NodeJS.ProcessEnv {
  * env stripping, headful toggle) so behavior differences between fixtures
  * don't leak in as false positives for persistence bugs.
  */
-export function createRestartSession(testInfo: TestInfo): RestartSession {
+export function createRestartSession(
+  testInfo: TestInfo,
+  options: RestartSessionOptions = {}
+): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
+  const extraElectronArgs = options.extraElectronArgs ?? []
 
   // Why: this helper bypasses the shared `electronApp` fixture, so it must
   // seed the same completed onboarding profile or first-run overlays cover
@@ -97,7 +109,7 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
 
   const launch = async (): Promise<LaunchedOrca> => {
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
+      args: [...extraElectronArgs, ...getOrcaElectronLaunchArgs(mainPath, headful)],
       env: launchEnv(userDataDir, headful)
     })
     const page = await app.firstWindow({ timeout: 120_000 })

@@ -11,12 +11,17 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
   const locale = resolveUiLocale(uiLanguage)
 
   useEffect(() => {
-    if (i18n.language !== locale) {
-      // Why: changeLanguage triggers the lazy locale backend, which fetches the
-      // non-English catalog before activating it — so the switch resolves real
-      // translations without bundling every locale at startup.
-      void i18n.changeLanguage(locale)
-    }
+    // Why: changeLanguage triggers the lazy locale backend, which fetches the
+    // non-English catalog before activating it — so the switch resolves real
+    // translations without bundling every locale at startup.
+    // Why: no `i18n.language !== locale` guard. At boot the system-locale
+    // switch can still be lazy-loading its catalog when the persisted language
+    // arrives; i18n.language then still reads as the init default, the guard
+    // skips the correction, and the stale switch finishes and wins (UI renders
+    // the system language while settings show the persisted one). Calling
+    // changeLanguage unconditionally makes i18next's own last-call-wins
+    // handling discard the stale in-flight switch.
+    void i18n.changeLanguage(locale)
   }, [locale])
 
   return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
