@@ -102,6 +102,34 @@ describe('resolveComposerBranchSelection', () => {
       })
     ).toBeUndefined()
   })
+
+  it('does not preserve a slash typed name outside branch mode (gate off)', () => {
+    // Why: only branch mode opts into slash preservation; every other mode keeps
+    // deriving the branch from the sanitized workspace name.
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: undefined,
+        branchAutoName: '',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: false,
+        createBranchFromWorkspaceName: false
+      })
+    ).toBeUndefined()
+  })
+
+  it('keeps a resolver-provided override even in branch mode with a slash name', () => {
+    // Why: a picked branch (override set) wins over the typed slash name so the
+    // branch-mode gate never hijacks an explicit branch selection.
+    expect(
+      resolveComposerBranchNameOverrideForCreate({
+        branchNameOverride: 'feature/picked',
+        branchAutoName: 'feature/picked',
+        workspaceName: 'feature/user-profile',
+        preserveWorkspaceNameEdits: true,
+        createBranchFromWorkspaceName: true
+      })
+    ).toBe('feature/picked')
+  })
 })
 
 describe('isBranchCheckedOutInWorktrees', () => {
