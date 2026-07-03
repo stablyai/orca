@@ -1363,7 +1363,7 @@ export class RuntimeBrowserCommands {
       url,
       worktreeId,
       params.profileId,
-      sessionPartition,
+      params.profileId ? sessionPartition : undefined,
       params.activate
     )
 
@@ -1793,7 +1793,7 @@ export class RuntimeBrowserCommands {
     url: string,
     worktreeId: string | undefined,
     profileId: string | undefined,
-    sessionPartition: string,
+    sessionPartition: string | undefined,
     activate?: boolean
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
@@ -1825,7 +1825,12 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
-        sessionProfileId: profileId ?? null,
+        // Why: leave sessionProfileId/sessionPartition undefined when no explicit
+        // profile was chosen so the renderer still applies the user's configured
+        // default-profile inheritance. Only thread the resolved partition when a
+        // profile is named — sending null here would suppress inheritance and
+        // force the shared default partition.
+        sessionProfileId: profileId,
         sessionPartition,
         activate
       })

@@ -240,13 +240,17 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     ).resolves.toEqual({ browserPageId: 'page-new' })
 
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
+    // Why: with no explicit profile, main must leave sessionProfileId/
+    // sessionPartition undefined so the renderer applies the user's configured
+    // default-profile inheritance instead of being forced onto the shared
+    // default partition.
     expect(send).toHaveBeenCalledWith(
       'browser:requestTabCreate',
       expect.objectContaining({
         url: 'about:blank',
         worktreeId: 'wt-1',
-        sessionProfileId: null,
-        sessionPartition: 'persist:orca-browser'
+        sessionProfileId: undefined,
+        sessionPartition: undefined
       })
     )
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-new')
