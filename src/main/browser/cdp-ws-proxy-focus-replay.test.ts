@@ -330,4 +330,35 @@ describe('CdpWsProxy DOM.focus replay', () => {
     ])
     second.close()
   })
+
+  it('does not replay or insert once the client disconnects mid-DOM.focus', async () => {
+    let resolveFocus: (v: Record<string, unknown>) => void = () => {}
+    mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
+      const [method] = args as [string]
+      if (method === 'DOM.focus') {
+        return new Promise<Record<string, unknown>>((resolve) => {
+          resolveFocus = resolve
+        })
+      }
+      return {}
+    })
+
+    const client = await connect(endpoint)
+    client.send(JSON.stringify({ id: 35, method: 'DOM.focus', params: { backendNodeId: 7 } }))
+    await new Promise((r) => setTimeout(r, 10))
+    // Pipeline the insert while DOM.focus is still in flight, then drop the client.
+    client.send(JSON.stringify({ id: 36, method: 'Input.insertText', params: { text: 'gone' } }))
+    await new Promise((r) => setTimeout(r, 10))
+    client.close()
+    await new Promise((r) => setTimeout(r, 10))
+
+    // Resolve the in-flight DOM.focus only after the client is gone.
+    resolveFocus({})
+    await new Promise((r) => setTimeout(r, 20))
+
+    // Why: a disconnected client's focus replay and insert must not reach the live page.
+    const methods = getSendCommandMethods(mock)
+    expect(methods.filter((m) => m === 'DOM.focus')).toHaveLength(1)
+    expect(methods).not.toContain('Input.insertText')
+  })
 })

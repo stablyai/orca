@@ -529,6 +529,11 @@ export class CdpWsProxy {
     const pendingFocus = this.pendingDomFocusBySession.get(effectiveSessionId)
     this.pendingDomFocusBySession.delete(effectiveSessionId)
     const pendingFocusParams = pendingFocus ? await pendingFocus : undefined
+    // Why: the client can disconnect while DOM.focus is in flight; don't replay its
+    // focus or forward its insert into the live page once it is no longer active.
+    if (!this.isActiveClient(client)) {
+      return
+    }
     if (pendingFocusParams) {
       if (this.webContents.isDestroyed()) {
         this.sendError(clientId, 'Browser tab is no longer available', client)
