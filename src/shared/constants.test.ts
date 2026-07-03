@@ -1,9 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_AGENT_ROW_CONTENT_MODE,
   getDefaultNotificationSettings,
   getDefaultPrimarySelectionMiddleClickPaste,
-  getDefaultSettings
+  getDefaultSettings,
+  normalizeAgentRowContentMode
 } from './constants'
+
+describe('normalizeAgentRowContentMode', () => {
+  it('defaults to progress so existing rows keep showing live activity', () => {
+    expect(DEFAULT_AGENT_ROW_CONTENT_MODE).toBe('progress')
+  })
+
+  it('passes through valid modes', () => {
+    expect(normalizeAgentRowContentMode('progress')).toBe('progress')
+    expect(normalizeAgentRowContentMode('tabName')).toBe('tabName')
+  })
+
+  it('falls back to the default for unknown or missing values', () => {
+    expect(normalizeAgentRowContentMode('bogus')).toBe('progress')
+    expect(normalizeAgentRowContentMode(undefined)).toBe('progress')
+    expect(normalizeAgentRowContentMode(null)).toBe('progress')
+  })
+})
 
 describe('getDefaultSettings', () => {
   it('uses platform-consistent separators for the default workspace directory', () => {

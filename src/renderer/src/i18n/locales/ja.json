@@ -1173,9 +1173,9 @@
         "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする"
       },
       "NewWorkspaceComposerModal": {
+        "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。",
         "createWorktree": "ワークツリーを作成する",
-        "createWorkspace": "ワークスペースを作成する",
-        "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"
+        "createWorkspace": "ワークスペースを作成する"
       },
       "PullRequestPage": {
         "2560588245": "レビュアーのリクエストに失敗しました",
@@ -3865,7 +3865,10 @@
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
           "automation": "自動化",
-          "folderPathIdentity": "ブランチ / フォルダパス"
+          "folderPathIdentity": "ブランチ / フォルダパス",
+          "agentRowContentTitle": "エージェント行の内容",
+          "agentRowContentProgress": "進捗",
+          "agentRowContentTabName": "タブ名"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -8162,7 +8165,6 @@
             "1d89457764": "ライトテーマ",
             "da864e6cec": "ライトモード",
             "f268092ee3": "ライトモードでは独自のターミナルテーマを使用できます。",
-            "match_dark_mode_title": "ダークモードに合わせる",
             "f785374072": "ダーク",
             "9c32726f47": "ダーク モードでのペイン間の分割分割線を制御します。",
             "8987db7ff2": "ダークディバイダーカラー",
@@ -8229,6 +8231,7 @@
               "title": "スクロール速度",
               "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。"
             },
+            "match_dark_mode_title": "ダークモードに合わせる",
             "theme_target": {
               "title": "テーマモード",
               "keyword_target": "対象",
@@ -9620,8 +9623,6 @@
             "resumeCommand": "再開コマンド",
             "sessionActions": "{{value0}} 件のセッション操作",
             "resumeInNewTab": "新しいタブで再開",
-            "resumeInWorktree": "ワークツリーで再開",
-            "viewLog": "ログを表示",
             "copyResumeCommand": "再開コマンドをコピー",
             "openLog": "ログを開く",
             "revealLog": "ログを表示",
@@ -9651,6 +9652,8 @@
             "toolRole": "ツール",
             "systemRole": "システム",
             "sessionRole": "セッション",
+            "resumeInWorktree": "ワークツリーで再開",
+            "viewLog": "ログを表示",
             "jumpToOriginalPane": "元のペインにジャンプ",
             "worktree": "ワークツリー",
             "jumpToWorktree": "ワークツリーにジャンプ"

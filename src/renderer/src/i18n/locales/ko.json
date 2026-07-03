@@ -1173,9 +1173,9 @@
         "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝"
       },
       "NewWorkspaceComposerModal": {
+        "fa90f739a5": "워크스페이스를 만들기 전에 프로젝트, 워크스페이스 이름, agent를 선택하세요.",
         "createWorktree": "작업 트리 만들기",
-        "createWorkspace": "워크스페이스 만들기",
-        "fa90f739a5": "워크스페이스를 만들기 전에 프로젝트, 워크스페이스 이름, agent를 선택하세요."
+        "createWorkspace": "워크스페이스 만들기"
       },
       "PullRequestPage": {
         "2560588245": "리뷰어를 요청하지 못했습니다.",
@@ -3865,7 +3865,10 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "브랜치 / 폴더 경로"
+          "folderPathIdentity": "브랜치 / 폴더 경로",
+          "agentRowContentTitle": "에이전트 행 내용",
+          "agentRowContentProgress": "진행 상황",
+          "agentRowContentTabName": "탭 이름"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -8111,7 +8114,6 @@
             "1d89457764": "라이트 테마",
             "da864e6cec": "라이트 모드",
             "f268092ee3": "라이트 모드는 자체 터미널 테마를 사용할 수 있습니다.",
-            "match_dark_mode_title": "다크 모드와 일치",
             "f785374072": "다크",
             "9c32726f47": "어두운 모드에서 창 사이의 분할 구분선을 제어합니다.",
             "8987db7ff2": "다크 모드 구분선 색상",
@@ -8192,6 +8194,7 @@
               "title": "스크롤 속도",
               "description": "일반 터미널 스크롤백, 수정 키 빠른 스크롤, 전체 화면 TUI 휠 속도를 조정합니다."
             },
+            "match_dark_mode_title": "다크 모드와 일치",
             "theme_target": {
               "title": "테마 모드",
               "keyword_target": "대상",
@@ -9620,8 +9623,6 @@
             "resumeCommand": "재개 명령",
             "sessionActions": "{{value0}} 세션 작업",
             "resumeInNewTab": "새 탭에서 재개",
-            "resumeInWorktree": "워크트리에서 재개",
-            "viewLog": "로그 보기",
             "copyResumeCommand": "재개 명령 복사",
             "openLog": "로그 열기",
             "revealLog": "로그 위치 열기",
@@ -9651,6 +9652,8 @@
             "toolRole": "도구",
             "systemRole": "시스템",
             "sessionRole": "세션",
+            "resumeInWorktree": "워크트리에서 재개",
+            "viewLog": "로그 보기",
             "jumpToOriginalPane": "원래 창으로 이동",
             "worktree": "작업 트리",
             "jumpToWorktree": "작업 트리로 이동"

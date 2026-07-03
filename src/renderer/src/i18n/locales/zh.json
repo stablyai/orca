@@ -1173,9 +1173,9 @@
         "perWorkspaceEnvHint": "根据配方按需创建环境"
       },
       "NewWorkspaceComposerModal": {
+        "fa90f739a5": "创建工作区之前选择项目、工作区名称和智能体。",
         "createWorktree": "创建工作树",
-        "createWorkspace": "创建工作区",
-        "fa90f739a5": "创建工作区之前选择项目、工作区名称和智能体。"
+        "createWorkspace": "创建工作区"
       },
       "PullRequestPage": {
         "2560588245": "请求评审人失败",
@@ -3865,7 +3865,10 @@
           "65a9820bd1": "智能体状态",
           "219ebf1961": "分支名称",
           "automation": "自动化",
-          "folderPathIdentity": "分支 / 文件夹路径"
+          "folderPathIdentity": "分支 / 文件夹路径",
+          "agentRowContentTitle": "代理行内容",
+          "agentRowContentProgress": "进度",
+          "agentRowContentTabName": "标签名称"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -8111,7 +8114,6 @@
             "1d89457764": "浅色主题",
             "da864e6cec": "灯光模式",
             "f268092ee3": "浅色模式可以使用自己的终端主题。",
-            "match_dark_mode_title": "匹配深色模式",
             "f785374072": "深色",
             "9c32726f47": "控制深色模式下窗格之间的分割分隔线。",
             "8987db7ff2": "深色分隔线颜色",
@@ -8192,6 +8194,7 @@
               "title": "滚动速度",
               "description": "调整普通终端回滚、修饰键快速滚动以及全屏 TUI 滚轮速度。"
             },
+            "match_dark_mode_title": "匹配深色模式",
             "theme_target": {
               "title": "主题模式",
               "keyword_target": "目标",
@@ -9620,8 +9623,6 @@
             "resumeCommand": "恢复命令",
             "sessionActions": "{{value0}} 会话操作",
             "resumeInNewTab": "在新标签页中恢复",
-            "resumeInWorktree": "在工作树中恢复",
-            "viewLog": "查看日志",
             "copyResumeCommand": "复制恢复命令",
             "openLog": "打开日志",
             "revealLog": "显示日志",
@@ -9651,6 +9652,8 @@
             "toolRole": "工具",
             "systemRole": "系统",
             "sessionRole": "会话",
+            "resumeInWorktree": "在工作树中恢复",
+            "viewLog": "查看日志",
             "jumpToOriginalPane": "跳转到原始窗格",
             "worktree": "工作树",
             "jumpToWorktree": "跳转到工作树"

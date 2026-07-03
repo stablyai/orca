@@ -22,6 +22,7 @@ import type {
   UpdateStatus,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
+  AgentRowContentMode,
   ProjectOrderBy,
   WorktreeCardProperty,
   WorktreeCardMode,
@@ -58,11 +59,13 @@ import {
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+  DEFAULT_AGENT_ROW_CONTENT_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowContentMode,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
@@ -815,6 +818,8 @@ export type UISlice = {
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
+  agentRowContentMode: AgentRowContentMode
+  setAgentRowContentMode: (mode: AgentRowContentMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number
@@ -2019,6 +2024,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
     set({ agentActivityDisplayMode: normalized })
   },
+  agentRowContentMode: DEFAULT_AGENT_ROW_CONTENT_MODE,
+  setAgentRowContentMode: (mode) => {
+    const normalized = normalizeAgentRowContentMode(mode)
+    window.api.ui.set({ agentRowContentMode: normalized }).catch(console.error)
+    set({ agentRowContentMode: normalized })
+  },
 
   workspaceStatuses: cloneDefaultWorkspaceStatuses(),
   setWorkspaceStatuses: (statuses) => {
@@ -2282,6 +2293,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
         _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
+        agentRowContentMode: normalizeAgentRowContentMode(ui.agentRowContentMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),

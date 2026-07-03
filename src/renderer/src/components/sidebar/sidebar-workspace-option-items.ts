@@ -1,4 +1,8 @@
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
+import type {
+  AgentActivityDisplayMode,
+  AgentRowContentMode,
+  WorktreeCardProperty
+} from '../../../../shared/types'
 import { TASK_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 
@@ -60,6 +64,30 @@ export const AGENT_ACTIVITY_DISPLAY_OPTIONS: {
       return translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366',
         'Full list'
+      )
+    }
+  }
+]
+
+export const AGENT_ROW_CONTENT_OPTIONS: {
+  id: AgentRowContentMode
+  label: string
+}[] = [
+  {
+    id: 'progress',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowContentProgress',
+        'Progress'
+      )
+    }
+  },
+  {
+    id: 'tabName',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowContentTabName',
+        'Tab name'
       )
     }
   }

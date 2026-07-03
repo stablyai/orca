@@ -1605,6 +1605,29 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().agentActivityDisplayMode).toBe('compact')
   })
+
+  it('persists the agent row content mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setAgentRowContentMode('tabName')
+
+    expect(store.getState().agentRowContentMode).toBe('tabName')
+    expect(setUI).toHaveBeenCalledWith({ agentRowContentMode: 'tabName' })
+  })
+
+  it('normalizes invalid persisted agent row content modes', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentRowContentMode: 'bogus' as PersistedUIState['agentRowContentMode']
+      })
+    )
+
+    expect(store.getState().agentRowContentMode).toBe('progress')
+  })
 })
 
 describe('createUISlice settings navigation', () => {

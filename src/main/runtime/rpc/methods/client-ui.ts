@@ -40,6 +40,7 @@ const WorktreeCardProperties = z
   .array(LegacyWorktreeCardProperty)
   .transform((value) => normalizeWorktreeCardProperties(value))
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])
+const AgentRowContentMode = z.enum(['progress', 'tabName'])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -179,6 +180,7 @@ const UiUpdate = z
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
+    agentRowContentMode: AgentRowContentMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
