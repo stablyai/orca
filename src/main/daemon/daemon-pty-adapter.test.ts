@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
+import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
@@ -1237,6 +1238,159 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.isReattach).toBe(true)
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
       expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
+    })
+
+    it('skips the cold-restore replay when the daemon session is still alive', async () => {
+      const sessionId = 'warm-reattach-skip-replay'
+      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      await first.spawn({ cols: 80, rows: 24, cwd: '/home/user', sessionId })
+      // Why disconnectOnly: the production app-quit path leaves meta.endedAt
+      // null so the session stays crash-recoverable — the state every app
+      // relaunch with a live daemon sees.
+      await first.disconnectOnly()
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+      const detectSpy = vi.spyOn(reader, 'detectColdRestore')
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.isReattach).toBe(true)
+      expect(result.coldRestore).toBeUndefined()
+      expect(detectSpy).not.toHaveBeenCalled()
+      // The unmanaged-reattach re-anchor must survive the skipped detect.
+      const internals = historyAdapter as unknown as {
+        sessionsNeedingFullCheckpoint: Set<string>
+        lastFullCheckpointAt: Map<string, number>
+      }
+      expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
+      expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
+    })
+
+    it('does not probe session aliveness when there is no restorable history', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const requestSpy = vi.spyOn(client, 'request')
+
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId: 'fresh-no-history' })
+
+      expect(requestSpy.mock.calls.map((call) => call[0])).not.toContain('getSize')
+    })
+
+    it('recovers cold restore when the probed session dies before createOrAttach', async () => {
+      const sessionId = 'probe-race-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/raced',
+          cols: 100,
+          rows: 30,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'raced output\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      // Why: simulates the probe→createOrAttach race — the probe sees the
+      // session alive, but it is gone by the time createOrAttach runs. The
+      // meta rewrite mimics the dying session's exit event beating the
+      // createOrAttach reply and writing endedAt via closeSession; the
+      // fallback detect must still restore instead of falling through to
+      // openSession (which would delete the checkpoint).
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        if (type === 'getSize') {
+          return { size: { cols: 100, rows: 30 } }
+        }
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          writeFileSync(
+            join(sessionDir, 'meta.json'),
+            JSON.stringify({
+              cwd: '/projects/raced',
+              cols: 100,
+              rows: 30,
+              startedAt: '2026-04-15T10:00:00Z',
+              endedAt: '2026-04-15T10:05:00Z',
+              exitCode: 0
+            })
+          )
+        }
+        return response
+      })
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore).toBeDefined()
+      expect(result.coldRestore!.scrollback).toContain('raced output')
+      // Documented race delta: the fresh shell spawns with the renderer's
+      // requested params, not the recovered ones.
+      expect(lastSpawnOpts).toMatchObject({ sessionId, cols: 80, rows: 24 })
+      // The recovery data must survive — openSession would have deleted it.
+      expect(existsSync(join(sessionDir, 'scrollback.bin'))).toBe(true)
+      const internals = historyAdapter as unknown as {
+        sessionsNeedingFullCheckpoint: Set<string>
+        lastFullCheckpointAt: Map<string, number>
+      }
+      expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
+      expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
+    })
+
+    it('falls back to the full cold-restore detect when the aliveness probe fails', async () => {
+      const sessionId = 'probe-error-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/probeless',
+          cols: 132,
+          rows: 43,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'probeless output\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      // Why: an old daemon rejects the unknown getSize method; the spawn must
+      // behave exactly like the unprobed path.
+      vi.spyOn(client, 'request').mockImplementation((type: string, payload?: unknown) => {
+        if (type === 'getSize') {
+          return Promise.reject(new Error('Unknown request type'))
+        }
+        return originalRequest(type, payload)
+      })
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore).toBeDefined()
+      expect(result.coldRestore!.scrollback).toContain('probeless output')
+      expect(lastSpawnOpts).toMatchObject({
+        sessionId,
+        cwd: '/projects/probeless',
+        cols: 132,
+        rows: 43
+      })
     })
 
     it('returns same cold restore on StrictMode double-mount (sticky cache)', async () => {

@@ -99,6 +99,14 @@ export type PtySpawnResult = {
   }
 }
 
+export type PtyProcessInfo = {
+  id: string
+  cwd: string
+  title: string
+  /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
+  terminalHandle?: string
+}
+
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   attach(id: string): Promise<void>
@@ -128,7 +136,7 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
-  listProcesses(): Promise<{ id: string; cwd: string; title: string }[]>
+  listProcesses(): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: { id: string; data: string }) => void): () => void
@@ -142,6 +150,10 @@ export type FileStat = {
   size: number
   type: 'file' | 'directory' | 'symlink'
   mtime: number
+  mtimeMs?: number
+  dev?: number
+  ino?: number
+  nlink?: number
 }
 
 export type FileReadResult = {
@@ -154,9 +166,18 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  readTerminalArtifact?(
+    filePath: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
+  writeTerminalArtifact?(
+    filePath: string,
+    content: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileStat>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
@@ -176,6 +197,12 @@ export type IFilesystemProvider = {
     options?: { signal?: AbortSignal }
   ): Promise<WorkspaceSpaceDirectoryScanResult>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
+}
+
+export type TerminalArtifactAccessOptions = {
+  expectedRealPath: string
+  expectedStatIdentity: string | null
+  maxBytes: number
 }
 
 // ─── Git Provider ───────────────────────────────────────────────────

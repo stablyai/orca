@@ -5,7 +5,10 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone
+  DropZone,
+  PaneExternalDropHandler,
+  PaneExternalDropResolver,
+  PaneExternalDropTarget
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -40,11 +43,23 @@ import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { PaneIdentityRegistry } from './pane-identity-registry'
-import { closeManagedPane, splitManagedPane } from './pane-split-close'
+import {
+  closeManagedPane,
+  detachManagedPaneForExternalMove,
+  splitManagedPane
+} from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
 
-export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
+export type {
+  PaneManagerOptions,
+  PaneStyleOptions,
+  ManagedPane,
+  DropZone,
+  PaneExternalDropTarget,
+  PaneExternalDropResolver,
+  PaneExternalDropHandler
+}
 
 export class PaneManager {
   private root: HTMLElement
@@ -158,6 +173,22 @@ export class PaneManager {
     })
   }
 
+  detachPaneForExternalMove(paneId: number): boolean {
+    return detachManagedPaneForExternalMove({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
   getPanes(): ManagedPane[] {
     return Array.from(this.panes.values()).map(toPublicPane)
   }
@@ -168,11 +199,6 @@ export class PaneManager {
 
   refreshAllPanes(): void {
     for (const pane of this.panes.values()) {
-      // Why: suspended panes are invisible and repaint on rendering resume;
-      // recovery repaints must not scale with hidden-workspace pane count.
-      if (pane.webglAttachmentDeferred) {
-        continue
-      }
       try {
         if (pane.terminal.rows > 0) {
           pane.terminal.refresh(0, pane.terminal.rows - 1)
@@ -409,7 +435,9 @@ export class PaneManager {
         this.requestPaneReparentFrame(callback)
       },
       onLayoutChanged: this.options.onLayoutChanged,
-      onDragActiveChange: this.options.onPaneDragActiveChange
+      onDragActiveChange: this.options.onPaneDragActiveChange,
+      resolveExternalDropTarget: this.options.resolveExternalPaneDropTarget,
+      onExternalPaneDrop: this.options.onExternalPaneDrop
     }
   }
 

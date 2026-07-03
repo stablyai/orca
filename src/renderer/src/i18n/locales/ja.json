@@ -4076,7 +4076,8 @@
           "hostAuthNeeded": "認証が必要です",
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
-          "sidebarRowMissing": "対象はもう存在しません"
+          "sidebarRowMissing": "対象はもう存在しません",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -5147,7 +5148,9 @@
           "8f1afdfbd8": "差分ワードラップ",
           "4aa4d9fb73": "水平スクロールを必要とせずに、差分エディターで長い行を折り返します。",
           "bf16ef0af2": "オフ",
-          "3f6892f307": "オン"
+          "3f6892f307": "オン",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
@@ -7437,7 +7440,9 @@
             "161a86a9da": "ピン留めしたタブを閉じる前に確認",
             "8e593f04fc": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
             "defaultProjectRuntime": "Default Project Runtime",
-            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8819,7 +8824,8 @@
             "98a79948b3": "コピー",
             "b234ab25b4": "ファイルをクリップボードにコピーできませんでした",
             "f9d7ca753d": "パスのコピー",
-            "3161c4e425": "フォルダ"
+            "3161c4e425": "フォルダ",
+            "e887fa4b2e": "ターミナルで開く"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",

@@ -77,6 +77,7 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../shared/stable-pane-id'
+import { resolveTerminalStartupCwdForWorkspace } from '../../shared/terminal-startup-cwd'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
@@ -1960,6 +1961,17 @@ export function registerPtyHandlers(
     assertFolderWorkspacePathUsable(status)
   }
 
+  const resolveGuardedPtySpawnCwd = (
+    worktreeId: string | undefined,
+    cwd: string | undefined
+  ): string | undefined =>
+    resolveTerminalStartupCwdForWorkspace({
+      workspaceId: worktreeId,
+      requestedCwd: cwd,
+      resolveFolderWorkspacePath: (folderWorkspaceId) =>
+        store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
+    })
+
   // Why: the runtime controller must route through getProviderForPty() so that
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
@@ -1970,6 +1982,7 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -1989,7 +2002,7 @@ export function registerPtyHandlers(
       const daemonShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         daemonShellOverride,
-        args.cwd,
+        cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const claudeAuth =
@@ -2057,7 +2070,7 @@ export function registerPtyHandlers(
         : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
-        shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd) &&
+        shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
         !selectedCodexHomePath
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
@@ -2071,7 +2084,7 @@ export function registerPtyHandlers(
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
-          isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd),
+          isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
@@ -2084,7 +2097,7 @@ export function registerPtyHandlers(
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
-        cwd: args.cwd,
+        cwd,
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
@@ -2204,7 +2217,8 @@ export function registerPtyHandlers(
               worktreeId: hostSessionBinding.worktreeId,
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
-              ptyId: result.id
+              ptyId: result.id,
+              ...(cwd ? { startupCwd: cwd } : {})
             })
           } catch (err) {
             console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
@@ -2396,6 +2410,14 @@ export function registerPtyHandlers(
         return null
       }
     },
+    getCwd: async (ptyId) => {
+      try {
+        const cwd = await getProviderForPty(ptyId).getCwd(ptyId)
+        return cwd || null
+      } catch {
+        return null
+      }
+    },
     hasChildProcesses: async (ptyId) => {
       try {
         return await getProviderForPty(ptyId).hasChildProcesses(ptyId)
@@ -2540,6 +2562,7 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+      const cwd = resolveGuardedPtySpawnCwd(args.worktreeId, args.cwd)
       spawnTiming.mark('preflight')
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
@@ -2558,7 +2581,7 @@ export function registerPtyHandlers(
       const initialShellOverride = terminalRuntimeOptions.shellOverride
       const initialSelectionTarget = getCodexSelectionTargetForPty(
         initialShellOverride,
-        args.cwd,
+        cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const claudeAuth =
@@ -2729,7 +2752,7 @@ export function registerPtyHandlers(
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         effectiveShellOverride,
-        args.cwd,
+        cwd,
         terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const selectedCodexHomePath = isDaemonHostSpawn
@@ -2740,7 +2763,7 @@ export function registerPtyHandlers(
         : null
       const skipCodexHomeEnv =
         isDaemonHostSpawn &&
-        shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd) &&
+        shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
         !selectedCodexHomePath
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
@@ -2769,7 +2792,7 @@ export function registerPtyHandlers(
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
-            isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd),
+            isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.()
           })
@@ -2811,7 +2834,7 @@ export function registerPtyHandlers(
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
-        cwd: args.cwd,
+        cwd,
         env: spawnEnv,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
@@ -3003,7 +3026,8 @@ export function registerPtyHandlers(
               worktreeId: args.worktreeId,
               tabId: args.tabId,
               leafId: validatedLeafId,
-              ptyId: result.id
+              ptyId: result.id,
+              ...(cwd ? { startupCwd: cwd } : {})
             })
           } catch (err) {
             console.error('[pty] failed to persist PTY binding after spawn:', err)

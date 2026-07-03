@@ -68,10 +68,11 @@ type QueueEntry = {
 
 const BACKGROUND_FLUSH_DELAY_MS = 50
 const BACKGROUND_DRAIN_INTERVAL_MS = 16
-const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 1
+const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 const BACKGROUND_CHUNK_CHARS = 16 * 1024
 const MAX_WRITES_PER_DRAIN = 2
-const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 16
+const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 2
+const DRAIN_TIME_BUDGET_MS = 8
 const LARGE_BACKLOG_CHARS = 512 * 1024
 const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
 const MAX_BACKGROUND_QUEUE_CHARS = 2 * 1024 * 1024
@@ -728,10 +729,18 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   return queuedWrite.foreground ? 'foreground' : 'background'
 }
 
+function getDrainNow(): number {
+  if (typeof performance !== 'undefined') {
+    return performance.now()
+  }
+  return Date.now()
+}
+
 function drainQueuedOutput(): void {
   drainTimer = null
   drainTimerDelayMs = null
   let writes = 0
+  const startedAt = getDrainNow()
   const maxWrites = hasHighPriorityBacklog()
     ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN
     : MAX_WRITES_PER_DRAIN
@@ -759,6 +768,11 @@ function drainQueuedOutput(): void {
       entry.highPriority = false
       clearForegroundCoalesce(entry)
       clearForegroundHoldSafety(entry)
+    }
+    // Why: xterm parsing and DOM work share the renderer thread with input.
+    // Keep backlog draining cooperative so WSL/agent output cannot pin the UI.
+    if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
+      break
     }
   }
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposePane } from './pane-lifecycle'
+import { suspendPaneRendering } from './pane-rendering-control'
 import { disposeWebgl } from './pane-webgl-renderer'
 
 function createPane(
@@ -86,6 +87,17 @@ describe('pane WebGL refresh lifecycle', () => {
     expect(loseContext).toHaveBeenCalledTimes(1)
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(canvas).toEqual({ width: 0, height: 0 })
+    expect(pane.webglAddon).toBeNull()
+  })
+
+  it('disposes WebGL when rendering is suspended', () => {
+    const dispose = vi.fn()
+    const pane = createPane({ webglAddon: { dispose } as never })
+
+    suspendPaneRendering([pane])
+
+    expect(pane.webglAttachmentDeferred).toBe(true)
+    expect(dispose).toHaveBeenCalledTimes(1)
     expect(pane.webglAddon).toBeNull()
   })
 

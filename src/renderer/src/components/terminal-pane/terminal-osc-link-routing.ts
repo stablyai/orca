@@ -3,6 +3,7 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import { isTerminalLinkActivation } from './terminal-link-activation'
 import {
   openTerminalHttpLink,
   type TerminalLinkRoutingPreferenceRequester
@@ -11,16 +12,16 @@ import {
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
   Partial<Pick<MouseEvent, 'button' | 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
 
-function isPrimaryOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
+function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
   if (!event) {
     return false
   }
   if ('button' in event && event.button !== undefined && event.button !== 0) {
     return false
   }
-  // Why: macOS Ctrl-click is a context-menu gesture even when Chromium reports
-  // it as button 0; ordinary OSC links should not steal that secondary action.
-  return !(navigator.userAgent.includes('Mac') && event.ctrlKey && !event.metaKey)
+  // Why: desktop xterm links must not open while the user is just placing the
+  // cursor or selecting text. Mobile URL taps use a separate WebView path.
+  return isTerminalLinkActivation(event)
 }
 
 export function handleOscLink(
@@ -30,9 +31,9 @@ export function handleOscLink(
     Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
     }
-): void {
-  if (!isPrimaryOscLinkActivation(event)) {
-    return
+): boolean {
+  if (!isDesktopOscLinkActivation(event)) {
+    return false
   }
   // Why: xterm renders OSC 8 links as clickable anchors. Orca must suppress
   // default anchor navigation so link-routing settings can choose the target.
@@ -67,15 +68,14 @@ export function handleOscLink(
   ) {
     // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
     // Windows OSC links need file-path routing before generic URL parsing.
-    return
+    return true
   }
 
   let parsed: URL
   try {
     parsed = new URL(rawText)
   } catch {
-    openDetectedPathLink()
-    return
+    return openDetectedPathLink()
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
@@ -84,7 +84,7 @@ export function handleOscLink(
       forceSystemBrowser: Boolean(event?.shiftKey),
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
-    return
+    return true
   }
 
   if (parsed.protocol === 'file:') {
@@ -99,11 +99,13 @@ export function handleOscLink(
       !deps.runtimeEnvironmentId
     const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
     if (!resolved) {
-      return
+      return false
     }
     openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, {
       ...deps,
       openWithSystemDefault: Boolean(event?.shiftKey)
     })
+    return true
   }
+  return false
 }

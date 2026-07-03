@@ -4076,7 +4076,8 @@
           "hostAuthNeeded": "需要身份验证",
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
-          "sidebarRowMissing": "目标不再存在"
+          "sidebarRowMissing": "目标不再存在",
+          "failedUnnestWorkspace": "Failed to unnest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -5147,7 +5148,9 @@
           "8f1afdfbd8": "差异自动换行",
           "4aa4d9fb73": "在差异编辑器中换行显示长行，而不是要求水平滚动。",
           "bf16ef0af2": "关闭",
-          "3f6892f307": "开启"
+          "3f6892f307": "开启",
+          "b82f86d7d2": "Rich Markdown Spellcheck",
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -7400,7 +7403,9 @@
             "161a86a9da": "关闭固定标签页前确认",
             "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "默认项目运行时",
-            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。"
+            "defaultProjectRuntimeDescription": "选择本地 Windows 项目继承的运行时。",
+            "d2d2d929c0": "Rich Markdown Spellcheck",
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
           }
         },
         "git": {
@@ -8819,7 +8824,8 @@
             "98a79948b3": "复制",
             "b234ab25b4": "无法将文件复制到剪贴板",
             "f9d7ca753d": "复制路径",
-            "3161c4e425": "文件夹"
+            "3161c4e425": "文件夹",
+            "e887fa4b2e": "在终端中打开"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
