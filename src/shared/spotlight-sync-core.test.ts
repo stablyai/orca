@@ -284,6 +284,34 @@ describe('spotlight-sync-core', () => {
     expect(refs.snapshotSha).toBeNull()
   })
 
+  it('keeps the backup ref when a fresh activation cannot restore the root', async () => {
+    // Uncommitted tracked change in the root — backupRootState captures it in a
+    // stash-create commit (no reflog), so the backup ref is its only reference.
+    write(rootPath, 'a.txt', 'root-dirty\n')
+    write(worktreePath, 'a.txt', 'a-changed\n')
+    // Every `reset --hard` fails (e.g. a locked file / EBUSY): the fresh
+    // activation's apply fails AND the rollback's restore fails.
+    const failingResets = makeContext({
+      git: async (args, cwd, opts) => {
+        if (args[0] === 'reset' && args[1] === '--hard') {
+          throw new Error('simulated reset failure')
+        }
+        return realGitExecutor(args, cwd, opts)
+      }
+    })
+    await expect(
+      activateSpotlightCore(failingResets, rootPath, worktreePath)
+    ).rejects.toBeInstanceOf(SpotlightCoreError)
+    // The refs (backup especially) must survive so the user's uncommitted root
+    // state stays reachable instead of becoming a dangling, fsck-only commit.
+    const refs = await inspectSpotlightRefsCore(ctx, rootPath)
+    expect(refs.backupSha).not.toBeNull()
+    expect(refs.backupSha).not.toBe(refs.originalHeadSha)
+    expect(refs.originalHeadSha).not.toBeNull()
+    // That backup commit still holds the root's uncommitted edit.
+    expect(run(rootPath, 'show', `${refs.backupSha}:a.txt`)).toBe('root-dirty')
+  })
+
   it('rejects a worktree that does not belong to the repo', async () => {
     const otherBase = mkdtempSync(path.join(tmpdir(), 'orca-spotlight-other-'))
     try {

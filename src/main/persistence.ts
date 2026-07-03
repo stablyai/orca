@@ -3958,6 +3958,16 @@ export class Store {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (
+      sanitizedUpdates.spotlightTestingEnabled === true &&
+      (isFolderRepo(repo) || Boolean(repo.connectionId?.trim()))
+    ) {
+      // Spotlight testing is local-git only; the service refuses folder/SSH
+      // repos, and the settings UI hides the toggle for them. Drop a stray
+      // enable (e.g. from a runtime RPC client) so it can't persist a flag that
+      // only injects a dead ORCA_SPOTLIGHT_LOG with no UI to turn it back off.
+      delete sanitizedUpdates.spotlightTestingEnabled
+    }
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
       if (

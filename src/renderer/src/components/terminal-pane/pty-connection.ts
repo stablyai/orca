@@ -164,6 +164,7 @@ import {
 } from '@/lib/agent-startup-delayed-delivery'
 import { isExpectedAgentProcess } from '../../../../shared/agent-process-recognition'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { resolveRuntimePath } from '../../../../shared/cross-platform-path'
 import { SPOTLIGHT_LOG_RELATIVE_PATH } from '../../../../shared/spotlight'
 
@@ -2080,7 +2081,9 @@ export function connectPanePty(
     (repo) => repo.id === getRepoIdFromWorktreeId(deps.worktreeId)
   )
   const spotlightLogEnv: Record<string, string> =
-    spotlightLogRepo?.spotlightTestingEnabled === true && !spotlightLogRepo.connectionId?.trim()
+    spotlightLogRepo?.spotlightTestingEnabled === true &&
+    !spotlightLogRepo.connectionId?.trim() &&
+    !isFolderRepo(spotlightLogRepo)
       ? {
           ORCA_SPOTLIGHT_LOG: resolveRuntimePath(spotlightLogRepo.path, SPOTLIGHT_LOG_RELATIVE_PATH)
         }

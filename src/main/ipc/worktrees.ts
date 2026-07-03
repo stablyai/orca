@@ -85,6 +85,7 @@ import {
   registerWorktreeRootsForRepo
 } from './filesystem-auth'
 import { closeLocalWatcherForWorktreePath } from './filesystem-watcher'
+import { deactivateSpotlightIfHolder } from './spotlight'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider } from './pty'
@@ -1379,6 +1380,11 @@ export function registerWorktreeHandlers(
           notifyWorktreesChanged(mainWindow, repoId)
           return {}
         }
+
+        // Restore the root before deleting the holder: otherwise the root stays
+        // frozen on a snapshot pointing at a worktree that is about to vanish,
+        // auto-sync dies silently, and the sidebar badge keeps claiming active.
+        await deactivateSpotlightIfHolder(repoId, args.worktreeId)
 
         // Why: the renderer-supplied worktreeId contains a filesystem path.
         // Re-derive the canonical path from git before any destructive action.

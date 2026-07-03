@@ -40,6 +40,7 @@ import {
 } from '../../shared/cross-platform-path'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
+import { deactivateSpotlightBeforeTeardown } from './spotlight'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
@@ -1915,6 +1916,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
+    // Restore the root first: removeProject deletes the Spotlight record, and
+    // without a prior deactivate the root would stay detached on the snapshot,
+    // the log capture would leak, and no store entry would remain for reconcile
+    // to repair.
+    await deactivateSpotlightBeforeTeardown(args.repoId)
     store.removeProject(args.repoId)
     invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)

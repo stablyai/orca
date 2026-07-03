@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/types'
+import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
@@ -15,6 +16,23 @@ export function RepositorySpotlightSection({
   forceVisible
 }: RepositorySpotlightSectionProps): React.JSX.Element {
   const enabled = repo.spotlightTestingEnabled === true
+  const spotlightActive = useAppStore((s) => Boolean(s.spotlightByRepo?.[repo.id]))
+  const deactivateSpotlight = useAppStore((s) => s.deactivateSpotlight)
+  const handleToggle = (): void => {
+    // Turning the feature off while it's live must first restore the root —
+    // otherwise the root stays mirrored while the holder row's controls vanish.
+    // Only flip the flag once the restore succeeds so a restore-conflict keeps
+    // the controls visible for a retry.
+    if (enabled && spotlightActive) {
+      void deactivateSpotlight(repo.id).then((result) => {
+        if (result.ok) {
+          updateRepo(repo.id, { spotlightTestingEnabled: false })
+        }
+      })
+      return
+    }
+    updateRepo(repo.id, { spotlightTestingEnabled: !enabled })
+  }
   return (
     <section className="space-y-4">
       <div className="space-y-1">
@@ -60,7 +78,7 @@ export function RepositorySpotlightSection({
             'Show a Spotlight button on workspaces of this project that mirrors their tracked changes onto the project root.'
           )}
           checked={enabled}
-          onChange={() => updateRepo(repo.id, { spotlightTestingEnabled: !enabled })}
+          onChange={handleToggle}
         />
       </SearchableSetting>
     </section>

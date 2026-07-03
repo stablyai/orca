@@ -51,8 +51,18 @@ export function sendServerRestart(target: RestartTarget): boolean {
 
 /** Start watching .orca/ for the restart trigger file. Calls `onRestart` once
  *  per trigger (after deleting the file so a slow restart can't loop). Returns
- *  the watcher (close it on teardown) or null if watching failed. */
-export function watchRestartTrigger(orcaDir: string, onRestart: () => void): FSWatcher | null {
+ *  the watcher (close it on teardown) or null if watching failed.
+ *
+ *  `captureStartedAtMs` is when this capture began (before the async watcher
+ *  setup). A leftover trigger OLDER than that is stale (agent touched it, then
+ *  Orca closed/crashed) and is cleared without restarting; a trigger at-or-after
+ *  it was written during this session — including in the setup gap before the
+ *  watcher armed — so it is honored rather than silently deleted. */
+export function watchRestartTrigger(
+  orcaDir: string,
+  onRestart: () => void,
+  captureStartedAtMs: number
+): FSWatcher | null {
   const triggerPath = path.join(orcaDir, SPOTLIGHT_RESTART_TRIGGER_FILENAME)
   const consumeTrigger = (): void => {
     void stat(triggerPath)
@@ -70,10 +80,20 @@ export function watchRestartTrigger(orcaDir: string, onRestart: () => void): FSW
         consumeTrigger()
       }
     })
-    // Clear a leftover trigger from a prior session WITHOUT restarting: a stale
-    // file (agent touched it, then Orca closed/crashed) must not interrupt the
-    // freshly-booted server. Only triggers written after the watch is armed act.
-    void rm(triggerPath, { force: true })
+    // Reconcile any pre-existing trigger against the capture start time so the
+    // arm-time cleanup can't race (and swallow) a legitimate touch written just
+    // before the watcher armed.
+    void stat(triggerPath)
+      .then((stats) => {
+        if (stats.mtimeMs < captureStartedAtMs) {
+          return rm(triggerPath, { force: true })
+        }
+        consumeTrigger()
+        return undefined
+      })
+      .catch(() => {
+        // No leftover trigger — nothing to reconcile.
+      })
     return watcher
   } catch {
     return null

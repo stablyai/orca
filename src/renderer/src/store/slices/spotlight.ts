@@ -11,6 +11,25 @@ import { translate } from '@/i18n/i18n'
 
 const ERROR_TOAST_DURATION = 60_000
 
+/** Field-wise equality so applyState can skip a set when main re-sends an
+ *  identical state (each op sends up to 3 events; an idle sync re-sends the same
+ *  object). A no-op set would still churn every subscriber and invalidate the
+ *  editor watch-target cache, which compares spotlightByRepo by reference. */
+function spotlightStateEqual(a: SpotlightRepoState, b: SpotlightRepoState): boolean {
+  return (
+    a.holderWorktreeId === b.holderWorktreeId &&
+    a.status === b.status &&
+    a.originalBranch === b.originalBranch &&
+    a.originalHeadSha === b.originalHeadSha &&
+    a.backupSha === b.backupSha &&
+    a.lastSnapshotSha === b.lastSnapshotSha &&
+    a.activatedAt === b.activatedAt &&
+    a.lastSyncAt === b.lastSyncAt &&
+    a.lastError?.code === b.lastError?.code &&
+    a.lastError?.message === b.lastError?.message
+  )
+}
+
 function spotlightErrorDescription(error: SpotlightError): string {
   switch (error.code) {
     case 'operation-in-progress':
@@ -92,6 +111,10 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
         const next = { ...s.spotlightByRepo }
         delete next[repoId]
         return { spotlightByRepo: next }
+      }
+      const current = s.spotlightByRepo[repoId]
+      if (current && spotlightStateEqual(current, state)) {
+        return {}
       }
       return { spotlightByRepo: { ...s.spotlightByRepo, [repoId]: state } }
     })
@@ -189,7 +212,10 @@ export const createSpotlightSlice: StateCreator<AppState, [], [], SpotlightSlice
             'Spotlight re-synced — the root mirrors the workspace again'
           )
         )
-      } else {
+      } else if (result.error.code !== 'not-active') {
+        // The root-diverged toast's "Force sync" action lives 60s; a click after
+        // the user already turned Spotlight off returns 'not-active', which is
+        // not a fresh failure worth toasting over the "Spotlight off" success.
         reportSpotlightError(
           translate('auto.store.slices.spotlight.syncFailed', 'Spotlight sync failed'),
           result.error

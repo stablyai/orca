@@ -17,6 +17,30 @@ let service: SpotlightService | null = null
 let currentWindow: BrowserWindow | null = null
 let reconciled = false
 
+/** Turn Spotlight off before a repo/holder is torn down, so the root doesn't
+ *  stay detached on the snapshot with the log capture leaked. No-op when the
+ *  repo isn't holding the Spotlight. Deactivate is idempotent and swallows its
+ *  own errors, so callers (repo removal, worktree deletion) can await it
+ *  unconditionally without failing the teardown. */
+export async function deactivateSpotlightBeforeTeardown(repoId: string): Promise<void> {
+  if (service && service.getState(repoId)) {
+    await service.deactivate(repoId)
+  }
+}
+
+/** Deactivate before the CURRENT holder worktree is deleted, so the root is
+ *  restored instead of frozen on a snapshot that points at a worktree about to
+ *  vanish (which would silently kill auto-sync and leave the badge lying).
+ *  No-op unless this worktree is the active holder. */
+export async function deactivateSpotlightIfHolder(
+  repoId: string,
+  worktreeId: string
+): Promise<void> {
+  if (service && service.getState(repoId)?.holderWorktreeId === worktreeId) {
+    await service.deactivate(repoId)
+  }
+}
+
 export function registerSpotlightHandlers(mainWindow: BrowserWindow, store: Store): void {
   currentWindow = mainWindow
   if (!service) {

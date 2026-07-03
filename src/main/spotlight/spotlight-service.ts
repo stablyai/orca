@@ -155,7 +155,10 @@ export class SpotlightService {
         })
       }
 
-      this.emitSyncing(repoId, state)
+      // Why NO optimistic emitSyncing here (unlike activate): the watcher fires
+      // this every ~300ms and most calls are no-ops, so a 'syncing'→'active'
+      // broadcast per call would flash the spinner and re-render every
+      // subscriber (and invalidate the editor watch-target cache) on idle syncs.
       try {
         const outcome = await syncSpotlightCore(resolved.ctx, resolved.repo.path, worktreePath, {
           force: opts.force,
@@ -165,6 +168,12 @@ export class SpotlightService {
           worktreeId: state.holderWorktreeId,
           headSha: outcome.checkpointHeadSha
         })
+        // Nothing was mirrored and the snapshot is unchanged. Skip the store
+        // write + broadcast entirely UNLESS a prior error needs clearing, so an
+        // idle sync burst doesn't churn state that is byte-for-byte identical.
+        if (outcome.skipped && !state.lastError) {
+          return { ok: true, state }
+        }
         const next: SpotlightRepoState = {
           ...state,
           status: 'active',
@@ -174,9 +183,7 @@ export class SpotlightService {
         }
         this.store.setSpotlightState(repoId, next)
         this.emitChanged(repoId, next)
-        if (!outcome.skipped) {
-          void writeSpotlightStateFile(resolved.repo.path, next)
-        }
+        void writeSpotlightStateFile(resolved.repo.path, next)
         return { ok: true, state: next }
       } catch (error) {
         return this.failure(repoId, toSpotlightError(error), state)
@@ -190,7 +197,9 @@ export class SpotlightService {
   ): Promise<SpotlightOpResult> {
     return this.withRepoLock(repoId, async () => {
       const state = this.store.getSpotlightState(repoId)
-      const resolved = this.resolveRepoContext(repoId)
+      // requireEnabled:false — turning the repo's Spotlight toggle off while it
+      // is active must not lock the user out of restoring the root.
+      const resolved = this.resolveRepoContext(repoId, { requireEnabled: false })
       if ('error' in resolved) {
         return this.failure(repoId, resolved.error, state)
       }
@@ -254,6 +263,10 @@ export class SpotlightService {
         if (!refs.originalHeadSha || !refs.snapshotSha) {
           // Refs were removed outside Orca — the repo is no longer in
           // Spotlight mode, so the persisted record is stale.
+          // Stop any live capture too (a race with a reconnecting terminal's
+          // setLogPty can create one before this runs), or its PTY listener,
+          // .orca watcher, and file handle leak against a dead session.
+          stopSpotlightLogCapture({ repoId })
           this.lastCheckpointByRepo.delete(repoId)
           this.store.clearSpotlightState(repoId)
           this.emitChanged(repoId, null)
@@ -281,8 +294,11 @@ export class SpotlightService {
     })
   }
 
-  private resolveRepoContext(repoId: string): ResolvedRepoContext {
-    return resolveRepoContext(this.store, repoId)
+  private resolveRepoContext(
+    repoId: string,
+    opts: { requireEnabled?: boolean } = {}
+  ): ResolvedRepoContext {
+    return resolveRepoContext(this.store, repoId, opts)
   }
 
   private withLiveStatus(repoId: string, state: SpotlightRepoState): SpotlightRepoState {
@@ -297,6 +313,14 @@ export class SpotlightService {
     const state = previous ? { ...previous, status: 'active' as const, lastError: error } : null
     if (state) {
       this.store.setSpotlightState(repoId, state)
+      // Keep the agent-facing state file in step with the failure: without this
+      // a live sync failure (e.g. root-diverged) leaves the file claiming the
+      // last successful sync's active/clean state, so an agent misattributes
+      // stale server-log errors to its own changes.
+      const repo = this.store.getRepo(repoId)
+      if (repo) {
+        void writeSpotlightStateFile(repo.path, state)
+      }
     }
     this.emitChanged(repoId, state)
     return { ok: false, error, state }

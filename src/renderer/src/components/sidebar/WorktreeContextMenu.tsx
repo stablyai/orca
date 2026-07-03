@@ -39,7 +39,7 @@ import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { canHoldSpotlight } from './WorktreeCardSpotlightControls'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { openSpotlightTerminalTab } from '@/lib/open-spotlight-terminal-tab'
+import { useShallow } from 'zustand/react/shallow'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -440,12 +440,25 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)
   }, [worktree.id, worktree.isPinned, setWorktreesPinnedAndReveal])
 
-  const spotlightState = useAppStore((s) => (repo ? s.spotlightByRepo?.[repo.id] : undefined))
+  // Why useShallow + a narrow view: main replaces this repo's spotlight object
+  // on every sync. A raw-object selector would re-run this per-row menu on each
+  // sync; selecting only the flags this menu reads keeps it stable.
+  const spotlight = useAppStore(
+    useShallow((s) => {
+      const st = repo ? s.spotlightByRepo?.[repo.id] : undefined
+      return {
+        active: Boolean(st),
+        holderWorktreeId: st?.holderWorktreeId ?? null,
+        syncing: st?.status === 'syncing',
+        rootDiverged: st?.lastError?.code === 'root-diverged'
+      }
+    })
+  )
   const spotlightEligible = repo ? canHoldSpotlight(worktree, repo, isFolderRepo(repo)) : false
-  const spotlightHeldHere = spotlightState?.holderWorktreeId === worktree.id
+  const spotlightHeldHere = spotlight.holderWorktreeId === worktree.id
   // The main worktree can't hold the Spotlight, but while it's on its context
   // menu offers the off switch (the root is what Spotlight is rewriting).
-  const spotlightOffOnMain = Boolean(worktree.isMainWorktree && repo && spotlightState)
+  const spotlightOffOnMain = Boolean(worktree.isMainWorktree && repo && spotlight.active)
   const handleToggleSpotlight = useCallback(() => {
     if (!repo) {
       return
@@ -458,11 +471,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       void state.deactivateSpotlight(repo.id)
       return
     }
-    void state.activateSpotlight(repo.id, worktree.id).then((result) => {
-      if (result.ok) {
-        openSpotlightTerminalTab({ repoId: repo.id, reveal: false })
-      }
-    })
+    // activateSpotlight already opens/adopts the repo's server terminal on
+    // success — don't open it again here.
+    void state.activateSpotlight(repo.id, worktree.id)
   }, [repo, worktree.id, worktree.isMainWorktree])
 
   const handleCreateGroupFromRepo = useCallback(() => {
@@ -795,7 +806,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               {spotlightEligible || spotlightOffOnMain ? (
                 <DropdownMenuItem
                   onSelect={handleToggleSpotlight}
-                  disabled={isDeleting || spotlightState?.status === 'syncing'}
+                  disabled={isDeleting || spotlight.syncing}
                 >
                   <Flashlight className="size-3.5" />
                   {spotlightHeldHere || spotlightOffOnMain
@@ -809,11 +820,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                       )}
                 </DropdownMenuItem>
               ) : null}
-              {spotlightHeldHere && spotlightState?.lastError?.code === 'root-diverged' && repo ? (
+              {spotlightHeldHere && spotlight.rootDiverged && repo ? (
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => void useAppStore.getState().forceSyncSpotlight(repo.id)}
-                  disabled={isDeleting || spotlightState.status === 'syncing'}
+                  disabled={isDeleting || spotlight.syncing}
                 >
                   <Flashlight className="size-3.5" />
                   {translate(

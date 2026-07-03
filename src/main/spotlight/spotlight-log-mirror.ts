@@ -29,13 +29,39 @@ function spotlightLogPathFor(rootPath: string): string {
 // Coalesce bursty PTY output into one flush so a chatty server doesn't cause
 // an fs write + regex pass per chunk.
 const FLUSH_DEBOUNCE_MS = 60
+// Back off (up to this ceiling) when writes keep failing, so a permanently
+// broken log (dir deleted, disk full) doesn't retry at the debounce rate.
+const MAX_FLUSH_BACKOFF_MS = 5000
+// Bound the in-memory buffer: if writes keep failing while the server keeps
+// printing, drop the oldest buffered output instead of growing without limit.
+const MAX_PENDING_BYTES = 2 * 1024 * 1024
+
+function flushBackoffMs(failures: number): number {
+  return Math.min(FLUSH_DEBOUNCE_MS * 2 ** Math.min(failures, 10), MAX_FLUSH_BACKOFF_MS)
+}
+
+function capPendingBytes(text: string): string {
+  if (Buffer.byteLength(text) <= MAX_PENDING_BYTES) {
+    return text
+  }
+  // Keep the newest tail; older buffered output is lost but memory is bounded.
+  return `\n[Orca Spotlight: log write buffer overflowed — older output dropped]\n${text.slice(
+    text.length - MAX_PENDING_BYTES
+  )}`
+}
 
 type LogCapture = {
   repoId: string
   ptyId: string
   logPath: string
   unsubscribe: () => void
+  /** Raw, unstripped PTY data awaiting the next flush. */
   pending: string
+  /** Already-stripped bytes a prior write failed to flush — retried verbatim
+   *  (never re-stripped, which was quadratic under a persistent write error). */
+  writeBacklog: string
+  /** Consecutive write failures, for exponential backoff. */
+  flushFailures: number
   flushTimer: ReturnType<typeof setTimeout> | null
   flushing: boolean
   /** Persistent append handle for the capture's lifetime (avoids open/close per flush). */
@@ -60,29 +86,38 @@ function subscribeCapture(capture: LogCapture): void {
   })
 }
 
-function scheduleFlush(capture: LogCapture): void {
+function scheduleFlush(capture: LogCapture, delayMs = FLUSH_DEBOUNCE_MS): void {
   if (capture.flushTimer || capture.flushing) {
     return
   }
   capture.flushTimer = setTimeout(() => {
     capture.flushTimer = null
     void flushCapture(capture)
-  }, FLUSH_DEBOUNCE_MS)
+  }, delayMs)
 }
 
 async function flushCapture(capture: LogCapture): Promise<void> {
   if (capture.flushing || capture.stopped) {
     return
   }
-  const chunk = stripTerminalSequences(capture.pending)
+  // Strip freshly-arrived raw data ONCE, then prepend any already-stripped
+  // backlog from a failed write. The backlog is never re-stripped — doing so on
+  // every retry was O(n²) while the buffer grew.
+  const fresh = stripTerminalSequences(capture.pending)
   capture.pending = ''
+  const chunk = capture.writeBacklog + fresh
+  capture.writeBacklog = ''
   if (!chunk) {
     return
   }
   capture.flushing = true
+  let failed = false
   try {
     let handle = capture.handle
     if (!handle) {
+      // Recreate the dir in case .orca/ was removed mid-session, so a transient
+      // deletion self-heals instead of failing every flush forever.
+      await mkdir(path.dirname(capture.logPath), { recursive: true }).catch(() => {})
       handle = await open(capture.logPath, 'a')
       // Teardown could have run while `open` was pending — it saw a null
       // handle and couldn't close this one. Close it here so the fd doesn't
@@ -94,22 +129,32 @@ async function flushCapture(capture: LogCapture): Promise<void> {
       capture.handle = handle
     }
     await handle.write(chunk)
+    capture.flushFailures = 0
     capture.bytesOnDisk += Buffer.byteLength(chunk)
     if (capture.bytesOnDisk > MAX_LOG_BYTES) {
-      await trimLog(capture)
+      // Trim in its OWN scope: a trim failure must not requeue the chunk we just
+      // wrote (that would duplicate it on the next flush).
+      try {
+        await trimLog(capture)
+      } catch {
+        // Non-fatal: the log stays readable, just above the size cap.
+      }
     }
   } catch {
-    // Non-fatal: the log dir may have been removed mid-session. Re-queue the
-    // chunk (re-stripping plain text is a no-op) so a transient write error
-    // doesn't drop server output, and drop the stale handle to force a reopen.
-    capture.pending = chunk + capture.pending
+    // The write itself failed (dir removed, disk full, bad fd). Keep the
+    // already-stripped chunk to retry verbatim, drop the stale handle to force
+    // a reopen + mkdir, and back off so a persistent failure doesn't spin.
+    failed = true
+    capture.flushFailures += 1
+    capture.writeBacklog = capPendingBytes(chunk)
     await capture.handle?.close().catch(() => {})
     capture.handle = null
   } finally {
     capture.flushing = false
-    // Output that arrived while flushing still needs to land.
-    if (capture.pending && !capture.stopped) {
-      scheduleFlush(capture)
+    // Output that arrived while flushing (or the requeued backlog) still needs
+    // to land; back off the retry when the last write failed.
+    if (!capture.stopped && (capture.pending || capture.writeBacklog)) {
+      scheduleFlush(capture, failed ? flushBackoffMs(capture.flushFailures) : FLUSH_DEBOUNCE_MS)
     }
   }
 }
@@ -163,6 +208,9 @@ export async function startSpotlightLogCapture(args: {
   ptyId: string
   rootPath: string
 }): Promise<void> {
+  // Captured before the async setup below so watchRestartTrigger can tell a
+  // stale prior-session trigger from one written during this setup gap.
+  const captureStartedAtMs = Date.now()
   const existing = capturesByRepoId.get(args.repoId)
   if (existing?.ptyId === args.ptyId) {
     return
@@ -199,6 +247,8 @@ export async function startSpotlightLogCapture(args: {
     logPath,
     unsubscribe: () => {},
     pending: '',
+    writeBacklog: '',
+    flushFailures: 0,
     flushTimer: null,
     flushing: false,
     handle: null,
@@ -208,8 +258,10 @@ export async function startSpotlightLogCapture(args: {
     stopped: false
   }
   subscribeCapture(capture)
-  capture.triggerWatcher = watchRestartTrigger(path.dirname(logPath), () =>
-    restartSpotlightServer(capture.repoId)
+  capture.triggerWatcher = watchRestartTrigger(
+    path.dirname(logPath),
+    () => restartSpotlightServer(capture.repoId),
+    captureStartedAtMs
   )
   capturesByRepoId.set(args.repoId, capture)
 

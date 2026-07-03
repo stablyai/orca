@@ -14,8 +14,18 @@ export type ResolvedRepoContext =
 /** Enforce Spotlight eligibility in MAIN, not just the UI: activate/sync run
  *  `checkout --detach` + `reset --hard` on the root, so a renderer bug or
  *  crafted IPC must not rewrite the root of a repo that never opted in, a
- *  folder project, or a remote repo. Mirrors the renderer's canHoldSpotlight. */
-export function resolveRepoContext(store: Store, repoId: string): ResolvedRepoContext {
+ *  folder project, or a remote repo. Mirrors the renderer's canHoldSpotlight.
+ *
+ *  `requireEnabled: false` skips only the opt-in-flag check — used by deactivate
+ *  so the root can always be RESTORED even after the user turns the toggle off
+ *  while Spotlight is live (the flag is off but the root is still mirrored). The
+ *  folder/host checks stay, since those govern whether a local git context even
+ *  exists. */
+export function resolveRepoContext(
+  store: Store,
+  repoId: string,
+  opts: { requireEnabled?: boolean } = {}
+): ResolvedRepoContext {
   const repo = store.getRepo(repoId)
   if (!repo) {
     return { error: { code: 'repo-not-found', message: `Unknown repository: ${repoId}` } }
@@ -31,7 +41,7 @@ export function resolveRepoContext(store: Store, repoId: string): ResolvedRepoCo
       }
     }
   }
-  if (repo.spotlightTestingEnabled !== true) {
+  if (opts.requireEnabled !== false && repo.spotlightTestingEnabled !== true) {
     return {
       error: { code: 'not-enabled', message: 'Spotlight testing is not enabled for this project.' }
     }

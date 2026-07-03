@@ -47,6 +47,12 @@ export function openSpotlightTerminalTab({
       // The tab survived but its PTY died (or was never spawned after a
       // session restore); make sure the respawn lands in the repo root again.
       store.queueTabInitialCwd(existing.id, mainWorktree.path)
+    } else {
+      // Re-register the log mirror. After an off→on cycle deactivate tore the
+      // capture down, and the tab's still-live PTY won't fire updateTabPtyId
+      // (its ptyId is unchanged), so nothing else would restart mirroring —
+      // the second session would append to .orca/spotlight.log nowhere.
+      void window.api.spotlight?.setLogPty?.({ repoId, ptyId: existing.ptyId })
     }
     if (reveal) {
       activateAndRevealWorktree(worktreeId)

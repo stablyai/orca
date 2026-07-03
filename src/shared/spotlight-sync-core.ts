@@ -114,7 +114,13 @@ export async function activateSpotlightCore(
   try {
     await applySnapshotToRoot(ctx, rootPath, checkpoint.sha)
   } catch (error) {
-    await rollbackFreshActivation(ctx, rootPath, original.originalBranch)
+    try {
+      await rollbackFreshActivation(ctx, rootPath, original)
+    } catch {
+      // Restore also failed; rollbackFreshActivation intentionally keeps the
+      // refs so the backup commit stays reachable. Surface the original
+      // activation error, which explains why activation aborted.
+    }
     throw error
   }
   return {
@@ -137,6 +143,19 @@ export async function syncSpotlightCore(
   if (!refs.snapshotSha || !refs.originalHeadSha) {
     throw new SpotlightCoreError('not-active', 'Spotlight is not active for this repository.')
   }
+
+  const checkpoint = await createCheckpointCommit(ctx, worktreePath, {
+    reuseIndexForHead: opts.reuseIndexForHead
+  })
+  const snapshotTree = await git(ctx, rootPath, ['rev-parse', `${refs.snapshotSha}^{tree}`])
+  // Fast no-op path: the workspace tree already matches the root's snapshot and
+  // the root hasn't moved. Return BEFORE the `status -uall` root scan so
+  // watcher-debounced idle syncs don't enumerate the whole root working tree.
+  if (checkpoint.treeSha === snapshotTree && refs.rootHeadSha === refs.snapshotSha && !opts.force) {
+    return { snapshotSha: refs.snapshotSha, checkpointHeadSha: checkpoint.headSha, skipped: true }
+  }
+
+  // A reset will run — now pay for the guards that protect the root's own state.
   const rootStatus = opts.force ? null : await readRootStatus(ctx, rootPath)
   if (rootStatus) {
     if (refs.rootHeadSha !== refs.snapshotSha) {
@@ -153,16 +172,6 @@ export async function syncSpotlightCore(
         'The repository root has tracked changes that were made outside the Spotlight workspace.'
       )
     }
-  }
-
-  const checkpoint = await createCheckpointCommit(ctx, worktreePath, {
-    reuseIndexForHead: opts.reuseIndexForHead
-  })
-  const snapshotTree = await git(ctx, rootPath, ['rev-parse', `${refs.snapshotSha}^{tree}`])
-  if (checkpoint.treeSha === snapshotTree && refs.rootHeadSha === refs.snapshotSha && !opts.force) {
-    return { snapshotSha: refs.snapshotSha, checkpointHeadSha: checkpoint.headSha, skipped: true }
-  }
-  if (rootStatus) {
     await assertNoUntrackedCollisions(ctx, rootPath, checkpoint.sha, rootStatus.untrackedPaths)
   }
   await applySnapshotToRoot(ctx, rootPath, checkpoint.sha)

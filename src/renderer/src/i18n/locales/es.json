@@ -4542,9 +4542,7 @@
           "turnOff": "Turn off Spotlight and restore the project root",
           "agentLogs": "Agents in every workspace can read the server logs: .orca/spotlight.log (env var ORCA_SPOTLIGHT_LOG).",
           "syncBroken": "Spotlight sync is failing:",
-          "lastSynced": "Last synced {{when}}.",
-          "snapshotBadge": "spotlight snapshot",
-          "snapshotBadgeTooltip": "The project root is temporarily showing \"{{holder}}\". It returns to its branch when Spotlight turns off."
+          "lastSynced": "Last synced {{when}}."
         }
       },
       "shared": {

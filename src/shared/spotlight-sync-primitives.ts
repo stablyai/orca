@@ -2,6 +2,7 @@
 // agnostic executor and low-level runners live in ./spotlight-git-exec.
 import type { SpotlightRefsSnapshot } from './spotlight'
 import { SPOTLIGHT_REFS } from './spotlight'
+import { normalizeRuntimePathForComparison, resolveRuntimePath } from './cross-platform-path'
 import {
   git,
   gitTry,
@@ -224,16 +225,36 @@ export async function backupRootState(
   }
 }
 
-/** Best-effort undo of a fresh activation's root mutations so a mid-flight
- *  failure never strands the root detached with orphan refs (which nothing in
- *  the app could see or repair — reconcile only visits persisted records). */
+/** Undo a fresh activation's root mutations after a mid-flight failure, fully
+ *  restoring the root to its pre-activation state (reset to the original commit,
+ *  re-attach the branch, re-apply the captured index+worktree — the same
+ *  sequence deactivate uses). The backup ref is the ONLY reference to the user's
+ *  uncommitted root state (a `stash create` commit with no reflog entry), so the
+ *  refs are deleted ONLY after the working-tree restore is confirmed — if the
+ *  restore throws (e.g. a still-locked file or a stash-apply conflict) the refs
+ *  stay reachable for a later deactivate or a manual recovery, instead of
+ *  stranding that state as a dangling commit findable only via `git fsck`. */
 export async function rollbackFreshActivation(
   ctx: SpotlightGitContext,
   rootPath: string,
-  originalBranch: string | null
+  original: { originalBranch: string | null; originalHeadSha: string; backupSha: string }
 ): Promise<void> {
-  if (originalBranch) {
-    await gitTry(ctx, rootPath, ['checkout', originalBranch, '--'])
+  await git(ctx, rootPath, ['reset', '--hard', original.originalHeadSha])
+  if (original.originalBranch) {
+    const branchSha = await gitTry(ctx, rootPath, [
+      'rev-parse',
+      '--verify',
+      '-q',
+      `refs/heads/${original.originalBranch}`
+    ])
+    if (branchSha) {
+      await git(ctx, rootPath, ['checkout', original.originalBranch, '--'])
+    }
+  }
+  if (original.backupSha !== original.originalHeadSha) {
+    // Let a conflict propagate WITHOUT deleting refs below so the backup stays
+    // reachable (`git stash apply --index refs/orca/spotlight/backup`).
+    await git(ctx, rootPath, ['stash', 'apply', '--index', original.backupSha])
   }
   await gitTry(ctx, rootPath, ['update-ref', '-d', SPOTLIGHT_REFS.snapshot])
   await gitTry(ctx, rootPath, ['update-ref', '-d', SPOTLIGHT_REFS.backup])
@@ -290,13 +311,46 @@ export async function assertWorktreeBelongsToRoot(
   worktreePath: string
 ): Promise<void> {
   const [rootCommon, worktreeCommon] = await Promise.all([
-    gitTry(ctx, rootPath, ['rev-parse', '--path-format=absolute', '--git-common-dir']),
-    gitTry(ctx, worktreePath, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
+    resolveGitCommonDir(ctx, rootPath),
+    resolveGitCommonDir(ctx, worktreePath)
   ])
-  if (!rootCommon || !worktreeCommon || rootCommon !== worktreeCommon) {
+  if (
+    !rootCommon ||
+    !worktreeCommon ||
+    normalizeRuntimePathForComparison(rootCommon) !==
+      normalizeRuntimePathForComparison(worktreeCommon)
+  ) {
     throw new SpotlightCoreError(
       'worktree-not-found',
       'The selected workspace is not a worktree of this repository.'
     )
   }
+}
+
+/** Absolute git common dir. git >= 2.31 returns it directly via
+ *  `--path-format=absolute`; older git ignores that flag — either erroring, or
+ *  echoing it to stdout and exiting 0 — and may return a RELATIVE common dir, so
+ *  fall back to a bare `--git-common-dir` and resolve the last real path line
+ *  against `cwdPath`. Without this, Spotlight fails with a misleading
+ *  'worktree-not-found' on git < 2.31 (e.g. Ubuntu 20.04's git 2.25). */
+async function resolveGitCommonDir(
+  ctx: SpotlightGitContext,
+  cwdPath: string
+): Promise<string | null> {
+  const primary = await gitTry(ctx, cwdPath, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir'
+  ])
+  const raw = primary ?? (await gitTry(ctx, cwdPath, ['rev-parse', '--git-common-dir']))
+  if (!raw) {
+    return null
+  }
+  // Drop the unknown-flag line old git echoes, then resolve the path (which may
+  // be relative to cwdPath) to an absolute form for comparison.
+  const pathLine = raw
+    .split('\n')
+    .filter((line) => line.length > 0 && !line.startsWith('-'))
+    .at(-1)
+  return pathLine ? resolveRuntimePath(cwdPath, pathLine) : null
 }
