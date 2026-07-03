@@ -29,14 +29,6 @@ type VerifiedTerminalArtifactOptions = {
 }
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
-type WritableFileHandle = {
-  write(
-    buffer: Buffer,
-    offset: number,
-    length: number,
-    position: number
-  ): Promise<{ bytesWritten: number }>
-}
 
 export async function readVerifiedTerminalArtifact(params: Record<string, unknown>) {
   const filePath = stringParam(params.filePath)
@@ -68,14 +60,16 @@ export async function writeVerifiedTerminalArtifact(
   const filePath = stringParam(params.filePath)
   const content = stringParam(params.content)
   const options = verifiedTerminalArtifactOptions(params)
-  if (Buffer.byteLength(content, 'utf8') > (options.maxBytes ?? MAX_TEXT_FILE_SIZE)) {
+  // Why: maxBytes is client-supplied; clamp before it sizes buffer allocations.
+  const writeLimit = Math.min(options.maxBytes ?? MAX_TEXT_FILE_SIZE, MAX_TEXT_FILE_SIZE)
+  if (Buffer.byteLength(content, 'utf8') > writeLimit) {
     throw new Error('file_too_large')
   }
   const handle = await openVerifiedTerminalArtifact(filePath, options, constants.O_RDONLY)
   let originalMode: number | null = null
   try {
     originalMode = (await verifiedHandleStat(handle, options)).mode ?? null
-    const existing = await readBoundedFileFromHandle(handle, options.maxBytes ?? MAX_TEXT_FILE_SIZE)
+    const existing = await readBoundedFileFromHandle(handle, writeLimit)
     if (isBinaryBuffer(existing)) {
       throw new Error('binary_file')
     }
@@ -107,17 +101,6 @@ async function openStatClose(filePath: string): Promise<Stats> {
     return await handle.stat()
   } finally {
     await handle.close()
-  }
-}
-
-export async function writeBufferFully(handle: WritableFileHandle, buffer: Buffer): Promise<void> {
-  let offset = 0
-  while (offset < buffer.length) {
-    const { bytesWritten } = await handle.write(buffer, offset, buffer.length - offset, offset)
-    if (bytesWritten <= 0) {
-      throw new Error('short_write')
-    }
-    offset += bytesWritten
   }
 }
 

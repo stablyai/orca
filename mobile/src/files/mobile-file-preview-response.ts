@@ -1,6 +1,7 @@
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
+import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
 export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
 
@@ -61,11 +62,7 @@ export function previewError(message: string): MobileFilePreviewResult {
   if (normalized === 'file_too_large' || normalized.includes('file_too_large')) {
     return { status: 'error', message: 'File too large for mobile preview', reconnect: false }
   }
-  if (
-    normalized.includes('terminal_file_grant_expired') ||
-    normalized.includes('terminal_file_grant_mismatch') ||
-    normalized.includes('terminal_file_grant_stale')
-  ) {
+  if (isTerminalArtifactGrantError(normalized)) {
     return { status: 'error', message: 'Reload preview before saving', reconnect: false }
   }
   if (

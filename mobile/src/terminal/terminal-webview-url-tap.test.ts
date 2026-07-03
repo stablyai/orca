@@ -1,13 +1,139 @@
+import { createContext, Script } from 'node:vm'
 import { describe, expect, it } from 'vitest'
+import type { TappedFilePath } from './terminal-path-tap'
+import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import {
   TERMINAL_HTTP_URL_MAX_LENGTH,
   TERMINAL_HTTP_URL_REGEX_SOURCE,
+  URL_TAP_WEBVIEW_JS,
   findFileUrlAtColumn,
   findUrlAtColumn,
   resolveTerminalOscFileTap,
   resolveTerminalFileUrlTap
 } from './terminal-webview-url-tap'
 import { XTERM_HTML } from './terminal-webview-html'
+
+type FileTapResolverCase = {
+  name: string
+  uri: string
+  expected: TappedFilePath | null
+}
+
+const FILE_URL_TAP_CASES: FileTapResolverCase[] = [
+  {
+    name: 'plain file URL',
+    uri: 'file:///tmp/result.json',
+    expected: { pathText: '/tmp/result.json', line: null, column: null }
+  },
+  {
+    name: 'hash line and column',
+    uri: 'file:///tmp/result.json#L12C3',
+    expected: { pathText: '/tmp/result.json', line: 12, column: 3 }
+  },
+  {
+    name: 'trailing line and column suffix',
+    uri: 'file:///tmp/result.json:8:2',
+    expected: { pathText: '/tmp/result.json', line: 8, column: 2 }
+  },
+  {
+    name: 'percent-encoded colon suffix stays in the path',
+    uri: 'file:///tmp/report%3A8%3A2',
+    expected: { pathText: '/tmp/report:8:2', line: null, column: null }
+  },
+  {
+    name: 'Windows drive path with hash line',
+    uri: 'file:///C:/repo/src/app.ts#L4',
+    expected: { pathText: 'C:/repo/src/app.ts', line: 4, column: null }
+  },
+  {
+    name: 'host-qualified POSIX authority is preserved',
+    uri: 'file://remote-host/tmp/result.json#L12',
+    expected: { pathText: '//remote-host/tmp/result.json', line: 12, column: null }
+  },
+  {
+    name: 'bracketed IPv6 loopback is local',
+    uri: 'file://[::1]/tmp/result.json#L12',
+    expected: { pathText: '/tmp/result.json', line: 12, column: null }
+  },
+  {
+    name: 'IPv4 loopback is local',
+    uri: 'file://127.0.0.1/tmp/result.json#L12',
+    expected: { pathText: '/tmp/result.json', line: 12, column: null }
+  },
+  {
+    name: 'UNC authority is preserved',
+    uri: 'file://server/share/repo/app.ts#L12',
+    expected: { pathText: '//server/share/repo/app.ts', line: 12, column: null }
+  },
+  {
+    name: 'non-file scheme is rejected',
+    uri: 'https://example.com/result.json',
+    expected: null
+  }
+]
+
+const OSC_FILE_TAP_CASES: FileTapResolverCase[] = [
+  {
+    name: 'relative path',
+    uri: 'docs/README.md',
+    expected: { pathText: 'docs/README.md', line: null, column: null }
+  },
+  {
+    name: 'tilde path with line and column',
+    uri: '~/notes.md:4:2',
+    expected: { pathText: '~/notes.md', line: 4, column: 2 }
+  },
+  {
+    name: 'mailto target is rejected',
+    uri: 'mailto:team@example.com',
+    expected: null
+  }
+]
+
+type InjectedFileTapResolver = (uri: string) => TappedFilePath | null
+
+// Why: the WebView blob hand-translates terminal-file-url-tap.ts into plain JS
+// with re-escaped regexes; executing it against the same cases as the TS module
+// keeps the two copies from drifting (mirrors createInjectedPathMatcher).
+function createInjectedFileTapResolvers(): {
+  resolveTerminalFileUrlTap: InjectedFileTapResolver
+  resolveTerminalOscFileTap: InjectedFileTapResolver
+} {
+  const context = createContext({ URL })
+  new Script(
+    `${TERMINAL_PATH_TAP_JS}\n${URL_TAP_WEBVIEW_JS}\n` +
+      'this.__resolveTerminalFileUrlTap = resolveTerminalFileUrlTap;\n' +
+      'this.__resolveTerminalOscFileTap = resolveTerminalOscFileTap;'
+  ).runInContext(context)
+  const injected = context as {
+    __resolveTerminalFileUrlTap: InjectedFileTapResolver
+    __resolveTerminalOscFileTap: InjectedFileTapResolver
+  }
+  return {
+    resolveTerminalFileUrlTap: injected.__resolveTerminalFileUrlTap,
+    resolveTerminalOscFileTap: injected.__resolveTerminalOscFileTap
+  }
+}
+
+describe.each([
+  ['module', { resolveTerminalFileUrlTap, resolveTerminalOscFileTap }],
+  ['injected', createInjectedFileTapResolvers()]
+] as const)('terminal file tap resolvers (%s)', (_variant, resolvers) => {
+  it.each(FILE_URL_TAP_CASES)('resolves file URL: $name', ({ uri, expected }) => {
+    expect(resolvers.resolveTerminalFileUrlTap(uri)).toEqual(expected)
+  })
+
+  it.each(OSC_FILE_TAP_CASES)('resolves OSC target: $name', ({ uri, expected }) => {
+    expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
+  })
+
+  it.each(FILE_URL_TAP_CASES)('OSC resolver accepts file URL: $name', ({ uri, expected }) => {
+    if (expected === null) {
+      return
+    }
+    expect(resolvers.resolveTerminalOscFileTap(uri)).toEqual(expected)
+  })
+})
 
 describe('findUrlAtColumn', () => {
   it('returns the URL when the tapped column falls inside it', () => {
@@ -64,81 +190,6 @@ describe('findUrlAtColumn', () => {
 
     const overlongUrl = `https://example.com/${'a'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH)}`
     expect(findUrlAtColumn(overlongUrl, 0)).toBeNull()
-  })
-
-  it('resolves file OSC targets to terminal file taps', () => {
-    expect(resolveTerminalFileUrlTap('file:///tmp/result.json')).toEqual({
-      pathText: '/tmp/result.json',
-      line: null,
-      column: null
-    })
-    expect(resolveTerminalFileUrlTap('file:///tmp/result.json#L12C3')).toEqual({
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: 3
-    })
-    expect(resolveTerminalFileUrlTap('file:///tmp/result.json:8:2')).toEqual({
-      pathText: '/tmp/result.json',
-      line: 8,
-      column: 2
-    })
-    expect(resolveTerminalFileUrlTap('file:///tmp/report%3A8%3A2')).toEqual({
-      pathText: '/tmp/report:8:2',
-      line: null,
-      column: null
-    })
-    expect(resolveTerminalFileUrlTap('file:///C:/repo/src/app.ts#L4')).toEqual({
-      pathText: 'C:/repo/src/app.ts',
-      line: 4,
-      column: null
-    })
-    expect(resolveTerminalFileUrlTap('https://example.com/result.json')).toBeNull()
-  })
-
-  it('preserves host-qualified POSIX file OSC targets as terminal paths', () => {
-    expect(resolveTerminalFileUrlTap('file://remote-host/tmp/result.json#L12')).toEqual({
-      pathText: '//remote-host/tmp/result.json',
-      line: 12,
-      column: null
-    })
-  })
-
-  it('treats bracketed IPv6 loopback file OSC targets as local paths', () => {
-    expect(resolveTerminalFileUrlTap('file://[::1]/tmp/result.json#L12')).toEqual({
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: null
-    })
-  })
-
-  it('treats IPv4 loopback file OSC targets as local paths', () => {
-    expect(resolveTerminalFileUrlTap('file://127.0.0.1/tmp/result.json#L12')).toEqual({
-      pathText: '/tmp/result.json',
-      line: 12,
-      column: null
-    })
-  })
-
-  it('preserves UNC authority in file OSC targets', () => {
-    expect(resolveTerminalFileUrlTap('file://server/share/repo/app.ts#L12')).toEqual({
-      pathText: '//server/share/repo/app.ts',
-      line: 12,
-      column: null
-    })
-  })
-
-  it('resolves raw path-like OSC targets to terminal file taps', () => {
-    expect(resolveTerminalOscFileTap('docs/README.md')).toEqual({
-      pathText: 'docs/README.md',
-      line: null,
-      column: null
-    })
-    expect(resolveTerminalOscFileTap('~/notes.md:4:2')).toEqual({
-      pathText: '~/notes.md',
-      line: 4,
-      column: 2
-    })
-    expect(resolveTerminalOscFileTap('mailto:team@example.com')).toBeNull()
   })
 
   it('injects URL and OSC tap handling into the WebView document', () => {

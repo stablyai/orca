@@ -2,7 +2,7 @@
    Space scans, file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
-import { writeBufferFully } from './fs-handler-terminal-artifact'
+import { MAX_TEXT_FILE_SIZE } from './fs-handler-utils'
 import { RelayContext } from './context'
 import type { RelayDispatcher } from './dispatcher'
 import * as fs from 'node:fs/promises'
@@ -345,28 +345,6 @@ describe('FsHandler', () => {
     }
   )
 
-  it('writeBufferFully completes partial handle writes before resolving', async () => {
-    const chunks: string[] = []
-    const writes: number[] = []
-    const handle = {
-      async write(
-        buffer: Buffer,
-        offset = 0,
-        length = buffer.length
-      ): Promise<{ bytesWritten: number; buffer: Buffer }> {
-        const bytesWritten = Math.min(length, 2)
-        chunks.push(buffer.subarray(offset, offset + bytesWritten).toString('utf8'))
-        writes.push(bytesWritten)
-        return { bytesWritten, buffer }
-      }
-    }
-
-    await writeBufferFully(handle, Buffer.from('abcdef'))
-
-    expect(chunks.join('')).toBe('abcdef')
-    expect(writes).toEqual([2, 2, 2])
-  })
-
   it('writeTerminalArtifact rejects oversized existing content before writing', async () => {
     const filePath = path.join(tmpDir, 'artifact-write-too-large.txt')
     writeFileSync(filePath, 'abcdef')
@@ -377,6 +355,21 @@ describe('FsHandler', () => {
         content: 'ok',
         expectedRealPath: await fs.realpath(filePath),
         maxBytes: 5
+      })
+    ).rejects.toThrow('file_too_large')
+    await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')
+  })
+
+  it('writeTerminalArtifact clamps client-supplied maxBytes to the text-file cap', async () => {
+    const filePath = path.join(tmpDir, 'artifact-write-clamp.txt')
+    writeFileSync(filePath, 'abcdef')
+
+    await expect(
+      dispatcher.callRequest('fs.writeTerminalArtifact', {
+        filePath,
+        content: 'a'.repeat(MAX_TEXT_FILE_SIZE + 1),
+        expectedRealPath: await fs.realpath(filePath),
+        maxBytes: Number.MAX_SAFE_INTEGER
       })
     ).rejects.toThrow('file_too_large')
     await expect(fs.readFile(filePath, 'utf-8')).resolves.toBe('abcdef')

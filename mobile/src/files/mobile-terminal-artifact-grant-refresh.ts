@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
+import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
 type MobileFilePreviewClient = Pick<RpcClient, 'sendRequest'>
 
@@ -61,12 +62,7 @@ function isTerminalArtifactGrantFailure(
   if (options.refreshGrant === false) {
     return false
   }
-  const message = `${response.error.code} ${response.error.message}`.toLowerCase()
-  return (
-    message.includes('terminal_file_grant_expired') ||
-    message.includes('terminal_file_grant_mismatch') ||
-    message.includes('terminal_file_grant_stale')
-  )
+  return isTerminalArtifactGrantError(`${response.error.code} ${response.error.message}`)
 }
 
 function isTerminalArtifactResolution(result: unknown): result is {

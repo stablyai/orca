@@ -14,7 +14,6 @@ import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
 const authorizedExternalPaths = new Set<string>()
-const authorizedExactExternalPaths = new Map<string, number>()
 const registeredWorktreeRoots = new Set<string>()
 const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
 const registeredWorktreeRootRepoIds = new Set<string>()
@@ -31,26 +30,6 @@ export function authorizeExternalPath(targetPath: string): void {
     // Why: macOS canonicalizes /tmp to /private/tmp during read authorization.
     authorizedExternalPaths.add(realpathSync(resolvedTarget))
   } catch {}
-}
-
-export function authorizeExactExternalPath(targetPath: string): () => void {
-  const paths = new Set([resolve(targetPath)])
-  try {
-    paths.add(realpathSync(targetPath))
-  } catch {}
-  for (const path of paths) {
-    authorizedExactExternalPaths.set(path, (authorizedExactExternalPaths.get(path) ?? 0) + 1)
-  }
-  return () => {
-    for (const path of paths) {
-      const count = authorizedExactExternalPaths.get(path) ?? 0
-      if (count <= 1) {
-        authorizedExactExternalPaths.delete(path)
-      } else {
-        authorizedExactExternalPaths.set(path, count - 1)
-      }
-    }
-  }
 }
 
 export function invalidateAuthorizedRootsCache(): void {
@@ -178,9 +157,6 @@ export function getAllowedRoots(store: Store): string[] {
 
 export function isPathAllowed(targetPath: string, store: Store): boolean {
   const resolvedTarget = resolve(targetPath)
-  if (authorizedExactExternalPaths.has(resolvedTarget)) {
-    return true
-  }
   if (authorizedExternalPaths.has(resolvedTarget)) {
     return true
   }
