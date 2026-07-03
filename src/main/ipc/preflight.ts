@@ -284,7 +284,9 @@ export function registerPreflightHandlers(store: Store): void {
     ): Promise<PreflightStatus> => {
       // Why: when connected to a remote Orca runtime, git/gh/glab are installed
       // on the server, not the local client. Proxy to the server's preflight RPC
-      // so the check runs against the correct filesystem and shell.
+      // so the check runs against the correct filesystem and shell. Fail loud on
+      // error rather than falling back to the local scan, which would surface
+      // misleading local status while remote — mirrors the web client.
       const environmentId = store.getSettings().activeRuntimeEnvironmentId?.trim()
       if (environmentId) {
         const response = await callRuntimeEnvironment(
@@ -293,10 +295,16 @@ export function registerPreflightHandlers(store: Store): void {
           'preflight.check',
           { force: args?.force },
           15_000
-        )
+        ).catch((error: unknown) => {
+          // Why: an unreachable host rejects rather than resolving ok:false.
+          console.warn('[preflight] remote check unavailable:', error)
+          throw error
+        })
         if (response.ok) {
           return response.result as PreflightStatus
         }
+        console.warn('[preflight] remote check failed:', response.error.message)
+        throw new Error(response.error.message)
       }
       return runPreflightCheck(args?.force, args)
     }

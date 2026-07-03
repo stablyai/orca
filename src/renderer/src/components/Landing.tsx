@@ -242,14 +242,19 @@ export default function Landing(): React.JSX.Element {
   useEffect(() => {
     let cancelled = false
     const refreshPreflight = (force = false): void => {
-      void window.api.preflight.check(force ? { force: true } : undefined).then((status) => {
-        if (cancelled) {
-          return
-        }
-        setPreflightIssues(
-          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
-        )
-      })
+      // Why: a remote-runtime preflight rejects when the server is unreachable;
+      // keep the last-known issues instead of surfacing an unhandled rejection.
+      window.api.preflight
+        .check(force ? { force: true } : undefined)
+        .then((status) => {
+          if (cancelled) {
+            return
+          }
+          setPreflightIssues(
+            getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+          )
+        })
+        .catch(() => {})
     }
 
     // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: preflight status is read from an external IPC probe on mount and focus.
@@ -282,14 +287,19 @@ export default function Landing(): React.JSX.Element {
     // Why: some users complete `gh auth login` without ever leaving the Orca
     // window. Poll only while a warning is visible so the banner self-clears.
     const intervalId = window.setInterval(() => {
-      void window.api.preflight.check({ force: true }).then((status) => {
-        if (cancelled) {
-          return
-        }
-        setPreflightIssues(
-          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
-        )
-      })
+      // Why: a remote-runtime preflight rejects when the server is unreachable;
+      // keep the last-known issues instead of surfacing an unhandled rejection.
+      window.api.preflight
+        .check({ force: true })
+        .then((status) => {
+          if (cancelled) {
+            return
+          }
+          setPreflightIssues(
+            getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+          )
+        })
+        .catch(() => {})
     }, 30000)
 
     return () => {

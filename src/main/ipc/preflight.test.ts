@@ -34,6 +34,9 @@ const {
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock
+  },
+  app: {
+    getPath: () => '/mock/userData'
   }
 }))
 
@@ -94,10 +97,15 @@ import {
   registerPreflightHandlers,
   runPreflightCheck
 } from './preflight'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+
+const callRuntimeEnvironmentMock = vi.mocked(callRuntimeEnvironment)
 
 type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
 const mockStore = { getSettings: () => ({ activeRuntimeEnvironmentId: null }) } as never
+const storeWithActiveEnvironment = (environmentId: string) =>
+  ({ getSettings: () => ({ activeRuntimeEnvironmentId: environmentId }) }) as never
 
 describe('preflight', () => {
   const originalPlatform = process.platform
@@ -129,6 +137,7 @@ describe('preflight', () => {
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
     mergePersistedWindowsPathMock.mockReset()
+    callRuntimeEnvironmentMock.mockReset()
     // Why: existing tests should keep treating `which` as the only source
     // unless a case explicitly exercises the install-dir fallback.
     resolveCliCommandsMock.mockReset()
@@ -173,6 +182,76 @@ describe('preflight', () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
+    })
+  })
+
+  describe('preflight:check remote runtime proxying', () => {
+    const remoteStatus = {
+      git: { installed: true },
+      gh: { installed: true, authenticated: true },
+      glab: { installed: false, authenticated: false }
+    }
+
+    it('proxies to the active remote runtime and returns its status', async () => {
+      callRuntimeEnvironmentMock.mockResolvedValue({
+        id: 'preflight.check',
+        ok: true,
+        result: remoteStatus,
+        _meta: { runtimeId: 'runtime-1' }
+      })
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:check'](null, { force: true })).resolves.toEqual(
+        remoteStatus
+      )
+      expect(callRuntimeEnvironmentMock).toHaveBeenCalledWith(
+        '/mock/userData',
+        'env-1',
+        'preflight.check',
+        { force: true },
+        15_000
+      )
+      // Why: while a remote runtime is active the local probe must not run.
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('fails loud on ok:false and never falls back to the local scan', async () => {
+      callRuntimeEnvironmentMock.mockResolvedValue({
+        id: 'preflight.check',
+        ok: false,
+        error: { code: 'runtime_unavailable', message: 'remote refused' },
+        _meta: { runtimeId: null }
+      })
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:check']()).rejects.toThrow('remote refused')
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('propagates the rejection when the remote host is unreachable', async () => {
+      callRuntimeEnvironmentMock.mockRejectedValue(new Error('connect ETIMEDOUT'))
+
+      registerPreflightHandlers(storeWithActiveEnvironment('env-1'))
+
+      await expect(handlers['preflight:check']()).rejects.toThrow('connect ETIMEDOUT')
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('runs the local scan when no remote runtime is active', async () => {
+      execFileAsyncMock
+        .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
+        .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
+        .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+        .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
+        .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
+
+      registerPreflightHandlers(mockStore)
+
+      const status = (await handlers['preflight:check']()) as { gh: { installed: boolean } }
+      expect(status.gh.installed).toBe(true)
+      expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
     })
   })
 
