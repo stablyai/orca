@@ -57,6 +57,22 @@ afterEach(() => {
 })
 
 describe('createPaneDOM link tooltips', () => {
+  it('anchors WebLinks hover text to the unpadded terminal window corner', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const pane = createPaneDOM(
+      1,
+      leafId,
+      {},
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    expect(pane.linkTooltip.style.left).toBe('0px')
+    expect(pane.linkTooltip.style.bottom).toBe('0px')
+  })
+
   it('uses desktop modifier-click text for WebLinks hover hints', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 
