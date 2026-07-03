@@ -20,6 +20,7 @@ import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import { E2EEChannel } from './rpc/e2ee-channel'
+import { loadOrCreateTlsCertificate } from './tls-certificate'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import {
   decodeTerminalStreamFrame,
@@ -516,7 +517,8 @@ export class OrcaRuntimeRpcServer {
       endpoint,
       deviceToken: device.token,
       publicKeyB64,
-      scope
+      scope,
+      tlsFingerprint: this.tlsFingerprint ?? undefined
     })
     return {
       available: true,
@@ -695,6 +697,23 @@ export class OrcaRuntimeRpcServer {
       try {
         this.deviceRegistry = new DeviceRegistry(this.userDataPath)
         this.e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
+
+        // Why: load the self-signed TLS certificate so its fingerprint is
+        // available for the pairing offer. The cert is generated once on first
+        // run and reused across restarts (see tls-certificate.ts). TLS is not
+        // enabled on the transport yet because React Native's WebSocket cannot
+        // pin self-signed certs; E2EE (tweetnacl) provides payload
+        // confidentiality over plain ws:// in the meantime. The fingerprint
+        // lets future clients verify server identity once they support pinning.
+        try {
+          const tls = loadOrCreateTlsCertificate(this.userDataPath)
+          this.tlsFingerprint = tls.fingerprint
+        } catch (error) {
+          // Why: cert generation shells out to OpenSSL, which may be missing
+          // (notably on Windows without Git in PATH). Continue without TLS —
+          // E2EE still protects the payload.
+          console.error('[runtime] Failed to load TLS certificate:', error)
+        }
 
         const wsTransport = new WebSocketTransport({
           host: '0.0.0.0',

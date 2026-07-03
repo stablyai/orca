@@ -27,6 +27,16 @@ describe('pairing offer', () => {
     expect(decodePairingOffer(encodePairingOffer(scopedOffer))).toEqual(scopedOffer)
   })
 
+  it('preserves optional TLS fingerprint metadata', () => {
+    const offerWithTls: PairingOffer = { ...offer, tlsFingerprint: 'sha256:abcdef1234567890' }
+    expect(decodePairingOffer(encodePairingOffer(offerWithTls))).toEqual(offerWithTls)
+  })
+
+  it('omits tlsFingerprint when not provided (backward compatibility)', () => {
+    const decoded = decodePairingOffer(encodePairingOffer(offer))
+    expect(decoded.tlsFingerprint).toBeUndefined()
+  })
+
   it('encoded URL uses base64url (no +, /, or = characters)', () => {
     const url = encodePairingOffer(offer)
     const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!

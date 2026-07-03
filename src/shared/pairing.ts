@@ -12,7 +12,12 @@ export const PairingOfferSchema = z.object({
   publicKeyB64: z.string().min(1),
   // Why: advisory UI metadata lets the web client reject phone-QR offers before
   // opening a socket; the runtime still authorizes solely from deviceToken.
-  scope: PairingScopeSchema.optional()
+  scope: PairingScopeSchema.optional(),
+  // Why: SHA-256 fingerprint of the runtime's self-signed TLS certificate
+  // (sha256:<hex>). Clients can pin this to verify the WebSocket server
+  // identity and detect MITM attacks. Optional for backward compatibility —
+  // older clients that don't know the field simply ignore it.
+  tlsFingerprint: z.string().optional()
 })
 
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
