@@ -51,6 +51,8 @@ import {
   type TerminalStreamFrame
 } from '../../shared/terminal-stream-protocol'
 
+import { timingSafeTokenCompare } from '../../shared/timing-safe-token-compare'
+
 const DEFAULT_WS_PORT = 6768
 
 type OrcaRuntimeRpcServerOptions = {
@@ -1348,7 +1350,9 @@ export class OrcaRuntimeRpcServer {
     if (typeof request.authToken !== 'string' || request.authToken.length === 0) {
       return { error: this.buildError(request.id, 'unauthorized', 'Missing auth token') }
     }
-    if (request.authToken !== this.authToken) {
+    // Why: constant-time compare prevents a local CLI client from inferring
+    // how many leading token bytes match via response timing.
+    if (!timingSafeTokenCompare(this.authToken, request.authToken)) {
       return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
     }
 

@@ -5,6 +5,8 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { timingSafeTokenCompare } from '../../shared/timing-safe-token-compare'
+
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
@@ -1957,7 +1959,11 @@ export class AgentHookServer {
         return
       }
 
-      if (req.headers['x-orca-agent-hook-token'] !== this.token) {
+      // Why: constant-time compare prevents a local caller from inferring how
+      // many leading header bytes match via response timing.
+      if (
+        !timingSafeTokenCompare(this.token, String(req.headers['x-orca-agent-hook-token'] ?? ''))
+      ) {
         res.writeHead(403)
         res.end()
         return
