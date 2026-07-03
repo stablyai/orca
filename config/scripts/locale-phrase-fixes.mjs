@@ -386,5 +386,6 @@ export const LOCALE_PHRASE_FIXES = {
     // matches the actual `PR`/`PRs` token (not a loose "pr" substring) to avoid rewriting
     // English that is genuinely about public relations.
     { pattern: /relaciones públicas/g, replacement: 'PR', whenEnMatches: /\bPRs?\b/ }
-  ]
+  ],
+  tr: [{ pattern: /halkla iliskiler/g, replacement: 'PR', whenEnMatches: /\bPRs?\b/ }]
 }

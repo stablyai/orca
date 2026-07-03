@@ -516,5 +516,18 @@ export const LOCALE_VALUE_OVERRIDES = {
     Open: 'オープン',
     'Join Discord': 'Discord に参加',
     ...JA_VALUE_OVERRIDES
+  },
+  tr: {
+    Save: 'Kaydet',
+    Close: 'Kapat',
+    Cancel: 'İptal',
+    Copy: 'Kopyala',
+    Done: 'Tamam',
+    Next: 'İleri',
+    Delete: 'Sil',
+    Search: 'Ara',
+    Back: 'Geri',
+    Open: 'Aç',
+    New: 'Yeni'
   }
 }

@@ -253,5 +253,31 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     'font features': 'フォント特性',
     conductor: 'Conductor',
     'needs review': 'レビュー待ち'
+  },
+  tr: {
+    dark: 'koyu',
+    light: 'acik',
+    language: 'dil',
+    search: 'ara',
+    agent: 'agent',
+    agents: 'agentlar',
+    terminal: 'terminal',
+    workspace: 'calisma alani',
+    status: 'durum',
+    pr: 'PR',
+    mr: 'MR',
+    issue: 'issue',
+    review: 'inceleme',
+    enable: 'etkinlestir',
+    disable: 'devre disi birak',
+    install: 'yukle',
+    delete: 'sil',
+    update: 'guncelle',
+    launch: 'baslat',
+    command: 'komut',
+    default: 'varsayilan',
+    folder: 'klasor',
+    path: 'yol',
+    title: 'baslik'
   }
 }

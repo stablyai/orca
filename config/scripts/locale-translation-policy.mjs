@@ -331,10 +331,41 @@ export const BRAND_MISTRANSLATIONS = {
 }
 
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
-  es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
+  zh: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    turkish: 'Türkçe'
+  },
+  ko: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    turkish: 'Türkçe'
+  },
+  ja: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    turkish: 'Türkçe'
+  },
+  es: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    turkish: 'Türkçe'
+  },
+  tr: {
+    chinese: '中文（简体）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    turkish: 'Türkçe'
+  }
 }
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
@@ -583,6 +614,16 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
       }
       if (localeCatalog.menu.gettingStarted !== 'Orca 시작하기') {
         localeCatalog.menu.gettingStarted = 'Orca 시작하기'
+        repaired += 1
+      }
+    }
+    if (locale === 'tr') {
+      if (localeCatalog.menu.exploreOrca !== "Orca'yı Keşfet") {
+        localeCatalog.menu.exploreOrca = "Orca'yı Keşfet"
+        repaired += 1
+      }
+      if (localeCatalog.menu.gettingStarted !== "Orca'ya Başlarken") {
+        localeCatalog.menu.gettingStarted = "Orca'ya Başlarken"
         repaired += 1
       }
     }

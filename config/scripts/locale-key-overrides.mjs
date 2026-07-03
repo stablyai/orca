@@ -12,7 +12,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   // Bare "Cursor" terminal/theme settings = on-screen カーソル, not the Cursor product.
   'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
   'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
-  'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
+  'menu.reportCrash': {
+    ko: '크래시 신고...',
+    zh: '报告崩溃...',
+    ja: 'クラッシュを報告...',
+    tr: 'Çökmeyi Bildir...'
+  },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
     zh: '显示 Orca Mobile 按钮',
@@ -33,7 +38,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '打开工作树面板',
     ja: 'ワークツリーパレットを開く'
   },
-  'menu.exploreOrca': { ko: 'Orca 둘러보기', zh: '探索 Orca', ja: 'Orca を探索' },
+  'menu.exploreOrca': {
+    ko: 'Orca 둘러보기',
+    zh: '探索 Orca',
+    ja: 'Orca を探索',
+    tr: "Orca'yı Keşfet"
+  },
   'worktreeJumpPalette.matchLabel.issue': { ko: '이슈', zh: '议题', ja: 'Issue' },
   'worktreeJumpPalette.matchLabel.comment': { ko: '댓글', zh: '评论', ja: 'コメント' },
   'auto.hooks.useSettingsNavigationMetadata.13241992bd': {
