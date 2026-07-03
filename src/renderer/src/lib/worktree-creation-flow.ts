@@ -226,7 +226,7 @@ async function executeWorktreeCreation(
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
-      ...(request.issueCommand ? { issueCommand: request.issueCommand } : {})
+      ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {})
     })
     primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
@@ -238,7 +238,7 @@ async function executeWorktreeCreation(
       worktree.id,
       startupOpt,
       result.setup,
-      request.issueCommand,
+      preparedRequest.issueCommand,
       result.defaultTabs,
       { activateCreatedTabs: false }
     )

@@ -523,15 +523,19 @@ describe('staged background worktree creation', () => {
     )
 
     expect(started).toBe(true)
-    await flushAsyncWorktreeCreation()
-    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
-      store,
-      'wt-1',
-      undefined,
-      undefined,
-      { command: 'gh issue view 42' },
-      undefined,
-      { activateCreatedTabs: false }
+    // Why: vi.waitFor instead of a fixed microtask flush — the await count in
+    // executeWorktreeCreation grows over time (e.g. VM preflight), and a fixed
+    // flush silently starves this assertion in merged builds.
+    await vi.waitFor(() =>
+      expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+        store,
+        'wt-1',
+        undefined,
+        undefined,
+        { command: 'gh issue view 42' },
+        undefined,
+        { activateCreatedTabs: false }
+      )
     )
   })
 
@@ -555,10 +559,11 @@ describe('staged background worktree creation', () => {
     )
 
     expect(started).toBe(true)
-    await flushAsyncWorktreeCreation()
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith(
-      'wt-1',
-      expect.objectContaining({ issueCommand: { command: 'gh issue view 42' } })
+    await vi.waitFor(() =>
+      expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({ issueCommand: { command: 'gh issue view 42' } })
+      )
     )
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
   })
