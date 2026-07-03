@@ -72,6 +72,7 @@ type AddRepoDialogStepContentProps = {
   onNestedGroupNameChange: (name: string) => void
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   onImportNestedRepos: (mode: 'group' | 'separate') => void
+  onOpenNestedAsFolder?: () => void
   onCreateNameChange: (name: string) => void
   onCreateParentChange: (parent: string) => void
   onPickCreateParent: () => void
@@ -140,6 +141,7 @@ export function AddRepoDialogStepContent({
   onNestedGroupNameChange,
   onNestedSelectedPathsChange,
   onImportNestedRepos,
+  onOpenNestedAsFolder,
   onCreateNameChange,
   onCreateParentChange,
   onPickCreateParent,
@@ -237,6 +239,7 @@ export function AddRepoDialogStepContent({
         onGroupNameChange={onNestedGroupNameChange}
         onSelectedPathsChange={onNestedSelectedPathsChange}
         onImport={onImportNestedRepos}
+        {...(onOpenNestedAsFolder ? { onOpenAsFolder: onOpenNestedAsFolder } : {})}
         onStopScan={onStopNestedScan}
       />
     )

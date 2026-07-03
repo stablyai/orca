@@ -193,22 +193,26 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
   })
-  const { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction } =
-    useAddRepoNestedImportFlow({
-      nestedAttemptId,
-      nestedScan,
-      nestedSelectedPaths,
-      nestedRuntimeKind,
-      nestedConnectionId,
-      nestedGroupName,
-      nestedImportScanId,
-      activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
-      fetchWorktrees,
-      importNestedRepos,
-      getNestedRepoRuntimeKind,
-      onGitRepoReady: completeGitRepoAdd,
-      setIsAdding
-    })
+  const {
+    handleImportNestedRepos,
+    handleOpenNestedAsFolder,
+    resetNestedImportFlow,
+    trackNestedBackAction
+  } = useAddRepoNestedImportFlow({
+    nestedAttemptId,
+    nestedScan,
+    nestedSelectedPaths,
+    nestedRuntimeKind,
+    nestedConnectionId,
+    nestedGroupName,
+    nestedImportScanId,
+    activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
+    fetchWorktrees,
+    importNestedRepos,
+    getNestedRepoRuntimeKind,
+    onGitRepoReady: completeGitRepoAdd,
+    setIsAdding
+  })
 
   const resetState = useCallback(() => {
     // Why: kill the git clone process if one is running, so backing out
@@ -258,6 +262,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     onResetClosed: resetState,
     onResetHostScopedState: resetHostScopedState
   })
+
+  const canOpenNestedAsFolder = !nestedConnectionId && !isRuntimeEnvironmentActive
 
   const handleBack = useCallback(() => {
     if (step === 'nested') {
@@ -381,6 +387,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         onNestedGroupNameChange={setNestedGroupName}
         onNestedSelectedPathsChange={setNestedSelectedPaths}
         onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}
+        onOpenNestedAsFolder={
+          canOpenNestedAsFolder ? () => void handleOpenNestedAsFolder() : undefined
+        }
         onCreateNameChange={(value) => {
           setCreateName(value)
           setCreateError(null)
