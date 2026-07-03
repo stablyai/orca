@@ -1,7 +1,8 @@
 /* oxlint-disable max-lines */
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
-import type { IDisposable } from '@xterm/xterm'
+import type { IBuffer, IDisposable } from '@xterm/xterm'
+import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
 import {
   detectAgentStatusFromTitle,
   isGeminiTerminalTitle,
@@ -49,6 +50,7 @@ import {
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 import {
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
@@ -85,6 +87,7 @@ import {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
@@ -186,6 +189,8 @@ const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 const SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS = SYNCHRONIZED_OUTPUT_START_SEQUENCE.length - 1
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
+const TERMINAL_FOCUS_IN_SEQUENCE = '\x1b[I'
+const FOCUS_REPORTING_DISABLE_SEQUENCE = '\x1b[?1004l'
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 128 * 1024
@@ -209,6 +214,103 @@ const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean
   keys: () => string[]
+}
+
+type TerminalWithFocusMode = {
+  textarea?: HTMLTextAreaElement | null
+  modes?: {
+    sendFocusMode?: boolean
+  }
+}
+
+type TerminalWithInspectableBuffer = {
+  cols: number
+  rows: number
+  buffer?: {
+    active?: IBuffer
+  }
+}
+
+// Why: replay bytes can carry a dead run's screen in scrollback — or still
+// painted in the viewport with a shell prompt below it — so once xterm has
+// parsed the replay the confirmation needs both the cursor-agent screen shape
+// AND the parked cursor. A dead screen leaves the shell cursor after its
+// prompt; a live agent that needs the focus-in is by definition parked, and a
+// live agent that is not parked only loses focus reporting the way the
+// pre-fix reattach always did. Returns null when the buffer is not
+// inspectable (e.g. test doubles).
+function parsedViewportShowsParkedCursorAgentScreen(
+  terminal: TerminalWithInspectableBuffer
+): boolean | null {
+  const buffer = terminal.buffer?.active
+  if (
+    !buffer ||
+    typeof buffer.getLine !== 'function' ||
+    typeof buffer.cursorX !== 'number' ||
+    typeof buffer.cursorY !== 'number'
+  ) {
+    return null
+  }
+  return (
+    resolveCursorAgentImeAnchor({
+      buffer,
+      rows: terminal.rows,
+      cols: terminal.cols,
+      cursorX: buffer.cursorX,
+      cursorY: buffer.cursorY
+    }) !== null
+  )
+}
+
+function terminalHasFocusReportingEnabled(terminal: TerminalWithFocusMode): boolean {
+  return terminal.modes?.sendFocusMode === true
+}
+
+function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
+  if (typeof document === 'undefined' || !terminal.textarea) {
+    return false
+  }
+  return document.activeElement === terminal.textarea
+}
+
+function stripAnsiCsiSequences(data: string): string {
+  let normalized = ''
+  let index = 0
+  while (index < data.length) {
+    if (data.charCodeAt(index) === 0x1b && data[index + 1] === '[') {
+      index += 2
+      while (index < data.length) {
+        const code = data.charCodeAt(index)
+        index += 1
+        if (code >= 0x40 && code <= 0x7e) {
+          break
+        }
+      }
+      continue
+    }
+    normalized += data[index]
+    index += 1
+  }
+  return normalized
+}
+
+const CURSOR_AGENT_REATTACH_HEADER = 'Cursor Agent'
+const CURSOR_AGENT_REATTACH_INPUT_MARKER = '→'
+const CURSOR_AGENT_REATTACH_SCREEN_SIGNAL_MAX_CHARS = 5000
+
+function hasCursorAgentReattachPayloadScreenSignal(data: string): boolean {
+  const normalized = stripAnsiCsiSequences(data)
+  // Why: anchor on the LAST header occurrence — replay buffers keep scrollback,
+  // and an earlier finished run must not classify the current screen.
+  const headerIndex = normalized.lastIndexOf(CURSOR_AGENT_REATTACH_HEADER)
+  if (headerIndex === -1) {
+    return false
+  }
+  const screenTail = normalized.slice(
+    headerIndex + CURSOR_AGENT_REATTACH_HEADER.length,
+    headerIndex + CURSOR_AGENT_REATTACH_SCREEN_SIGNAL_MAX_CHARS
+  )
+  return screenTail.includes(`${CURSOR_AGENT_REATTACH_INPUT_MARKER} `)
 }
 
 type E2eTerminalPtyDataInjectionWindow = Window & {
@@ -1227,6 +1329,52 @@ export function connectPanePty(
     )?.title
     return runtimeTitle ?? tabTitle ?? null
   }
+  let reattachReplayPayloadHasCursorAgentSignal = false
+  // Why: post-parse veto callbacks must only judge the latest replay frame; a
+  // newer frame bumps the generation so a stale callback stands down.
+  let reattachReplayPayloadSignalGeneration = 0
+  const rememberReattachPayloadAgentSignal = (
+    data: string,
+    opts: { fullScreenReplay: boolean }
+  ): void => {
+    reattachReplayPayloadSignalGeneration += 1
+    // Why: ordinary scrollback can mention agent names. Treat replay bytes as
+    // a live Cursor Agent signal only when they look like its restored screen.
+    const signal = hasCursorAgentReattachPayloadScreenSignal(data)
+    // Why: incremental (non-clearing) replay frames repaint only part of the
+    // screen, so their bytes can only add evidence — a full-screen replay is
+    // the authoritative repaint that may clear the flag.
+    reattachReplayPayloadHasCursorAgentSignal = opts.fullScreenReplay
+      ? signal
+      : reattachReplayPayloadHasCursorAgentSignal || signal
+  }
+  const isCursorAgentNativeTitle = (title: string): boolean => {
+    return title.trim().toLowerCase() === CURSOR_AGENT_REATTACH_HEADER.toLowerCase()
+  }
+  const hasLiveAgentReattachStatusOrTitleSignal = (): boolean => {
+    // Why: launch ownership (tab.launchAgent) never decays after the agent
+    // exits, so it must not count as liveness here — only live status, live
+    // titles, and the replayed screen shape do.
+    if (useAppStore.getState().agentStatusByPaneKey[cacheKey]) {
+      return true
+    }
+    const title = getCurrentTerminalTitle() ?? ''
+    // Why: broad token matching (getAgentLabel) fires on titles like
+    // "ssh devin@host"; that surface is too loose to gate mode preservation
+    // and PTY byte injection, so only exact/status titles count here.
+    return detectAgentStatusFromTitle(title) !== null || isCursorAgentNativeTitle(title)
+  }
+  const hasLiveAgentReattachSignal = (): boolean => {
+    return hasLiveAgentReattachStatusOrTitleSignal() || reattachReplayPayloadHasCursorAgentSignal
+  }
+  const shouldPreserveAgentReattachModes = (): boolean => {
+    // Why: ordinary shells can inherit stale ?25l/?1004h from replay bytes.
+    // Preserve those modes only when reattach still looks agent-owned.
+    return hasLiveAgentReattachSignal()
+  }
+  const shouldSendFocusedAgentReattachFocusIn = (): boolean => {
+    return terminalOwnsDomFocus(pane.terminal) && shouldPreserveAgentReattachModes()
+  }
   const scheduleReattachIdleAgentCursorReset = (): void => {
     const status = detectAgentStatusFromTitle(getCurrentTerminalTitle() ?? '')
     if (status !== 'idle' && status !== 'permission') {
@@ -1373,6 +1521,9 @@ export function connectPanePty(
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandFinished: () => {
+      // Why: the finished command may have moved HEAD or the index (e.g.
+      // `git checkout`); nudge git UI now instead of waiting for a poll.
+      dispatchTerminalCommandFinishedEvent(deps.worktreeId)
       const state = useAppStore.getState()
       const entry = state.agentStatusByPaneKey[cacheKey]
       const inferenceResult = flushPendingInterruptInference()
@@ -3355,6 +3506,52 @@ export function connectPanePty(
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
     }
 
+    const reattachReplayResetSequence = (): string => {
+      return shouldPreserveAgentReattachModes()
+        ? POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+        : POST_REPLAY_REATTACH_RESET
+    }
+
+    const sendFocusedReattachFocusInAfterReplay = (): void => {
+      const scheduledGeneration = reattachReplayPayloadSignalGeneration
+      void waitForTerminalOutputParsed(pane.terminal).then(() => {
+        if (disposed) {
+          return
+        }
+        // Why: a newer replay frame owns the judgment; its own post-parse
+        // callback will re-evaluate against its own viewport.
+        if (scheduledGeneration !== reattachReplayPayloadSignalGeneration) {
+          return
+        }
+        // Why: the replay-byte signal also matches a dead run's screen — in
+        // scrollback or still painted above a fresh shell prompt. The parsed
+        // viewport is the ground truth; unless it shows a parked-cursor
+        // cursor-agent screen and no status/title corroborates, downgrade to
+        // the plain-shell behavior (drop focus reporting, skip focus-in).
+        if (
+          !hasLiveAgentReattachStatusOrTitleSignal() &&
+          reattachReplayPayloadHasCursorAgentSignal
+        ) {
+          if (parsedViewportShowsParkedCursorAgentScreen(pane.terminal) === false) {
+            reattachReplayPayloadHasCursorAgentSignal = false
+            writeReplayData(FOCUS_REPORTING_DISABLE_SEQUENCE)
+            return
+          }
+        }
+        // Why: a live TUI such as cursor-agent parks the real terminal cursor off
+        // its own input caret and moves it back only on a focus-in. Reattach
+        // reuses the same live PTY and the xterm textarea already holds DOM
+        // focus, so xterm never emits the focus-in the agent needs and the parked
+        // cursor anchors the IME/caret to the wrong cell. Gated on ?1004h so a
+        // bare shell never receives a stray \x1b[I.
+        const sendFocusMode = terminalHasFocusReportingEnabled(pane.terminal)
+        if (!shouldSendFocusedAgentReattachFocusIn() || !sendFocusMode) {
+          return
+        }
+        transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE)
+      })
+    }
+
     let replayWriteQueue = Promise.resolve()
     type PendingReplayData = {
       data: string
@@ -3373,9 +3570,15 @@ export function connectPanePty(
         if (clearBeforeReplay) {
           await writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
         }
+        if (clearBeforeReplay || data.length > 0) {
+          // Why: an empty clearing frame is still an authoritative repaint and
+          // must clear a stale agent signal from an earlier payload.
+          rememberReattachPayloadAgentSignal(data, { fullScreenReplay: clearBeforeReplay })
+        }
         await writeReplayDataAsync(data)
         if (clearBeforeReplay || data.length > 0) {
-          await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
+          await writeReplayDataAsync(reattachReplayResetSequence())
+          sendFocusedReattachFocusInAfterReplay()
         }
         if (disposed) {
           pendingReplayData = null
@@ -4190,6 +4393,13 @@ export function connectPanePty(
         // clearing on restore loses scroll-up after a hidden->visible return.
         // Mirrors the attach-time guard in pty-transport.ts.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      } else {
+        // Why: the snapshot's own ?1049h is a no-op when the pane is already on
+        // the alternate screen, and the serialized frame skips blank cells — so
+        // without clearing the alt screen the pre-hide frame bleeds through
+        // every cell the final frame leaves blank. \x1b[2J on the alt buffer
+        // does not touch the normal buffer's scrollback the TUI returns to.
+        writeReplayData('\x1b[?1049h\x1b[2J\x1b[H')
       }
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
@@ -4553,12 +4763,14 @@ export function connectPanePty(
       // the daemon and relay are by definition tracking the same session
       // and only the freshest source belongs on screen.
       if (connectResult?.snapshot) {
+        rememberReattachPayloadAgentSignal(connectResult.snapshot, { fullScreenReplay: true })
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
-        // reset. We only drop stale cursor/focus state that should not leak
-        // from replay bytes into the restored renderer terminal.
-        writeReplayData(POST_REPLAY_REATTACH_RESET)
+        // reset. We only drop renderer-owned state that should not leak from
+        // replay bytes into the restored renderer terminal.
+        writeReplayData(reattachReplayResetSequence())
+        sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the
           // daemon does not redeliver it on the next reattach.
@@ -4567,13 +4779,15 @@ export function connectPanePty(
           }
         }
       } else if (connectResult?.replay) {
+        rememberReattachPayloadAgentSignal(connectResult.replay, { fullScreenReplay: true })
         // Relay replay holds the last 100 KB of raw output. The xterm may
         // already hold pre-disconnect content; clear first to avoid
-        // duplication. The reattach reset prevents stale cursor/focus mode
-        // bits in the replayed data from leaking into the restored terminal.
+        // duplication. The reattach reset clears renderer-owned state without
+        // tearing down the still-running TUI's live modes.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
-        writeReplayData(POST_REPLAY_REATTACH_RESET)
+        writeReplayData(reattachReplayResetSequence())
+        sendFocusedReattachFocusInAfterReplay()
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {
             window.api.pty.ackColdRestore(ptyId)

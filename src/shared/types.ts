@@ -836,6 +836,9 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: explorer-created terminals can start below the workspace root while
+   *  still belonging to that workspace for tab/session ownership. */
+  startupCwd?: string
   /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
    *  show the provider icon immediately, before the agent emits its first hook
    *  event (a freshly-launched, idle agent reports no live status yet). Live

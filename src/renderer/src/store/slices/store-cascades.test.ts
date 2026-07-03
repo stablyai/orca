@@ -1146,6 +1146,30 @@ describe('setActiveWorktree', () => {
     )
   })
 
+  it('stores terminal startup cwd exactly and omits empty values', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const nested = store
+      .getState()
+      .createTab(wt, undefined, undefined, { startupCwd: '/path/wt1/packages/app ' })
+    const empty = store.getState().createTab(wt, undefined, undefined, { startupCwd: '' })
+    const state = store.getState()
+
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === nested.id)?.startupCwd).toBe(
+      '/path/wt1/packages/app '
+    )
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === empty.id)).not.toHaveProperty(
+      'startupCwd'
+    )
+  })
+
   it('stamps the Windows default shell onto new terminal tabs', () => {
     const originalNavigator = globalThis.navigator
     Object.defineProperty(globalThis, 'navigator', {

@@ -440,6 +440,7 @@ export type TerminalSlice = {
        *  `'chat'` so the tab opens in the native chat view; omitted otherwise
        *  so the tab keeps the implicit `'terminal'` default. */
       viewMode?: Tab['viewMode']
+      startupCwd?: string
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -764,6 +765,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       const quickCommandLabel = options?.quickCommandLabel?.trim()
+      const startupCwd = options?.startupCwd
       const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
       const isRemoteWorktree = Boolean(remoteConnectionId)
       const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
@@ -800,6 +802,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         sortOrder: existing.length,
         createdAt: Date.now(),
         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
+        ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
         // Why: when Terminal.tsx's activation fallback auto-creates a tab for a
         // first-visit worktree, the resulting PTY spawn is caused by the user

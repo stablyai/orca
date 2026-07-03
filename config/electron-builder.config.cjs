@@ -1,6 +1,7 @@
-const { chmodSync, existsSync, readdirSync } = require('node:fs')
+const { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
-const { join, resolve } = require('node:path')
+const { basename, dirname, join, resolve } = require('node:path')
+const { tmpdir } = require('node:os')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
@@ -143,6 +144,9 @@ module.exports = {
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
     }
+  },
+  afterSign: async (context) => {
+    await notarizeMacServeSimCameraDylibs(context)
   },
   win: {
     executableName: 'Orca',
@@ -371,6 +375,184 @@ function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
   }
 }
 
+async function notarizeMacServeSimCameraDylibs(context) {
+  await notarizeMacServeSimCameraDylibsWithHost(context, macNotarizationHost)
+}
+
+async function notarizeMacServeSimCameraDylibsWithHost(context, host) {
+  if (!isMacRelease || context.electronPlatformName !== 'darwin') {
+    return
+  }
+  const resourcesDir = join(
+    context.appOutDir,
+    `${context.packager.appInfo.productFilename}.app`,
+    'Contents',
+    'Resources'
+  )
+  const requiredDylibPaths = [
+    join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'libSimCameraInjector.dylib'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'libSimCameraInjector.dylib')
+  ]
+  const optionalDylibPaths = [
+    join(
+      resourcesDir,
+      'app.asar.unpacked',
+      'node_modules',
+      'serve-sim',
+      'dist',
+      'simcam',
+      'libSimCameraInjector.dylib'
+    )
+  ]
+  for (const dylibPath of requiredDylibPaths) {
+    if (!host.existsSync(dylibPath)) {
+      throw new Error(`Missing serve-sim camera dylib for notarization: ${dylibPath}`)
+    }
+  }
+  const dylibPaths = [
+    ...requiredDylibPaths,
+    ...optionalDylibPaths.filter((dylibPath) => host.existsSync(dylibPath))
+  ]
+  // Why: stapler cannot attach tickets to bare dylibs; submitting each signed
+  // dylib zip registers its cdhash for direct Gatekeeper assessment.
+  for (const dylibPath of dylibPaths) {
+    notarizeMacStandaloneBinary(dylibPath, host)
+  }
+}
+
+let macNotarizationHost = {
+  existsSync,
+  execFileSync,
+  mkdtempSync,
+  rmSync
+}
+
+async function withMacNotarizationHost(host, callback) {
+  const previousHost = macNotarizationHost
+  macNotarizationHost = host
+  try {
+    return await callback()
+  } finally {
+    macNotarizationHost = previousHost
+  }
+}
+
+function notarizeMacStandaloneBinary(binaryPath, host) {
+  const archiveDir = host.mkdtempSync(join(tmpdir(), 'orca-mac-standalone-notary-'))
+  const archivePath = join(archiveDir, `${basename(binaryPath)}.zip`)
+  try {
+    host.execFileSync(
+      'ditto',
+      ['-c', '-k', '--sequesterRsrc', '--keepParent', basename(binaryPath), archivePath],
+      {
+        cwd: dirname(binaryPath),
+        stdio: 'inherit',
+        timeout: macDylibArchiveTimeoutMs
+      }
+    )
+    const credentialArgs = macNotarytoolCredentialArgs()
+    const output = execFileSyncWithRedactedError(
+      host,
+      'xcrun',
+      ['notarytool', 'submit', archivePath, ...credentialArgs, '--wait', '--output-format', 'json'],
+      {
+        encoding: 'utf8',
+        timeout: macDylibNotarytoolTimeoutMs
+      },
+      credentialArgs,
+      binaryPath
+    )
+    const result = JSON.parse(output)
+    if (result.status !== 'Accepted') {
+      throw new Error(`Standalone binary notarization failed for ${binaryPath}: ${output}`)
+    }
+  } finally {
+    host.rmSync(archiveDir, { recursive: true, force: true })
+  }
+}
+
+const macDylibArchiveTimeoutMs = 2 * 60 * 1000
+// Why: release jobs should fail loudly instead of hanging on a stuck submission.
+const macDylibNotarytoolTimeoutMs = 45 * 60 * 1000
+
+const macNotarytoolCredentialFlags = new Set([
+  '--apple-id',
+  '--password',
+  '--team-id',
+  '--key',
+  '--key-id',
+  '--issuer',
+  '--keychain',
+  '--keychain-profile'
+])
+
+function execFileSyncWithRedactedError(host, command, args, options, credentialArgs, binaryPath) {
+  try {
+    return host.execFileSync(command, args, options)
+  } catch (error) {
+    throw new Error(
+      `Standalone binary notarization subprocess failed for ${binaryPath}: ${redactCredentialValues(
+        error instanceof Error ? error.message : String(error),
+        credentialArgs
+      )}`
+    )
+  }
+}
+
+function redactCredentialValues(message, credentialArgs) {
+  let redacted = message
+  for (let index = 0; index < credentialArgs.length - 1; index += 2) {
+    const value = credentialArgs[index + 1]
+    if (macNotarytoolCredentialFlags.has(credentialArgs[index]) && value) {
+      redacted = redacted.split(value).join('[REDACTED]')
+    }
+  }
+  return redacted
+}
+
+function macNotarytoolCredentialArgs() {
+  if (process.env.APPLE_ID || process.env.APPLE_APP_SPECIFIC_PASSWORD) {
+    if (!process.env.APPLE_ID) {
+      throw new Error('APPLE_ID env var needs to be set')
+    }
+    if (!process.env.APPLE_APP_SPECIFIC_PASSWORD) {
+      throw new Error('APPLE_APP_SPECIFIC_PASSWORD env var needs to be set')
+    }
+    if (!process.env.APPLE_TEAM_ID) {
+      throw new Error('APPLE_TEAM_ID env var needs to be set')
+    }
+    return [
+      '--apple-id',
+      process.env.APPLE_ID,
+      '--password',
+      process.env.APPLE_APP_SPECIFIC_PASSWORD,
+      '--team-id',
+      process.env.APPLE_TEAM_ID
+    ]
+  }
+  if (process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) {
+    return [
+      '--key',
+      process.env.APPLE_API_KEY,
+      '--key-id',
+      process.env.APPLE_API_KEY_ID,
+      '--issuer',
+      process.env.APPLE_API_ISSUER
+    ]
+  }
+  if (process.env.APPLE_KEYCHAIN_PROFILE) {
+    return [
+      ...(process.env.APPLE_KEYCHAIN ? ['--keychain', process.env.APPLE_KEYCHAIN] : []),
+      '--keychain-profile',
+      process.env.APPLE_KEYCHAIN_PROFILE
+    ]
+  }
+  if (process.env.APPLE_API_KEY || process.env.APPLE_API_KEY_ID || process.env.APPLE_API_ISSUER) {
+    throw new Error('Env vars APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER need to be set')
+  }
+  throw new Error('Missing notarization credentials for serve-sim camera dylibs')
+}
+
 async function signMacComputerUseHelper(helperAppPath, packager) {
   if (!existsSync(helperAppPath)) {
     if (isMacRelease) {
@@ -433,4 +615,15 @@ function findInstalledMacSigningIdentity(keychainFile) {
     }
   } catch {}
   return null
+}
+
+if (process.env.VITEST || process.env.VITEST_WORKER_ID) {
+  Object.defineProperty(module.exports, '__test', {
+    enumerable: false,
+    value: {
+      macNotarytoolCredentialArgs,
+      notarizeMacServeSimCameraDylibsWithHost,
+      withMacNotarizationHost
+    }
+  })
 }

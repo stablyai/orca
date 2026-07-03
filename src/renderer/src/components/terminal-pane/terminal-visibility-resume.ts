@@ -75,6 +75,10 @@ export function resumeTerminalVisibility({
       // terminals; refresh after reset so rebuilt atlases repaint from xterm.
       resetAndRefreshAllTerminalWebglAtlases()
     }
+    // Why: the synchronous recovery above can fire before the revealed pane is
+    // attached and laid out, where the WebGL renderer drops redraw requests
+    // without retry. Follow up with a settled-frame, pane-scoped repaint.
+    manager.scheduleRevealRepaint()
   })
 }
 
@@ -133,6 +137,7 @@ export function recoverVisibleTerminalWindowWake({
   }
   enforceTerminalViewportIntents(manager)
   resetAndRefreshAllTerminalWebglAtlases()
+  manager.scheduleRevealRepaint()
 }
 
 function requestLightTabBacklogRecovery(manager: PaneManager): void {

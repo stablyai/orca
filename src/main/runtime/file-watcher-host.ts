@@ -8,20 +8,15 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { FsChangeEvent } from '../../shared/types'
 import type { FileWatcherHostMessage, FileWatcherWorkerMessage } from './file-watcher-worker'
+// Why: shares the explorer watcher's canonical ignore list, pre-shaped so the
+// macOS daemon-side exclusion-path cap (8) is respected — over the cap ALL
+// exclusions silently fail and fseventsd delivers full node_modules churn.
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOption
+} from '../ipc/filesystem-watcher-ignore'
 
-// Mirrors VS Code's predefined recursive-watch excludes: skip churny generated
-// trees at crawl time so the watcher never traverses them.
-const RUNTIME_FILE_WATCH_IGNORE = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-  '.cache',
-  '__pycache__',
-  'target',
-  '.venv'
-]
+const RUNTIME_FILE_WATCH_IGNORE = buildParcelWatcherIgnoreOption(WATCHER_IGNORE_DIRS)
 
 // Why: clean teardown is async (the worker awaits subscription.unsubscribe()
 // before closing its port and exiting). Wait this long for the worker to exit on

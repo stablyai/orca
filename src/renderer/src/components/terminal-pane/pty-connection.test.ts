@@ -2,6 +2,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   RESET_KITTY_KEYBOARD_PROTOCOL,
@@ -330,7 +331,8 @@ function createPane(paneId: number) {
         active: activeBuffer
       },
       modes: {
-        bracketedPasteMode: false
+        bracketedPasteMode: false,
+        sendFocusMode: false
       },
       options: {
         ignoreBracketedPasteMode: false,
@@ -448,6 +450,52 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     ...overrides
   }
 }
+
+function setReattachPaneTitle(title: string): void {
+  mockStoreState = {
+    ...mockStoreState,
+    tabsByWorktree: {
+      'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title }]
+    },
+    runtimePaneTitlesByTabId: {
+      'tab-1': { 1: title }
+    }
+  } as StoreState
+}
+
+async function withMockedDocumentActiveElement<T>(
+  activeElement: unknown,
+  run: () => Promise<T>
+): Promise<T> {
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { activeElement }
+  })
+  try {
+    return await run()
+  } finally {
+    if (originalDocument) {
+      Object.defineProperty(globalThis, 'document', originalDocument)
+    } else {
+      Reflect.deleteProperty(globalThis, 'document')
+    }
+  }
+}
+
+function configureTerminalFocusMode(
+  pane: ReturnType<typeof createPane>,
+  textarea: HTMLTextAreaElement
+): void {
+  Object.assign(pane.terminal, { textarea })
+  Object.assign(pane.terminal.modes, { sendFocusMode: true })
+  pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+    callback?.()
+  })
+}
+
+const ANSI_POSITIONED_CURSOR_AGENT_REATTACH_SCREEN =
+  '\x1b[4;3HCursor Agent\x1b[5;3Hv2026.06.29\x1b[9;3H→ Plan, search, build anything'
 
 // Why: setting activeRuntimeEnvironmentId in mockStoreState exercises the
 // remote-runtime path where the renderer still owns OSC 9999 status.
@@ -709,7 +757,10 @@ describe('connectPanePty', () => {
         agentStatus: {
           inferInterrupt: vi.fn().mockResolvedValue(false)
         }
-      }
+      },
+      dispatchEvent: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
@@ -4023,7 +4074,7 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledTimes(1)
   })
 
-  it('resets reattach cursor/focus state after daemon snapshot replay without applying the full mode reset', async () => {
+  it('resets reattach renderer state after daemon snapshot replay without applying the full mode reset', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -4066,6 +4117,241 @@ describe('connectPanePty', () => {
       POST_REPLAY_MODE_RESET,
       expect.any(Function)
     )
+  })
+
+  it('preserves live modes and injects focus-in after focused agent reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('Cursor Agent')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    // Why: public xterm modes plus an agent title are the stable signal for a
+    // live focus-driven TUI; avoid private `_core` field probes.
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    })
+  })
+
+  it('does not inject focus-in after reattach when the terminal does not own DOM focus', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('Cursor Agent')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    // Why: a different element owns focus, so the reattach must not send a stray
+    // focus-in to a background pane.
+    await withMockedDocumentActiveElement({}, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    })
+  })
+
+  it('resets stale focus and cursor modes for a focused non-agent shell reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('zsh')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    })
+  })
+
+  it('does not treat persisted tab launchAgent metadata as a live agent reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    // Why: launchAgent is launch ownership metadata that never decays after
+    // the agent exits; it must not preserve stale modes for the shell left
+    // behind after an unclean agent death.
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty', title: 'zsh', launchAgent: 'claude' }]
+      },
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'zsh' }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    })
+  })
+
+  it('does not treat an agent-name token in a shell title as a live agent reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    // Why: broad token matching would classify this ordinary ssh title as an
+    // agent and preserve stale modes / inject focus-in into a bare shell.
+    setReattachPaneTitle('ssh devin@host')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    })
+  })
+
+  it('does not treat ordinary shell scrollback mentioning Cursor Agent as a live agent reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot:
+            '\x1b[?1004h\x1b[?25l$ grep -R "Cursor Agent" docs\r\nCursor Agent IME notes\r\n'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('zsh')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    await withMockedDocumentActiveElement(textarea, async () => {
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+    })
   })
 
   it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {
@@ -7030,7 +7316,7 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('preserves scrollback by skipping the destructive clear when restoring an alternate-screen snapshot', async () => {
+  it('clears only the alternate screen when restoring an alternate-screen snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
@@ -7078,6 +7364,19 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       '\x1b[2J\x1b[3J\x1b[H',
       expect.any(Function)
+    )
+    // Why: the snapshot's ?1049h no-ops on an already-alt pane and serialized
+    // frames skip blank cells, so the pre-hide frame bleeds through unless the
+    // alt screen is cleared (without \x1b[3J) before the snapshot paints.
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      '\x1b[?1049h\x1b[2J\x1b[H',
+      expect.any(Function)
+    )
+    const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
+      (call) => call[0]
+    )
+    expect(writes.indexOf('\x1b[?1049h\x1b[2J\x1b[H')).toBeLessThan(
+      writes.indexOf('altscreen-snapshot\r\n')
     )
     expect(pane.terminal.write).toHaveBeenCalledWith('altscreen-snapshot\r\n', expect.any(Function))
     disposable.dispose()
@@ -8257,6 +8556,82 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).toHaveBeenCalledWith('remote prompt\r\n$ ', expect.any(Function))
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
     expect(manager.rebuildPaneWebgl).toHaveBeenCalledWith(1)
+    disposable.dispose()
+  })
+
+  it('preserves live agent modes when queued replay data carries the Cursor Agent screen', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('renamed shell')
+
+    const pane = createPane(1)
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = await withMockedDocumentActiveElement(textarea, async () => {
+      const connection = connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+
+      capturedReplayCallback.current?.(ANSI_POSITIONED_CURSOR_AGENT_REATTACH_SCREEN)
+      await flushAsyncTicks(12)
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+        expect.any(Function)
+      )
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      return connection
+    })
+    disposable.dispose()
+  })
+
+  it('downgrades a scrollback-only Cursor Agent signal when the parsed viewport shows a shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('renamed shell')
+
+    const pane = createPane(1)
+    // Why: an inspectable buffer whose visible rows carry no Cursor Agent
+    // screen models a shell foreground after a dead run left its screen in
+    // scrollback.
+    Object.assign(pane.terminal.buffer.active, {
+      cursorX: 2,
+      getLine: () => undefined
+    })
+    const textarea = {} as HTMLTextAreaElement
+    configureTerminalFocusMode(pane, textarea)
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = await withMockedDocumentActiveElement(textarea, async () => {
+      const connection = connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+
+      capturedReplayCallback.current?.(ANSI_POSITIONED_CURSOR_AGENT_REATTACH_SCREEN)
+      await flushAsyncTicks(12)
+
+      expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?1004l', expect.any(Function))
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+      return connection
+    })
     disposable.dispose()
   })
 

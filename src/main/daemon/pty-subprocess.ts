@@ -29,6 +29,7 @@ import {
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -559,6 +560,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
+  removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'

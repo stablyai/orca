@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { dirname, join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
@@ -17,6 +17,128 @@ const {
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
+
+const electronBuilderConfigPath = require.resolve('../electron-builder.config.cjs')
+const macNotaryEnvKeys = [
+  'APPLE_ID',
+  'APPLE_APP_SPECIFIC_PASSWORD',
+  'APPLE_TEAM_ID',
+  'APPLE_API_KEY',
+  'APPLE_API_KEY_ID',
+  'APPLE_API_ISSUER',
+  'APPLE_KEYCHAIN_PROFILE',
+  'APPLE_KEYCHAIN',
+  'ORCA_MAC_RELEASE'
+]
+const appleIdMacReleaseEnv = {
+  APPLE_APP_SPECIFIC_PASSWORD: 'app-password',
+  APPLE_ID: 'release@example.com',
+  APPLE_TEAM_ID: 'TEAMID',
+  ORCA_MAC_RELEASE: '1'
+}
+
+async function withElectronBuilderConfigEnv(env, callback) {
+  const previous = new Map(macNotaryEnvKeys.map((key) => [key, process.env[key]]))
+  try {
+    for (const key of macNotaryEnvKeys) {
+      delete process.env[key]
+    }
+    Object.assign(process.env, env)
+    delete require.cache[electronBuilderConfigPath]
+    return await callback(require('../electron-builder.config.cjs'))
+  } finally {
+    for (const key of macNotaryEnvKeys) {
+      const value = previous.get(key)
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+    delete require.cache[electronBuilderConfigPath]
+  }
+}
+
+function createMacNotarizationContext(appOutDir) {
+  return {
+    appOutDir,
+    electronPlatformName: 'darwin',
+    packager: {
+      appInfo: {
+        productFilename: 'Orca'
+      }
+    }
+  }
+}
+
+function requiredMacServeSimDylibPaths(appOutDir) {
+  const resourcesDir = join(appOutDir, 'Orca.app', 'Contents', 'Resources')
+  return [
+    join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'libSimCameraInjector.dylib'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'libSimCameraInjector.dylib')
+  ]
+}
+
+function optionalMacServeSimDylibPaths(appOutDir) {
+  const resourcesDir = join(appOutDir, 'Orca.app', 'Contents', 'Resources')
+  return [
+    join(
+      resourcesDir,
+      'app.asar.unpacked',
+      'node_modules',
+      'serve-sim',
+      'dist',
+      'simcam',
+      'libSimCameraInjector.dylib'
+    )
+  ]
+}
+
+function macServeSimDylibPaths(appOutDir) {
+  return [...requiredMacServeSimDylibPaths(appOutDir), ...optionalMacServeSimDylibPaths(appOutDir)]
+}
+
+function createMacNotarizationHost({ existingPaths, output = { status: 'Accepted' } }) {
+  const calls = []
+  let temporaryDirectoryIndex = 0
+  const host = {
+    calls,
+    execFileSync: vi.fn((command, args, options = {}) => {
+      calls.push({ args, command, options })
+      if (command === 'xcrun') {
+        return typeof output === 'string' ? output : JSON.stringify(output)
+      }
+      return ''
+    }),
+    existsSync: vi.fn((targetPath) => existingPaths.has(targetPath)),
+    mkdtempSync: vi.fn((prefix) => `${prefix}${++temporaryDirectoryIndex}`),
+    rmSync: vi.fn()
+  }
+  return host
+}
+
+async function runMacAfterSignWithHost(config, appOutDir, host) {
+  return await config.__test.withMacNotarizationHost(host, async () => {
+    await config.afterSign(createMacNotarizationContext(appOutDir))
+  })
+}
+
+function expectNotaryCredentials(calls, credentials, expectedCallCount = 3) {
+  const notaryCalls = calls.filter(({ command }) => command === 'xcrun')
+  expect(notaryCalls).toHaveLength(expectedCallCount)
+  for (const notaryCall of notaryCalls) {
+    expect(notaryCall.args).toEqual(
+      expect.arrayContaining([
+        'notarytool',
+        'submit',
+        ...credentials,
+        '--wait',
+        '--output-format',
+        'json'
+      ])
+    )
+  }
+}
 
 describe('electron-builder config', () => {
   it('excludes repo-only source trees from app.asar', () => {
@@ -61,6 +183,208 @@ describe('electron-builder config', () => {
         })
       ])
     )
+  })
+
+  it('keeps the macOS afterSign hook inert outside macOS release builds', async () => {
+    for (const { context, env } of [
+      { context: { electronPlatformName: 'darwin' }, env: {} },
+      { context: { electronPlatformName: 'linux' }, env: { ORCA_MAC_RELEASE: '1' } }
+    ]) {
+      await withElectronBuilderConfigEnv(env, async (config) => {
+        const host = createMacNotarizationHost({ existingPaths: new Set() })
+
+        await expect(
+          config.__test.withMacNotarizationHost(host, async () => {
+            await config.afterSign(context)
+          })
+        ).resolves.toBeUndefined()
+        expect(host.execFileSync).not.toHaveBeenCalled()
+      })
+    }
+  })
+
+  it('submits all packaged serve-sim camera dylib copies in macOS releases', async () => {
+    await withElectronBuilderConfigEnv(appleIdMacReleaseEnv, async (config) => {
+      const appOutDir = join(tmpdir(), 'orca-electron-builder-test')
+      const dylibPaths = macServeSimDylibPaths(appOutDir)
+      const host = createMacNotarizationHost({ existingPaths: new Set(dylibPaths) })
+
+      await runMacAfterSignWithHost(config, appOutDir, host)
+
+      const dittoCalls = host.calls.filter(({ command }) => command === 'ditto')
+      const notaryCalls = host.calls.filter(({ command }) => command === 'xcrun')
+      expect(dittoCalls).toHaveLength(dylibPaths.length)
+      expect(notaryCalls).toHaveLength(dylibPaths.length)
+      expect(dittoCalls.map(({ options }) => options.cwd)).toEqual(
+        dylibPaths.map((dylibPath) => dirname(dylibPath))
+      )
+      expect(dittoCalls.every(({ options }) => options.timeout === 2 * 60 * 1000)).toBe(true)
+      expect(notaryCalls.every(({ options }) => options.timeout === 45 * 60 * 1000)).toBe(true)
+      expect(dittoCalls.map(({ args }) => args.at(-1))).toEqual(
+        notaryCalls.map(({ args }) => args[2])
+      )
+      expectNotaryCredentials(host.calls, [
+        '--apple-id',
+        'release@example.com',
+        '--password',
+        'app-password',
+        '--team-id',
+        'TEAMID'
+      ])
+      expect(host.rmSync).toHaveBeenCalledTimes(dylibPaths.length)
+    })
+  })
+
+  it('does not require optional app.asar.unpacked serve-sim dylibs in macOS releases', async () => {
+    await withElectronBuilderConfigEnv(appleIdMacReleaseEnv, async (config) => {
+      const appOutDir = join(tmpdir(), 'orca-electron-builder-test')
+      const dylibPaths = requiredMacServeSimDylibPaths(appOutDir)
+      const host = createMacNotarizationHost({ existingPaths: new Set(dylibPaths) })
+
+      await runMacAfterSignWithHost(config, appOutDir, host)
+
+      const dittoCalls = host.calls.filter(({ command }) => command === 'ditto')
+      expect(dittoCalls).toHaveLength(dylibPaths.length)
+      expect(dittoCalls.map(({ options }) => options.cwd)).toEqual(
+        dylibPaths.map((dylibPath) => dirname(dylibPath))
+      )
+      expectNotaryCredentials(
+        host.calls,
+        ['--apple-id', 'release@example.com', '--password', 'app-password', '--team-id', 'TEAMID'],
+        dylibPaths.length
+      )
+      expect(host.rmSync).toHaveBeenCalledTimes(dylibPaths.length)
+    })
+  })
+
+  it('fails before notarization when a packaged serve-sim camera dylib is missing', async () => {
+    await withElectronBuilderConfigEnv({ ORCA_MAC_RELEASE: '1' }, async (config) => {
+      const appOutDir = join(tmpdir(), 'orca-electron-builder-test')
+      const [firstDylibPath] = macServeSimDylibPaths(appOutDir)
+      const host = createMacNotarizationHost({ existingPaths: new Set([firstDylibPath]) })
+
+      await expect(
+        config.__test.notarizeMacServeSimCameraDylibsWithHost(
+          createMacNotarizationContext(appOutDir),
+          host
+        )
+      ).rejects.toThrow('Missing serve-sim camera dylib for notarization')
+
+      expect(host.execFileSync).not.toHaveBeenCalled()
+    })
+  })
+
+  it('maps supported macOS notarization credential families to notarytool flags', async () => {
+    const cases = [
+      {
+        credentials: ['--key', '/tmp/AuthKey.p8', '--key-id', 'KEYID', '--issuer', 'issuer'],
+        env: {
+          APPLE_API_ISSUER: 'issuer',
+          APPLE_API_KEY: '/tmp/AuthKey.p8',
+          APPLE_API_KEY_ID: 'KEYID',
+          ORCA_MAC_RELEASE: '1'
+        }
+      },
+      {
+        credentials: [
+          '--apple-id',
+          'release@example.com',
+          '--password',
+          'app-password',
+          '--team-id',
+          'TEAMID'
+        ],
+        env: {
+          APPLE_API_ISSUER: 'issuer',
+          APPLE_API_KEY: '/tmp/AuthKey.p8',
+          APPLE_API_KEY_ID: 'KEYID',
+          ...appleIdMacReleaseEnv
+        }
+      },
+      {
+        credentials: ['--keychain', '/tmp/login.keychain-db', '--keychain-profile', 'orca-release'],
+        env: {
+          APPLE_KEYCHAIN: '/tmp/login.keychain-db',
+          APPLE_KEYCHAIN_PROFILE: 'orca-release',
+          ORCA_MAC_RELEASE: '1'
+        }
+      }
+    ]
+
+    for (const { credentials, env } of cases) {
+      await withElectronBuilderConfigEnv(env, async (config) => {
+        const appOutDir = join(tmpdir(), 'orca-electron-builder-test')
+        const dylibPaths = macServeSimDylibPaths(appOutDir)
+        const host = createMacNotarizationHost({ existingPaths: new Set(dylibPaths) })
+
+        await runMacAfterSignWithHost(config, appOutDir, host)
+        expectNotaryCredentials(host.calls, credentials)
+      })
+    }
+  })
+
+  it('fails macOS standalone notarization on partial credentials and bad notary output', async () => {
+    for (const { env, message } of [
+      {
+        env: { APPLE_ID: 'release@example.com', ORCA_MAC_RELEASE: '1' },
+        message: 'APPLE_APP_SPECIFIC_PASSWORD env var needs to be set'
+      },
+      {
+        env: { APPLE_API_KEY: '/tmp/AuthKey.p8', APPLE_API_KEY_ID: 'KEYID', ORCA_MAC_RELEASE: '1' },
+        message: 'Env vars APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER need to be set'
+      }
+    ]) {
+      await withElectronBuilderConfigEnv(env, async (config) => {
+        expect(() => config.__test.macNotarytoolCredentialArgs()).toThrow(message)
+      })
+    }
+
+    for (const { output, message } of [
+      { message: 'Standalone binary notarization failed', output: { status: 'Invalid' } },
+      { message: '', output: '{not-json' }
+    ]) {
+      await withElectronBuilderConfigEnv(appleIdMacReleaseEnv, async (config) => {
+        const appOutDir = join(tmpdir(), 'orca-electron-builder-test')
+        const dylibPaths = macServeSimDylibPaths(appOutDir)
+        const host = createMacNotarizationHost({ existingPaths: new Set(dylibPaths), output })
+
+        const expectation = expect(
+          config.__test.notarizeMacServeSimCameraDylibsWithHost(
+            createMacNotarizationContext(appOutDir),
+            host
+          )
+        ).rejects
+        await (message ? expectation.toThrow(message) : expectation.toThrow())
+      })
+    }
+  })
+
+  it('surfaces macOS standalone notarization subprocess failures without secrets', async () => {
+    await withElectronBuilderConfigEnv(appleIdMacReleaseEnv, async (config) => {
+      const appOutDir = join(tmpdir(), 'orca-electron-builder-test')
+      const dylibPaths = macServeSimDylibPaths(appOutDir)
+      const host = createMacNotarizationHost({ existingPaths: new Set(dylibPaths) })
+      host.execFileSync.mockImplementation((command, args, options = {}) => {
+        host.calls.push({ args, command, options })
+        if (command === 'xcrun') {
+          throw new Error(`Command failed: xcrun ${args.join(' ')}`)
+        }
+        return ''
+      })
+
+      try {
+        await config.__test.notarizeMacServeSimCameraDylibsWithHost(
+          createMacNotarizationContext(appOutDir),
+          host
+        )
+        throw new Error('Expected notarization to fail')
+      } catch (error) {
+        expect(error.message).toContain('Standalone binary notarization subprocess failed')
+        expect(error.message).not.toMatch(/release@example\.com|app-password|TEAMID/)
+        expect(error.message).toContain('[REDACTED]')
+      }
+      expect(host.rmSync).toHaveBeenCalled()
+    })
   })
 
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {

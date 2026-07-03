@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Animated, AppState, Linking, type AppStateStatus } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
-import { File as FsFile, Paths } from 'expo-file-system'
 import {
   BackHandler,
   FlatList,
@@ -94,14 +92,18 @@ import {
   getVisibleTerminalAccessoryKeys,
   loadTerminalAccessoryLayout
 } from '../../../../src/terminal/terminal-accessory-layout'
+import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/terminal-live-accessory-input'
+import { getTerminalLiveAccessoryRawSendTarget } from '../../../../src/terminal/terminal-live-accessory-raw-send-target'
 import {
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
-  getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
+import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
+import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -161,13 +163,8 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
-import {
-  buildMobileImagePastePayload,
-  prepareMobileClipboardImageBase64,
-  saveMobileClipboardImageAsTempFile,
-  type MobileClipboardImageResizer
-} from '../../../../src/session/mobile-clipboard-image'
 import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { useMobileTerminalPaste } from '../../../../src/session/use-mobile-terminal-paste'
 import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
@@ -233,52 +230,9 @@ import type {
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
 
-const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
-const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
+type TerminalLiveAccessoryInput = ReturnType<typeof createTerminalLiveAccessoryInput>
 
-// Why: clipboard images are re-encoded as lossless PNG, so high-res screenshots and
-// photos can exceed the upload byte budget; resize the raster down to fit before upload.
-// The image is staged to a temp file first because the iOS ImageManipulator loader
-// (Data(contentsOf:)) cannot decode large base64 data URIs — it needs a file:// URI.
-const resizeMobileClipboardImage: MobileClipboardImageResizer = async (source, target) => {
-  const base64 = source.replace(CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE, '')
-  const file = new FsFile(Paths.cache, `orca-clip-resize-${Date.now()}.png`)
-  let context: ReturnType<typeof ImageManipulator.manipulate> | null = null
-  let rendered: Awaited<
-    ReturnType<ReturnType<typeof ImageManipulator.manipulate>['renderAsync']>
-  > | null = null
-  let resultUri: string | null = null
-  try {
-    file.create({ overwrite: true })
-    file.write(base64, { encoding: 'base64' })
-    context = ImageManipulator.manipulate(file.uri)
-    context.resize({ width: target.width, height: target.height })
-    rendered = await context.renderAsync()
-    const result = await rendered.saveAsync({ format: SaveFormat.PNG, base64: true })
-    resultUri = result.uri
-    // Why: empty base64 would pass the downstream base64 check and upload a corrupt
-    // image, so fail loudly here instead of silently sending an invalid payload.
-    if (!result.base64) {
-      throw new Error('Failed to encode resized clipboard image')
-    }
-    return { data: result.base64, width: result.width, height: result.height }
-  } finally {
-    rendered?.release()
-    context?.release()
-    if (resultUri) {
-      try {
-        new FsFile(resultUri).delete()
-      } catch {
-        // Best-effort cleanup; ImageManipulator saves into cache for every retry.
-      }
-    }
-    try {
-      file.delete()
-    } catch {
-      // Best-effort cleanup; the OS reclaims the cache directory regardless.
-    }
-  }
-}
+const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
 function getActiveTabIdForHandle(
   tabs: MobileSessionTab[],
@@ -1050,6 +1004,7 @@ export default function SessionScreen() {
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -1084,6 +1039,7 @@ export default function SessionScreen() {
   // render where client was still null/connecting, silently no-opping the
   // in-app-browser open). Route through a ref kept current every render.
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
+
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
@@ -1110,6 +1066,24 @@ export default function SessionScreen() {
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
 
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
+  const {
+    clearPendingLiveInputCommit,
+    flushPendingLiveInputBeforeExternalSend,
+    handleLiveInputAccessoryBytes,
+    handleLiveInputChange,
+    handleLiveInputKeyPress,
+    handleLiveInputSubmit
+  } = useTerminalLiveInputCommit({
+    activeHandle,
+    activeHandleRef,
+    activeSessionTabType: activeSessionTab?.type,
+    activeSessionTabTypeRef,
+    liveInputRef,
+    liveInputTerminalHandles,
+    liveInputTerminalHandlesRef,
+    sendLiveTerminalInputRef,
+    setLiveInputCapture
+  })
   const canSend =
     connState === 'connected' &&
     activeHandle != null &&
@@ -1260,8 +1234,16 @@ export default function SessionScreen() {
         if (!insertHandle) {
           return
         }
-        sendLiveTerminalInput(insertHandle, route.text)
-        showToast('Dictation inserted')
+        void (async () => {
+          const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
+          if (!flushedPendingInput) {
+            return
+          }
+          const sent = await sendLiveTerminalInput(insertHandle, route.text)
+          if (sent) {
+            showToast('Dictation inserted')
+          }
+        })()
         return
       }
       setInput((current) => appendBufferedDictation(current, route.text))
@@ -2702,7 +2684,7 @@ export default function SessionScreen() {
     terminalsRef.current = []
     setSessionTabs([])
     setActiveSessionTabId(null)
-    setLiveInputCapture('')
+    clearPendingLiveInputCommit()
     liveInputTerminalHandlesRef.current = new Set()
     defaultedLiveInputTerminalHandlesRef.current = new Set()
     setLiveInputTerminalHandles(new Set())
@@ -2712,9 +2694,16 @@ export default function SessionScreen() {
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+      clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
-  }, [clearDelayedActionTimers, clearTerminalCache, hostId, worktreeId])
+  }, [
+    clearDelayedActionTimers,
+    clearPendingLiveInputCommit,
+    clearTerminalCache,
+    hostId,
+    worktreeId
+  ])
 
   useEffect(() => {
     if (connState !== 'connected') {
@@ -3119,46 +3108,62 @@ export default function SessionScreen() {
     }
   }
 
-  async function handleAccessoryKey(bytes: string) {
+  async function handleAccessoryKey(input: TerminalLiveAccessoryInput) {
     if (!client || !activeHandle || !canSend) {
       return
     }
-
-    try {
-      await client.sendRequest('terminal.send', {
-        terminal: activeHandle,
-        text: bytes,
+    const targetHandle = activeHandle
+    const accessoryCommit = await handleLiveInputAccessoryBytes(input)
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return
+    }
+    const currentClient = clientRef.current
+    // Why: async IME flushing can outlive the original terminal selection.
+    const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
+      targetHandle,
+      activeHandle: activeHandleRef.current,
+      activeSessionTabType: activeSessionTabTypeRef.current
+    })
+    if (!currentClient || !rawSendTarget || connStateRef.current !== 'connected') {
+      return
+    }
+    await currentClient
+      .sendRequest('terminal.send', {
+        terminal: rawSendTarget,
+        text: input.bytes,
         enter: false,
         ...(deviceTokenRef.current
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
-    } catch {
-      // Transient failure
-    }
+      .then(
+        () => undefined,
+        () => undefined
+      )
   }
 
   const sendLiveTerminalInput = useCallback(
-    (handle: string, bytes: string) => {
+    async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
       if (text.length === 0) {
-        return
+        return false
       }
       if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
-        return
+        return false
       }
       const rpc = clientRef.current
+      // Why: callers suppress follow-up controls/toasts when this live send is stale.
       if (
         !rpc ||
         connStateRef.current !== 'connected' ||
         handle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
-        return
+        return false
       }
-      void rpc
+      return rpc
         .sendRequest('terminal.send', {
           terminal: handle,
           text,
@@ -3167,12 +3172,11 @@ export default function SessionScreen() {
             ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
             : {})
         })
-        .catch(() => {
-          // Transient failure
-        })
+        .then(isTerminalSendRpcAccepted, () => false)
     },
     [showToast]
   )
+  sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
   const focusLiveInput = useCallback(() => {
     if (!canSend || !liveInputEnabled) {
@@ -3369,70 +3373,14 @@ export default function SessionScreen() {
       liveInputTerminalHandlesRef.current = next
       return next
     })
-    setLiveInputCapture('')
+    clearPendingLiveInputCommit()
     if (nextEnabled) {
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
-  }, [activeHandle, liveInputTerminalHandles])
-
-  const handleLiveInputChange = useCallback(
-    (text: string) => {
-      if (!activeHandle) {
-        setLiveInputCapture('')
-        liveInputRef.current?.setNativeProps({ text: '' })
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        setLiveInputCapture('')
-        liveInputRef.current?.setNativeProps({ text: '' })
-        return
-      }
-      const normalizedText = normalizeTerminalTextInput(text)
-      if (normalizedText.length > 0) {
-        sendLiveTerminalInput(activeHandle, normalizedText)
-      }
-      setLiveInputCapture('')
-      // Why: the field is only a keyboard capture surface. Clearing the
-      // native value prevents subsequent phone-keyboard events from replaying
-      // already-sent characters when React state remains the empty string.
-      liveInputRef.current?.setNativeProps({ text: '' })
-    },
-    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
-  )
-
-  const handleLiveInputKeyPress = useCallback(
-    (event: { nativeEvent: { key: string } }) => {
-      if (!activeHandle) {
-        return
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        return
-      }
-      const bytes = getTerminalLiveSpecialKeyBytes(event.nativeEvent.key)
-      if (!bytes) {
-        return
-      }
-      sendLiveTerminalInput(activeHandle, bytes)
-      setLiveInputCapture('')
-      liveInputRef.current?.setNativeProps({ text: '' })
-    },
-    [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput]
-  )
-
-  const handleLiveInputSubmit = useCallback(() => {
-    if (!activeHandle) {
-      return
-    }
-    if (!liveInputTerminalHandles.has(activeHandle)) {
-      return
-    }
-    sendLiveTerminalInput(activeHandle, '\r')
-    setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
-  }, [activeHandle, liveInputTerminalHandles, sendLiveTerminalInput])
+  }, [activeHandle, clearPendingLiveInputCommit, liveInputTerminalHandles])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
@@ -3632,11 +3580,11 @@ export default function SessionScreen() {
     }
   }, [])
   const startAccessoryRepeat = useCallback(
-    (bytes: string) => {
+    (input: TerminalLiveAccessoryInput) => {
       stopAccessoryRepeat()
       repeatTimeoutRef.current = setTimeout(() => {
         repeatIntervalRef.current = setInterval(() => {
-          void handleAccessoryKeyRef.current(bytes)
+          void handleAccessoryKeyRef.current(input)
         }, 45)
       }, 400)
     },
@@ -3655,11 +3603,13 @@ export default function SessionScreen() {
       clearToastHideTimer()
       clearDelayedActionTimers()
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      clearPendingLiveInputCommit()
       sessionTabActionSheetRequestSeqRef.current += 1
       clearSessionTabActionSheetKeyboardListener()
       stopAccessoryRepeat()
     },
     [
+      clearPendingLiveInputCommit,
       clearDelayedActionTimers,
       clearSessionTabActionSheetKeyboardListener,
       clearTerminalCache,
@@ -3783,84 +3733,38 @@ export default function SessionScreen() {
     })
   }, [])
 
-  const handlePaste = useCallback(async () => {
-    if (!client || !activeHandle || !canSend) {
-      return
-    }
-    try {
-      const text = await Clipboard.getStringAsync()
-      let payload: string | null = null
-      if (text.length > 0) {
-        const modes = ptyModesRef.current.get(activeHandle) || {
-          bracketedPasteMode: false,
-          altScreen: false,
-          mouseTrackingMode: 'none',
-          sgrMouseMode: false,
-          sgrMousePixelsMode: false
-        }
-        const wrap = modes.bracketedPasteMode && !modes.altScreen
-        // Why: strip embedded bracketed-paste markers from clipboard text so a
-        // malicious copy containing `\x1b[201~` can't terminate paste mode early
-        // and have the trailing bytes interpreted as shell commands. Matches
-        // xterm.js / iTerm2 behavior.
-        // eslint-disable-next-line no-control-regex -- intentional bracketed-paste marker stripping
-        const sanitized = wrap ? text.replace(/\x1b\[20[01]~/g, '') : text
-        payload = wrap ? `\x1b[200~${sanitized}\x1b[201~` : sanitized
-      } else {
-        const image = await Clipboard.getImageAsync({ format: 'png' })
-        if (!image) {
-          refreshCanPaste()
-          return
-        }
-        const connectionId = await getActiveWorktreeConnectionId()
-        const base64 = await prepareMobileClipboardImageBase64(image, resizeMobileClipboardImage)
-        const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
-          connectionId
-        })
-        payload = buildMobileImagePastePayload(imagePath)
-      }
-
-      const wrappedBytes = new TextEncoder().encode(payload).byteLength
-      if (wrappedBytes > 256 * 1024) {
-        triggerError()
-        // eslint-disable-next-line no-console
-        console.warn('[mobile-clip] paste oversized', { wrappedBytes })
-        showToast('Paste too large (max 256 KiB)', 1500)
-        return
-      }
-      await client.sendRequest('terminal.send', {
-        terminal: activeHandle,
-        text: payload,
-        enter: false,
-        ...(deviceTokenRef.current
-          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-          : {})
-      })
-      triggerSelection()
-      refreshCanPaste()
-    } catch (e) {
-      triggerError()
-      const err = e as { name?: string; message?: string }
-      const isDisconnected = connState !== 'connected'
-      // eslint-disable-next-line no-console
-      console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
-      if (isDisconnected) {
-        showToast('Paste failed (disconnected)', 1500)
-      } else if (err.message === 'Clipboard image is too large') {
-        showToast('Image too large to paste', 1500)
-      } else {
-        showToast('Paste failed', 1500)
-      }
-    }
-  }, [
+  const handlePaste = useMobileTerminalPaste({
     client,
     activeHandle,
+    activeHandleRef,
+    activeSessionTabTypeRef,
     canSend,
     connState,
+    connStateRef,
+    clientRef,
+    deviceTokenRef,
+    flushPendingLiveInputBeforeExternalSend,
     getActiveWorktreeConnectionId,
+    onError: triggerError,
+    onSuccess: triggerSelection,
+    ptyModesRef,
     refreshCanPaste,
     showToast
-  ])
+  })
+
+  const flushPendingLiveInputBeforeAttachmentSend = useCallback(
+    async (targetHandle: string): Promise<boolean> => {
+      const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
+      // Why: image picking/upload and IME flushing can outlive the original tab.
+      return (
+        flushedPendingInput &&
+        connStateRef.current === 'connected' &&
+        targetHandle === activeHandleRef.current &&
+        activeSessionTabTypeRef.current === 'terminal'
+      )
+    },
+    [flushPendingLiveInputBeforeExternalSend]
+  )
 
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
@@ -3868,6 +3772,7 @@ export default function SessionScreen() {
     canSend,
     connState,
     deviceTokenRef,
+    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
     getActiveWorktreeConnectionId,
     showToast,
     onSuccess: triggerSelection,
@@ -5028,8 +4933,9 @@ export default function SessionScreen() {
                           if (!key.repeatable) {
                             return
                           }
-                          void handleAccessoryKey(key.bytes)
-                          startAccessoryRepeat(key.bytes)
+                          const input = createTerminalLiveAccessoryInput(key)
+                          void handleAccessoryKey(input)
+                          startAccessoryRepeat(input)
                         }}
                         onPressOut={() => {
                           if (key.repeatable) {
@@ -5040,7 +4946,7 @@ export default function SessionScreen() {
                           if (key.repeatable) {
                             return
                           }
-                          void handleAccessoryKey(key.bytes)
+                          void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
                         }}
                         accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
                       >
@@ -5064,7 +4970,7 @@ export default function SessionScreen() {
                           !canSend && styles.accessoryKeyDisabled
                         ]}
                         disabled={!canSend}
-                        onPress={() => void handleAccessoryKey(key.bytes)}
+                        onPress={() => void handleAccessoryKey({ bytes: key.bytes })}
                         onLongPress={() => {
                           triggerMediumImpact()
                           setDeleteKeyTarget(key)
