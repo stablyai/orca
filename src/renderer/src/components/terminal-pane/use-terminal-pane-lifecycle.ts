@@ -2,7 +2,11 @@
 import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import {
+  PaneManager,
+  type PaneExternalDropHandler,
+  type PaneExternalDropResolver
+} from '@/lib/pane-manager/pane-manager'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import {
   normalizeTerminalFastScrollSensitivity,
@@ -273,6 +277,8 @@ type UseTerminalPaneLifecycleDeps = {
   // Why: same pane count does not imply same geometry; drag-reorder can move
   // panes without resizing them, so overlay rects need a layout-change tick.
   setPaneLayoutRevision: React.Dispatch<React.SetStateAction<number>>
+  resolveExternalPaneDropTarget?: PaneExternalDropResolver
+  onExternalPaneDrop?: PaneExternalDropHandler
 }
 
 export function suppressIntentionalPaneCloseExit(
@@ -532,7 +538,9 @@ export function useTerminalPaneLifecycle({
   paneTitlesRef,
   setRenamingPaneId,
   setPaneCount,
-  setPaneLayoutRevision
+  setPaneLayoutRevision,
+  resolveExternalPaneDropTarget,
+  onExternalPaneDrop
 }: UseTerminalPaneLifecycleDeps): void {
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     settings?.terminalScrollbackRows
@@ -1092,6 +1100,7 @@ export function useTerminalPaneLifecycle({
         queueResizeAll(true)
       },
       onPaneClosed: (paneId, closedPane) => {
+        const isDetachedToTab = closedPane?.reason === 'detach'
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -1167,31 +1176,37 @@ export function useTerminalPaneLifecycle({
           panePtyBinding.dispose()
           panePtyBindings.delete(paneId)
         }
-        // Why: closing a pane is user-initiated teardown of this row — drop
-        // (not remove) so any retained `done` snapshot for this pane is also
-        // cleared and a same-frame live→gone transition cannot re-snapshot
-        // it via the retention sync. This is pane-keyed state, so it must
-        // clear even if the PTY transport was already removed.
         const leafId = closedPane?.leafId
-        if (leafId) {
+        if (leafId && !isDetachedToTab) {
+          // Why: closing a pane is user-initiated teardown of this row — drop
+          // (not remove) so any retained `done` snapshot for this pane is also
+          // cleared and a same-frame live→gone transition cannot re-snapshot
+          // it via the retention sync. This is pane-keyed state, so it must
+          // clear even if the PTY transport was already removed.
           const paneKey = makePaneKey(tabId, leafId)
           useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
           clearTerminalPaneUnread(paneKey)
           useAppStore.getState().dropAgentStatus(paneKey)
         }
         if (transport) {
-          const ptyId = suppressIntentionalPaneCloseExit(
-            transport,
-            useAppStore.getState().suppressPtyExit
-          )
-          if (ptyId) {
-            // Why: user/CLI pane closes intentionally tear down this PTY after
-            // PaneManager has already promoted the sibling. Suppress that exit
-            // so the last-surviving pane is not mistaken for an exited tab.
-            syncPanePtyLayoutBinding(paneId, null)
-            clearTabPtyId(tabId, ptyId)
+          if (isDetachedToTab) {
+            // Why: pane-to-tab detach hands the PTY to a newly-created tab;
+            // detach renderer listeners without sending a process teardown.
+            transport.detach?.()
+          } else {
+            const ptyId = suppressIntentionalPaneCloseExit(
+              transport,
+              useAppStore.getState().suppressPtyExit
+            )
+            if (ptyId) {
+              // Why: user/CLI pane closes intentionally tear down this PTY after
+              // PaneManager has already promoted the sibling. Suppress that exit
+              // so the last-surviving pane is not mistaken for an exited tab.
+              syncPanePtyLayoutBinding(paneId, null)
+              clearTabPtyId(tabId, ptyId)
+            }
+            transport.destroy?.()
           }
-          transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
         clearRuntimePaneTitle(tabId, paneId)
@@ -1290,6 +1305,8 @@ export function useTerminalPaneLifecycle({
         releaseWebviewDragPassthrough?.()
         releaseWebviewDragPassthrough = null
       },
+      resolveExternalPaneDropTarget,
+      onExternalPaneDrop,
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)

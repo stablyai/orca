@@ -1117,6 +1117,57 @@ describe('setActiveWorktree', () => {
     expect(groups[0].tabOrder).toEqual([terminal.id])
   })
 
+  it('moves live PTY ownership when detaching a primary pane to a tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const sourceTabId = 'tab-source'
+    const targetTabId = 'tab-target'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: 'pty-detached' }),
+          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
+        ]
+      },
+      ptyIdsByTabId: {
+        [sourceTabId]: ['pty-detached', 'pty-survivor'],
+        [targetTabId]: ['pty-detached']
+      },
+      lastKnownRelayPtyIdByTabId: {
+        [sourceTabId]: 'pty-detached',
+        [targetTabId]: 'pty-detached'
+      }
+    })
+
+    store.getState().syncPaneDetachPtyOwnership({
+      detachedPtyId: 'pty-detached',
+      sourceLayout: {
+        root: { type: 'leaf', leafId: 'survivor-leaf' },
+        activeLeafId: 'survivor-leaf',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'survivor-leaf': 'pty-survivor' }
+      },
+      sourceTabId,
+      targetTabId
+    })
+
+    const state = store.getState()
+    expect(state.ptyIdsByTabId[sourceTabId]).toEqual(['pty-survivor'])
+    expect(state.ptyIdsByTabId[targetTabId]).toEqual(['pty-detached'])
+    expect(state.lastKnownRelayPtyIdByTabId[sourceTabId]).toBe('pty-survivor')
+    expect(state.lastKnownRelayPtyIdByTabId[targetTabId]).toBe('pty-detached')
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === sourceTabId)?.ptyId).toBe(
+      'pty-survivor'
+    )
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === targetTabId)?.ptyId).toBe(
+      'pty-detached'
+    )
+  })
+
   it('stores trimmed quick command labels on terminal and unified tabs', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

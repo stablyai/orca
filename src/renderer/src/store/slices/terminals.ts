@@ -293,6 +293,36 @@ function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
   return a.every((value) => bSet.has(value))
 }
 
+function uniquePtyIds(ptyIds: readonly (string | null | undefined)[]): string[] {
+  return [...new Set(ptyIds.filter((ptyId): ptyId is string => Boolean(ptyId)))]
+}
+
+function resolvePrimaryLayoutPtyId(layout: TerminalLayoutSnapshot): string | null {
+  const ptyIdsByLeafId = layout.ptyIdsByLeafId ?? {}
+  const activePtyId = layout.activeLeafId ? ptyIdsByLeafId[layout.activeLeafId] : undefined
+  return activePtyId ?? Object.values(ptyIdsByLeafId)[0] ?? null
+}
+
+function withTerminalTabPtyId(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  tabId: string,
+  ptyId: string | null
+): Record<string, TerminalTab[]> {
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const index = tabs.findIndex((tab) => tab.id === tabId)
+    if (index === -1) {
+      continue
+    }
+    if (tabs[index]?.ptyId === ptyId) {
+      return tabsByWorktree
+    }
+    const nextTabs = [...tabs]
+    nextTabs[index] = { ...nextTabs[index]!, ptyId }
+    return { ...tabsByWorktree, [worktreeId]: nextTabs }
+  }
+  return tabsByWorktree
+}
+
 export type AutomaticAgentResumeClaim = {
   worktreeId: string
   launchAgent: TuiAgent
@@ -506,6 +536,12 @@ export type TerminalSlice = {
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
+  syncPaneDetachPtyOwnership: (args: {
+    detachedPtyId: string | null
+    sourceLayout: TerminalLayoutSnapshot
+    sourceTabId: string
+    targetTabId: string
+  }) => void
   queueTabStartupCommand: (
     tabId: string,
     startup: {
@@ -2452,6 +2488,54 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         delete next[tabId]
       }
       return { terminalLayoutsByTabId: next }
+    })
+  },
+
+  syncPaneDetachPtyOwnership: ({ detachedPtyId, sourceLayout, sourceTabId, targetTabId }) => {
+    set((s) => {
+      const layoutSourcePtyIds = uniquePtyIds(Object.values(sourceLayout.ptyIdsByLeafId ?? {}))
+      const existingSourcePtyIds = (s.ptyIdsByTabId[sourceTabId] ?? []).filter(
+        (ptyId) => ptyId !== detachedPtyId
+      )
+      const sourcePtyIds = layoutSourcePtyIds.length > 0 ? layoutSourcePtyIds : existingSourcePtyIds
+      const sourcePrimaryPtyId = resolvePrimaryLayoutPtyId(sourceLayout) ?? sourcePtyIds[0] ?? null
+      const nextPtyIdsByTabId = {
+        ...s.ptyIdsByTabId,
+        [sourceTabId]: sourcePtyIds
+      }
+      if (detachedPtyId) {
+        nextPtyIdsByTabId[targetTabId] = uniquePtyIds([
+          ...(nextPtyIdsByTabId[targetTabId] ?? []),
+          detachedPtyId
+        ])
+      }
+
+      const nextLastKnownRelayPtyIdByTabId = { ...s.lastKnownRelayPtyIdByTabId }
+      if (sourcePrimaryPtyId) {
+        nextLastKnownRelayPtyIdByTabId[sourceTabId] = sourcePrimaryPtyId
+      } else {
+        delete nextLastKnownRelayPtyIdByTabId[sourceTabId]
+      }
+      if (detachedPtyId) {
+        nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
+      }
+
+      // Why: pane-to-tab detach moves live PTY ownership without spawning or
+      // exiting processes, so sync identity maps directly without activity bumps.
+      const sourceTabsByWorktree = withTerminalTabPtyId(
+        s.tabsByWorktree,
+        sourceTabId,
+        sourcePrimaryPtyId
+      )
+      const nextTabsByWorktree = detachedPtyId
+        ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
+        : sourceTabsByWorktree
+
+      return {
+        ptyIdsByTabId: nextPtyIdsByTabId,
+        lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
+      }
     })
   },
 
