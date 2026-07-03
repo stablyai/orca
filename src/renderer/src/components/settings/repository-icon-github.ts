@@ -62,14 +62,6 @@ export async function resolveRepositoryGitHubAvatar(
   return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream: null }
 }
 
-export async function resolveRepositoryGitHubAvatarIcon(
-  runtimeTarget: RuntimeTarget,
-  repo: Repo,
-  options: ResolveRepositoryGitHubAvatarOptions = {}
-): Promise<RepoIcon | null> {
-  return (await resolveRepositoryGitHubAvatar(runtimeTarget, repo, options)).repoIcon
-}
-
 function sameRepositoryIdentity(
   a: GitHubRepositoryIdentity | null | undefined,
   b: GitHubRepositoryIdentity | null | undefined

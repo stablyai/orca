@@ -95,13 +95,11 @@ export function RepositoryIconPicker({
         )
         return
       }
-      updateRepo(
-        repo.id,
-        buildRepositoryGitHubAvatarUpdate(repo, resolution) ?? {
-          repoIcon: resolution.repoIcon,
-          upstream: resolution.upstream
-        }
-      )
+      // A null build means the stored icon/upstream already match — nothing to write.
+      const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
+      if (updates) {
+        updateRepo(repo.id, updates)
+      }
     } catch {
       if (mountedRef.current) {
         toast.error(
@@ -125,15 +123,12 @@ export function RepositoryIconPicker({
       if (!mountedRef.current) {
         return
       }
-      updateRepo(
-        repo.id,
-        resolution
-          ? (buildRepositoryGitHubAvatarUpdate(repo, resolution, { clearMissingIcon: true }) ?? {
-              repoIcon: resolution.repoIcon,
-              upstream: resolution.upstream
-            })
-          : { repoIcon: null }
-      )
+      const updates = resolution
+        ? buildRepositoryGitHubAvatarUpdate(repo, resolution, { clearMissingIcon: true })
+        : { repoIcon: null }
+      if (updates) {
+        updateRepo(repo.id, updates)
+      }
     } finally {
       if (mountedRef.current) {
         setResetting(false)
