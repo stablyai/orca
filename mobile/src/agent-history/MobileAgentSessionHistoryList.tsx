@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
+import { Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
@@ -149,13 +150,14 @@ function AgentHistoryCardRow({
               }
             }}
             disabled={resumeActionState?.disabled}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Resume agent session"
           >
             {resumeActionState?.loading ? (
-              <ActivityIndicator size="small" color={colors.bgBase} />
+              <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
-              <Text style={styles.resumeButtonText}>Resume</Text>
+              <Play size={17} color={colors.textPrimary} strokeWidth={2.4} />
             )}
           </Pressable>
         ) : null}

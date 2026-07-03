@@ -154,25 +154,19 @@ export const styles = StyleSheet.create({
   },
   resumeButton: {
     minHeight: 28,
-    minWidth: 76,
+    minWidth: 28,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 'auto',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary
+    borderRadius: radii.button
   },
   resumeButtonPressed: {
     opacity: 0.78
   },
   resumeButtonDisabled: {
     opacity: 0.45
-  },
-  resumeButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
   },
   preview: {
     marginTop: spacing.sm,
