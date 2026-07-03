@@ -227,7 +227,10 @@ export async function createGitHubWorkItemWorkspaceInBackground(
       }
     }
 
-    const trustDecision = await deps.confirmHooks(store, args.repoId, 'setup')
+    // Why: trust prompts are serialized app-wide, so read the store fresh at
+    // each check — an "Always trust" stamped by an earlier prompt (including
+    // this flow's own setup prompt) must short-circuit instead of re-prompting.
+    const trustDecision = await deps.confirmHooks(deps.getStore(), args.repoId, 'setup')
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
@@ -275,7 +278,11 @@ export async function createGitHubWorkItemWorkspaceInBackground(
         return { kind: 'background-started' }
       }
       if (effectiveContent.length > 0) {
-        const issueCommandTrust = await deps.confirmHooks(store, args.repoId, 'issueCommand')
+        const issueCommandTrust = await deps.confirmHooks(
+          deps.getStore(),
+          args.repoId,
+          'issueCommand'
+        )
         if (!deps.hasPendingCreate(creationId)) {
           return { kind: 'background-started' }
         }

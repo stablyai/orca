@@ -747,6 +747,42 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
     expect(request.issueCommand).toBeUndefined()
   })
 
+  it('re-reads the store for each trust check so mid-flow trust updates are honored', async () => {
+    const snapshots = [makeStore(), makeStore(), makeStore()]
+    let getStoreCall = 0
+    const deps = makeDeps(snapshots[0])
+    deps.getStore = vi.fn(
+      () => snapshots[Math.min(getStoreCall++, snapshots.length - 1)] ?? snapshots[0]
+    )
+    deps.readIssueCommand.mockResolvedValueOnce({
+      effectiveContent: 'echo {{issue}}',
+      localContent: null,
+      sharedContent: 'echo {{issue}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+
+    await createGitHubWorkItemWorkspaceInBackground(
+      {
+        item: makeIssue(),
+        repoId: 'repo-1',
+        openModalFallback: vi.fn()
+      },
+      deps
+    )
+
+    // Why: an "Always trust" stamped by the setup prompt only exists in a fresh
+    // snapshot. Each trust check must read the store at call time instead of
+    // reusing the snapshot captured when the flow began.
+    const setupCall = deps.confirmHooks.mock.calls.find((call) => call[2] === 'setup')
+    const issueCall = deps.confirmHooks.mock.calls.find((call) => call[2] === 'issueCommand')
+    expect(setupCall?.[0]).toBeDefined()
+    expect(issueCall?.[0]).toBeDefined()
+    expect(setupCall?.[0]).not.toBe(snapshots[0])
+    expect(issueCall?.[0]).not.toBe(snapshots[0])
+    expect(issueCall?.[0]).not.toBe(setupCall?.[0])
+  })
+
   it('keeps the seeded agent prompt as the bare issue URL (not Complete <url>)', async () => {
     const store = makeStore({
       ensureDetectedAgents: vi.fn().mockResolvedValue(['codex'])
