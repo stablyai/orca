@@ -3508,7 +3508,9 @@
           "8401a7a0d0": "1 repositorio",
           "d4f1df62ef": "{{value0}} repositorios",
           "b4263a2ac4": "Se encontraron {{value0}} en {{value1}}.",
-          "24eda6c8b2": "Explorando... {{value0}}"
+          "24eda6c8b2": "Explorando... {{value0}}",
+          "6149d5203f": "No hay repositorios seleccionados. Abre la carpeta principal para usar el editor, la terminal y la búsqueda sin funciones de Git.",
+          "e52454b7f6": "Abrir como carpeta"
         },
         "AddRepoRemoteStep": {
           "5b205b5281": "Detener escaneo",
