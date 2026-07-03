@@ -125,7 +125,10 @@ export function resyncTerminalFocusForWindowFocus(args: {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
       const active = reclaimedHelper.ownerDocument.activeElement
-      if (active === reclaimedHelper || isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)) {
+      if (
+        active === reclaimedHelper ||
+        isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
+      ) {
         reclaimedHelper.focus()
       }
     })
@@ -144,7 +147,10 @@ export function resyncTerminalFocusForWindowFocus(args: {
       // Why: only reclaim focus if nothing else grabbed it during the frame, so
       // a click into another field mid-reactivation isn't yanked back.
       const active = reclaimedHelper.ownerDocument.activeElement
-      if (active === reclaimedHelper || isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)) {
+      if (
+        active === reclaimedHelper ||
+        isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
+      ) {
         reclaimedHelper.focus()
       }
     })

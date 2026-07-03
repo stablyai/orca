@@ -45,8 +45,15 @@ export function beginPaneDragFromPointerDown(
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
     }
-    if (pointerId !== null && handle.hasPointerCapture(pointerId)) {
-      handle.releasePointerCapture(pointerId)
+    if (pointerId !== null) {
+      try {
+        if (handle.hasPointerCapture(pointerId)) {
+          handle.releasePointerCapture(pointerId)
+        }
+      } catch {
+        // Best effort: Electron/Chromium can drop capture before our cleanup
+        // runs, but the terminal must never stay pointer-inert.
+      }
     }
     if (!dragging) {
       return

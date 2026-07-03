@@ -20,6 +20,7 @@ import {
   Loader2,
   Pencil,
   Search,
+  SquareTerminal,
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -285,6 +286,7 @@ type FileExplorerRowProps = {
   onDuplicate: (node: TreeNode) => void
   onAddFolderAsProject: () => void
   canAddAsProject: boolean
+  onOpenInTerminal: () => void
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -301,6 +303,10 @@ export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boole
 }
 
 export function shouldShowFindInFolderAction(node: TreeNode): boolean {
+  return node.isDirectory
+}
+
+export function shouldShowOpenInTerminalAction(node: TreeNode): boolean {
   return node.isDirectory
 }
 
@@ -422,6 +428,7 @@ export function FileExplorerRow({
   onDuplicate,
   onAddFolderAsProject,
   canAddAsProject,
+  onOpenInTerminal,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -693,6 +700,15 @@ export function FileExplorerRow({
             {translate(
               'auto.components.right.sidebar.FileExplorerRow.1bb9be455c',
               'Add as Project...'
+            )}
+          </ContextMenuItem>
+        )}
+        {shouldShowOpenInTerminalAction(node) && (
+          <ContextMenuItem onSelect={onOpenInTerminal}>
+            <SquareTerminal />
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.e887fa4b2e',
+              'Open in Terminal'
             )}
           </ContextMenuItem>
         )}

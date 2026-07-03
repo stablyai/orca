@@ -82,11 +82,22 @@ function matchingBaseRepoIds(
   return repoIds
 }
 
+// Why: branch switches and commits in the primary checkout rewrite these
+// top-level common-dir files; matching them keeps root-checkout branch/status
+// as fresh as linked worktrees. Deeper churn (objects, refs, logs) is ignored.
+const GIT_COMMON_PRIMARY_METADATA_FILES = new Set(['HEAD', 'packed-refs', 'index'])
+
 // Why: Git records linked worktrees under the common dir's `worktrees`
 // metadata, which is lower churn than watching checkout contents.
 function matchingGitCommonRepoIds(target: WorktreeBaseWatchTarget, eventPath: string): string[] {
   const parts = pathRelativeToWorktreeWatchRoot(target.path, eventPath)
-  if (!parts || parts[0] !== 'worktrees') {
+  if (!parts) {
+    return []
+  }
+  if (
+    parts[0] !== 'worktrees' &&
+    !(parts.length === 1 && GIT_COMMON_PRIMARY_METADATA_FILES.has(parts[0]))
+  ) {
     return []
   }
   return [...target.repos.keys()]

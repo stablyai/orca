@@ -895,12 +895,13 @@ async function main(): Promise<void> {
   function startGrace(reason: string): void {
     const startupEmptyDetached =
       detached && !hasAcceptedSocketClient && ptyHandler.activePtyCount === 0
-    const timeoutMs =
-      graceTimeMs === 0
-        ? 0
-        : startupEmptyDetached
-          ? Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
-          : graceTimeMs
+    // Why: "until reset" preserves real PTYs, but a detached relay that never
+    // accepted a client has no terminal state and should not linger forever.
+    const timeoutMs = startupEmptyDetached
+      ? graceTimeMs === 0
+        ? EMPTY_DETACHED_STARTUP_GRACE_MS
+        : Math.min(graceTimeMs, EMPTY_DETACHED_STARTUP_GRACE_MS)
+      : graceTimeMs
     graceDeadlineAt = timeoutMs === 0 ? null : Date.now() + timeoutMs
     graceReason = reason
     process.stderr.write(

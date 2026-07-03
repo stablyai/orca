@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
-import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -10,12 +10,8 @@ import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
-import {
-  getEditingTargetForSshTarget,
-  getSshTargetDraftConnectionFields,
-  isRelayGracePeriodValid,
-  parseRelayGracePeriodSeconds
-} from './ssh-target-draft'
+import { getEditingTargetForSshTarget } from './ssh-target-draft'
+import { buildSshTargetSavePayload } from './ssh-target-save-payload'
 import { translate } from '@/i18n/i18n'
 export { getSshPaneSearchEntries } from './ssh-search'
 
@@ -77,65 +73,16 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   }, [loadTargets])
 
   const handleSave = async (): Promise<void> => {
-    const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
-    if (!host) {
-      toast.error(
-        translate(
-          'auto.components.settings.SshPane.0e5aa04161',
-          'Host or SSH config alias is required'
-        )
-      )
+    const savePayload = buildSshTargetSavePayload(form)
+    if (!savePayload.ok) {
+      toast.error(savePayload.error)
       return
-    }
-
-    if (isNaN(port) || port < 1 || port > 65535) {
-      toast.error(
-        translate('auto.components.settings.SshPane.4db9afce1c', 'Port must be between 1 and 65535')
-      )
-      return
-    }
-
-    const graceSeconds = parseRelayGracePeriodSeconds(form)
-    if (!isRelayGracePeriodValid(form, graceSeconds)) {
-      toast.error(
-        translate(
-          'auto.components.settings.SshPane.3879cbaa52',
-          'Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset',
-          { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
-        )
-      )
-      return
-    }
-
-    const identityFile = form.identityFile.trim() || undefined
-    const proxyCommand = form.proxyCommand.trim() || undefined
-    const jumpHost = form.jumpHost.trim() || undefined
-
-    const target = {
-      label: form.label.trim() || (username ? `${username}@${host}` : configHost),
-      configHost,
-      host,
-      port,
-      username,
-      relayGracePeriodSeconds: graceSeconds,
-      ...(identityFile ? { identityFile } : {}),
-      ...(proxyCommand ? { proxyCommand } : {}),
-      ...(jumpHost ? { jumpHost } : {})
     }
 
     try {
       await (editingId
-        ? // Why: an explicit edit takes ownership of the target, so mark it
-          // `manual` — otherwise the next ~/.ssh/config sync would silently
-          // revert the user's change back to the config value. Carry the
-          // optional fields even when cleared (undefined) so removing e.g. a
-          // config-derived ProxyCommand actually deletes it — updateTarget
-          // merges partially, so an omitted key would keep the stale value.
-          window.api.ssh.updateTarget({
-            id: editingId,
-            updates: { ...target, identityFile, proxyCommand, jumpHost, source: 'manual' }
-          })
-        : window.api.ssh.addTarget({ target }))
+        ? window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
+        : window.api.ssh.addTarget({ target: savePayload.payload.target }))
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
         return

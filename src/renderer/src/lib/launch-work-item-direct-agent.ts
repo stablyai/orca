@@ -89,6 +89,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     agentEnv: effectiveAgentEnv,
     allowEmptyPromptLaunch: true
   })
+  if (startupPlan && args.promptDelivery === 'draft') {
+    startupPlan.draftPrompt = args.draftContent
+  }
   return {
     startupPlan,
     draftLaunchedNatively: false,
@@ -106,6 +109,7 @@ export function buildDirectWorkItemStartupOpts(
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
+    draftPrompt?: string
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
   }
@@ -123,6 +127,7 @@ export function buildDirectWorkItemStartupOpts(
       ...(plan.env ? { env: plan.env } : {}),
       launchConfig: plan.launchConfig,
       ...(agent ? { launchAgent: agent } : {}),
+      ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),

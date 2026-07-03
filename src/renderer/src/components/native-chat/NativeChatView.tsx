@@ -43,6 +43,12 @@ import {
 } from './native-chat-typing-redirect'
 import { useNativeChatContextMenu } from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import {
+  resolveNativeChatFileLink,
+  resolveNativeChatFileLinkContext
+} from './native-chat-file-link'
+import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 
 const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
   onSplitRight: () => {},
@@ -164,6 +170,9 @@ function NativeChatResolvedView({
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  const fileLinkContext = useAppStore(
+    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
+  )
   // Delegate to the composer so a pane-level Cmd/Ctrl+V (or context-menu /
   // app-menu paste) attaches a clipboard image when present, falling back to
   // text — matching the textarea's own paste behavior and the hosted TUI.
@@ -338,6 +347,24 @@ function NativeChatResolvedView({
     setWorkingInterrupted(true)
     interactiveSend.cancel()
   }, [interactiveSend])
+  const openNativeChatFileLink = useCallback<CommentMarkdownLinkClickHandler>(
+    (event, href) => {
+      const target = resolveNativeChatFileLink(href, fileLinkContext)
+      if (!target || !fileLinkContext) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      openDetectedFilePath(target.absolutePath, target.line, target.column, {
+        worktreeId: fileLinkContext.worktreeId,
+        worktreePath: fileLinkContext.worktreePath,
+        runtimeEnvironmentId: fileLinkContext.runtimeEnvironmentId,
+        openWithSystemDefault: event.shiftKey
+      })
+    },
+    [fileLinkContext]
+  )
+  const nativeChatFileLinkClick = fileLinkContext ? openNativeChatFileLink : undefined
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -393,6 +420,8 @@ function NativeChatResolvedView({
             isWorking={isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
+            onLinkClick={nativeChatFileLinkClick}
+            allowFileUriLinks={fileLinkContext !== null}
           />
         )}
       </div>

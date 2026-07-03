@@ -304,6 +304,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   if (!primaryTabId || !startupPlan || draftLaunchedNatively) {
     return true
   }
+  if (promptDelivery === 'draft' && startupPlan.draftPrompt) {
+    // Why: startup-owned draft paste observes the first PTY frames; the older
+    // delayed sidecar path can attach too late and miss Codex's ready marker.
+    return true
+  }
 
   void pasteDirectWorkItemDraftWhenAgentReady({
     primaryTabId,

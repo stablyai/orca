@@ -1,5 +1,4 @@
 import {
-  getRuntimePathBasename,
   isRuntimePathAbsolute,
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
@@ -160,15 +159,13 @@ export function classifyWorktreeOwnership(args: {
     return 'orca-managed'
   }
 
-  if (matchesStrongOrcaCreatePath(args.worktree.path, args.knownOrcaLayouts, args.repo)) {
-    return 'orca-managed'
-  }
-
   if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
     return 'unknown-legacy'
   }
 
   if (canClassifyAsExternal(args.worktree.path, args.knownOrcaLayouts)) {
+    // Why: a plain `git worktree add` can target Orca's nested workspace
+    // folder. Only metadata proves Orca created it.
     return 'external'
   }
 
@@ -240,6 +237,7 @@ export function areRuntimePathsEqual(leftPath: string, rightPath: string): boole
 function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
   return Boolean(
     meta?.orcaCreatedAt ||
+    meta?.orcaCreationWorkspaceLayout ||
     meta?.createdAt ||
     meta?.createdWithAgent ||
     meta?.pushTarget ||
@@ -247,38 +245,6 @@ function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
     meta?.sparsePresetId ||
     meta?.preserveBranchOnDelete
   )
-}
-
-export function matchesStrongOrcaCreatePath(
-  worktreePath: string,
-  knownOrcaLayouts: readonly OrcaWorkspaceLayout[],
-  repo: Pick<Repo, 'path'>
-): boolean {
-  const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/i, '')
-  if (!repoName) {
-    return false
-  }
-  for (const layout of knownOrcaLayouts) {
-    if (!layout.nestWorkspaces) {
-      continue
-    }
-    const relative = relativePathInsideRoot(layout.path, worktreePath)
-    if (relative === null) {
-      continue
-    }
-    const segments = splitNormalizedPath(relative)
-    const caseInsensitive =
-      isWindowsAbsolutePathLike(layout.path) || isWindowsAbsolutePathLike(worktreePath)
-    if (
-      segments.length === 2 &&
-      normalizePathSegment(segments[0], caseInsensitive) ===
-        normalizePathSegment(repoName, caseInsensitive) &&
-      segments[1].length > 0
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 function isUnderFlatOrUntrustedOrcaRoot(
@@ -312,13 +278,4 @@ function canClassifyAsExternal(
     return layout.nestWorkspaces
   }
   return true
-}
-
-function splitNormalizedPath(value: string): string[] {
-  return normalizeRuntimePathSeparators(value).split('/').filter(Boolean)
-}
-
-function normalizePathSegment(value: string, caseInsensitive: boolean): string {
-  const normalized = normalizeRuntimePathSeparators(value)
-  return caseInsensitive ? normalized.toLowerCase() : normalized
 }
