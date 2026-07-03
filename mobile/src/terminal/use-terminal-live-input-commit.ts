@@ -73,10 +73,13 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     if (!pendingHandle) {
       return
     }
+    // Why: a lagging mobile tab list briefly yields no active tab object; a
+    // null/undefined type is "unknown", not "left the terminal" — flush guards
+    // still block sends if the tab truly changed.
     if (
       !activeHandle ||
       pendingHandle !== activeHandle ||
-      activeSessionTabType !== 'terminal' ||
+      (activeSessionTabType != null && activeSessionTabType !== 'terminal') ||
       !liveInputTerminalHandles.has(activeHandle)
     ) {
       clearPendingLiveInputCommit()
