@@ -1,4 +1,3 @@
-import { logTerminalImeDiagnostic, summarizeElement } from '@/lib/terminal-ime-diagnostics'
 import {
   refreshTerminalImeInputContext,
   type TerminalImeInputContextRefocusScheduler
@@ -60,10 +59,6 @@ export function releaseTerminalFocusForOutsidePointerDown(args: {
     return false
   }
 
-  logTerminalImeDiagnostic('terminal-focus-release-outside-pointer', {
-    activeElement: summarizeElement(args.activeElement),
-    pointerTarget: summarizeElement(args.pointerTarget)
-  })
   args.syncFocused(false)
   activeHelper.blur()
   return true
@@ -82,10 +77,6 @@ export function releaseTerminalFocusForWindowBlur(args: {
     return null
   }
 
-  logTerminalImeDiagnostic('terminal-focus-release-window-blur', {
-    activeElement: summarizeElement(args.activeElement),
-    releasedHelper: summarizeElement(releasedHelper)
-  })
   args.syncFocused(false)
   return releasedHelper
 }
@@ -121,21 +112,10 @@ export function resyncTerminalFocusForWindowFocus(args: {
       helper = releasedHelper
       needsProgrammaticFocus = true
     } else {
-      logTerminalImeDiagnostic('terminal-focus-resync-skipped', {
-        activeElement: summarizeElement(args.activeElement),
-        releasedHelper: summarizeElement(args.releasedHelper)
-      })
       return false
     }
   }
 
-  logTerminalImeDiagnostic('terminal-focus-resync-start', {
-    activeElement: summarizeElement(args.activeElement),
-    helper: summarizeElement(helper),
-    releasedHelper: summarizeElement(args.releasedHelper),
-    needsProgrammaticFocus,
-    isMac: args.isMac ?? isMacUserAgent()
-  })
   args.syncFocused(true)
 
   const reclaimedHelper = helper
@@ -154,16 +134,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
         active === reclaimedHelper ||
         isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
       ) {
-        logTerminalImeDiagnostic('terminal-focus-resync-programmatic-focus', {
-          activeElement: summarizeElement(active),
-          helper: summarizeElement(reclaimedHelper)
-        })
         reclaimedHelper.focus()
-      } else {
-        logTerminalImeDiagnostic('terminal-focus-resync-programmatic-focus-skipped', {
-          activeElement: summarizeElement(active),
-          helper: summarizeElement(reclaimedHelper)
-        })
       }
     })
     return true
@@ -175,30 +146,9 @@ export function resyncTerminalFocusForWindowFocus(args: {
   // blur → next-frame refocus rebuilds the input context so the IME works again.
   // Other platforms don't hit this and shouldn't pay the flicker cost.
   if (isMac) {
-    logTerminalImeDiagnostic('terminal-focus-resync-mac-blur-refocus', {
-      helper: summarizeElement(reclaimedHelper)
-    })
     refreshTerminalImeInputContext(reclaimedHelper, {
       isMac,
-      scheduleRefocus: (callback) => {
-        const schedule = args.scheduleRefocus ?? scheduleNextFrame
-        schedule(() => {
-          callback()
-          const active = reclaimedHelper.ownerDocument.activeElement
-          if (active === reclaimedHelper) {
-            logTerminalImeDiagnostic('terminal-focus-resync-mac-refocus', {
-              activeElement: summarizeElement(active),
-              helper: summarizeElement(reclaimedHelper)
-            })
-          } else {
-            logTerminalImeDiagnostic('terminal-focus-resync-mac-refocus-skipped', {
-              activeElement: summarizeElement(active),
-              helper: summarizeElement(reclaimedHelper)
-            })
-          }
-        })
-      },
-      reason: 'window-focus-resync'
+      scheduleRefocus: args.scheduleRefocus
     })
   }
 

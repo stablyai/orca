@@ -1,9 +1,4 @@
 import type { IDisposable } from '@xterm/xterm'
-import {
-  logTerminalImeDiagnostic,
-  summarizeElement,
-  summarizeTextInputEvent
-} from '@/lib/terminal-ime-diagnostics'
 
 export type TerminalImeCompositionTracker = IDisposable & {
   isActive: () => boolean
@@ -22,41 +17,18 @@ export function installTerminalImeCompositionTracker(
 
   const markActive = (): void => {
     active = true
-    logTerminalImeDiagnostic('composition-start', {
-      active,
-      target: summarizeElement(terminalElement)
-    })
   }
   const updateComposition = (event: Event): void => {
     active = !(event instanceof CompositionEvent) || event.data !== ''
-    logTerminalImeDiagnostic('composition-update', {
-      active,
-      event: summarizeTextInputEvent(event),
-      target: summarizeElement(terminalElement)
-    })
   }
   const handleInput = (event: Event): void => {
     if (event instanceof InputEvent && event.inputType === 'insertCompositionText') {
-      logTerminalImeDiagnostic('composition-input-retained', {
-        active,
-        event: summarizeTextInputEvent(event),
-        target: summarizeElement(event.target)
-      })
       return
     }
     active = false
-    logTerminalImeDiagnostic('composition-input-cleared', {
-      active,
-      event: summarizeTextInputEvent(event),
-      target: summarizeElement(event.target)
-    })
   }
   const markInactive = (): void => {
     active = false
-    logTerminalImeDiagnostic('composition-end-or-blur', {
-      active,
-      target: summarizeElement(terminalElement)
-    })
   }
 
   terminalElement.addEventListener('compositionstart', markActive, true)

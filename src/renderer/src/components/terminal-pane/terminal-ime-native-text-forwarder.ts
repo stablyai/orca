@@ -8,15 +8,6 @@ import {
   isSinglePrintableTextKey,
   type ImeNativeTextKeyEvent
 } from './terminal-ime-native-text-candidates'
-import {
-  logNativeForwarderCancel,
-  logNativeForwarderClaimedKeydown,
-  logNativeForwarderInput,
-  logNativeForwarderKeydown,
-  logNativeForwarderPendingTimeout,
-  logNativeForwarderRejected,
-  shouldLogNativeTextKeyEvent
-} from './terminal-ime-native-forwarder-diagnostics'
 
 export { isImeNativeTextKeydownCandidate } from './terminal-ime-native-text-candidates'
 export type { ImeNativeTextKeyEvent } from './terminal-ime-native-text-candidates'
@@ -101,7 +92,6 @@ export function installTerminalImeNativeTextForwarder(args: {
     pendingForwardClearTimer = window.setTimeout(() => {
       pendingForward = false
       pendingForwardClearTimer = null
-      logNativeForwarderPendingTimeout(claimedPress, terminalElement)
     }, 100)
   }
 
@@ -111,17 +101,6 @@ export function installTerminalImeNativeTextForwarder(args: {
       const features =
         args.getInputSourceFeatures?.() ?? DISABLED_MAC_NATIVE_TEXT_INPUT_SOURCE_FEATURES
       const candidate = isImeNativeTextKeydownCandidate(event, compositionActive, features)
-      if (shouldLogNativeTextKeyEvent(event, candidate, features)) {
-        logNativeForwarderKeydown({
-          event,
-          compositionActive,
-          features,
-          candidate,
-          pendingForward,
-          claimedPress,
-          terminalElement
-        })
-      }
       if (!candidate) {
         return false
       }
@@ -129,29 +108,16 @@ export function installTerminalImeNativeTextForwarder(args: {
       clearPendingForwardTimer()
       pendingForward = true
       claimedPress = { key: event.key, code: event.code }
-      logNativeForwarderClaimedKeydown(event, features, claimedPress, terminalElement)
       return true
     }
     if (!claimedPress) {
       return false
     }
     if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing === true) {
-      logNativeForwarderRejected('native-forwarder-rejected-modifier-or-composing', {
-        event,
-        pendingForward,
-        claimedPress,
-        terminalElement
-      })
       return false
     }
     if (event.type === 'keyup') {
       if (!matchesClaimedPress(event, claimedPress)) {
-        logNativeForwarderRejected('native-forwarder-keyup-mismatch', {
-          event,
-          pendingForward,
-          claimedPress,
-          terminalElement
-        })
         return false
       }
       claimedPress = null
@@ -159,31 +125,12 @@ export function installTerminalImeNativeTextForwarder(args: {
         schedulePendingForwardClear()
       }
       // Bypass so the kitty release sequence for the swallowed press cannot leak.
-      logNativeForwarderRejected('native-forwarder-claimed-keyup', {
-        event,
-        pendingForward,
-        claimedPress,
-        terminalElement
-      })
       return true
     }
     if (event.type === 'keypress') {
       // Keep the keydown's armed state but still bypass xterm so it does not
       // double-send printable text before our input forward runs.
-      const matches = matchesClaimedKeypress(event, claimedPress)
-      logNativeForwarderRejected(
-        'native-forwarder-keypress',
-        {
-          event,
-          pendingForward,
-          claimedPress,
-          terminalElement
-        },
-        {
-          matches
-        }
-      )
-      return matches
+      return matchesClaimedKeypress(event, claimedPress)
     }
     return false
   }
@@ -196,12 +143,10 @@ export function installTerminalImeNativeTextForwarder(args: {
       return
     }
     if (event.inputType !== 'insertText') {
-      logNativeForwarderInput('native-forwarder-disarm-non-insert-text', event, claimedPress)
       disarmPendingForward()
       return
     }
     disarmPendingForward()
-    logNativeForwarderInput('native-forwarder-forward-insert-text', event, claimedPress)
     if (event.data) {
       args.sendInput(event.data)
     }
@@ -214,20 +159,19 @@ export function installTerminalImeNativeTextForwarder(args: {
     }
   }
 
-  const cancelPending = (reason: string): void => {
-    logNativeForwarderCancel(reason, pendingForward, claimedPress, terminalElement)
+  const cancelPending = (): void => {
     disarmPendingForward()
     claimedPress = null
   }
 
   terminalElement.addEventListener('input', forwardCommittedText, true)
-  const cancelPendingOnBlur = (): void => cancelPending('blur')
+  const cancelPendingOnBlur = (): void => cancelPending()
   terminalElement.addEventListener('blur', cancelPendingOnBlur, true)
 
   return {
     claimKeyEvent,
     dispose: () => {
-      cancelPending('dispose')
+      cancelPending()
       terminalElement.removeEventListener('input', forwardCommittedText, true)
       terminalElement.removeEventListener('blur', cancelPendingOnBlur, true)
     }

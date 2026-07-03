@@ -1,5 +1,4 @@
 import type { IDisposable } from '@xterm/xterm'
-import { logTerminalImeDiagnostic, summarizeKeyboardEvent } from '@/lib/terminal-ime-diagnostics'
 
 export type MacNativeTextInputSourceFeatures = Readonly<{
   forwardAsciiPunctuation: boolean
@@ -124,21 +123,14 @@ export function createMacNativeTextInputSourceTracker(
       return
     }
     features = getMacNativeTextInputSourceFeatures(inputSourceId)
-    logTerminalImeDiagnostic('input-source-refresh', {
-      inputSourceId,
-      features,
-      generation
-    })
   }
 
   const requestRefresh = (): void => {
     if (refreshInFlight) {
       refreshQueued = true
-      logTerminalImeDiagnostic('input-source-refresh-queued', { features })
       return
     }
     refreshInFlight = true
-    logTerminalImeDiagnostic('input-source-refresh-requested', { features })
     void refresh().finally(() => {
       refreshInFlight = false
       if (!disposed && refreshQueued) {
@@ -159,23 +151,13 @@ export function createMacNativeTextInputSourceTracker(
       lastKeyboardActivityRefreshAt !== null &&
       now - lastKeyboardActivityRefreshAt < KEYBOARD_ACTIVITY_REFRESH_COOLDOWN_MS
     ) {
-      logTerminalImeDiagnostic('input-source-keyboard-refresh-throttled', {
-        force,
-        features,
-        sinceLastMs: now - lastKeyboardActivityRefreshAt
-      })
       return
     }
     lastKeyboardActivityRefreshAt = now
-    logTerminalImeDiagnostic('input-source-keyboard-refresh', { force, features })
     requestRefresh()
   }
 
   const onKeyboardActivity = (event: KeyboardEvent): void => {
-    logTerminalImeDiagnostic('input-source-keyboard-activity', {
-      event: summarizeKeyboardEvent(event),
-      features
-    })
     if (event.ctrlKey || event.altKey || event.metaKey) {
       requestKeyboardActivityRefresh(true)
       return

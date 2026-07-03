@@ -20,7 +20,6 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
-import { logTerminalImeDiagnostic, summarizeElement } from '../terminal-ime-diagnostics'
 
 type MovedPaneSplitState = {
   pane: ManagedPaneInternal
@@ -143,12 +142,6 @@ function openSplitPane(
   openTerminal(newPane)
   applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
   applyDividerStyles(args.root, args.styleOptions)
-  logTerminalImeDiagnostic('pane-manager-split-new-pane-focus', {
-    paneId: newPane.id,
-    leafId: newPane.leafId,
-    activeElement: summarizeElement(document.activeElement),
-    target: summarizeElement(newPane.terminal.element)
-  })
   newPane.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
   // Why: forward one-shot spawn/adoption hints so the new pane inherits the
@@ -217,12 +210,6 @@ function activateReplacementPane(args: CloseManagedPaneArgs): number | null {
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
   if (next) {
-    logTerminalImeDiagnostic('pane-manager-close-replacement-focus', {
-      paneId: next.id,
-      leafId: next.leafId,
-      activeElement: summarizeElement(document.activeElement),
-      target: summarizeElement(next.terminal.element)
-    })
     next.terminal.focus()
   }
   return nextActivePaneId

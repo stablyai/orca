@@ -126,7 +126,6 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
-import { logTerminalImeDiagnostic, summarizeElement } from '@/lib/terminal-ime-diagnostics'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -253,8 +252,6 @@ export default function TerminalPane({
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  const imeDiagnosticTabIdRef = useRef(tabId)
-  imeDiagnosticTabIdRef.current = tabId
   const managerRef = useRef<PaneManager | null>(null)
   const paneFontSizesRef = useRef<Map<number, number>>(new Map())
   const expandedPaneIdRef = useRef<number | null>(null)
@@ -1746,23 +1743,11 @@ export default function TerminalPane({
       if (focused) {
         releasedHelperOnWindowBlur = null
       }
-      logTerminalImeDiagnostic('terminal-pane-sync-focused', {
-        tabId: imeDiagnosticTabIdRef.current,
-        focused,
-        ownsRegularTerminalFocus,
-        activeElement: summarizeElement(document.activeElement)
-      })
       setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
     }
     const onFocusIn = (event: FocusEvent): void => {
       if (isXtermHelperTextarea(event.target)) {
-        logTerminalImeDiagnostic('terminal-pane-focusin-helper', {
-          tabId: imeDiagnosticTabIdRef.current,
-          target: summarizeElement(event.target),
-          relatedTarget: summarizeElement(event.relatedTarget),
-          activeElement: summarizeElement(document.activeElement)
-        })
         syncFocused(true)
       }
     }
@@ -1771,20 +1756,8 @@ export default function TerminalPane({
         return
       }
       if (isXtermHelperTextarea(event.relatedTarget)) {
-        logTerminalImeDiagnostic('terminal-pane-focusout-helper-to-helper', {
-          tabId: imeDiagnosticTabIdRef.current,
-          target: summarizeElement(event.target),
-          relatedTarget: summarizeElement(event.relatedTarget),
-          activeElement: summarizeElement(document.activeElement)
-        })
         return
       }
-      logTerminalImeDiagnostic('terminal-pane-focusout-helper', {
-        tabId: imeDiagnosticTabIdRef.current,
-        target: summarizeElement(event.target),
-        relatedTarget: summarizeElement(event.relatedTarget),
-        activeElement: summarizeElement(document.activeElement)
-      })
       syncFocused(false)
     }
     const onPointerDown = (event: PointerEvent): void => {
@@ -1798,10 +1771,6 @@ export default function TerminalPane({
     const onWindowBlur = (): void => {
       // Why: webview/browser handoff leaves the helper textarea as DOM focus,
       // so clear only the main-process mirror and let guest focus proceed.
-      logTerminalImeDiagnostic('terminal-pane-window-blur', {
-        tabId: imeDiagnosticTabIdRef.current,
-        activeElement: summarizeElement(document.activeElement)
-      })
       releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
         container,
         activeElement: document.activeElement,
@@ -1811,11 +1780,6 @@ export default function TerminalPane({
     const onWindowFocus = (): void => {
       // Why: app reactivation can preserve DOM focus on xterm after blur
       // cleared the process-wide shortcut mirror, or move focus to body/null.
-      logTerminalImeDiagnostic('terminal-pane-window-focus', {
-        tabId: imeDiagnosticTabIdRef.current,
-        activeElement: summarizeElement(document.activeElement),
-        releasedHelperOnWindowBlur: summarizeElement(releasedHelperOnWindowBlur)
-      })
       if (
         resyncTerminalFocusForWindowFocus({
           container,

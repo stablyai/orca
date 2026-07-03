@@ -42,7 +42,6 @@ import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
-import { logTerminalImeDiagnostic, summarizeElement } from '../terminal-ime-diagnostics'
 
 export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
 
@@ -84,12 +83,6 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
-      logTerminalImeDiagnostic('pane-manager-create-initial-focus', {
-        paneId: pane.id,
-        leafId: pane.leafId,
-        activeElement: summarizeElement(document.activeElement),
-        target: summarizeElement(pane.terminal.element)
-      })
       pane.terminal.focus()
     }
 
@@ -250,13 +243,6 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
-      logTerminalImeDiagnostic('pane-manager-set-active-focus', {
-        paneId: pane.id,
-        leafId: pane.leafId,
-        changed,
-        activeElement: summarizeElement(document.activeElement),
-        target: summarizeElement(pane.terminal.element)
-      })
       pane.terminal.focus()
     }
 

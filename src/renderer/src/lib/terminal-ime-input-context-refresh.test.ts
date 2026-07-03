@@ -24,7 +24,6 @@ describe('refreshTerminalImeInputContext', () => {
 
     const refreshed = refreshTerminalImeInputContext(helper, {
       isMac: true,
-      reason: 'test',
       scheduleRefocus: (callback) => scheduled.push(callback)
     })
 
@@ -50,7 +49,6 @@ describe('refreshTerminalImeInputContext', () => {
 
     refreshTerminalImeInputContext(helper, {
       isMac: true,
-      reason: 'test',
       scheduleRefocus: (callback) => scheduled.push(callback)
     })
 
@@ -68,7 +66,6 @@ describe('refreshTerminalImeInputContext', () => {
 
     const refreshed = refreshTerminalImeInputContext(helper, {
       isMac: false,
-      reason: 'test',
       scheduleRefocus: () => {
         throw new Error('should not schedule')
       }
