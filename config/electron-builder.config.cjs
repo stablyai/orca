@@ -7,7 +7,6 @@ const {
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
-const { compressMacServeSimCameraDylibs } = require('./serve-sim-camera-packaging.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
@@ -132,7 +131,6 @@ module.exports = {
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
-    compressMacServeSimCameraDylibs(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
