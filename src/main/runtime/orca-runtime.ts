@@ -558,7 +558,6 @@ import type {
   UpdatePullRequestBySlugArgs
 } from '../../shared/github-project-types'
 import {
-  getGitUsername,
   getBaseRefDefault,
   getDefaultBaseRef,
   getDefaultRemote,
@@ -578,6 +577,7 @@ import {
   getRecentDriftSubjects
 } from '../git/repo'
 import { hasLocalCommitObject } from '../git/commit-object-ref'
+import { resolveLocalGitUsername } from '../git/git-username'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -12917,7 +12917,7 @@ export class OrcaRuntimeService {
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     let effectiveSanitizedName = sanitizedName
-    const username = getGitUsername(repo.path)
+    const username = await resolveLocalGitUsername(repo.path)
 
     const baseBranch =
       args.baseBranch ||
