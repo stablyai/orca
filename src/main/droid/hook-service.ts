@@ -70,10 +70,16 @@ function getManagedScript(): string {
       '@echo off',
       'setlocal',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
+      // Why: route guard exits through :suppress so every path emits Factory's
+      // suppressOutput directive once; success falls through after the curl. #6069
+      'if "%ORCA_AGENT_HOOK_PORT%"=="" goto suppress',
+      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto suppress',
+      'if "%ORCA_PANE_KEY%"=="" goto suppress',
       buildWindowsAgentHookPostCommand('droid'),
+      // Label sits on its own line so cmd.exe finishes the caret-continued curl
+      // before flowing into the no-op label and echoing the directive.
+      ':suppress',
+      'echo {"suppressOutput":true}',
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -81,14 +87,21 @@ function getManagedScript(): string {
 
   return [
     '#!/bin/sh',
+    // Why: emit Factory's suppressOutput so droid hides the managed hook block;
+    // failing hooks always render, so we still exit 0. #6069
+    'orca_suppress_output() {',
+    "  printf '%s\\n' '{\"suppressOutput\":true}'",
+    '}',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  orca_suppress_output',
     '  exit 0',
     'fi',
     'payload=$(cat)',
     'if [ -z "$payload" ]; then',
+    '  orca_suppress_output',
     '  exit 0',
     'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.
@@ -103,6 +116,7 @@ function getManagedScript(): string {
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
+    'orca_suppress_output',
     'exit 0',
     ''
   ].join('\n')

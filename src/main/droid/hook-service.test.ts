@@ -109,6 +109,92 @@ describe('DroidHookService', () => {
     }
   )
 
+  // Why: #6069 — the managed droid hook must emit Factory's suppressOutput
+  // directive on EVERY exit path so droid hides the hook block, while staying
+  // fail-open (always exit 0). A bare "contains the JSON" check would pass even
+  // if a regression dropped the emit on the listener-down / empty-payload paths,
+  // so these assert the script's path structure, not mere substring presence.
+  describe('managed script suppressOutput structure (#6069)', () => {
+    it('emits suppressOutput before every exit 0 in the POSIX body', () => {
+      // Pin a POSIX platform so this runs host-independently — on a Windows dev
+      // box install() would write droid-hook.cmd and the .sh read would ENOENT.
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+      try {
+        new DroidHookService().install()
+
+        const body = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'droid-hook.sh'), 'utf8')
+        const lines = body.split('\n')
+
+        // Pin the printf one-liner so a future echo swap can't introduce platform escapes.
+        expect(body).toContain(
+          "orca_suppress_output() {\n  printf '%s\\n' '{\"suppressOutput\":true}'\n}"
+        )
+
+        // Every `exit 0` must be immediately preceded by the suppress emission.
+        const exitIndexes = lines
+          .map((line, index) => ({ line: line.trim(), index }))
+          .filter((entry) => entry.line === 'exit 0')
+          .map((entry) => entry.index)
+        expect(exitIndexes.length).toBeGreaterThan(0)
+        for (const index of exitIndexes) {
+          expect(lines[index - 1].trim()).toBe('orca_suppress_output')
+        }
+
+        // Fail-open POST and final exit are still present.
+        expect(body).toContain(
+          'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/droid"'
+        )
+        expect(body).toContain('>/dev/null 2>&1 || true')
+      } finally {
+        if (originalPlatform) {
+          Object.defineProperty(process, 'platform', originalPlatform)
+        }
+      }
+    })
+
+    it('routes Windows guards through a single :suppress label after the curl block', () => {
+      // getManagedScript() branches on process.platform at call time, so drive
+      // the Windows body directly to keep its fragile caret/label form tested
+      // from non-Windows CI.
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+      try {
+        new DroidHookService().install()
+
+        const body = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'droid-hook.cmd'), 'utf8')
+        const lines = body.split('\r\n')
+
+        // All three env-var guards short-circuit to the shared label.
+        expect(body).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" goto suppress')
+        expect(body).toContain('if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto suppress')
+        expect(body).toContain('if "%ORCA_PANE_KEY%"=="" goto suppress')
+
+        // Exactly one :suppress label, sitting after the curl block.
+        const labelIndexes = lines
+          .map((line, index) => ({ line, index }))
+          .filter((entry) => entry.line === ':suppress')
+          .map((entry) => entry.index)
+        expect(labelIndexes).toHaveLength(1)
+        const curlIndex = lines.findIndex((line) => line.includes('curl.exe'))
+        expect(curlIndex).toBeGreaterThanOrEqual(0)
+        expect(labelIndexes[0]).toBeGreaterThan(curlIndex)
+
+        // Fail-open guarantee: no exit before the label re-introduces a non-zero path.
+        const firstExitIndex = lines.findIndex((line) => line.trim() === 'exit /b 0')
+        expect(firstExitIndex).toBeGreaterThan(labelIndexes[0])
+
+        // The emitted echo must not carry a trailing space (cmd echoes it verbatim).
+        expect(lines).toContain('echo {"suppressOutput":true}')
+        expect(body).not.toContain('echo {"suppressOutput":true} ')
+      } finally {
+        if (originalPlatform) {
+          Object.defineProperty(process, 'platform', originalPlatform)
+        }
+      }
+    })
+  })
+
   it('reports partial when Factory has hooks disabled globally', () => {
     const configPath = join(homeDir, '.factory', 'settings.json')
     mkdirSync(dirname(configPath), { recursive: true })
