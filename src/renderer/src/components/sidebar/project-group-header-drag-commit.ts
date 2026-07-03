@@ -1,7 +1,4 @@
-import {
-  getProjectGroupTabOrderForSidebarDrop,
-  mapSidebarProjectGroupDropIndexToSiblingInsertIndex
-} from './project-group-header-drop'
+import { getProjectGroupTabOrderUpdatesForSidebarDrop } from './project-group-header-drop'
 import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
 import type { ProjectGroup } from '../../../../shared/types'
 
@@ -11,40 +8,13 @@ export function commitProjectGroupHeaderDragDrop(args: {
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
 }): void {
-  const draggedGroup = args.projectGroupById.get(args.session.groupId)
-  if (!draggedGroup) {
-    return
-  }
-
-  const sidebarProjectGroupHeaderIds = args.session.sidebarProjectGroupHeaderIds
-  const sourceIndex = sidebarProjectGroupHeaderIds.indexOf(args.session.groupId)
-  if (sourceIndex === -1) {
-    return
-  }
-  if (args.sidebarDropIndex === sourceIndex) {
-    return
-  }
-
-  const siblings = sidebarProjectGroupHeaderIds
-    .filter((groupId) => groupId !== args.session.groupId)
-    .map((groupId) => args.projectGroupById.get(groupId))
-    .filter((group): group is ProjectGroup => group !== undefined)
-  const siblingDropIndex = mapSidebarProjectGroupDropIndexToSiblingInsertIndex({
+  const updates = getProjectGroupTabOrderUpdatesForSidebarDrop({
+    sidebarProjectGroupHeaderIds: args.session.sidebarProjectGroupHeaderIds,
+    draggedGroupId: args.session.groupId,
     sidebarDropIndex: args.sidebarDropIndex,
-    sourceIndex,
-    siblingCount: siblings.length
+    projectGroupById: args.projectGroupById
   })
-  const sourceIndexInSiblings = Math.min(sourceIndex, siblings.length)
-  if (siblingDropIndex === sourceIndexInSiblings) {
-    return
+  for (const update of updates) {
+    args.onCommitProjectGroupTabOrder(update.groupId, update.tabOrder)
   }
-
-  const tabOrder = getProjectGroupTabOrderForSidebarDrop({
-    siblings,
-    dropIndex: siblingDropIndex
-  })
-  if (!Number.isFinite(tabOrder)) {
-    return
-  }
-  args.onCommitProjectGroupTabOrder(draggedGroup.id, tabOrder)
 }

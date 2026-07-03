@@ -73,6 +73,23 @@ export function useProjectGroupHeaderDrag({
     []
   )
 
+  const applyDrop = useCallback(
+    (groupId: string, drop: { dropIndex: number; dropIndicatorY: number } | null) => {
+      latestDropIndexRef.current = drop?.dropIndex ?? null
+      const nextState: ProjectGroupDragState = drop
+        ? { draggingGroupId: groupId, ...drop }
+        : { draggingGroupId: groupId, dropIndex: null, dropIndicatorY: null }
+      setState((prev) =>
+        prev.draggingGroupId === nextState.draggingGroupId &&
+        prev.dropIndex === nextState.dropIndex &&
+        prev.dropIndicatorY === nextState.dropIndicatorY
+          ? prev
+          : nextState
+      )
+    },
+    []
+  )
+
   const cancelAutoscroll = useCallback(() => {
     if (autoscrollFrameIdRef.current !== null) {
       window.cancelAnimationFrame(autoscrollFrameIdRef.current)
@@ -157,18 +174,11 @@ export function useProjectGroupHeaderDrag({
         refreshHeaderRects()
       }
 
-      const drop = computeDrop(session.latestPointerY)
-      if (drop) {
-        setState((prev) =>
-          prev.dropIndex === drop.dropIndex && prev.dropIndicatorY === drop.dropIndicatorY
-            ? prev
-            : { draggingGroupId: session.groupId, ...drop }
-        )
-      }
+      applyDrop(session.groupId, computeDrop(session.latestPointerY))
 
       autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
     },
-    [cancelAutoscroll, computeDrop, refreshHeaderRects]
+    [applyDrop, cancelAutoscroll, computeDrop, refreshHeaderRects]
   )
 
   const ensureAutoscroll = useCallback(() => {
@@ -212,14 +222,7 @@ export function useProjectGroupHeaderDrag({
         setState({ draggingGroupId: session.groupId, dropIndex: null, dropIndicatorY: null })
       }
       refreshHeaderRects()
-      const drop = computeDrop(event.clientY)
-      if (drop) {
-        setState((prev) =>
-          prev.dropIndex === drop.dropIndex && prev.dropIndicatorY === drop.dropIndicatorY
-            ? prev
-            : { draggingGroupId: session.groupId, ...drop }
-        )
-      }
+      applyDrop(session.groupId, computeDrop(event.clientY))
       ensureAutoscroll()
     }
     const onPointerUp = (event: PointerEvent): void => {
@@ -260,7 +263,15 @@ export function useProjectGroupHeaderDrag({
         clickSwallowTimeoutRef.current = null
       }
     }
-  }, [cancelAutoscroll, computeDrop, endDrag, ensureAutoscroll, refreshHeaderRects, sessionArmed])
+  }, [
+    applyDrop,
+    cancelAutoscroll,
+    computeDrop,
+    endDrag,
+    ensureAutoscroll,
+    refreshHeaderRects,
+    sessionArmed
+  ])
 
   useEffect(() => {
     if (state.draggingGroupId === null) {

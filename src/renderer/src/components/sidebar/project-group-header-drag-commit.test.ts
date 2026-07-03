@@ -40,7 +40,7 @@ function makeSession(
 }
 
 describe('commitProjectGroupHeaderDragDrop', () => {
-  it('commits a finite tabOrder for the dragged Project Group', () => {
+  it('commits dense tabOrder updates for the affected Project Group siblings', () => {
     const onCommitProjectGroupTabOrder = vi.fn()
     const groups = [
       group('a', { tabOrder: 0 }),
@@ -56,7 +56,11 @@ describe('commitProjectGroupHeaderDragDrop', () => {
       onCommitProjectGroupTabOrder
     })
 
-    expect(onCommitProjectGroupTabOrder).toHaveBeenCalledWith('c', -1)
+    expect(onCommitProjectGroupTabOrder.mock.calls).toEqual([
+      ['c', 0],
+      ['a', 1],
+      ['b', 2]
+    ])
   })
 
   it('computes order only from the captured sibling bucket', () => {
@@ -76,7 +80,10 @@ describe('commitProjectGroupHeaderDragDrop', () => {
       onCommitProjectGroupTabOrder
     })
 
-    expect(onCommitProjectGroupTabOrder).toHaveBeenCalledWith('sibling-b', -1)
+    expect(onCommitProjectGroupTabOrder.mock.calls).toEqual([
+      ['sibling-b', 0],
+      ['sibling-a', 1]
+    ])
   })
 
   it('does not commit when the drop keeps the group in the same slot', () => {
