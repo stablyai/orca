@@ -2,8 +2,7 @@ import { useCallback, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import {
   getTerminalLiveAccessoryBytesDecision,
-  getTerminalLiveAccessoryLocalEditText,
-  getTerminalLiveDeferredTextDelayMs
+  getTerminalLiveAccessoryLocalEditText
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
@@ -14,12 +13,6 @@ export type TerminalLiveAccessoryInputCommitResult =
   | { readonly kind: 'handled' }
   | { readonly kind: 'suppress-raw' }
 
-type TerminalLiveInputCommitScheduler = (
-  handle: string,
-  text: string,
-  delayMs: number | null
-) => void
-
 export async function getTerminalLiveAccessoryInactiveInputCommitResult(
   waitForPendingLiveInputFlush: () => Promise<boolean>
 ): Promise<TerminalLiveAccessoryInputCommitResult> {
@@ -28,13 +21,14 @@ export async function getTerminalLiveAccessoryInactiveInputCommitResult(
 
 type TerminalLiveAccessoryInputCommitOptions = {
   readonly activeHandle: string | null
+  readonly applyLiveInputMirror: (handle: string, fieldText: string) => void
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
+  readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
-  readonly pendingLiveInputTextRef: RefObject<string>
-  readonly schedulePendingLiveInputCommit: TerminalLiveInputCommitScheduler
+  readonly sentLiveInputTextRef: RefObject<string>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
@@ -42,13 +36,14 @@ type TerminalLiveAccessoryInputCommitOptions = {
 
 export function useTerminalLiveAccessoryInputCommit({
   activeHandle,
+  applyLiveInputMirror,
   clearPendingLiveInputCommit,
   flushPendingLiveInputText,
+  heldLiveInputTextRef,
   liveInputRef,
   liveInputTerminalHandles,
   pendingLiveInputHandleRef,
-  pendingLiveInputTextRef,
-  schedulePendingLiveInputCommit,
+  sentLiveInputTextRef,
   sendLiveTerminalInputRef,
   setLiveInputCapture,
   waitForPendingLiveInputFlush
@@ -63,40 +58,33 @@ export function useTerminalLiveAccessoryInputCommit({
       if (!liveInputTerminalHandles.has(activeHandle)) {
         return getTerminalLiveAccessoryInactiveInputCommitResult(waitForPendingLiveInputFlush)
       }
-      const pendingText =
-        pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
-      if (pendingLiveInputHandleRef.current && pendingLiveInputHandleRef.current !== activeHandle) {
+      const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      if (pendingLiveInputHandleRef.current && !ownsPendingState) {
         clearPendingLiveInputCommit()
       }
-      const decision = getTerminalLiveAccessoryBytesDecision({ ...input, pendingText })
+      const heldText = ownsPendingState ? heldLiveInputTextRef.current : ''
+      const sentText = ownsPendingState ? sentLiveInputTextRef.current : ''
+      const decision = getTerminalLiveAccessoryBytesDecision({ ...input, heldText, sentText })
       switch (decision.kind) {
         case 'send-now':
-          // Why: raw accessory bytes must wait behind any in-flight IME text
-          // flush so composed Hangul reaches the PTY before follow-up controls.
+          // Why: raw accessory bytes must wait behind any in-flight mirror send
+          // so composed Hangul reaches the PTY before follow-up controls.
           return (await waitForPendingLiveInputFlush())
             ? { kind: 'allow-raw' }
             : { kind: 'suppress-raw' }
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
             localEdit: decision.localEdit,
-            pendingText
+            fieldText: sentText + heldText
           })
-          if (editedText.length === 0) {
-            clearPendingLiveInputCommit()
-            return { kind: 'handled' }
-          }
           // Why: accessory buttons do not emit native TextInput edits, so the
-          // pending IME buffer must be edited and rescheduled here.
+          // field is edited here and the mirror diff syncs the PTY echo.
           setLiveInputCapture(editedText)
           liveInputRef.current?.setNativeProps({ text: editedText })
-          schedulePendingLiveInputCommit(
-            activeHandle,
-            editedText,
-            getTerminalLiveDeferredTextDelayMs(editedText)
-          )
+          applyLiveInputMirror(activeHandle, editedText)
           return { kind: 'handled' }
         }
-        case 'flush-then-send':
+        case 'commit-held-then-send':
           await sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
@@ -109,13 +97,14 @@ export function useTerminalLiveAccessoryInputCommit({
     },
     [
       activeHandle,
+      applyLiveInputMirror,
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
+      heldLiveInputTextRef,
       liveInputRef,
       liveInputTerminalHandles,
       pendingLiveInputHandleRef,
-      pendingLiveInputTextRef,
-      schedulePendingLiveInputCommit,
+      sentLiveInputTextRef,
       sendLiveTerminalInputRef,
       setLiveInputCapture,
       waitForPendingLiveInputFlush
