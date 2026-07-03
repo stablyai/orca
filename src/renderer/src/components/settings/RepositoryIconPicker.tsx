@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../shared/types'
-import { githubAvatarIcon, type RepoIcon } from '../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../shared/repo-icon'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { Button } from '../ui/button'
@@ -15,7 +15,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { RepositoryIconColorSection } from './RepositoryIconColorSection'
 import { RepositoryIconTabs } from './RepositoryIconTabs'
 import {
-  resolveRepositoryGitHubAvatarIcon,
+  buildRepositoryGitHubAvatarUpdate,
+  resolveRepositoryGitHubAvatar,
   resolveRepositoryUpstreamLive
 } from './repository-icon-github'
 import { translate } from '@/i18n/i18n'
@@ -72,19 +73,20 @@ export function RepositoryIconPicker({
     [runtimeTarget, repo]
   )
 
-  const resolveGitHubAvatarIcon = useCallback(
-    () => resolveRepositoryGitHubAvatarIcon(runtimeTarget, repo),
+  const resolveGitHubAvatar = useCallback(
+    (options?: { forceLive?: boolean }) =>
+      resolveRepositoryGitHubAvatar(runtimeTarget, repo, options),
     [runtimeTarget, repo]
   )
 
   const handleUseGitHubAvatar = async () => {
     setLoadingGitHub(true)
     try {
-      const icon = await resolveGitHubAvatarIcon()
+      const resolution = await resolveGitHubAvatar({ forceLive: true })
       if (!mountedRef.current) {
         return
       }
-      if (!icon) {
+      if (!resolution.repoIcon) {
         toast.error(
           translate(
             'auto.components.settings.RepositoryIconPicker.f79972271a',
@@ -93,7 +95,11 @@ export function RepositoryIconPicker({
         )
         return
       }
-      setIcon(icon)
+      // A null build means the stored icon/upstream already match — nothing to write.
+      const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
+      if (updates) {
+        updateRepo(repo.id, updates)
+      }
     } catch {
       if (mountedRef.current) {
         toast.error(
@@ -113,11 +119,16 @@ export function RepositoryIconPicker({
   const handleResetToDefault = async () => {
     setResetting(true)
     try {
-      const icon = await resolveGitHubAvatarIcon().catch(() => null)
+      const resolution = await resolveGitHubAvatar({ forceLive: true }).catch(() => null)
       if (!mountedRef.current) {
         return
       }
-      setIcon(icon)
+      const updates = resolution
+        ? buildRepositoryGitHubAvatarUpdate(repo, resolution, { clearMissingIcon: true })
+        : { repoIcon: null }
+      if (updates) {
+        updateRepo(repo.id, updates)
+      }
     } finally {
       if (mountedRef.current) {
         setResetting(false)
@@ -125,33 +136,39 @@ export function RepositoryIconPicker({
     }
   }
 
-  const upstreamBackfilledRef = useRef<string | null>(null)
+  const githubIdentityRefreshedRef = useRef<string | null>(null)
   useEffect(() => {
-    if (repo.upstream !== undefined || upstreamBackfilledRef.current === repo.id) {
+    const hasGitHubAvatar = repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
+    const shouldRefresh = hasGitHubAvatar || repo.upstream === undefined
+    if (!shouldRefresh || githubIdentityRefreshedRef.current === repo.id) {
       return
     }
-    upstreamBackfilledRef.current = repo.id
+    githubIdentityRefreshedRef.current = repo.id
     let cancelled = false
     void (async () => {
-      let upstream
+      let updates: Partial<Repo> | null
       try {
-        upstream = await resolveUpstreamLive()
+        if (hasGitHubAvatar) {
+          // Why: stored upstream/icon metadata can outlive a GitHub repo transfer.
+          // Refresh only when settings opens for the affected GitHub-avatar repo.
+          const resolution = await resolveGitHubAvatar({ forceLive: true })
+          updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
+        } else {
+          const upstream = await resolveUpstreamLive()
+          updates = { upstream: upstream ?? null }
+        }
       } catch {
         return
       }
-      if (cancelled || !mountedRef.current) {
+      if (cancelled || !mountedRef.current || !updates) {
         return
-      }
-      const updates: Partial<Repo> = { upstream: upstream ?? null }
-      if (upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github') {
-        updates.repoIcon = githubAvatarIcon(upstream)
       }
       updateRepo(repo.id, updates)
     })()
     return () => {
       cancelled = true
     }
-  }, [repo.id, repo.upstream, repo.repoIcon, resolveUpstreamLive, updateRepo, mountedRef])
+  }, [repo, resolveGitHubAvatar, resolveUpstreamLive, updateRepo, mountedRef])
 
   return (
     <div className="space-y-3">
