@@ -1,17 +1,17 @@
 ---
-name: safe-dispatch
+name: overwatch
 description: >-
-  3-gate validation for dispatching agents to Orca worktrees: resolve the
-  handle live, validate no collision, then dispatch. Prevents wrong-worktree
-  dispatch, double-agent collisions, and stale-handle bugs. Includes an
-  inbox monitor pattern for reliable message consumption. Complements the
-  orchestration skill with safety guardrails. Works with any agent CLI
-  (Claude, Codex, Pi, Cursor, etc.).
+  External dispatch control for Orca agent fleets. A coordinator sits
+  outside the worktrees, directing agents through 3-gate validation
+  (resolve, validate, dispatch) and a single-consumer inbox. Prevents
+  wrong-worktree dispatch, double-agent collisions, and lost messages.
+  Works with any agent CLI (Claude, Codex, Pi, Cursor, etc.).
+  Complements the orchestration skill.
 ---
 
-# Safe Dispatch
+# Overwatch
 
-A safety layer on top of Orca orchestration that prevents the three most common dispatch bugs:
+External dispatch control for agent fleets. The overwatch sits outside the worktrees -- a neutral position that directs agents without participating in their work. It prevents the three most common fleet dispatch bugs:
 
 1. **Wrong-worktree dispatch** from cached or stale handles
 2. **Double-agent collision** from dispatching into an occupied worktree
