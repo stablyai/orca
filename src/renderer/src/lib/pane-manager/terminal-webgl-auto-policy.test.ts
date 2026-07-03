@@ -21,18 +21,26 @@ function stubWebglRendererInfo({
   vendor = 'Intel',
   hasWebgl2 = true,
   hasDebugInfo = true
-}: MockWebglRendererInfo): void {
+}: MockWebglRendererInfo): {
+  canvas: { width: number; height: number }
+  loseContext: ReturnType<typeof vi.fn>
+} {
   const rendererKey = 0x9246
   const vendorKey = 0x9245
+  const loseContext = vi.fn()
   const gl = {
-    getExtension: vi.fn(() =>
-      hasDebugInfo
-        ? {
-            UNMASKED_RENDERER_WEBGL: rendererKey,
-            UNMASKED_VENDOR_WEBGL: vendorKey
-          }
-        : null
-    ),
+    getExtension: vi.fn((extensionName: string) => {
+      if (extensionName === 'WEBGL_lose_context') {
+        return { loseContext }
+      }
+      if (extensionName !== 'WEBGL_debug_renderer_info' || !hasDebugInfo) {
+        return null
+      }
+      return {
+        UNMASKED_RENDERER_WEBGL: rendererKey,
+        UNMASKED_VENDOR_WEBGL: vendorKey
+      }
+    }),
     getParameter: vi.fn((key: number) => {
       if (key === rendererKey) {
         return renderer
@@ -43,19 +51,21 @@ function stubWebglRendererInfo({
       return null
     })
   }
+  const canvas = {
+    width: 300,
+    height: 150,
+    getContext: vi.fn((contextName: string) => (hasWebgl2 && contextName === 'webgl2' ? gl : null))
+  }
 
   vi.stubGlobal('document', {
     createElement: vi.fn((tagName: string) => {
       if (tagName === 'canvas') {
-        return {
-          getContext: vi.fn((contextName: string) =>
-            hasWebgl2 && contextName === 'webgl2' ? gl : null
-          )
-        }
+        return canvas
       }
       return {}
     })
   })
+  return { canvas, loseContext }
 }
 
 function stubNoDocument(): void {
@@ -133,6 +143,22 @@ describe('terminal WebGL auto policy', () => {
       renderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0)',
       vendor: 'Google Inc. (NVIDIA)'
     })
+  })
+
+  it('releases the renderer identity probe context', () => {
+    stubNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    const probe = stubWebglRendererInfo({
+      renderer: 'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc. (Microsoft)'
+    })
+
+    expect(getTerminalWebglAutoDecision()).toMatchObject({
+      allowWebgl: false,
+      reason: 'non-linux-software-renderer'
+    })
+    expect(probe.loseContext).toHaveBeenCalledTimes(1)
+    expect(probe.canvas.width).toBe(0)
+    expect(probe.canvas.height).toBe(0)
   })
 
   it('allows Linux auto panes for identifiable hardware renderers', () => {

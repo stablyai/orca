@@ -39,6 +39,23 @@ function readRendererDisplayServer(): 'wayland' | 'x11' | null {
   }
 }
 
+function releaseWebglProbe(
+  canvas: HTMLCanvasElement | null,
+  gl: WebGL2RenderingContext | null
+): void {
+  try {
+    // Why: auto policy only needs renderer identity; keeping the probe context
+    // alive defeats the software-renderer fallback this check is protecting.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+  } catch {
+    /* ignore - renderer probing must stay best-effort */
+  }
+  if (canvas) {
+    canvas.width = 0
+    canvas.height = 0
+  }
+}
+
 function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | 'vendor'> & {
   hasWebgl2: boolean
   hasRendererInfo: boolean
@@ -47,9 +64,11 @@ function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | '
     return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
   }
 
+  let canvas: HTMLCanvasElement | null = null
+  let gl: WebGL2RenderingContext | null = null
   try {
-    const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl2')
+    canvas = document.createElement('canvas')
+    gl = canvas.getContext('webgl2')
     if (!gl) {
       return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
     }
@@ -69,6 +88,8 @@ function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | '
     }
   } catch {
     return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+  } finally {
+    releaseWebglProbe(canvas, gl)
   }
 }
 
