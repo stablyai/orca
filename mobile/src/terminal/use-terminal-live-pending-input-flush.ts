@@ -75,11 +75,13 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     async (handle: string, fieldText: string, commitHeld: boolean): Promise<boolean> => {
       if (
         handle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal' ||
+        (activeSessionTabTypeRef.current != null &&
+          activeSessionTabTypeRef.current !== 'terminal') ||
         !liveInputTerminalHandlesRef.current.has(handle)
       ) {
         // Why: a stale handle must not keep local mirror state alive — the next
-        // active terminal would inherit wrong erase counts.
+        // active terminal would inherit wrong erase counts. A null tab type is
+        // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
         resetMirrorState()
         return false
       }

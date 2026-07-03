@@ -91,6 +91,9 @@ function createTerminalLiveInputCommitHarness({
     sent,
     setActiveSessionTabType: (next: string | undefined): void => {
       currentActiveSessionTabType = next
+      // Ref and prop derive from the same activeSessionTab in the real route, so
+      // they go null together during tab-list lag — keep the harness coupled.
+      activeSessionTabTypeRef.current = next ?? null
       act(() => {
         renderer?.update(createElement(Harness))
       })
