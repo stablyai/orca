@@ -14,6 +14,7 @@ export type RuntimeClientEventsSyncDeps = {
     onError: (error: unknown) => void
   ) => Promise<RuntimeClientEventSubscriptionHandle>
   onEvent: (environmentId: string, event: RuntimeClientEvent) => void
+  retryDelayMs?: number
 }
 
 export type RuntimeClientEventsSync = {
@@ -44,7 +45,37 @@ export function createRuntimeClientEventsSync(
 ): RuntimeClientEventsSync {
   const subscriptions = new Map<string, () => void>()
   const pending = new Set<string>()
+  const retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const retryDelayMs = deps.retryDelayMs ?? 1_000
   let generation = 0
+
+  const clearRetryTimer = (environmentId: string): void => {
+    const retryTimer = retryTimers.get(environmentId)
+    if (!retryTimer) {
+      return
+    }
+    clearTimeout(retryTimer)
+    retryTimers.delete(environmentId)
+  }
+
+  const scheduleRetry = (environmentId: string, subscribeGeneration: number): void => {
+    if (retryTimers.has(environmentId)) {
+      return
+    }
+    // Why: useIpcEvents no longer retries on every store mutation; transient
+    // subscribe failures still need a bounded retry while the env remains desired.
+    const retryTimer = setTimeout(() => {
+      retryTimers.delete(environmentId)
+      if (
+        subscribeGeneration !== generation ||
+        !deps.getDesiredEnvironmentIds().includes(environmentId)
+      ) {
+        return
+      }
+      sync()
+    }, retryDelayMs)
+    retryTimers.set(environmentId, retryTimer)
+  }
 
   const stop = (): void => {
     generation += 1
@@ -53,10 +84,20 @@ export function createRuntimeClientEventsSync(
     }
     subscriptions.clear()
     pending.clear()
+    for (const retryTimer of retryTimers.values()) {
+      clearTimeout(retryTimer)
+    }
+    retryTimers.clear()
   }
 
   const sync = (): void => {
     const desiredIds = new Set(deps.getDesiredEnvironmentIds())
+    for (const environmentId of retryTimers.keys()) {
+      if (desiredIds.has(environmentId)) {
+        continue
+      }
+      clearRetryTimer(environmentId)
+    }
 
     for (const [environmentId, unsubscribe] of subscriptions) {
       if (desiredIds.has(environmentId)) {
@@ -70,6 +111,7 @@ export function createRuntimeClientEventsSync(
       if (subscriptions.has(environmentId) || pending.has(environmentId)) {
         continue
       }
+      clearRetryTimer(environmentId)
       pending.add(environmentId)
       const subscribeGeneration = generation
       void deps
@@ -103,6 +145,9 @@ export function createRuntimeClientEventsSync(
           pending.delete(environmentId)
           if (subscribeGeneration === generation) {
             console.warn('[runtime-client-events] failed to subscribe:', error)
+            if (deps.getDesiredEnvironmentIds().includes(environmentId)) {
+              scheduleRetry(environmentId, subscribeGeneration)
+            }
           }
         })
     }

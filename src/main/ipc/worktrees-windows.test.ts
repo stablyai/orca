@@ -4,6 +4,7 @@ const {
   handleMock,
   removeHandlerMock,
   listWorktreesMock,
+  assertWorktreeCleanForRemovalMock,
   addWorktreeMock,
   removeWorktreeMock,
   getGitUsernameMock,
@@ -22,11 +23,16 @@ const {
   hasHooksFileMock,
   loadHooksMock,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  ensurePathWithinWorkspaceMock,
+  killAllProcessesForWorktreeMock,
+  clearProviderPtyStateMock,
+  getLocalPtyProviderMock,
+  deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   listWorktreesMock: vi.fn(),
+  assertWorktreeCleanForRemovalMock: vi.fn(),
   addWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
@@ -45,7 +51,11 @@ const {
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  ensurePathWithinWorkspaceMock: vi.fn(),
+  killAllProcessesForWorktreeMock: vi.fn(),
+  clearProviderPtyStateMock: vi.fn(),
+  getLocalPtyProviderMock: vi.fn(),
+  deleteWorktreeHistoryDirMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -57,6 +67,8 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
+  listWorktreesStrict: listWorktreesMock,
+  assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
 }))
@@ -91,6 +103,19 @@ vi.mock('../hooks', () => ({
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
+}))
+
+vi.mock('../runtime/worktree-teardown', () => ({
+  killAllProcessesForWorktree: killAllProcessesForWorktreeMock
+}))
+
+vi.mock('./pty', () => ({
+  clearProviderPtyState: clearProviderPtyStateMock,
+  getLocalPtyProvider: getLocalPtyProviderMock
+}))
+
+vi.mock('../terminal-history', () => ({
+  deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
 vi.mock('./worktree-logic', async (importOriginal) => {
@@ -129,6 +154,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     listWorktreesMock.mockReset()
+    assertWorktreeCleanForRemovalMock.mockReset()
     addWorktreeMock.mockReset()
     removeWorktreeMock.mockReset()
     getGitUsernameMock.mockReset()
@@ -148,6 +174,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     loadHooksMock.mockReset()
     computeWorktreePathMock.mockReset()
     ensurePathWithinWorkspaceMock.mockReset()
+    killAllProcessesForWorktreeMock.mockReset()
+    clearProviderPtyStateMock.mockReset()
+    getLocalPtyProviderMock.mockReset()
+    deleteWorktreeHistoryDirMock.mockReset()
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
@@ -205,6 +235,13 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
+    assertWorktreeCleanForRemovalMock.mockResolvedValue(undefined)
+    killAllProcessesForWorktreeMock.mockResolvedValue({
+      runtimeStopped: 0,
+      providerStopped: 0,
+      registryStopped: 0
+    })
+    getLocalPtyProviderMock.mockReturnValue({})
 
     // Why: createLocalWorktree routes `git fetch` through
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
@@ -307,5 +344,44 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         lastActivityAt: 123
       }
     ])
+  })
+
+  it('deletes a Windows worktree when the requested path uses different separators and drive casing', async () => {
+    const registeredWorktree = {
+      path: 'c:\\workspaces\\Improve-Dashboard',
+      head: 'feature-head',
+      branch: 'refs/heads/improve-dashboard',
+      isBare: false,
+      isMainWorktree: false
+    }
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:\\repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      registeredWorktree
+    ])
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::C:/workspaces/improve-dashboard'
+    })
+
+    expect(assertWorktreeCleanForRemovalMock).toHaveBeenCalledWith(registeredWorktree.path, false)
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      registeredWorktree.path,
+      false,
+      expect.objectContaining({
+        knownRemovedWorktree: registeredWorktree
+      })
+    )
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::C:/workspaces/improve-dashboard')
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
   })
 })

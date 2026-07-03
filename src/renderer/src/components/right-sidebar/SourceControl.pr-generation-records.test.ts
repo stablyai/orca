@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { create } from 'zustand'
 import {
   arePullRequestGenerationFieldsEqual,
+  clearPullRequestGenerationRequiresPushBeforeCreate,
   createPullRequestGenerationSlice,
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
+  getPullRequestGenerationSeedRestoreKey,
   getPullRequestGenerationWorktreeKey,
+  markPullRequestGenerationRequiresPushBeforeCreate,
+  markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationSuccess,
   shouldApplyPullRequestGenerationResult,
@@ -40,6 +44,7 @@ function runningRecord(overrides: Partial<PullRequestGenerationRecord> = {}) {
     },
     seed,
     seedFieldRevisions: fieldRevisions,
+    requiresPushBeforeCreate: false,
     status: 'running' as const,
     result: null,
     error: null,
@@ -122,6 +127,45 @@ describe('SourceControl pull request generation records', () => {
         record: { ...record, hydrated: true }
       })
     ).toBe(false)
+  })
+
+  it('restores terminal failed and canceled seeds once after remount', () => {
+    const failed = runningRecord({
+      status: 'failed',
+      error: 'Model failed'
+    })
+    const canceled = runningRecord({
+      status: 'canceled',
+      error: null
+    })
+
+    expect(
+      getPullRequestGenerationSeedRestoreKey({
+        recordKey: 'pr-record',
+        record: failed
+      })
+    ).toBe('pr-record:3:failed')
+    expect(
+      getPullRequestGenerationSeedRestoreKey({
+        recordKey: 'pr-record',
+        record: canceled
+      })
+    ).toBe('pr-record:3:canceled')
+
+    const restored = markPullRequestGenerationTerminalSeedRestored({
+      record: failed,
+      requestId: 3
+    })
+    expect(restored).toMatchObject({
+      status: 'failed',
+      hydrated: true
+    })
+    expect(
+      getPullRequestGenerationSeedRestoreKey({
+        recordKey: 'pr-record',
+        record: restored
+      })
+    ).toBeNull()
   })
 
   it('keeps a switched-away PR generation owned by the original worktree', () => {
@@ -213,6 +257,46 @@ describe('SourceControl pull request generation records', () => {
       status: 'succeeded',
       result: generated,
       hydrated: false
+    })
+  })
+
+  it('persists branch-preparation push requirement until create succeeds', () => {
+    const record = createRunningPullRequestGenerationRecord(
+      {
+        worktreeId: 'wt-a',
+        worktreePath: '/repo/a',
+        connectionId: 'conn-a',
+        requestId: 1,
+        repoId: 'repo-1',
+        branch: 'feature-a'
+      },
+      seed,
+      fieldRevisions
+    )
+
+    const marked = markPullRequestGenerationRequiresPushBeforeCreate({
+      record,
+      requestId: 1
+    })
+    expect(marked?.requiresPushBeforeCreate).toBe(true)
+
+    const completed = resolvePullRequestGenerationSuccess({
+      record: marked,
+      requestId: 1,
+      result: {
+        base: 'main',
+        title: 'Generated after branch preparation',
+        body: 'Generated body',
+        draft: false
+      }
+    })
+    expect(completed).toMatchObject({
+      status: 'succeeded',
+      requiresPushBeforeCreate: true
+    })
+
+    expect(clearPullRequestGenerationRequiresPushBeforeCreate(completed)).toMatchObject({
+      requiresPushBeforeCreate: false
     })
   })
 

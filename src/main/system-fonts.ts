@@ -1,4 +1,4 @@
-import { execFile } from 'child_process'
+import { execFile } from 'node:child_process'
 
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null

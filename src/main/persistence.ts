@@ -12,11 +12,11 @@ import {
   copyFileSync,
   statSync,
   realpathSync
-} from 'fs'
-import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
-import { join, dirname, isAbsolute, resolve, sep } from 'path'
-import { homedir } from 'os'
-import { randomUUID } from 'node:crypto'
+} from 'node:fs'
+import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
+import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
+import { homedir } from 'node:os'
+import { createHash, randomUUID } from 'node:crypto'
 import type {
   Automation,
   AutomationCreateInput,
@@ -72,12 +72,19 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
-import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
+import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
+import { hardenExistingSecureFile } from '../shared/secure-file'
+import {
+  LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshRemotePtyLease,
+  type SshTarget
+} from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
@@ -90,7 +97,7 @@ import {
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
   getWorktreeCardModeProperties,
-  isLegacyDefaultedCompactWorktreeCardProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -105,6 +112,7 @@ import {
   type ExecutionHostId
 } from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
+import { isWslUncPath } from '../shared/wsl-paths'
 import {
   isTerminalLeafId,
   makePaneKey,
@@ -118,9 +126,14 @@ import {
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
-import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId
+} from '../shared/worktree-id'
 import {
   isPathInsideOrEqual,
+  isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
@@ -128,8 +141,13 @@ import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
 import { normalizeAppIconId } from '../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
+import {
+  legacyTerminalScrollbackBytesToRows,
+  normalizeDesktopTerminalScrollbackRows
+} from '../shared/terminal-scrollback-policy'
 import {
   compareFeatureInteractionUsageBuckets,
   getFeatureInteractionCategory,
@@ -201,6 +219,7 @@ import {
 } from './terminal-scrollback-snapshots'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -294,17 +313,178 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
 // Solution: index.ts calls initDataPath() right after configureDevUserDataPath()
 // but before app.setName(), capturing the correct path at the right moment.
 let _dataFile: string | null = null
+let _userDataDir: string | null = null
 
 export function initDataPath(): void {
-  _dataFile = join(app.getPath('userData'), 'orca-data.json')
+  const userDataDir = app.getPath('userData')
+  _userDataDir = userDataDir
+  _dataFile = join(userDataDir, 'orca-data.json')
 }
 
 function getDataFile(): string {
   if (!_dataFile) {
     // Safety fallback — should not be hit in normal startup.
-    _dataFile = join(app.getPath('userData'), 'orca-data.json')
+    const userDataDir = app.getPath('userData')
+    _userDataDir = userDataDir
+    _dataFile = join(userDataDir, 'orca-data.json')
   }
   return _dataFile
+}
+
+// Why a sidecar: githubCache is a refetchable 5-min-TTL poll cache whose
+// fetchedAt stamps change on every refresh — keeping it inside orca-data.json
+// made every poll cycle rewrite the whole multi-MB durable state (defeating
+// the content-hash guard by design). It lives in memory during the session
+// and is snapshotted here best-effort at quit so PR/issue badges still paint
+// instantly on the next launch. Loss of this file costs nothing.
+function getGithubCacheFile(): string {
+  return join(dirname(getDataFile()), 'orca-github-cache.json')
+}
+
+// Why: worktrees deleted outside Orca (git CLI worktree remove, rm -rf,
+// agent scripts) purge renderer session state but nothing removed their
+// worktreeMeta, so the map grew monotonically (63% dead entries measured on
+// a heavy install). GC is deliberately narrow: local-host entries only
+// (SSH/runtime metas embed remote paths a local existsSync would falsely
+// condemn; WSL UNC paths are skipped the same way), and only after a
+// 30-day idle grace so pushTarget cleanup for recently-vanished worktrees
+// and quick recreations keep their metadata.
+const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
+
+function gcStaleWorktreeMeta(state: PersistedState): number {
+  // Why: a hand-corrupted file with `"worktreeMeta": null` overrides the
+  // defaults merge; normalize instead of throwing outside the parse guard.
+  state.worktreeMeta ??= {}
+  const repoById = new Map(state.repos.map((repo) => [repo.id, repo]))
+  const projectIds = new Set((state.projects ?? []).map((project) => project.id))
+  const now = Date.now()
+  let removed = 0
+  for (const key of Object.keys(state.worktreeMeta)) {
+    // Why: folder-project workspace instances are keyed
+    // `repoId::path::workspace:<uuid>` and their meta IS the workspace
+    // record — never a filesystem-checkout row. Skip them entirely.
+    if (key.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)) {
+      continue
+    }
+    const separator = key.indexOf('::')
+    if (separator === -1) {
+      continue
+    }
+    const ownerId = key.slice(0, separator)
+    const worktreePath = key.slice(separator + 2)
+    const meta = state.worktreeMeta[key]
+    const repo = repoById.get(ownerId)
+    if (repo) {
+      if (repo.connectionId || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
+        continue
+      }
+    } else if (projectIds.has(ownerId)) {
+      // Project-owned metas keep project/host semantics on the entry itself;
+      // stay conservative and leave them to their own lifecycle.
+      continue
+    }
+    // Unowned entries (repo removed before removeProject pruned metas) fall
+    // through to the same missing-path + idle-grace gate.
+    if (meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) {
+      continue
+    }
+    if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {
+      continue
+    }
+    // Why: WSL linked worktrees on Windows carry Linux-style paths from git
+    // porcelain; a Windows existsSync cannot probe those and would falsely
+    // condemn live worktrees.
+    if (process.platform === 'win32' && !isWindowsAbsolutePathLike(worktreePath)) {
+      continue
+    }
+    // Why keep timestamp-less entries: without lastActivityAt/createdAt we
+    // cannot prove the 30-day idle grace elapsed; the measured dead entries
+    // all carry timestamps, so this costs almost nothing in reclaimed bytes.
+    // Grace runs before the stat so healthy profiles skip the existsSync
+    // fan-out (and its slow-NFS tail) for active entries entirely.
+    const newestTouch = Math.max(meta?.lastActivityAt ?? 0, meta?.createdAt ?? 0)
+    if (newestTouch === 0 || now - newestTouch < WORKTREE_META_GC_GRACE_MS) {
+      continue
+    }
+    if (existsSync(worktreePath)) {
+      continue
+    }
+    delete state.worktreeMeta[key]
+    delete state.worktreeLineageById[key]
+    delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
+    removed++
+  }
+  return removed
+}
+
+function readGithubCacheSnapshot(): PersistedState['githubCache'] | null {
+  try {
+    const parsed = JSON.parse(readFileSync(getGithubCacheFile(), 'utf-8')) as unknown
+    const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+    if (
+      isPlainRecord(parsed) &&
+      isPlainRecord((parsed as { pr?: unknown }).pr) &&
+      isPlainRecord((parsed as { issue?: unknown }).issue)
+    ) {
+      return parsed as PersistedState['githubCache']
+    }
+  } catch {
+    // Missing or corrupt snapshot: start with an empty cache and refetch.
+  }
+  return null
+}
+
+/**
+ * Return the userData directory captured at initDataPath() time, before
+ * app.setName() can change how app.getPath('userData') resolves.
+ *
+ * Subsystems that must share storage with orca-data.json (mobile pairing's
+ * DeviceRegistry, E2EE keypair, runtime metadata) read this instead of
+ * resolving the path late, which on case-sensitive filesystems can land in a
+ * different directory and lose paired devices across restarts/updates.
+ */
+export function getCanonicalUserDataPath(): string {
+  if (!_userDataDir) {
+    // Safety fallback — should not be hit in normal startup.
+    _userDataDir = app.getPath('userData')
+  }
+  return _userDataDir
+}
+
+/**
+ * Copy legacy mobile pairing credentials into the canonical userData directory.
+ *
+ * Existing installs may already have credentials in the late app.getPath('userData')
+ * directory. Before switching the runtime server to the canonical path, copy the
+ * registry and E2EE keypair forward as a pair so an update does not force one
+ * last re-pair or mix devices with the wrong key.
+ */
+export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
+  const targetUserDataDir = getCanonicalUserDataPath()
+  if (resolve(sourceUserDataDir) === resolve(targetUserDataDir)) {
+    return
+  }
+
+  const migrations = MOBILE_PAIRING_USERDATA_FILES.map((fileName) => ({
+    sourcePath: join(sourceUserDataDir, fileName),
+    targetPath: join(targetUserDataDir, fileName)
+  }))
+  if (migrations.some(({ sourcePath }) => !existsSync(sourcePath))) {
+    return
+  }
+  if (migrations.some(({ targetPath }) => existsSync(targetPath))) {
+    return
+  }
+
+  mkdirSync(targetUserDataDir, { recursive: true })
+  for (const { sourcePath, targetPath } of migrations) {
+    copyFileSync(sourcePath, targetPath)
+    // Why: these are credential files (device tokens, E2EE secret key). copyFileSync
+    // does not carry Windows ACLs, so re-assert the current-user-only restriction on
+    // the copy instead of relying on the runtime's later lazy re-harden on read.
+    hardenExistingSecureFile(targetPath)
+  }
 }
 
 // Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
@@ -316,6 +496,15 @@ const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceS
   'tabsByWorktree',
   'terminalLayoutsByTabId'
 ])
+
+function logPersistenceStartupMilestone(
+  event: string,
+  details: Record<string, unknown> = {}
+): void {
+  if (isStartupDiagnosticsEnabled()) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
+}
 
 function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatch): boolean {
   return Object.keys(patch).some((key) =>
@@ -388,6 +577,71 @@ function buildWorkspaceDirHistoryForUpdate(
     next.push(previousLayout)
   }
   return next
+}
+
+type LegacyTerminalScrollbackSettings = {
+  terminalScrollbackRows?: unknown
+  terminalScrollbackBytes?: unknown
+}
+
+const LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT = 3
+
+function readLegacyTerminalScrollbackSettings(settings: unknown): LegacyTerminalScrollbackSettings {
+  return settings && typeof settings === 'object'
+    ? (settings as LegacyTerminalScrollbackSettings)
+    : {}
+}
+
+function stripLegacyTerminalScrollbackBytes(
+  settings: Partial<GlobalSettings> | undefined
+): Partial<GlobalSettings> {
+  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...rest } = (settings ??
+    {}) as Partial<GlobalSettings> & { terminalScrollbackBytes?: unknown }
+  void _legacyScrollbackBytes
+  return rest
+}
+
+function migrateTerminalScrollbackRows(settings: unknown): {
+  rows: number
+  needsSave: boolean
+} {
+  const legacySettings = readLegacyTerminalScrollbackSettings(settings)
+  const hasRows = Object.prototype.hasOwnProperty.call(legacySettings, 'terminalScrollbackRows')
+  const hasLegacyBytes = Object.prototype.hasOwnProperty.call(
+    legacySettings,
+    'terminalScrollbackBytes'
+  )
+  const rows = hasRows
+    ? normalizeDesktopTerminalScrollbackRows(legacySettings.terminalScrollbackRows)
+    : legacyTerminalScrollbackBytesToRows(legacySettings.terminalScrollbackBytes)
+
+  return {
+    rows,
+    needsSave: !hasRows || hasLegacyBytes || legacySettings.terminalScrollbackRows !== rows
+  }
+}
+
+function migrateTerminalTuiScrollSensitivityDefault(settings: GlobalSettings | undefined): {
+  settings: Pick<
+    GlobalSettings,
+    'terminalTuiScrollSensitivity' | 'terminalTuiScrollSensitivityDefaultedToOne'
+  >
+  needsSave: boolean
+} {
+  const alreadyDefaultedToOne = settings?.terminalTuiScrollSensitivityDefaultedToOne === true
+  const current = settings?.terminalTuiScrollSensitivity
+  const shouldMoveInheritedDefault =
+    !alreadyDefaultedToOne &&
+    (current === undefined || current === LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT)
+  const terminalTuiScrollSensitivity = shouldMoveInheritedDefault ? 1 : (current ?? 1)
+
+  return {
+    settings: {
+      terminalTuiScrollSensitivity,
+      terminalTuiScrollSensitivityDefaultedToOne: true
+    },
+    needsSave: !alreadyDefaultedToOne || current === undefined
+  }
 }
 
 function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
@@ -664,6 +918,16 @@ function normalizeAutomationRunWorkspaceDisplayName(value: string | null): strin
   return trimmed ? trimmed : null
 }
 
+function normalizeAutomationRunTerminalPaneKey(value: string | null | undefined): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed && parsePaneKey(trimmed) ? trimmed : null
+}
+
+function normalizeAutomationRunTerminalPtyId(value: string | null | undefined): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed || null
+}
+
 function normalizeAutomationRunOutputSnapshot(
   value: AutomationRunOutputSnapshot | null | undefined
 ): AutomationRunOutputSnapshot | null {
@@ -719,11 +983,25 @@ function normalizeAutomationPrecheckResult(
 }
 
 function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  const setupDecision = normalizeAutomationSetupDecisionForWorkspaceMode(
+    automation.workspaceMode,
+    automation.setupDecision
+  )
   return {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
+    setupDecision,
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
+}
+
+function normalizeAutomationSetupDecisionForWorkspaceMode(
+  workspaceMode: Automation['workspaceMode'],
+  setupDecision: unknown
+): Automation['setupDecision'] {
+  return workspaceMode === 'new_per_run' && (setupDecision === 'run' || setupDecision === 'skip')
+    ? setupDecision
+    : undefined
 }
 
 function getAutomationContextsForRepo(
@@ -821,6 +1099,14 @@ function backfillLegacyAutomationContexts(
       next.sourceContext = automationContexts?.sourceContext ?? null
       changed = true
     }
+    if (!Object.hasOwn(next, 'terminalPaneKey')) {
+      next.terminalPaneKey = null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPtyId')) {
+      next.terminalPtyId = null
+      changed = true
+    }
     return next
   })
   if (!changed) {
@@ -848,11 +1134,13 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
+  const systemSshConnectionReuse = target.systemSshConnectionReuse
   // Why: remote workspace sync now follows the SSH relay lifecycle, so the
   // retired per-target sync opt-out and grace-period fields stop at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
+  delete target.systemSshConnectionReuse
   // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
   // Prefer the synced grace so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
@@ -863,8 +1151,16 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  if (relayGracePeriodSeconds !== undefined) {
+  // Why: the old SSH form eagerly persisted 10800 even when the user had not
+  // chosen a timeout; treat that legacy default as the new implicit default.
+  if (
+    relayGracePeriodSeconds !== undefined &&
+    relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+  ) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
+  }
+  if (systemSshConnectionReuse === false) {
+    normalized.systemSshConnectionReuse = false
   }
   return normalized
 }
@@ -1047,6 +1343,10 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
+function shouldDefaultNewWorktreeCardStyleOn(onboarding: OnboardingState): boolean {
+  return onboarding.closedAt === null
+}
+
 // Why: read a settings field that was removed from GlobalSettings but can
 // still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
@@ -1076,6 +1376,24 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   return owner && repo ? { owner, repo } : undefined
 }
 
+function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as {
+    canonicalKey?: unknown
+    remoteName?: unknown
+    remoteUrl?: unknown
+  }
+  const canonicalKey =
+    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
+  const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
+  const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+  return canonicalKey && remoteName && remoteUrl
+    ? { canonicalKey, remoteName, remoteUrl }
+    : undefined
+}
+
 function sanitizeRepoProjectHostSetupMethod(
   value: unknown
 ): RepoProjectHostSetupMethod | undefined {
@@ -1093,6 +1411,7 @@ function sanitizeRepoUpdatesForPersistence<
       | 'badgeColor'
       | 'repoIcon'
       | 'upstream'
+      | 'gitRemoteIdentity'
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
@@ -1123,6 +1442,14 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.upstream
     } else {
       sanitized.upstream = upstream
+    }
+  }
+  if ('gitRemoteIdentity' in sanitized) {
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(sanitized.gitRemoteIdentity)
+    if (gitRemoteIdentity === undefined) {
+      delete sanitized.gitRemoteIdentity
+    } else {
+      sanitized.gitRemoteIdentity = gitRemoteIdentity
     }
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
@@ -2025,6 +2352,7 @@ function createMinimalPersistedTerminalTab(args: {
   tabId: string
   ptyId: string
   existingTabCount: number
+  startupCwd?: string
 }): TerminalTab {
   const ordinal = args.existingTabCount + 1
   const defaultTitle = `Terminal ${ordinal}`
@@ -2038,6 +2366,7 @@ function createMinimalPersistedTerminalTab(args: {
     color: null,
     sortOrder: args.existingTabCount,
     createdAt: Date.now(),
+    ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
     pendingActivationSpawn: true
   }
 }
@@ -2227,6 +2556,14 @@ export class Store {
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
+  // Why: hash of the plaintext state as of the last successful write. Saves
+  // triggered by mutations that net out to identical state skip the full
+  // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
+  // written payload) because encrypt() uses a random IV per call, so the
+  // on-disk bytes differ even for identical state.
+  private lastWrittenStateHash: string | null = null
+  private firstPendingSaveAt: number | null = null
+  private githubCacheDirty = false
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -2449,12 +2786,22 @@ export class Store {
     // social contract we installed them under.
     const dataFile = getDataFile()
     const fileExistedOnLoad = existsSync(dataFile)
+    logPersistenceStartupMilestone('persistence-load-start', {
+      fileExists: fileExistedOnLoad
+    })
 
     let result: PersistedState | null = null
     try {
       if (fileExistedOnLoad) {
+        const readStartedAt = performance.now()
         const raw = readFileSync(dataFile, 'utf-8')
+        logPersistenceStartupMilestone('persistence-read-done', {
+          bytes: Buffer.byteLength(raw),
+          durationMs: Math.round(performance.now() - readStartedAt)
+        })
+        logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secret settings are stored encrypted on disk via safeStorage.
         // Decrypt at the load boundary so the rest of the app sees plaintext.
@@ -2471,6 +2818,16 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
+        const migratedTerminalScrollback = migrateTerminalScrollbackRows(parsed.settings)
+        if (migratedTerminalScrollback.needsSave) {
+          this.loadNeedsSave = true
+        }
+        const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
+          parsed.settings
+        )
+        if (migratedTerminalTuiScrollSensitivity.needsSave) {
+          this.loadNeedsSave = true
+        }
         const rawSourceControlAi = parsed.settings?.sourceControlAi
         const rawSourceControlAiMissing = rawSourceControlAi === undefined
         const rawSourceControlAiActionsMissing =
@@ -2652,11 +3009,30 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
+        const defaultNewWorktreeCardStyle =
+          shouldDefaultNewWorktreeCardStyleOn(normalizedOnboarding)
+        const migratedExperimentalNewWorktreeCardStyle =
+          parsed.settings?.experimentalNewWorktreeCardStyle ?? defaultNewWorktreeCardStyle
+        if (
+          parsed.settings?.experimentalNewWorktreeCardStyle === undefined &&
+          defaultNewWorktreeCardStyle
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
           defaults.settings.compactWorktreeCards
+        const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
+          parsed.settings?.sourceControlGroupOrder
+        )
+        if (
+          parsed.settings?.sourceControlGroupOrder !== undefined &&
+          parsed.settings.sourceControlGroupOrder !== normalizedSourceControlGroupOrder
+        ) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -2674,7 +3050,7 @@ export class Store {
           ),
           settings: {
             ...defaults.settings,
-            ...parsed.settings,
+            ...stripLegacyTerminalScrollbackBytes(parsed.settings),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
@@ -2693,8 +3069,12 @@ export class Store {
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
+            ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: open first-run onboarding is the local fresh-install signal;
+            // closed/backfilled onboarding identifies existing profiles.
+            experimentalNewWorktreeCardStyle: migratedExperimentalNewWorktreeCardStyle,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
             compactWorktreeCards: loadedCompactWorktreeCards,
@@ -2707,6 +3087,7 @@ export class Store {
             floatingTerminalCwd: migratedFloatingTerminalCwd,
             floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
             floatingTerminalCwdMigratedToAppWorkspace: true,
+            terminalScrollbackRows: migratedTerminalScrollback.rows,
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
@@ -2732,6 +3113,7 @@ export class Store {
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
+            sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: new builds read sourceControlAi, but rollback builds still
             // write commitMessageAi; after merging those writes, refresh the
             // legacy projection for continued rollback compatibility.
@@ -2765,8 +3147,11 @@ export class Store {
             }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
-            // Only exact legacy default payloads are migrated; users who
+            // Why: a short-lived default put Done on the left. Repair only
+            // the exact raw payload once; user-authored reorders then survive.
+            const workspaceStatusesReorderedDefaultRepaired =
+              parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
+            // Why: only exact legacy default payloads are migrated; users who
             // customized status labels, colors, icons, or order keep theirs.
             const workspaceStatusesDefaultWorkflowMigrated =
               parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
@@ -2778,12 +3163,13 @@ export class Store {
               parsed.ui?.workspaceStatuses,
               {
                 migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
-                repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
+                repairReorderedDefaultStatuses: !workspaceStatusesReorderedDefaultRepaired,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesReorderedDefaultRepaired ||
               !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
@@ -2806,7 +3192,7 @@ export class Store {
             const needsLegacyDefaultedCompactMigration =
               loadedCompactWorktreeCards &&
               parsed.ui?._worktreeCardModeDefaulted === true &&
-              isLegacyDefaultedCompactWorktreeCardProperties(rawCardProps)
+              isDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined
@@ -2881,6 +3267,7 @@ export class Store {
               ),
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesReorderedDefaultRepaired: true,
               _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
@@ -2966,7 +3353,18 @@ export class Store {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      const defaults = getDefaultPersistedState(homedir())
+      const isFreshDefaultProfile =
+        !fileExistedOnLoad && shouldDefaultNewWorktreeCardStyleOn(defaults.onboarding)
+      result = {
+        ...defaults,
+        settings: {
+          ...defaults.settings,
+          // Why: a corrupt existing data file also falls back to defaults; only
+          // the absent-file path is a true fresh install.
+          experimentalNewWorktreeCardStyle: isFreshDefaultProfile
+        }
+      }
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -3008,7 +3406,34 @@ export class Store {
     }
     result = folderScopeConnectionMigration.state
 
-    return this.migrateTelemetry(result, fileExistedOnLoad)
+    if (gcStaleWorktreeMeta(result) > 0) {
+      this.loadNeedsSave = true
+    }
+
+    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+
+    // githubCache lives in a sidecar file now (see getGithubCacheFile). A
+    // legacy in-file cache (pre-sidecar build, or a downgrade round-trip) is
+    // kept as this session's seed and stripped from the durable file by the
+    // save scheduled below; otherwise seed from the sidecar snapshot.
+    const legacyCache = migrated.githubCache
+    const hasLegacyCache =
+      Object.keys(legacyCache?.pr ?? {}).length > 0 ||
+      Object.keys(legacyCache?.issue ?? {}).length > 0
+    if (hasLegacyCache) {
+      this.loadNeedsSave = true
+      // Why: mark dirty so the first flush writes the sidecar even if no
+      // poll refresh happens this session — the seed survives the migration.
+      this.githubCacheDirty = true
+    } else {
+      migrated.githubCache = readGithubCacheSnapshot() ?? migrated.githubCache
+    }
+
+    logPersistenceStartupMilestone('persistence-load-done', {
+      repos: migrated.repos.length,
+      workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
+    })
+    return migrated
   }
 
   // One-shot telemetry cohort migration. Runs on every `load()` but is a
@@ -3070,12 +3495,25 @@ export class Store {
     }
   }
 
+  // Why 1s trailing + 5s max-wait (previously 300ms trailing, unbounded):
+  // sustained sub-interval mutation bursts used to either rewrite the full
+  // multi-MB state ~3x/sec or postpone the write indefinitely by resetting
+  // the timer. The max-wait bounds crash staleness at 5s while bursts
+  // coalesce; the content-hash guard in the writers skips no-op payloads.
+  private static SAVE_DEBOUNCE_MS = 1_000
+  private static SAVE_MAX_WAIT_MS = 5_000
+
   private scheduleSave(): void {
+    const now = Date.now()
+    this.firstPendingSaveAt ??= now
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
     }
+    const untilMaxWait = Math.max(0, this.firstPendingSaveAt + Store.SAVE_MAX_WAIT_MS - now)
+    const delay = Math.min(Store.SAVE_DEBOUNCE_MS, untilMaxWait)
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
+      this.firstPendingSaveAt = null
       // Why (issue #1158): serialize async writes so backup rotation never has
       // two callers racing over the same dataFile/tmp/.bak paths.
       const prev = this.pendingWrite ?? Promise.resolve()
@@ -3090,7 +3528,7 @@ export class Store {
           }
         })
       this.pendingWrite = next
-    }, 300)
+    }, delay)
   }
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
@@ -3100,19 +3538,26 @@ export class Store {
     }
   }
 
-  // Why: async writes avoid blocking the main Electron thread on every
-  // debounced save (every 300ms during active use).
-  private async writeToDiskAsync(): Promise<void> {
-    const gen = this.writeGeneration
-    const dataFile = getDataFile()
-    const dir = dirname(dataFile)
-    await mkdir(dir, { recursive: true }).catch(() => {})
-    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+  // Why githubCache is omitted: it is memory-only during the session (see
+  // getGithubCacheFile) — excluding it from both the payload and the hash
+  // keeps cache refreshes from ever touching the durable file.
+  private getDurableState(): Omit<PersistedState, 'githubCache'> {
+    const { githubCache: _memoryOnly, ...durable } = this.state
+    return durable
+  }
 
+  private computeStateHash(): string {
+    return createHash('sha1').update(JSON.stringify(this.getDurableState())).digest('hex')
+  }
+
+  // Why: builds the on-disk payload synchronously so the hash and the
+  // serialized bytes reflect the same state tick (no mutation can interleave
+  // before an await).
+  private buildStateToSave(): string {
     // Why: secrets must be encrypted on disk. Clone state so the in-memory
     // this.state stays plaintext for the rest of the app.
     const stateToSave = {
-      ...this.state,
+      ...this.getDurableState(),
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
@@ -3123,13 +3568,31 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
+    return JSON.stringify(stateToSave, null, 2)
+  }
+
+  // Why: async writes avoid blocking the main Electron thread on every
+  // debounced save during active use.
+  private async writeToDiskAsync(): Promise<void> {
+    const gen = this.writeGeneration
+    const stateHash = this.computeStateHash()
+    // Why: a mutation burst that nets out to already-persisted state (or a
+    // flush that raced ahead) must not rewrite a byte-identical multi-MB file.
+    if (stateHash === this.lastWrittenStateHash) {
+      return
+    }
+    const payload = this.buildStateToSave()
+    const dataFile = getDataFile()
+    const dir = dirname(dataFile)
+    await mkdir(dir, { recursive: true }).catch(() => {})
+    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
     // Why: wrap write+rename in try/finally-on-error so any failure (ENOSPC,
     // ENFILE, EIO, permission) removes the tmp file rather than leaving a
     // multi-megabyte orphan behind. Successful rename consumes the tmp file.
     let renamed = false
     try {
-      await writeFile(tmpFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
+      await writeFile(tmpFile, payload, 'utf-8')
       // Why: if flush() ran while this async write was in-flight, it bumped
       // writeGeneration and already wrote the latest state synchronously.
       // Renaming this stale tmp file would overwrite the fresh data.
@@ -3138,6 +3601,13 @@ export class Store {
       }
       await rename(tmpFile, dataFile)
       renamed = true
+      // Why the gen re-check: a sync flush can interleave during the rename
+      // await, write fresher state, and record its own hash. Recording this
+      // stale hash over it would make later saves skip against content that
+      // is not what the file holds.
+      if (this.writeGeneration === gen) {
+        this.lastWrittenStateHash = stateHash
+      }
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
@@ -3156,7 +3626,16 @@ export class Store {
 
   // Why: synchronous variant kept only for flush() at shutdown, where the
   // process may exit before an async write completes.
-  private writeToDiskSync(): void {
+  private writeToDiskSync(opts: { force?: boolean } = {}): void {
+    const stateHash = this.computeStateHash()
+    // Why: skipping is safe under flushOrThrow's durability contract — a
+    // matching hash means this exact state is already the file's content.
+    // Except when an async write was in flight at flush entry (force): its
+    // rename may already be dispatched past the generation check, and only
+    // an unconditional sync write afterwards reliably out-orders it.
+    if (!opts.force && stateHash === this.lastWrittenStateHash) {
+      return
+    }
     const dataFile = getDataFile()
     const dir = dirname(dataFile)
     if (!existsSync(dir)) {
@@ -3164,29 +3643,17 @@ export class Store {
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: secrets must be encrypted on disk. Clone state so the in-memory
-    // this.state stays plaintext for the rest of the app.
-    const stateToSave = {
-      ...this.state,
-      settings: {
-        ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
-      },
-      ui: {
-        ...this.state.ui,
-        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
-      }
-    }
+    const payload = this.buildStateToSave()
 
     // Why: mirror the async path — on any failure between writeFileSync and
     // renameSync, remove the tmp file so crashes during shutdown don't leak
     // orphans into userData.
     let renamed = false
     try {
-      writeFileSync(tmpFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
+      writeFileSync(tmpFile, payload, 'utf-8')
       renameSync(tmpFile, dataFile)
       renamed = true
+      this.lastWrittenStateHash = stateHash
     } finally {
       if (!renamed) {
         try {
@@ -3207,11 +3674,13 @@ export class Store {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
     }
+    this.firstPendingSaveAt = null
+    const asyncWriteWasInFlight = this.pendingWrite !== null
     // Why: bump writeGeneration so any in-flight async writeToDiskAsync skips
     // its rename, preventing a stale snapshot from overwriting this sync write.
     this.writeGeneration++
     this.pendingWrite = null
-    this.writeToDiskSync()
+    this.writeToDiskSync({ force: asyncWriteWasInFlight })
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -3681,6 +4150,7 @@ export class Store {
         | 'badgeColor'
         | 'repoIcon'
         | 'upstream'
+        | 'gitRemoteIdentity'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -3690,11 +4160,16 @@ export class Store {
         | 'forkSyncMode'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
+        | 'externalWorktreeInboxBaselinePaths'
+        | 'importedExternalWorktreePaths'
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
-    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+    > & {
+      sourceControlAi?: Repo['sourceControlAi'] | null
+      externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+    }
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -3743,6 +4218,14 @@ export class Store {
       // Why: old persisted repos have no explicit marker. Stamp it the first
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
+    }
+    if (
+      'externalWorktreeDiscoverySuppressedAt' in sanitizedUpdates &&
+      (sanitizedUpdates.externalWorktreeDiscoverySuppressedAt === undefined ||
+        sanitizedUpdates.externalWorktreeDiscoverySuppressedAt === null)
+    ) {
+      delete repo.externalWorktreeDiscoverySuppressedAt
+      delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
     }
     if (
       'sourceControlAi' in sanitizedUpdates &&
@@ -3856,6 +4339,7 @@ export class Store {
     const {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
+      gitRemoteIdentity: rawGitRemoteIdentity,
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
       forkSyncMode: rawForkSyncMode,
@@ -3863,6 +4347,7 @@ export class Store {
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
@@ -3879,6 +4364,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
       ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
@@ -3959,6 +4445,10 @@ export class Store {
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
+        input.workspaceMode,
+        input.setupDecision
+      ),
       reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
       timezone: input.timezone,
       rrule: input.rrule,
@@ -4026,6 +4516,12 @@ export class Store {
             ? (updates.baseBranch ?? null)
             : (current.baseBranch ?? null)
           : null,
+      setupDecision:
+        workspaceMode === 'new_per_run'
+          ? Object.hasOwn(updates, 'setupDecision')
+            ? normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, updates.setupDecision)
+            : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
+          : undefined,
       reuseSession:
         workspaceMode === 'existing'
           ? (updates.reuseSession ?? current.reuseSession ?? false)
@@ -4079,6 +4575,8 @@ export class Store {
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null,
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
@@ -4114,7 +4612,15 @@ export class Store {
         workspaceDisplayName ??
         normalizeAutomationRunWorkspaceDisplayName(current.workspaceDisplayName ?? null) ??
         this.getAutomationRunWorkspaceDisplayName(workspaceId),
-      terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      terminalSessionId: Object.hasOwn(result, 'terminalSessionId')
+        ? (result.terminalSessionId ?? null)
+        : current.terminalSessionId,
+      terminalPaneKey: Object.hasOwn(result, 'terminalPaneKey')
+        ? normalizeAutomationRunTerminalPaneKey(result.terminalPaneKey)
+        : normalizeAutomationRunTerminalPaneKey(current.terminalPaneKey),
+      terminalPtyId: Object.hasOwn(result, 'terminalPtyId')
+        ? normalizeAutomationRunTerminalPtyId(result.terminalPtyId)
+        : normalizeAutomationRunTerminalPtyId(current.terminalPtyId),
       outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
         ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
         : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),
@@ -4500,7 +5006,7 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
-    const sanitizedUpdates = { ...updates }
+    const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
     // Why: coerce strictly to boolean here (not at the IPC edge) so every write
     // path is covered and a non-bool renderer payload can never persist a
     // truthy non-bool that later reads as "tray-minimize on".
@@ -4528,6 +5034,17 @@ export class Store {
         updates.terminalCustomThemes
       )
     }
+    if ('terminalScrollbackRows' in updates) {
+      sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
+        updates.terminalScrollbackRows
+      )
+    }
+    if (
+      'terminalTuiScrollSensitivity' in updates ||
+      'terminalTuiScrollSensitivityDefaultedToOne' in updates
+    ) {
+      sanitizedUpdates.terminalTuiScrollSensitivityDefaultedToOne = true
+    }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
       const taskProviderSettings = normalizeTaskProviderSettings({
         visibleTaskProviders:
@@ -4554,6 +5071,11 @@ export class Store {
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
+      )
+    }
+    if ('sourceControlGroupOrder' in updates) {
+      sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
+        updates.sourceControlGroupOrder
       )
     }
     if ('appIcon' in updates) {
@@ -4862,8 +5384,12 @@ export class Store {
   }
 
   setGitHubCache(cache: PersistedState['githubCache']): void {
+    // Why no scheduleSave: the cache is memory-only during the session and
+    // snapshotted to its sidecar file at flush (quit/reload) time. Every poll
+    // refresh restamps fetchedAt, so persisting here rewrote the whole
+    // durable state file once per poll cycle for refetchable data.
     this.state.githubCache = cache
-    this.scheduleSave()
+    this.githubCacheDirty = true
   }
 
   // ── Workspace Session ─────────────────────────────────────────────
@@ -5225,6 +5751,7 @@ export class Store {
     tabId: string
     leafId: string
     ptyId: string
+    startupCwd?: string
   }): void {
     const session = this.state.workspaceSession
     if (!session) {
@@ -5342,7 +5869,14 @@ export class Store {
     if (!target) {
       return null
     }
-    Object.assign(target, updates, normalizeSshTarget({ ...target, ...updates }))
+    const normalized = normalizeSshTarget({ ...target, ...updates })
+    Object.assign(target, updates, normalized)
+    if (!Object.hasOwn(normalized, 'relayGracePeriodSeconds')) {
+      delete target.relayGracePeriodSeconds
+    }
+    if (!Object.hasOwn(normalized, 'systemSshConnectionReuse')) {
+      delete target.systemSshConnectionReuse
+    }
     this.scheduleSave()
     return { ...target }
   }
@@ -5560,6 +6094,29 @@ export class Store {
       this.flushOrThrow()
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
+    }
+    this.writeGithubCacheSnapshotSync()
+  }
+
+  // Why best-effort: the sidecar is a refetchable cache — a failed write only
+  // costs a cold badge paint on next launch, never data.
+  private writeGithubCacheSnapshotSync(): void {
+    if (!this.githubCacheDirty) {
+      return
+    }
+    const cacheFile = getGithubCacheFile()
+    const tmpFile = `${cacheFile}.${process.pid}.tmp`
+    try {
+      writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
+      renameSync(tmpFile, cacheFile)
+      this.githubCacheDirty = false
+    } catch (err) {
+      try {
+        unlinkSync(tmpFile)
+      } catch {
+        // Best-effort cleanup.
+      }
+      console.warn('[persistence] Failed to write github cache snapshot:', err)
     }
   }
 }

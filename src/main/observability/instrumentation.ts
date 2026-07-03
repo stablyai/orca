@@ -23,48 +23,164 @@
 
 import { withSpan, type ActiveSpan } from './tracer'
 
+const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
+const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
+const GIT_FAST_SUCCESS_BUDGET_PER_WINDOW = 60
+const GIT_SAMPLING_MAX_BUCKETS = 512
+
+// Why: trace captures showed `git status --short` bursts dominating payloads.
+// Keep enough fast successes for timing shape while bounding memory and volume.
+const GIT_GLOBAL_OPTIONS_WITH_OPERAND = new Set([
+  '-c',
+  '-C',
+  '--git-dir',
+  '--work-tree',
+  '--config-env',
+  '--namespace',
+  '--exec-path',
+  '--super-prefix',
+  '--pathspec-from-file'
+])
+const GIT_GLOBAL_FLAGS = new Set([
+  '--bare',
+  '--no-pager',
+  '--paginate',
+  '--literal-pathspecs',
+  '--glob-pathspecs',
+  '--noglob-pathspecs',
+  '--icase-pathspecs',
+  '--no-optional-locks',
+  '--pathspec-file-nul'
+])
+
+type GitSamplingBucket = {
+  windowStartMs: number
+  emitted: number
+}
+
+const gitSamplingBuckets = new Map<string, GitSamplingBucket>()
+
+function gitSubcommandFromArgs(args: readonly string[]): string {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (!arg) {
+      continue
+    }
+    if (arg === '--') {
+      return '<none>'
+    }
+    if (GIT_GLOBAL_OPTIONS_WITH_OPERAND.has(arg)) {
+      index += 1
+      continue
+    }
+    if (
+      arg.startsWith('--git-dir=') ||
+      arg.startsWith('--work-tree=') ||
+      arg.startsWith('--config-env=') ||
+      arg.startsWith('--namespace=') ||
+      arg.startsWith('--exec-path=') ||
+      arg.startsWith('--super-prefix=') ||
+      arg.startsWith('--pathspec-from-file=') ||
+      (arg.startsWith('-c') && arg.length > 2) ||
+      (arg.startsWith('-C') && arg.length > 2)
+    ) {
+      continue
+    }
+    if (GIT_GLOBAL_FLAGS.has(arg)) {
+      continue
+    }
+    if (arg.startsWith('-')) {
+      continue
+    }
+    return arg
+  }
+  return '<none>'
+}
+
+function pruneGitSamplingBuckets(nowMs: number): void {
+  for (const [key, bucket] of gitSamplingBuckets) {
+    if (nowMs - bucket.windowStartMs >= GIT_FAST_SUCCESS_WINDOW_MS) {
+      gitSamplingBuckets.delete(key)
+    }
+  }
+  while (gitSamplingBuckets.size > GIT_SAMPLING_MAX_BUCKETS) {
+    let oldestKey: string | undefined
+    let oldestWindowStartMs = Number.POSITIVE_INFINITY
+    for (const [key, bucket] of gitSamplingBuckets) {
+      if (bucket.windowStartMs < oldestWindowStartMs) {
+        oldestKey = key
+        oldestWindowStartMs = bucket.windowStartMs
+      }
+    }
+    if (oldestKey === undefined) {
+      return
+    }
+    gitSamplingBuckets.delete(oldestKey)
+  }
+}
+
+function gitSamplingKey(meta: GitSpanArgs): string {
+  return `${gitSubcommandFromArgs(meta.args)}\u0000${meta.cwd ?? '<none>'}`
+}
+
+function shouldRecordGitSpan(
+  meta: GitSpanArgs,
+  record: { durationMs: number; startTimeUnixNano: string; exit: { _tag: string } }
+): boolean {
+  if (record.exit._tag !== 'Success' || record.durationMs >= GIT_FAST_SUCCESS_THRESHOLD_MS) {
+    return true
+  }
+
+  const nowMs = Number(BigInt(record.startTimeUnixNano) / 1_000_000n)
+  pruneGitSamplingBuckets(nowMs)
+  const key = gitSamplingKey(meta)
+  const bucket = gitSamplingBuckets.get(key)
+  if (!bucket) {
+    gitSamplingBuckets.set(key, { windowStartMs: nowMs, emitted: 1 })
+    pruneGitSamplingBuckets(nowMs)
+    return true
+  }
+  if (bucket.emitted < GIT_FAST_SUCCESS_BUDGET_PER_WINDOW) {
+    bucket.emitted += 1
+    return true
+  }
+  return false
+}
+
+function addGitAttributes(span: ActiveSpan, meta: GitSpanArgs): void {
+  span.setAttribute('git.subcommand', gitSubcommandFromArgs(meta.args))
+  // Why: git args can contain commit messages, branch names, remotes, or
+  // paths. Keep cardinality without copying user-authored content.
+  span.setAttribute('git.arg_count', meta.args.length)
+  if (meta.cwd) {
+    span.setAttribute('cwd', meta.cwd)
+  }
+}
+
+export function _resetGitSpanSamplingForTests(): void {
+  gitSamplingBuckets.clear()
+}
+
+export function _gitSpanSamplingBucketCountForTests(): number {
+  return gitSamplingBuckets.size
+}
+
 export type GitSpanArgs = {
   readonly args: readonly string[]
   readonly cwd?: string
 }
 
-/** Wrap a git execution in a `git.exec` span. The first argument typically
- *  is the subcommand (`status`, `clone`, `pull`); promoting it to its own
- *  attribute makes it grep-friendly without pulling the full args array
- *  into a single comma-joined string in dashboards. */
+/** Wrap a git execution in a `git.exec` span. Git accepts global options before
+ *  the subcommand; promoting the parsed command to its own attribute makes it
+ *  grep-friendly without copying the full args array into dashboards. */
 export async function withGitSpan<T>(meta: GitSpanArgs, fn: () => Promise<T>): Promise<T> {
   return withSpan(
     'git.exec',
     async (span) => {
-      span.setAttribute('git.subcommand', meta.args[0] ?? '<none>')
-      // Why: git args can contain commit messages, branch names, remotes, or
-      // paths. Keep cardinality without copying user-authored content.
-      span.setAttribute('git.arg_count', meta.args.length)
-      if (meta.cwd) {
-        span.setAttribute('cwd', meta.cwd)
-      }
+      addGitAttributes(span, meta)
       return await fn()
     },
-    { attributes: { kind: 'git' } }
-  )
-}
-
-export type IpcSpanArgs = {
-  readonly channel: string
-}
-
-/** Wrap an ipcMain handler invocation in an `ipc.handle` span. Used by
- *  the highest-traffic handlers — `git`, `runtime`, `pty`, `worktree`,
- *  `agent` — not every handler. Tracing every IPC call would explode the
- *  trace tree and obscure the spans that matter. */
-export async function withIpcSpan<T>(meta: IpcSpanArgs, fn: () => Promise<T> | T): Promise<T> {
-  return withSpan(
-    'ipc.handle',
-    async (span) => {
-      span.setAttribute('ipc.channel', meta.channel)
-      return await fn()
-    },
-    { attributes: { kind: 'ipc' } }
+    { attributes: { kind: 'git' }, shouldRecord: (record) => shouldRecordGitSpan(meta, record) }
   )
 }
 
@@ -114,47 +230,6 @@ export async function withPtySpan<T>(meta: PtySpanArgs, fn: () => Promise<T> | T
       return await fn()
     },
     { attributes: { kind: 'pty' } }
-  )
-}
-
-export type AgentSpanArgs = {
-  readonly stage: 'start' | 'turn' | 'stop' | 'recover'
-  readonly agentKind?: string
-}
-
-export async function withAgentSpan<T>(meta: AgentSpanArgs, fn: () => Promise<T> | T): Promise<T> {
-  return withSpan(
-    `agent.${meta.stage}`,
-    async (span) => {
-      span.setAttribute('agent.stage', meta.stage)
-      if (meta.agentKind) {
-        span.setAttribute('agent.kind', meta.agentKind)
-      }
-      return await fn()
-    },
-    { attributes: { kind: 'agent' } }
-  )
-}
-
-export type ExternalEditorSpanArgs = {
-  readonly editor: string
-  readonly path?: string
-}
-
-export async function withExternalEditorSpan<T>(
-  meta: ExternalEditorSpanArgs,
-  fn: () => Promise<T> | T
-): Promise<T> {
-  return withSpan(
-    'external_editor.launch',
-    async (span) => {
-      span.setAttribute('editor', meta.editor)
-      if (meta.path) {
-        span.setAttribute('path', meta.path)
-      }
-      return await fn()
-    },
-    { attributes: { kind: 'external_editor' } }
   )
 }
 

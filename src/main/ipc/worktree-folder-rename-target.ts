@@ -1,4 +1,4 @@
-import { posix } from 'path'
+import { posix } from 'node:path'
 import type { GlobalSettings } from '../../shared/types'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
 import { computeWorktreePath } from './worktree-logic'

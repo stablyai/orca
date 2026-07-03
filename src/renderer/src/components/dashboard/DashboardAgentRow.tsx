@@ -10,6 +10,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
+import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
 // shared dot states for rendering, falling back to 'idle' for any unknown
@@ -188,7 +189,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
-  const prompt = agent.entry.prompt.trim()
+  const prompt = getAgentRowPrimaryText(agent.entry)
   // Why: `agent.entry.prompt` is normalized to '' when the prompt is unknown
   // (fresh agent, missing telemetry). Rendering the row with an empty primary
   // slot would collapse the text column and leave the row with no human-

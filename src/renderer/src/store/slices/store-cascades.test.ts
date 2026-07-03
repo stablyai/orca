@@ -80,6 +80,10 @@ import {
 } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
+import {
+  loadSessionCommitDrafts,
+  saveSessionCommitDrafts
+} from '@/lib/source-control-commit-draft-session'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -87,6 +91,7 @@ describe('removeWorktree cascade', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearRuntimeCompatibilityCacheForTests()
+    saveSessionCommitDrafts({})
     mockApi.worktrees.remove.mockResolvedValue(undefined)
     mockApi.worktrees.forceDeletePreservedBranch.mockResolvedValue({ deleted: true })
     mockApi.runtimeEnvironments.call.mockReset()
@@ -149,6 +154,10 @@ describe('removeWorktree cascade', () => {
       activeTabTypeByWorktree: { [worktreeId]: 'editor' },
       rightSidebarExplorerViewByWorktree: { [worktreeId]: 'search' }
     })
+    saveSessionCommitDrafts({
+      [worktreeId]: 'feat: stale draft',
+      'repo1::/path/wt2': 'fix: keep draft'
+    })
 
     const result = await store.getState().removeWorktree(worktreeId)
     const s = store.getState()
@@ -170,6 +179,7 @@ describe('removeWorktree cascade', () => {
     expect(s.activeFileIdByWorktree[worktreeId]).toBeUndefined()
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[worktreeId]).toBeUndefined()
+    expect(loadSessionCommitDrafts()).toEqual({ 'repo1::/path/wt2': 'fix: keep draft' })
   })
 
   it('warns when workspace removal keeps the local branch', async () => {
@@ -199,27 +209,10 @@ describe('removeWorktree cascade', () => {
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
-      description:
-        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
-      action: {
-        label: 'Force Delete Branch',
-        onClick: expect.any(Function)
-      }
-    })
-
-    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as
-      | { onClick?: () => void }
-      | undefined
-    action?.onClick?.()
-    await vi.waitFor(() => {
-      expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
-        worktreeId,
-        branchName: 'feature/test',
-        expectedHead: 'def456'
-      })
-    })
-    expect(toast.success).toHaveBeenCalledWith('Local branch deleted', {
-      description: 'Deleted "feature/test".'
+      id: 'preserved-branch:feature/test:def456',
+      description: expect.anything(),
+      dismissible: true,
+      duration: Infinity
     })
   })
 
@@ -1124,6 +1117,57 @@ describe('setActiveWorktree', () => {
     expect(groups[0].tabOrder).toEqual([terminal.id])
   })
 
+  it('moves live PTY ownership when detaching a primary pane to a tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const sourceTabId = 'tab-source'
+    const targetTabId = 'tab-target'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: 'pty-detached' }),
+          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
+        ]
+      },
+      ptyIdsByTabId: {
+        [sourceTabId]: ['pty-detached', 'pty-survivor'],
+        [targetTabId]: ['pty-detached']
+      },
+      lastKnownRelayPtyIdByTabId: {
+        [sourceTabId]: 'pty-detached',
+        [targetTabId]: 'pty-detached'
+      }
+    })
+
+    store.getState().syncPaneDetachPtyOwnership({
+      detachedPtyId: 'pty-detached',
+      sourceLayout: {
+        root: { type: 'leaf', leafId: 'survivor-leaf' },
+        activeLeafId: 'survivor-leaf',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'survivor-leaf': 'pty-survivor' }
+      },
+      sourceTabId,
+      targetTabId
+    })
+
+    const state = store.getState()
+    expect(state.ptyIdsByTabId[sourceTabId]).toEqual(['pty-survivor'])
+    expect(state.ptyIdsByTabId[targetTabId]).toEqual(['pty-detached'])
+    expect(state.lastKnownRelayPtyIdByTabId[sourceTabId]).toBe('pty-survivor')
+    expect(state.lastKnownRelayPtyIdByTabId[targetTabId]).toBe('pty-detached')
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === sourceTabId)?.ptyId).toBe(
+      'pty-survivor'
+    )
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === targetTabId)?.ptyId).toBe(
+      'pty-detached'
+    )
+  })
+
   it('stores trimmed quick command labels on terminal and unified tabs', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -1150,6 +1194,30 @@ describe('setActiveWorktree', () => {
     ).toBe('Run tests')
     expect(state.tabsByWorktree[wt].find((tab) => tab.id === unlabeled.id)).not.toHaveProperty(
       'quickCommandLabel'
+    )
+  })
+
+  it('stores terminal startup cwd exactly and omits empty values', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const nested = store
+      .getState()
+      .createTab(wt, undefined, undefined, { startupCwd: '/path/wt1/packages/app ' })
+    const empty = store.getState().createTab(wt, undefined, undefined, { startupCwd: '' })
+    const state = store.getState()
+
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === nested.id)?.startupCwd).toBe(
+      '/path/wt1/packages/app '
+    )
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === empty.id)).not.toHaveProperty(
+      'startupCwd'
     )
   })
 
@@ -1333,6 +1401,104 @@ describe('setActiveWorktree', () => {
             connectionId: 'ssh-1'
           }
         ],
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
+        worktreesByRepo: {
+          'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
+      expect(terminal.shellOverride).toBeUndefined()
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('preserves explicit Windows shell selections for Windows SSH terminal tabs', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'remote-repo::/path/wt1'
+
+      seedStore(store, {
+        repos: [
+          {
+            id: 'remote-repo',
+            path: '/remote/repo',
+            displayName: 'Remote Repo',
+            badgeColor: '#000',
+            addedAt: 0,
+            connectionId: 'ssh-1'
+          }
+        ],
+        sshConnectionStates: new Map([
+          [
+            'ssh-1',
+            {
+              targetId: 'ssh-1',
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0,
+              remotePlatform: 'win32'
+            }
+          ]
+        ]),
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
+        worktreesByRepo: {
+          'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
+      expect(terminal.shellOverride).toBe('cmd.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('drops explicit Windows shell selections for non-Windows SSH terminal tabs', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'remote-repo::/path/wt1'
+
+      seedStore(store, {
+        repos: [
+          {
+            id: 'remote-repo',
+            path: '/remote/repo',
+            displayName: 'Remote Repo',
+            badgeColor: '#000',
+            addedAt: 0,
+            connectionId: 'ssh-1'
+          }
+        ],
+        sshConnectionStates: new Map([
+          [
+            'ssh-1',
+            {
+              targetId: 'ssh-1',
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0,
+              remotePlatform: 'linux'
+            }
+          ]
+        ]),
         settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
         worktreesByRepo: {
           'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
@@ -1712,8 +1878,10 @@ describe('setActiveWorktree', () => {
       'canExpandPaneByTabId',
       'terminalLayoutsByTabId',
       'pendingStartupByTabId',
+      'pendingInitialCwdByTabId',
       'pendingSetupSplitByTabId',
       'pendingIssueCommandSplitByTabId',
+      'automaticAgentResumeClaimsByTabId',
       'tabBarOrderByWorktree',
       'cacheTimerByKey',
       'activeTabIdByWorktree'
@@ -1752,6 +1920,16 @@ describe('setActiveWorktree', () => {
       pendingStartupByTabId: {
         [orphanId]: { command: 'codex' }
       },
+      automaticAgentResumeClaimsByTabId: {
+        [orphanId]: {
+          worktreeId: wt,
+          launchAgent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' }
+        }
+      },
+      pendingInitialCwdByTabId: {
+        [orphanId]: '/repo/packages/web'
+      },
       tabBarOrderByWorktree: {
         [wt]: [orphanId]
       },
@@ -1772,6 +1950,8 @@ describe('setActiveWorktree', () => {
     expect(s.runtimePaneTitlesByTabId[orphanId]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[orphanId]).toBeUndefined()
     expect(s.pendingStartupByTabId[orphanId]).toBeUndefined()
+    expect(s.automaticAgentResumeClaimsByTabId[orphanId]).toBeUndefined()
+    expect(s.pendingInitialCwdByTabId[orphanId]).toBeUndefined()
     expect(s.cacheTimerByKey[`${orphanId}:seed`]).toBeUndefined()
     expect(s.terminalLayoutsByTabId[replacement.id]).toEqual(makeLayout())
   })
@@ -2714,6 +2894,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       [siblingLeaf]: 'pty-shell'
     })
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'target-session' }
     })
     expect(state.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingSleepingRecordBefore)
@@ -3235,6 +3416,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('commits sleep state after exact runtime stop for runtime-backed PTYs', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
       Promise.resolve(
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -3262,12 +3444,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     store.getState().setAgentStatus(
       'tab-1:live',
       {
-        state: 'done',
+        state: 'working',
         prompt: 'resume live',
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
@@ -3286,6 +3468,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     )
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
@@ -3549,6 +3732,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('commits the pre-stop sleeping record when exact-stop exit clears live status', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.stopExact') {
         store.getState().removeAgentStatus('tab-1:live')
@@ -3582,12 +3766,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     store.getState().setAgentStatus(
       'tab-1:live',
       {
-        state: 'done',
+        state: 'working',
         prompt: 'resume live',
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
@@ -3599,6 +3783,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
   })
@@ -3873,6 +4058,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   it('captures resumable provider session metadata before dropping sleep-time rows', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
+    const now = Date.now()
 
     seedStore(store, {
       worktreesByRepo: {
@@ -3892,7 +4078,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         agentType: 'codex'
       },
       'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
+      { updatedAt: now, stateStartedAt: now },
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'codex-session-1' } }
     )
@@ -3906,13 +4092,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       tabId: 'tab-1',
       worktreeId: wt,
       agent: 'codex',
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'codex-session-1' },
       prompt: 'resume this',
       terminalTitle: 'Codex'
     })
   })
 
-  it('captures only allowlisted sleeping pane sessions when requested', async () => {
+  it('skips allowlisted done live sleeping pane sessions during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -3963,10 +4150,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
-      paneKey: 'tab-1:live',
-      providerSession: { key: 'session_id', id: 'live-session' }
-    })
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 
@@ -4093,6 +4277,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       paneKey: 'tab-1:live',
+      origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(state.retainedAgentsByPaneKey['tab-1:retained']).toBeUndefined()
@@ -4157,6 +4342,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:interrupted']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:working']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained-only']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:interrupted']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:working']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:retained-only']).toBeUndefined()

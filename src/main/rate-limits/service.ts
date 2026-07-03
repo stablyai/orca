@@ -37,6 +37,13 @@ type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
+type OpenCodeGoRateLimitConfig = {
+  sessionCookie: string
+  workspaceIdOverride: string
+}
+
+type GeminiCliOAuthEnabledResolver = () => boolean
+
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
 // into 429s during long focused Orca sessions.
@@ -63,6 +70,18 @@ function normalizePollingInterval(ms: number): number {
     return DEFAULT_POLL_MS
   }
   return Math.min(MAX_POLL_MS, Math.max(MIN_POLL_MS, ms))
+}
+
+function isSystemDefaultClaudeAuth(
+  authPreparation: ClaudeRuntimeAuthPreparation | undefined
+): boolean {
+  // Why: fetch cycles classify missing Claude auth as system-default; keep the
+  // PTY fallback gate aligned so background refresh cannot trigger auth flows.
+  if (!authPreparation) {
+    return true
+  }
+  const provenance = authPreparation?.provenance
+  return provenance === 'system' || Boolean(provenance?.endsWith(':system'))
 }
 
 export class RateLimitService {
@@ -98,13 +117,8 @@ export class RateLimitService {
     runtime: 'host',
     wslDistro: null
   }
-  private settingsResolver:
-    | (() => {
-        opencodeSessionCookie: string
-        opencodeWorkspaceId: string
-        geminiCliOAuthEnabled?: boolean
-      })
-    | null = null
+  private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
@@ -142,14 +156,12 @@ export class RateLimitService {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
   }
 
-  setSettingsResolver(
-    resolver: () => {
-      opencodeSessionCookie: string
-      opencodeWorkspaceId: string
-      geminiCliOAuthEnabled?: boolean
-    }
-  ): void {
-    this.settingsResolver = resolver
+  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
+    this.openCodeGoConfigResolver = resolver
+  }
+
+  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
+    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
@@ -370,7 +382,9 @@ export class RateLimitService {
         continue
       }
       try {
-        const fresh = await fetchManagedAccountUsage(account)
+        const fresh = await fetchManagedAccountUsage(account, {
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
+        })
         if (
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
           !this.isCurrentInactiveClaudeAccount(account.id)
@@ -792,6 +806,26 @@ export class RateLimitService {
     return process.platform !== 'win32'
   }
 
+  private shouldAllowClaudePtyFallback(
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined
+  ): boolean {
+    // Why: automatic recovery uses Claude CLI as the next source, but Windows
+    // hidden PTY support remains less reliable than host/WSL shells.
+    if (process.platform === 'win32') {
+      return false
+    }
+    // Why: system-default Claude is not an Orca-managed account. Background
+    // quota refresh may read existing OAuth, but must not launch Claude and
+    // trigger auth/browser flows for users who never configured Claude in Orca.
+    return !isSystemDefaultClaudeAuth(authPreparation)
+  }
+
+  private shouldAllowClaudeUsagePanelSupplement(): boolean {
+    // Why: this supplement runs only after OAuth has already returned usage
+    // data. Keep it off on Windows where hidden PTYs are still less reliable.
+    return process.platform !== 'win32'
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
@@ -819,10 +853,10 @@ export class RateLimitService {
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
-    const settings = this.settingsResolver?.()
-    const cookie = settings?.opencodeSessionCookie ?? ''
-    const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
-    const geminiCliOAuthEnabled = settings?.geminiCliOAuthEnabled ?? false
+    const openCodeGoConfig = this.openCodeGoConfigResolver?.()
+    const cookie = openCodeGoConfig?.sessionCookie ?? ''
+    const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
+    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
 
     // Detect if configuration changed — if it did, we must discard any stale
     // data because it belongs to a different session/workspace.
@@ -855,9 +889,8 @@ export class RateLimitService {
       await Promise.allSettled([
         fetchClaudeRateLimits({
           authPreparation: claudeAuthPreparation,
-          // Why: active quota refreshes run on startup/focus/timers. They must
-          // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
-          allowPtyFallback: false
+          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
         }),
         missingWslCodexHome ??
           fetchCodexRateLimits({
@@ -1032,9 +1065,8 @@ export class RateLimitService {
 
     const claude = await fetchClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
-      // Why: account-change refreshes share the same automatic active quota
-      // surface as startup/timer refreshes, so keep them API-only as well.
-      allowPtyFallback: false
+      allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement()
     }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
@@ -1069,7 +1101,14 @@ export class RateLimitService {
   ): ProviderRateLimits {
     // Fresh data is fine — use it
     if (fresh.status === 'ok') {
-      return fresh
+      return {
+        ...fresh,
+        usageMetadata: {
+          ...fresh.usageMetadata,
+          lastSuccessfulSource:
+            fresh.usageMetadata?.source ?? fresh.usageMetadata?.lastSuccessfulSource
+        }
+      }
     }
 
     // Explicitly unavailable — user likely cleared a setting. Discard any stale
@@ -1081,6 +1120,7 @@ export class RateLimitService {
     const previousHasData = Boolean(
       previous?.session ||
       previous?.weekly ||
+      previous?.fableWeekly ||
       previous?.monthly ||
       (previous?.buckets && previous.buckets.length > 0)
     )
@@ -1103,7 +1143,13 @@ export class RateLimitService {
     return {
       ...previous,
       error: fresh.error,
-      status: 'error'
+      status: 'error',
+      usageMetadata: {
+        ...previous.usageMetadata,
+        ...fresh.usageMetadata,
+        lastSuccessfulSource:
+          previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
+      }
     }
   }
 

@@ -1,10 +1,12 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsGitBashHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -73,12 +75,9 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    // Why: Claude Code runs hooks through Git Bash on Windows; forward slashes
-    // survive that shell layer while native Windows APIs still accept them.
-    return scriptPath.replaceAll('\\', '/')
-  }
-  return wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsGitBashHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
@@ -98,7 +97,7 @@ export function applyManagedHooks(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [{ type: 'command', command }]
+      hooks: [buildManagedCommandHook(command)]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }

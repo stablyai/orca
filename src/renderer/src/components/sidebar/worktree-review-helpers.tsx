@@ -25,12 +25,14 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
 
 export function ReviewIcon({
   review,
-  className
+  className,
+  variant = 'provider'
 }: {
   review: WorktreeCardPrDisplay
   className?: string
+  variant?: 'provider' | 'generic'
 }): React.JSX.Element {
-  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const Icon = variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const checkTone =
     review.state !== 'merged' && review.status === 'failure'
       ? 'text-rose-500/85'

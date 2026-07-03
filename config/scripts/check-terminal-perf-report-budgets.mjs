@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
+import { collectTerminalPerfRows, readJsonReport } from './terminal-perf-report-annotations.mjs'
 
 const reportPaths = process.argv.slice(2)
 if (reportPaths[0] === '--') {
@@ -24,55 +24,6 @@ const BUDGETS = {
   maxRendererQueuedChars: 2 * 1024 * 1024,
   maxRendererPeakQueuedChars: 2 * 1024 * 1024,
   maxRendererDroppedBacklogs: 0
-}
-
-function readJsonReport(path) {
-  const raw = readFileSync(path, 'utf8')
-  const start = raw.indexOf('{')
-  const end = raw.lastIndexOf('}')
-  if (start === -1 || end <= start) {
-    throw new Error(`${path}: no JSON object found`)
-  }
-  return JSON.parse(raw.slice(start, end + 1))
-}
-
-function parseAnnotationDescription(description) {
-  const values = {}
-  for (const part of description.split(/\s+/)) {
-    const index = part.indexOf('=')
-    if (index === -1) {
-      continue
-    }
-    values[part.slice(0, index)] = part.slice(index + 1)
-  }
-  return values
-}
-
-function collectTerminalPerfRows(report, source) {
-  const rows = []
-  const visitSuite = (suite) => {
-    for (const spec of suite.specs ?? []) {
-      for (const test of spec.tests ?? []) {
-        for (const annotation of test.annotations ?? []) {
-          if (!annotation.type.startsWith('opencode-')) {
-            continue
-          }
-          rows.push({
-            source,
-            scenario: annotation.type,
-            ...parseAnnotationDescription(annotation.description ?? '')
-          })
-        }
-      }
-    }
-    for (const child of suite.suites ?? []) {
-      visitSuite(child)
-    }
-  }
-  for (const suite of report.suites ?? []) {
-    visitSuite(suite)
-  }
-  return rows
 }
 
 function parseMs(value, fieldName, row, failures) {

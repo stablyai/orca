@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('getMarkdownRichModeUnsupportedMessage', () => {
   it('allows markdown tables once table nodes are available in rich mode', () => {
@@ -33,6 +37,7 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
   it('ignores jsx-looking tags inside code spans and fences', () => {
     expect(getMarkdownRichModeUnsupportedMessage('Use `<Widget />` in docs.\n')).toBeNull()
     expect(getMarkdownRichModeUnsupportedMessage('```tsx\n<Widget />\n```\n')).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage('```tsx\r\n<Widget />\r\n```\r\n')).toBeNull()
   })
 
   it('allows angle brackets in ordinary prose', () => {
@@ -60,5 +65,29 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(
       getMarkdownRichModeUnsupportedMessage('---\ntitle: Docs\n---\n# Heading\n\n- one\n- two\n')
     ).toBeNull()
+  })
+
+  it('strips newline-heavy fenced code without splitting the full body', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const content = `${'```tsx\n<Widget />\n```\n'.repeat(10_000)}# Tail\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+
+    expect(split).not.toHaveBeenCalled()
+  })
+
+  it('preserves newline-heavy embedded html without global fragment matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const content = `${'<span>hi</span>\n'.repeat(1_000)}Tail\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+
+    const usedGlobalHtmlFragmentMatch = matchSpy.mock.calls.some(
+      ([pattern]) =>
+        pattern instanceof RegExp &&
+        pattern.global &&
+        pattern.source.startsWith('<!--[\\s\\S]*?-->')
+    )
+    expect(usedGlobalHtmlFragmentMatch).toBe(false)
   })
 })

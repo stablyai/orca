@@ -6,18 +6,19 @@ it would scatter the "swap the running provider atomically" invariant across
 files with no cleaner ownership seam: restart, replaceDaemonProvider, and the
 module-level spawner/adapter singletons must stay co-located so a future
 change cannot leave them drifting out of sync. */
-import { join } from 'path'
+import { join } from 'node:path'
 import { app } from 'electron'
-import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'fs'
-import { fork } from 'child_process'
-import { connect } from 'net'
+import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs'
+import { fork } from 'node:child_process'
+import { connect } from 'node:net'
 import {
   DaemonSpawner,
   getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath,
   serializeDaemonPidFile,
-  type DaemonLauncher
+  type DaemonLauncher,
+  type DaemonProcessHandle
 } from './daemon-spawner'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyRouter } from './daemon-pty-router'
@@ -31,11 +32,13 @@ import {
   getMacDaemonSystemResolverHealth,
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
-  healthCheckDaemon,
+  checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
+import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import {
+  getLocalPtyProvider,
   setLocalPtyProvider,
   unbindLocalProviderListeners,
   rebindLocalProviderListeners
@@ -52,7 +55,9 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
 }
 
 let spawner: DaemonSpawner | null = null
-let adapter: DaemonPtyRouter | DaemonPtyAdapter | null = null
+type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
+
+let adapter: DaemonProvider | null = null
 // Why: coalesce concurrent restartDaemon() calls so two clicks (or a UI
 // click racing an internal caller) can't both enter the 7-step sequence —
 // the second entry would read the already-disposed current adapter and
@@ -145,13 +150,18 @@ async function getAliveDaemonSessionCount(
 
 function createPreservedDaemonHandle(
   runtimeDir: string,
-  protocolVersion = PROTOCOL_VERSION
-): { shutdown(): Promise<void> } {
-  return {
+  protocolVersion = PROTOCOL_VERSION,
+  mode?: 'degraded-new-pty-fallback'
+): DaemonProcessHandle {
+  const handle: DaemonProcessHandle = {
     shutdown: async () => {
       await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
     }
   }
+  if (mode) {
+    handle.mode = mode
+  }
+  return handle
 }
 
 async function shouldPreserveDaemonWithLiveSessions(
@@ -174,8 +184,8 @@ async function shouldPreserveDaemonWithLiveSessions(
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   return async (socketPath, tokenPath) => {
     const entryPath = getDaemonEntryPath()
-    const healthy = await healthCheckDaemon(socketPath, tokenPath)
-    if (healthy) {
+    const health = await checkDaemonHealth(socketPath, tokenPath)
+    if (health === 'healthy') {
       const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
       if (resolverHealth === 'unhealthy') {
         const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
@@ -228,6 +238,16 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       // only recovery.
       const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
       if (liveSessionCount !== null && liveSessionCount > 0) {
+        if (health === 'pty-spawn-unhealthy') {
+          console.warn(
+            `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
+          )
+          return createPreservedDaemonHandle(
+            runtimeDir,
+            PROTOCOL_VERSION,
+            'degraded-new-pty-fallback'
+          )
+        }
         console.warn(
           `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
         )
@@ -374,6 +394,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
   // correctly on retry.
   const info = await newSpawner.ensureRunning()
+  const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {
     // Why: startup fail-open may already have allowed fallback LocalPtyProvider
@@ -398,13 +419,24 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
 
   const legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
   const routedAdapter =
-    legacyAdapters.length > 0
-      ? new DaemonPtyRouter({
+    launchMode === 'degraded-new-pty-fallback'
+      ? new DegradedDaemonPtyProvider({
           current: newAdapter,
-          legacy: legacyAdapters
+          legacy: legacyAdapters,
+          fallback: getLocalPtyProvider()
         })
-      : newAdapter
-  if (routedAdapter instanceof DaemonPtyRouter) {
+      : legacyAdapters.length > 0
+        ? new DaemonPtyRouter({
+            current: newAdapter,
+            legacy: legacyAdapters
+          })
+        : newAdapter
+  if (routedAdapter instanceof DegradedDaemonPtyProvider) {
+    // Why: the preserved daemon cannot create fresh terminals, but its live
+    // sessions may still be writable. Discover those ids so only known old
+    // sessions route to the degraded daemon; fresh panes fall back locally.
+    await routedAdapter.discoverDaemonSessions()
+  } else if (routedAdapter instanceof DaemonPtyRouter) {
     await routedAdapter.discoverLegacySessions()
   }
   if (signal?.aborted) {
@@ -427,7 +459,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
 // adapter/router to list sessions, kill them, etc. Exposed as a narrow getter
 // rather than exporting the module-level variable to keep the "swap on
 // restart" invariant in one place (replaceDaemonProvider).
-export function getDaemonProvider(): DaemonPtyRouter | DaemonPtyAdapter | null {
+export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
@@ -435,9 +467,33 @@ export function getDaemonProvider(): DaemonPtyRouter | DaemonPtyAdapter | null {
 // must update both the module-level `adapter` singleton here and the
 // `localProvider` reference inside ipc/pty.ts. Without this helper they could
 // drift — app-quit would dispose a stale adapter reference.
-export function replaceDaemonProvider(newAdapter: DaemonPtyAdapter | DaemonPtyRouter): void {
+export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter
   setLocalPtyProvider(newAdapter)
+}
+
+function getCurrentDaemonAdapter(provider: DaemonProvider): DaemonPtyAdapter {
+  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
+    return provider.getCurrentAdapter()
+  }
+  return provider
+}
+
+function getLegacyDaemonAdapters(provider: DaemonProvider): DaemonPtyAdapter[] {
+  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
+    return [...provider.getLegacyAdapters()]
+  }
+  return []
+}
+
+function disposeProviderSubscriptionsOnly(provider: DaemonProvider): void {
+  if (provider instanceof DaemonPtyRouter) {
+    provider.disposeRouterOnly()
+    return
+  }
+  if (provider instanceof DegradedDaemonPtyProvider) {
+    provider.disposeProviderOnly()
+  }
 }
 
 export type RestartDaemonResult = {
@@ -467,18 +523,29 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   }
 
   const runtimeDir = getRuntimeDir()
-  const currentOnly =
-    currentAdapter instanceof DaemonPtyRouter ? currentAdapter.getCurrentAdapter() : currentAdapter
-  const legacyAdapters =
-    currentAdapter instanceof DaemonPtyRouter ? [...currentAdapter.getLegacyAdapters()] : []
+  const currentOnly = getCurrentDaemonAdapter(currentAdapter)
+  const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
 
   // Step 1: synthesize pty:exit for every active session on the current
   // adapter BEFORE any teardown. The daemon's kill-all-and-shutdown path
   // explicitly does not fan onExit to clients (session.ts:246-252), so
   // without this the renderer would never see exits and would black-hole
   // writes against the disposed adapter.
-  const killedCount = currentOnly.getActiveSessionIds().length
+  const fallbackKilledCount =
+    currentAdapter instanceof DegradedDaemonPtyProvider
+      ? await currentAdapter.shutdownFallbackSessions()
+      : 0
+  const currentDaemonSessionIds =
+    currentAdapter instanceof DegradedDaemonPtyProvider
+      ? currentAdapter.getCurrentDaemonSessionIds()
+      : []
+  const killedCount =
+    new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
+    fallbackKilledCount
   currentOnly.fanoutSyntheticExits(-1)
+  if (currentAdapter instanceof DegradedDaemonPtyProvider) {
+    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
+  }
 
   // Step 2: detach renderer listeners from the current adapter. Must happen
   // AFTER step 1 so the synthesized exits actually reach the renderer, and
@@ -525,9 +592,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   // the narrow window, and *before* replaceDaemonProvider so the swap is
   // atomic from the renderer's perspective. Plain dispose() would also tear
   // down the legacy adapters themselves — use the router-only variant.
-  if (currentAdapter instanceof DaemonPtyRouter) {
-    currentAdapter.disposeRouterOnly()
-  }
+  disposeProviderSubscriptionsOnly(currentAdapter)
 
   // Step 6: swap module state (adapter + localProvider) atomically.
   replaceDaemonProvider(newProvider)

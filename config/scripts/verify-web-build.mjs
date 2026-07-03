@@ -1,5 +1,5 @@
-import { readFile } from 'fs/promises'
-import { resolve } from 'path'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 
 const indexPath = resolve('out/web/web-index.html')
 const html = await readFile(indexPath, 'utf8')

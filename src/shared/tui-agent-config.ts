@@ -8,7 +8,10 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
-export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'codex-composer-prompt'
+export type DraftPasteReadySignal =
+  | 'render-quiet-after-bracketed-paste'
+  | 'codex-composer-prompt'
+  | 'render-cursor-after-bracketed-paste'
 
 export type TuiAgentConfig = {
   detectCmd: string
@@ -114,7 +117,20 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
     expectedProcess: 'opencode',
-    promptInjectionMode: 'flag-prompt'
+    promptInjectionMode: 'flag-prompt',
+    // Why: opencode enables bracketed paste before its composer mounts; wait
+    // for post-\x1b[?2004h show-cursor (\x1b[?25h) so paste hits mounted input.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+  },
+  'mimo-code': {
+    detectCmd: 'mimo',
+    launchCmd: 'mimo',
+    expectedProcess: 'mimo',
+    promptInjectionMode: 'flag-prompt',
+    // Why: mimo-code shares opencode's flag-prompt paste route, so it gets the
+    // same cursor-gated signal by parity (its startup stream is not separately
+    // validated); the quiet-window fallback bounds the risk if it differs.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
   pi: {
     detectCmd: 'pi',
@@ -271,9 +287,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
-    detectCmd: 'qwen-code',
-    launchCmd: 'qwen-code',
-    expectedProcess: 'qwen-code',
+    // Why: the upstream package is QwenLM/qwen-code, but its installed CLI
+    // executable on PATH is `qwen`, so detect/launch/recognition must use that.
+    detectCmd: 'qwen',
+    launchCmd: 'qwen',
+    expectedProcess: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
   rovo: {
@@ -340,7 +358,14 @@ export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
 
 export function getTuiAgentLaunchCommand(
   config: TuiAgentConfig,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  opts?: { isRemote?: boolean }
 ): string {
+  // Why: the SSH relay shim is always named `orca` on Unix, so the local-only
+  // `orca-ide` rename (avoids shadowing the GNOME Orca screen reader) must not
+  // leak to Linux remotes — the remote has no such desktop binary on PATH.
+  if (opts?.isRemote && platform === 'linux') {
+    return config.launchCmd
+  }
   return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }

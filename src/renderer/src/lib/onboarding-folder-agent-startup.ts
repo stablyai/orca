@@ -7,11 +7,14 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { GlobalSettings, OnboardingState } from '../../../shared/types'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../shared/types'
 
 export type OnboardingFolderAgentStartup = {
   command: string
   env?: Record<string, string>
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   telemetry: AgentStartedTelemetry
 }
@@ -52,6 +55,8 @@ export function buildOnboardingFolderAgentStartup(
   return {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),

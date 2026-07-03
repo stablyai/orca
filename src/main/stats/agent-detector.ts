@@ -29,45 +29,30 @@ const MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT = 4096
  * orca-runtime.ts normalizeTerminalChunk but avoids importing the runtime.
  */
 function hasMeaningfulContent(chunk: string): boolean {
-  // Why: large plain-text PTY bursts should not pay the full ANSI stripping
-  // chain just to prove they contain visible output.
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
+    if (code === 0x1b) {
+      const controlEnd = parseMeaningfulControlSequence(chunk, index)
+      if (controlEnd === null) {
+        return false
+      }
+      index = controlEnd
+      continue
+    }
     if (
-      code === 0x1b ||
       code === 0x7f ||
       code < 0x09 ||
       (code > 0x0d && code < 0x20) ||
       (code >= 0x80 && code <= 0x9f)
     ) {
-      break
+      continue
     }
     if (code > 0x20) {
       return true
     }
   }
 
-  const stripped = chunk
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\][^\x07]*(?:\x1b)?$/g, '') // incomplete OSC tail
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[PX^_][\s\S]*?\x1b\\/g, '') // ST-terminated string controls
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[PX^_][\s\S]*(?:\x1b)?$/g, '') // incomplete string-control tail
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI sequences
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[@-_]/g, '') // Fe sequences
-    // eslint-disable-next-line no-control-regex
-    .replace(/\u0008/g, '') // backspace
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '') // non-printable
-    .trim()
-  return stripped.length > 0
+  return false
 }
 
 /**

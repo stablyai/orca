@@ -68,18 +68,23 @@ export function normalizeSoftBreaks(editor: Editor): void {
         return
       }
 
-      // Split this text node on `\n`.  Each segment inherits the original marks.
-      const parts = child.text!.split('\n')
-      parts.forEach((part, i) => {
-        if (i > 0) {
-          // Flush currentNodes into a completed line.
+      const text = child.text!
+      let segmentStart = 0
+      for (let index = 0; index <= text.length; index += 1) {
+        if (index < text.length && text.charCodeAt(index) !== 10) {
+          continue
+        }
+        if (index > segmentStart) {
+          currentNodes.push(schema.text(text.slice(segmentStart, index), child.marks))
+        }
+        if (index < text.length) {
+          // Why: pasted markdown paragraphs can contain thousands of soft line
+          // breaks; scan boundaries directly instead of allocating a split array.
           lines.push(Fragment.from(currentNodes))
           currentNodes = []
+          segmentStart = index + 1
         }
-        if (part.length > 0) {
-          currentNodes.push(schema.text(part, child.marks))
-        }
-      })
+      }
     })
 
     // Flush the last accumulated line.

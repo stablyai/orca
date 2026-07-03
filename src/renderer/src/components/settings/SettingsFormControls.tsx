@@ -9,6 +9,11 @@ import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
+import {
+  filterFontSuggestions,
+  filterTerminalThemeOptions,
+  isSettingsFormOptionQueryTooLarge
+} from './settings-form-option-filter'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -71,11 +76,19 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
-      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+      className={cn(
+        'flex gap-4',
+        description ? 'py-3' : 'py-2',
+        alignTop ? 'items-start' : 'items-center justify-between'
+      )}
     >
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <Label id={labelId}>{label}</Label>
-        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      <div className={cn('min-w-0 flex-1', description ? 'space-y-1' : 'space-y-0.5')}>
+        <Label id={labelId} className="select-text">
+          {label}
+        </Label>
+        {description ? (
+          <p className="select-text text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>
@@ -213,16 +226,18 @@ type SettingsSubsectionHeaderProps = {
   title: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  className?: string
 }
 
 /** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
 export function SettingsSubsectionHeader({
   title,
   description,
-  action
+  action,
+  className
 }: SettingsSubsectionHeaderProps): React.JSX.Element {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
@@ -303,10 +318,10 @@ export function ThemePicker({
     return () => clearTimeout(timer)
   }, [importedHighlightSignal])
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const matchingThemes = themeOptions.filter((theme) =>
-    `${theme.label} ${theme.sourceLabel ?? ''}`.toLowerCase().includes(normalizedQuery)
-  )
+  const themeQuery = query.trim()
+  const shouldShowThemeQueryLabel =
+    themeQuery.length > 0 && !isSettingsFormOptionQueryTooLarge(themeQuery)
+  const matchingThemes = filterTerminalThemeOptions(themeOptions, query)
   const selectedThemeLabel =
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
   const groupedThemes = [
@@ -348,11 +363,11 @@ export function ThemePicker({
           <span>
             {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
             {visibleThemeCount}
-            {normalizedQuery
+            {shouldShowThemeQueryLabel
               ? translate(
                   'auto.components.settings.SettingsFormControls.c822571b2e',
                   ' matching "{{value0}}"',
-                  { value0: query.trim() }
+                  { value0: themeQuery }
                 )
               : translate(
                   'auto.components.settings.SettingsFormControls.cb330ef7f8',
@@ -621,21 +636,14 @@ export function FontAutocomplete({
 
   const normalizedQuery = query.trim().toLowerCase()
   const normalizedValue = value.trim().toLowerCase()
-  const filteredSuggestions = useMemo(() => {
-    const startsWith = suggestions.filter((font) => font.toLowerCase().startsWith(normalizedQuery))
-    const includes = suggestions.filter(
-      (font) =>
-        !font.toLowerCase().startsWith(normalizedQuery) &&
-        font.toLowerCase().includes(normalizedQuery)
-    )
-    return normalizedQuery ? [...startsWith, ...includes] : suggestions
-  }, [suggestions, normalizedQuery])
-  // Why: a committed font fills the input, but typed searches can also mirror
-  // into `value`; only expand exact matches outside an active search session.
+  const filteredSuggestions = useMemo(
+    () => filterFontSuggestions(suggestions, query),
+    [suggestions, query]
+  )
+  // Why: the committed font fills the input, but opening the chooser should
+  // still reveal every installed font instead of only fonts sharing that name.
   const visibleSuggestions =
-    !isFilteringQuery && normalizedQuery === normalizedValue && filteredSuggestions.length <= 1
-      ? suggestions
-      : filteredSuggestions
+    !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
 
   // Why: sync the highlighted index during render rather than via useEffect so
   // the correct item is highlighted on the very first paint after open/filter

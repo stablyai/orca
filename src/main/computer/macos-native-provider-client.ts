@@ -1,5 +1,5 @@
-import { rmSync } from 'fs'
-import type net from 'net'
+import { rmSync } from 'node:fs'
+import type net from 'node:net'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -56,7 +56,7 @@ export class MacOSNativeProviderClient {
     return (await this.call('getAppState', params)) as ComputerSnapshotResult
   }
   async action(method: NativeActionMethod, params: unknown): Promise<ComputerActionResult> {
-    validateComputerProviderActionParams(
+    await validateComputerProviderActionParams(
       method,
       params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
     )

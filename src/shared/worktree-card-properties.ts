@@ -25,6 +25,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
 // Why: compact cards default to the quiet preset; metadata icons remain opt-in
 // through Show properties instead of appearing automatically.
 export const COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status']
+const NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
 
 const LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION: WorktreeCardProperty[] = [
   'status',
@@ -83,10 +84,12 @@ export function getWorktreeCardModeUpdates(mode: WorktreeCardMode): {
   }
 }
 
-export function isLegacyDefaultedCompactWorktreeCardProperties(
+export function isDefaultedCompactWorktreeCardProperties(
   properties: readonly unknown[] | null | undefined
 ): boolean {
   return (
+    matchesWorktreeCardProperties(properties, COMPACT_WORKTREE_CARD_PROPERTIES) ||
+    matchesWorktreeCardProperties(properties, NORMALIZED_COMPACT_WORKTREE_CARD_PROPERTIES) ||
     matchesWorktreeCardProperties(
       properties,
       LEGACY_COMPACT_WORKTREE_CARD_PROPERTIES_WITH_AUTOMATION

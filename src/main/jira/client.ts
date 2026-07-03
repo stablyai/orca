@@ -1,10 +1,10 @@
 /* eslint-disable max-lines -- Why: Jira credential storage and authenticated
 request plumbing share one boundary so encrypted token lifecycle and
 multi-site selection cannot drift between task operations. */
-import { createHash } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { net, safeStorage, session } from 'electron'
 import {
   CredentialDecryptionError,
@@ -20,6 +20,13 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../shared/types'
+
+// Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
+// User-Agent, failing them with "XSRF check failed" even under API-token auth.
+// Electron's net.fetch sends a Chrome UA, so issue search/create/update/comment
+// all 403'd while GET calls (connect, /myself) passed. A non-browser UA is the
+// reliable fix; X-Atlassian-Token: no-check is not honored for this case.
+const JIRA_API_USER_AGENT = 'Orca'
 
 const MAX_CONCURRENT = 4
 let running = 0
@@ -364,6 +371,7 @@ async function requestWithCredentials(
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', authHeader(email, apiToken))
   const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
@@ -407,6 +415,7 @@ export async function jiraRequest<T>(
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
   const response = await jiraFetch(`${client.site.siteUrl}${path}`, {
     ...init,

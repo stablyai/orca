@@ -54,6 +54,11 @@ export type TeamPane = {
   fakePaneId: string
   handle: string
   index: number
+  // Why: Claude Code splits a holding pane (`-- cat`) then `respawn-pane`s it
+  // with the real teammate command. We remember how the pane was first split so
+  // respawn can recreate it in the same slot while preserving its fake pane id.
+  splitFromPane?: string
+  splitDirection?: 'horizontal' | 'vertical'
 }
 
 export type AgentTeam = {

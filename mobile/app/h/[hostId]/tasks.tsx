@@ -47,6 +47,7 @@ import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { MobileMarkdown } from '../../../src/components/MobileMarkdown'
 import { MobileAgentIcon } from '../../../src/components/MobileAgentIcon'
+import { MobileWorkspaceNameInput } from '../../../src/components/MobileWorkspaceNameInput'
 import { MobileSyntaxSegments } from '../../../src/components/MobileSyntaxSegments'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
@@ -4870,7 +4871,6 @@ export default function MobileTasksScreen() {
       }
     ]
   }, [runtimeTaskSettings.disabledTuiAgents, workspaceAgent, workspaceDetectedAgentIds])
-
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
     setWorkspaceCreateDraft({ item, ...(repoIdOverride ? { repoIdOverride } : {}) })
@@ -10977,14 +10977,12 @@ export default function MobileTasksScreen() {
                 <Text style={styles.workspaceCreateLabel}>
                   Workspace Name <Text style={styles.workspaceCreateLabelHint}>[Optional]</Text>
                 </Text>
-                <TextInput
+                <MobileWorkspaceNameInput
                   style={styles.input}
                   value={workspaceNameDraft}
                   onChangeText={handleWorkspaceNameDraftChange}
-                  placeholder="Workspace name"
                   placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  shouldAutoFocus={taskUiReady && workspaceCreateDraft !== null}
                 />
               </View>
 

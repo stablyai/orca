@@ -13,7 +13,28 @@ const sampleItems: MarkdownTocItem[] = [
         id: 'setup',
         level: 2,
         title: 'Setup',
-        children: []
+        children: [
+          {
+            id: 'install',
+            level: 3,
+            title: 'Install',
+            children: [
+              {
+                id: 'configure',
+                level: 4,
+                title: 'Configure',
+                children: [
+                  {
+                    id: 'options',
+                    level: 5,
+                    title: 'Options',
+                    children: []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     ]
   }
@@ -27,7 +48,13 @@ describe('MarkdownTableOfContentsPanel', () => {
 
     expect(html).toContain('Collapse by level')
     expect(html).toContain('Collapse to heading level 1')
+    expect(html).toContain('Collapse to heading level 4')
+    expect(html).toContain('Expand all heading levels')
+    expect(html).toContain('H5')
     expect(html).toContain('Collapse Intro')
+    expect(html).toContain('Install')
+    expect(html).toContain('Configure')
+    expect(html).toContain('Options')
     expect(html).toContain('Intro')
     expect(html).toContain('Setup')
     expect(html).toContain('data-markdown-toc-resize-handle')

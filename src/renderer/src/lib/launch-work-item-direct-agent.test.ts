@@ -18,12 +18,15 @@ describe('buildDirectWorkItemStartupOpts', () => {
       launchCommand: "codex 'review linked issue'",
       expectedProcess: 'codex',
       followupPrompt: null,
+      launchConfig: { agentArgs: '', agentEnv: {} },
       startupCommandDelivery: 'shell-ready'
     }
 
     expect(buildDirectWorkItemStartupOpts('codex', plan, 'task_page')).toEqual({
       startup: {
         command: "codex 'review linked issue'",
+        launchAgent: 'codex',
+        launchConfig: { agentArgs: '', agentEnv: {} },
         startupCommandDelivery: 'shell-ready',
         telemetry: {
           agent_kind: 'codex',

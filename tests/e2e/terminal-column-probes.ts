@@ -7,6 +7,8 @@ import {
   waitForPtyPaneMounted,
   waitForPtyShellEcho
 } from './terminal-pty-readiness'
+import { nodeTerminalCommand } from './terminal-node-command'
+import { buildFreshShellProbeInputSequence } from './terminal-probe-input-sequence'
 
 type TerminalColumnProbeWindow = Window & {
   __store?: {
@@ -77,18 +79,14 @@ export async function waitForPtyColumnsAtMost(
   while (Date.now() < deadline) {
     const marker = `ORCA_PTY_COLUMNS_${randomUUID()}`
     lastMarker = marker
-    // Why: a few CI shells occasionally eat the first printable byte when a
-    // command is written immediately after Ctrl+C/Ctrl+U. Split control bytes
-    // from the probe command so the shell sees the whole `node` executable.
-    await sendToTerminal(page, ptyId, '\x03')
-    await page.waitForTimeout(50)
-    await sendToTerminal(page, ptyId, '\x15')
-    await page.waitForTimeout(50)
-    await sendToTerminal(
-      page,
-      ptyId,
-      `node -e ${JSON.stringify(`console.log('${marker}:' + (process.stdout.columns || 0))`)}\r`
-    )
+    for (const input of buildFreshShellProbeInputSequence(
+      `${nodeTerminalCommand([
+        '-e',
+        `console.log('${marker}:' + (process.stdout.columns || 0))`
+      ])}\r`
+    )) {
+      await sendToTerminal(page, ptyId, input)
+    }
     const probeDeadline = Date.now() + Math.min(5_000, Math.max(0, deadline - Date.now()))
     while (Date.now() < probeDeadline) {
       const content = await getTerminalContentForPtyId(page, ptyId, 30_000)

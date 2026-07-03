@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   REPEATED_FLAG_SEPARATOR,
+  normalizeCommandPositionals,
   parseArgs,
   supportsBrowserPageFlag,
   validateCommandAndFlags
@@ -41,6 +42,43 @@ describe('parseArgs', () => {
     expect(parsed.commandPath).toEqual(['tab', 'create'])
     expect(parsed.flags.get('json')).toBe(true)
     expect(parsed.flags.get('url')).toBe('https://example.com')
+  })
+
+  it('parses emulator reinstall as a boolean flag', () => {
+    const parsed = parseArgs(['emulator', 'install', 'app.apk', '--reinstall', '--device', 'emu'])
+
+    expect(parsed.commandPath).toEqual(['emulator', 'install', 'app.apk'])
+    expect(parsed.flags.get('reinstall')).toBe(true)
+    expect(parsed.flags.get('device')).toBe('emu')
+  })
+
+  it('normalizes partial positionals without conflicting later flag-supplied args', () => {
+    const parsed = normalizeCommandPositionals(
+      [
+        {
+          path: ['emulator', 'permissions'],
+          summary: 'Permissions',
+          usage: 'orca emulator permissions <op> <package> [permission]',
+          allowedFlags: ['op', 'package', 'permission'],
+          positionalArgs: ['op', 'package', 'permission']
+        }
+      ],
+      parseArgs([
+        'emulator',
+        'permissions',
+        'grant',
+        '--package',
+        'com.example.app',
+        '--permission',
+        'android.permission.CAMERA'
+      ])
+    )
+
+    expect(parsed.commandPath).toEqual(['emulator', 'permissions'])
+    expect(parsed.flags.get('op')).toBe('grant')
+    expect(parsed.flags.get('package')).toBe('com.example.app')
+    expect(parsed.flags.get('permission')).toBe('android.permission.CAMERA')
+    expect(parsed.positionalFlagConflicts).toEqual([])
   })
 
   it('preserves repeated string flags', () => {

@@ -20,16 +20,18 @@ export function getHostedReviewCacheKey(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   repoId?: string | null,
   connectionId?: string | null,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
-  const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId)
+  const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner)
   return `${scope}::${repoId ?? repoPath}::${branch}`
 }
 
 function getHostedReviewCacheHostScope(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   connectionId?: string | null,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  hasRepoOwner = false
 ): string {
   const hostId = normalizeExecutionHostId(executionHostId)
   if (hostId) {
@@ -38,6 +40,11 @@ function getHostedReviewCacheHostScope(
   const sshConnectionId = connectionId?.trim()
   if (sshConnectionId) {
     return toSshExecutionHostId(sshConnectionId)
+  }
+  // Why: a known repo owner with no SSH/runtime marker is local; absent owner
+  // context keeps the focused-runtime fallback for active-host operations.
+  if (hasRepoOwner) {
+    return 'local'
   }
   return getSettingsFocusedExecutionHostId(settings)
 }

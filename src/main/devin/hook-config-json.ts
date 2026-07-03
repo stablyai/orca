@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { isPlainObject, type HooksConfig } from '../agent-hooks/installer-utils'
 

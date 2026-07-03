@@ -3,6 +3,7 @@ import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EventBus } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import { translate } from '@/i18n/i18n'
+import { getFindRequestQuery } from '@/lib/find-query-bounds'
 
 type PdfFindProps = {
   isOpen: boolean
@@ -18,37 +19,38 @@ export default function PdfFind({
   const [query, setQuery] = useState('')
   const [activeMatch, setActiveMatch] = useState(0)
   const [totalMatches, setTotalMatches] = useState(0)
+  const requestQuery = getFindRequestQuery(query)
 
   const dispatchFind = useCallback(
     (type: string, findPrevious = false): void => {
       const eventBus = eventBusRef.current
-      if (!eventBus) {
+      if (!eventBus || !requestQuery) {
         return
       }
       eventBus.dispatch('find', {
         source: null,
         type,
-        query,
+        query: requestQuery,
         highlightAll: true,
         caseSensitive: false,
         entireWord: false,
         findPrevious
       })
     },
-    [eventBusRef, query]
+    [eventBusRef, requestQuery]
   )
 
   const findNext = useCallback(() => {
-    if (query) {
+    if (requestQuery) {
       dispatchFind('again', false)
     }
-  }, [query, dispatchFind])
+  }, [requestQuery, dispatchFind])
 
   const findPrevious = useCallback(() => {
-    if (query) {
+    if (requestQuery) {
       dispatchFind('again', true)
     }
-  }, [query, dispatchFind])
+  }, [requestQuery, dispatchFind])
 
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
     if (!input) {
@@ -62,7 +64,7 @@ export default function PdfFind({
     if (!isOpen) {
       return
     }
-    if (!query) {
+    if (!requestQuery) {
       const eventBus = eventBusRef.current
       if (eventBus) {
         eventBus.dispatch('findbarclose', { source: null })
@@ -70,7 +72,7 @@ export default function PdfFind({
       return
     }
     dispatchFind('')
-  }, [query, isOpen, dispatchFind, eventBusRef])
+  }, [requestQuery, isOpen, dispatchFind, eventBusRef])
 
   useEffect(() => {
     const eventBus = eventBusRef.current
@@ -105,7 +107,7 @@ export default function PdfFind({
 
   // Why: close hides the bar immediately; reset counters before the next commit
   // so reopening with the same query never paints stale match totals.
-  if ((!isOpen || !query) && (activeMatch !== 0 || totalMatches !== 0)) {
+  if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
     setTotalMatches(0)
   }

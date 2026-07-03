@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -179,8 +179,11 @@ export function CompactAgentSummaryButton({
           )}
         </>
       )}
-      <ChevronRight
-        className={cn('size-3 shrink-0 transition-transform duration-150', expanded && 'rotate-90')}
+      <ChevronDown
+        className={cn(
+          'size-3 shrink-0 transition-transform duration-150',
+          !expanded && '-rotate-90'
+        )}
         aria-hidden
       />
     </button>

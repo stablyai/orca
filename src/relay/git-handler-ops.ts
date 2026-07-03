@@ -5,7 +5,7 @@
  * These async operations accept a git executor callback so they
  * remain decoupled from the GitHandler class.
  */
-import * as path from 'path'
+import * as path from 'node:path'
 import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
 import { buildDiffResult } from './git-diff-result'
 import { isGitBufferOverflowError } from './git-buffer-overflow'
@@ -16,7 +16,7 @@ import { readWorkingDiffFile } from './git-working-file-read'
 export type GitExec = (
   args: string[],
   cwd: string,
-  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; stdin?: string }
 ) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>

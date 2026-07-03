@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  FILE_SEARCH_SELECTED_TEXT_MAX_CHARS,
   getSelectedTextForFileSearch,
   normalizeSelectedTextForFileSearch,
   registerFileSearchSelectedTextProvider
@@ -24,9 +25,24 @@ describe('normalizeSelectedTextForFileSearch', () => {
     expect(normalizeSelectedTextForFileSearch('  foo\r\n  bar\n\n baz  ')).toBe('foo bar baz')
   })
 
+  it('handles CR-only selected text line breaks', () => {
+    expect(normalizeSelectedTextForFileSearch('  foo\r  bar\r\r baz  ')).toBe('foo bar baz')
+  })
+
   it('returns null for empty selections', () => {
     expect(normalizeSelectedTextForFileSearch(' \n\t ')).toBeNull()
     expect(normalizeSelectedTextForFileSearch(null)).toBeNull()
+  })
+
+  it('bounds newline-heavy selected text without splitting it into arrays', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const selectedText = Array.from({ length: 2000 }, (_, index) => `term-${index + 1}`).join('\n')
+
+    const normalized = normalizeSelectedTextForFileSearch(selectedText)
+
+    expect(normalized?.startsWith('term-1 term-2 term-3')).toBe(true)
+    expect(normalized?.length).toBeLessThanOrEqual(FILE_SEARCH_SELECTED_TEXT_MAX_CHARS)
+    expect(split).not.toHaveBeenCalled()
   })
 })
 

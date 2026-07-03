@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Check, ChevronDown, KeyRound } from 'lucide-react'
 import type { LinearTeam, LinearWorkspace, LinearWorkspaceSelection } from '../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -29,6 +30,38 @@ type LinearScopeTeamSelectionInput = {
   teams: LinearTeam[]
   currentSelectedTeamIds: ReadonlySet<string>
   nextSelectedTeamIds: ReadonlySet<string>
+}
+
+export const LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES = 2 * 1024
+
+export function isLinearScopeTeamFilterQueryTooLarge(
+  query: string,
+  maxBytes = LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function filterLinearScopeTeams(
+  teams: LinearTeam[],
+  query: string,
+  workspaceById: ReadonlyMap<string, LinearWorkspace>
+): LinearTeam[] {
+  if (isLinearScopeTeamFilterQueryTooLarge(query)) {
+    return []
+  }
+  const trimmed = query.trim()
+  if (!trimmed) {
+    return teams
+  }
+  const normalizedQuery = trimmed.toLowerCase()
+  return teams.filter((team) => {
+    const workspaceName =
+      team.workspaceName ??
+      (team.workspaceId ? workspaceById.get(team.workspaceId)?.organizationName : '')
+    return [team.name, team.key, workspaceName ?? ''].some((value) =>
+      value.toLowerCase().includes(normalizedQuery)
+    )
+  })
 }
 
 export function normalizeLinearScopeTeamSelection({
@@ -146,20 +179,10 @@ export function LinearScopeSelector({
   })
   const showWorkspaceNames = selectedWorkspaceId === 'all' || workspaces.length > 1
   const allTeamsSelected = teams.length > 0 && teams.every((team) => selectedTeamIds.has(team.id))
-  const filteredTeams = useMemo(() => {
-    const trimmed = query.trim().toLowerCase()
-    if (!trimmed) {
-      return teams
-    }
-    return teams.filter((team) => {
-      const workspaceName =
-        team.workspaceName ??
-        (team.workspaceId ? workspaceById.get(team.workspaceId)?.organizationName : '')
-      return [team.name, team.key, workspaceName ?? ''].some((value) =>
-        value.toLowerCase().includes(trimmed)
-      )
-    })
-  }, [query, teams, workspaceById])
+  const filteredTeams = useMemo(
+    () => filterLinearScopeTeams(teams, query, workspaceById),
+    [query, teams, workspaceById]
+  )
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {

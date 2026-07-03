@@ -458,6 +458,22 @@ describe('sortWorktreesSmart — cold start fallback', () => {
     expect(sorted.map((w) => w.id)).toEqual(['b', 'a'])
   })
 
+  it('falls back to the path label when a persisted worktree has no displayName', () => {
+    const missingDisplayName = {
+      ...makeWorktree({
+        id: 'missing-display-name',
+        path: '/tmp/alpha-path',
+        sortOrder: 1
+      }),
+      displayName: undefined
+    } as unknown as Worktree
+    const named = makeWorktree({ id: 'named', displayName: 'Zulu', sortOrder: 1 })
+
+    const sorted = sortWorktreesSmart([named, missingDisplayName], {}, repoMap, {}, {}, {})
+
+    expect(sorted.map((w) => w.id)).toEqual(['missing-display-name', 'named'])
+  })
+
   it('treats slept tabs (tab.ptyId without live entry) as cold start', () => {
     // Why: tab.ptyId is the wake-hint sessionId preserved under sleep — not a
     // liveness signal. With slept tabs but no live PTYs, sortWorktreesSmart

@@ -6,11 +6,14 @@ import {
 import type { TerminalTab } from '../../../shared/types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { isExplicitAgentStatusFresh } from './agent-status'
+import { detectAgentSendTitleStatus } from './agent-send-title-status'
+import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,
   'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
->
+> &
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
 
 export type RunningAgentSendTarget = {
   paneKey: string
@@ -47,17 +50,31 @@ export function deriveRunningAgentSendTargets(
     }
 
     const layoutPtyId =
-      state.terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+      state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+    const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
     const ptyId =
-      layoutPtyId && state.ptyIdsByTabId[parsed.tabId]?.includes(layoutPtyId) ? layoutPtyId : null
+      layoutPtyId && (tabPtyIds === undefined || tabPtyIds.includes(layoutPtyId))
+        ? layoutPtyId
+        : null
     let disabledReason: string | undefined
 
+    // Why: hook-backed rows can go stale while the same PTY is still a live
+    // agent; live titles are the runtime proof that the row remains targetable.
+    const liveTitleStatus = ptyId
+      ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
+      : null
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      disabledReason = 'Agent status is stale'
+      if (liveTitleStatus === 'permission') {
+        disabledReason = 'Agent needs permission'
+      } else if (liveTitleStatus === null) {
+        disabledReason = 'Agent status is stale'
+      }
     } else if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
-    } else if (entry.state === 'working') {
-      disabledReason = 'Agent is working'
+    } else if (entry.state === 'blocked' || entry.state === 'waiting') {
+      disabledReason = 'Agent needs permission'
+    } else if (liveTitleStatus === 'permission') {
+      disabledReason = 'Agent needs permission'
     }
 
     targets.push({
@@ -73,6 +90,24 @@ export function deriveRunningAgentSendTargets(
   }
 
   return targets
+}
+
+function detectLiveAgentPaneStatus(
+  state: RunningAgentTargetState,
+  tabId: string,
+  leafId: string,
+  tabTitle: string
+): ReturnType<typeof detectAgentSendTitleStatus> {
+  const layout = state.terminalLayoutsByTabId[tabId]
+  const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
+  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
+  // Why: runtime pane titles are the freshest title signal for split panes; use
+  // the tab title only before the runtime has reported a pane title for the leaf.
+  const title = paneTitleResolution.title ?? (paneTitleResolution.hasAnyPaneTitle ? null : tabTitle)
+  if (title === null) {
+    return null
+  }
+  return detectAgentSendTitleStatus(title)
 }
 
 export function resolveRunningAgentSendTarget(

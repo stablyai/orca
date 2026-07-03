@@ -17,11 +17,21 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess, removeLocalWorktreePath } from './local-worktree-filesystem'
+import {
+  getLocalWorktreePathAccess,
+  removeLocalWorktreePath,
+  toHostRemovalPath
+} from './local-worktree-filesystem'
 
 function completeExecFile(stdout = ''): void {
   execFileMock.mockImplementation((_file, _args, _options, callback) => {
     callback(null, stdout, '')
+  })
+}
+
+function failExecFile(error: Error & { code?: number | string }): void {
+  execFileMock.mockImplementation((_file, _args, _options, callback) => {
+    callback(error, '', '')
   })
 }
 
@@ -45,6 +55,7 @@ describe('local worktree filesystem runtime access', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -59,8 +70,77 @@ describe('local worktree filesystem runtime access', () => {
 
     expect(lstatMock).toHaveBeenCalledWith('C:\\repo\\.git')
     expect(readFileMock).toHaveBeenCalledWith('C:\\repo\\.git', 'utf8')
-    expect(rmMock).toHaveBeenCalledWith('C:\\repo\\feature', { recursive: true, force: true })
+    expect(rmMock).toHaveBeenCalledWith(
+      toHostRemovalPath('C:\\repo\\feature'),
+      expect.objectContaining({
+        recursive: true,
+        force: true
+      })
+    )
     expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('uses a Win32 long-path namespace for host removal on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const longPath = `C:\\repo\\${'nested\\'.repeat(40)}feature`
+
+      await removeLocalWorktreePath(longPath)
+
+      expect(toHostRemovalPath(longPath)).toBe(`\\\\?\\${longPath}`)
+      expect(rmMock).toHaveBeenCalledWith(
+        `\\\\?\\${longPath}`,
+        expect.objectContaining({
+          recursive: true,
+          force: true,
+          maxRetries: expect.any(Number),
+          retryDelay: expect.any(Number)
+        })
+      )
+    })
+  })
+
+  it('retries transient host removal failures on Windows', async () => {
+    vi.useFakeTimers()
+    await withPlatform('win32', async () => {
+      const error = Object.assign(new Error('Directory not empty'), { code: 'ENOTEMPTY' })
+      rmMock.mockRejectedValueOnce(error).mockResolvedValueOnce(undefined)
+
+      const removal = removeLocalWorktreePath('C:\\repo\\feature')
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(removal).resolves.toBeUndefined()
+      expect(rmMock).toHaveBeenCalledTimes(2)
+      expect(rmMock).toHaveBeenNthCalledWith(
+        1,
+        toHostRemovalPath('C:\\repo\\feature'),
+        expect.objectContaining({
+          recursive: true,
+          force: true,
+          maxRetries: expect.any(Number),
+          retryDelay: expect.any(Number)
+        })
+      )
+      expect(rmMock).toHaveBeenNthCalledWith(
+        2,
+        toHostRemovalPath('C:\\repo\\feature'),
+        expect.objectContaining({
+          recursive: true,
+          force: true,
+          maxRetries: expect.any(Number),
+          retryDelay: expect.any(Number)
+        })
+      )
+    })
+  })
+
+  it('does not retry host removal failures outside Windows', async () => {
+    await withPlatform('linux', async () => {
+      const error = Object.assign(new Error('Directory not empty'), { code: 'ENOTEMPTY' })
+      rmMock.mockRejectedValue(error)
+
+      await expect(removeLocalWorktreePath('/repo/feature')).rejects.toBe(error)
+      expect(rmMock).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('uses the selected WSL distro for stat, read, and removal on Windows', async () => {
@@ -91,6 +171,17 @@ describe('local worktree filesystem runtime access', () => {
         String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
       )
       expect(rmMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('reports missing WSL stat targets with an ENOENT-shaped error', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(Object.assign(new Error('missing'), { code: 2 }))
+      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+
+      await expect(access.statPath('/mnt/c/repo/missing/.git')).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
     })
   })
 })

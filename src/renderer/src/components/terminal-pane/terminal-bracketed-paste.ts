@@ -19,32 +19,61 @@ type PasteTerminalTextOptions = {
 const interruptedBracketedPasteTerminals = new WeakSet<object>()
 const bracketedPasteModeOutputTail = new WeakMap<object, string>()
 const ESCAPE = '\u001b'
-const BRACKETED_PASTE_START = `${ESCAPE}[200~`
-const BRACKETED_PASTE_END = `${ESCAPE}[201~`
+export const BRACKETED_PASTE_START = `${ESCAPE}[200~`
+export const BRACKETED_PASTE_END = `${ESCAPE}[201~`
 const BRACKETED_PASTE_MODE_SEQUENCE_RE = /^\[\?(?:\d+;)*2004(?:;\d+)*[hl]/
 const BRACKETED_PASTE_MODE_TAIL_MAX = 128
+const BRACKETED_PASTE_MODE_SEQUENCE_SCAN_MAX = BRACKETED_PASTE_MODE_TAIL_MAX
 const LINE_BREAK_RE = /[\r\n]/
 
 function hasBracketedPasteModeSequence(data: string): boolean {
-  const segments = data.split(ESCAPE)
-  for (let index = 1; index < segments.length; index++) {
-    if (BRACKETED_PASTE_MODE_SEQUENCE_RE.test(segments[index])) {
+  let escapeIndex = data.indexOf(ESCAPE)
+  while (escapeIndex !== -1) {
+    const sequenceStart = escapeIndex + 1
+    if (
+      data.charCodeAt(sequenceStart) === 0x5b &&
+      BRACKETED_PASTE_MODE_SEQUENCE_RE.test(
+        data.slice(sequenceStart, sequenceStart + BRACKETED_PASTE_MODE_SEQUENCE_SCAN_MAX)
+      )
+    ) {
       return true
     }
+    escapeIndex = data.indexOf(ESCAPE, escapeIndex + 1)
   }
   return false
 }
 
-function sanitizeBracketedPasteText(text: string): string {
-  return text.split(ESCAPE).join('\u241b')
+// Why: an embedded ESC (e.g. a pasted `\x1b[201~` from scrollback) would close
+// the bracketed-paste frame early and run the tail as keystrokes. Replacing ESC
+// with its printable substitute (\u241b, U+241B) neutralizes every framing escape.
+export function sanitizeBracketedPasteText(text: string): string {
+  let escapeIndex = text.indexOf(ESCAPE)
+  if (escapeIndex === -1) {
+    return text
+  }
+
+  let sanitized = ''
+  let start = 0
+  while (escapeIndex !== -1) {
+    sanitized += `${text.slice(start, escapeIndex)}\u241b`
+    start = escapeIndex + ESCAPE.length
+    escapeIndex = text.indexOf(ESCAPE, start)
+  }
+  return sanitized + text.slice(start)
+}
+
+export function sanitizeTerminalPasteText(text: string): string {
+  return sanitizeBracketedPasteText(text)
+}
+
+export function wrapTerminalBracketedPasteText(text: string): string {
+  return `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(text)}${BRACKETED_PASTE_END}`
 }
 
 function forceBracketedPaste(terminal: PasteTerminal, text: string): void {
   // Why: forced callers already built the exact paste protocol bytes. Send
   // them as PTY input so xterm's DOM/native paste machinery cannot defer them.
-  terminal.input(
-    `${BRACKETED_PASTE_START}${sanitizeBracketedPasteText(text)}${BRACKETED_PASTE_END}`
-  )
+  terminal.input(wrapTerminalBracketedPasteText(text))
 }
 
 export function markTerminalBracketedPasteInterrupted(terminal: BracketedPasteTerminal): void {
@@ -100,7 +129,7 @@ export function pasteTerminalText(
   // process dies. Single-line paste does not need wrappers, so avoid leaking them.
   terminal.options.ignoreBracketedPasteMode = true
   try {
-    terminal.paste(sanitizeBracketedPasteText(text))
+    terminal.paste(sanitizeTerminalPasteText(text))
   } finally {
     terminal.options.ignoreBracketedPasteMode = previousIgnoreBracketedPasteMode
   }

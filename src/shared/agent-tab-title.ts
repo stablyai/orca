@@ -1,4 +1,5 @@
 export const GENERATED_TAB_TITLE_MAX_LENGTH = 40
+export const GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT = 512
 
 const LEADING_FILLER_PATTERNS: RegExp[] = [
   /^(?:can|could|would)\s+you(?:\s+please)?\s+/i,
@@ -31,8 +32,47 @@ function truncateAtWordBoundary(value: string, maxLength: number): string {
   return sliced
 }
 
+// Why: generated titles are derived from pasted agent prompts on renderer
+// state paths; collapse display whitespace without a regex replacement pass.
+function foldGeneratedTabTitleWhitespace(value: string): string {
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isGeneratedTabTitleWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index)
+  }
+  return normalized
+}
+
+function isGeneratedTabTitleWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
+}
+
 export function deriveGeneratedTabTitle(prompt: string): string | null {
-  const firstClause = prompt
+  // Why: agent prompts can be paste-sized. Generated tab titles are previews,
+  // so title cleanup must not scan the full prompt on the renderer state path.
+  const promptPreview = prompt.slice(0, GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT)
+  const firstClause = promptPreview
     .trim()
     .replace(/[`*_~#>[\]{}()]/g, ' ')
     .replace(/^(?:issue|task|bug|feature|pr)\s*(?:#?\d+)?\s*[:-]\s*/i, '')
@@ -56,10 +96,7 @@ export function deriveGeneratedTabTitle(prompt: string): string | null {
     }
   }
 
-  candidate = candidate
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  candidate = foldGeneratedTabTitleWhitespace(candidate.replace(/[^\p{L}\p{N}\s]/gu, ' '))
 
   if (!candidate) {
     return null

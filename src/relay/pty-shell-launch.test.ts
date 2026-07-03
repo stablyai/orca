@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { spawnSync } from 'child_process'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 
@@ -136,6 +136,24 @@ describe('getRelayShellLaunchConfig', () => {
       'export ORCA_USER_ZDOTDIR="${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'wraps zsh when MiMo home must survive shell startup',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(zshrc).toContain(
+        '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+      )
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'wraps bash even without overlay env for OSC 133 lifecycle markers',

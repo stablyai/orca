@@ -14,6 +14,8 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
 
+export { localPreflightContextKey } from './local-preflight-context-key'
+
 type LocalProjectRuntimeState = Pick<
   AppState,
   'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
@@ -51,10 +53,6 @@ function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightCo
   const context = Object.freeze({ wslDistro })
   wslPreflightContextsByDistro.set(wslDistro, context)
   return context
-}
-
-function getProjectRuntimeCacheKey(resolution: ProjectExecutionRuntimeResolution): string {
-  return resolution.status === 'resolved' ? resolution.runtime.cacheKey : resolution.repair.cacheKey
 }
 
 function getProjectRuntimeContextObjectCacheKey(
@@ -193,6 +191,25 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(projectRuntime)
   }
 
+  if (
+    appPlatform === 'win32' &&
+    !state.activeRepoId &&
+    !state.activeWorktreeId &&
+    state.settings?.localWindowsRuntimeDefault
+  ) {
+    // Why: Settings -> Agents is global and can mount before any project is
+    // active; still respect the Windows/WSL runtime default for PATH detection.
+    return getProjectRuntimePreflightContext(
+      resolveProjectExecutionRuntime({
+        appPlatform: 'win32',
+        projectId: getLocalPreflightProjectId(state),
+        projectRuntimePreference: { kind: 'inherit-global' },
+        globalWindowsRuntimeDefault: state.settings.localWindowsRuntimeDefault,
+        ...wslContext
+      })
+    )
+  }
+
   const explicitAgentRuntime = appPlatform === 'win32' ? state.settings?.localAgentRuntime : null
   if (explicitAgentRuntime === 'host') {
     return getProjectRuntimePreflightContext(
@@ -314,17 +331,4 @@ function getLocalPreflightProjectId(
   return (
     activeWorktree?.projectId ?? activeWorktree?.repoId ?? state.activeRepoId ?? 'local-project'
   )
-}
-
-export function localPreflightContextKey(context: LocalPreflightContext): string {
-  if (context?.projectRuntime) {
-    return getProjectRuntimeCacheKey(context.projectRuntime)
-  }
-  if (context?.runtimeContextKey) {
-    return context.runtimeContextKey
-  }
-  if (context?.wslDistro) {
-    return `wsl:${context.wslDistro}`
-  }
-  return context?.wslDefault ? 'wsl:default' : 'host'
 }

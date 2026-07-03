@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { normalizeSoftBreaks } from './rich-markdown-normalize'
 
 const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function createEditor(content: string): Editor {
   return new Editor({
@@ -28,6 +32,24 @@ describe('rich markdown normalization', () => {
       expect(emptyItem.childCount).toBe(1)
       expect(emptyItem.child(0).type.name).toBe('paragraph')
       expect(emptyItem.child(0).content.size).toBe(0)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('normalizes newline-heavy soft-break paragraphs without splitting text nodes', () => {
+    const editor = createEditor('Line one\nLine two\nLine three')
+
+    try {
+      const split = vi.spyOn(String.prototype, 'split')
+
+      normalizeSoftBreaks(editor)
+
+      expect(editor.state.doc.childCount).toBe(3)
+      expect(editor.state.doc.child(0).textContent).toBe('Line one')
+      expect(editor.state.doc.child(1).textContent).toBe('Line two')
+      expect(editor.state.doc.child(2).textContent).toBe('Line three')
+      expect(split).not.toHaveBeenCalled()
     } finally {
       editor.destroy()
     }

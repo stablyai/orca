@@ -1,4 +1,4 @@
-import { readFile, stat } from 'fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
 import {
   faviconUrlFromWebsite,
@@ -9,6 +9,7 @@ import {
 import { getRepoSlug, getRepoUpstream } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import { detectGitRemoteIdentity } from './repo-git-remote-identity'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
@@ -306,12 +307,8 @@ export async function detectRepoIcon({
   return undefined
 }
 
-/**
- * Detect a repo's icon and its fork upstream together. The upstream is resolved
- * once and reused for the avatar so a fork shows the upstream owner's avatar.
- * Returns a spread-ready slice of `Repo`. For git repos, `upstream: null`
- * is a resolved "not a fork" marker and prevents repeated best-effort probes.
- */
+// Why: `upstream: null` is a resolved "not a fork" marker and prevents
+// repeated best-effort probes.
 export async function detectRepoIconAndUpstream({
   repoPath,
   kind,
@@ -320,11 +317,14 @@ export async function detectRepoIconAndUpstream({
   repoPath: string
   kind: RepoKind
   connectionId?: string | null
-}): Promise<{ repoIcon?: RepoIcon; upstream?: GitHubRepositoryIdentity | null }> {
+}) {
   const upstream = kind === 'git' ? await getRepoUpstream(repoPath, connectionId) : null
+  const gitRemoteIdentity =
+    kind === 'git' ? await detectGitRemoteIdentity(repoPath, connectionId) : null
   const repoIcon = await detectRepoIcon({ repoPath, kind, connectionId, upstream })
   return {
     ...(repoIcon ? { repoIcon } : {}),
+    ...(gitRemoteIdentity ? { gitRemoteIdentity } : {}),
     ...(kind === 'git' ? { upstream: upstream ?? null } : {})
   }
 }

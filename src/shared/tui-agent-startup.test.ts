@@ -5,6 +5,7 @@ import {
   buildAgentStartupPlan,
   buildShellCommandFromArgv
 } from './tui-agent-startup'
+import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 
 describe('tui agent startup plans', () => {
@@ -73,7 +74,8 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       launchCommand: 'codex',
       expectedProcess: 'codex',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
     })
   })
 
@@ -101,6 +103,54 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe('orca-ide claude-teams')
   })
 
+  it('uses the plain orca shim for Claude Agent Teams on Linux SSH remotes', () => {
+    // Why: the SSH relay deploys the CLI shim as `orca` (not the local-only
+    // `orca-ide` GNOME-screen-reader workaround), so a remote launch must not
+    // emit `orca-ide claude-teams` — that name is not on the remote PATH and
+    // `claude-teams` is rejected by the relay's CLI switch (issue #6500).
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      isRemote: true,
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca claude-teams')
+  })
+
+  it('keeps the Windows orca.cmd shim for Claude Agent Teams on SSH remotes', () => {
+    // Why: the Windows remote shim is also `orca.cmd`, matching the local
+    // win32 override, so remoteness must not alter the Windows command.
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'win32',
+      isRemote: true,
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca.cmd claude-teams')
+  })
+
+  it('keeps the Linux orca-ide wrapper for local (non-remote) Claude Agent Teams', () => {
+    // Why: the `orca-ide` rename is still required for a local Linux desktop
+    // install (avoids shadowing the GNOME Orca screen reader), so an explicit
+    // isRemote:false must preserve it.
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      isRemote: false,
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca-ide claude-teams')
+  })
+
   it('launches OpenClaude as a distinct argv agent', () => {
     const plan = buildAgentStartupPlan({
       agent: 'openclaude',
@@ -113,7 +163,8 @@ describe('tui agent startup plans', () => {
       agent: 'openclaude',
       launchCommand: "openclaude 'fix it'",
       expectedProcess: 'openclaude',
-      followupPrompt: null
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'openclaude', agentArgs: '', agentEnv: {} }
     })
   })
 
@@ -129,7 +180,25 @@ describe('tui agent startup plans', () => {
       agent: 'mistral-vibe',
       launchCommand: 'vibe',
       expectedProcess: 'vibe',
-      followupPrompt: 'fix it'
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'vibe', agentArgs: '', agentEnv: {} }
+    })
+  })
+
+  it('launches Qwen Code through the installed qwen executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'qwen-code',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'qwen-code',
+      launchCommand: 'qwen',
+      expectedProcess: 'qwen',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'qwen', agentArgs: '', agentEnv: {} }
     })
   })
 
@@ -177,6 +246,23 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
   })
 
+  it('uses a captured launch command when building resume plans after overrides change', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { codex: 'codex --profile changed' },
+      agentCommand: 'codex --profile captured',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'codex --profile captured',
+      agentArgs: '',
+      agentEnv: {}
+    })
+  })
+
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
@@ -215,6 +301,25 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe('goose')
     expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'goose',
+      agentArgs: '',
+      agentEnv: { GOOSE_MODE: 'auto' }
+    })
+  })
+
+  it('captures empty args and env as explicit launch config values', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      cmdOverrides: {},
+      agentArgs: '',
+      agentEnv: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchConfig).toEqual({ agentCommand: 'claude', agentArgs: '', agentEnv: {} })
   })
 
   it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {
@@ -230,6 +335,37 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
+  })
+
+  it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
+    expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG.opencode.draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG.opencode.draftPromptEnvVar).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['mimo-code'].draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptEnvVar).toBeUndefined()
+    // Why: no native draft launch plan means both agents fall through to the
+    // cursor-gated paste-after-ready route, where the new signal applies.
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'opencode',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'mimo-code',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
   })
 
   it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {
@@ -330,7 +466,29 @@ describe('tui agent startup plans', () => {
       agent: 'devin',
       launchCommand: "devin '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
-      followupPrompt: 'fix the tests'
+      followupPrompt: 'fix the tests',
+      launchConfig: {
+        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentArgs: '--permission-mode bypass',
+        agentEnv: {}
+      }
+    })
+  })
+
+  it('excludes transient draft prompt env from launch config', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'pi',
+      draft: 'prefill text',
+      cmdOverrides: {},
+      agentEnv: { ORCA_AGENT_MODE: 'managed' },
+      platform: 'linux'
+    })
+
+    expect(plan?.env).toEqual({ ORCA_AGENT_MODE: 'managed', ORCA_PI_PREFILL: 'prefill text' })
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'pi',
+      agentArgs: '',
+      agentEnv: { ORCA_AGENT_MODE: 'managed' }
     })
   })
 

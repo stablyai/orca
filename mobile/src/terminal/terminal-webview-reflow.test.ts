@@ -49,6 +49,13 @@ describe('terminal WebView reflow', () => {
     expect(handleSource).toContain("postMessage({ type: 'reflow', cols, rows })")
   })
 
+  it('does not locally resize hidden WebViews to a one-column grid', () => {
+    expect(htmlSource).toContain('var MIN_FIT_COLS = 20;')
+    expect(htmlSource).toContain('if (cols < MIN_FIT_COLS) return;')
+    expect(htmlSource).toContain("flog('measure-skip-small-width'")
+    expect(htmlSource).toContain("notify({ type: 'measure-result', cols: null, rows: null });")
+  })
+
   // Why: the raw-source assertions above pass even if the reflow module is
   // dropped from the XTERM_HTML concatenation (a broken/removed import or an
   // emptied TERMINAL_REFLOW_JS leaves the `${...}` placeholder in the template

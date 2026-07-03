@@ -103,7 +103,9 @@ export async function loadPrSidebarData(
     const pr = prOutcome.result
     const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
       prNumber: pr.number,
-      headSha: args.headSha ?? pr.headSha ?? null,
+      // Why: mobile create can commit before opening the review; the fetched PR
+      // head is fresher than the route's cached git.status head.
+      headSha: pr.headSha ?? args.headSha ?? null,
       // Prefer the fetched PR's own repo identity so fork PRs key their cached
       // checks correctly; fall back to an explicit override then null.
       prRepo: pr.prRepo ?? args.prRepo ?? null

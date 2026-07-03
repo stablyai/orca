@@ -180,8 +180,37 @@ export function closeManagedPane(args: CloseManagedPaneArgs): void {
     safeFit(p)
   }
   updateMultiPaneState(args.getDragCallbacks())
-  args.managerOptions.onPaneClosed?.(args.paneId, { paneId: args.paneId, leafId: closedLeafId })
+  args.managerOptions.onPaneClosed?.(args.paneId, {
+    paneId: args.paneId,
+    leafId: closedLeafId,
+    reason: 'close'
+  })
   args.managerOptions.onLayoutChanged?.()
+}
+
+export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): boolean {
+  const pane = args.panes.get(args.paneId)
+  if (!pane || args.panes.size <= 1) {
+    return false
+  }
+  const closedLeafId = pane.leafId
+  args.releasePaneIdentity(args.paneId)
+  removePaneContainer(args, pane)
+  const nextActivePaneId = activateReplacementPane(args)
+  applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
+  for (const p of args.panes.values()) {
+    safeFit(p)
+  }
+  updateMultiPaneState(args.getDragCallbacks())
+  // Why: pane-to-tab detach tears down only this renderer pane; the PTY is
+  // adopted by the new tab, so TerminalPane must skip process-close cleanup.
+  args.managerOptions.onPaneClosed?.(args.paneId, {
+    paneId: args.paneId,
+    leafId: closedLeafId,
+    reason: 'detach'
+  })
+  args.managerOptions.onLayoutChanged?.()
+  return true
 }
 
 function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneInternal): void {

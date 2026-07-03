@@ -1,14 +1,16 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -55,7 +57,9 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -92,6 +96,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
@@ -129,7 +134,7 @@ function buildInstalledConfig(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [{ type: 'command', command }]
+      hooks: [buildManagedCommandHook(command)]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }

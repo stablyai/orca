@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildCommitMessagePrompt, splitGeneratedCommitMessage } from './commit-message-generation'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('buildCommitMessagePrompt', () => {
   it('builds a prompt from staged context instead of asking the agent to inspect git', () => {
@@ -60,5 +64,20 @@ describe('splitGeneratedCommitMessage', () => {
       body: '- Move planning into main',
       message: 'Fix source control generation\n\n- Move planning into main'
     })
+  })
+
+  it('extracts subject and body from newline-heavy output without line-array splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const body = '- Explain one generated change\n'.repeat(10_000).trimEnd()
+
+    const result = splitGeneratedCommitMessage(`Add generated paste protection\n\n${body}`)
+
+    expect(result.subject).toBe('Add generated paste protection')
+    expect(result.body.startsWith('- Explain one generated change\n')).toBe(true)
+    expect(result.body.endsWith('- Explain one generated change')).toBe(true)
+    const usedLineSplit = splitSpy.mock.calls.some(
+      ([separator]) => typeof separator === 'string' && separator === '\n'
+    )
+    expect(usedLineSplit).toBe(false)
   })
 })

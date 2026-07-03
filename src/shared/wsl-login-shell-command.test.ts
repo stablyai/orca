@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import {
   buildWslInteractiveLoginShellCommand,
@@ -58,7 +58,9 @@ describe('wsl login shell command helpers', () => {
     const command = buildWslLoginShellCommand("printf 'hello'")
 
     expect(command).toContain('getent passwd')
+    expect(command).toContain('bash|zsh|ksh|mksh|ash)')
     expect(command).toContain('exec "$_orca_wsl_shell" -ilc')
+    expect(command).toContain('exec /bin/sh -lc')
     expect(command).toContain("printf '\\''hello'\\''")
   })
 

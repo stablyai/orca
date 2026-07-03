@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { detectCsvDelimiter, parseCsv } from './csv-parse'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS, detectCsvDelimiter, parseCsv } from './csv-parse'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseCsv', () => {
   it('parses basic rows', () => {
@@ -80,6 +84,10 @@ describe('detectCsvDelimiter', () => {
     expect(detectCsvDelimiter('x.csv', '\n\na\tb\tc')).toBe('\t')
   })
 
+  it('skips CR-only blank lines when sniffing', () => {
+    expect(detectCsvDelimiter('x.csv', '\r\ra\tb\tc')).toBe('\t')
+  })
+
   it('strips a leading BOM before sniffing', () => {
     expect(detectCsvDelimiter('x.csv', '\uFEFFa\tb\tc')).toBe('\t')
   })
@@ -92,5 +100,18 @@ describe('detectCsvDelimiter', () => {
       ['Doe, Jane', 'Age'],
       ['Roe, John', '42']
     ])
+  })
+
+  it('bounds newline-heavy delimiter sniffing without splitting the full file', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
+    const content = `${'\n'.repeat(CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS + 10_000)}a\tb\tc`
+
+    expect(detectCsvDelimiter('x.csv', content)).toBe(',')
+
+    expect(split).not.toHaveBeenCalled()
+    expect(charCodeAt.mock.calls.length).toBeLessThanOrEqual(
+      CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS + 1
+    )
   })
 })

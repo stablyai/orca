@@ -179,6 +179,23 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
+  it('routes Edit > Paste through Orca coordinated paste ownership', () => {
+    const send = vi.fn()
+    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+
+    expect(pasteItem).toBeDefined()
+    expect(pasteItem?.role).toBeUndefined()
+    expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+
+    pasteItem?.click?.({} as never, {} as never, {} as never)
+
+    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+  })
+
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())
 

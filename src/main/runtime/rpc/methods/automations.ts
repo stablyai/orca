@@ -22,6 +22,7 @@ const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
 })
 
 const AutomationWorkspaceMode = z.enum(['existing', 'new_per_run']).optional()
+const SetupDecision = z.enum(['inherit', 'run', 'skip']).optional()
 const ExecutionHostId = requiredString('Missing host id').transform((value, ctx) => {
   const hostId = normalizeExecutionHostId(value)
   if (!hostId) {
@@ -109,6 +110,7 @@ const AutomationCreate = z.object({
   workspace: OptionalString,
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
+  setupDecision: SetupDecision,
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
@@ -129,6 +131,7 @@ const AutomationUpdateFields = z.object({
   workspaceMode: AutomationWorkspaceMode,
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
+  setupDecision: SetupDecision,
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),

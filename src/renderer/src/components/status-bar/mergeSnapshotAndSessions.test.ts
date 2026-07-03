@@ -186,6 +186,27 @@ describe('mergeSnapshotAndSessions', () => {
     expect(out[0].worktrees[0].sessions[0].bound).toBe(true)
   })
 
+  it('treats startup deferred reattach tab ptyId wake hints as bound sessions', () => {
+    const tabId = 'tab-restored'
+    const sessionId = 'orca::/Users/me/Triton@@deferred'
+    const ds: DaemonSession[] = [{ id: sessionId, cwd: '/Users/me/Triton', title: 'orca/Triton' }]
+    const restoredTab = { ...makeTab(tabId, 'Restored'), ptyId: sessionId }
+    const ctx = baseCtx({
+      tabsByWorktree: {
+        'orca::/Users/me/Triton': [restoredTab]
+      },
+      ptyIdsByTabId: { [tabId]: [] }
+    })
+
+    const out = mergeSnapshotAndSessions(null, ds, ctx)
+
+    expect(out[0].worktrees[0].sessions[0]).toMatchObject({
+      sessionId,
+      bound: true,
+      tabId
+    })
+  })
+
   it('repo aggregate sums only worktrees with numeric metrics; remote-by-connectionId flags chip', () => {
     // Why: a single repo can be both reflected as a snapshot worktree
     // (covered by the local collector) and a daemon-only session

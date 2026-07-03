@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   syncForkDefaultBranch,
   validateGitForkSyncExpectedUpstream,
   type GitForkSyncRunner
 } from './git-fork-sync'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function createRunner(overrides: {
   remotes?: string
@@ -99,6 +103,29 @@ describe('syncForkDefaultBranch', () => {
 
     expect(result).toMatchObject({ status: 'up-to-date', branchName: 'main' })
     expect(flattenedCommands(calls)).not.toContain('push origin')
+  })
+
+  it('scans newline-heavy remote and default-branch output without line-array splitting', async () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const { runGit } = createRunner({
+      remotes: `${'\r\n'.repeat(10_000)}origin\r\nupstream\r\n`,
+      defaultBranchOutput: `${'metadata\r\n'.repeat(
+        10_000
+      )}ref: refs/heads/main\tHEAD\r\n0123456789012345678901234567890123456789\tHEAD\r\n`,
+      aheadBehind: '0\t0\n'
+    })
+
+    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
+      status: 'up-to-date',
+      branchName: 'main'
+    })
+
+    const usedLineSplit = splitSpy.mock.calls.some(
+      ([separator]) =>
+        (typeof separator === 'string' && separator === '\n') ||
+        (separator instanceof RegExp && separator.source === '\\r?\\n')
+    )
+    expect(usedLineSplit).toBe(false)
   })
 
   it('blocks when the fork has commits that are not upstream', async () => {

@@ -1,4 +1,12 @@
-const { existsSync, readFileSync, readdirSync, realpathSync, rmSync } = require('node:fs')
+const {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync
+} = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
 
@@ -29,6 +37,7 @@ const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
   linux: 'linux-',
   win32: 'win32-'
 }
+const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const PARCEL_WATCHER_PLATFORM_PREFIX_BY_PLATFORM = {
   darwin: 'watcher-darwin',
   linux: 'watcher-linux',
@@ -230,7 +239,62 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
   }
 }
 
-function prunePackagedNodePty(resourcesDir, electronPlatformName) {
+function normalizeNodePtyWindowsArch(electronArch) {
+  if (electronArch === 'x64' || electronArch === 1) {
+    return 'x64'
+  }
+  if (electronArch === 'arm64' || electronArch === 3) {
+    return 'arm64'
+  }
+  return process.arch === 'arm64' ? 'arm64' : 'x64'
+}
+
+function findNodePtyConptySourceDir(nodePtyDir, windowsArch) {
+  const conptyRoot = join(nodePtyDir, 'third_party', 'conpty')
+  if (!existsSync(conptyRoot)) {
+    throw new Error(`Packaged node-pty is missing ${conptyRoot}`)
+  }
+  for (const entry of readdirSync(conptyRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+    const sourceDir = join(conptyRoot, entry.name, `win10-${windowsArch}`)
+    if (existsSync(sourceDir)) {
+      return sourceDir
+    }
+  }
+  throw new Error(`Packaged node-pty has no ConPTY payload for win10-${windowsArch}`)
+}
+
+function ensurePackagedNodePtyConptyRuntime(nodePtyDir, electronArch) {
+  const releaseDir = join(nodePtyDir, 'build', 'Release')
+  if (!existsSync(join(releaseDir, 'conpty.node'))) {
+    return
+  }
+
+  const runtimeDir = join(releaseDir, 'conpty')
+  const missingRuntimeFiles = NODE_PTY_CONPTY_RUNTIME_FILES.filter(
+    (filename) => !existsSync(join(runtimeDir, filename))
+  )
+  if (missingRuntimeFiles.length === 0) {
+    return
+  }
+
+  const windowsArch = normalizeNodePtyWindowsArch(electronArch)
+  const sourceDir = findNodePtyConptySourceDir(nodePtyDir, windowsArch)
+  mkdirSync(runtimeDir, { recursive: true })
+  for (const filename of missingRuntimeFiles) {
+    const sourceFile = join(sourceDir, filename)
+    if (!existsSync(sourceFile)) {
+      throw new Error(`Packaged node-pty is missing ${sourceFile}`)
+    }
+    // Why: node-pty's Windows addon loads conpty.dll relative to conpty.node,
+    // but its install script can run before electron-builder gathers resources.
+    copyFileSync(sourceFile, join(runtimeDir, filename))
+  }
+}
+
+function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) {
   const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
   if (!existsSync(nodePtyDir)) {
     return
@@ -248,7 +312,9 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName) {
     }
   }
 
-  if (electronPlatformName !== 'win32') {
+  if (electronPlatformName === 'win32') {
+    ensurePackagedNodePtyConptyRuntime(nodePtyDir, electronArch)
+  } else {
     // Why: conpty is Windows-only and node-pty resolves runtime binaries from
     // build/Release or prebuilds/<platform>-<arch>, not third_party/conpty.
     rmSync(join(nodePtyDir, 'third_party', 'conpty'), { recursive: true, force: true })
@@ -322,8 +388,8 @@ function prunePackagedZodSources(resourcesDir) {
   rmSync(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true, force: true })
 }
 
-function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName) {
-  prunePackagedNodePty(resourcesDir, electronPlatformName)
+function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, electronArch) {
+  prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName)
   prunePackagedRuntimeTypeDeclarations(resourcesDir)
   prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)

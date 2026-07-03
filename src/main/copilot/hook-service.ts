@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: local status/install/remove and SSH remote
    install must share the same Copilot event list, script body, and
    managed-command matching so local and remote hook behavior cannot drift. */
-import { existsSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -136,6 +136,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '  $payload = $inputData | ConvertFrom-Json',
       '  $body = @{',
       '    paneKey = $env:ORCA_PANE_KEY',
+      '    launchToken = $env:ORCA_AGENT_LAUNCH_TOKEN',
       '    tabId = $env:ORCA_TAB_ID',
       '    worktreeId = $env:ORCA_WORKTREE_ID',
       '    hookEventName = $env:ORCA_COPILOT_HOOK_EVENT',
@@ -171,6 +172,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "hookEventName=${ORCA_COPILOT_HOOK_EVENT}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',

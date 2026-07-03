@@ -42,6 +42,7 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
 
 type Props = {
   worktreeId: string
+  agents?: DashboardAgentRowData[]
   /** Controls spacing from the card body above. Passed in so the parent can
    *  decide whether a divider is appropriate — e.g. suppressed when the card
    *  chrome already provides visual separation. */
@@ -58,9 +59,11 @@ type Props = {
  */
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
+  agents: precomputedAgents,
   className
 }: Props) {
-  const agents = useWorktreeAgentRows(worktreeId)
+  const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
+  const agents = precomputedAgents ?? selectedAgents
   if (agents.length === 0) {
     return null
   }
@@ -91,6 +94,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
@@ -131,7 +135,13 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
     return new Map(
       deriveRunningAgentSendTargets(
-        { agentStatusByPaneKey, tabsByWorktree, terminalLayoutsByTabId, ptyIdsByTabId },
+        {
+          agentStatusByPaneKey,
+          tabsByWorktree,
+          terminalLayoutsByTabId,
+          ptyIdsByTabId,
+          runtimePaneTitlesByTabId
+        },
         worktreeId
       ).map((target) => [
         target.paneKey,
@@ -152,6 +162,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     agentStatusByPaneKey,
     isAgentSendTargetModeActive,
     ptyIdsByTabId,
+    runtimePaneTitlesByTabId,
     tabsByWorktree,
     terminalLayoutsByTabId,
     worktreeId
@@ -348,7 +359,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const renderCompactAgentBranch = (
     agent: DashboardAgentRowData,
-    ancestorPaneKeys: ReadonlySet<string> = new Set()
+    ancestorPaneKeys: ReadonlySet<string> = new Set(),
+    cacheTimerActive = true
   ): React.ReactNode => {
     if (ancestorPaneKeys.has(agent.paneKey)) {
       return null
@@ -383,12 +395,17 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          cacheTimerActive={cacheTimerActive}
         />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>
             <div className="worktree-agent-lineage-children flex flex-col gap-0.5">
               {childAgents.map((childAgent) =>
-                renderCompactAgentBranch(childAgent, descendantAncestorPaneKeys)
+                renderCompactAgentBranch(
+                  childAgent,
+                  descendantAncestorPaneKeys,
+                  cacheTimerActive && expanded
+                )
               )}
             </div>
           </CompactAgentExpansion>
@@ -436,7 +453,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               }}
             />
             <CompactAgentExpansion expanded={compactRootListExpanded}>
-              {rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))}
+              {rootAgents.map((rootAgent) =>
+                renderCompactAgentBranch(rootAgent, new Set(), compactRootListExpanded)
+              )}
             </CompactAgentExpansion>
           </div>
         ) : (

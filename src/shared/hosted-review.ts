@@ -40,6 +40,8 @@ export type HostedReviewForBranchArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
+  currentHeadOid?: string | null
 }
 
 export type HostedReviewSummary = {

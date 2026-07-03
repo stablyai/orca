@@ -4,7 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
+    "start": "node scripts/start-expo.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "test": "vitest run",
@@ -12,7 +12,8 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "mock-server": "npx tsx scripts/mock-server.ts",
-    "repro:workspace-picker-lag": "npx tsx scripts/repro-workspace-picker-lag.ts"
+    "repro:workspace-picker-lag": "npx tsx scripts/repro-workspace-picker-lag.ts",
+    "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
@@ -59,12 +60,15 @@
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-native": "^0.73.0",
+    "@types/react-test-renderer": "19.1.0",
     "@types/ws": "^8.18.1",
     "expo-module-scripts": "^55.0.2",
     "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0",
-    "tsx": "^4.21.0",
+    "oxlint": "^1.71.0",
+    "react-test-renderer": "19.2.6",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.5"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
   }
 }

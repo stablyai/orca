@@ -12,6 +12,9 @@ const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
 const EMPTY_RUNTIME_AGENT_ORCHESTRATION: Record<string, AgentStatusOrchestrationContext> = {}
+// Why: selector unit tests often pass partial store mocks; production state
+// owns these maps, but missing mock maps should behave like empty slices.
+const EMPTY_RECORD = {}
 
 type WorktreeAgentRowsState = Pick<
   AppState,
@@ -77,17 +80,19 @@ function getTabIdToWorktreeId(
 }
 
 function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, AgentStatusEntry[]> {
+  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
+  const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
   if (
-    liveEntriesByWorktreeCache?.tabsByWorktree === state.tabsByWorktree &&
-    liveEntriesByWorktreeCache.agentStatusByPaneKey === state.agentStatusByPaneKey
+    liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
+    liveEntriesByWorktreeCache.agentStatusByPaneKey === agentStatusByPaneKey
   ) {
     return liveEntriesByWorktreeCache.entriesByWorktree
   }
 
-  const tabIdToWorktreeId = getTabIdToWorktreeId(state.tabsByWorktree)
+  const tabIdToWorktreeId = getTabIdToWorktreeId(tabsByWorktree)
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
     if (!parsed) {
       continue
@@ -107,8 +112,8 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
   liveEntriesByWorktreeCache = {
-    tabsByWorktree: state.tabsByWorktree,
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
+    tabsByWorktree,
+    agentStatusByPaneKey,
     entriesByWorktree
   }
   return entriesByWorktree
@@ -117,18 +122,19 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
 function getMigrationUnsupportedByWorktree(
   state: WorktreeAgentRowsState
 ): Map<string, MigrationUnsupportedPtyEntry[]> {
+  const migrationUnsupportedByPtyId = state.migrationUnsupportedByPtyId ?? EMPTY_RECORD
+  const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
   if (
-    migrationUnsupportedByWorktreeCache?.tabsByWorktree === state.tabsByWorktree &&
-    migrationUnsupportedByWorktreeCache.migrationUnsupportedByPtyId ===
-      state.migrationUnsupportedByPtyId
+    migrationUnsupportedByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
+    migrationUnsupportedByWorktreeCache.migrationUnsupportedByPtyId === migrationUnsupportedByPtyId
   ) {
     return migrationUnsupportedByWorktreeCache.entriesByWorktree
   }
 
-  const tabIdToWorktreeId = getTabIdToWorktreeId(state.tabsByWorktree)
+  const tabIdToWorktreeId = getTabIdToWorktreeId(tabsByWorktree)
   const previous = migrationUnsupportedByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, MigrationUnsupportedPtyEntry[]>()
-  for (const unsupported of Object.values(state.migrationUnsupportedByPtyId)) {
+  for (const unsupported of Object.values(migrationUnsupportedByPtyId)) {
     if (!unsupported.paneKey) {
       continue
     }
@@ -148,8 +154,8 @@ function getMigrationUnsupportedByWorktree(
     entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
   migrationUnsupportedByWorktreeCache = {
-    tabsByWorktree: state.tabsByWorktree,
-    migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
+    tabsByWorktree,
+    migrationUnsupportedByPtyId,
     entriesByWorktree
   }
   return entriesByWorktree
@@ -158,13 +164,14 @@ function getMigrationUnsupportedByWorktree(
 function getRetainedEntriesByWorktree(
   state: WorktreeAgentRowsState
 ): Map<string, RetainedAgentEntry[]> {
-  if (retainedEntriesByWorktreeCache?.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey) {
+  const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_RECORD
+  if (retainedEntriesByWorktreeCache?.retainedAgentsByPaneKey === retainedAgentsByPaneKey) {
     return retainedEntriesByWorktreeCache.entriesByWorktree
   }
 
   const previous = retainedEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, RetainedAgentEntry[]>()
-  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+  for (const retained of Object.values(retainedAgentsByPaneKey)) {
     const bucket = entriesByWorktree.get(retained.worktreeId)
     if (bucket) {
       bucket.push(retained)
@@ -176,7 +183,7 @@ function getRetainedEntriesByWorktree(
     entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
   retainedEntriesByWorktreeCache = {
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    retainedAgentsByPaneKey,
     entriesByWorktree
   }
   return entriesByWorktree
@@ -215,16 +222,20 @@ export function selectRuntimeAgentOrchestrationForWorktree(
   >,
   worktreeId: string
 ): Record<string, AgentStatusOrchestrationContext> {
-  const tabs = state.tabsByWorktree[worktreeId] ?? []
+  const tabs = (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []
   const tabIds = new Set(tabs.map((tab) => tab.id))
   const out: Record<string, AgentStatusOrchestrationContext> = {}
-  for (const [paneKey, orchestration] of Object.entries(state.runtimeAgentOrchestrationByPaneKey)) {
+  const runtimeAgentOrchestrationByPaneKey =
+    state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_RECORD
+  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
+  const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_RECORD
+  for (const [paneKey, orchestration] of Object.entries(runtimeAgentOrchestrationByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
     const parsedParent = orchestration.parentPaneKey
       ? parsePaneKey(orchestration.parentPaneKey)
       : null
-    const liveEntry = state.agentStatusByPaneKey[paneKey]
-    const retainedEntry = state.retainedAgentsByPaneKey[paneKey]
+    const liveEntry = agentStatusByPaneKey[paneKey]
+    const retainedEntry = retainedAgentsByPaneKey[paneKey]
     // Why: child agent terminals can be attributed to a worktree before their
     // tab reaches this renderer, or after the row has been retained as done.
     // The parent link must still reach that worktree card.
@@ -245,8 +256,8 @@ export function selectTerminalLayoutsForWorktree(
   worktreeId: string
 ): Record<string, TerminalLayoutSnapshot | undefined> {
   const out: Record<string, TerminalLayoutSnapshot | undefined> = {}
-  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    out[tab.id] = state.terminalLayoutsByTabId[tab.id]
+  for (const tab of (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []) {
+    out[tab.id] = (state.terminalLayoutsByTabId ?? EMPTY_RECORD)[tab.id]
   }
   return out
 }

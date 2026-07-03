@@ -1,3 +1,5 @@
+import { getProcessOutputFields } from './process-output-field-scanner'
+
 export type ForkSyncMode = 'ask' | 'safe-auto' | 'off'
 
 export type GitForkSyncBlockedReason =
@@ -31,7 +33,7 @@ const DEFAULT_BRANCH_FALLBACKS = ['main', 'master']
 const GITHUB_HOSTS = new Set(['github.com', 'ssh.github.com'])
 
 function parseRemoteHeadBranch(stdout: string): string | null {
-  for (const line of stdout.split(/\r?\n/)) {
+  for (const line of iterateGitOutputLines(stdout)) {
     const match = /^ref:\s+refs\/heads\/(.+?)\s+HEAD$/.exec(line.trim())
     if (match?.[1]) {
       return match[1]
@@ -41,7 +43,7 @@ function parseRemoteHeadBranch(stdout: string): string | null {
 }
 
 function parseAheadBehind(stdout: string): { ahead: number; behind: number } {
-  const [aheadRaw, behindRaw] = stdout.trim().split(/\s+/, 2)
+  const [aheadRaw, behindRaw] = getProcessOutputFields(stdout, 2)
   return {
     ahead: Number.parseInt(aheadRaw ?? '0', 10) || 0,
     behind: Number.parseInt(behindRaw ?? '0', 10) || 0
@@ -50,10 +52,33 @@ function parseAheadBehind(stdout: string): { ahead: number; behind: number } {
 
 async function remoteExists(runGit: GitForkSyncRunner, remote: string): Promise<boolean> {
   const { stdout } = await runGit(['remote'])
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .includes(remote)
+  for (const rawLine of iterateGitOutputLines(stdout)) {
+    if (rawLine.trim() === remote) {
+      return true
+    }
+  }
+  return false
+}
+
+function* iterateGitOutputLines(output: string): Generator<string> {
+  let lineStart = 0
+
+  for (let index = 0; index < output.length; index++) {
+    const code = output.charCodeAt(index)
+    if (code !== 10 && code !== 13) {
+      continue
+    }
+
+    yield output.slice(lineStart, index)
+    if (code === 13 && output.charCodeAt(index + 1) === 10) {
+      index++
+    }
+    lineStart = index + 1
+  }
+
+  if (lineStart <= output.length) {
+    yield output.slice(lineStart)
+  }
 }
 
 function cleanGitHubRemotePath(path: string): string | null {

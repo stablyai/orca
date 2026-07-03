@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { AppState } from './types'
@@ -10,6 +10,7 @@ import {
   resetFloatingVisibleTabCountSelectorCacheForTest,
   selectFloatingVisibleTabCount
 } from './selectors'
+import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 
 function makeWorktree(args: { id: string; repoId: string; displayName: string }): Worktree {
   return {
@@ -39,6 +40,19 @@ function makeRepo(args: Pick<Repo, 'id' | 'path' | 'displayName'> & Partial<Repo
     addedAt: 100,
     kind: 'git',
     ...args
+  }
+}
+
+function makeTerminalTab(args: { id: string; worktreeId: string; title: string }): TerminalTab {
+  return {
+    id: args.id,
+    ptyId: null,
+    worktreeId: args.worktreeId,
+    title: args.title,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
   }
 }
 
@@ -145,13 +159,22 @@ describe('store selectors', () => {
         createdAt: 3
       },
       {
+        id: 'simulator-1',
+        entityId: 'simulator-1',
+        worktreeId,
+        contentType: 'simulator',
+        label: 'Mobile Emulator',
+        sortOrder: 3,
+        createdAt: 4
+      },
+      {
         id: 'unified-stale-terminal',
         entityId: 'missing-term',
         worktreeId,
         contentType: 'terminal',
         label: 'Stale',
-        sortOrder: 3,
-        createdAt: 4
+        sortOrder: 4,
+        createdAt: 5
       }
     ] as AppState['unifiedTabsByWorktree'][string]
     const state = {
@@ -161,11 +184,58 @@ describe('store selectors', () => {
       unifiedTabsByWorktree: { [worktreeId]: unifiedTabs }
     } satisfies Parameters<typeof selectFloatingVisibleTabCount>[0]
 
-    expect(selectFloatingVisibleTabCount(state)).toBe(3)
+    expect(selectFloatingVisibleTabCount(state)).toBe(4)
     expect(openFileScans).toBe(1)
 
-    expect(selectFloatingVisibleTabCount({ ...state })).toBe(3)
+    expect(selectFloatingVisibleTabCount({ ...state })).toBe(4)
     expect(openFileScans).toBe(1)
+  })
+
+  it('keeps active terminal chrome stable across title-only tab updates', () => {
+    const activeTab = makeTerminalTab({
+      id: 'term-1',
+      worktreeId: 'wt-1',
+      title: 'Codex working'
+    })
+    const secondTab = makeTerminalTab({
+      id: 'term-2',
+      worktreeId: 'wt-1',
+      title: 'Shell'
+    })
+    const otherWorktreeTab = makeTerminalTab({
+      id: 'term-other',
+      worktreeId: 'wt-2',
+      title: 'Background'
+    })
+    const state = {
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'term-1',
+      tabsByWorktree: {
+        'wt-1': [activeTab, secondTab],
+        'wt-2': [otherWorktreeTab]
+      },
+      canExpandPaneByTabId: { 'term-1': true, 'term-2': false },
+      expandedPaneByTabId: { 'term-1': true, 'term-2': false }
+    } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
+
+    const selected = selectActiveTerminalChromeState(state)
+    const retitledState = {
+      ...state,
+      tabsByWorktree: {
+        'wt-1': [{ ...activeTab, title: 'Codex working · frame 2' }, secondTab],
+        'wt-2': [{ ...otherWorktreeTab, title: 'Background · frame 2' }]
+      }
+    } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
+
+    expect(selected).toEqual({
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'term-1',
+      tabCount: 2,
+      effectiveActiveTabId: 'term-1',
+      activeTabCanExpand: true,
+      effectiveActiveTabExpanded: true
+    })
+    expect(selectActiveTerminalChromeState(retitledState)).toEqual(selected)
   })
 
   it('caches the project host setup projection by repo slice identity', () => {
@@ -227,6 +297,82 @@ describe('store selectors', () => {
       projects,
       setups: projectHostSetups
     })
+  })
+
+  it('groups hydrated VM project setups under the repo-derived project identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      }),
+      makeRepo({
+        id: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        executionHostId: toRuntimeExecutionHostId('vm-env')
+      })
+    ]
+    const projects = [
+      {
+        id: 'github:stablyai/orca',
+        displayName: 'orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['local-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'repo:vm-orca',
+        displayName: 'vercel/sandbox/orca',
+        badgeColor: '#737373',
+        sourceRepoIds: ['vm-orca'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'local-setup',
+        projectId: 'github:stablyai/orca',
+        hostId: 'local' as const,
+        repoId: 'local-orca',
+        path: '/Users/alice/stably/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'legacy-repo' as const,
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'vm-setup',
+        projectId: 'repo:vm-orca',
+        hostId: toRuntimeExecutionHostId('vm-env'),
+        repoId: 'vm-orca',
+        path: '/vercel/sandbox/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'provisioned' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+
+    expect(projection.projects.map((project) => project.id)).toEqual(['github:stablyai/orca'])
+    expect(projection.setups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'local-setup', projectId: 'github:stablyai/orca' }),
+        expect.objectContaining({ id: 'vm-setup', projectId: 'github:stablyai/orca' })
+      ])
+    )
   })
 
   it('falls back to repo compatibility projection when hydrated setup state is empty', () => {

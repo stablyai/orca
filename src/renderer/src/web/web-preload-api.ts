@@ -1,8 +1,16 @@
 /* eslint-disable max-lines -- Why: the web preload adapter is the browser-side
    replacement for Electron preload, so the compatibility surface is necessarily
    centralized at this boundary. */
-import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
+import type {
+  PreloadApi,
+  PreflightStatus,
+  RefreshAgentsResult,
+  NativeChatApi,
+  NativeChatReadSessionResult,
+  NativeChatAppendedMessages
+} from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
@@ -31,6 +39,7 @@ import {
   getDefaultSettings,
   getDefaultUIState,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
@@ -76,6 +85,19 @@ import {
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
+import {
+  assertClipboardTextWriteWithinLimitWithYield,
+  assertClipboardTextWithinLimitWithYield,
+  type ReadClipboardTextOptions
+} from '../../../shared/clipboard-text'
+import {
+  CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
+  CLIPBOARD_IMAGE_MAX_PIXELS,
+  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
+  CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
+  assertClipboardImageByteLengthWithinLimit,
+  assertClipboardImageDimensionsWithinLimit
+} from '../../../shared/clipboard-image'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
 import {
   normalizeFeatureInteractions,
@@ -95,7 +117,9 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
-const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
+export const MAX_CLIPBOARD_IMAGE_SOURCE_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
@@ -120,9 +144,15 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
+function assertClipboardImageBlobWithinLimit(blob: Blob): void {
+  assertClipboardImageByteLengthWithinLimit(blob.size)
+}
+
 async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+  assertClipboardImageBlobWithinLimit(blob)
   const bitmap = await createImageBitmap(blob)
   try {
+    assertClipboardImageDimensionsWithinLimit(bitmap)
     const canvas = document.createElement('canvas')
     canvas.width = bitmap.width
     canvas.height = bitmap.height
@@ -135,6 +165,12 @@ async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
       canvas.toBlob((png) => {
         if (!png) {
           reject(new Error('Clipboard image could not be encoded as PNG'))
+          return
+        }
+        try {
+          assertClipboardImageBlobWithinLimit(png)
+        } catch (error) {
+          reject(error)
           return
         }
         resolve(png)
@@ -159,6 +195,7 @@ async function readClipboardImagePngBase64(): Promise<string | null> {
       continue
     }
     const blob = await item.getType(imageType)
+    assertClipboardImageBlobWithinLimit(blob)
     const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
     return blobToBase64(pngBlob)
   }
@@ -427,6 +464,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
+      startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
@@ -451,7 +489,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     platform: {
       get: () => ({
         platform: getBrowserPlatform(),
-        osRelease: ''
+        osRelease: '',
+        displayServer: null
       })
     },
     e2e: {
@@ -562,6 +601,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       }
     },
     runtime: createRuntimeApi(),
+    nativeChat: createNativeChatApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),
@@ -592,7 +632,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           sessions: [],
           issues: [],
           scannedAt: new Date().toISOString()
-        })
+        }),
+      onWindowFocused: () => () => {}
     },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
@@ -626,7 +667,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
-      drop: () => {}
+      drop: () => {},
+      dropByTabPrefix: () => {}
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
@@ -947,6 +989,72 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
   }
 }
 
+// Why: the desktop reads native-chat transcripts over IPC; the web client has
+// no IPC, so route readSession/subscribe through the runtime RPC (the same
+// methods the mobile app uses). Without this, window.api.nativeChat was
+// undefined on web and the chat view showed no messages.
+function createNativeChatApi(): NativeChatApi {
+  return {
+    readSession: (agent, sessionId, limit, transcriptPath) =>
+      callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
+        agent,
+        sessionId,
+        limit,
+        transcriptPath
+      }),
+    subscribe: (args, onAppended) => {
+      // No paired runtime yet: nothing to subscribe to, and
+      // requireActiveEnvironment() would throw. Return a no-op teardown so the
+      // chat view mounts cleanly until a runtime is paired (only the not-paired
+      // case is swallowed — real subscribe errors still surface via .catch).
+      const environment = requireActiveEnvironmentOrNull()
+      if (!environment) {
+        return () => {}
+      }
+      let handle: { unsubscribe: () => void } | null = null
+      let cancelled = false
+      void getClientForEnvironment(environment)
+        .subscribe(
+          'nativeChat.subscribe',
+          { agent: args.agent, sessionId: args.sessionId, transcriptPath: args.transcriptPath },
+          {
+            onResponse: (response) => {
+              if (cancelled || !response.ok) {
+                return
+              }
+              const result = response.result as {
+                type?: string
+                messages?: NativeChatAppendedMessages
+              }
+              if (result?.type === 'appended' && Array.isArray(result.messages)) {
+                onAppended(result.messages)
+              }
+            }
+          },
+          {
+            // Why: send nativeChat.unsubscribe on teardown so the server reaps
+            // the transcript fs-watcher on view-toggle, not just on socket close
+            // (the watcher-leak fix). Uses the same agent:sessionId cleanup token
+            // mobile sends, via the shared key-builder so it can't drift.
+            buildUnsubscribe: () => buildNativeChatUnsubscribe(args.agent, args.sessionId)
+          }
+        )
+        .then((h) => {
+          if (cancelled) {
+            h.unsubscribe()
+          } else {
+            handle = h
+          }
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
+        handle?.unsubscribe()
+      }
+    }
+  }
+}
+
 function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
   return {
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
@@ -1130,6 +1238,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        ...(args.startup
+          ? {
+              startupCommand: args.startup.command,
+              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...(args.startup.launchConfig
+                ? { startupLaunchConfig: args.startup.launchConfig }
+                : {}),
+              ...(args.startup.startupCommandDelivery
+                ? { startupCommandDelivery: args.startup.startupCommandDelivery }
+                : {}),
+              activate: true
+            }
+          : {}),
         parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
@@ -1174,13 +1295,19 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchName,
         expectedHead
       }),
-    updateMeta: async ({ worktreeId, updates }) =>
-      (
+    updateMeta: async ({ worktreeId, updates }) => {
+      const rpcUpdates =
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
+          ? { ...updates, pushTarget: null }
+          : updates
+      return (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...updates
+          ...rpcUpdates
         })
-      ).worktree,
+      ).worktree
+    },
     listLineage: async () =>
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
@@ -1223,6 +1350,21 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       })
     },
     downloadFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    saveDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    startDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    appendDownloadedFileChunk: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    finishDownloadedFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    cancelDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
     listMarkdownDocuments: async ({ rootPath }) => {
@@ -1342,6 +1484,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       return callRuntimeResult('git.status', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored
+      })
+    },
+    submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.submoduleStatus', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        submodulePath,
+        area
       })
     },
     checkIgnored: async ({ worktreePath, paths }) => {
@@ -1558,8 +1708,6 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     onActivateView: () => noopUnsubscribe,
     onPaneFocus: () => noopUnsubscribe,
     onOpenLinkInOrcaTab: () => noopUnsubscribe,
-    acceptDownload: () =>
-      Promise.resolve({ ok: false, reason: 'Downloads are handled by the server browser.' }),
     cancelDownload: () => Promise.resolve(false),
     setGrabMode: () =>
       Promise.resolve({
@@ -1646,12 +1794,17 @@ function createGitHubApi(): WebGitHubApi {
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
+      const acceptMergedFallbackPR =
+        candidate.linkedPRNumber == null &&
+        candidate.fallbackPRNumber != null &&
+        candidate.fallbackPRSource != null
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
-        fallbackPRNumber: candidate.fallbackPRNumber ?? null
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+        ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }
@@ -1669,6 +1822,7 @@ function createGitHubApi(): WebGitHubApi {
       }),
     workItemDetails: (args) =>
       route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    notifyWorkItemMutated: () => Promise.resolve(false),
     prFileContents: (args) =>
       route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
     listIssues: (args) =>
@@ -1965,10 +2119,17 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return optimistic
       }
     },
-    readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readClipboardText: async (options?: ReadClipboardTextOptions) =>
+      assertClipboardTextWithinLimitWithYield(
+        await (navigator.clipboard?.readText?.() ?? ''),
+        options
+      ),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: async (args?: { connectionId?: string | null }) => {
+    saveClipboardImageAsTempFile: async (args?: {
+      connectionId?: string | null
+      runtimeEnvironmentId?: string | null
+    }) => {
       if (!requireActiveEnvironmentOrNull()) {
         return null
       }
@@ -1978,10 +2139,20 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
-    writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeClipboardText: async (text) => {
+      await assertClipboardTextWriteWithinLimitWithYield(text)
+      await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
+    },
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
+    writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
+    performNativePaste: () => {
+      document.execCommand?.('paste')
+    },
+    onExportPdfRequested: () => noopUnsubscribe,
+    onAppMenuPaste: () => noopUnsubscribe,
+    onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
       zoomLevel = level
@@ -2000,6 +2171,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
     onOpenQuickOpen: () => noopUnsubscribe,
+    onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
@@ -2095,6 +2267,20 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+  type WindowsTerminalCapabilityBridgeResult = {
+    wslAvailable: boolean
+    wslDistros: string[]
+    pwshAvailable: boolean
+    gitBashAvailable: boolean
+    hostPlatform: NodeJS.Platform | null
+  }
+  const fallbackWindowsTerminalCapabilities = {
+    wslAvailable: false,
+    wslDistros: [],
+    pwshAvailable: false,
+    gitBashAvailable: false,
+    hostPlatform: null
+  }
   return {
     check: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
@@ -2117,7 +2303,14 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
-        : []
+        : [],
+    detectRemoteWindowsTerminalCapabilities: async (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(
+            'preflight.detectRemoteWindowsTerminalCapabilities',
+            args
+          ).catch(() => fallbackWindowsTerminalCapabilities)
+        : Promise.resolve(fallbackWindowsTerminalCapabilities)
   }
 }
 
@@ -2231,8 +2424,8 @@ function createComputerUsePermissionsApi(): NonNullable<
 
 function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
   return {
-    discover: () =>
-      callRuntimeResult<SkillDiscoveryResult>('skills.discover', undefined, 15_000).catch(() => ({
+    discover: (target) =>
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000).catch(() => ({
         skills: [],
         sources: [],
         scannedAt: Date.now()
@@ -2289,6 +2482,7 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
@@ -2348,10 +2542,13 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     ackColdRestore: () => {},
     ackData: () => {},
     setActiveRendererPty: () => {},
+    setRendererPtyVisible: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
+    getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
@@ -2380,7 +2577,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     settlePaneSerializer: () => Promise.resolve(),
     clearPendingPaneSerializer: () => Promise.resolve(),
     management: {
-      listSessions: () => Promise.resolve({ sessions: [] }),
+      listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0 }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })
@@ -2466,10 +2663,10 @@ async function callRuntimeResult<TResult>(
 
 async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
-  args?: { connectionId?: string | null }
+  args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
 ): Promise<string> {
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
-    throw new Error('Clipboard image is too large')
+    throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
   }
   const connectionId = args?.connectionId ?? null
   const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
@@ -2758,11 +2955,19 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(defaults, stored)
-  }
   const storedSettings = getStoredSettings()
-  return mergeWebUIState(defaults, {
+  const base = {
+    ...defaults,
+    // Why: when runtime ui.get is unavailable, web fallback must mirror the
+    // main-process missing-property seed from the legacy card layout mode.
+    worktreeCardProperties: getWorktreeCardModeProperties(
+      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
+    )
+  }
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(base, stored)
+  }
+  return mergeWebUIState(base, {
     ...stored,
     // Why: web fallback lacks main-process normalization, so migrate the
     // retired setting only when the local UI preference is still absent.

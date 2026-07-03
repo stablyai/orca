@@ -31,7 +31,6 @@ import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '../../store'
 import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
@@ -68,10 +67,14 @@ import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
+import {
+  buildResourceSessionBindingIndex,
+  countUnboundDaemonSessions,
+  type ResourceSessionBindingInputs
+} from './resource-session-bindings'
 import { translate } from '@/i18n/i18n'
 
 const POLL_MS = 2_000
-const SESSIONS_POLL_MS = 10_000
 
 type SortOption = 'memory' | 'cpu' | 'name'
 
@@ -732,6 +735,8 @@ export function ResourceUsageStatusSegment({
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const tabsByWorktreeForPtyBindings = useAppStore((s) => s.tabsByWorktree)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
@@ -778,6 +783,17 @@ export function ResourceUsageStatusSegment({
   // While a runtime server is active, hiding local samples avoids showing or
   // killing sessions from the wrong machine.
   const resourceSnapshot = runtimeEnvironmentActive ? null : snapshot
+  // Why: ptyIdsByTabId intentionally tracks mounted/live panes only. Resource
+  // Manager also reads restored wake hints, but only for classification.
+  const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
+    () => ({
+      ptyIdsByTabId,
+      tabsByWorktree: tabsByWorktreeForPtyBindings,
+      terminalLayoutsByTabId,
+      workspaceSessionReady
+    }),
+    [ptyIdsByTabId, tabsByWorktreeForPtyBindings, terminalLayoutsByTabId, workspaceSessionReady]
+  )
 
   // Why: after a kill confirms and the session unmounts, focus would otherwise
   // fall to <body>. We park a ref on the popover body so we can restore focus
@@ -859,19 +875,19 @@ export function ResourceUsageStatusSegment({
   }
   const spaceScanReady = nextSpaceScanSnapshot.ready
 
-  // Poll memory + sessions when popover is open. Sessions also poll in the
-  // background at a slower rate so the badge count stays reasonably fresh
-  // without keeping the Memory IPC hot.
+  // Poll memory when popover is open. Sessions are refreshed on open and after
+  // session actions; a closed status-bar badge must not globally inventory
+  // daemon PTYs because large preserved-session sets make that visible while
+  // typing.
   useEffect(() => {
     if (!open || runtimeEnvironmentActive) {
       return
     }
     void fetchSnapshot()
     void refreshSessions()
-    // Why: sessions already have an always-on poll in the effect below; only
-    // the memory snapshot is gated on the popover being open. Stacking a
-    // second sessions interval here doubled IPC traffic while the popover
-    // was open.
+    // Why: only the memory snapshot keeps an interval while the popover is
+    // open. Session inventory is explicit-on-open/action because it can be
+    // expensive with many daemon-preserved terminals.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
@@ -884,16 +900,8 @@ export function ResourceUsageStatusSegment({
     if (runtimeEnvironmentActive) {
       setSessions([])
       setSessionsError(false)
-      return
     }
-    // Why: the closed-popover badge is informational. Polling daemon sessions
-    // while the whole window is hidden keeps IPC and daemon list calls hot for
-    // no visible UI; visibility refreshes catch the badge up immediately.
-    return installWindowVisibilityInterval({
-      run: () => void refreshSessions(),
-      intervalMs: SESSIONS_POLL_MS
-    })
-  }, [runtimeEnvironmentActive, refreshSessions])
+  }, [runtimeEnvironmentActive])
 
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -947,6 +955,7 @@ export function ResourceUsageStatusSegment({
         ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
             tabsByWorktree,
             ptyIdsByTabId,
+            terminalLayoutsByTabId,
             runtimePaneTitlesByTabId,
             workspaceSessionReady,
             repoDisplayNameById,
@@ -960,6 +969,7 @@ export function ResourceUsageStatusSegment({
       sessions,
       tabsByWorktree,
       ptyIdsByTabId,
+      terminalLayoutsByTabId,
       runtimePaneTitlesByTabId,
       workspaceSessionReady,
       repoDisplayNameById,
@@ -967,30 +977,26 @@ export function ResourceUsageStatusSegment({
     ]
   )
 
-  // Why: orphanCount drives the trigger badge (always visible in the status
-  // bar, popover open or not) so it must compute outside the open-gate.
-  // Build the bound set with a single flat walk instead of nested Object
-  // iterations to keep this light on every store update.
+  // Why: orphan detection needs daemon inventory. Keep it open-only so the
+  // closed badge never reintroduces a background global session scan.
   const orphanCount = useMemo(() => {
+    if (!open || !workspaceSessionReady || runtimeEnvironmentActive) {
+      return 0
+    }
+    return countUnboundDaemonSessions(sessions, resourceSessionBindings)
+  }, [open, sessions, resourceSessionBindings, workspaceSessionReady, runtimeEnvironmentActive])
+
+  const closedSessionCount = useMemo(() => {
     if (!workspaceSessionReady || runtimeEnvironmentActive) {
       return 0
     }
-    const bound = new Set<string>()
-    for (const ids of Object.values(ptyIdsByTabId)) {
-      for (const id of ids) {
-        if (id) {
-          bound.add(id)
-        }
-      }
-    }
-    let n = 0
-    for (const s of sessions) {
-      if (!bound.has(s.id)) {
-        n++
-      }
-    }
-    return n
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady, runtimeEnvironmentActive])
+    return buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds.size
+  }, [resourceSessionBindings, workspaceSessionReady, runtimeEnvironmentActive])
+  const triggerSessionCount = runtimeEnvironmentActive
+    ? 0
+    : open
+      ? sessions.length
+      : closedSessionCount
 
   const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {
     const memory = resourceSnapshot?.totalMemory ?? 0
@@ -1005,10 +1011,8 @@ export function ResourceUsageStatusSegment({
   }, [resourceSnapshot])
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and
-  // "never fetched". When the segment is mounted but the popover hasn't
-  // been opened, fetchMemorySnapshot has never run, so a sessions IPC
-  // failure on the always-on poll would otherwise be silent. Treat the
-  // absence of any snapshot plus a sessions error as unreachable too.
+  // "never fetched". If session refresh fails before a memory snapshot exists,
+  // treat that as daemon-unreachable too.
   const daemonUnreachable =
     !runtimeEnvironmentActive &&
     sessionsError &&
@@ -1022,12 +1026,12 @@ export function ResourceUsageStatusSegment({
     !runtimeEnvironmentActive && sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
     memoryLabel: memBadgeLabel,
-    sessionCount: sessions.length,
+    sessionCount: triggerSessionCount,
     runtimeEnvironmentActive,
     spaceScanReady
   })
   const resourceManagerAriaLabel = getResourceManagerAriaLabel({
-    sessionCount: sessions.length,
+    sessionCount: triggerSessionCount,
     runtimeEnvironmentActive,
     spaceScanReady
   })
@@ -1123,25 +1127,18 @@ export function ResourceUsageStatusSegment({
     if (!workspaceSessionReady) {
       return
     }
-    const bound = new Set<string>()
-    for (const ids of Object.values(ptyIdsByTabId)) {
-      for (const id of ids) {
-        if (id) {
-          bound.add(id)
-        }
-      }
-    }
+    const bound = buildResourceSessionBindingIndex(resourceSessionBindings).boundPtyIds
     const orphans = sessions.filter((s) => !bound.has(s.id))
     if (orphans.length === 0) {
       return
     }
-    // Why: optimistic removal so the rows disappear immediately rather than
-    // lingering up to SESSIONS_POLL_MS while the daemon-side list reconciles.
+    // Why: optimistic removal so rows disappear immediately instead of waiting
+    // for the next explicit daemon-side list refresh.
     const orphanIds = new Set(orphans.map((s) => s.id))
     setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
     void refreshSessions()
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady, refreshSessions])
+  }, [sessions, resourceSessionBindings, workspaceSessionReady, refreshSessions])
 
   const runKillConfirmed = useCallback(async () => {
     if (!killConfirm) {
@@ -1151,7 +1148,7 @@ export function ResourceUsageStatusSegment({
     setKilling(true)
     // Why: optimistic removal — the kill X was on the row that's about to be
     // unmounted, so updating local state immediately avoids a flash where the
-    // dialog closes but the killed row stays for up to 10s.
+    // dialog closes but the killed row waits for the next list refresh.
     setSessions((prev) => prev.filter((s) => s.id !== target.sessionId))
     try {
       await window.api.pty.kill(target.sessionId)
@@ -1223,16 +1220,16 @@ export function ResourceUsageStatusSegment({
                   <span className="text-muted-foreground/50">·</span>
                   <Terminal className="size-3 text-muted-foreground" />
                   <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {sessions.length}
+                    {triggerSessionCount}
                     {orphanCount > 0 && (
                       <span className="text-yellow-500 ml-0.5">({orphanCount})</span>
                     )}
                   </span>
                 </>
               )}
-              {iconOnly && sessions.length > 0 && (
+              {iconOnly && triggerSessionCount > 0 && (
                 <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {sessions.length}
+                  {triggerSessionCount}
                 </span>
               )}
               {daemonUnreachable && (

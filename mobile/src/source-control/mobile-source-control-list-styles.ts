@@ -161,6 +161,11 @@ export const listStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.md
   },
+  commitButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
   generateButton: {
     width: 42,
     minHeight: 42,
@@ -179,5 +184,83 @@ export const listStyles = StyleSheet.create({
     color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '700'
+  },
+  commitButtonSecondaryText: {
+    color: colors.textPrimary
+  },
+  commitFailurePanel: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.statusRed,
+    gap: spacing.sm
+  },
+  commitFailureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  commitFailureTextBlock: {
+    flex: 1,
+    minWidth: 0
+  },
+  commitFailureTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  commitFailureSummary: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 16,
+    marginTop: 2
+  },
+  commitFailureFixButton: {
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.button,
+    backgroundColor: colors.textPrimary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs
+  },
+  commitFailureFixButtonDisabled: {
+    opacity: 0.45
+  },
+  commitFailureFixButtonPressed: {
+    opacity: 0.75
+  },
+  commitFailureFixButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
+  commitFailureDetailsButton: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  commitFailureDetailsButtonPressed: {
+    opacity: 0.75
+  },
+  commitFailureDetailsButtonText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  commitFailureDetailsText: {
+    color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize,
+    lineHeight: 17
+  },
+  commitFailureLaunchError: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    lineHeight: 16
   }
 })

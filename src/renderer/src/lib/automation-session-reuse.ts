@@ -33,57 +33,64 @@ export function findReusableAutomationSession(args: {
         run.automationId === automationId &&
         run.workspaceId === worktreeId &&
         run.status === 'completed' &&
-        run.terminalSessionId &&
-        terminalTabIds.has(run.terminalSessionId)
+        Boolean(run.terminalPaneKey) &&
+        Boolean(run.terminalPtyId)
     )
     .sort((left, right) => right.createdAt - left.createdAt)
 
   for (const run of candidates) {
-    const tabId = run.terminalSessionId
-    if (!tabId) {
-      continue
+    const exactPane = findReusableExactRunPane({ state, terminalTabIds, agentId, run })
+    if (exactPane) {
+      return exactPane
     }
-    const pane = findReusablePane(state.agentStatusByPaneKey, tabId, agentId)
-    if (!pane) {
-      continue
-    }
-    const ptyId = getReusablePanePtyId(state, tabId, pane.leafId)
-    if (!ptyId) {
-      continue
-    }
-    return { tabId, ptyId, paneKey: pane.paneKey }
   }
   return null
 }
 
-function findReusablePane(
-  entries: Record<string, AgentStatusEntry>,
-  tabId: string,
+function findReusableExactRunPane({
+  state,
+  terminalTabIds,
+  agentId,
+  run
+}: {
+  state: Pick<AppState, 'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>
+  terminalTabIds: Set<string>
   agentId: TuiAgent
-): { paneKey: string; leafId: string } | null {
-  for (const [paneKey, entry] of Object.entries(entries)) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed?.tabId !== tabId || entry.state !== 'done') {
-      continue
-    }
-    if (entry.agentType && entry.agentType !== 'unknown' && entry.agentType !== agentId) {
-      continue
-    }
-    return { paneKey, leafId: parsed.leafId }
+  run: AutomationRun
+}): ReusableAutomationSession | null {
+  if (!run.terminalPaneKey || !run.terminalPtyId) {
+    return null
   }
-  return null
+  const parsed = parsePaneKey(run.terminalPaneKey)
+  if (!parsed || !terminalTabIds.has(parsed.tabId)) {
+    return null
+  }
+  const entry = state.agentStatusByPaneKey[run.terminalPaneKey]
+  if (!entry || !isReusableAgentStatus(entry, agentId)) {
+    return null
+  }
+  if (!isRunPtyLiveInPane(state, parsed.tabId, parsed.leafId, run.terminalPtyId)) {
+    return null
+  }
+  return { tabId: parsed.tabId, ptyId: run.terminalPtyId, paneKey: run.terminalPaneKey }
 }
 
-function getReusablePanePtyId(
+function isReusableAgentStatus(entry: AgentStatusEntry, agentId: TuiAgent): boolean {
+  if (entry.state !== 'done') {
+    return false
+  }
+  return !entry.agentType || entry.agentType === 'unknown' || entry.agentType === agentId
+}
+
+function isRunPtyLiveInPane(
   state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
   tabId: string,
-  leafId: string
-): string | null {
-  const ptyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId
-  if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
-    // Why: split terminal tabs can contain multiple PTYs; reuse must observe
-    // the PTY assigned to the idle agent pane's stable leaf.
-    return ptyIdsByLeafId[leafId] ?? null
+  leafId: string,
+  ptyId: string
+): boolean {
+  if (!state.ptyIdsByTabId[tabId]?.includes(ptyId)) {
+    return false
   }
-  return state.ptyIdsByTabId[tabId]?.[0] ?? null
+  const layoutPtyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+  return layoutPtyId === undefined || layoutPtyId === ptyId
 }
