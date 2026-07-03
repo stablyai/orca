@@ -5,13 +5,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   DEFAULT_EXPECTED_SIGNER,
+  INNER_SIGNATURE_REQUIRED_ENV,
+  checkWindowsInnerSignature,
   classifySignature,
   getPowerShellSignatureJson,
   normalizeSignerSubject,
   normalizeThumbprint,
   parseExpectedSigners,
   parseExpectedThumbprints,
+  parseInnerSignatureRequired,
   parseSignatureJson,
+  runWindowsInnerSignatureCli,
   validateExecutablePath,
   verifyWindowsInnerSignature
 } from './verify-windows-inner-signature.mjs'
@@ -38,13 +42,32 @@ function withTempFile(callback) {
   }
 }
 
+function createConsoleRecorder() {
+  const messages = {
+    error: [],
+    log: [],
+    warn: []
+  }
+
+  return {
+    consoleImpl: {
+      error: (message = '') => messages.error.push(String(message)),
+      log: (message = '') => messages.log.push(String(message)),
+      warn: (message = '') => messages.warn.push(String(message))
+    },
+    messages
+  }
+}
+
 describe('verify-windows-inner-signature', () => {
   const originalExpectedSigners = process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
   const originalExpectedThumbprints = process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+  const originalInnerSignatureRequired = process.env[INNER_SIGNATURE_REQUIRED_ENV]
 
   beforeEach(() => {
     delete process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
     delete process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+    delete process.env[INNER_SIGNATURE_REQUIRED_ENV]
   })
 
   afterEach(() => {
@@ -58,6 +81,12 @@ describe('verify-windows-inner-signature', () => {
       delete process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
     } else {
       process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS = originalExpectedThumbprints
+    }
+
+    if (originalInnerSignatureRequired === undefined) {
+      delete process.env[INNER_SIGNATURE_REQUIRED_ENV]
+    } else {
+      process.env[INNER_SIGNATURE_REQUIRED_ENV] = originalInnerSignatureRequired
     }
   })
 
@@ -89,6 +118,16 @@ describe('verify-windows-inner-signature', () => {
   it('normalizes optional thumbprint allowlists', () => {
     expect(normalizeThumbprint('aa bb:cc')).toBe('AABBCC')
     expect(parseExpectedThumbprints('aa bb cc,11:22:33')).toEqual(['AABBCC', '112233'])
+  })
+
+  it('parses the explicit release-blocking switch', () => {
+    expect(parseInnerSignatureRequired()).toBe(false)
+    expect(parseInnerSignatureRequired('')).toBe(false)
+    expect(parseInnerSignatureRequired('false')).toBe(false)
+    expect(parseInnerSignatureRequired('0')).toBe(false)
+    expect(parseInnerSignatureRequired('true')).toBe(true)
+    expect(parseInnerSignatureRequired('1')).toBe(true)
+    expect(() => parseInnerSignatureRequired('sometimes')).toThrow(/must be true or false/)
   })
 
   it('rejects missing, nonexistent, and directory executable paths before PowerShell', () => {
@@ -199,6 +238,94 @@ describe('verify-windows-inner-signature', () => {
       })
 
       expect(signature).toEqual(validSignature)
+    })
+  })
+
+  it('returns signature evidence without failing when the release gate is optional', () => {
+    withTempFile((filePath) => {
+      const classification = checkWindowsInnerSignature({
+        executablePath: filePath,
+        platform: 'win32',
+        spawnSyncImpl: () => ({
+          status: 0,
+          stdout: JSON.stringify({ ...validSignature, status: 'NotSigned' }),
+          stderr: ''
+        })
+      })
+
+      expect(classification.ok).toBe(false)
+      expect(classification.message).toBe('Windows inner executable signature status is NotSigned.')
+      expect(classification.summary).toContain('Status: NotSigned')
+    })
+  })
+
+  it('reports unsigned inner signatures as a non-blocking GitHub warning by default', () => {
+    withTempFile((filePath) => {
+      const { consoleImpl, messages } = createConsoleRecorder()
+      const exitCode = runWindowsInnerSignatureCli([filePath], {
+        consoleImpl,
+        env: {},
+        platform: 'win32',
+        spawnSyncImpl: () => ({
+          status: 0,
+          stdout: JSON.stringify({ ...validSignature, status: 'NotSigned' }),
+          stderr: ''
+        })
+      })
+
+      expect(exitCode).toBe(0)
+      expect(messages.warn.join('\n')).toContain('::warning::')
+      expect(messages.warn.join('\n')).toContain(INNER_SIGNATURE_REQUIRED_ENV)
+      expect(messages.log.join('\n')).toContain('Status: NotSigned')
+      expect(messages.error).toEqual([])
+    })
+  })
+
+  it('fails unsigned inner signatures when the release gate is required', () => {
+    withTempFile((filePath) => {
+      const { consoleImpl, messages } = createConsoleRecorder()
+      const exitCode = runWindowsInnerSignatureCli([filePath], {
+        consoleImpl,
+        env: {
+          [INNER_SIGNATURE_REQUIRED_ENV]: 'true'
+        },
+        platform: 'win32',
+        spawnSyncImpl: () => ({
+          status: 0,
+          stdout: JSON.stringify({ ...validSignature, status: 'NotSigned' }),
+          stderr: ''
+        })
+      })
+
+      expect(exitCode).toBe(1)
+      expect(messages.error.join('\n')).toContain(
+        'Windows inner executable signature status is NotSigned.'
+      )
+      expect(messages.error.join('\n')).toContain('Status: NotSigned')
+      expect(messages.warn).toEqual([])
+    })
+  })
+
+  it('passes valid inner signatures even when the release gate is required', () => {
+    withTempFile((filePath) => {
+      const { consoleImpl, messages } = createConsoleRecorder()
+      const exitCode = runWindowsInnerSignatureCli([filePath], {
+        consoleImpl,
+        env: {
+          [INNER_SIGNATURE_REQUIRED_ENV]: 'true'
+        },
+        platform: 'win32',
+        spawnSyncImpl: () => ({
+          status: 0,
+          stdout: JSON.stringify(validSignature),
+          stderr: ''
+        })
+      })
+
+      expect(exitCode).toBe(0)
+      expect(messages.log.join('\n')).toContain('Verified Windows inner executable signature.')
+      expect(messages.warn).toEqual([])
+      expect(messages.error).toEqual([])
     })
   })
 

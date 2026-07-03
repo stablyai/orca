@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 
 export const DEFAULT_EXPECTED_SIGNER =
   'CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US'
+export const INNER_SIGNATURE_REQUIRED_ENV = 'ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED'
 
 const POWERSHELL_SIGNATURE_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
@@ -58,6 +59,23 @@ export function parseExpectedThumbprints(value = process.env.ORCA_WINDOWS_EXPECT
     .split(/[\r\n,;]+/u)
     .map(normalizeThumbprint)
     .filter(Boolean)
+}
+
+export function parseInnerSignatureRequired(value = process.env[INNER_SIGNATURE_REQUIRED_ENV]) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return false
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'required'].includes(normalized)) {
+    return true
+  }
+
+  if (['0', 'false', 'no', 'optional', 'soft'].includes(normalized)) {
+    return false
+  }
+
+  throw new Error(`${INNER_SIGNATURE_REQUIRED_ENV} must be true or false.`)
 }
 
 export function parseSignatureJson(stdout) {
@@ -115,6 +133,14 @@ export function formatSignatureSummary(signature) {
   ].join('\n')
 }
 
+export function formatSignatureFailureMessage(classification) {
+  return `${classification.message}\n${formatSignatureSummary(classification.signature)}`
+}
+
+export function escapeGitHubActionsMessage(value) {
+  return String(value).replace(/%/gu, '%25').replace(/\r/gu, '%0D').replace(/\n/gu, '%0A')
+}
+
 export function validateExecutablePath(executablePath) {
   if (typeof executablePath !== 'string' || executablePath.trim() === '') {
     throw new Error('Usage: node config/scripts/verify-windows-inner-signature.mjs <Orca.exe>')
@@ -168,7 +194,7 @@ export function getPowerShellSignatureJson(executablePath, spawnSyncImpl = spawn
   return result.stdout
 }
 
-export function verifyWindowsInnerSignature({
+export function checkWindowsInnerSignature({
   executablePath,
   platform = process.platform,
   spawnSyncImpl = spawnSync,
@@ -183,21 +209,71 @@ export function verifyWindowsInnerSignature({
 
   const signature = parseSignatureJson(getPowerShellSignatureJson(executablePath, spawnSyncImpl))
   const classification = classifySignature(signature, { expectedSigners, expectedThumbprints })
+  return {
+    ...classification,
+    summary: formatSignatureSummary(signature)
+  }
+}
+
+export function verifyWindowsInnerSignature(options) {
+  const classification = checkWindowsInnerSignature(options)
   if (!classification.ok) {
-    throw new Error(`${classification.message}\n${formatSignatureSummary(signature)}`)
+    throw new Error(formatSignatureFailureMessage(classification))
   }
 
-  return signature
+  return classification.signature
+}
+
+export function reportWindowsInnerSignatureCheck(
+  classification,
+  { required = false, consoleImpl = console } = {}
+) {
+  if (classification.ok) {
+    consoleImpl.log('Verified Windows inner executable signature.')
+    consoleImpl.log(classification.summary)
+    return 0
+  }
+
+  if (required) {
+    consoleImpl.error(formatSignatureFailureMessage(classification))
+    return 1
+  }
+
+  const warning = `${classification.message} The release remains non-blocking because ${INNER_SIGNATURE_REQUIRED_ENV} is not true.`
+  consoleImpl.warn(`::warning::${escapeGitHubActionsMessage(warning)}`)
+  consoleImpl.log(classification.summary)
+  return 0
+}
+
+export function runWindowsInnerSignatureCli(
+  argv = process.argv.slice(2),
+  {
+    env = process.env,
+    platform = process.platform,
+    spawnSyncImpl = spawnSync,
+    consoleImpl = console
+  } = {}
+) {
+  try {
+    const classification = checkWindowsInnerSignature({
+      executablePath: argv[0],
+      platform,
+      spawnSyncImpl,
+      expectedSigners: parseExpectedSigners(env.ORCA_WINDOWS_EXPECTED_SIGNERS),
+      expectedThumbprints: parseExpectedThumbprints(env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS)
+    })
+    const required = parseInnerSignatureRequired(env[INNER_SIGNATURE_REQUIRED_ENV])
+    return reportWindowsInnerSignatureCheck(classification, { required, consoleImpl })
+  } catch (error) {
+    consoleImpl.error(error.message)
+    return 1
+  }
 }
 
 export function main(argv = process.argv.slice(2)) {
-  try {
-    const signature = verifyWindowsInnerSignature({ executablePath: argv[0] })
-    console.log('Verified Windows inner executable signature.')
-    console.log(formatSignatureSummary(signature))
-  } catch (error) {
-    console.error(error.message)
-    process.exitCode = 1
+  const exitCode = runWindowsInnerSignatureCli(argv)
+  if (exitCode !== 0) {
+    process.exitCode = exitCode
   }
 }
 

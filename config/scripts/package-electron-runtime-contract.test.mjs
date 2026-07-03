@@ -221,7 +221,7 @@ describe('Electron runtime package contract', () => {
     expect(installRun).not.toMatch(/throw\s+\$_/)
   })
 
-  it('temporarily allows publishing Windows after verifying the signed installer only', () => {
+  it('checks the Windows inner executable signature before publishing signed assets', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
@@ -230,12 +230,42 @@ describe('Electron runtime package contract', () => {
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
     const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
-    const innerVerifyIndex = stepNames.indexOf('Verify signed Windows inner executable')
+    const innerCheckIndex = stepNames.indexOf('Check signed Windows inner executable')
     const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
 
     expect(outerVerifyIndex).toBeGreaterThan(-1)
-    expect(innerVerifyIndex).toBe(-1)
-    expect(publishIndex).toBe(outerVerifyIndex + 1)
+    expect(innerCheckIndex).toBe(outerVerifyIndex + 1)
+    expect(publishIndex).toBe(innerCheckIndex + 1)
+
+    const innerCheckStep = steps[innerCheckIndex]
+    const innerCheckRun = innerCheckStep.run
+
+    expect(innerCheckStep.if).toBe("matrix.platform == 'win'")
+    expect(innerCheckStep.shell).toBe('pwsh')
+    expect(innerCheckStep['continue-on-error']).toBeUndefined()
+    expect(innerCheckStep.env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe(
+      "${{ vars.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED || 'false' }}"
+    )
+    expect(innerCheckStep.env.ORCA_WINDOWS_EXPECTED_SIGNERS).toContain(
+      'CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US'
+    )
+    expect(innerCheckRun).toContain('$innerSignatureRequired')
+    expect(innerCheckRun).toContain('try {')
+    expect(innerCheckRun).toMatch(/catch \{\s+if \(\$innerSignatureRequired\) \{\s+throw\s+}/)
+    expect(innerCheckRun).toContain('Write-Host "::warning::$warningMessage"')
+    expect(innerCheckRun).toContain('& 7z x -y "-o$installerExtractDir"')
+    expect(innerCheckRun).toContain(
+      "Get-ChildItem -LiteralPath $installerExtractDir -Recurse -File -Filter 'app-*.7z'"
+    )
+    expect(innerCheckRun).toContain('if ($appArchives.Count -ne 1)')
+    expect(innerCheckRun).toContain('& 7z x -y "-o$appExtractDir"')
+    expect(innerCheckRun).toContain(
+      "Get-ChildItem -LiteralPath $appExtractDir -File -Filter 'Orca.exe'"
+    )
+    expect(innerCheckRun).toContain('if ($innerExecutables.Count -ne 1)')
+    expect(innerCheckRun).toContain(
+      'node config/scripts/verify-windows-inner-signature.mjs $innerExecutables[0].FullName'
+    )
   })
 
   it('publishes both Linux release matrix entries', () => {

@@ -1067,6 +1067,62 @@ jobs:
           }
           $signature.SignerCertificate | Format-List Subject,Issuer,NotBefore,NotAfter,Thumbprint
 
+      - name: Check signed Windows inner executable
+        if: matrix.platform == 'win'
+        shell: pwsh
+        env:
+          ORCA_WINDOWS_EXPECTED_SIGNERS: |
+            CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US
+            CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, ST=Delaware, C=US
+          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: ${{ vars.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED || 'false' }}
+        run: |
+          $requiredValue = if ($null -eq $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED) { '' } else { $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED.Trim().ToLowerInvariant() }
+          $innerSignatureRequired = @('1', 'true', 'yes', 'required') -contains $requiredValue
+
+          try {
+            # Why: recursive PE signing is a SignPath artifact setting, so keep
+            # releases observable until the server-side setting is proven.
+            $installerExtractDir = Join-Path $env:RUNNER_TEMP 'orca-windows-installer-extract'
+            $appExtractDir = Join-Path $env:RUNNER_TEMP 'orca-windows-app-extract'
+            Remove-Item -LiteralPath $installerExtractDir, $appExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Path $installerExtractDir, $appExtractDir -Force | Out-Null
+
+            & 7z x -y "-o$installerExtractDir" 'dist/orca-windows-setup.exe'
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to extract signed Windows installer with 7z (exit $LASTEXITCODE)."
+            }
+
+            $appArchives = @(Get-ChildItem -LiteralPath $installerExtractDir -Recurse -File -Filter 'app-*.7z')
+            if ($appArchives.Count -ne 1) {
+              $foundArchives = if ($appArchives.Count -eq 0) { '<none>' } else { ($appArchives | ForEach-Object { $_.FullName }) -join "`n" }
+              throw "Expected exactly one app-*.7z payload in signed Windows installer, found $($appArchives.Count):`n$foundArchives"
+            }
+
+            & 7z x -y "-o$appExtractDir" $appArchives[0].FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to extract Windows app payload with 7z (exit $LASTEXITCODE)."
+            }
+
+            $innerExecutables = @(Get-ChildItem -LiteralPath $appExtractDir -File -Filter 'Orca.exe')
+            if ($innerExecutables.Count -ne 1) {
+              $foundExecutables = if ($innerExecutables.Count -eq 0) { '<none>' } else { ($innerExecutables | ForEach-Object { $_.FullName }) -join "`n" }
+              throw "Expected exactly one app-root Orca.exe in the signed Windows app payload, found $($innerExecutables.Count):`n$foundExecutables"
+            }
+
+            & node config/scripts/verify-windows-inner-signature.mjs $innerExecutables[0].FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Windows inner executable signature verifier failed with exit $LASTEXITCODE."
+            }
+          } catch {
+            if ($innerSignatureRequired) {
+              throw
+            }
+
+            $warningMessage = "Windows inner executable signature evidence did not complete: $($_.Exception.Message)"
+            $warningMessage = $warningMessage.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Host "::warning::$warningMessage"
+          }
+
       - name: Publish signed Windows release artifacts
         if: matrix.platform == 'win'
         uses: nick-fields/retry@v4
