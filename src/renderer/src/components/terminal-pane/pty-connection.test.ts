@@ -7022,6 +7022,17 @@ describe('connectPanePty', () => {
   })
 
   it('does not apply stale background Codex query chunks after hidden snapshot restore', async () => {
+    const visibilityChangeHandler: { current: (() => void) | null } = { current: null }
+    ;(globalThis as { document?: Document }).document = {
+      visibilityState: 'visible',
+      addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+        if (type === 'visibilitychange') {
+          visibilityChangeHandler.current = listener as () => void
+        }
+      }),
+      removeEventListener: vi.fn()
+    } as unknown as Document
+
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
@@ -7046,6 +7057,8 @@ describe('connectPanePty', () => {
     const currentFrame = '\r\x1b[2KWorking current'
     const staleSeq = hiddenFrame.length + staleQueryFrame.length
     const currentSeq = staleSeq + currentFrame.length
+    // The main emulator has already parsed every frame, so the snapshot covers
+    // the query frame that is still in flight on the pty:data channel.
     getMainBufferSnapshot.mockResolvedValue({
       data: currentFrame,
       cols: 80,
@@ -7070,17 +7083,21 @@ describe('connectPanePty', () => {
       rawLength: hiddenFrame.length
     })
     ;(deps.isVisibleRef as { current: boolean }).current = true
-    capturedDataCallback.current?.(currentFrame, {
-      seq: currentSeq,
-      rawLength: currentFrame.length
-    })
+    visibilityChangeHandler.current?.()
     await flushAsyncTicks(20)
 
+    // The in-flight chunks arrive in channel order after the restore already
+    // rebuilt the buffer from the newer snapshot.
     vi.useFakeTimers()
     try {
       capturedDataCallback.current?.(staleQueryFrame, {
         seq: staleSeq,
         rawLength: staleQueryFrame.length,
+        background: true
+      })
+      capturedDataCallback.current?.(currentFrame, {
+        seq: currentSeq,
+        rawLength: currentFrame.length,
         background: true
       })
       vi.advanceTimersByTime(50)
@@ -7098,6 +7115,164 @@ describe('connectPanePty', () => {
 
     expect(writes).not.toContain(staleQueryFrame)
     expect(rendererBuffer).toEqual(referenceBuffer)
+    binding.dispose()
+  })
+
+  it('restores hidden Codex output after a suppressed exit revives the same ptyId with a restarted seq counter', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current:
+        | ((
+            data: string,
+            meta?: { seq?: number; rawLength?: number; background?: boolean }
+          ) => void)
+        | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+
+    const hiddenFrame = '\r\x1b[2KWorking hidden'
+    const visibleFrame = '\r\x1b[2KWorking now'
+    const hiddenSeq = hiddenFrame.length
+    const visibleSeq = hiddenSeq + visibleFrame.length
+    // Why 3 extra bytes: the main emulator typically runs ahead of the chunks
+    // the renderer has received, so the snapshot seq exceeds the channel seq.
+    const preExitSnapshotSeq = visibleSeq + 3
+    getMainBufferSnapshot.mockResolvedValue({
+      data: visibleFrame,
+      cols: 80,
+      rows: 8,
+      seq: preExitSnapshotSeq
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 8
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      startup: { command: 'codex' },
+      consumeSuppressedPtyExit: vi.fn(() => true)
+    })
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(hiddenFrame, { seq: hiddenSeq, rawLength: hiddenFrame.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(visibleFrame, {
+      seq: visibleSeq,
+      rawLength: visibleFrame.length
+    })
+    await flushAsyncTicks(20)
+
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    expect(onPtyExit).toBeTypeOf('function')
+    onPtyExit?.('pty-id')
+
+    // Revived session: same ptyId, main seq counter restarted. The first
+    // revived chunk lands below the pre-exit snapshot seq but above the last
+    // channel seq, so only the exit reset can stop it being judged covered.
+    ;(deps.isVisibleRef as { current: boolean }).current = false
+    const revivedHiddenFrame = '\r\x1b[2KWorking revived'
+    capturedDataCallback.current?.(revivedHiddenFrame, {
+      seq: preExitSnapshotSeq - 1,
+      rawLength: revivedHiddenFrame.length
+    })
+
+    const revivedSnapshotFrame = '\r\x1b[2KREVIVED SNAPSHOT'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: revivedSnapshotFrame,
+      cols: 80,
+      rows: 8,
+      seq: preExitSnapshotSeq - 1
+    })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    const revivedVisibleFrame = '\r\x1b[2Kafter revive'
+    capturedDataCallback.current?.(revivedVisibleFrame, {
+      seq: preExitSnapshotSeq - 1 + revivedVisibleFrame.length,
+      rawLength: revivedVisibleFrame.length
+    })
+    await flushAsyncTicks(20)
+
+    const written = writes.join('')
+    expect(written).toContain('REVIVED SNAPSHOT')
+    expect(written).toContain('after revive')
+    binding.dispose()
+  })
+
+  it('restores hidden Codex output when the pty seq counter restarts without an observed exit', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current:
+        | ((
+            data: string,
+            meta?: { seq?: number; rawLength?: number; background?: boolean }
+          ) => void)
+        | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 8
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: true },
+      startup: { command: 'codex' }
+    })
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    const establishedFrame = '\r\x1b[2KWorking established'
+    capturedDataCallback.current?.(establishedFrame, {
+      seq: 50_000,
+      rawLength: establishedFrame.length
+    })
+    await flushAsyncTicks(6)
+
+    // Main lost the pty silently (no exit reached the renderer) and the seq
+    // counter restarted: the channel seq regression must invalidate the old
+    // high-water mark instead of covering the new stream.
+    ;(deps.isVisibleRef as { current: boolean }).current = false
+    const revivedHiddenFrame = '\r\x1b[2KWorking revived'
+    capturedDataCallback.current?.(revivedHiddenFrame, {
+      seq: revivedHiddenFrame.length,
+      rawLength: revivedHiddenFrame.length
+    })
+
+    const revivedSnapshotFrame = '\r\x1b[2KREVIVED SNAPSHOT2'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: revivedSnapshotFrame,
+      cols: 80,
+      rows: 8,
+      seq: revivedHiddenFrame.length
+    })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    const revivedVisibleFrame = '\r\x1b[2Kafter revive'
+    capturedDataCallback.current?.(revivedVisibleFrame, {
+      seq: revivedHiddenFrame.length + revivedVisibleFrame.length,
+      rawLength: revivedVisibleFrame.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(writes.join('')).toContain('REVIVED SNAPSHOT2')
     binding.dispose()
   })
 

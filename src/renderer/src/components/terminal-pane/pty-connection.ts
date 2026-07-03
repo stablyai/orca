@@ -1035,6 +1035,7 @@ export function connectPanePty(
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
+  let resetRendererOrderedSeqForPtyExit: (exitedPtyId: string) => void = () => {}
   let cleanupStartupDraftPasteTimers = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
@@ -1700,6 +1701,7 @@ export function connectPanePty(
     if (handledExitPtyId === ptyId) {
       return
     }
+    resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = deps.paneTransportsRef.current.get(pane.id)
     if (currentPaneTransport && currentPaneTransport !== transport) {
       // Why: an old transport can deliver a late exit after this pane has
@@ -3648,6 +3650,8 @@ export function connectPanePty(
     let hiddenRewriteCsiScanTail = ''
     let rendererOrderedPtyId: string | null = null
     let rendererOrderedSeq: number | null = null
+    let rendererChannelSeqPtyId: string | null = null
+    let rendererChannelSeq: number | null = null
 
     function canUseMainBufferSnapshot(ptyId: string | null): ptyId is string {
       return Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
@@ -4136,6 +4140,46 @@ export function connectPanePty(
         return
       }
       rendererOrderedSeq = Math.max(rendererOrderedSeq ?? 0, meta.seq)
+    }
+
+    resetRendererOrderedSeqForPtyExit = (exitedPtyId: string): void => {
+      // Why: an exit ends this ptyId's seq domain. A revived session can reuse
+      // the id with a restarted main-side counter, and a stale high-water mark
+      // would wrongly cover — and silently drop — every hidden byte it emits.
+      if (rendererOrderedPtyId === exitedPtyId) {
+        rendererOrderedPtyId = null
+        rendererOrderedSeq = null
+      }
+      if (rendererChannelSeqPtyId === exitedPtyId) {
+        rendererChannelSeqPtyId = null
+        rendererChannelSeq = null
+      }
+    }
+
+    function observeRendererOrderedSeqRegression(meta: PtyDataMeta | undefined): void {
+      if (typeof meta?.seq !== 'number') {
+        return
+      }
+      const ptyId = transport.getPtyId()
+      if (!ptyId) {
+        return
+      }
+      if (rendererChannelSeqPtyId !== ptyId) {
+        rendererChannelSeqPtyId = ptyId
+        rendererChannelSeq = meta.seq
+        return
+      }
+      if (rendererChannelSeq !== null && meta.seq < rendererChannelSeq) {
+        // Why: pty:data delivery is FIFO per pty, so seq only moves backwards
+        // when the session was revived without an observed exit and restarted
+        // its counter. Drop the stale ordered baseline instead of letting it
+        // cover the new stream's bytes.
+        if (rendererOrderedPtyId === ptyId) {
+          rendererOrderedPtyId = null
+          rendererOrderedSeq = null
+        }
+      }
+      rendererChannelSeq = meta.seq
     }
 
     function getHiddenRendererDataAfterOrderedSeq(
@@ -4669,6 +4713,7 @@ export function connectPanePty(
         meta,
         pendingForegroundQuery?.consumedCurrentChars ?? 0
       )
+      observeRendererOrderedSeqRegression(meta)
       const orderedRendererData = foreground
         ? rendererData
         : getHiddenRendererDataAfterOrderedSeq(rendererData, rendererMeta)
