@@ -148,8 +148,11 @@ export class WebSocketTransport implements RpcTransport {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
-        // Why: any fallback-port failure must degrade to the next candidate (Windows can reserve the port → EACCES, not just EADDRINUSE); only non-EADDRINUSE preferred-port failures are fatal.
-        if (port !== persistedFallbackPort && (!isEAddressInUse(error) || port === 0)) {
+        // Why: a persisted fallback may fail for any reason, while configured ports fall through only when occupied or Windows-reserved.
+        if (
+          port !== persistedFallbackPort &&
+          (!isPortListenFallbackError(error) || port === 0)
+        ) {
           throw error
         }
         console.warn(
@@ -327,6 +330,10 @@ export class WebSocketTransport implements RpcTransport {
   }
 }
 
-function isEAddressInUse(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'EADDRINUSE'
+function isPortListenFallbackError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'EADDRINUSE' || error.code === 'EACCES')
+  )
 }
