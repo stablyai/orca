@@ -345,6 +345,31 @@ describe('runtime file client', () => {
     )
   })
 
+  it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
+    // Why: only a typed RuntimeRpcCallError('binary_file') means the server
+    // classified the file as binary. A transport-level failure that happens to
+    // carry the same message text must propagate, not trigger a preview read.
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.reject(new Error('binary_file'))
+      }
+      throw new Error('files.readPreview should not be called')
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/remote/repo/doc.pdf',
+        relativePath: 'doc.pdf',
+        worktreeId: 'wt-1'
+      })
+    ).rejects.toThrow('binary_file')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.readPreview' })
+    )
+  })
+
   it('uses the active runtime id as the dedupe scope', () => {
     expect(getRuntimeFileReadScope({ activeRuntimeEnvironmentId: 'env-1' }, 'ssh-1')).toBe(
       'runtime:env-1'
