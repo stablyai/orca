@@ -4,8 +4,6 @@ import { gitExecFileAsync } from './runner'
 
 const CHECK_IGNORE_CHUNK_SIZE = 100
 
-type GitExecError = Error & { stdout?: string; code?: number | string }
-
 function parseCheckIgnoreOutput(stdout: string): string[] {
   return stdout.split(/\r?\n/).filter(Boolean)
 }
@@ -15,19 +13,16 @@ async function runCheckIgnoreChunk(
   relativePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'check-ignore', '--', ...relativePaths],
-      gitOptionsForWorktree(worktreePath, options)
-    )
-    return parseCheckIgnoreOutput(stdout)
-  } catch (error) {
-    const gitError = error as GitExecError
-    if (gitError.code === 1) {
-      return parseCheckIgnoreOutput(gitError.stdout ?? '')
+  const { stdout } = await gitExecFileAsync(
+    ['-c', 'core.quotePath=false', 'check-ignore', '--', ...relativePaths],
+    {
+      ...gitOptionsForWorktree(worktreePath, options),
+      // Why: Git uses exit 1 for the normal "none of these paths are ignored"
+      // result. Treating it as success avoids hot-path exception churn.
+      successExitCodes: [1]
     }
-    throw error
-  }
+  )
+  return parseCheckIgnoreOutput(stdout)
 }
 
 export async function checkIgnoredPaths(

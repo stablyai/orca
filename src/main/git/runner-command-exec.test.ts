@@ -218,6 +218,21 @@ describe('runner execFile timeout handling', () => {
     expect(child.kill).toHaveBeenCalled()
   })
 
+  it('resolves git executions with configured success exit codes', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(Object.assign(new Error('no matches'), { code: '1' }), 'ignored.log\n', 'note\n')
+      return child
+    })
+
+    await expect(
+      gitExecFileAsync(['check-ignore', '--', 'src/index.ts'], {
+        cwd: '/repo',
+        successExitCodes: [1]
+      })
+    ).resolves.toEqual({ stdout: 'ignored.log\n', stderr: 'note\n' })
+  })
+
   it('rejects gh executions that never call back using the default timeout', async () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)

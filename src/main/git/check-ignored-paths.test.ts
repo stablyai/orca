@@ -30,13 +30,17 @@ describe('checkIgnoredPaths', () => {
         'src/index.ts',
         '.env'
       ],
-      { cwd: '/repo' }
+      { cwd: '/repo', successExitCodes: [1] }
     )
   })
 
-  it('treats exit code 1 as no ignored paths', async () => {
-    gitExecFileAsyncMock.mockRejectedValue(Object.assign(new Error('no matches'), { code: 1 }))
+  it('treats Git exit code 1 as an expected no-ignored-paths result', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
     await expect(checkIgnoredPaths('/repo', ['src/index.ts'])).resolves.toEqual([])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['-c', 'core.quotePath=false', 'check-ignore', '--', 'src/index.ts'],
+      { cwd: '/repo', successExitCodes: [1] }
+    )
   })
 })
