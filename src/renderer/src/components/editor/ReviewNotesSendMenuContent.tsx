@@ -27,7 +27,6 @@ import { useNow } from '@/components/dashboard/useNow'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { translate } from '@/i18n/i18n'
@@ -89,18 +88,16 @@ export function ReviewNotesSendMenuContent({
     worktreeId
   ])
   const orderedSendTargets = useMemo(
-    () =>
-      orderSendTargetsByWorktreeAgentRows(
-        sendTargets,
-        agentRows,
-        terminalLayoutsByTabId,
-        ptyIdsByTabId
-      ),
-    [agentRows, sendTargets, terminalLayoutsByTabId, ptyIdsByTabId]
+    () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
+    [agentRows, sendTargets]
   )
 
   const runNotesSend = useCallback(
-    (send: () => Promise<ActiveAgentNotesSendResult>, onSent: () => void) => {
+    (
+      send: () => Promise<ActiveAgentNotesSendResult>,
+      onSent: () => void,
+      options: { explicitTarget?: boolean } = {}
+    ) => {
       const pending = toast.loading(
         translate(
           'auto.components.editor.ReviewNotesSendMenuContent.50f7e753ea',
@@ -121,7 +118,11 @@ export function ReviewNotesSendMenuContent({
             return
           }
 
-          toast.message(activeAgentNotesSendFailureMessage(result.status))
+          toast.message(
+            activeAgentNotesSendFailureMessage(result.status, {
+              explicitTarget: options.explicitTarget
+            })
+          )
         })
         .catch((error) => {
           console.error('Failed to send notes:', error)
@@ -145,6 +146,12 @@ export function ReviewNotesSendMenuContent({
         return
       }
 
+      const currentEligibility = resolveCurrentSendTargetEligibility(target, worktreeId)
+      if (currentEligibility.status !== 'eligible') {
+        toast.message(currentEligibility.disabledReason)
+        return
+      }
+
       runNotesSend(
         () =>
           sendNotesToActiveAgentSession({
@@ -161,7 +168,8 @@ export function ReviewNotesSendMenuContent({
             launch_source: launchSource,
             request_kind: 'followup'
           })
-        }
+        },
+        { explicitTarget: true }
       )
     },
     [hasPrompt, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]
@@ -199,6 +207,26 @@ export function ReviewNotesSendMenuContent({
   )
 }
 
+function resolveCurrentSendTargetEligibility(
+  target: NotesSendAgentTarget,
+  worktreeId: string
+): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
+  const state = useAppStore.getState()
+  const currentTarget = deriveNotesSendAgentTargets(state, worktreeId).find(
+    (candidate) => candidate.paneKey === target.paneKey
+  )
+  if (currentTarget) {
+    return currentTarget.status === 'eligible'
+      ? { status: 'eligible' }
+      : {
+          status: 'disabled',
+          disabledReason: currentTarget.disabledReason ?? 'Terminal is no longer available'
+        }
+  }
+
+  return { status: 'disabled', disabledReason: 'Terminal is no longer available' }
+}
+
 function AgentTargetMenuItem({
   target,
   agent,
@@ -224,7 +252,7 @@ function AgentTargetMenuItem({
     <DropdownMenuItem
       disabled={disabled}
       onSelect={() => onSend(target)}
-      // Why: surface the ineligibility reason (working/stale/no-terminal) as a
+      // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
       // hover tooltip rather than inline text, matching DashboardAgentRow's
       // title-attribute treatment of the same disabledReason.
       title={target.status === 'disabled' ? target.disabledReason : undefined}
@@ -246,18 +274,14 @@ function AgentTargetMenuItem({
 
 function orderSendTargetsByWorktreeAgentRows(
   sendTargets: NotesSendAgentTarget[],
-  agentRows: DashboardAgentRowData[],
-  terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string> } | undefined>,
-  ptyIdsByTabId: Record<string, string[]>
+  agentRows: DashboardAgentRowData[]
 ): OrderedSendTarget[] {
   const targetsByPaneKey = new Map(sendTargets.map((target) => [target.paneKey, target]))
   const usedPaneKeys = new Set<string>()
   const ordered: OrderedSendTarget[] = []
 
   for (const agent of agentRows) {
-    const target =
-      targetsByPaneKey.get(agent.paneKey) ??
-      deriveTitleOnlySendTarget(agent, terminalLayoutsByTabId, ptyIdsByTabId)
+    const target = targetsByPaneKey.get(agent.paneKey)
     if (!target) {
       continue
     }
@@ -272,31 +296,6 @@ function orderSendTargetsByWorktreeAgentRows(
   }
 
   return ordered
-}
-
-function deriveTitleOnlySendTarget(
-  agent: DashboardAgentRowData,
-  terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string> } | undefined>,
-  ptyIdsByTabId: Record<string, string[]>
-): NotesSendAgentTarget | null {
-  const parsed = parsePaneKey(agent.paneKey)
-  if (!parsed) {
-    return null
-  }
-  const ptyId = terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-  if (!ptyId || !ptyIdsByTabId[parsed.tabId]?.includes(ptyId)) {
-    return null
-  }
-  const disabledReason = agent.state === 'working' ? 'Agent is working' : undefined
-  return {
-    paneKey: agent.paneKey,
-    tabId: parsed.tabId,
-    leafId: parsed.leafId,
-    agentType: agent.agentType,
-    tabTitle: agent.tab.title,
-    status: disabledReason ? 'disabled' : 'eligible',
-    ...(disabledReason ? { disabledReason } : {})
-  }
 }
 
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {

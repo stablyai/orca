@@ -126,6 +126,26 @@ function classTokensForTaggedElement(markup: string, dataAttribute: string): str
 }
 
 describe('DashboardAgentRow', () => {
+  it('renders orchestration task preview instead of the raw dispatch preamble prompt', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          prompt: 'You are working inside Orca, a multi-agent IDE.',
+          orchestration: {
+            taskId: 'task-1',
+            dispatchId: 'ctx-1',
+            taskTitle: 'Checkout race',
+            displayName: 'Fix checkout race'
+          }
+        }
+      )
+    )
+
+    expect(markup).toContain('Fix checkout race')
+    expect(markup).not.toContain('You are working inside Orca')
+  })
+
   it('uses the hover background as the focused-pane row highlight', () => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>
@@ -217,6 +237,24 @@ describe('DashboardAgentRow', () => {
     expect(dismissButtonClassTokens(markup)).toContain('group-hover/agent-row:opacity-100')
     expect(dismissButtonClassTokens(markup)).toContain('focus-visible:opacity-100')
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
+  })
+
+  it('renders waiting rows with the amber permission color', () => {
+    const markup = renderRow(makeAgent({}, { state: 'waiting' }))
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('aria-label="Waiting for input"')
+    expect(tokens).toContain('bg-amber-500')
+    expect(tokens).not.toContain('bg-red-500')
+  })
+
+  it('keeps blocked rows red', () => {
+    const markup = renderRow(makeAgent({}, { state: 'blocked' }))
+    const tokens = classTokens(markup)
+
+    expect(markup).toContain('aria-label="Blocked"')
+    expect(tokens).toContain('bg-red-500')
+    expect(tokens).not.toContain('bg-amber-500')
   })
 
   it('keeps each row hover boundary inside an anonymous ancestor group', () => {

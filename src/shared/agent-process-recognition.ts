@@ -2,6 +2,7 @@ import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './types'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
+import { getFirstCommandToken } from './command-token-scanner'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -23,10 +24,6 @@ function normalizeProcessName(
     return withoutProcessExtension.replace(INTERPRETER_SCRIPT_EXTENSION_RE, '')
   }
   return withoutProcessExtension
-}
-
-function firstCommandToken(command: string): string {
-  return command.trim().split(/\s+/)[0] ?? ''
 }
 
 const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
@@ -68,7 +65,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   for (const candidate of [
     config.expectedProcess,
     ...getTuiAgentDetectCommands(config),
-    firstCommandToken(config.launchCmd)
+    getFirstCommandToken(config.launchCmd)
   ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {

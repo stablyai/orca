@@ -77,6 +77,8 @@ function makeDispatchRequest(): AutomationDispatchRequest {
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null,
       outputSnapshot: null,
       precheckResult: null,
       usage: null,

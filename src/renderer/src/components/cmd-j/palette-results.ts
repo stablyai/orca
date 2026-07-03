@@ -1,5 +1,6 @@
 import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type CmdJSettingsResult = {
   id: string
@@ -43,8 +44,47 @@ const SETTINGS_ALIASES: Record<string, string[]> = {
   privacy: ['telemetry']
 }
 
+export const CMD_J_PALETTE_QUERY_MAX_BYTES = 2 * 1024
+
+export function isCmdJPaletteQueryTooLarge(
+  query: string,
+  maxBytes = CMD_J_PALETTE_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 function normalizeQuery(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isCmdJPaletteWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index).toLowerCase()
+  }
+  return normalized
+}
+
+function isCmdJPaletteWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 function keywordParts(section: SettingsNavSection): string[] {
@@ -220,6 +260,9 @@ export function rankCmdJMiddleResults({
   settingsResults: readonly CmdJSettingsResult[]
   actionResults: readonly CmdJActionResult[]
 }): CmdJMiddleResult[] {
+  if (isCmdJPaletteQueryTooLarge(query)) {
+    return []
+  }
   const normalizedQuery = normalizeQuery(query)
   if (normalizedQuery.length < 2) {
     return []

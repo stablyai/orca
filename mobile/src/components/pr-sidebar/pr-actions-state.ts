@@ -1,4 +1,4 @@
-import type { PRState } from '../../../../src/shared/types'
+import type { GitHubPRMergeMethod, PRState } from '../../../../src/shared/types'
 
 // Which actions the PR actions section may offer for a given PR state. Merged PRs
 // expose only unlink (+ open-on-host elsewhere); closed PRs add reopen; open/draft
@@ -21,4 +21,24 @@ export function resolvePrActionAvailability(state: PRState): PrActionAvailabilit
     canReopen: state === 'closed',
     canUnlink: true
   }
+}
+
+type MergeMethodSettings = {
+  defaultMethod?: GitHubPRMergeMethod
+  allowedMethods?: Record<GitHubPRMergeMethod, boolean>
+}
+
+const MOBILE_PR_MERGE_METHOD_FALLBACK_ORDER: GitHubPRMergeMethod[] = ['merge', 'squash', 'rebase']
+
+export function resolveMobilePrMergeMethod(
+  settings: MergeMethodSettings | null | undefined
+): GitHubPRMergeMethod {
+  const preferredMethod = settings?.defaultMethod ?? 'squash'
+  const allowed = settings?.allowedMethods
+
+  if (!allowed || allowed[preferredMethod]) {
+    return preferredMethod
+  }
+
+  return MOBILE_PR_MERGE_METHOD_FALLBACK_ORDER.find((method) => allowed[method]) ?? preferredMethod
 }

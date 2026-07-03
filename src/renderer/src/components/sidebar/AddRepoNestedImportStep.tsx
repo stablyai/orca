@@ -105,13 +105,13 @@ export function AddRepoNestedImportStep({
           <p className="text-sm font-medium text-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.fb33359f69',
-              'Is this a monorepo?'
+              'Group these repositories?'
             )}
           </p>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
-              "Import them as a group if they're a monorepo or otherwise belong together. Orca will group them and let you work from the parent folder."
+              'Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.'
             )}
           </p>
         </div>
@@ -156,7 +156,7 @@ export function AddRepoNestedImportStep({
             {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
-              'Import as group'
+              'Yes, import as group'
             )}
           </Button>
         </div>

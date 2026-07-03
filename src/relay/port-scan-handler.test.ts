@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseHexAddress } from './port-scan-handler'
 import { parseWindowsNetstatOutput, parseWindowsPowerShellPortRows } from './windows-port-scan'
 
@@ -117,5 +117,21 @@ describe('parseWindowsNetstatOutput', () => {
       { host: '0.0.0.0', port: 5173, pid: 1234 },
       { host: '::1', port: 3000, pid: 5678 }
     ])
+  })
+
+  it('parses Windows netstat rows without whitespace regex splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    expect(
+      parseWindowsNetstatOutput(
+        '  TCP    127.0.0.1:3000         0.0.0.0:0              LISTENING       4242'
+      )
+    ).toEqual([{ host: '127.0.0.1', port: 3000, pid: 4242 }])
+
+    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
+      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
+    )
+    splitSpy.mockRestore()
+    expect(usedWhitespaceFieldSplit).toBe(false)
   })
 })

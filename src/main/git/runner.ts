@@ -16,8 +16,8 @@ import {
   type ChildProcess,
   type ExecFileOptions,
   type SpawnOptions
-} from 'child_process'
-import { StringDecoder } from 'string_decoder'
+} from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
@@ -250,6 +250,7 @@ type GitExecOptions = {
   encoding?: BufferEncoding | 'buffer'
   maxBuffer?: number
   timeout?: number
+  stdin?: string
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
   wslDistro?: string
@@ -313,6 +314,7 @@ function killSpawnedCommandTree(child: ChildProcess): void {
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
+  stdin?: string
 }
 
 function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
@@ -400,6 +402,12 @@ function execFileCapture(
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
+    }
+
+    child.once('error', (error) => finish(error))
+
+    if (options.stdin !== undefined) {
+      child.stdin?.end(options.stdin)
     }
 
     // Why: Node's native execFile timeout waits for the child to exit after
@@ -740,6 +748,7 @@ export async function gitExecFileAsync(
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           timeout: options.timeout,
+          stdin: options.stdin,
           // Why: never let a git read-path call block on an interactive prompt
           // (issue #5308) — fail fast instead of hanging the runtime.
           env: policy.env,
@@ -827,6 +836,7 @@ type GitStreamOptions = {
   cwd: string
   env?: NodeJS.ProcessEnv
   wslDistro?: string
+  signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
   /**
@@ -854,6 +864,10 @@ export async function gitStreamStdout(
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   return withGitSpan({ args, cwd: options.cwd }, async () => {
     return new Promise<GitStreamResult>((resolve, reject) => {
+      if (options.signal?.aborted) {
+        reject(createAbortError())
+        return
+      }
       const child = gitSpawn(args, {
         cwd: options.cwd,
         env: nonInteractiveGitEnv(options.env),
@@ -878,6 +892,7 @@ export async function gitStreamStdout(
         child.stderr?.off('data', onStderrData)
         child.off('error', onError)
         child.off('close', onClose)
+        options.signal?.removeEventListener('abort', onAbort)
         // Flush any bytes the decoders were holding for an incomplete sequence.
         stdoutDecoder.end()
         stderrDecoder.end()
@@ -944,11 +959,19 @@ export async function gitStreamStdout(
         }
         finish(new Error(`git exited with ${code}: ${stderr}`))
       }
+      function onAbort(): void {
+        killSpawnedCommandTree(child)
+        finish(createAbortError())
+      }
 
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
       child.on('error', onError)
       child.on('close', onClose)
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      if (options.signal?.aborted) {
+        onAbort()
+      }
     })
   })
 }
@@ -1154,11 +1177,10 @@ export function extractExecError(err: unknown): { stderr: string; stdout: string
  * and burns the retry budget. Also supports HTTP-date Retry-After values.
  */
 export function parseRetryAfterMs(stderr: string): number | null {
-  const m = stderr.match(/retry-after:\s*([^\r\n]+)/i)
-  if (!m) {
+  const raw = findRetryAfterHeaderValue(stderr)
+  if (raw === null) {
     return null
   }
-  const raw = m[1].trim()
   if (/^\d+$/.test(raw)) {
     const seconds = Number(raw)
     return Number.isFinite(seconds) ? seconds * 1000 : null
@@ -1168,6 +1190,50 @@ export function parseRetryAfterMs(stderr: string): number | null {
     return null
   }
   return Math.max(0, ts - Date.now())
+}
+
+function findRetryAfterHeaderValue(stderr: string): string | null {
+  const headerIndex = indexOfAsciiIgnoreCase(stderr, 'retry-after:', 0)
+  if (headerIndex === -1) {
+    return null
+  }
+  let valueStart = headerIndex + 'retry-after:'.length
+  while (valueStart < stderr.length) {
+    const code = stderr.charCodeAt(valueStart)
+    if (code !== 9 && code !== 32) {
+      break
+    }
+    valueStart++
+  }
+  let valueEnd = valueStart
+  while (valueEnd < stderr.length) {
+    const code = stderr.charCodeAt(valueEnd)
+    if (code === 10 || code === 13) {
+      break
+    }
+    valueEnd++
+  }
+  const value = stderr.slice(valueStart, valueEnd).trim()
+  return value.length > 0 ? value : null
+}
+
+function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
+  const lastStart = value.length - search.length
+  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
+    let matches = true
+    for (let offset = 0; offset < search.length; offset++) {
+      const code = value.charCodeAt(index + offset)
+      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
+      if (normalizedCode !== search.charCodeAt(offset)) {
+        matches = false
+        break
+      }
+    }
+    if (matches) {
+      return index
+    }
+  }
+  return -1
 }
 
 /**

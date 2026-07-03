@@ -24,6 +24,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
 import {
@@ -307,8 +311,17 @@ export default function JiraIssueWorkspace({
     if (!displayed || commentSubmitting) {
       return
     }
-    const body = commentDraft.trim()
-    if (!body) {
+    const bodyState = getCommentBodySubmitState(commentDraft)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.JiraIssueWorkspace.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setCommentSubmitting(true)
@@ -316,7 +329,7 @@ export default function JiraIssueWorkspace({
       const result = await jiraAddIssueComment(
         providerSettings,
         displayed.key,
-        body,
+        bodyState.body,
         displayed.siteId
       )
       if (!result.ok) {
@@ -324,7 +337,7 @@ export default function JiraIssueWorkspace({
       }
       const comment: JiraComment = {
         id: result.id || createBrowserUuid(),
-        body,
+        body: bodyState.body,
         createdAt: new Date().toISOString(),
         user: { accountId: 'local', displayName: 'You' }
       }
@@ -341,6 +354,7 @@ export default function JiraIssueWorkspace({
       setCommentSubmitting(false)
     }
   }, [commentDraft, commentSubmitting, displayed, providerSettings])
+  const canSubmitComment = hasBoundedCommentBodyText(commentDraft)
 
   const actionItems = useMemo(() => {
     if (!displayed) {
@@ -801,7 +815,7 @@ export default function JiraIssueWorkspace({
                 />
                 <Button
                   onClick={() => void handleSubmitComment()}
-                  disabled={!commentDraft.trim() || commentSubmitting}
+                  disabled={!canSubmitComment || commentSubmitting}
                   className="self-end gap-2"
                 >
                   {commentSubmitting ? (

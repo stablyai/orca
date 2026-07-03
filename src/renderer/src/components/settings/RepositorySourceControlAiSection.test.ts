@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
-import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
+import type {
+  RepoSourceControlAiOverrides,
+  SourceControlAiSettings
+} from '../../../../shared/source-control-ai-types'
 import {
   createRepoAiDraftState,
   dropRepoLegacyInstructionForAction,
   resolveRepoAiDraftState
 } from './RepositorySourceControlAiSection'
+import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
 
 describe('RepositorySourceControlAiSection draft state', () => {
   it('refreshes clean drafts when persisted repo overrides change', () => {
@@ -71,6 +77,24 @@ describe('RepositorySourceControlAiSection draft state', () => {
       value: persisted,
       baseSerialized: JSON.stringify(normalizeRepoSourceControlAiOverrides(persisted))
     })
+  })
+})
+
+describe('RepositorySourceControlAiEnablement', () => {
+  it('describes repo enablement as Source Control AI action visibility', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(RepositorySourceControlAiEnablement, {
+        value: false,
+        source: { enabled: true } as SourceControlAiSettings,
+        onChange: () => {}
+      })
+    )
+
+    expect(markup).toContain('Show Source Control AI actions')
+    expect(markup).toContain('Controls whether Source Control AI buttons are shown')
+    expect(markup).toContain('separate features follows those features&#x27; settings')
+    expect(markup).toContain('Show')
+    expect(markup).not.toContain('Source Control AI enabled')
   })
 })
 

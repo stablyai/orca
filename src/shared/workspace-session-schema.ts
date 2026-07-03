@@ -20,8 +20,8 @@ import type {
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
-import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
 import { isWorkspaceKey } from './workspace-scope'
+import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -78,6 +78,7 @@ const terminalTabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
+  startupCwd: z.string().min(1).optional(),
   // Why: persist the launched agent so a restored idle agent tab keeps its
   // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
   // unknown agent id from failing the whole-session parse (which would reset
@@ -87,48 +88,6 @@ const terminalTabSchema = z.object({
     .optional()
     .catch(undefined)
 })
-
-// ─── Sleeping agent resume records ─────────────────────────────────
-
-const agentProviderSessionSchema = z.preprocess(
-  (raw) => normalizeAgentProviderSession(raw) ?? undefined,
-  z.object({
-    key: z.enum(['session_id', 'conversation_id']),
-    id: z.string().min(1).max(512)
-  })
-)
-
-const sleepingAgentSessionRecordSchema = z.object({
-  paneKey: z.string().refine((value) => value.length > 0),
-  tabId: terminalTabIdSchema.optional(),
-  worktreeId: z.string().min(1),
-  agent: z.enum(RESUMABLE_TUI_AGENTS),
-  providerSession: agentProviderSessionSchema,
-  prompt: z.string(),
-  state: z.enum(['working', 'blocked', 'waiting', 'done']),
-  capturedAt: z.number().finite().positive(),
-  updatedAt: z.number().finite().positive(),
-  terminalTitle: z.string().optional(),
-  lastAssistantMessage: z.string().optional(),
-  connectionId: z.string().nullable().optional(),
-  origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
-})
-
-const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined
-  }
-
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = {}
-  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
-    if (parsed.success && parsed.data.paneKey === paneKey) {
-      cleaned[paneKey] = parsed.data
-    }
-  }
-
-  return Object.keys(cleaned).length > 0 ? cleaned : undefined
-}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
@@ -158,7 +117,13 @@ const tabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
+  // session restore. `.catch('terminal')` tolerates unknown future values (a
+  // newer build that wrote an unrecognized mode) by degrading to the safe
+  // default instead of failing the whole-session parse. Legacy/missing stays
+  // undefined → 'terminal' in the renderer.
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
 })
 
 const tabGroupSchema = z.object({

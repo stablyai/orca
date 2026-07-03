@@ -24,6 +24,10 @@ import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import {
+  getProcessOutputFields,
+  iterateProcessOutputLines
+} from '../../shared/process-output-field-scanner'
 import { app } from 'electron'
 import type {
   AppMemory,
@@ -199,14 +203,8 @@ async function enumerateUnix(): Promise<ProcRow[]> {
 /** Exported for tests: parses `ps -eo pid=,ppid=,pcpu=,rss=` output. */
 export function parsePsOutput(stdout: string): ProcRow[] {
   const rows: ProcRow[] = []
-  const lines = stdout.split('\n')
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (line.length === 0) {
-      continue
-    }
-    // Split on runs of whitespace. We requested exactly 4 columns.
-    const fields = line.split(/\s+/, 4)
+  for (const line of iterateProcessOutputLines(stdout)) {
+    const fields = getProcessOutputFields(line, 4)
     if (fields.length < 4) {
       continue
     }

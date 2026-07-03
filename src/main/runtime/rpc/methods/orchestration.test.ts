@@ -374,9 +374,107 @@ describe('orchestration RPC methods', () => {
         })
       ).rejects.toThrow('No recipients resolved for group address')
     })
+
+    it('releases dispatch lock before waking recipients when worker_done is sent via send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'lock-release work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+
+      // Why: assert lock is already gone at delivery time, not just after the call.
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {
+        expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
+      })
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })) as { message: { type: string } }
+
+      expect(result.message.type).toBe('worker_done')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
+      // Lock released — a new dispatch to the same terminal must succeed.
+      const t2 = db.createTask({ spec: 'follow-up work' })
+      expect(() => db.createDispatchContext(t2.id, 'term_worker')).not.toThrow()
+    })
+
+    it('records heartbeat when heartbeat is sent via send', async () => {
+      setup()
+      const task = db.createTask({ spec: 'heartbeat work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeTruthy()
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
+    })
+
+    it('does not release dispatch lock for non-lifecycle sends', async () => {
+      setup()
+      const task = db.createTask({ spec: 'in-flight work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: 'term_coord',
+        to: 'term_worker',
+        subject: 'how is it going?',
+        type: 'status'
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getActiveDispatchForTerminal('term_worker')).toBeDefined()
+    })
   })
 
   describe('orchestration.check', () => {
+    function createDispatchedTask(assigneeHandle = 'term_worker') {
+      const task = db.createTask({ spec: 'manual check work' })
+      const dispatch = db.createDispatchContext(task.id, assigneeHandle)
+      return { task, dispatch }
+    }
+
+    function insertWorkerDone(params: {
+      from?: string
+      to?: string
+      taskId?: string
+      dispatchId?: string
+      filesModified?: string[]
+    }): void {
+      const payload: Record<string, unknown> = {}
+      if (params.taskId !== undefined) {
+        payload.taskId = params.taskId
+      }
+      if (params.dispatchId !== undefined) {
+        payload.dispatchId = params.dispatchId
+      }
+      if (params.filesModified !== undefined) {
+        payload.filesModified = params.filesModified
+      }
+
+      db.insertMessage({
+        from: params.from ?? 'term_worker',
+        to: params.to ?? 'term_coord',
+        subject: 'Done',
+        type: 'worker_done',
+        payload: JSON.stringify(payload)
+      })
+    }
+
     it('returns unread messages for a terminal', async () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
@@ -414,6 +512,152 @@ describe('orchestration RPC methods', () => {
       })) as { count: number }
 
       expect(result.count).toBe(1)
+    })
+
+    it('reconciles worker_done returned by a waiting manual check', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask()
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        insertWorkerDone({
+          taskId: task.id,
+          dispatchId: dispatch.id,
+          filesModified: ['src/file.ts']
+        })
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        wait: true,
+        timeoutMs: 100,
+        types: 'worker_done,escalation,decision_gate'
+      })) as { count: number; messages: { type: string }[] }
+
+      expect(result.count).toBe(1)
+      expect(result.messages[0].type).toBe('worker_done')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(db.getUnreadMessages('term_coord')).toHaveLength(0)
+      const taskList = (await call('orchestration.taskList', {})) as {
+        tasks: {
+          id: string
+          status: string
+          assignee_handle?: string | null
+          dispatch_id?: string | null
+        }[]
+      }
+      const listedTask = taskList.tasks.find((t) => t.id === task.id)
+      expect(listedTask?.status).toBe('completed')
+      expect(listedTask).not.toHaveProperty('assignee_handle')
+      expect(listedTask).not.toHaveProperty('dispatch_id')
+      const shownDispatch = (await call('orchestration.dispatchShow', {
+        task: task.id
+      })) as { dispatch: { status: string } | null }
+      expect(shownDispatch.dispatch?.status).toBe('completed')
+
+      const completedAt = db.getTask(task.id)?.completed_at
+      const taskResult = db.getTask(task.id)?.result
+      const repeated = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { count: number }
+      expect(repeated.count).toBe(0)
+      expect(db.getTask(task.id)?.completed_at).toBe(completedAt)
+      expect(db.getTask(task.id)?.result).toBe(taskResult)
+    })
+
+    it('keeps check --all read-only for lifecycle messages', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask()
+      insertWorkerDone({ taskId: task.id, dispatchId: dispatch.id })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        all: true,
+        types: 'worker_done'
+      })) as { count: number }
+
+      expect(result.count).toBe(1)
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getUnreadMessages('term_coord', ['worker_done'])).toHaveLength(1)
+    })
+
+    it('does not complete worker_done missing taskId or dispatchId', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask()
+      insertWorkerDone({ dispatchId: dispatch.id })
+      insertWorkerDone({ taskId: task.id })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { count: number }
+
+      expect(result.count).toBe(2)
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    })
+
+    it('does not complete worker_done from a terminal that does not own the dispatch', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask('term_owner')
+      insertWorkerDone({
+        from: 'term_intruder',
+        taskId: task.id,
+        dispatchId: dispatch.id
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { count: number }
+
+      expect(result.count).toBe(1)
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    })
+
+    it('does not complete worker_done for a stale inactive dispatch', async () => {
+      setup()
+      const task = db.createTask({ spec: 'retry-sensitive work' })
+      const staleDispatch = db.createDispatchContext(task.id, 'term_old')
+      db.failDispatch(staleDispatch.id, 'retry elsewhere')
+      const activeDispatch = db.createDispatchContext(task.id, 'term_current')
+      insertWorkerDone({
+        from: 'term_old',
+        taskId: task.id,
+        dispatchId: staleDispatch.id
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'worker_done'
+      })) as { count: number }
+
+      expect(result.count).toBe(1)
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(staleDispatch.id)?.status).toBe('failed')
+      expect(db.getDispatchContextById(activeDispatch.id)?.status).toBe('dispatched')
+    })
+
+    it('records heartbeat returned by unread manual check', async () => {
+      setup()
+      const { task, dispatch } = createDispatchedTask()
+      const msg = db.insertMessage({
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        types: 'heartbeat'
+      })) as { count: number }
+
+      expect(result.count).toBe(1)
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBe(msg.created_at)
     })
 
     it('rejects invalid type filters', async () => {
@@ -660,11 +904,15 @@ describe('orchestration RPC methods', () => {
     it('creates a task', async () => {
       setup()
       const result = (await call('orchestration.taskCreate', {
-        spec: 'implement feature X'
+        spec: 'implement feature X',
+        taskTitle: 'Feature X',
+        displayName: 'Implement feature X'
       })) as { task: { id: string; status: string } }
 
       expect(result.task.id).toMatch(/^task_/)
       expect(result.task.status).toBe('ready')
+      expect(db.getTask(result.task.id)?.task_title).toBe('Feature X')
+      expect(db.getTask(result.task.id)?.display_name).toBe('Implement feature X')
     })
 
     it('creates a task with deps', async () => {

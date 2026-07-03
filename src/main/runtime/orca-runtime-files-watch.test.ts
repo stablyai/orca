@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as Fs from 'fs'
-import type * as FsPromises from 'fs/promises'
+import type * as Fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/types'
 
@@ -51,6 +51,13 @@ function createRuntimeFileCommands(rootPath: string) {
       id: 'wt-1',
       repoId: 'repo-1',
       path: rootPath
+    })),
+    resolveRuntimeFileTarget: vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: rootPath
+      }
     })),
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()

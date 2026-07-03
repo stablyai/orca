@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
@@ -7,6 +7,10 @@ import {
   resolveWorkspaceCreateName,
   slugifyForWorkspaceName
 } from './workspace-name'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('slugifyForWorkspaceName', () => {
   it('keeps workspace seed slugs short, ascii-safe, and git-ref-safe', () => {
@@ -22,6 +26,18 @@ describe('slugifyForWorkspaceName', () => {
     expect(slugifyForWorkspaceName('Can’t enable browser notifications')).toBe(
       'cant-enable-browser-notifications'
     )
+  })
+
+  it('folds pasted workspace-name whitespace without regex replacement', () => {
+    const replace = vi.spyOn(String.prototype, 'replace')
+    const name = ['Fix', String.fromCharCode(160), '\nPasted\tWorkspace'].join('')
+
+    expect(slugifyForWorkspaceName(name)).toBe('fix-pasted-workspace')
+    expect(
+      replace.mock.calls.filter(
+        ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+      )
+    ).toHaveLength(0)
   })
 })
 
@@ -214,6 +230,24 @@ describe('getWorkspaceIntentName', () => {
       displayName: 'Add Keyboard Shortcut Settings',
       seedName: 'add-keyboard-shortcut-settings'
     })
+  })
+
+  it('compacts pasted task text without whitespace regex splitting', () => {
+    const split = vi.spyOn(String.prototype, 'split')
+    const sourceText = [
+      'https://github.com/acme/app/issues/123',
+      '\nadd',
+      String.fromCharCode(160),
+      'keyboard\tshortcut settings'
+    ].join('')
+
+    expect(getWorkspaceIntentName({ sourceText })).toEqual({
+      displayName: 'Add Keyboard Shortcut Settings',
+      seedName: 'add-keyboard-shortcut-settings'
+    })
+    expect(
+      split.mock.calls.filter(([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+')
+    ).toHaveLength(0)
   })
 })
 

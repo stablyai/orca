@@ -1,3 +1,5 @@
+import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
+
 const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
 export type RepoSlug = {
@@ -8,6 +10,7 @@ export type RepoSlug = {
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
+  tooLarge?: boolean
 }
 
 export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | null {
@@ -19,6 +22,11 @@ export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | 
 
 function matchGitHubItemPath(url: URL): RegExpExecArray | null {
   return GH_ITEM_PATH_RE.exec(url.pathname.replace(/\/+$/, ''))
+}
+
+function parseGitHubItemNumber(value: string): number | null {
+  const parsed = Number.parseInt(value, 10)
+  return parsed > 0 ? parsed : null
 }
 
 /**
@@ -33,7 +41,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
 
   const numeric = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
   if (/^\d+$/.test(numeric)) {
-    return Number.parseInt(numeric, 10)
+    return parseGitHubItemNumber(numeric)
   }
 
   let url: URL
@@ -52,7 +60,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
     return null
   }
 
-  return Number.parseInt(match[4], 10)
+  return parseGitHubItemNumber(match[4])
 }
 
 /**
@@ -84,11 +92,15 @@ export function parseGitHubIssueOrPRLink(input: string): {
   if (!match) {
     return null
   }
+  const number = parseGitHubItemNumber(match[4])
+  if (number === null) {
+    return null
+  }
 
   return {
     slug: { owner: match[1], repo: match[2] },
     type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
-    number: Number.parseInt(match[4], 10)
+    number
   }
 }
 
@@ -97,6 +109,9 @@ export function parseGitHubIssueOrPRLink(input: string): {
  * URLs resolve to a usable query + direct-number lookup.
  */
 export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
+  if (isWorkItemLinkQueryTooLarge(raw)) {
+    return { query: '', directNumber: null, tooLarge: true }
+  }
   const trimmed = raw.trim()
   if (!trimmed) {
     return { query: '', directNumber: null }

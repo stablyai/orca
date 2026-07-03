@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let hermesHome: string | null = null
@@ -140,6 +140,48 @@ Run summary: monitor automation completed successfully.
     )
     expect((page.runs[0] as { output_content?: string }).output_content).toContain(
       'full command output line'
+    )
+  })
+
+  it('builds large response previews without broad regex captures', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(
+      join(outputDir, '2026-05-15_09-02-00.md'),
+      [
+        '# Cron Job: Monitor automation',
+        '',
+        '## Response',
+        '',
+        '```',
+        'hidden-token\n'.repeat(500),
+        '```',
+        '',
+        'Visible response text '.repeat(500),
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const { readHermesCronOutputRunsPage } = await loadReader()
+    const execSpy = vi.spyOn(RegExp.prototype, 'exec')
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+    const usedBroadCapture = execSpy.mock.contexts.some(
+      (pattern) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
+    )
+    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
+    )
+
+    expect(usedBroadCapture).toBe(false)
+    expect(usedWhitespaceReplace).toBe(false)
+    expect((page.runs[0] as { output_preview?: string }).output_preview).toContain(
+      'Visible response text'
+    )
+    expect((page.runs[0] as { output_preview?: string }).output_preview).not.toContain(
+      'hidden-token'
     )
   })
 

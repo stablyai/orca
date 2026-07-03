@@ -13,7 +13,12 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    agentCmdOverrides: {},
+    agentDefaultArgs: {} as Record<string, string>,
+    agentDefaultEnv: {} as Record<string, Record<string, string>>,
+    activeRuntimeEnvironmentId: null as string | null
+  },
   projects: [
     {
       id: 'repo-1',
@@ -101,7 +106,12 @@ describe('launchAgentInNewTab', () => {
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue(true)
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
-    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: null
+    }
     store.projects = [
       {
         id: 'repo-1',
@@ -159,7 +169,12 @@ describe('launchAgentInNewTab', () => {
 
   it('delegates agent quick launch to the host runtime in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: 'web-runtime'
+    }
     store.tabsByWorktree = {
       'wt-1': [
         { id: 'tab-1' },
@@ -194,10 +209,57 @@ describe('launchAgentInNewTab', () => {
     expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
   })
 
+  it('forwards prompt launch env and captured config to paired web runtime hosts', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: { codex: '--model gpt-5 --reasoning-effort high' },
+      agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } },
+      activeRuntimeEnvironmentId: 'web-runtime'
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'fix the spinner',
+      groupId: 'group-1'
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        tabId: null,
+        pasteDraftAfterLaunch: false
+      })
+    )
+    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      targetGroupId: 'group-1',
+      activate: true,
+      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
+      env: { CODEX_PROFILE: 'captured' },
+      startupCommandDelivery: 'shell-ready',
+      launchConfig: {
+        agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
+        agentArgs: '--model gpt-5 --reasoning-effort high',
+        agentEnv: { CODEX_PROFILE: 'captured' }
+      },
+      launchAgent: 'codex'
+    })
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+  })
+
   it('surfaces a toast when host agent launch fails in paired web clients', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue(false)
-    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: 'web-runtime'
+    }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({

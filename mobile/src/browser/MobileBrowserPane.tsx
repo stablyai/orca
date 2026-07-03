@@ -1,14 +1,8 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
+// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' — Metro
+// can't resolve Node's builtin in a React Native bundle.
 import { Buffer } from 'buffer'
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   AppState,
@@ -34,13 +28,20 @@ import type {
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS,
-  buildMobileBrowserScreencastRequest
+  buildMobileBrowserScreencastRequest,
+  type MobileBrowserViewMode
 } from './browser-screencast-request'
 import {
   MobileBrowserPointerModifiers,
   type BrowserPointerModifier
 } from './MobileBrowserPointerModifiers'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
+import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
+import {
+  getInitialMobileBrowserViewMode,
+  saveMobileBrowserViewMode
+} from './mobile-browser-view-mode-state'
 import {
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
@@ -138,7 +139,10 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
-  const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId)
+  const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
+    getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId)
+  )
+  const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
   const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
@@ -175,11 +179,11 @@ export function MobileBrowserPane({
   const lastAppliedFrameAtRef = useRef(0)
   const pendingThrottledFrameRef = useRef<{
     frame: BrowserScreencastFrame
-    browserPageId: string
+    cacheKey: string
   } | null>(null)
   const frameThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dialogRef = useRef<BrowserDialogState | null>(null)
-  const lastStreamPageIdRef = useRef<string | null>(tab.browserPageId)
+  const lastStreamCacheKeyRef = useRef<string | null>(cacheKey)
   const startPointRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rightClickSentRef = useRef(false)
@@ -271,13 +275,13 @@ export function MobileBrowserPane({
     }
   }, [tab.browserPageId, worktreeId])
 
-  const applyFrame = useCallback((frame: BrowserScreencastFrame, browserPageId: string): void => {
+  const applyFrame = useCallback((frame: BrowserScreencastFrame, frameCacheKey: string): void => {
     if (!browserFrameMetadataEqual(frameMetadataRef.current, frame.metadata)) {
       frameMetadataRef.current = frame.metadata
       setFrameMetadata(frame.metadata)
     }
     const nextFrameUri = createBrowserFrameDataUri(frame)
-    cacheBrowserFrame(browserPageId, { uri: nextFrameUri, metadata: frame.metadata })
+    cacheBrowserFrame(frameCacheKey, { uri: nextFrameUri, metadata: frame.metadata })
     if (!frameMountedRef.current) {
       frameUriRef.current = nextFrameUri
       frameMountedRef.current = true
@@ -316,19 +320,19 @@ export function MobileBrowserPane({
   }, [])
 
   const applyFrameThrottled = useCallback(
-    (frame: BrowserScreencastFrame, browserPageId: string): void => {
+    (frame: BrowserScreencastFrame, frameCacheKey: string): void => {
       const now = Date.now()
       const elapsed = now - lastAppliedFrameAtRef.current
       if (lastAppliedFrameAtRef.current === 0 || elapsed >= MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS) {
         clearFrameThrottle()
         lastAppliedFrameAtRef.current = now
-        applyFrame(frame, browserPageId)
+        applyFrame(frame, frameCacheKey)
         return
       }
 
       // Why: static UI changes can be the last frame Chromium emits. Coalesce
       // throttled frames so the final visible state is applied after the delay.
-      pendingThrottledFrameRef.current = { frame, browserPageId }
+      pendingThrottledFrameRef.current = { frame, cacheKey: frameCacheKey }
       if (frameThrottleTimerRef.current) {
         return
       }
@@ -341,7 +345,7 @@ export function MobileBrowserPane({
             return
           }
           lastAppliedFrameAtRef.current = Date.now()
-          applyFrame(pending.frame, pending.browserPageId)
+          applyFrame(pending.frame, pending.cacheKey)
         },
         Math.max(0, MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS - elapsed)
       )
@@ -350,8 +354,8 @@ export function MobileBrowserPane({
   )
 
   const streamRequest = useMemo(
-    () => buildMobileBrowserScreencastRequest(layout, PixelRatio.get()),
-    [layout]
+    () => buildMobileBrowserScreencastRequest(layout, PixelRatio.get(), browserViewMode),
+    [browserViewMode, layout]
   )
 
   const frameGeometry = useMemo(
@@ -382,9 +386,9 @@ export function MobileBrowserPane({
   useEffect(() => {
     streamGenerationRef.current += 1
     const generation = streamGenerationRef.current
-    const samePage = Boolean(tab.browserPageId) && lastStreamPageIdRef.current === tab.browserPageId
-    lastStreamPageIdRef.current = tab.browserPageId
-    if (!samePage || !frameUriRef.current) {
+    const sameStream = Boolean(cacheKey) && lastStreamCacheKeyRef.current === cacheKey
+    lastStreamCacheKeyRef.current = cacheKey
+    if (!sameStream || !frameUriRef.current) {
       const cachedFrame = getCachedBrowserFrame(cacheKey)
       if (cachedFrame) {
         frameUriRef.current = cachedFrame.uri
@@ -407,7 +411,7 @@ export function MobileBrowserPane({
       frameMountedRef.current = true
     }
     pendingFrameLayerRef.current = null
-    if (!samePage || !frameUriRef.current) {
+    if (!sameStream || !frameUriRef.current) {
       visibleFrameLayerRef.current = 0
     }
     updateBrowserLayerVisibility(browserLayerRefs.current, visibleFrameLayerRef.current)
@@ -1036,6 +1040,19 @@ export function MobileBrowserPane({
     }
     void sendBrowserRequest('browser.reload', {}, { suppressError: true })
   }, [controlsDisabled, sendBrowserRequest])
+  const selectBrowserViewMode = useCallback(
+    (mode: MobileBrowserViewMode) => {
+      if (browserViewMode === mode) {
+        return
+      }
+      // Why: browser panes can remount during normal tab/workspace navigation;
+      // keep a page-scoped choice while new browser pages still default to Web.
+      saveMobileBrowserViewMode(worktreeId, tab.browserPageId, mode)
+      setBrowserViewMode(mode)
+      resetBrowserZoomState()
+    },
+    [browserViewMode, resetBrowserZoomState, tab.browserPageId, worktreeId]
+  )
   const renderedFrameSource =
     frameUriRef.current || frameUri ? { uri: frameUriRef.current ?? frameUri! } : null
   const frameLayerStyle = useCallback((layer: FrameLayer) => {
@@ -1066,23 +1083,27 @@ export function MobileBrowserPane({
   return (
     <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
-        <ToolbarIconButton
+        <MobileBrowserToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}
           label="Back"
           onPress={goBack}
         >
           <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
-        </ToolbarIconButton>
-        <ToolbarIconButton
+        </MobileBrowserToolbarIconButton>
+        <MobileBrowserToolbarIconButton
           disabled={controlsDisabled || !tab.canGoForward}
           label="Forward"
           onPress={goForward}
         >
           <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
-        </ToolbarIconButton>
-        <ToolbarIconButton disabled={controlsDisabled} label="Reload" onPress={reloadPage}>
+        </MobileBrowserToolbarIconButton>
+        <MobileBrowserToolbarIconButton
+          disabled={controlsDisabled}
+          label="Reload"
+          onPress={reloadPage}
+        >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
-        </ToolbarIconButton>
+        </MobileBrowserToolbarIconButton>
         <TextInput
           style={styles.addressInput}
           value={addressValue}
@@ -1100,6 +1121,11 @@ export function MobileBrowserPane({
           placeholder="URL"
           placeholderTextColor={colors.textMuted}
           editable={!controlsDisabled}
+        />
+        <MobileBrowserViewModeSwitch
+          disabled={controlsDisabled}
+          value={browserViewMode}
+          onChange={selectBrowserViewMode}
         />
       </View>
 
@@ -1273,33 +1299,6 @@ export function MobileBrowserPane({
   )
 }
 
-function ToolbarIconButton({
-  children,
-  disabled,
-  label,
-  onPress
-}: {
-  children: ReactNode
-  disabled?: boolean
-  label: string
-  onPress: () => void
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.toolbarIconButton,
-        pressed && !disabled && styles.toolbarIconButtonPressed,
-        disabled && styles.disabled
-      ]}
-      disabled={disabled}
-      onPress={onPress}
-      accessibilityLabel={label}
-    >
-      {children}
-    </Pressable>
-  )
-}
-
 function buttonColor(enabled: boolean): string {
   return enabled ? colors.textSecondary : colors.textMuted
 }
@@ -1308,8 +1307,12 @@ function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
   return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
 }
 
-function makeBrowserFrameCacheKey(worktreeId: string, browserPageId: string | null): string | null {
-  return browserPageId ? `${worktreeId}:${browserPageId}` : null
+function makeBrowserFrameCacheKey(
+  worktreeId: string,
+  browserPageId: string | null,
+  viewMode: MobileBrowserViewMode
+): string | null {
+  return browserPageId ? `${worktreeId}:${browserPageId}:${viewMode}` : null
 }
 
 function clearCachedBrowserFramesForWorktree(worktreeId: string): void {
@@ -1490,16 +1493,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  toolbarIconButton: {
-    width: 26,
-    height: 26,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  toolbarIconButtonPressed: {
-    backgroundColor: colors.bgRaised
   },
   addressInput: {
     flex: 1,

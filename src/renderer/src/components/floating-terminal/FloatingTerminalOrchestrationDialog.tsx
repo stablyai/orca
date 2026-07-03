@@ -42,20 +42,18 @@ export function FloatingTerminalOrchestrationDialog({
   onSetupStateChange
 }: FloatingTerminalOrchestrationDialogProps): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const installCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          ORCHESTRATION_SKILL_INSTALL_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : ORCHESTRATION_SKILL_INSTALL_COMMAND
-  const updateCommand =
-    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
-      ? buildSkillCommandForRuntime(
-          ORCHESTRATION_SKILL_UPDATE_COMMAND,
-          activeSkillRuntime.agentRuntime
-        )
-      : ORCHESTRATION_SKILL_UPDATE_COMMAND
+  const installCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(
+        ORCHESTRATION_SKILL_INSTALL_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+    : ORCHESTRATION_SKILL_INSTALL_COMMAND
+  const updateCommand = !activeSkillRuntime.installDisabledReason
+    ? buildSkillCommandForRuntime(
+        ORCHESTRATION_SKILL_UPDATE_COMMAND,
+        activeSkillRuntime.agentRuntime
+      )
+    : ORCHESTRATION_SKILL_UPDATE_COMMAND
   const {
     installed: orchestrationSkillDetected,
     loading: orchestrationSkillLoading,

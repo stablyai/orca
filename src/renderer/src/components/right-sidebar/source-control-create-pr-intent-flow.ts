@@ -1,6 +1,9 @@
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
+import {
+  normalizeHostedReviewBaseRef,
+  normalizeHostedReviewHeadRef
+} from '../../../../shared/hosted-review-refs'
 import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
 import { getStageAllPaths } from './discard-all-sequence'
 
@@ -11,6 +14,7 @@ export type CreatePrIntentRunToken = {
   worktreeId: string
   worktreePath: string
   branch: string
+  baseRef?: string | null
   startedAt: number
 }
 
@@ -19,10 +23,30 @@ export type CreatePrIntentCurrentTarget = {
   worktreeId?: string | null
   worktreePath?: string | null
   branch?: string | null
+  baseRef?: string | null
 }
 
 export function createCreatePrIntentRunToken(input: Omit<CreatePrIntentRunToken, 'startedAt'>) {
   return { ...input, startedAt: Date.now() }
+}
+
+function normalizeCreatePrIntentBaseIdentityRef(ref: string | null | undefined): string {
+  const trimmed = ref?.trim()
+  if (!trimmed) {
+    return ''
+  }
+  // Why: compare bases are local git refs; origin/main and upstream/main must
+  // stay distinct even though hosted review APIs receive only branch names.
+  if (trimmed.startsWith('refs/remotes/')) {
+    return trimmed.slice('refs/remotes/'.length)
+  }
+  if (trimmed.startsWith('remotes/')) {
+    return trimmed.slice('remotes/'.length)
+  }
+  if (trimmed.startsWith('refs/heads/')) {
+    return trimmed.slice('refs/heads/'.length)
+  }
+  return trimmed
 }
 
 export function createPrIntentRunTokenMatches(
@@ -33,7 +57,9 @@ export function createPrIntentRunTokenMatches(
     token.repoId === current.repoId &&
     token.worktreeId === current.worktreeId &&
     token.worktreePath === current.worktreePath &&
-    token.branch === current.branch
+    token.branch === current.branch &&
+    normalizeCreatePrIntentBaseIdentityRef(token.baseRef) ===
+      normalizeCreatePrIntentBaseIdentityRef(current.baseRef)
   )
 }
 
@@ -65,6 +91,22 @@ export function getCreatePrIntentStagePaths(grouped: {
     ...getStageAllPaths(grouped.unstaged, 'unstaged'),
     ...getStageAllPaths(grouped.untracked, 'untracked')
   ]
+}
+
+export function resolveCreatePrIntentReviewBase({
+  currentBaseRef,
+  eligibilityDefaultBaseRef,
+  composerBaseRef
+}: {
+  currentBaseRef?: string | null
+  eligibilityDefaultBaseRef?: string | null
+  composerBaseRef?: string | null
+}): string {
+  // Why: the compare-base picker is the user's latest target; eligibility can
+  // lag behind while Create PR intent is preparing the branch.
+  return normalizeHostedReviewBaseRef(
+    currentBaseRef?.trim() || eligibilityDefaultBaseRef?.trim() || composerBaseRef?.trim() || ''
+  )
 }
 
 export function resolveCreatePrIntentRemoteStep({

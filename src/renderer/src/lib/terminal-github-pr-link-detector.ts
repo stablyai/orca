@@ -1,12 +1,11 @@
 import type { RepoSlug } from './github-links'
 import { parseGitHubIssueOrPRLink } from './github-links'
 
-const GITHUB_PR_URL_RE =
-  /\bhttps?:\/\/[A-Za-z0-9][A-Za-z0-9_.-]*(?::\d+)?\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(?:[/?#][^\s"'<>]*)?/gi
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
 const TRAILING_TERMINAL_PUNCTUATION_RE = /[),.;\]}]+$/
 const MAX_CARRY_LENGTH = 512
+const MAX_TERMINAL_GITHUB_PR_URL_LENGTH = 2048
 
 export type TerminalGitHubPRLink = {
   url: string
@@ -41,11 +40,78 @@ function endsWithHttpSchemePrefixFragment(value: string): string {
 function getPotentialGitHubPRCarry(value: string): string {
   const schemeIndex = Math.max(...HTTP_SCHEME_PREFIXES.map((prefix) => value.lastIndexOf(prefix)))
   if (schemeIndex !== -1) {
-    const tail = value.slice(schemeIndex)
-    return /\s/.test(tail) ? '' : tail.slice(-MAX_CARRY_LENGTH)
+    const tailLength = value.length - schemeIndex
+    if (tailLength > MAX_CARRY_LENGTH) {
+      return ''
+    }
+    return hasTerminalUrlWhitespace(value, schemeIndex, value.length)
+      ? ''
+      : value.slice(schemeIndex)
   }
 
   return endsWithHttpSchemePrefixFragment(value)
+}
+
+function hasTerminalUrlWhitespace(value: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index += 1) {
+    if (/\s/.test(value.charAt(index))) {
+      return true
+    }
+  }
+  return false
+}
+
+type TerminalUrlCandidate = {
+  rawUrl: string
+  endIndex: number
+}
+
+function findNextHttpSchemeIndex(value: string, start: number): number {
+  let nextIndex = -1
+  for (const prefix of HTTP_SCHEME_PREFIXES) {
+    const candidate = value.indexOf(prefix, start)
+    if (candidate !== -1 && (nextIndex === -1 || candidate < nextIndex)) {
+      nextIndex = candidate
+    }
+  }
+  return nextIndex
+}
+
+function isTerminalUrlTerminator(char: string): boolean {
+  return char === '"' || char === "'" || char === '<' || char === '>' || /\s/.test(char)
+}
+
+function findTerminalUrlCandidateEnd(value: string, start: number): number {
+  const scanEnd = Math.min(value.length, start + MAX_TERMINAL_GITHUB_PR_URL_LENGTH + 1)
+  for (let index = start; index < scanEnd; index += 1) {
+    if (isTerminalUrlTerminator(value.charAt(index))) {
+      return index
+    }
+  }
+  return scanEnd
+}
+
+function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCandidate> {
+  let searchStart = 0
+
+  while (searchStart < value.length) {
+    const candidateStart = findNextHttpSchemeIndex(value, searchStart)
+    if (candidateStart === -1) {
+      return
+    }
+
+    const candidateEnd = findTerminalUrlCandidateEnd(value, candidateStart)
+    const rawUrl = value.slice(candidateStart, candidateEnd)
+    searchStart = Math.max(candidateEnd, candidateStart + 1)
+    if (
+      rawUrl.length > MAX_TERMINAL_GITHUB_PR_URL_LENGTH ||
+      !rawUrl.includes(GITHUB_PR_PATH_MARKER)
+    ) {
+      continue
+    }
+
+    yield { rawUrl, endIndex: candidateEnd }
+  }
 }
 
 export function createTerminalGitHubPRLinkDetector(): (data: string) => TerminalGitHubPRLink[] {
@@ -61,12 +127,13 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
     }
 
     const links: TerminalGitHubPRLink[] = []
-    for (const match of combined.matchAll(GITHUB_PR_URL_RE)) {
-      const rawUrl = match[0]
-      const matchEnd = (match.index ?? 0) + rawUrl.length
+    // Why: PTY data may echo a huge pasted line. Scan URL candidates directly
+    // instead of running a global regex across the whole chunk when it contains
+    // a /pull/ substring.
+    for (const { rawUrl, endIndex } of iterateTerminalUrlCandidates(combined)) {
       // Why: PTY chunks can split the PR number; wait for a boundary before
       // treating a URL at chunk-end as complete.
-      if (matchEnd === combined.length) {
+      if (endIndex === combined.length) {
         continue
       }
 

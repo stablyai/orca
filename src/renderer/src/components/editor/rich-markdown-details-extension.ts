@@ -5,6 +5,7 @@ import { TextSelection } from '@tiptap/pm/state'
 import {
   detailsBodyHtmlToMarkdown,
   escapeDetailsHtml,
+  extractDetailsSummaryHtml,
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
   parseDetailsAttributes,
@@ -216,13 +217,13 @@ const OrcaDetails = Details.extend({
         return undefined
       }
 
-      const summaryMatch = detailsBlock.inner.match(/^\s*<summary\b[^>]*>([\s\S]*?)<\/summary>/i)
-      if (!summaryMatch) {
+      const summaryHtml = extractDetailsSummaryHtml(detailsBlock.inner)
+      if (!summaryHtml) {
         return undefined
       }
 
-      const summary = decodeHtmlEntities(summaryMatch[1].trim())
-      const body = detailsBlock.inner.slice((summaryMatch.index ?? 0) + summaryMatch[0].length)
+      const summary = decodeHtmlEntities(summaryHtml.content.trim())
+      const body = detailsBlock.inner.slice(summaryHtml.rawLength)
 
       return {
         type: 'details',

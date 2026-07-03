@@ -3,10 +3,11 @@
  * completion bookkeeping, and focus restoration. */
 import { useEffect } from 'react'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
-import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
+import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import { launchWorktreeBackgroundTerminals } from '@/lib/launch-worktree-background-terminals'
 import { useAppStore } from '@/store'
 import type {
   AutomationDispatchResult,
@@ -17,7 +18,6 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../../shared/automation-precheck'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   createAutomationRunOutputSnapshotBuffer,
   selectAutomationRunOutputSnapshot
@@ -199,50 +199,51 @@ export function useAutomationDispatchEvents(): void {
           }
 
           const automationWorkspaceCreateRequestId = createBrowserUuid()
-          const worktree =
+          const createResult =
             automation.workspaceMode === 'new_per_run'
-              ? (
-                  await useAppStore
-                    .getState()
-                    .createWorktree(
-                      runRepoId,
-                      buildAutomationWorkspaceName(run.title, run.scheduledFor),
-                      automation.baseBranch ?? undefined,
-                      'inherit',
-                      undefined,
-                      'unknown',
-                      run.title,
-                      undefined,
-                      undefined,
-                      undefined,
-                      automation.agentId,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      undefined,
-                      {
-                        automationProvenanceRequest: {
-                          automationId: automation.id,
-                          automationRunId: run.id,
-                          dispatchToken,
-                          createRequestId: automationWorkspaceCreateRequestId
-                        }
+              ? await useAppStore
+                  .getState()
+                  .createWorktree(
+                    runRepoId,
+                    buildAutomationWorkspaceName(run.title, run.scheduledFor),
+                    automation.baseBranch ?? undefined,
+                    automation.setupDecision ?? 'skip',
+                    undefined,
+                    'unknown',
+                    run.title,
+                    undefined,
+                    undefined,
+                    undefined,
+                    automation.agentId,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                      automationProvenanceRequest: {
+                        automationId: automation.id,
+                        automationRunId: run.id,
+                        dispatchToken,
+                        createRequestId: automationWorkspaceCreateRequestId
                       }
-                    )
-                ).worktree
-              : automation.workspaceId
-                ? automationWorktree
-                : null
+                    }
+                  )
+              : null
+          const worktree = createResult
+            ? createResult.worktree
+            : automation.workspaceId
+              ? automationWorktree
+              : null
 
           if (!worktree) {
             await markDispatchResult({
@@ -259,6 +260,17 @@ export function useAutomationDispatchEvents(): void {
           }
           dispatchWorkspaceId = worktree.id
           dispatchWorkspaceDisplayName = worktree.displayName
+          if (createResult?.setup || createResult?.defaultTabs) {
+            void launchWorktreeBackgroundTerminals({
+              worktreeId: worktree.id,
+              setup: createResult.setup,
+              defaultTabs: createResult.defaultTabs
+            }).catch((error) => {
+              // Why: setup/defaultTabs match normal worktree creation: they are
+              // best-effort terminal work and must not block the automation agent.
+              console.warn('[automations] Failed to launch workspace setup/default tabs:', error)
+            })
+          }
 
           const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
           let latestAssistantMessage: string | null = null
@@ -329,7 +341,7 @@ export function useAutomationDispatchEvents(): void {
             void markCompletionResult()
           }
           const observeAgentStatus = (
-            tabId: string,
+            targetPaneKey: string,
             startedAfter: number,
             options?: { requireWorkingAfterStart?: boolean }
           ): void => {
@@ -337,8 +349,7 @@ export function useAutomationDispatchEvents(): void {
             const checkCurrentStatus = (): void => {
               const { agentStatusByPaneKey } = useAppStore.getState()
               for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
-                const parsed = parsePaneKey(paneKey)
-                if (parsed?.tabId !== tabId || entry.updatedAt < startedAfter) {
+                if (paneKey !== targetPaneKey || entry.updatedAt < startedAfter) {
                   continue
                 }
                 if (entry.state === 'working') {
@@ -375,8 +386,9 @@ export function useAutomationDispatchEvents(): void {
               if (releaseTab) {
                 releaseReuseDispatchTab = releaseTab
                 try {
-                  const submitted = await submitPromptToAgentTab({
+                  const submitted = await submitPromptToAgentPty({
                     tabId: reusableSession.tabId,
+                    ptyId: reusableSession.ptyId,
                     content: automation.prompt
                   })
                   if (!submitted) {
@@ -416,7 +428,7 @@ export function useAutomationDispatchEvents(): void {
                         void markExitResult(code)
                       }
                     })
-                    observeAgentStatus(reusableSession.tabId, reuseCompletionStartedAt, {
+                    observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
                       requireWorkingAfterStart: true
                     })
                     await markDispatchResult({
@@ -425,6 +437,8 @@ export function useAutomationDispatchEvents(): void {
                       workspaceId: worktree.id,
                       workspaceDisplayName: worktree.displayName,
                       terminalSessionId: reusableSession.tabId,
+                      terminalPaneKey: reusableSession.paneKey,
+                      terminalPtyId: reusableSession.ptyId,
                       precheckResult,
                       error: null
                     })
@@ -477,14 +491,13 @@ export function useAutomationDispatchEvents(): void {
           const launchedTabId = result.tabId
           // Why: this hidden tab/PTY is launched solely to run the automation; on
           // completion it must be closed or it leaks for the app's lifetime. Only a
-          // local tab is reapable, so gate the bookkeeping on launchedTabId.
+          // local tab is reapable, so gate reaping bookkeeping on launchedTabId.
           if (launchedTabId) {
             launchedBackgroundSession = { tabId: launchedTabId, ptyId: result.ptyId }
-            // Why: host-backed automation terminals may lack a local tab id; skip
-            // pane-key status observation while background session output still
-            // tracks completion.
-            observeAgentStatus(launchedTabId, dispatchStartedAt)
           }
+          // Why: observe completion by paneKey (main) — always present and works for
+          // host-backed sessions that may lack a local tab id.
+          observeAgentStatus(result.paneKey, dispatchStartedAt)
           try {
             await markDispatchResult({
               runId: run.id,
@@ -492,6 +505,8 @@ export function useAutomationDispatchEvents(): void {
               workspaceId: worktree.id,
               workspaceDisplayName: worktree.displayName,
               terminalSessionId: launchedTabId,
+              terminalPaneKey: result.paneKey,
+              terminalPtyId: result.ptyId,
               precheckResult,
               error: null
             })

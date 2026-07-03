@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
+import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -18,7 +20,8 @@ export const ActivateTab = WorktreeTabSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing tab id')),
-  leafId: z.string().max(128).optional()
+  leafId: z.string().max(128).optional(),
+  notifyClients: OptionalBoolean
 })
 
 export type TerminalPaneLayoutNodeInput =
@@ -101,20 +104,36 @@ export const SetTabProps = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   // undefined = leave unchanged; null = clear color / unset.
   color: z.string().max(64).nullable().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
+  viewMode: z.enum(['terminal', 'chat']).optional()
 })
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
+  cwd: z.string().min(1).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+  launchConfig: sleepingAgentLaunchConfigSchema,
+  launchToken: z.string().min(1).max(128).optional(),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {
       message: 'Unknown agent preset'
     })
     .optional(),
-  activate: z.boolean().optional()
+  // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
+  // identity used when preserving resume config across runtime boundaries.
+  launchAgent: z
+    .custom<TuiAgent>(isTuiAgent, {
+      message: 'Unknown launch agent'
+    })
+    .optional(),
+  activate: z.boolean().optional(),
+  // Why: idempotency key so a retried create (double-tap, reconnect replay)
+  // returns the in-flight operation instead of spawning a duplicate terminal.
+  clientMutationId: z.string().min(1).max(128).optional()
 })
 
 const MoveTabBase = {

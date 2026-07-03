@@ -7,6 +7,20 @@ import {
   getActiveTerminalNoteTarget,
   type ActiveTerminalNoteTarget
 } from './active-agent-note-target'
+import {
+  BRACKETED_PASTE_BEGIN,
+  BRACKETED_PASTE_END,
+  POST_PASTE_SUBMIT_DELAY_MS,
+  sanitizeBracketedPasteContent
+} from './agent-paste-draft'
+import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
+import {
+  ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS,
+  getTerminalAgentSendReadiness,
+  isRuntimeTerminalNotWritable,
+  isRuntimeTerminalUnavailable,
+  isRuntimeTimeout
+} from './active-agent-terminal-send-readiness'
 
 export {
   getActiveAgentNoteTarget,
@@ -16,27 +30,20 @@ export {
   useCanSendNotesToActiveTerminal,
   type ActiveTerminalNoteTarget
 } from './active-agent-note-target'
+export {
+  activeAgentNotesSendFailureMessage,
+  type ActiveAgentNotesSendResult,
+  type ActiveAgentNotesSendStatus
+} from './active-agent-note-send-result'
 
 const ACTIVE_AGENT_SEND_TIMEOUT_MS = 8000
-const ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS = 15000
-
-export type ActiveAgentNotesSendStatus =
-  | 'sent'
-  | 'empty'
-  | 'no-active-terminal'
-  | 'no-agent'
-  | 'not-ready'
-  | 'not-writable'
-
-export type ActiveAgentNotesSendResult = {
-  status: ActiveAgentNotesSendStatus
-}
+const ORCA_DESKTOP_TERMINAL_CLIENT = { id: 'orca-desktop', type: 'desktop' as const }
 
 export async function sendNotesToActiveAgentSession({
   worktreeId,
   prompt,
   noteTarget: explicitNoteTarget,
-  timeoutMs = ACTIVE_AGENT_SEND_TIMEOUT_MS
+  timeoutMs
 }: {
   worktreeId: string
   prompt: string
@@ -57,7 +64,6 @@ export async function sendNotesToActiveAgentSession({
   if (!noteTarget) {
     return { status: 'no-active-terminal' }
   }
-
   // Route by the worktree's owner host so the agent terminal is found and driven
   // on the host that actually runs it, not on the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
@@ -73,25 +79,31 @@ export async function sendNotesToActiveAgentSession({
     return { status: 'no-active-terminal' }
   }
 
-  // Why: sending notes submits with Enter, so only the runtime's agent/idle
-  // checks can authorize it; tab labels and renderer state are not enough.
-  const agentCheck = await callRuntimeRpc<{ isRunningAgent: boolean }>(
-    runtimeTarget,
-    'terminal.isRunningAgent',
-    { terminal: terminal.handle },
-    { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
-  )
-  if (!agentCheck.isRunningAgent) {
-    return { status: 'no-agent' }
+  if (explicitNoteTarget) {
+    return await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt)
+  }
+
+  const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
+  const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
+    allowLegacyFallback: true
+  })
+  if (initialAgentStatus.status !== 'sendable') {
+    return { status: initialAgentStatus.status }
   }
 
   try {
     const { wait } = await callRuntimeRpc<{ wait: RuntimeTerminalWait }>(
       runtimeTarget,
       'terminal.wait',
-      { terminal: terminal.handle, for: 'tui-idle', timeoutMs },
-      { timeoutMs: timeoutMs + 5000 }
+      { terminal: terminal.handle, for: 'tui-idle', timeoutMs: effectiveTimeoutMs },
+      { timeoutMs: effectiveTimeoutMs + 5000 }
     )
+    if (wait.status !== 'running') {
+      return { status: 'no-active-terminal' }
+    }
+    if (wait.blockedReason) {
+      return { status: 'permission' }
+    }
     if (!wait.satisfied) {
       return { status: 'not-ready' }
     }
@@ -105,48 +117,142 @@ export async function sendNotesToActiveAgentSession({
     throw error
   }
 
-  const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
-    runtimeTarget,
-    'terminal.send',
-    {
-      terminal: terminal.handle,
-      text: trimmedPrompt,
-      enter: true,
-      client: { id: 'orca-desktop', type: 'desktop' }
-    },
-    { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
-  )
-  return send.accepted ? { status: 'sent' } : { status: 'not-writable' }
+  const finalAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
+    allowLegacyFallback: true
+  })
+  if (finalAgentStatus.status !== 'sendable') {
+    return { status: finalAgentStatus.status }
+  }
+
+  if (finalAgentStatus.supportsGuardedSend) {
+    return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
+      allowLegacyFallback: false
+    })
+  }
+
+  // Why: protocol-compatible older SSH runtimes do not know the guarded send
+  // option. They already passed terminal.wait + legacy isRunningAgent checks,
+  // so preserve the old active-focused send path for remote compatibility.
+  return await sendPromptWithLegacyCombinedSend(runtimeTarget, terminal.handle, trimmedPrompt)
 }
 
-export function activeAgentNotesSendFailureMessage(status: ActiveAgentNotesSendStatus): string {
-  switch (status) {
-    case 'empty':
-      return 'No notes to send.'
-    case 'no-active-terminal':
-      return 'Open the agent terminal in this worktree, then send the notes again.'
-    case 'no-agent':
-      return 'The active terminal is not a recognized agent session.'
-    case 'not-ready':
-      return 'The active agent was not ready for input yet.'
-    case 'not-writable':
-      return 'The active terminal did not accept the notes.'
-    case 'sent':
-      return ''
+async function sendPromptWithLegacyCombinedSend(
+  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  terminalHandle: string,
+  prompt: string
+): Promise<ActiveAgentNotesSendResult> {
+  try {
+    const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
+      runtimeTarget,
+      'terminal.send',
+      {
+        terminal: terminalHandle,
+        text: prompt,
+        enter: true,
+        client: ORCA_DESKTOP_TERMINAL_CLIENT
+      },
+      { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
+    )
+    return send.accepted ? { status: 'sent' } : { status: 'not-writable' }
+  } catch (error) {
+    if (isRuntimeTerminalUnavailable(error)) {
+      return { status: 'no-active-terminal' }
+    }
+    if (isRuntimeTerminalNotWritable(error)) {
+      return { status: 'not-writable' }
+    }
+    throw error
   }
 }
 
-function isRuntimeTimeout(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('timeout')
+async function sendPromptWithGuardedPasteAndEnter(
+  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  terminalHandle: string,
+  prompt: string,
+  options: { allowLegacyFallback: boolean }
+): Promise<ActiveAgentNotesSendResult> {
+  const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminalHandle, {
+    allowLegacyFallback: options.allowLegacyFallback
+  })
+  if (initialAgentStatus.status !== 'sendable') {
+    return { status: initialAgentStatus.status }
+  }
+
+  const pastePayload = `${BRACKETED_PASTE_BEGIN}${sanitizeBracketedPasteContent(prompt)}${BRACKETED_PASTE_END}`
+  try {
+    const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
+      runtimeTarget,
+      'terminal.send',
+      {
+        terminal: terminalHandle,
+        text: pastePayload,
+        requireAgentStatus: 'sendable',
+        client: ORCA_DESKTOP_TERMINAL_CLIENT
+      },
+      { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
+    )
+    if (!send.accepted) {
+      if (send.refusedReason === 'permission') {
+        return { status: 'permission' }
+      }
+      if (send.refusedReason === 'no-agent') {
+        return { status: 'no-agent' }
+      }
+      return { status: 'not-writable' }
+    }
+  } catch (error) {
+    if (isRuntimeTerminalUnavailable(error)) {
+      return { status: 'no-active-terminal' }
+    }
+    if (isRuntimeTerminalNotWritable(error)) {
+      return { status: 'not-writable' }
+    }
+    throw error
+  }
+
+  await new Promise<void>((resolve) => setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+
+  try {
+    const submitAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminalHandle, {
+      allowLegacyFallback: options.allowLegacyFallback
+    })
+    if (submitAgentStatus.status !== 'sendable') {
+      return { status: 'partial-submit-failed' }
+    }
+  } catch (error) {
+    if (isRuntimeTerminalUnavailable(error)) {
+      return { status: 'partial-submit-failed' }
+    }
+    throw error
+  }
+
+  try {
+    const { send } = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
+      runtimeTarget,
+      'terminal.send',
+      {
+        terminal: terminalHandle,
+        enter: true,
+        requireAgentStatus: 'sendable',
+        client: ORCA_DESKTOP_TERMINAL_CLIENT
+      },
+      { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
+    )
+    return send.accepted ? { status: 'sent' } : { status: 'partial-submit-failed' }
+  } catch (error) {
+    if (isRuntimeTerminalUnavailable(error) || isRuntimeTerminalNotWritable(error)) {
+      return { status: 'partial-submit-failed' }
+    }
+    throw error
+  }
 }
 
-function isRuntimeTerminalUnavailable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return (
-    message.includes('terminal_handle_stale') ||
-    message.includes('terminal_exited') ||
-    message.includes('terminal_gone') ||
-    message.includes('no_active_terminal')
-  )
+async function sendPromptToExplicitAgentTarget(
+  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  terminalHandle: string,
+  prompt: string
+): Promise<ActiveAgentNotesSendResult> {
+  return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminalHandle, prompt, {
+    allowLegacyFallback: false
+  })
 }

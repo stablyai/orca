@@ -80,6 +80,29 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.d2d2d929c0',
+      'Rich Markdown Spellcheck'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.4497e2e2bb',
+      'Show browser spelling underlines and suggestions while editing rich Markdown.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.f96cdaf37d', 'spellcheck'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.a51d23f4a1',
+        'spell check'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.641358460a', 'spelling'),
+      ...translateSearchKeyword('auto.components.settings.general.search.d05f629d2c', 'markdown'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.d755962089',
+        'red underline'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.128bc09325', 'Markdown Review Notes'),
     description: translate(
       'auto.components.settings.general.search.694613d47f',

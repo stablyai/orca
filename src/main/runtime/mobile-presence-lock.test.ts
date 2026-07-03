@@ -16,7 +16,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([])
+  listWorktrees: vi.fn().mockResolvedValue([]),
+  listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 vi.mock('../hooks', () => ({
   createSetupRunnerScript: vi.fn(),
@@ -217,7 +218,7 @@ describe('mobile presence lock — driver state machine', () => {
 
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     // The last emitted event for pty-1 must be idle.
-    const last = [...driverEvents].reverse().find((e) => e.ptyId === 'pty-1')
+    const last = [...driverEvents].toReversed().find((e) => e.ptyId === 'pty-1')
     expect(last?.driver).toEqual({ kind: 'idle' })
   })
 })

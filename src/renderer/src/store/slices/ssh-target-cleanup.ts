@@ -10,7 +10,8 @@ export function sshConnectionStatesEqual(
     a?.targetId === b.targetId &&
     a?.status === b.status &&
     a?.error === b.error &&
-    a?.reconnectAttempt === b.reconnectAttempt
+    a?.reconnectAttempt === b.reconnectAttempt &&
+    a?.remotePlatform === b.remotePlatform
   )
 }
 

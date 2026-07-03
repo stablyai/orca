@@ -35,9 +35,32 @@ function getDiagLogPath(): string {
 function reasonWithDiagLog(reason: string): string {
   return `${reason} Details were written to ${getDiagLogPath()}.`
 }
-function describeImportError(err: unknown): string {
+const COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS = 180
+const COOKIE_IMPORT_ERROR_SCAN_MAX_CHARS = 512
+
+// Why: imported cookie errors can include pasted or file-derived payloads;
+// diagnostics only need a short preview, not a full-string whitespace pass.
+export function summarizeCookieImportError(err: unknown): string {
   const raw = err instanceof Error && err.message ? err.message : String(err)
-  return raw.replace(/\s+/g, ' ').slice(0, 180)
+  let summary = ''
+  let previousWasWhitespace = false
+  const scanLimit = Math.min(raw.length, COOKIE_IMPORT_ERROR_SCAN_MAX_CHARS)
+  for (let index = 0; index < scanLimit; index += 1) {
+    const code = raw.charCodeAt(index)
+    if (code === 32 || (code >= 9 && code <= 13)) {
+      if (summary.length > 0 && !previousWasWhitespace) {
+        summary += ' '
+      }
+      previousWasWhitespace = true
+      continue
+    }
+    summary += raw.charAt(index)
+    if (summary.length >= COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS) {
+      return summary.slice(0, COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS)
+    }
+    previousWasWhitespace = false
+  }
+  return summary
 }
 function diag(msg: string): void {
   const line = `[${new Date().toISOString()}] ${msg}\n`
@@ -130,6 +153,16 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     macRoot: 'Comet',
     winRoot: 'Comet/User Data'
     // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
+  },
+  {
+    family: 'helium',
+    // Why: Helium deviates from the '<Browser> Safe Storage'/'<Browser>' convention —
+    // its Keychain entry is literally service 'Helium Storage Key', account 'Helium'.
+    label: 'Helium',
+    keychainService: 'Helium Storage Key',
+    keychainAccount: 'Helium',
+    macRoot: 'net.imput.helium'
+    // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
   }
 ]
 
@@ -742,6 +775,12 @@ export function getUserAgentForBrowser(
       // Why: Comet is Chromium-based and ships a Chrome-shaped version in its plist.
       // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
       const v = readBrowserVersion('/Applications/Comet.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'helium': {
+      // Why: Helium is Chromium-based and ships a Chrome-shaped version in its plist.
+      // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Helium.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
     case 'firefox':
@@ -1768,7 +1807,7 @@ export async function importCookiesFromBrowser(
     return {
       ok: false,
       reason: reasonWithDiagLog(
-        `Could not import cookies from ${browser.label}: ${describeImportError(err)}.`
+        `Could not import cookies from ${browser.label}: ${summarizeCookieImportError(err)}.`
       )
     }
   }

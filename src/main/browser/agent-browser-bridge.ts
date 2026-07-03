@@ -1,8 +1,8 @@
 /* eslint-disable max-lines */
-import { execFile, type ChildProcess } from 'child_process'
-import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'fs'
-import { join } from 'path'
-import { platform, arch } from 'os'
+import { execFile, type ChildProcess } from 'node:child_process'
+import { existsSync, accessSync, chmodSync, readFileSync, constants } from 'node:fs'
+import { join } from 'node:path'
+import { platform, arch } from 'node:os'
 import { app, type WebContents } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
@@ -47,6 +47,8 @@ import type {
   BrowserCaptureStopResult,
   BrowserCookie
 } from '../../shared/runtime-types'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
+import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 
 // Why: must exceed agent-browser's internal per-command timeouts (goto defaults to 30s,
 // wait can be up to 60s). Using 90s ensures the bridge never kills a command before
@@ -55,6 +57,8 @@ const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
+export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -83,6 +87,27 @@ type ResolvedBrowserCommandTarget = {
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
+function focusedValueSetExpression(
+  valueExpression: string,
+  options?: { append?: boolean; dispatchEvents?: boolean }
+): string {
+  const nextValue = options?.append
+    ? ["String(el.value ?? '') + ", valueExpression].join('')
+    : valueExpression
+  const dispatchEvents = options?.dispatchEvents
+    ? " el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));"
+    : ''
+  return [
+    '(() => { const el = document.activeElement; if (el) {' +
+      " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;",
+    ' const nextValue = ',
+    nextValue,
+    '; if (nativeSetter) { nativeSetter.call(el, nextValue); } else { el.value = nextValue; }',
+    dispatchEvents,
+    ' } })()'
+  ].join('')
+}
+
 type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
@@ -92,6 +117,9 @@ type AgentBrowserExecOptions = {
 type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
   ensureVisible?: boolean
+  // Why: text-mutating commands must never fall back to the global active tab,
+  // which can point at a different worktree the user is currently viewing.
+  requireScopedTarget?: boolean
 }
 
 type AgentBrowserBridgeOptions = {
@@ -733,20 +761,38 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserFillResult> {
+    await assertClipboardTextWriteWithinLimitWithYield(value)
     // Why: Input.insertText via Electron's debugger API does not deliver text to
     // focused inputs in webviews — this is a fundamental Electron limitation.
     // Agent-browser's fill and click also fail for the same reason.
     // Workaround: use agent-browser's focus to resolve the ref, then set the value
-    // directly via JS and dispatch input/change events for React/framework compat.
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      await this.execAgentBrowser(sessionName, ['focus', element])
-      const serializedValue = JSON.stringify(value)
-      await this.execAgentBrowser(sessionName, [
-        'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
-      ])
-      return { filled: element } as BrowserFillResult
-    })
+    // directly via chunked JS and dispatch input/change events for React/framework compat.
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        await this.execAgentBrowser(sessionName, ['focus', element])
+        await this.execAgentBrowser(sessionName, [
+          'eval',
+          focusedValueSetExpression(JSON.stringify(''))
+        ])
+        for (const chunk of iterateBrowserTextInsertionChunks(
+          value,
+          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+        )) {
+          await this.execAgentBrowser(sessionName, [
+            'eval',
+            focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+          ])
+        }
+        await this.execAgentBrowser(sessionName, [
+          'eval',
+          focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
+        ])
+        return { filled: element } as BrowserFillResult
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   async type(
@@ -754,13 +800,21 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserTypeResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
-        'keyboard',
-        'type',
-        input
-      ])) as BrowserTypeResult
-    })
+    await assertClipboardTextWriteWithinLimitWithYield(input)
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        for (const chunk of iterateBrowserTextInsertionChunks(
+          input,
+          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+        )) {
+          await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
+        }
+        return { typed: true } as BrowserTypeResult
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   async select(
@@ -836,9 +890,22 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', text])
-    })
+    await assertClipboardTextWriteWithinLimitWithYield(text)
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        let result: unknown = { inserted: true }
+        for (const chunk of iterateBrowserTextInsertionChunks(
+          text,
+          AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+        )) {
+          result = await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', chunk])
+        }
+        return result
+      },
+      { requireScopedTarget: true }
+    )
   }
 
   // ── Mouse commands ──
@@ -1052,6 +1119,9 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    await assertClipboardTextWriteWithinLimitWithYield(text, {
+      maxBytes: AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES
+    })
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'write', text])
     })
@@ -1789,7 +1859,7 @@ export class AgentBrowserBridge {
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
-    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
     const sessionName = `orca-tab-${target.browserPageId}`
 
     if (options.ensureSession !== false) {
@@ -1910,10 +1980,13 @@ export class AgentBrowserBridge {
 
   private resolveCommandTarget(
     worktreeId?: string,
-    browserPageId?: string
+    browserPageId?: string,
+    requireScopedTarget = false
   ): ResolvedBrowserCommandTarget {
     if (!browserPageId) {
-      return this.resolveActiveTab(worktreeId)
+      return requireScopedTarget
+        ? this.resolveScopedActiveTab(worktreeId)
+        : this.resolveActiveTab(worktreeId)
     }
 
     const tabs = this.getRegisteredTabs(worktreeId)
@@ -1985,6 +2058,40 @@ export class AgentBrowserBridge {
       'browser_no_tab',
       'No live browser tab available — all registered tabs have been destroyed'
     )
+  }
+
+  // Why: text-mutating commands (inserttext/type/fill) must not silently fall
+  // back to the global active tab when no worktree was resolved — that tab can
+  // belong to a worktree the user is currently viewing, so a goal-loop agent in
+  // another worktree would inject text into the user's foreground webview and
+  // steal OS focus. A scoped (worktreeId-bearing) call is already safe because
+  // the candidate set is pre-filtered to that worktree, so defer to the lenient
+  // resolver. An unscoped call instead requires an unambiguous target: scope to
+  // the lone worktree with live tabs, or refuse rather than guess.
+  private resolveScopedActiveTab(worktreeId?: string): ResolvedBrowserCommandTarget {
+    if (worktreeId) {
+      return this.resolveActiveTab(worktreeId)
+    }
+
+    const worktreesWithLiveTabs = new Set<string | undefined>()
+    for (const [tabId, wcId] of this.getRegisteredTabs(undefined)) {
+      if (this.getWebContents(wcId)) {
+        worktreesWithLiveTabs.add(this.browserManager.getWorktreeIdForTab(tabId))
+      }
+    }
+
+    if (worktreesWithLiveTabs.size === 0) {
+      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
+    }
+    if (worktreesWithLiveTabs.size > 1) {
+      throw new BrowserError(
+        'browser_target_ambiguous',
+        'Multiple worktrees have browser tabs open; pass --worktree to target text insertion safely'
+      )
+    }
+
+    const [onlyWorktreeId] = worktreesWithLiveTabs
+    return this.resolveActiveTab(onlyWorktreeId)
   }
 
   private async ensureSession(

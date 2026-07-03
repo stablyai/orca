@@ -122,10 +122,7 @@ vi.mock('./SettingsFormControls', () => ({
 }))
 
 vi.mock('./TerminalThemeSections', () => ({
-  DarkTerminalThemeSection: function DarkTerminalThemeSection() {
-    return null
-  },
-  LightTerminalThemeSection: function LightTerminalThemeSection() {
+  TerminalThemeCatalogSection: function TerminalThemeCatalogSection() {
     return null
   }
 }))
@@ -283,7 +280,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows the PowerShell 7+ download link when pwsh is unavailable', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'powershell.exe',
         terminalWordSeparator: ''
@@ -305,7 +302,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('does not show WSL as a Windows default shell option when available', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -328,7 +325,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -352,7 +349,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('hides WSL as a Windows default shell option when unavailable', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -371,7 +368,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('does not show WSL distro choices for a persisted legacy WSL shell', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian',
         terminalWindowsPowerShellImplementation: 'auto',
@@ -398,7 +395,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('shows Git Bash as a Windows default shell option when bash.exe is detected', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''
@@ -418,7 +415,7 @@ describe('TerminalPane PowerShell version setting', () => {
   it('hides Git Bash as a Windows default shell option when not detected', () => {
     const element = TerminalPane({
       settings: {
-        terminalScrollbackBytes: 10_000_000,
+        terminalScrollbackRows: 5_000,
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto',
         terminalWordSeparator: ''

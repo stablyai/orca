@@ -1,0 +1,165 @@
+import { describe, expect, it } from 'vitest'
+import {
+  formatAskAnswer,
+  parseApprovalFromStatus,
+  parseAskFromStatus,
+  parseInteractivePrompt
+} from './native-chat-interactive-prompt'
+
+const ESC = String.fromCharCode(27)
+
+describe('parseAskFromStatus', () => {
+  it('returns null for empty/invalid input', () => {
+    expect(parseAskFromStatus(null)).toBeNull()
+    expect(parseAskFromStatus(undefined)).toBeNull()
+    expect(parseAskFromStatus('')).toBeNull()
+    expect(parseAskFromStatus('not json')).toBeNull()
+    expect(parseAskFromStatus('{}')).toBeNull()
+    expect(parseAskFromStatus('{"questions":[]}')).toBeNull()
+  })
+
+  it('parses the canonical AskUserQuestion shape', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'Pick a color',
+            header: 'Color',
+            multiSelect: false,
+            options: [{ label: 'Red', description: 'warm' }, { label: 'Blue' }]
+          }
+        ]
+      })
+    )
+    expect(prompt).toEqual({
+      questions: [
+        {
+          question: 'Pick a color',
+          header: 'Color',
+          multiSelect: false,
+          options: [{ label: 'Red', description: 'warm' }, { label: 'Blue' }]
+        }
+      ]
+    })
+  })
+
+  it('accepts string options and defaults multiSelect to false', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({ questions: [{ question: 'q', options: ['A', 'B'] }] })
+    )
+    expect(prompt?.questions[0]).toMatchObject({
+      multiSelect: false,
+      options: [{ label: 'A' }, { label: 'B' }]
+    })
+  })
+
+  it('honors multiSelect: true and multiple questions', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          { question: 'q1', multiSelect: true, options: [{ label: 'X' }] },
+          { question: 'q2', options: [{ label: 'Y' }] }
+        ]
+      })
+    )
+    expect(prompt?.questions).toHaveLength(2)
+    expect(prompt?.questions[0]?.multiSelect).toBe(true)
+    expect(prompt?.questions[1]?.multiSelect).toBe(false)
+  })
+
+  it('skips malformed question entries', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({ questions: [null, 42, { question: 'ok', options: ['A'] }] })
+    )
+    expect(prompt?.questions).toHaveLength(1)
+    expect(prompt?.questions[0]?.question).toBe('ok')
+  })
+})
+
+describe('parseApprovalFromStatus', () => {
+  it('returns null for non-approval envelopes', () => {
+    expect(parseApprovalFromStatus(null)).toBeNull()
+    expect(parseApprovalFromStatus('not json')).toBeNull()
+    expect(parseApprovalFromStatus('{}')).toBeNull()
+    expect(parseApprovalFromStatus(JSON.stringify({ approval: {} }))).toBeNull()
+    expect(parseApprovalFromStatus(JSON.stringify({ approval: { tool: '' } }))).toBeNull()
+  })
+
+  it('builds an Allow/Deny card from { approval: { tool, summary } }', () => {
+    const approval = parseApprovalFromStatus(
+      JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
+    )
+    expect(approval).toEqual({
+      title: 'Allow Bash?',
+      detail: 'rm -rf build',
+      options: [
+        { label: 'Allow', send: '1' },
+        { label: 'Deny', send: ESC }
+      ]
+    })
+  })
+
+  it('omits detail when summary is missing', () => {
+    const approval = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'Edit' } }))
+    expect(approval?.title).toBe('Allow Edit?')
+    expect(approval?.detail).toBeUndefined()
+  })
+})
+
+describe('parseInteractivePrompt', () => {
+  it('returns a question card, with question taking precedence', () => {
+    const card = parseInteractivePrompt(
+      JSON.stringify({
+        questions: [{ question: 'q', options: ['A'] }],
+        approval: { tool: 'Bash', summary: 's' }
+      })
+    )
+    expect(card?.kind).toBe('question')
+  })
+
+  it('returns an approval card when no question is present', () => {
+    const card = parseInteractivePrompt(JSON.stringify({ approval: { tool: 'Bash' } }))
+    expect(card?.kind).toBe('approval')
+  })
+
+  it('returns null when neither parses', () => {
+    expect(parseInteractivePrompt(null)).toBeNull()
+    expect(parseInteractivePrompt('{}')).toBeNull()
+  })
+})
+
+describe('formatAskAnswer', () => {
+  it('joins selected labels per question, one line each', () => {
+    const prompt = {
+      questions: [
+        { question: 'q1', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }] }
+      ]
+    }
+    expect(formatAskAnswer(prompt, [['A', 'B'], ['C']])).toBe('A, B\nC')
+  })
+
+  it('preserves empty answers as empty lines so N lines == N questions', () => {
+    const prompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'B' }] }
+      ]
+    }
+    // Leading blank stays an empty line: '\nB' (2 lines), not 'B'.
+    expect(formatAskAnswer(prompt, [[], ['B']])).toBe('\nB')
+  })
+
+  it('keeps one line per question with a blank middle answer (3 questions)', () => {
+    const prompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'B' }] },
+        { question: 'q3', multiSelect: false, options: [{ label: 'C' }] }
+      ]
+    }
+    const answer = formatAskAnswer(prompt, [['A'], [], ['C']])
+    expect(answer).toBe('A\n\nC')
+    expect(answer.split('\n')).toHaveLength(3)
+  })
+})

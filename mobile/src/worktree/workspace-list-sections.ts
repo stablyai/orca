@@ -1,54 +1,50 @@
-// Pure data transforms for the host workspaces list: status derivation,
-// filtering, sorting, and grouping into SectionList sections. Kept out of the
-// screen component so the screen stays under its line cap and the logic is
-// unit-testable in isolation.
-
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import {
+  DEFAULT_MOBILE_WORKSPACE_STATUSES,
+  coerceMobileWorkspaceStatuses,
+  getMobileWorkspaceStatus,
+  getMobileWorkspaceStatusGroupKey
+} from './mobile-workspace-statuses'
+import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
+import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-status-groups'
+import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 
-export type Worktree = {
-  workspaceKind?: 'git' | 'folder-workspace'
-  worktreeId: string
-  repoId: string
-  repo: string
-  branch: string
-  displayName: string
-  // Why: on-disk worktree directory path. Needed by NewWorktreeModal so the
-  // marine-creature fallback dedupes against the actual filesystem basenames
-  // (matching the desktop's collision check), not against displayName which
-  // the user may have renamed.
-  path: string
-  liveTerminalCount: number
-  hasAttachedPty: boolean
-  preview: string
-  unread: boolean
-  lastOutputAt?: number
-  isPinned: boolean
-  isActive?: boolean
-  linkedPR: { number: number; state: string } | null
-  linkedIssue?: number | null
-  linkedLinearIssue?: string | null
-  linkedGitLabMR?: number | null
-  linkedGitLabIssue?: number | null
-  comment?: string
-  status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
-  agents?: RuntimeWorktreeAgentRow[]
-}
+export type { FilterState, Section, Worktree } from './workspace-list-types'
 
-// Desktop's filter model (shared via PersistedUIState): repos selected by id,
-// plus two hide toggles. There is no "active only" — hideSleeping is the
-// inverse intent.
-export type FilterState = {
-  filterRepoIds: Set<string>
-  hideSleeping: boolean
-  hideDefaultBranch: boolean
+function makeSection(
+  key: string,
+  title: string,
+  data: Worktree[],
+  icon?: 'pin',
+  collapsedGroups?: ReadonlySet<string>
+): Section {
+  const rows = collapsedGroups ? applyMobileWorkspaceLineage(data, collapsedGroups) : data
+  return {
+    key,
+    title,
+    ...(icon ? { icon } : {}),
+    data: rows.map((worktree) => ({
+      ...worktree,
+      sectionListKey: `${key}:${worktree.worktreeId}`
+    }))
+  }
 }
-
-export type Section = { title: string; icon?: 'pin'; data: Worktree[] }
 
 export function getWorktreeStatus(
   w: Worktree
 ): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
+  // Why: desktop's sidebar activity is the parity source. Runtime status may
+  // still report retained/background PTYs as active after desktop hides them.
+  if (w.hasHostSidebarActivity === false) {
+    return 'inactive'
+  }
+  if (w.status && w.status !== 'inactive') {
+    return w.status
+  }
+  if (w.hasHostSidebarActivity === true) {
+    return 'active'
+  }
   if (w.status) {
     return w.status
   }
@@ -62,6 +58,9 @@ export function getWorktreeStatus(
 // worktrees with idle terminal prompts had no recent output and were excluded.
 // Any worktree with live terminals or unread output counts as "active".
 export function isWorktreeActive(w: Worktree): boolean {
+  if (w.hasHostSidebarActivity !== undefined) {
+    return w.hasHostSidebarActivity
+  }
   if (w.unread) {
     return true
   }
@@ -74,33 +73,41 @@ export function isWorktreeActive(w: Worktree): boolean {
   return false
 }
 
-// Why: mobile worktree.ps carries no per-repo default branch, so we treat the
-// conventional main/master as the default for the hideDefaultBranch filter.
-function isOnDefaultBranch(w: Worktree): boolean {
+function isDefaultBranchWorkspace(w: Worktree): boolean {
+  if (w.workspaceKind === 'folder-workspace') {
+    return false
+  }
+  if (w.isMainWorktree !== undefined) {
+    return w.isMainWorktree && w.branch.trim() !== ''
+  }
+  // Why: older hosts did not include isMainWorktree in worktree.ps, so keep the
+  // legacy fallback until all paired runtimes carry the desktop predicate input.
   const branch = w.branch.replace(/^refs\/heads\//, '')
   return branch === 'main' || branch === 'master'
 }
 
-export const WORKSPACE_STATUS_LABELS: Record<ReturnType<typeof getWorktreeStatus>, string> = {
-  permission: 'Needs Permission',
-  working: 'Working',
-  done: 'Done',
-  active: 'Active',
-  inactive: 'Inactive'
+function getManualSortRank(worktree: Worktree): number | null {
+  const rank = worktree.manualOrder ?? worktree.sortOrder
+  return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
 }
 
-export const WORKSPACE_STATUS_ORDER: ReturnType<typeof getWorktreeStatus>[] = [
-  'permission',
-  'working',
-  'done',
-  'active',
-  'inactive'
-]
-
 export function sortWorktrees(worktrees: Worktree[], mode: MobileSortMode): Worktree[] {
-  // 'manual' keeps the server (worktree.ps) order untouched.
   if (mode === 'manual') {
-    return worktrees
+    return [...worktrees].sort((a, b) => {
+      const aRank = getManualSortRank(a)
+      const bRank = getManualSortRank(b)
+      if (aRank !== null && bRank !== null && aRank !== bRank) {
+        // Why: desktop assigns higher sort/manual ranks to earlier list positions.
+        return bRank - aRank
+      }
+      if (aRank !== null && bRank === null) {
+        return -1
+      }
+      if (aRank === null && bRank !== null) {
+        return 1
+      }
+      return 0
+    })
   }
   return [...worktrees].sort((a, b) => {
     if (mode === 'name') {
@@ -113,7 +120,6 @@ export function sortWorktrees(worktrees: Worktree[], mode: MobileSortMode): Work
       const repoComparison = a.repo.localeCompare(b.repo, undefined, { sensitivity: 'base' })
       return repoComparison || (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
     }
-    // 'smart' — attention-first
     if (a.unread !== b.unread) {
       return a.unread ? -1 : 1
     }
@@ -135,12 +141,12 @@ export function filterWorktrees(
   filters: FilterState,
   search: string
 ): Worktree[] {
-  let result = worktrees
+  let result = worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
-    result = result.filter((w) => getWorktreeStatus(w) !== 'inactive')
+    result = result.filter(isWorktreeActive)
   }
   if (filters.hideDefaultBranch) {
-    result = result.filter((w) => !isOnDefaultBranch(w))
+    result = result.filter((w) => !isDefaultBranchWorkspace(w))
   }
   if (filters.filterRepoIds.size > 0) {
     result = result.filter((w) => filters.filterRepoIds.has(w.repoId))
@@ -157,36 +163,6 @@ export function filterWorktrees(
   return result
 }
 
-// Why: matches desktop's PR_GROUP_META naming from worktree-list-groups.ts.
-// no PR/draft/unknown → "In Progress", open → "In Review", merged → "Done", closed → "Closed"
-type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
-
-const PR_GROUP_LABELS: Record<PRGroupKey, string> = {
-  done: 'Done',
-  'in-review': 'In Review',
-  'in-progress': 'In Progress',
-  closed: 'Closed'
-}
-
-const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
-
-function getPRGroupKey(w: Worktree): PRGroupKey {
-  if (!w.linkedPR) {
-    return 'in-progress'
-  }
-  const s = w.linkedPR.state.toLowerCase()
-  if (s === 'merged') {
-    return 'done'
-  }
-  if (s === 'closed') {
-    return 'closed'
-  }
-  if (s === 'draft') {
-    return 'in-progress'
-  }
-  return 'in-review'
-}
-
 export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
   return w.isPinned || localPins.has(w.worktreeId)
 }
@@ -197,33 +173,45 @@ export function buildSections(
   filters: FilterState,
   search: string,
   groupMode: MobileGroupMode,
-  pinnedIds: Set<string>
+  pinnedIds: Set<string>,
+  repoIdsByName: ReadonlyMap<string, string> = new Map(),
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
+  collapsedGroups: ReadonlySet<string> = new Set()
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
 
   const pinned = sorted.filter((w) => isWorktreePinned(w, pinnedIds))
   const unpinned = sorted.filter((w) => !isWorktreePinned(w, pinnedIds))
-  const active = unpinned.filter(isWorktreeActive)
-  const inactive = unpinned.filter((w) => !isWorktreeActive(w))
+  // Why: mobile shows pinned workspaces once in the pinned section; duplicating
+  // them in status/project sections makes the phone list harder to scan.
+  const canonicalGroupWorktrees = unpinned
+  const active = canonicalGroupWorktrees.filter(isWorktreeActive)
+  const inactive = canonicalGroupWorktrees.filter((w) => !isWorktreeActive(w))
 
   const sections: Section[] = []
   if (pinned.length > 0) {
-    sections.push({ title: 'Pinned', icon: 'pin', data: pinned })
+    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
   }
 
   if (groupMode === 'none') {
     if (active.length > 0) {
-      // Why: without explicit grouping, mobile's primary workflow is jumping
-      // back into running sessions before browsing the full worktree archive.
-      sections.push({ title: 'Active', data: active })
+      sections.push(makeSection('all-active', 'Active', active, undefined, collapsedGroups))
     }
     if (inactive.length > 0) {
-      sections.push({ title: pinned.length > 0 || active.length > 0 ? 'All' : '', data: inactive })
+      sections.push(
+        makeSection(
+          'all',
+          pinned.length > 0 || active.length > 0 ? 'All' : '',
+          inactive,
+          undefined,
+          collapsedGroups
+        )
+      )
     }
   } else if (groupMode === 'repo') {
     const byRepo = new Map<string, Worktree[]>()
-    for (const w of unpinned) {
+    for (const w of canonicalGroupWorktrees) {
       const key = w.repo || 'Unknown'
       const list = byRepo.get(key)
       if (list) {
@@ -232,13 +220,31 @@ export function buildSections(
         byRepo.set(key, [w])
       }
     }
+    const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
+    const query = search.trim().toLowerCase()
+    for (const [displayName, id] of repoIdsByName) {
+      if (representedRepoIds.has(id)) {
+        continue
+      }
+      if (filters.filterRepoIds.size > 0 && !filters.filterRepoIds.has(id)) {
+        continue
+      }
+      if (query && !displayName.toLowerCase().includes(query)) {
+        continue
+      }
+      if (!byRepo.has(displayName)) {
+        byRepo.set(displayName, [])
+      }
+    }
     for (const [repo, items] of byRepo) {
-      sections.push({ title: repo, data: items })
+      const key = `repo:${repoIdsByName.get(repo) ?? repo}`
+      sections.push(makeSection(key, repo, items, undefined, collapsedGroups))
     }
   } else if (groupMode === 'workspaceStatus') {
-    const byStatus = new Map<ReturnType<typeof getWorktreeStatus>, Worktree[]>()
-    for (const w of unpinned) {
-      const key = getWorktreeStatus(w)
+    const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)
+    const byStatus = new Map<string, Worktree[]>()
+    for (const w of canonicalGroupWorktrees) {
+      const key = getMobileWorkspaceStatus(w, renderableWorkspaceStatuses)
       const list = byStatus.get(key)
       if (list) {
         list.push(w)
@@ -246,15 +252,23 @@ export function buildSections(
         byStatus.set(key, [w])
       }
     }
-    for (const status of WORKSPACE_STATUS_ORDER) {
-      const items = byStatus.get(status)
+    for (const status of renderableWorkspaceStatuses) {
+      const items = byStatus.get(status.id)
       if (items && items.length > 0) {
-        sections.push({ title: WORKSPACE_STATUS_LABELS[status], data: items })
+        sections.push(
+          makeSection(
+            getMobileWorkspaceStatusGroupKey(status.id),
+            status.label,
+            items,
+            undefined,
+            collapsedGroups
+          )
+        )
       }
     }
   } else if (groupMode === 'prStatus') {
-    const byGroup = new Map<PRGroupKey, Worktree[]>()
-    for (const w of unpinned) {
+    const byGroup = new Map<string, Worktree[]>()
+    for (const w of canonicalGroupWorktrees) {
       const key = getPRGroupKey(w)
       const list = byGroup.get(key)
       if (list) {
@@ -266,7 +280,15 @@ export function buildSections(
     for (const groupKey of PR_GROUP_ORDER) {
       const items = byGroup.get(groupKey)
       if (items && items.length > 0) {
-        sections.push({ title: PR_GROUP_LABELS[groupKey], data: items })
+        sections.push(
+          makeSection(
+            `pr:${groupKey}`,
+            PR_GROUP_LABELS[groupKey],
+            items,
+            undefined,
+            collapsedGroups
+          )
+        )
       }
     }
   }

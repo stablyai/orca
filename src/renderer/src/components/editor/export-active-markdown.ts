@@ -10,17 +10,18 @@ export async function exportActiveMarkdownToPdf(options: {
   fileId: string
   root: ParentNode | null
 }): Promise<void> {
-  const payload = getActiveMarkdownExportPayload(options)
-  if (!payload) {
-    // Why: stale panel refs can survive a dropdown click; keep export defensive
-    // even though the local Markdown menu disables unreachable states.
-    return
-  }
-
   const toastId = toast.loading(
     translate('auto.components.editor.export.active.markdown.d4a901e0ad', 'Exporting PDF...')
   )
   try {
+    const payload = await getActiveMarkdownExportPayload(options)
+    if (!payload) {
+      // Why: stale panel refs can survive a dropdown click; keep export defensive
+      // even though the local Markdown menu disables unreachable states.
+      toast.dismiss(toastId)
+      return
+    }
+
     const result = await window.api.export.htmlToPdf({
       html: payload.html,
       title: payload.title

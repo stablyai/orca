@@ -4,7 +4,8 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   _installedAgentSkillDiscoveryInternalsForTests,
-  hasInstalledAgentSkill
+  hasInstalledAgentSkill,
+  hasInstalledAgentSkillNamed
 } from './useInstalledAgentSkills'
 
 afterEach(() => {
@@ -112,6 +113,47 @@ describe('hasInstalledAgentSkill', () => {
         sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
       })
     ).toBe(true)
+  })
+
+  it('matches installed skills by any accepted name', () => {
+    expect(
+      hasInstalledAgentSkillNamed(
+        [skill({ name: 'linear-tickets' })],
+        ['orca-linear', 'linear-tickets']
+      )
+    ).toBe(true)
+  })
+
+  it('matches accepted names by POSIX directory basename', () => {
+    expect(
+      hasInstalledAgentSkillNamed(
+        [
+          skill({
+            name: 'Linear Tickets',
+            directoryPath: '/Users/test/.agents/skills/linear-tickets'
+          })
+        ],
+        ['orca-linear', 'linear-tickets']
+      )
+    ).toBe(true)
+  })
+
+  it('matches accepted names by Windows directory basename', () => {
+    expect(
+      hasInstalledAgentSkillNamed(
+        [
+          skill({
+            name: 'Linear Tickets',
+            directoryPath: 'C:\\Users\\test\\.agents\\skills\\orca-linear'
+          })
+        ],
+        ['orca-linear', 'linear-tickets']
+      )
+    ).toBe(true)
+  })
+
+  it('keeps aliases opt-in for unrelated single-name checks', () => {
+    expect(hasInstalledAgentSkill([skill({ name: 'linear-tickets' })], 'orca-linear')).toBe(false)
   })
 })
 

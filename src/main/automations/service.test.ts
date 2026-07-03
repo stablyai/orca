@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
@@ -317,6 +317,8 @@ describe('AutomationService', () => {
         workspaceId: 'remote-wt-1',
         workspaceDisplayName: 'Remote automation',
         terminalSessionId: 'remote-tab-1',
+        terminalPaneKey: 'remote-tab-1:11111111-1111-4111-8111-111111111111',
+        terminalPtyId: 'remote-pty-1',
         completion: Promise.resolve({
           status: 'completed',
           outputSnapshot: {
@@ -336,11 +338,15 @@ describe('AutomationService', () => {
     expect(run.workspaceId).toBe('remote-wt-1')
     expect(run.workspaceDisplayName).toBe('Remote automation')
     expect(run.terminalSessionId).toBe('remote-tab-1')
+    expect(run.terminalPaneKey).toBe('remote-tab-1:11111111-1111-4111-8111-111111111111')
+    expect(run.terminalPtyId).toBe('remote-pty-1')
     await vi.waitFor(() =>
       expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
         status: 'completed',
         workspaceId: 'remote-wt-1',
         terminalSessionId: 'remote-tab-1',
+        terminalPaneKey: 'remote-tab-1:11111111-1111-4111-8111-111111111111',
+        terminalPtyId: 'remote-pty-1',
         outputSnapshot: expect.objectContaining({ content: 'Done.' })
       })
     )

@@ -7,7 +7,43 @@ export type QueryTokenMatch = {
 }
 
 export function normalizeMatchQuery(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+  return foldMatchQueryWhitespace(value).toLowerCase()
+}
+
+// Why: tab-create queries can come from large pasted text; keep whitespace
+// folding linear without whole-string regex replacement.
+function foldMatchQueryWhitespace(value: string): string {
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isMatchQueryWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index)
+  }
+  return normalized
+}
+
+function isMatchQueryWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 export function tokenizeMatchValue(value: string): string[] {

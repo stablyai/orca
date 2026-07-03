@@ -92,8 +92,8 @@ function decodeBase64Utf8(b64: string): string | null {
   // WHATWG `atob` rejects whitespace, so strip it first. Reject anything
   // else that doesn't match the base64 alphabet so we don't silently
   // accept garbage.
-  const stripped = b64.replace(/\s+/g, '')
-  if (!/^[A-Za-z0-9+/=]*$/.test(stripped)) {
+  const stripped = normalizeBase64Payload(b64)
+  if (stripped === null) {
     return null
   }
   try {
@@ -106,4 +106,41 @@ function decodeBase64Utf8(b64: string): string | null {
   } catch {
     return null
   }
+}
+
+function normalizeBase64Payload(value: string): string | null {
+  let stripped = ''
+  let sawWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isWhitespaceCode(code)) {
+      if (!sawWhitespace) {
+        stripped = value.slice(0, index)
+        sawWhitespace = true
+      }
+      continue
+    }
+    if (!isBase64Code(code)) {
+      return null
+    }
+    if (sawWhitespace) {
+      stripped += value[index]
+    }
+  }
+  return sawWhitespace ? stripped : value
+}
+
+function isBase64Code(code: number): boolean {
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    (code >= 48 && code <= 57) ||
+    code === 43 ||
+    code === 47 ||
+    code === 61
+  )
+}
+
+function isWhitespaceCode(code: number): boolean {
+  return code === 32 || (code >= 9 && code <= 13)
 }

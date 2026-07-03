@@ -11,6 +11,7 @@ import type {
 } from '../../../../shared/hosted-review'
 import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
 import { resolveCreatePrIntentEligibility } from './source-control-create-pr-intent-state'
+import { canClickBlockedCreateReviewReason } from './source-control-create-review-blocked-action'
 
 export function resolveProvisionalHostedReviewProvider(input: {
   hostedReview?: Pick<HostedReviewInfo, 'provider'> | null
@@ -97,8 +98,7 @@ export function resolveDisabledCreatePrHeaderAction(
   inputs: Pick<
     PrimaryActionInputs,
     'hostedReviewCreation' | 'isCommitting' | 'isRemoteOperationActive' | 'hasUnresolvedConflicts'
-  >,
-  options?: { noBranchChanges?: boolean }
+  >
 ): PrimaryAction | null {
   const { hostedReviewCreation } = inputs
   if (!shouldOfferCreatePrHeaderChrome(hostedReviewCreation)) {
@@ -124,12 +124,6 @@ export function resolveDisabledCreatePrHeaderAction(
     title = translate(
       'auto.components.right.sidebar.source.control.primary.action.c9f3a1b802',
       'Resolve conflicts before creating a {{value0}}.',
-      { value0: copy.reviewLabel }
-    )
-  } else if (options?.noBranchChanges) {
-    title = translate(
-      'auto.components.right.sidebar.source.control.primary.action.d2a8c4e703',
-      'No changes on this branch to include in a {{value0}}.',
       { value0: copy.reviewLabel }
     )
   } else {
@@ -195,7 +189,11 @@ export function resolveDisabledCreatePrHeaderAction(
     }
   }
 
-  return buildCreatePrHeaderAction(hostedReviewCreation, title, true)
+  const blockedByBusyState =
+    inputs.isCommitting || inputs.isRemoteOperationActive || inputs.hasUnresolvedConflicts
+  const disabled =
+    blockedByBusyState || !canClickBlockedCreateReviewReason(hostedReviewCreation.blockedReason)
+  return buildCreatePrHeaderAction(hostedReviewCreation, title, disabled)
 }
 
 export function resolveCreatePrIntentInFlightPrimaryAction(
@@ -308,5 +306,16 @@ export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): Primar
     }
   }
 
-  return resolveCreatePrIntentPrimaryAction(inputs) ?? resolveDisabledCreatePrHeaderAction(inputs)
+  const createPrIntent = resolveCreatePrIntentPrimaryAction(inputs)
+  if (createPrIntent) {
+    return createPrIntent
+  }
+
+  // Why: blocked notices are only for states the preparation intent cannot
+  // safely resolve, such as auth/default-branch/unsafe sync blockers.
+  if (canClickBlockedCreateReviewReason(inputs.hostedReviewCreation?.blockedReason)) {
+    return resolveDisabledCreatePrHeaderAction(inputs)
+  }
+
+  return resolveDisabledCreatePrHeaderAction(inputs)
 }

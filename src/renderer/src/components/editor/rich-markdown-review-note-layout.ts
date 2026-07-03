@@ -1,4 +1,5 @@
 import type { DiffComment } from '../../../../shared/types'
+import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
 
 export type RichMarkdownReviewNotePosition = {
   comment: DiffComment
@@ -49,7 +50,7 @@ export function stackRichMarkdownReviewNotePositions(
     // Why: cards render a fallback source-line quote even when no exact text was selected.
     const estimatedHeight =
       REVIEW_NOTE_BASE_HEIGHT_PX +
-      position.comment.body.split('\n').length * REVIEW_NOTE_BODY_LINE_HEIGHT_PX +
+      getCommentBodyLayoutLineCount(position.comment.body) * REVIEW_NOTE_BODY_LINE_HEIGHT_PX +
       REVIEW_NOTE_QUOTE_HEIGHT_PX
     const height = measured ?? estimatedHeight
     nextOpenTop = top + height + REVIEW_NOTE_GAP_PX

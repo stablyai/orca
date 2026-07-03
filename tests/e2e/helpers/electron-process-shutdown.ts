@@ -119,11 +119,11 @@ async function forceKillPidTree(pid: number): Promise<void> {
   // parent close path returned. Capture the tree before killing the root so
   // descendants do not get reparented out from under the cleanup.
   const pids = [...readPosixDescendantPids(pid), pid]
-  for (const targetPid of [...pids].reverse()) {
+  for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGTERM')
   }
   await delay(FORCE_KILL_WAIT_MS)
-  for (const targetPid of [...pids].reverse()) {
+  for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGKILL')
   }
 }

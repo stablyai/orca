@@ -9,6 +9,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GitPushTarget,
+  GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
   RemoveWorktreeResult,
@@ -30,6 +31,7 @@ export type PtySpawnOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
@@ -97,12 +99,33 @@ export type PtySpawnResult = {
   }
 }
 
+export type PtyProcessInfo = {
+  id: string
+  cwd: string
+  title: string
+  /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
+  terminalHandle?: string
+}
+
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
+  /**
+   * The size the PTY has ACTUALLY applied, not the last size requested.
+   * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
+   * so a resize can be silently dropped (session not yet alive, dead handle,
+   * cold-restore snapshot-cols coercion) while the caller still believes it
+   * landed. This is the readback the renderer's resume drift-check compares
+   * against to detect — and re-assert past — such drops. Returns null when the
+   * provider cannot confirm the applied size (unknown id, relay unreachable);
+   * callers treat null as "cannot confirm" and re-forward once. Optional so
+   * providers without an authoritative size source can omit it.
+   */
+  getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
+
   shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
@@ -113,7 +136,7 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
-  listProcesses(): Promise<{ id: string; cwd: string; title: string }[]>
+  listProcesses(): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: { id: string; data: string }) => void): () => void
@@ -127,6 +150,10 @@ export type FileStat = {
   size: number
   type: 'file' | 'directory' | 'symlink'
   mtime: number
+  mtimeMs?: number
+  dev?: number
+  ino?: number
+  nlink?: number
 }
 
 export type FileReadResult = {
@@ -139,9 +166,18 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  readTerminalArtifact?(
+    filePath: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
+  writeTerminalArtifact?(
+    filePath: string,
+    content: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileStat>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
@@ -163,10 +199,27 @@ export type IFilesystemProvider = {
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
 }
 
+export type TerminalArtifactAccessOptions = {
+  expectedRealPath: string
+  expectedStatIdentity: string | null
+  maxBytes: number
+}
+
 // ─── Git Provider ───────────────────────────────────────────────────
 
+export type GitProviderStatusOptions = {
+  includeIgnored?: boolean
+  bypassEffectiveUpstreamNegativeCache?: boolean
+  signal?: AbortSignal
+}
+
 export type IGitProvider = {
-  getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
+  getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>
+  getSubmoduleStatus(
+    worktreePath: string,
+    submodulePath: string,
+    area?: GitStagingArea
+  ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
@@ -227,6 +280,11 @@ export type IGitProvider = {
     options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
   ): Promise<RemoveWorktreeResult>
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
+  forceDeletePreservedBranch?(
+    repoPath: string,
+    branchName: string,
+    expectedHead: string
+  ): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
   exec(

@@ -58,7 +58,11 @@ export type TerminalHostOptions = {
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
-  onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
+  onFinalCheckpoint?: (
+    sessionId: string,
+    snapshot: TerminalSnapshot,
+    records: TakePendingOutputResult['records']
+  ) => void
   // Why: production keeps a large cap, but tests need a small deterministic cap
   // without spawning thousands of full terminal sessions.
   maxTombstones?: number
@@ -132,6 +136,7 @@ export class TerminalHost {
       sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
+      terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false,
       // Why: reap the dead session (dispose emulator + drop from the map) the
@@ -256,14 +261,29 @@ export class TerminalHost {
     return session.getSnapshot()
   }
 
-  // Why: same null-not-throw semantics as getSnapshot — incremental
-  // checkpoints are best-effort against sessions that may have just exited.
-  takePendingOutput(sessionId: string, includeSnapshot: boolean): TakePendingOutputResult | null {
+  // Why: read-only readback of the size the PTY actually applied (null-not-throw
+  // like getSnapshot). The renderer compares this against xterm to detect a
+  // resize that was dropped/coerced daemon-side and re-assert it.
+  getAppliedSize(sessionId: string): { cols: number; rows: number } | null {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
       return null
     }
-    return session.takePendingOutput(includeSnapshot)
+    return session.getAppliedSize()
+  }
+
+  // Why: same null-not-throw semantics as getSnapshot — incremental
+  // checkpoints are best-effort against sessions that may have just exited.
+  takePendingOutput(
+    sessionId: string,
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.takePendingOutput(includeSnapshot, opts)
   }
 
   isKilled(sessionId: string): boolean {
@@ -276,16 +296,17 @@ export class TerminalHost {
       if (!session.isAlive) {
         continue
       }
-      const snapshot = session.getSnapshot()
+      const size = session.getAppliedSize()
       result.push({
         sessionId: session.sessionId,
         state: session.state,
         shellState: session.shellState,
         isAlive: true,
+        ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
         pid: session.pid,
         cwd: session.getCwd(),
-        cols: snapshot?.cols ?? 0,
-        rows: snapshot?.rows ?? 0,
+        cols: size?.cols ?? 0,
+        rows: size?.rows ?? 0,
         createdAt: 0
       })
     }
@@ -300,10 +321,10 @@ export class TerminalHost {
         if (!session.isAlive) {
           continue
         }
-        const snapshot = session.getSnapshot()
-        if (snapshot) {
+        const take = session.takePendingOutput(true, { teardownSnapshot: true })
+        if (take?.snapshot) {
           try {
-            this.onFinalCheckpoint(sessionId, snapshot)
+            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
           } catch {
             // Best-effort — don't block shutdown
           }

@@ -82,6 +82,35 @@ describe('FontAutocomplete', () => {
     ).toBe('JetBrains Mono')
   })
 
+  it('shows the full list on focus when the committed font has multiple matching suggestions', async () => {
+    function Harness(): ReactNode {
+      const [value, setValue] = useState('Cascadia Mono')
+      return (
+        <FontAutocomplete
+          value={value}
+          suggestions={['Arial', 'Cascadia Code', 'Cascadia Mono', 'Cascadia Mono PL', 'Consolas']}
+          onChange={setValue}
+        />
+      )
+    }
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    await act(async () => {
+      getInput().focus()
+    })
+
+    expect(getOptionLabels()).toEqual([
+      'Arial',
+      'Cascadia Code',
+      'Cascadia Mono',
+      'Cascadia Mono PL',
+      'Consolas'
+    ])
+  })
+
   it('keeps typed searches filtered even after the value updates', async () => {
     function Harness(): ReactNode {
       const [value, setValue] = useState('Geist')

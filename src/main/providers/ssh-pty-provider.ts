@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 
 type DataCallback = (payload: { id: string; data: string }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
@@ -130,14 +131,16 @@ export class SshPtyProvider implements IPtyProvider {
       cols: opts.cols,
       rows: opts.rows,
       cwd: opts.cwd,
-      env: this.withRemoteCliBridgeEnv(opts.env),
+      env: this.withRemoteCliBridgeEnv(opts.env, opts.envToDelete),
       // Why: the relay's plugin-overlay env augmenter needs to know which
-      // Pi-compatible agent is being launched (`pi` vs `omp`) so it mirrors
-      // the right `~/.<kind>/agent` source dir on the remote disk. The
-      // relay does not execute `command` itself — the user types it into
-      // the shell — but receiving it as a hint lets overlay resolution be
-      // per-launch instead of always-Pi.
+      // Pi-compatible agent is being launched, while commandDelivery tells it
+      // whether to submit the command itself for runtime-owned background PTYs.
       ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.shellOverride !== undefined ? { shellOverride: opts.shellOverride } : {}),
+      ...(opts.terminalWindowsWslDistro !== undefined
+        ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
+        : {}),
+      ...(opts.commandDelivery ? { commandDelivery: opts.commandDelivery } : {}),
       ...(opts.startupCommandDelivery
         ? { startupCommandDelivery: opts.startupCommandDelivery }
         : {})
@@ -150,12 +153,17 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   private withRemoteCliBridgeEnv(
-    env: Record<string, string> | undefined
-  ): Record<string, string> | undefined {
-    if (!this.remoteCliBridgeEnv) {
-      return env
-    }
+    env: Record<string, string> | undefined,
+    envToDelete?: readonly string[]
+  ): Record<string, string> {
     const merged = { ...env }
+    for (const key of envToDelete ?? []) {
+      delete merged[key]
+    }
+    seedPowerlevel10kWizardEnv(merged, { envToDelete })
+    if (!this.remoteCliBridgeEnv) {
+      return merged
+    }
     const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
     if (pathKey) {
@@ -175,6 +183,16 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
+  }
+
+  async attachForReconnect(id: string): Promise<{ replay?: string }> {
+    // Why: reconnect owns replay delivery so stale/duplicate attach results can
+    // be filtered before they reach the renderer.
+    const result = (await this.mux.request('pty.attach', {
+      id: this.toRelayPtyId(id),
+      suppressReplayNotification: true
+    })) as { replay?: string } | undefined
+    return result ?? {}
   }
 
   write(id: string, data: string): void {
@@ -236,9 +254,9 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     const result = await this.mux.request('pty.listProcesses')
-    return (result as { id: string; cwd: string; title: string }[]).map((session) => ({
+    return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)
     }))

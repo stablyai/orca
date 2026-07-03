@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
@@ -8,6 +8,10 @@ import {
   tokenizeCustomCommandTemplate,
   truncateDiffForPrompt
 } from './commit-message-prompt'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('buildCommitPrompt', () => {
   it('embeds the diff into the base prompt', () => {
@@ -99,6 +103,27 @@ describe('cleanGeneratedCommitMessage', () => {
     expect(cleanGeneratedCommitMessage('feat: a\r\nbody line\r\n')).toBe('feat: a\nbody line')
   })
 
+  it('cleans large fenced CRLF output without regex-wide normalization', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const fence = '```'
+    const raw = `\r\n${fence}text\r\nfeat: large output\r\n${'body line\r\n'.repeat(10_000)}${fence}\r\n`
+
+    const result = cleanGeneratedCommitMessage(raw)
+
+    expect(result.startsWith('feat: large output\nbody line')).toBe(true)
+    expect(result.endsWith('body line')).toBe(true)
+    expect(result).not.toContain('\r\n')
+    const usedCrlfReplace = replaceSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
+    )
+    const usedFenceMatch = matchSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
+    )
+    expect(usedCrlfReplace).toBe(false)
+    expect(usedFenceMatch).toBe(false)
+  })
+
   it('strips a leading list marker from the commit subject', () => {
     expect(cleanGeneratedCommitMessage('● Add Copilot entry to agent results')).toBe(
       'Add Copilot entry to agent results'
@@ -140,6 +165,18 @@ describe('extractAgentErrorMessage', () => {
     expect(extractAgentErrorMessage(out, '')).toBe('second failure')
   })
 
+  it('uses the last ERROR line in large CRLF output without line-array splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+    const out = `${'preamble\r\n'.repeat(10_000)}ERROR: first failure\r\nretry\r\nERROR: second failure\r\n`
+
+    expect(extractAgentErrorMessage(out, '')).toBe('second failure')
+
+    const usedLineSplit = splitSpy.mock.calls.some(
+      ([separator]) => separator instanceof RegExp && separator.source === '\\r?\\n'
+    )
+    expect(usedLineSplit).toBe(false)
+  })
+
   it('matches an `Error:` line emitted on stdout', () => {
     expect(extractAgentErrorMessage('Error: model unavailable\n', '')).toBe('model unavailable')
   })
@@ -168,6 +205,30 @@ describe('extractAgentErrorMessage', () => {
     expect(extractAgentErrorMessage(stdout, '')).toBe(
       'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
     )
+  })
+
+  it('extracts wrapped provider error-code payloads from large output without replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const echoedPrompt = 'echoed pasted prompt '.repeat(10_000)
+    const stdout = [
+      `${echoedPrompt}Error code: 401 - {'error': {'message': 'The API Key appears to be invalid or ma`,
+      "y have expired. Please verify your credentials and try again.', 'type': 'invalid",
+      "_authentication_error'}}"
+    ].join('\r\n')
+
+    expect(extractAgentErrorMessage(stdout, '')).toBe(
+      'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
+    )
+    expect(replaceSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not strip ANSI across a paste-sized single-line log before error-code fallback', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const pastedLog = 'x'.repeat(20_000)
+    const stdout = `${pastedLog}Error code: 400 - {'message': 'bad request'}`
+
+    expect(extractAgentErrorMessage(stdout, '')).toBe('bad request')
+    expect(replaceSpy).not.toHaveBeenCalled()
   })
 
   it('returns null when no ERROR line is present', () => {

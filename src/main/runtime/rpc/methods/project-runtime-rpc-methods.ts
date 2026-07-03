@@ -90,7 +90,10 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'project.list',
     params: null,
-    handler: (_params, { runtime }) => ({ projects: runtime.listProjects() })
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return { projects: runtime.listProjects() }
+    }
   }),
   defineMethod({
     name: 'project.update',
@@ -102,7 +105,10 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectHostSetup.list',
     params: null,
-    handler: (_params, { runtime }) => ({ setups: runtime.listProjectHostSetups() })
+    handler: (_params, { runtime }) => {
+      runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return { setups: runtime.listProjectHostSetups() }
+    }
   }),
   defineMethod({
     name: 'projectHostSetup.create',

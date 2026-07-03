@@ -1,20 +1,29 @@
 import { basename } from '@/lib/path'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
-export type CombinedDiffFileTreeMode = 'uncommitted' | 'branch' | 'commit'
+export type CombinedDiffFileTreeMode = 'all' | 'uncommitted' | 'branch' | 'commit'
 export type CombinedDiffFileTreeEntry = GitStatusEntry | GitBranchChangeEntry
 export type CombinedDiffBranchTreeArea = 'combined-branch' | 'combined-commit'
 
 export const NO_EXTENSION_KEY = '(no extension)'
+export const COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES = 2 * 1024
+
+export function isCombinedDiffFileTreeQueryTooLarge(
+  query: string,
+  maxBytes = COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 
 export function getCombinedDiffFileTreeSectionKey(
   mode: CombinedDiffFileTreeMode,
   entry: CombinedDiffFileTreeEntry
 ): string {
-  if (mode === 'uncommitted' && 'area' in entry) {
+  if ((mode === 'all' || mode === 'uncommitted') && 'area' in entry) {
     return `${entry.area}:${entry.path}`
   }
-  return `${mode === 'branch' ? 'combined-branch' : 'combined-commit'}:${entry.path}`
+  return `${mode === 'commit' ? 'combined-commit' : 'combined-branch'}:${entry.path}`
 }
 
 export function createCombinedDiffSectionIndexMap(
@@ -96,7 +105,11 @@ export function getFilteredCombinedDiffFileTreeEntries({
   includeViewed: boolean
   viewedSectionKeys: ReadonlySet<string>
 }): CombinedDiffFileTreeEntry[] {
-  const normalizedQuery = query.trim().toLowerCase()
+  if (isCombinedDiffFileTreeQueryTooLarge(query)) {
+    return []
+  }
+  const trimmedQuery = query.trim()
+  const normalizedQuery = trimmedQuery.toLowerCase()
   return entries.filter((entry) => {
     if (excludedExtensions.has(getEntryExtension(entry))) {
       return false

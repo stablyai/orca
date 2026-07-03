@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
     baseY: 0
   })),
   flushTerminalOutput: vi.fn(),
-  getTerminalOutputEpoch: vi.fn(() => 1)
+  getTerminalOutputEpoch: vi.fn(() => 1),
+  getTerminalScrollIntentKind: vi.fn(() => 'followOutput'),
+  markTerminalFollowOutput: vi.fn()
 }))
 
 const reactRefState = vi.hoisted(() => ({
@@ -68,6 +70,11 @@ vi.mock('@/lib/pane-manager/pane-scroll', () => ({
   getTerminalOutputEpoch: mocks.getTerminalOutputEpoch
 }))
 
+vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
+  getTerminalScrollIntentKind: mocks.getTerminalScrollIntentKind,
+  markTerminalFollowOutput: mocks.markTerminalFollowOutput
+}))
+
 describe('useTerminalScrollVisibilityMemory', () => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
@@ -75,6 +82,7 @@ describe('useTerminalScrollVisibilityMemory', () => {
   beforeEach(() => {
     resetHookRefs()
     vi.clearAllMocks()
+    mocks.getTerminalScrollIntentKind.mockReturnValue('followOutput')
   })
 
   afterEach(() => {
@@ -121,6 +129,42 @@ describe('useTerminalScrollVisibilityMemory', () => {
       maxChars: 256 * 1024
     })
     expect(terminal.scrollToBottom).toHaveBeenCalled()
+    expect(mocks.markTerminalFollowOutput).toHaveBeenCalledWith(terminal)
+  })
+
+  it('does not turn a pinned viewport into follow-output when pending focus requests catch up', () => {
+    mocks.getTerminalScrollIntentKind.mockReturnValue('pinnedViewport')
+    const terminal = {
+      onScroll: vi.fn(() => ({ dispose: vi.fn() })),
+      scrollToBottom: vi.fn()
+    }
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1, terminal }])
+    }
+    const animationFrames: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    })
+
+    beginHookRender()
+    const visibilityMemory = useTerminalScrollVisibilityMemory({
+      managerRef: { current: manager as never },
+      isVisibleRef: { current: true },
+      visibleResumeCompleteRef: { current: true },
+      paneCount: 1
+    })
+
+    visibilityMemory.scheduleFollowOutputIfNeeded(1)
+    animationFrames.shift()?.(16)
+    animationFrames.shift()?.(32)
+
+    expect(mocks.flushTerminalOutput).toHaveBeenCalledWith(terminal, {
+      maxChars: 256 * 1024
+    })
+    expect(mocks.cancelDeferredScrollRestore).not.toHaveBeenCalled()
+    expect(mocks.markTerminalFollowOutput).not.toHaveBeenCalled()
+    expect(terminal.scrollToBottom).not.toHaveBeenCalled()
   })
 
   it('cancels pending follow-output frames on cleanup', () => {

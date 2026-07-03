@@ -58,14 +58,21 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
+async function flushRuntimeGraphSyncTimer(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(20)
+  await flushMicrotasks()
+}
+
 afterEach(() => {
   setRuntimeGraphSyncEnabled(false)
   setRuntimeGraphStoreStateGetter(null)
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
 describe('scheduleRuntimeGraphSync', () => {
   it('coalesces updates that arrive while the runtime graph IPC is in flight', async () => {
+    vi.useFakeTimers()
     const syncCalls: {
       promise: Promise<void>
       resolve: (value: void | PromiseLike<void>) => void
@@ -91,19 +98,50 @@ describe('scheduleRuntimeGraphSync', () => {
     )
 
     setRuntimeGraphSyncEnabled(true)
-    await flushMicrotasks()
+    await flushRuntimeGraphSyncTimer()
 
     expect(syncWindowGraph).toHaveBeenCalledTimes(1)
     scheduleRuntimeGraphSync()
     scheduleRuntimeGraphSync()
-    await flushMicrotasks()
+    await flushRuntimeGraphSyncTimer()
 
     expect(syncWindowGraph).toHaveBeenCalledTimes(1)
     syncCalls[0]?.resolve()
     await flushMicrotasks()
+    await flushRuntimeGraphSyncTimer()
 
     expect(syncWindowGraph).toHaveBeenCalledTimes(2)
     syncCalls[1]?.resolve()
+    unregister()
+  })
+
+  it('coalesces updates that arrive before the frame timer fires', async () => {
+    vi.useFakeTimers()
+    const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    const unregister = registerRuntimeTerminalTab({
+      tabId: 'term-1',
+      worktreeId: 'wt-1',
+      getManager: () => null,
+      getContainer: () => null,
+      getPtyIdForPane: () => null
+    })
+    setRuntimeGraphStoreStateGetter(() =>
+      makeState({
+        tabsByWorktree: { 'wt-1': [makeTerminalTab()] } as AppState['tabsByWorktree']
+      })
+    )
+
+    setRuntimeGraphSyncEnabled(true)
+    scheduleRuntimeGraphSync()
+    await flushMicrotasks()
+    scheduleRuntimeGraphSync()
+
+    expect(syncWindowGraph).toHaveBeenCalledTimes(0)
+    await flushRuntimeGraphSyncTimer()
+
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
     unregister()
   })
 })

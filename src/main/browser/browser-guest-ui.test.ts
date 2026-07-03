@@ -469,7 +469,7 @@ describe('setupGuestShortcutForwarding', () => {
     }
   })
 
-  it('forwards browser page zoom shortcuts from focused guest pages', () => {
+  it('forwards app zoom shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -497,12 +497,12 @@ describe('setupGuestShortcutForwarding', () => {
     expect(numpadSubtractPreventDefault).toHaveBeenCalledTimes(1)
     expect(resetPreventDefault).toHaveBeenCalledTimes(1)
     expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', 'reset')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'terminal:zoom', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'reset')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'terminal:zoom', 'in')
   })
 
   it('forwards browser history shortcuts from focused guest pages', () => {
@@ -528,6 +528,29 @@ describe('setupGuestShortcutForwarding', () => {
     expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', 'back')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
+  })
+
+  it('forwards quick-command menu shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
+      })
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'KeyQ',
+      key: 'q',
+      meta: isMac,
+      control: !isMac,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
   })
 
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
@@ -558,7 +581,7 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(defaultPreventDefault).not.toHaveBeenCalled()
     expect(customPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenCalledWith('terminal:zoom', 'in')
   })
 
   it('forwards double-tap window shortcuts from focused guest pages', () => {

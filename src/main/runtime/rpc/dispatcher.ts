@@ -4,6 +4,7 @@
 // runtime-rpc.ts focused on framing/auth/connection bookkeeping.
 import {
   ZodError,
+  InvalidArgumentError,
   buildRegistry,
   formatZodError,
   isStreamingMethod,
@@ -25,6 +26,7 @@ import {
   successResponse
 } from './errors'
 import { ALL_RPC_METHODS } from './methods'
+import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 export type DispatcherOptions = {
@@ -70,6 +72,10 @@ export class RpcDispatcher {
       )
     }
 
+    const isEmulator = request.method.startsWith('emulator.')
+    if (isEmulator) {
+      emulatorProbe(`rpc ${request.method}`, request.params)
+    }
     try {
       const result = await method.handler(parsedParams.value, {
         runtime: this.runtime,
@@ -78,6 +84,9 @@ export class RpcDispatcher {
       this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
       return successResponse(request.id, meta, result)
     } catch (error) {
+      if (isEmulator) {
+        emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
+      }
       return this.mapError(request, meta, error)
     }
   }
@@ -92,6 +101,7 @@ export class RpcDispatcher {
       connectionId?: string
       signal?: AbortSignal
       clientId?: string
+      clientKind?: 'mobile' | 'runtime'
       sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
       registerBinaryStreamHandler?: (
         streamId: number,
@@ -124,6 +134,7 @@ export class RpcDispatcher {
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
+          clientKind: options?.clientKind,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         })
@@ -157,6 +168,7 @@ export class RpcDispatcher {
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
+          clientKind: options?.clientKind,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         },
@@ -192,6 +204,13 @@ export class RpcDispatcher {
   }
 
   private mapError(request: RpcRequest, meta: RpcEnvelopeMeta, error: unknown): RpcResponse {
+    if (error instanceof ZodError) {
+      return this.invalidArgumentResponse(request, meta, formatZodError(error))
+    }
+    if (error instanceof InvalidArgumentError) {
+      return this.invalidArgumentResponse(request, meta, error.message)
+    }
+
     // Why: browser methods throw BrowserError with a structured `code`;
     // every other runtime error has a plain-message code. Routing by method
     // prefix keeps the mapping a single decision rather than a per-method
@@ -201,9 +220,6 @@ export class RpcDispatcher {
     }
     if (request.method.startsWith('emulator.')) {
       return mapEmulatorError(request.id, meta, error)
-    }
-    if (error instanceof ZodError) {
-      return this.invalidArgumentResponse(request, meta, formatZodError(error))
     }
     return mapRuntimeError(request.id, meta, error)
   }

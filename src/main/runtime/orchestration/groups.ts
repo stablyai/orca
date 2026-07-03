@@ -4,7 +4,15 @@ import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 // Resolution is done at send-time: one message record per recipient, same thread_id,
 // so each recipient gets their own read-tracking (Section 4.5).
 
-const AGENT_NAME_GROUPS = ['claude', 'openclaude', 'codex', 'opencode', 'gemini', 'droid'] as const
+const AGENT_NAME_GROUPS = [
+  'claude',
+  'openclaude',
+  'codex',
+  'opencode',
+  'mimo',
+  'gemini',
+  'droid'
+] as const
 
 export type GroupAddress =
   | '@all'

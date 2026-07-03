@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: () => null
+}))
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, string>) => {
+    let result = fallback
+    for (const [key, value] of Object.entries(values ?? {})) {
+      result = result.replace(`{{${key}}}`, value)
+    }
+    return result
+  }
+}))
+
 import {
+  formatResetCreditExpiry,
   formatResetCountdown,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
@@ -19,6 +35,10 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
   }
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('formatResetCountdown', () => {
   it('uses natural copy when the reset time has arrived', () => {
     expect(formatResetCountdown(0)).toBe('Resets now')
@@ -27,6 +47,22 @@ describe('formatResetCountdown', () => {
 
   it('keeps the "in" preposition for future reset times', () => {
     expect(formatResetCountdown(12 * 60 * 60_000 + 41 * 60_000)).toBe('Resets in 12h 41m')
+  })
+})
+
+describe('formatResetCreditExpiry', () => {
+  it('shows singular and plural expiry countdowns', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'))
+
+    expect(formatResetCreditExpiry(Date.parse('2026-06-20T14:30:00Z'), 1)).toBe('Expires in 2h 30m')
+    expect(formatResetCreditExpiry(Date.parse('2026-06-25T12:00:00Z'), 2)).toBe(
+      'Next expires in 5d'
+    )
+  })
+
+  it('omits expiry copy when the backend has not reported an expiry', () => {
+    expect(formatResetCreditExpiry(null, 1)).toBeNull()
   })
 })
 
@@ -127,12 +163,64 @@ describe('provider usage error copy', () => {
   it('keeps live-Claude refresh deferral copy visible', () => {
     const p = provider({
       error:
-        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.',
+      usageMetadata: {
+        failureKind: 'deferred-by-live-session',
+        deferredByLiveClaudeSession: true
+      }
     })
 
+    expect(getProviderUsageStatusLabel(p)).toBe('Waiting for Claude session')
     expect(getProviderUsageErrorMessage(p)).toBe(
-      'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+      'Claude usage will refresh after the live Claude terminal rotates its credentials.'
     )
+  })
+
+  it('uses structured Claude failure kinds before raw auth regexes', () => {
+    const p = provider({
+      error: 'Invalid OAuth token.',
+      usageMetadata: {
+        failureKind: 'stale-token',
+        attemptedSources: ['oauth', 'cli']
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Refreshing sign-in')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
+    )
+  })
+
+  it('uses structured network copy for Claude usage failures', () => {
+    const p = provider({
+      error: 'Network error while refreshing OAuth usage: ECONNRESET',
+      usageMetadata: { failureKind: 'network' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Network issue')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude usage could not be refreshed because the network request failed.'
+    )
+  })
+
+  it('uses structured Keychain copy for Claude usage failures', () => {
+    const p = provider({
+      error: 'Claude Keychain credentials unavailable',
+      usageMetadata: { failureKind: 'keychain-unavailable' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Sign-in unavailable')
+    expect(getProviderUsageErrorMessage(p)).toBe('Claude sign-in credentials could not be read.')
+  })
+
+  it('uses structured unavailable copy for Claude CLI usage shell failures', () => {
+    const p = provider({
+      error: 'Claude plan usage is unavailable for this Claude CLI session.',
+      usageMetadata: { failureKind: 'usage-unavailable' }
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Usage unavailable')
+    expect(getProviderUsageErrorMessage(p)).toBe('Claude usage is unavailable right now.')
   })
 })
 
@@ -183,6 +271,29 @@ describe('getWindowSections', () => {
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
       { label: 'Weekly', window: p.weekly }
+    ])
+  })
+
+  it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
+    const p: ProviderRateLimits = {
+      provider: 'claude',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 20, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      fableWeekly: {
+        usedPercent: 42,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    expect(sections).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Fable', window: p.fableWeekly }
     ])
   })
 

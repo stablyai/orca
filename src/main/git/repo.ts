@@ -1,9 +1,13 @@
 /* oxlint-disable max-lines */
-import { execSync } from 'child_process'
-import { existsSync, statSync } from 'fs'
-import { basename } from 'path'
+import { execSync } from 'node:child_process'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
+import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
+import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { toWindowsWslPath } from '../wsl'
 import {
   buildHostedRemoteCommitUrl,
   buildHostedRemoteFileUrl,
@@ -16,6 +20,9 @@ const GH_LOGIN_TIMEOUT_MS = 2500
 type LocalGitExecOptions = {
   wslDistro?: string
 }
+
+type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
+type GitMarkerScanResult = { status: 'valid'; rootPath: string } | { status: 'absent' | 'invalid' }
 
 function gitExecOptions(
   cwd: string,
@@ -68,24 +75,367 @@ export function isGitRepo(path: string): boolean {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return false
     }
+  } catch {
+    return false
+  }
+
+  // Authoritative positive signal: ask git directly. Covers regular work
+  // trees, linked worktrees (gitfile), submodules, and bare repos.
+  const gitProbeResult = probeGitRepo(path)
+  if (gitProbeResult === 'repo') {
+    return true
+  }
+  if (gitProbeResult === 'not-repo') {
+    return false
+  }
+
+  // Why: `git rev-parse` can fail to produce a clean answer for reasons
+  // unrelated to repo-ness — a transient spawn failure or git-shim hiccup in
+  // the packaged app, resource pressure in the Electron main process, or a
+  // repo whose config errors out. Treating every such failure as "not a repo"
+  // silently downgrades a real repository to a plain folder (worktrees, SCM,
+  // PRs all disappear) and is the regression behind the spurious "Open as
+  // Folder" prompt. Fall back to a validated `.git` marker so a directory that
+  // genuinely carries Git metadata is still recognized; a directory with only
+  // a garbage `.git` file has no valid marker and is correctly rejected.
+  const markerScan = scanGitMarkerSync(path)
+  if (markerScan.status === 'valid' && !warnedMarkerFallbackThisSession) {
+    // Why: warn only once per session. The folder scanner calls isGitRepo for
+    // many paths; if git is genuinely unavailable, warning per path would flood
+    // the main-process logs without adding signal beyond the first occurrence.
+    warnedMarkerFallbackThisSession = true
+    console.warn('[isGitRepo] git rev-parse could not confirm repo; accepted via .git marker', {
+      path
+    })
+  }
+  return markerScan.status === 'valid'
+}
+
+let warnedMarkerFallbackThisSession = false
+
+/**
+ * Tri-state git probe: only a clean pair of negative answers is a definitive
+ * non-repo. Spawn/config failures stay indeterminate so marker fallback can run.
+ */
+function probeGitRepo(path: string): GitRepoProbeResult {
+  let sawFailure = false
+
+  try {
     const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
     if (insideWorkTree === 'true') {
-      return true
+      return 'repo'
+    }
+    if (insideWorkTree !== 'false') {
+      return 'indeterminate'
     }
   } catch {
-    // Fall through to the bare-repo probe below.
+    sawFailure = true
   }
 
   try {
     const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
       cwd: path
     }).trim()
-    return bareRepo === 'true'
+    if (bareRepo === 'true') {
+      return 'repo'
+    }
+    if (bareRepo !== 'false') {
+      return 'indeterminate'
+    }
+  } catch {
+    sawFailure = true
+  }
+
+  return sawFailure ? 'indeterminate' : 'not-repo'
+}
+
+export function getGitRepoRoot(path: string): string {
+  try {
+    if (!existsSync(path) || !statSync(path).isDirectory()) {
+      return path
+    }
+    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+      cwd: path
+    }).trim()
+    if (insideWorkTree === 'true') {
+      const root = gitExecFileSync(['rev-parse', '--show-toplevel'], {
+        cwd: path
+      }).trim()
+      return normalizeGitRepoRootForInputPath(path, root)
+    }
+  } catch {
+    // Fall through to preserving the original path.
+  }
+  const markerScan = scanGitMarkerSync(path)
+  if (markerScan.status === 'valid') {
+    return normalizeGitRepoRootForInputPath(path, markerScan.rootPath)
+  }
+  return path
+}
+
+export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
+  const inputWsl = parseWslUncPath(inputPath)
+  if (inputWsl && rootPath.startsWith('/')) {
+    // Why: WSL git reports Linux-native roots; Orca must persist the UNC path so
+    // later local git calls keep routing through the WSL-aware runner.
+    return toWindowsWslPath(rootPath, inputWsl.distro)
+  }
+  return normalizeRuntimePathSeparators(rootPath)
+}
+
+/**
+ * Filesystem-only check for genuine Git metadata, used as a fallback when git
+ * cannot give a clean answer. Strict enough to reject a directory whose `.git`
+ * is a garbage file (preserving the validation added in 18ed7b27d):
+ * - `.git` directory: accepted only if it has real common or linked-worktree
+ *   gitdir shape, so empty/incomplete `.git/` folders are rejected.
+ * - `.git` file: accepted only if its `gitdir:` target resolves to valid Git
+ *   metadata, covering linked worktrees and submodules.
+ * - bare repo root: accepted when HEAD + objects/ + refs/ are present and the
+ *   config does not mark it as a regular worktree admin dir.
+ */
+function scanGitMarkerSync(path: string): GitMarkerScanResult {
+  const realPath = resolveRealPathSync(path)
+  if (realPath && realPath !== path) {
+    const lexicalScan = scanGitMarkerAncestorsSync(path)
+    const realPathScan = scanGitMarkerAncestorsSync(realPath)
+    if (
+      lexicalScan.status === 'valid' &&
+      realPathScan.status === 'valid' &&
+      pathsReferToSameEntry(lexicalScan.rootPath, realPathScan.rootPath)
+    ) {
+      // Why: preserve lexical spellings such as /var vs /private/var, but let a
+      // symlink from one repo into another bind to the real target repo like git.
+      return lexicalScan
+    }
+    return realPathScan
+  }
+  return scanGitMarkerAncestorsSync(path)
+}
+
+function resolveRealPathSync(path: string): string | null {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    try {
+      return realpathSync(path)
+    } catch {
+      return null
+    }
+  }
+}
+
+function scanGitMarkerAncestorsSync(path: string): GitMarkerScanResult {
+  for (const candidate of ancestorDirectories(path)) {
+    if (!isInsideDotGitMarker(candidate, path)) {
+      const worktreeMarker = scanWorktreeMarkerSync(candidate)
+      if (worktreeMarker.status !== 'absent') {
+        return worktreeMarker
+      }
+    }
+    if (hasValidBareRepoMarkerSync(candidate)) {
+      return { status: 'valid', rootPath: candidate }
+    }
+  }
+  return { status: 'absent' }
+}
+
+function ancestorDirectories(path: string): string[] {
+  const directories: string[] = []
+  let current = path
+  while (true) {
+    directories.push(current)
+    const parent = dirname(current)
+    if (parent === current) {
+      return directories
+    }
+    current = parent
+  }
+}
+
+function isInsideDotGitMarker(rootPath: string, targetPath: string): boolean {
+  const relativePath = relative(rootPath, targetPath)
+  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return false
+  }
+  const firstSegment = relativePath.split(/[\\/]+/)[0]
+  if (firstSegment === '.git') {
+    return true
+  }
+  if (firstSegment.toLowerCase() !== '.git') {
+    return false
+  }
+  return pathsReferToSameEntry(join(rootPath, firstSegment), join(rootPath, '.git'))
+}
+
+function pathsReferToSameEntry(leftPath: string, rightPath: string): boolean {
+  try {
+    const leftStat = statSync(leftPath)
+    const rightStat = statSync(rightPath)
+    if (leftStat.ino !== 0 && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino) {
+      return true
+    }
+    const leftRealPath = normalizeRuntimePathSeparators(realpathSync.native(leftPath))
+    const rightRealPath = normalizeRuntimePathSeparators(realpathSync.native(rightPath))
+    return process.platform === 'win32'
+      ? leftRealPath.toLowerCase() === rightRealPath.toLowerCase()
+      : leftRealPath === rightRealPath
   } catch {
     return false
   }
+}
+
+function scanWorktreeMarkerSync(worktreePath: string): GitMarkerScanResult {
+  const dotGit = join(worktreePath, '.git')
+  let marker: ReturnType<typeof statSync>
+  try {
+    marker = statSync(dotGit)
+  } catch {
+    return { status: 'absent' }
+  }
+
+  if (marker.isDirectory()) {
+    return hasValidGitDirectorySync(dotGit)
+      ? { status: 'valid', rootPath: worktreePath }
+      : { status: 'invalid' }
+  }
+  if (marker.isFile()) {
+    let gitDir: string | null
+    try {
+      gitDir = parseGitdirFile(worktreePath, readFileSync(dotGit, 'utf8'))
+    } catch {
+      return { status: 'invalid' }
+    }
+    return gitDir !== null && hasValidGitDirectorySync(gitDir)
+      ? { status: 'valid', rootPath: worktreePath }
+      : { status: 'invalid' }
+  }
+  return { status: 'invalid' }
+}
+
+function parseGitdirFile(basePath: string, content: string): string | null {
+  const firstLine = content.split(/\r?\n/, 1)[0] ?? ''
+  const match = firstLine.match(/^gitdir:\s*(.+?)\s*$/i)
+  if (!match) {
+    return null
+  }
+  return resolveGitMetadataPath(basePath, match[1])
+}
+
+function resolveGitMetadataPath(basePath: string, rawPath: string): string | null {
+  const value = rawPath.trim()
+  if (!value) {
+    return null
+  }
+  const baseWsl = parseWslUncPath(basePath)
+  if (baseWsl && value.startsWith('/')) {
+    return toWindowsWslPath(value, baseWsl.distro)
+  }
+  return isAbsolute(value) ? value : resolve(basePath, value)
+}
+
+function hasValidGitDirectorySync(gitDir: string): boolean {
+  return hasValidCommonGitDirectorySync(gitDir) || hasValidLinkedWorktreeGitDirectorySync(gitDir)
+}
+
+function hasValidCommonGitDirectorySync(gitDir: string): boolean {
+  try {
+    return (
+      statSync(join(gitDir, 'HEAD')).isFile() &&
+      statSync(join(gitDir, 'objects')).isDirectory() &&
+      statSync(join(gitDir, 'refs')).isDirectory()
+    )
+  } catch {
+    return false
+  }
+}
+
+function hasValidLinkedWorktreeGitDirectorySync(gitDir: string): boolean {
+  try {
+    if (!statSync(join(gitDir, 'HEAD')).isFile() || !statSync(join(gitDir, 'commondir')).isFile()) {
+      return false
+    }
+    const commonDir = resolveGitMetadataPath(
+      gitDir,
+      readFileSync(join(gitDir, 'commondir'), 'utf8')
+    )
+    return commonDir !== null && hasValidCommonGitDirectorySync(commonDir)
+  } catch {
+    return false
+  }
+}
+
+function hasValidBareRepoMarkerSync(path: string): boolean {
+  return hasValidCommonGitDirectorySync(path) && !gitConfigDeclaresNonBare(path)
+}
+
+function gitConfigDeclaresNonBare(gitDir: string): boolean {
+  try {
+    const config = readFileSync(join(gitDir, 'config'), 'utf8')
+    let inCoreSection = false
+    for (const line of config.split(/\r?\n/)) {
+      const section = line.match(/^\s*\[([^\]]+)\]/)
+      if (section) {
+        inCoreSection = section[1].trim().toLowerCase() === 'core'
+        continue
+      }
+      const bare = line.match(/^\s*bare\s*=\s*(.*?)\s*$/i)
+      if (inCoreSection && bare) {
+        return isGitBooleanFalse(normalizeGitConfigValue(bare[1]))
+      }
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+function normalizeGitConfigValue(value: string): string {
+  const unescaped = stripGitConfigInlineComment(value).trim().replace(/\\"/g, '"')
+  if (
+    unescaped.length >= 2 &&
+    ((unescaped.startsWith('"') && unescaped.endsWith('"')) ||
+      (unescaped.startsWith("'") && unescaped.endsWith("'")))
+  ) {
+    return unescaped.slice(1, -1)
+  }
+  return unescaped
+}
+
+function stripGitConfigInlineComment(value: string): string {
+  let quote: '"' | "'" | null = null
+  let escaped = false
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === '#' || char === ';') {
+      return value.slice(0, i)
+    }
+  }
+  return value
+}
+
+function isGitBooleanFalse(value: string): boolean {
+  return ['', 'false', 'no', 'off', '0'].includes(value.toLowerCase())
 }
 
 /**
@@ -363,13 +713,11 @@ export function getRemoteDrift(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
       gitExecOptions(repoPath, options)
     )
-    const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
-    const ahead = Number(aheadStr)
-    const behind = Number(behindStr)
-    if (!Number.isFinite(ahead) || !Number.isFinite(behind)) {
+    const counts = parseGitRevListAheadBehindCounts(stdout)
+    if (counts.status !== 'ok') {
       return null
     }
-    return { ahead, behind }
+    return { ahead: counts.ahead, behind: counts.behind }
   } catch {
     return null
   }

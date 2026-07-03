@@ -46,6 +46,13 @@ type RpcRateWindow = {
 
 type RateLimitResetCredits = {
   availableCount: number
+  totalEarnedCount?: number
+  nextExpiresAt?: number | null
+  credits?: {
+    status: string
+    expiresAt: number | null
+    grantedAt: number | null
+  }[]
 }
 
 type RpcRateLimitsResult = {
@@ -59,6 +66,13 @@ type RpcRateLimitsResponse = {
   rateLimits?: RpcRateLimitsResult
   rateLimitResetCredits?: {
     availableCount?: number
+    totalEarnedCount?: number
+    nextExpiresAt?: number | null
+    credits?: {
+      status?: string
+      expiresAt?: number | string | null
+      grantedAt?: number | string | null
+    }[]
   } | null
 }
 
@@ -69,10 +83,14 @@ type CodexAuthFile = {
   }
 }
 
-type BackendUsageResponse = {
-  rate_limit_reset_credits?: {
-    available_count?: number
-  } | null
+type BackendRateLimitResetCreditsResponse = {
+  available_count?: number
+  total_earned_count?: number
+  credits?: {
+    status?: string
+    expires_at?: string | null
+    granted_at?: string | null
+  }[]
 }
 
 type BackendConsumeRateLimitResetCreditResponse = {
@@ -122,6 +140,39 @@ function getCodexHomePath(codexHomePath?: string | null): string {
   return codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
 }
 
+function parseCreditTimestamp(value: number | string | null | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // Why: reset-credit payloads may use Unix seconds or Unix milliseconds.
+    return value < 10_000_000_000 ? value * 1000 : value
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    return null
+  }
+  const trimmed = value.trim()
+  const numeric = Number(trimmed)
+  if (Number.isFinite(numeric)) {
+    return numeric < 10_000_000_000 ? numeric * 1000 : numeric
+  }
+  const timestamp = Date.parse(trimmed)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function normalizeCreditStatus(status: string | undefined): string {
+  return status?.toLowerCase() ?? 'unknown'
+}
+
+function getNextAvailableCreditExpiry(
+  credits: RateLimitResetCredits['credits'] | undefined
+): number | null {
+  const expiries =
+    credits
+      ?.filter((credit) => credit.status === 'available')
+      .map((credit) => credit.expiresAt)
+      .filter((expiresAt): expiresAt is number => typeof expiresAt === 'number')
+      .sort((a, b) => a - b) ?? []
+  return expiries[0] ?? null
+}
+
 function mapRpcRateLimitResetCredits(
   raw: RpcRateLimitsResponse['rateLimitResetCredits']
 ): RateLimitResetCredits | null | undefined {
@@ -131,19 +182,47 @@ function mapRpcRateLimitResetCredits(
   if (typeof raw.availableCount !== 'number' || !Number.isFinite(raw.availableCount)) {
     return null
   }
-  return { availableCount: Math.max(0, Math.floor(raw.availableCount)) }
+  const credits = raw.credits?.map((credit) => ({
+    status: normalizeCreditStatus(credit.status),
+    expiresAt: parseCreditTimestamp(credit.expiresAt),
+    grantedAt: parseCreditTimestamp(credit.grantedAt)
+  }))
+  return {
+    availableCount: Math.max(0, Math.floor(raw.availableCount)),
+    ...(typeof raw.totalEarnedCount === 'number' && Number.isFinite(raw.totalEarnedCount)
+      ? { totalEarnedCount: Math.max(0, Math.floor(raw.totalEarnedCount)) }
+      : {}),
+    nextExpiresAt: parseCreditTimestamp(raw.nextExpiresAt) ?? getNextAvailableCreditExpiry(credits),
+    ...(credits ? { credits } : {})
+  }
 }
 
 function mapBackendRateLimitResetCredits(
-  raw: BackendUsageResponse['rate_limit_reset_credits']
+  raw: BackendRateLimitResetCreditsResponse | null | undefined
 ): RateLimitResetCredits | null | undefined {
   if (!raw) {
     return raw
   }
-  if (typeof raw.available_count !== 'number' || !Number.isFinite(raw.available_count)) {
+  const credits = raw.credits?.map((credit) => ({
+    status: normalizeCreditStatus(credit.status),
+    expiresAt: parseCreditTimestamp(credit.expires_at),
+    grantedAt: parseCreditTimestamp(credit.granted_at)
+  }))
+  const availableCount =
+    typeof raw.available_count === 'number' && Number.isFinite(raw.available_count)
+      ? raw.available_count
+      : (credits?.filter((credit) => credit.status === 'available').length ?? null)
+  if (availableCount === null) {
     return null
   }
-  return { availableCount: Math.max(0, Math.floor(raw.available_count)) }
+  return {
+    availableCount: Math.max(0, Math.floor(availableCount)),
+    ...(typeof raw.total_earned_count === 'number' && Number.isFinite(raw.total_earned_count)
+      ? { totalEarnedCount: Math.max(0, Math.floor(raw.total_earned_count)) }
+      : {}),
+    nextExpiresAt: getNextAvailableCreditExpiry(credits),
+    ...(credits ? { credits } : {})
+  }
 }
 
 async function getCodexBackendAuthHeaders(
@@ -158,7 +237,9 @@ async function getCodexBackendAuthHeaders(
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
-    'User-Agent': 'codex-cli'
+    'User-Agent': 'codex-cli',
+    'OpenAI-Beta': 'codex-1',
+    originator: 'Codex Desktop'
   }
   if (auth.tokens?.account_id) {
     headers['ChatGPT-Account-Id'] = auth.tokens.account_id
@@ -175,19 +256,26 @@ async function fetchBackendRateLimitResetCredits(
   }
   // Why: published Codex 0.140 can read windows through app-server but strips
   // reset-credit metadata that the backend already returns.
-  const response = await fetch('https://chatgpt.com/backend-api/wham/usage', auth)
+  const response = await fetch(
+    'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
+    auth
+  )
   if (!response.ok) {
     return null
   }
-  const payload = (await response.json()) as BackendUsageResponse
-  return mapBackendRateLimitResetCredits(payload.rate_limit_reset_credits) ?? null
+  const payload = (await response.json()) as BackendRateLimitResetCreditsResponse
+  return mapBackendRateLimitResetCredits(payload) ?? null
 }
 
 async function withBackendRateLimitResetCredits(
   limits: ProviderRateLimits,
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
-  if (limits.provider !== 'codex' || limits.rateLimitResetCredits !== undefined) {
+  if (
+    limits.provider !== 'codex' ||
+    (limits.rateLimitResetCredits?.nextExpiresAt !== undefined &&
+      limits.rateLimitResetCredits.nextExpiresAt !== null)
+  ) {
     return limits
   }
   try {

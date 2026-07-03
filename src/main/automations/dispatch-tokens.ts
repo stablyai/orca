@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 const DISPATCH_TOKEN_TTL_MS = 30 * 60_000
 

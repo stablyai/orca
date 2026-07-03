@@ -51,8 +51,17 @@ vi.mock('./cdp-bridge', () => ({
   }
 }))
 
-import { AgentBrowserBridge } from './agent-browser-bridge'
+import {
+  AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES,
+  AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES,
+  AgentBrowserBridge
+} from './agent-browser-bridge'
 import type { BrowserManager } from './browser-manager'
+import {
+  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
+  CLIPBOARD_TEXT_WRITE_MAX_BYTES,
+  CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
+} from '../../shared/clipboard-text'
 
 // Why: the bridge resolves webContents via dynamic require('electron').webContents.fromId
 // inside a try/catch. Override the private method to inject our mock.
@@ -1388,6 +1397,27 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('https://example.com')
   })
 
+  it('rejects oversized browser clipboard writes before spawning agent-browser', async () => {
+    const secret = 'browser-clipboard-secret'
+    succeedWith({ ok: true })
+
+    await expect(
+      bridge.clipboardWrite(secret + 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1))
+    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
+
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects browser clipboard writes that exceed the safe agent-browser argument size', async () => {
+    succeedWith({ ok: true })
+
+    await expect(
+      bridge.clipboardWrite('x'.repeat(AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES + 1))
+    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
+
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
   it('builds valid fill eval JavaScript for multiline values', async () => {
     succeedWith({ ok: true })
 
@@ -1400,6 +1430,167 @@ describe('AgentBrowserBridge', () => {
     const args = evalCall![1] as string[]
     const expression = args[args.indexOf('eval') + 1]
     expect(() => new Function(expression)).not.toThrow()
+  })
+
+  it('chunks large agent-browser fill values before eval transport', async () => {
+    const text = ['x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'tail'].join('')
+    succeedWith({ ok: true })
+
+    await bridge.fill('@textarea', text)
+
+    const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    const appendExpressions = evalCalls.slice(1, -1).map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('eval') + 1]
+    })
+
+    expect(appendExpressions).toHaveLength(2)
+    expect(appendExpressions.some((expression) => expression.includes(text))).toBe(false)
+    expect(appendExpressions[0]).toContain('x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES))
+    expect(appendExpressions[1]).toContain('tail')
+  })
+
+  it.each([
+    ['fill', (b: AgentBrowserBridge, text: string) => b.fill('@textarea', text)],
+    ['type', (b: AgentBrowserBridge, text: string) => b.type(text)],
+    ['keyboard insert', (b: AgentBrowserBridge, text: string) => b.keyboardInsertText(text)]
+  ])('yields before spawning agent-browser for accepted large %s text', async (_name, run) => {
+    vi.useFakeTimers()
+    try {
+      const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      succeedWith({ ok: true })
+
+      const pending = run(bridge, text)
+      await Promise.resolve()
+
+      expect(execFileMock).not.toHaveBeenCalled()
+
+      await vi.runOnlyPendingTimersAsync()
+      await pending
+
+      expect(execFileMock).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('chunks large agent-browser type text before keyboard transport', async () => {
+    const text = ['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'].join('')
+    succeedWith({ typed: true })
+
+    await bridge.type(text)
+
+    const typeCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args.includes('keyboard') && args.includes('type')
+    })
+    const chunks = typeCalls.map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('type') + 1]
+    })
+
+    expect(chunks).toEqual(['y'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'zz'])
+  })
+
+  it('chunks large agent-browser keyboard insert text before transport', async () => {
+    const text = ['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'].join('')
+    succeedWith({ inserted: true })
+
+    await bridge.keyboardInsertText(text)
+
+    const insertTextCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args.includes('keyboard') && args.includes('inserttext')
+    })
+    const chunks = insertTextCalls.map((call: unknown[]) => {
+      const args = call[1] as string[]
+      return args[args.indexOf('inserttext') + 1]
+    })
+
+    expect(chunks).toEqual(['z'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES), 'qq'])
+  })
+
+  // ── Cross-worktree text-injection guard ──
+
+  describe('scoped target for text-mutating commands', () => {
+    function twoWorktreeBridge(): AgentBrowserBridge {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const worktrees = new Map([
+        ['tab-a', 'wt-1'],
+        ['tab-b', 'wt-2']
+      ])
+      const wc1 = mockWebContents(1, 'https://a.com', 'A')
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+      return new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+    }
+
+    function sessionNamesUsed(): string[] {
+      return execFileMock.mock.calls
+        .filter((call: unknown[]) => (call[1] as string[]).includes('--session'))
+        .map((call: unknown[]) => {
+          const args = call[1] as string[]
+          return args[args.indexOf('--session') + 1]
+        })
+    }
+
+    it.each([
+      ['inserttext', (b: AgentBrowserBridge) => b.keyboardInsertText('x', undefined, undefined)],
+      ['type', (b: AgentBrowserBridge) => b.type('x', undefined, undefined)],
+      ['fill', (b: AgentBrowserBridge) => b.fill('@input', 'x', undefined, undefined)]
+    ])(
+      'refuses %s when worktrees are ambiguous instead of routing to the global active tab',
+      async (_name, run) => {
+        const b = twoWorktreeBridge()
+        // Why: simulates the user viewing worktree B's tab, which sets the global
+        // active webContents — the bug would route the agent's text there.
+        b.onTabChanged(2, 'wt-2')
+        succeedWith({ inserted: true })
+
+        await expect(run(b)).rejects.toMatchObject({
+          code: 'browser_target_ambiguous'
+        })
+        // Must not have dispatched the command to worktree B's session.
+        expect(sessionNamesUsed()).not.toContain('orca-tab-tab-b')
+      }
+    )
+
+    it('auto-scopes inserttext to the lone worktree that has a live tab', async () => {
+      const tabs = new Map([['tab-a', 1]])
+      const worktrees = new Map([['tab-a', 'wt-1']])
+      const wc1 = mockWebContents(1, 'https://a.com', 'A')
+      webContentsFromIdMock.mockReturnValue(wc1)
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+      succeedWith({ inserted: true })
+
+      await b.keyboardInsertText('x', undefined, undefined)
+
+      expect(sessionNamesUsed()).toContain('orca-tab-tab-a')
+    })
+
+    it('throws browser_no_tab for inserttext when no live tab exists', async () => {
+      const b = new AgentBrowserBridge(mockBrowserManager(new Map()))
+      await expect(b.keyboardInsertText('x', undefined, undefined)).rejects.toMatchObject({
+        code: 'browser_no_tab'
+      })
+    })
+
+    it('keeps read-only snapshot on the lenient global active-tab fallback', async () => {
+      const b = twoWorktreeBridge()
+      // Why: read/navigation commands intentionally keep the global fallback so
+      // discovery still works without a worktree; only text writes are guarded.
+      b.onTabChanged(2, 'wt-2')
+      succeedWith({ snapshot: 'tree' })
+
+      await b.snapshot(undefined, undefined)
+
+      expect(sessionNamesUsed()).toContain('orca-tab-tab-b')
+    })
   })
 
   // ── Cookie command arg building ──

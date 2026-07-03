@@ -35,10 +35,18 @@ export type TerminalShortcutAction =
   | { type: 'focusPane'; direction: 'next' | 'previous' }
   | { type: 'equalizePaneSizes' }
   | { type: 'toggleExpandActivePane' }
+  | { type: 'setTitle' }
+  | { type: 'clearPaneTitle' }
   | { type: 'closeActivePane' }
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
+  | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
 
+/**
+ * Resolves terminal keyboard events before xterm receives them.
+ * Keeps configurable Orca shortcuts and terminal byte fallbacks in one
+ * platform-aware policy so renderer handlers do not duplicate key checks.
+ */
 export function resolveTerminalShortcutAction(
   event: TerminalShortcutEvent,
   isMac: boolean,
@@ -77,6 +85,14 @@ export function resolveTerminalShortcutAction(
       return { type: 'toggleExpandActivePane' }
     }
 
+    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
+      return { type: 'setTitle' }
+    }
+
+    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
+      return { type: 'clearPaneTitle' }
+    }
+
     if (keybindingMatchesAction('terminal.closePane', event, platform, keybindings)) {
       return { type: 'closeActivePane' }
     }
@@ -107,6 +123,23 @@ export function resolveTerminalShortcutAction(
     !event.metaKey &&
     !event.altKey &&
     !event.shiftKey &&
+    event.key === 'Enter'
+  ) {
+    // Why: xterm.js collapses Ctrl+Enter to a bare CR, so TUIs that expect
+    // modified Enter chords never receive the distinct input and treat it as
+    // plain Enter. Forward the kitty CSI-u sequence directly (modifier code
+    // 5 = Ctrl; cf. 2 = Shift above) so cue/queue behavior reaches the TUI.
+    // Sibling of the Shift+Enter case; a Windows fallback is not added yet
+    // because, unlike #2418's Codex-on-PowerShell inertness, no Windows TUI is
+    // known to drop the CSI-u form for Ctrl+Enter.
+    return { type: 'sendInput', data: '\x1b[13;5u' }
+  }
+
+  if (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
     event.key === 'Backspace'
   ) {
     return { type: 'sendInput', data: '\x17' }
@@ -128,6 +161,14 @@ export function resolveTerminalShortcutAction(
     }
     if (event.key === 'ArrowRight') {
       return { type: 'sendInput', data: '\x05' }
+    }
+    // Why: macOS terminal users expect Cmd+↑/↓ to jump through scrollback
+    // without writing escape bytes into the shell.
+    if (event.key === 'ArrowUp') {
+      return { type: 'scrollViewport', position: 'top' }
+    }
+    if (event.key === 'ArrowDown') {
+      return { type: 'scrollViewport', position: 'bottom' }
     }
   }
 

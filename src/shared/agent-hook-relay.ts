@@ -38,6 +38,7 @@ export type AgentHookSource =
   | 'antigravity'
   | 'amp'
   | 'opencode'
+  | 'mimo-code'
   | 'cursor'
   | 'pi'
   | 'omp'
@@ -47,6 +48,7 @@ export type AgentHookSource =
   | 'copilot'
   | 'hermes'
   | 'devin'
+  | 'kimi'
 
 /** Env marker used by the remote relay. It is a transport/location marker, not
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
@@ -56,6 +58,8 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
   paneKey: string
+  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  launchToken?: string
   tabId?: string
   worktreeId?: string
   /** Always `null` on the wire — relay does not know Orca's local connectionId. */

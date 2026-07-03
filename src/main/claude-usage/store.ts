@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,

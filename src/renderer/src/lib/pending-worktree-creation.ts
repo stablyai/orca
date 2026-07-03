@@ -12,10 +12,11 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 
 /** Two-phase status reported by the main process while a worktree is created.
+ *  `preparing` covers renderer-side preflight before `createWorktree` starts;
  *  `fetching` covers the base-ref git fetch; `creating` covers `git worktree
- *  add`. The remote/runtime path emits neither, so consumers must tolerate a
- *  phase that never advances past `fetching`. */
-export type WorktreeCreationPhase = 'fetching' | 'creating'
+ *  add`. Remote/runtime creates may skip git phases; VM recipes add a
+ *  provider-provisioning phase before the runtime worktree exists. */
+export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
@@ -35,6 +36,19 @@ export type WorktreeCreationRequest = {
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
   workspaceRunContext?: WorkspaceRunContext | null
+  /** Ephemeral VM runtime provisioned for this create. Used for best-effort
+   *  cleanup if Orca fails before the workspace owns the runtime. */
+  ephemeralVmRuntimeId?: string
+  /** Runtime environment created from the VM's pairing code. Used to refresh
+   *  live status immediately after the workspace takes ownership. */
+  ephemeralVmRuntimeEnvironmentId?: string
+  /** Recipe to provision before creating the worktree. Kept serializable so
+   *  retry can rerun the recipe after a failed create. */
+  ephemeralVmRecipe?: {
+    sourceRepoId: string
+    recipeId: string
+    projectId: string
+  }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
@@ -63,6 +77,9 @@ export type WorktreeCreationRequest = {
    *  agent launch is self-contained; otherwise the renderer drives startup via
    *  `startupPlan`. */
   startup?: WorktreeStartupLaunch
+  /** Repo Custom GitHub Issue Command to run in a side-pane split after the
+   *  workspace's first terminal is created. Mirrors the composer's trust-gated issueCommand. */
+  issueCommand?: { command: string; env?: Record<string, string> }
   pendingFirstAgentMessageRename: boolean
   /** Post-create note persisted as the worktree comment. */
   note: string
@@ -71,6 +88,9 @@ export type WorktreeCreationRequest = {
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
   quickTelemetry: AgentStartedTelemetry | null
+  /** When the composer stays open for sequential creates, completion must not
+   *  steal focus from the next workspace name field. */
+  suppressTerminalFocusOnCompletion?: boolean
 }
 
 /** Renderer-only, session-ephemeral record of an in-flight (or failed) worktree
@@ -83,6 +103,7 @@ export type PendingWorktreeCreation = {
   creationId: string
   phase: WorktreeCreationPhase
   status: 'creating' | 'error'
+  startedAt: number
   /** True when the create runs over a remote/runtime target that emits no phase
    *  progress — the panel shows a single indeterminate spinner rather than a
    *  stepped checklist that would freeze on the first step. */
@@ -92,6 +113,7 @@ export type PendingWorktreeCreation = {
    *  from create start through terminal handoff. */
   loaderVisible: boolean
   error?: string
+  provisioningLog?: string
   request: WorktreeCreationRequest
 }
 
@@ -101,8 +123,14 @@ export type PendingWorktreeCreation = {
 export function getCreationProgressLabel(
   entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate'>
 ): string {
+  if (entry.phase === 'provisioning-vm') {
+    return 'Provisioning VM…'
+  }
   if (entry.indeterminate) {
     return 'Setting up your workspace…'
+  }
+  if (entry.phase === 'preparing') {
+    return 'Preparing workspace…'
   }
   return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
 }

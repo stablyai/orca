@@ -154,6 +154,24 @@ describe('runtime linear client', () => {
     ).resolves.toEqual({ items: [{ id: 'legacy-issue' }] })
   })
 
+  it('rejects oversized local Linear search queries before IPC', async () => {
+    await expect(
+      linearSearchIssues(
+        { activeRuntimeEnvironmentId: null },
+        'secret-token-value'.repeat(1024),
+        10
+      )
+    ).resolves.toEqual([])
+
+    await expect(
+      linearListProjects({ activeRuntimeEnvironmentId: null }, 'x'.repeat(9 * 1024), 10)
+    ).resolves.toEqual({ items: [] })
+
+    expect(linearSearchIssuesLocal).not.toHaveBeenCalled()
+    expect(linearListProjectsLocal).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('does not throw when an older local preload lacks project listing', async () => {
     delete (window.api.linear as { listProjects?: unknown }).listProjects
 
