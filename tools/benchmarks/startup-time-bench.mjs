@@ -550,6 +550,15 @@ function median(values) {
   return usable.length % 2 ? usable[mid] : (usable[mid - 1] + usable[mid]) / 2
 }
 
+// Results are committed as PR evidence — keep home-anchored paths out of them.
+function sanitizeLocalPath(value) {
+  if (typeof value !== 'string') {
+    return value
+  }
+  const home = os.homedir()
+  return value.startsWith(home) ? `~${value.slice(home.length)}` : value
+}
+
 function formatMs(value) {
   if (value === null) {
     return 'n/a'
@@ -625,14 +634,14 @@ async function main() {
         platform: process.platform,
         arch: process.arch,
         cpus: os.cpus()[0]?.model,
-        fixtureDir,
+        fixtureDir: sanitizeLocalPath(fixtureDir),
         fixtureFiles: args.files,
         stateProfile: args.stateProfile,
         sessionTabs: args.sessionTabs,
         githubRepos: args.githubRepos,
         ghHangMs: args.ghHangMs,
         waitForEvent: args.waitForEvent,
-        exe: args.exe,
+        exe: sanitizeLocalPath(args.exe),
         iterations,
         summaryMedianMs: summary
       },

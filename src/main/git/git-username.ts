@@ -9,10 +9,12 @@ const GH_LOGIN_PROBE_TIMEOUT_MS = 2500
 // Why: a timeout-killed gh can leave a grandchild holding the stdio pipes, so
 // the exec promise may settle long after the kill. The wall keeps the resolver
 // on schedule either way (issue #7225: a hung gh froze startup for 127s). It
-// must exceed one probe's timeout by enough to cover ghExecFileAsync's
-// internal transient retries and its host-missing→WSL fallback re-attempt, or
-// a healthy-but-cold WSL gh would be misread as stuck.
-const GH_LOGIN_PROBE_WALL_MS = 8000
+// must exceed ghExecFileAsync's full worst-case envelope — 3 attempts ×
+// GH_LOGIN_PROBE_TIMEOUT_MS plus its transient-retry backoff sleeps (250ms +
+// 1000ms ≈ 8.75s total) — or a slow-but-recovering gh would be misread as
+// stuck and start the retry cooldown. Retry-After sleeps can exceed any wall;
+// bounding those is exactly what the wall is for.
+const GH_LOGIN_PROBE_WALL_MS = 10_000
 // Why: a timed-out probe says nothing about the account, so don't pin '' for
 // the whole session — retry after a cooldown instead of hammering a stuck gh.
 const GH_LOGIN_TIMEOUT_RETRY_MS = 5 * 60 * 1000
@@ -103,6 +105,29 @@ async function runGhLoginProbe(args: string[]): Promise<GhLoginProbeResult> {
   }
 }
 
+// Why: `gh auth status` prints one block per account — the login line first,
+// then `Active account: true/false`. Parse block-wise so a multi-account
+// output resolves the ACTIVE account instead of whatever login line happens
+// to follow the first `Active account: true` marker.
+function parseGhAuthStatusLogin(output: string): string {
+  let currentLogin = ''
+  let firstLogin = ''
+  for (const line of output.split('\n')) {
+    const login = line.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)?.[1]
+    if (login) {
+      currentLogin = login
+      if (!firstLogin) {
+        firstLogin = login
+      }
+      continue
+    }
+    if (/Active account:\s+true/.test(line) && currentLogin) {
+      return currentLogin
+    }
+  }
+  return firstLogin
+}
+
 async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
   const api = await runGhLoginProbe(['api', 'user', '-q', '.login'])
   const apiLogin = normalizeGitUsername(api.stdout.trim())
@@ -119,12 +144,7 @@ async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
     return { login: '', timedOut: true }
   }
   const output = `${status.stdout}\n${status.stderr}`
-  const activeAccountMatch = output.match(/Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/)
-  if (activeAccountMatch?.[1]) {
-    return { login: normalizeGitUsername(activeAccountMatch[1]), timedOut: false }
-  }
-  const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-  return { login: normalizeGitUsername(accountMatch?.[1] ?? ''), timedOut: false }
+  return { login: normalizeGitUsername(parseGhAuthStatusLogin(output)), timedOut: false }
 }
 
 async function getGhLoginOutcome(): Promise<GhLoginOutcome> {

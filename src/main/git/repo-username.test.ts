@@ -242,8 +242,30 @@ describe('resolveLocalGitUsername', () => {
     ghExecFileAsyncMock.mockImplementation(() => new Promise(() => {}))
 
     const resolution = resolveLocalGitUsernameDetailed('/repo')
-    await vi.advanceTimersByTimeAsync(8100)
+    await vi.advanceTimersByTimeAsync(10_100)
     await expect(resolution).resolves.toEqual({ username: '', authoritative: false })
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('picks the active account from a multi-account auth status output', async () => {
+    // Why: each account block prints its login line BEFORE its
+    // "Active account" marker; a cross-block regex would capture the next
+    // block's login instead of the active one.
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(makeExecError('gh api unavailable'))
+      .mockResolvedValueOnce({
+        stdout: '',
+        stderr: [
+          'github.com',
+          '  ✓ Logged in to github.com account active-user (keyring)',
+          '  - Active account: true',
+          '  - Git operations protocol: https',
+          '  ✓ Logged in to github.com account inactive-user (keyring)',
+          '  - Active account: false'
+        ].join('\n')
+      })
+
+    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('active-user')
   })
 })
