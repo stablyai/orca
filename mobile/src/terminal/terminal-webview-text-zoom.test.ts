@@ -37,13 +37,14 @@ function resolveTerminalFontFamily(navigatorValue: {
   platform: string
   maxTouchPoints: number
 }) {
+  // Slice only the font block itself (isIOSWebView + terminalFontFamily), anchored
+  // on font-related markers so unrelated edits below it can't break this extraction.
   const functionStart = terminalHtmlSource.indexOf('  function isIOSWebView()')
-  const declarationEnd = terminalHtmlSource.indexOf(
-    '  // Why: change the real font size',
-    functionStart
-  )
+  const declarationLine = terminalHtmlSource.indexOf('  var terminalFontFamily =', functionStart)
+  const declarationEnd = terminalHtmlSource.indexOf('\n', declarationLine)
   expect(functionStart).toBeGreaterThanOrEqual(0)
-  expect(declarationEnd).toBeGreaterThan(functionStart)
+  expect(declarationLine).toBeGreaterThan(functionStart)
+  expect(declarationEnd).toBeGreaterThan(declarationLine)
   const context: { navigator: typeof navigatorValue; output?: string } = {
     navigator: navigatorValue
   }
