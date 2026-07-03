@@ -110,14 +110,32 @@ describe('parseManualNetworkAddress', () => {
       }
     })
 
-    it('rejects an all-numeric host as an ambiguous IPv4', () => {
-      // Bare (`123`) and dotted (`256.0.0.1`) all-numeric strings are treated
-      // as mistyped IPs, not hostnames: the WHATWG URL parser downstream would
-      // reinterpret a numeric host as IPv4 (`123` -> `0.0.0.123`), so accepting
-      // one here would validate an address the main process dials differently.
-      for (const bad of ['123', '123:8080', '1.2.3', '1.2.3.4.5', '256.0.0.1', '999.999.999.999']) {
-        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+    it('rejects a host whose last label is numeric as an ambiguous IPv4', () => {
+      // The WHATWG URL parser downstream treats "ends in a number" as an IPv4
+      // signal and would reinterpret or fail to resolve these (`123` ->
+      // `0.0.0.123`; `foo.123` -> no-op fallback), so accepting one here would
+      // validate an address the main process dials differently.
+      const bad = [
+        '123',
+        '123:8080',
+        '1.2.3',
+        '1.2.3.4.5',
+        '256.0.0.1',
+        '999.999.999.999',
+        'foo.123',
+        'foo.123:8080',
+        'foo.0x1'
+      ]
+      for (const value of bad) {
+        expect(parseManualNetworkAddress(value).ok).toBe(false)
       }
+    })
+
+    it('still accepts a hostname whose last label merely contains digits', () => {
+      // Only a fully-numeric (or hex) final label is ambiguous; a label like
+      // `com` or `nas1` is a normal hostname.
+      expect(parseManualNetworkAddress('host2.example.com').ok).toBe(true)
+      expect(parseManualNetworkAddress('my-nas1').ok).toBe(true)
     })
   })
 

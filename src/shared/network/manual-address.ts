@@ -40,14 +40,15 @@ export function parseManualNetworkAddress(input: string): ParseManualAddressResu
   if (IPV4_REGEX.test(host)) {
     return { ok: true, address: trimmed }
   }
-  // Why: reject any all-numeric host (bare `123` or dotted `256.0.0.1`) as a
-  // mistyped IP rather than a hostname. Although bare numeric labels are
-  // technically legal per RFC 1123, they are ambiguous with an IPv4 address:
-  // the WHATWG URL host parser that `resolvePairingEndpoint` feeds this into
-  // reinterprets a numeric host as IPv4 (`123` becomes `0.0.0.123`), so
-  // accepting one here would let the UI "validate" an address that the main
-  // process then silently dials as a different host.
-  if (/^[0-9]+(?:\.[0-9]+)*$/.test(host)) {
+  // Why: reject a host whose last label is numeric — a bare `123`, a dotted
+  // `256.0.0.1`, or a hostname with a numeric final label (`foo.123`, `foo.0x1`).
+  // The WHATWG URL host parser that `resolvePairingEndpoint` feeds this into
+  // treats "ends in a number" as an IPv4 signal and tries to parse the whole
+  // host as IPv4. A real IPv4 was already accepted above, so anything reaching
+  // here would fail that parse and the main process would silently dial a
+  // different host — so treat these as mistyped IPs, not hostnames.
+  const lastLabel = host.split('.').at(-1) ?? ''
+  if (/^[0-9]+$/.test(lastLabel) || /^0x[0-9a-f]*$/i.test(lastLabel)) {
     return { ok: false, error: ERROR_MESSAGE }
   }
   if (HOSTNAME_REGEX.test(host)) {
