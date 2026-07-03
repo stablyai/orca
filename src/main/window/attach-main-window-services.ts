@@ -45,6 +45,16 @@ import { logStartupMilestone } from '../startup/startup-diagnostics'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
+// Why: updater setup is deferred past first paint, but a manual check (app
+// menu or updater:check IPC) can arrive inside that window — it must run
+// against a configured updater (listeners, autoDownload=false, window ref),
+// so those entry points force the pending setup first.
+let pendingAutoUpdaterSetup: (() => void) | null = null
+
+export function ensureAutoUpdaterConfigured(): void {
+  pendingAutoUpdaterSetup?.()
+}
+
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
 let runtimeNotifierTokenCounter = 0
@@ -163,6 +173,7 @@ export function attachMainWindowServices(
     })
     logStartupMilestone('updater-setup-done')
   }
+  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
   mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
   const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
   updaterSetupFallback.unref?.()
@@ -434,9 +445,10 @@ export function registerUpdaterHandlers(_store: Store): void {
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
-  ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) =>
-    checkForUpdatesFromMenu(options)
-  )
+  ipcMain.handle('updater:check', (_event, options?: { includePrerelease?: boolean }) => {
+    ensureAutoUpdaterConfigured()
+    return checkForUpdatesFromMenu(options)
+  })
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())

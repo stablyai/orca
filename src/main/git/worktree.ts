@@ -609,9 +609,18 @@ export async function listWorktreeGraph(
 // paths (renderer worktrees fetch, lineage resolution, boot pty-registry
 // hydration), and each `git worktree list` is a full process spawn —
 // expensive on Windows (issue #7225). Sharing the in-flight promise collapses
-// concurrent duplicate scans with zero staleness risk: nothing is served
-// after a scan settles.
+// concurrent duplicate scans; nothing is served after a scan settles.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
+
+// Why: a caller listing AFTER a mutation completed must observe it, so it may
+// not join a scan that started before the mutation. Bumping the generation on
+// mutation completion retires older in-flight scans from sharing (they still
+// settle for their original callers).
+const worktreeScanGenerations = new Map<string, number>()
+
+function bumpWorktreeScanGeneration(repoPath: string): void {
+  worktreeScanGenerations.set(repoPath, (worktreeScanGenerations.get(repoPath) ?? 0) + 1)
+}
 
 /**
  * List all worktrees for a git repo at the given path. Concurrent calls for
@@ -625,7 +634,8 @@ export function listWorktrees(
   if (options.signal) {
     return listWorktreesUnshared(repoPath, options)
   }
-  const key = `${repoPath}\0${options.wslDistro ?? ''}`
+  const generation = worktreeScanGenerations.get(repoPath) ?? 0
+  const key = `${repoPath}\0${options.wslDistro ?? ''}\0${generation}`
   const inFlight = inFlightWorktreeScans.get(key)
   if (inFlight) {
     return inFlight
@@ -787,6 +797,30 @@ async function refreshLocalBaseRefForWorktreeCreate(
  * best-effort and warn-only. See body comments below for the full rationale.
  */
 export async function addWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  baseBranch?: string,
+  refreshLocalBaseRef = false,
+  noCheckout = false,
+  options: AddWorktreeOptions = {}
+): Promise<AddWorktreeResult> {
+  try {
+    return await performAddWorktree(
+      repoPath,
+      worktreePath,
+      branch,
+      baseBranch,
+      refreshLocalBaseRef,
+      noCheckout,
+      options
+    )
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
+async function performAddWorktree(
   repoPath: string,
   worktreePath: string,
   branch: string,
@@ -984,7 +1018,11 @@ export async function moveWorktree(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+  try {
+    await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
 }
 
 /**
@@ -998,6 +1036,19 @@ export async function removeWorktree(
   // (e.g. rollback of a failed creation) where the fresh branch has no user work
   // and must be removed outright. User-initiated deletes leave it false so unmerged
   // commits are preserved.
+  options: RemoveWorktreeOptions = {}
+): Promise<RemoveWorktreeResult> {
+  try {
+    return await performRemoveWorktree(repoPath, worktreePath, force, options)
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
+  }
+}
+
+async function performRemoveWorktree(
+  repoPath: string,
+  worktreePath: string,
+  force = false,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   const removedWorktree =

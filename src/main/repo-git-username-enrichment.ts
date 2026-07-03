@@ -1,5 +1,5 @@
 import type { Repo } from '../shared/types'
-import { resolveLocalGitUsername } from './git/git-username'
+import { resolveLocalGitUsernameDetailed } from './git/git-username'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]
@@ -15,6 +15,7 @@ type EnrichmentOptions = {
 // value in between, and a relaunch picks up config changes.
 const attemptedLocations = new Set<string>()
 let enrichmentInFlight: Promise<void> | null = null
+let rerunRequested = false
 
 function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
   return `${repo.connectionId ?? 'local'}\0${repo.path}`
@@ -35,10 +36,15 @@ async function enrichRepoGitUsernamesInBackground(
   let changed = false
   for (const repo of candidates) {
     attemptedLocations.add(getRepoLocationKey(repo))
-    const username = await resolveLocalGitUsername(repo.path)
-    // Why: '' can mean a transient probe failure (offline gh, stuck git), so
-    // never clear a previously persisted username with it.
-    if (username && store.setResolvedRepoGitUsername(repo.id, username)) {
+    const { username, authoritative } = await resolveLocalGitUsernameDetailed(repo.path)
+    // Why: a non-authoritative '' means a probe timed out and says nothing
+    // about the account — keep the persisted value. An authoritative result
+    // (including '') is the current truth: it must also CLEAR a stale
+    // persisted username after the user removes github.user or logs out.
+    if (!authoritative && !username) {
+      continue
+    }
+    if (store.setResolvedRepoGitUsername(repo.id, username)) {
       changed = true
     }
   }
@@ -57,6 +63,9 @@ export function enrichRepoGitUsernames(
   options: EnrichmentOptions = {}
 ): void {
   if (enrichmentInFlight) {
+    // Why: a repo added mid-pass would otherwise be dropped until some later
+    // repos:list happens to fire — queue one follow-up pass instead.
+    rerunRequested = true
     return
   }
   enrichmentInFlight = enrichRepoGitUsernamesInBackground(store, options)
@@ -65,14 +74,22 @@ export function enrichRepoGitUsernames(
     })
     .finally(() => {
       enrichmentInFlight = null
+      if (rerunRequested) {
+        rerunRequested = false
+        enrichRepoGitUsernames(store, options)
+      }
     })
 }
 
 export async function flushRepoGitUsernameEnrichmentForTests(): Promise<void> {
-  await enrichmentInFlight
+  // A queued rerun replaces enrichmentInFlight when the first pass settles.
+  while (enrichmentInFlight) {
+    await enrichmentInFlight
+  }
 }
 
 export function resetRepoGitUsernameEnrichmentForTests(): void {
   attemptedLocations.clear()
   enrichmentInFlight = null
+  rerunRequested = false
 }

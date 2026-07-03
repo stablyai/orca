@@ -855,23 +855,21 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
-        // Why: these four reads depend on nothing fetched below (main-side
-        // store/file reads), so start them now and await them at their
-        // original positions — the round-trips overlap the repo/worktree
-        // scans instead of queuing after them. The floating .catch marks the
-        // rejection handled if an earlier awaited step throws first; each
-        // await still rethrows its own failure.
+        // Why: these three reads are main-side store/file reads with no
+        // dependency on anything fetched below, so start them now and await
+        // them at their original positions — the round-trips overlap the
+        // repo/worktree scans instead of queuing after them. Browser session
+        // profiles are deliberately NOT started early: on a remote runtime
+        // they route through a runtime RPC that may not be connected this
+        // early, and a failed fetch clears the profile list. The floating
+        // .catch marks the rejection handled if an earlier awaited step
+        // throws first; each await still rethrows its own failure.
         const uiGetPromise = timeRendererStartupStep('ui-get', () => window.api.ui.get())
         uiGetPromise.catch(() => {})
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
           actions.fetchKeybindings()
         )
         keybindingsPromise.catch(() => {})
-        const browserSessionProfilesPromise = timeRendererStartupStep(
-          'fetch-browser-session-profiles',
-          () => actions.fetchBrowserSessionProfiles()
-        )
-        browserSessionProfilesPromise.catch(() => {})
         const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
           window.api.onboarding.get()
         )
@@ -931,7 +929,9 @@ function App(): React.JSX.Element {
             actions.pruneLastVisitedTimestamps()
             actions.seedActiveWorktreeLastVisitedIfMissing()
           })
-          await browserSessionProfilesPromise
+          await timeRendererStartupStep('fetch-browser-session-profiles', () =>
+            actions.fetchBrowserSessionProfiles()
+          )
           const onboardingState = await onboardingPromise
           if (!cancelled) {
             setOnboarding(onboardingState)

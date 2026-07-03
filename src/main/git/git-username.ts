@@ -1,14 +1,21 @@
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { extractExecError, ghExecFileAsync, gitExecFileAsync } from './runner'
 import { parseHostedRemote } from './hosted-remote-url'
+import { resolveDefaultBaseRefViaExec } from './repo'
 
 const EXPLICIT_USERNAME_CONFIG_KEYS = ['github.user', 'user.username'] as const
 
 const GH_LOGIN_PROBE_TIMEOUT_MS = 2500
 // Why: a timeout-killed gh can leave a grandchild holding the stdio pipes, so
 // the exec promise may settle long after the kill. The wall keeps the resolver
-// on schedule either way (issue #7225: a hung gh froze startup for 127s).
-const GH_LOGIN_PROBE_WALL_MS = GH_LOGIN_PROBE_TIMEOUT_MS + 500
+// on schedule either way (issue #7225: a hung gh froze startup for 127s). It
+// must exceed one probe's timeout by enough to cover ghExecFileAsync's
+// internal transient retries and its host-missing→WSL fallback re-attempt, or
+// a healthy-but-cold WSL gh would be misread as stuck.
+const GH_LOGIN_PROBE_WALL_MS = 8000
+// Why: a timed-out probe says nothing about the account, so don't pin '' for
+// the whole session — retry after a cooldown instead of hammering a stuck gh.
+const GH_LOGIN_TIMEOUT_RETRY_MS = 5 * 60 * 1000
 const LOCAL_GIT_READ_TIMEOUT_MS = 5000
 
 export function normalizeGitUsername(value: string): string {
@@ -20,6 +27,13 @@ export function normalizeGitUsername(value: string): string {
   const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
   return localPart.replace(/^\d+\+/, '')
 }
+
+/**
+ * A resolved username plus whether every probe on the way to it completed.
+ * Non-authoritative '' (a probe timed out) must not overwrite a previously
+ * persisted username; authoritative '' should clear one.
+ */
+export type ResolvedGitUsername = { username: string; authoritative: boolean }
 
 export async function getSshGitUsername(
   provider: SshGitProvider,
@@ -42,11 +56,14 @@ export async function getSshGitUsername(
 }
 
 type GhLoginProbeResult = { stdout: string; stderr: string; timedOut: boolean }
+type GhLoginOutcome = { login: string; timedOut: boolean }
 
 // gh reports one account for the whole machine, so the login is cached
-// per-process rather than per-repo (mirrors the old sync cache).
+// per-process rather than per-repo (mirrors the old sync cache). Timed-out
+// probes use the soft retry timestamp instead of the permanent cache.
 let cachedGhLogin: string | null = null
-let ghLoginProbeInFlight: Promise<string> | null = null
+let ghLoginTimedOutAt: number | null = null
+let ghLoginProbeInFlight: Promise<GhLoginOutcome> | null = null
 
 function isExecTimeoutError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
@@ -86,42 +103,49 @@ async function runGhLoginProbe(args: string[]): Promise<GhLoginProbeResult> {
   }
 }
 
-/**
- * Resolve the `gh` CLI's GitHub login without ever blocking the caller for
- * longer than the probe wall. Never rejects; unknown resolves to ''.
- */
-export async function getGhLoginAsync(): Promise<string> {
+async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
+  const api = await runGhLoginProbe(['api', 'user', '-q', '.login'])
+  const apiLogin = normalizeGitUsername(api.stdout.trim())
+  if (apiLogin) {
+    return { login: apiLogin, timedOut: false }
+  }
+  if (api.timedOut) {
+    // Why: if `gh api user` timed out, `gh auth status` is likely to hit the
+    // same stuck keychain/network path. Keep resolution bounded to one probe.
+    return { login: '', timedOut: true }
+  }
+  const status = await runGhLoginProbe(['auth', 'status'])
+  if (status.timedOut) {
+    return { login: '', timedOut: true }
+  }
+  const output = `${status.stdout}\n${status.stderr}`
+  const activeAccountMatch = output.match(/Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/)
+  if (activeAccountMatch?.[1]) {
+    return { login: normalizeGitUsername(activeAccountMatch[1]), timedOut: false }
+  }
+  const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
+  return { login: normalizeGitUsername(accountMatch?.[1] ?? ''), timedOut: false }
+}
+
+async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
   if (cachedGhLogin !== null) {
-    return cachedGhLogin
+    return { login: cachedGhLogin, timedOut: false }
+  }
+  if (ghLoginTimedOutAt !== null && Date.now() - ghLoginTimedOutAt < GH_LOGIN_TIMEOUT_RETRY_MS) {
+    return { login: '', timedOut: true }
   }
   if (ghLoginProbeInFlight) {
     return ghLoginProbeInFlight
   }
-  const probe = (async () => {
-    const api = await runGhLoginProbe(['api', 'user', '-q', '.login'])
-    const apiLogin = normalizeGitUsername(api.stdout.trim())
-    if (apiLogin) {
-      return apiLogin
-    }
-    if (api.timedOut) {
-      // Why: if `gh api user` timed out, `gh auth status` is likely to hit the
-      // same stuck keychain/network path. Keep resolution bounded to one probe.
-      return ''
-    }
-    const status = await runGhLoginProbe(['auth', 'status'])
-    const output = `${status.stdout}\n${status.stderr}`
-    const activeAccountMatch = output.match(
-      /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
-    )
-    if (activeAccountMatch?.[1]) {
-      return normalizeGitUsername(activeAccountMatch[1])
-    }
-    const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    return normalizeGitUsername(accountMatch?.[1] ?? '')
-  })()
-    .then((login) => {
-      cachedGhLogin = login
-      return login
+  const probe = probeGhLoginOnce()
+    .then((outcome) => {
+      if (outcome.timedOut) {
+        ghLoginTimedOutAt = Date.now()
+      } else {
+        cachedGhLogin = outcome.login
+        ghLoginTimedOutAt = null
+      }
+      return outcome
     })
     .finally(() => {
       ghLoginProbeInFlight = null
@@ -130,28 +154,96 @@ export async function getGhLoginAsync(): Promise<string> {
   return probe
 }
 
-async function localRepoHasGitHubRemote(repoPath: string): Promise<boolean> {
+/**
+ * Resolve the `gh` CLI's GitHub login without ever blocking the caller for
+ * longer than the probe wall. Never rejects; unknown resolves to ''.
+ */
+export async function getGhLoginAsync(): Promise<string> {
+  return (await getGhLoginOutcome()).login
+}
+
+async function readGitStdout(repoPath: string, args: string[]): Promise<string> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote', '-v'], {
+    const { stdout } = await gitExecFileAsync(args, {
       cwd: repoPath,
       timeout: LOCAL_GIT_READ_TIMEOUT_MS
     })
-    return stdout.split('\n').some((line) => {
-      const url = line.split(/\s+/)[1]
-      return !!url && parseHostedRemote(url)?.provider === 'github'
-    })
+    return stdout.trim()
   } catch {
-    return false
+    return ''
   }
+}
+
+function getRemoteNameFromRef(shortRef: string, remotes: readonly string[]): string {
+  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
+  return sortedRemotes.find((remote) => shortRef.startsWith(`${remote}/`)) ?? ''
+}
+
+function getDefaultBranchName(shortRef: string, remoteName: string): string {
+  if (!shortRef.includes('/')) {
+    return shortRef
+  }
+  return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
+}
+
+async function getConfiguredBranchRemote(repoPath: string, branch: string | null): Promise<string> {
+  if (!branch) {
+    return ''
+  }
+  const remote = await readGitStdout(repoPath, ['config', '--get', `branch.${branch}.remote`])
+  return remote === '.' ? '' : remote
+}
+
+/**
+ * Faithful async port of the old candidate-ordered GitHub gate: only the
+ * repo's *effective* remote (current-branch remote, default-branch remote,
+ * default-base remote, origin, or a lone remote) may authorize the gh login.
+ * Why: a GitLab-primary repo with a secondary GitHub mirror must NOT pick up
+ * the GitHub account name as its branch prefix.
+ */
+async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<boolean> {
+  const remotes = (await readGitStdout(repoPath, ['remote'])).split('\n').filter(Boolean)
+  const defaultBaseRef = await resolveDefaultBaseRefViaExec((argv) =>
+    gitExecFileAsync(argv, { cwd: repoPath, timeout: LOCAL_GIT_READ_TIMEOUT_MS })
+  )
+  const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
+  const defaultBranch = defaultBaseRef
+    ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
+    : null
+
+  const currentBranch = await readGitStdout(repoPath, ['branch', '--show-current'])
+  const candidateRemotes = [
+    await getConfiguredBranchRemote(repoPath, currentBranch || null),
+    await getConfiguredBranchRemote(repoPath, defaultBranch),
+    defaultBaseRemote,
+    'origin',
+    remotes.length === 1 ? remotes[0] : ''
+  ]
+
+  const seen = new Set<string>()
+  for (const remote of candidateRemotes) {
+    if (!remote || seen.has(remote)) {
+      continue
+    }
+    seen.add(remote)
+    const remoteUrl = await readGitStdout(repoPath, ['remote', 'get-url', remote])
+    if (remoteUrl && parseHostedRemote(remoteUrl)?.provider === 'github') {
+      return true
+    }
+  }
+  return false
 }
 
 /**
  * Async replacement for the old sync `getGitUsername`: explicit config keys
- * first, then the `gh` login — but only for repos with a GitHub remote, since
- * a GitHub account name would be the wrong branch prefix for GitLab/Bitbucket/
- * self-hosted repos. Never rejects; unknown resolves to ''.
+ * first, then the `gh` login — but only for repos whose effective remote is
+ * GitHub, since a GitHub account name would be the wrong branch prefix for
+ * GitLab/Bitbucket/self-hosted repos. Never rejects; unknown resolves to
+ * { username: '', authoritative: false }.
  */
-export async function resolveLocalGitUsername(repoPath: string): Promise<string> {
+export async function resolveLocalGitUsernameDetailed(
+  repoPath: string
+): Promise<ResolvedGitUsername> {
   for (const key of EXPLICIT_USERNAME_CONFIG_KEYS) {
     try {
       const { stdout } = await gitExecFileAsync(['config', '--get', key], {
@@ -160,19 +252,25 @@ export async function resolveLocalGitUsername(repoPath: string): Promise<string>
       })
       const username = normalizeGitUsername(stdout)
       if (username) {
-        return username
+        return { username, authoritative: true }
       }
     } catch {
       // Missing config keys are expected; try the next explicit username key.
     }
   }
-  if (await localRepoHasGitHubRemote(repoPath)) {
-    return getGhLoginAsync()
+  if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
+    const outcome = await getGhLoginOutcome()
+    return { username: outcome.login, authoritative: !outcome.timedOut }
   }
-  return ''
+  return { username: '', authoritative: true }
+}
+
+export async function resolveLocalGitUsername(repoPath: string): Promise<string> {
+  return (await resolveLocalGitUsernameDetailed(repoPath)).username
 }
 
 export function resetGhLoginCacheForTests(): void {
   cachedGhLogin = null
+  ghLoginTimedOutAt = null
   ghLoginProbeInFlight = null
 }
