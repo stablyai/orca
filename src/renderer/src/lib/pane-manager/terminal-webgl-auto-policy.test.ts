@@ -104,6 +104,37 @@ describe('terminal WebGL auto policy', () => {
     })
   })
 
+  it.each([
+    ['ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))'],
+    ['ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)'],
+    ['ANGLE (Microsoft, D3D11 WARP Direct3D11 vs_5_0 ps_5_0)']
+  ])('keeps Windows auto panes on DOM for software renderer %s', (renderer) => {
+    stubNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    stubWebglRendererInfo({ renderer, vendor: 'Google Inc. (Microsoft)' })
+
+    expect(getTerminalWebglAutoDecision()).toEqual({
+      allowWebgl: false,
+      reason: 'non-linux-software-renderer',
+      renderer,
+      vendor: 'Google Inc. (Microsoft)'
+    })
+  })
+
+  it('allows Windows auto panes for identifiable hardware renderers', () => {
+    stubNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    stubWebglRendererInfo({
+      renderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc. (NVIDIA)'
+    })
+
+    expect(getTerminalWebglAutoDecision()).toEqual({
+      allowWebgl: true,
+      reason: 'non-linux',
+      renderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0)',
+      vendor: 'Google Inc. (NVIDIA)'
+    })
+  })
+
   it('allows Linux auto panes for identifiable hardware renderers', () => {
     stubNavigator('Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)')
     stubWebglRendererInfo({

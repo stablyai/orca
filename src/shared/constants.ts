@@ -219,7 +219,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalTuiScrollSensitivity: 1,
     terminalTuiScrollSensitivityDefaultedToOne: true,
     // Why: "auto" should use WebGL when supported while keeping DOM fallback
-    // for renderer failures and Linux software/unknown GPU renderers.
+    // for renderer failures, software renderers, and unknown Linux GPUs.
     terminalGpuAcceleration: 'auto',
     // Why 'auto': when the user has picked a known ligature font we want the
     // feature enabled by default, but we never force it if they pick a font

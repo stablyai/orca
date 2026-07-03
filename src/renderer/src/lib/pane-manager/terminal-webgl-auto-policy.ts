@@ -2,6 +2,7 @@ export type TerminalWebglAutoDecision = {
   allowWebgl: boolean
   reason:
     | 'non-linux'
+    | 'non-linux-software-renderer'
     | 'linux-wayland'
     | 'linux-hardware-renderer'
     | 'linux-webgl2-unavailable'
@@ -13,8 +14,8 @@ export type TerminalWebglAutoDecision = {
 
 let cachedDecision: TerminalWebglAutoDecision | null = null
 
-const LINUX_SOFTWARE_RENDERER_PATTERN =
-  /\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|virgl|svga3d)\b/i
+const SOFTWARE_RENDERER_PATTERN =
+  /\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|microsoft basic render(?: driver)?|d3d11 warp|virgl|svga3d)\b/i
 
 export function resetTerminalWebglAutoDecision(): void {
   cachedDecision = null
@@ -77,11 +78,25 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   if (!isLinuxRendererHost()) {
+    const rendererInfo = readWebglRendererInfo()
+    const identity = `${rendererInfo.vendor ?? ''} ${rendererInfo.renderer ?? ''}`
+    if (rendererInfo.hasRendererInfo && SOFTWARE_RENDERER_PATTERN.test(identity)) {
+      // Why: Windows software rendering fallback disables GPU compositing, but
+      // xterm WebGL can still attach through ANGLE/SwiftShader unless auto
+      // recognizes the software renderer and chooses the DOM renderer.
+      cachedDecision = {
+        allowWebgl: false,
+        reason: 'non-linux-software-renderer',
+        renderer: rendererInfo.renderer,
+        vendor: rendererInfo.vendor
+      }
+      return cachedDecision
+    }
     cachedDecision = {
       allowWebgl: true,
       reason: 'non-linux',
-      renderer: null,
-      vendor: null
+      renderer: rendererInfo.renderer,
+      vendor: rendererInfo.vendor
     }
     return cachedDecision
   }
@@ -122,7 +137,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   const identity = `${rendererInfo.vendor ?? ''} ${rendererInfo.renderer ?? ''}`
-  if (LINUX_SOFTWARE_RENDERER_PATTERN.test(identity)) {
+  if (SOFTWARE_RENDERER_PATTERN.test(identity)) {
     cachedDecision = {
       allowWebgl: false,
       reason: 'linux-software-renderer',
