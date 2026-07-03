@@ -685,6 +685,11 @@ export type FetchClaudeRateLimitsOptions = {
   networkProxySettings?: NetworkProxySettings
 }
 
+export type FetchManagedAccountUsageOptions = {
+  allowUsagePanelSupplement?: boolean
+  networkProxySettings?: NetworkProxySettings
+}
+
 export async function fetchClaudeRateLimits(
   options?: FetchClaudeRateLimitsOptions
 ): Promise<ProviderRateLimits> {
@@ -1101,7 +1106,7 @@ async function fetchManagedUsagePanelSupplement(input: {
 
 export async function fetchManagedAccountUsage(
   account: InactiveClaudeAccountInfo,
-  options: { allowUsagePanelSupplement?: boolean; networkProxySettings?: NetworkProxySettings } = {}
+  options: FetchManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
   const location = resolveManagedCredentialsLocation(account)
   let credentialsJson = location ? await readManagedCredentialsJson(location) : null

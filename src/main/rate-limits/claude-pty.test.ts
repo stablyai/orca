@@ -112,6 +112,36 @@ describe('fetchViaPty', () => {
     await resultPromise
   })
 
+  it('exports the configured proxy inside the WSL launch command', async () => {
+    // Why: Windows-side spawn env does not cross into the distro, so the proxy
+    // must be exported in the bash command for the inner claude to see it.
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty({
+      networkProxySettings: { httpProxyUrl: 'http://127.0.0.1:7890' },
+      authPreparation: {
+        configDir: '/home/u/.claude',
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxConfigDir: '/home/u/.claude',
+        envPatch: { CLAUDE_CONFIG_DIR: '/home/u/.claude' },
+        stripAuthEnv: false,
+        provenance: 'system'
+      }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    const [spawnFile, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]
+    expect(spawnFile).toBe('wsl.exe')
+    const bashCommand = spawnArgs.at(-1) as string
+    expect(bashCommand).toContain("export HTTPS_PROXY='http://127.0.0.1:7890'")
+    expect(bashCommand).toContain('exec claude')
+
+    term.emitExit()
+    await resultPromise
+  })
+
   it('clears the startup delay timer when the hidden PTY exits early', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)

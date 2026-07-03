@@ -234,7 +234,8 @@ export async function fetchViaPty(options?: {
     // wrapper, so without the configured proxy it would reach api.anthropic.com
     // from the app's own IP — bypassing the proxy the user set for Claude and
     // risking rate-limit/geo signals on the account. Falls back to {} when unset.
-    Object.assign(spawnEnv, buildConfiguredProxyEnv(options?.networkProxySettings))
+    const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+    Object.assign(spawnEnv, proxyEnv)
     const authPreparation = options?.authPreparation
     const wslConfig =
       authPreparation?.runtime === 'wsl' &&
@@ -253,7 +254,13 @@ export async function fetchViaPty(options?: {
           '--',
           'bash',
           '-lc',
-          `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}; exec claude`
+          // Why: Windows-side env does not cross into the distro without WSLENV,
+          // so export the configured proxy inside the command for the inner claude.
+          [
+            `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}`,
+            ...Object.entries(proxyEnv).map(([key, value]) => `export ${key}=${shellQuote(value)}`),
+            'exec claude'
+          ].join('; ')
         ]
       : isWin32
         ? ['/c', `"${claudeCommand}"`]
