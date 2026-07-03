@@ -5,7 +5,8 @@ description: >-
   handle live, validate no collision, then dispatch. Prevents wrong-worktree
   dispatch, double-agent collisions, and stale-handle bugs. Includes an
   inbox monitor pattern for reliable message consumption. Complements the
-  orchestration skill with safety guardrails.
+  orchestration skill with safety guardrails. Works with any agent CLI
+  (Claude, Codex, Pi, Cursor, etc.).
 ---
 
 # Safe Dispatch
@@ -16,7 +17,7 @@ A safety layer on top of Orca orchestration that prevents the three most common 
 2. **Double-agent collision** from dispatching into an occupied worktree
 3. **Lost messages** from multiple inbox consumers
 
-Every dispatch runs all three gates in order. Skipping a gate is how wrong-worktree dispatch happens.
+Works with any agent CLI that Orca can host: Claude, Codex, Pi, Cursor, or a bare shell. Every dispatch runs all three gates in order. Skipping a gate is how wrong-worktree dispatch happens.
 
 ## Gate 1: RESOLVE (fresh, never cached)
 
@@ -48,10 +49,11 @@ Two agents editing the same files means corruption. This gate is not optional.
 
 ## Gate 3: DISPATCH (fresh terminal, inject)
 
-Create a fresh agent terminal, wait for it to be ready, then dispatch:
+Create a fresh agent terminal, wait for it to be ready, then dispatch. The `--command` value is whichever agent CLI you want to use:
 
 ```bash
-orca terminal create --worktree <full-id> --title <role> --command "<agent-command>" --json
+# Any agent CLI works: claude, codex, pi --model <provider>/<model>, cursor, or a bare shell
+orca terminal create --worktree <full-id> --title <role> --command "<agent-cli>" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 120000 --json
 orca orchestration task-create --spec "<brief with inbox handle>" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
@@ -63,16 +65,26 @@ The task spec should include the inbox handle so the worker can report back:
 orca orchestration send --to <inbox_handle> --subject '<role> result' --body '<result>' --type status --json
 ```
 
+For agents that do not support `--inject` (bare shells, some CLIs), dispatch for tracking only and deliver the prompt manually:
+
+```bash
+orca orchestration dispatch --task <task_id> --to <handle> --json
+orca terminal send --terminal <handle> --text "<prompt>" --enter --json
+```
+
 ## Inbox Monitor
 
 A single persistent consumer for orchestration messages. Two consumers on the same inbox means lost messages (`check --wait` marks messages read on retrieval).
 
-Run via Claude Code's Monitor tool (or any persistent process supervisor):
+How you run this depends on your agent:
+
+- **Claude Code**: `Monitor({ command: "bash inbox-monitor.sh", persistent: true })` -- stdout lines become instant `<task-notification>` events.
+- **Any agent / standalone**: run as a background process, tail the store directory, or read `$STORE/*.json` on demand.
 
 ```bash
 #!/usr/bin/env bash
-# The ONE inbox consumer. Each stdout line becomes an instant notification.
-# Full message bodies are saved to the store directory.
+# The ONE inbox consumer. Saves full message bodies to the store directory.
+# Prints a short summary per message to stdout.
 #
 # NEVER run a second instance. check --wait marks messages read.
 set -u
@@ -113,9 +125,16 @@ while true; do
 done
 ```
 
+Non-Claude agents can consume the store by polling:
+
+```bash
+# Check for new messages (works from any agent or script)
+ls -t ~/.orca-inbox/*.json 2>/dev/null | head -5 | xargs -I{} jq '{id:.id, type:.type, subject:.subject}' {}
+```
+
 ## Safe Dispatch Script
 
-A standalone script that enforces all 3 gates:
+A standalone script that enforces all 3 gates. Works with any agent CLI:
 
 ```bash
 #!/bin/bash
@@ -124,6 +143,8 @@ A standalone script that enforces all 3 gates:
 # Examples:
 #   safe-dispatch.sh feature-3 fixer "Fix the CSS transition" term_xxx
 #   safe-dispatch.sh feature-3 builder "Build the component" term_xxx "codex"
+#   safe-dispatch.sh feature-3 reviewer "Review for bugs" term_xxx "claude"
+#   safe-dispatch.sh feature-3 worker "Run the migration" term_xxx "pi --model openai/gpt-5.5 --thinking high"
 
 WORKTREE_NAME="$1"
 ROLE="$2"
