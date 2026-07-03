@@ -6,6 +6,10 @@ import { isExpectedAgentProcess } from '../../../shared/agent-process-recognitio
 import type { GlobalSettings } from '../../../shared/types'
 
 type RuntimeOwnerSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+// Why: stalled remote process inspection must not extend delayed-startup
+// cleanup beyond the existing follow-up readiness window.
+const FOLLOWUP_READY_TIMEOUT_MS = 4500
+const FOLLOWUP_READY_POLL_MS = 150
 
 export async function sendFollowupPromptWhenAgentReady(args: {
   ptyId: string
@@ -31,12 +35,16 @@ async function waitForAgentForeground(
   expectedProcess: string,
   settings: RuntimeOwnerSettings
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise((resolve) => globalThis.setTimeout(resolve, 150))
-    }
+  const deadline = Date.now() + FOLLOWUP_READY_TIMEOUT_MS
+  while (Date.now() < deadline) {
     try {
-      const process = await inspectRuntimeTerminalProcess(settings, ptyId)
+      const process = await withDeadline(
+        inspectRuntimeTerminalProcess(settings, ptyId),
+        Math.max(0, deadline - Date.now())
+      )
+      if (!process) {
+        return false
+      }
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return true
@@ -44,6 +52,29 @@ async function waitForAgentForeground(
     } catch {
       // Ignore transient PTY inspection failures and keep polling.
     }
+    const delayMs = Math.min(FOLLOWUP_READY_POLL_MS, Math.max(0, deadline - Date.now()))
+    if (delayMs > 0) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, delayMs))
+    }
   }
   return false
+}
+
+function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  if (timeoutMs <= 0) {
+    return Promise.resolve(null)
+  }
+  return new Promise((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => resolve(null), timeoutMs)
+    promise.then(
+      (value) => {
+        globalThis.clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        globalThis.clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
