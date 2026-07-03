@@ -36,6 +36,27 @@ declare module 'monaco-editor/esm/vs/editor/browser/controller/editContext/clipb
   }
 }
 
+declare module 'monaco-editor/esm/vs/base/common/async.js' {
+  export class Delayer<T = unknown> {
+    constructor(defaultDelay: number)
+    trigger(task: () => T | Promise<T>, delay?: number): Promise<T | undefined>
+    cancel(): void
+    dispose(): void
+  }
+}
+
+declare module 'monaco-editor/esm/vs/base/common/lifecycle.js' {
+  type Disposable = {
+    dispose(): void
+  }
+
+  export class DisposableStore {
+    add<T extends Disposable>(disposable: T): T
+    clear(): void
+    dispose(): void
+  }
+}
+
 declare global {
   var MonacoEnvironment:
     | {

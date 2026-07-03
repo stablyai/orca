@@ -8,9 +8,9 @@
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
-import { posix, win32 } from 'path'
-import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
+import { posix, win32 } from 'node:path'
+import { existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type {
   AutomationWorkspaceProvenance,
@@ -109,6 +109,11 @@ import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
 } from '../project-runtime-git-options'
+import {
+  getBranchNameOverrideCandidate,
+  getWorktreeCreateCandidate,
+  WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
+} from '../worktree-create-candidates'
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
@@ -718,6 +723,36 @@ async function hasSshRemoteBranchConflict(
   }
 }
 
+async function hasSshLocalBranchConflict(
+  provider: SshGitProvider,
+  repoPath: string,
+  branchName: string
+): Promise<boolean> {
+  try {
+    const { stdout } = await provider.exec(
+      ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
+      repoPath
+    )
+    return stdout.trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+async function getSshBranchConflictKind(
+  provider: SshGitProvider,
+  repoPath: string,
+  branchName: string,
+  allowedBaseRef: string
+): Promise<'local' | 'remote' | null> {
+  if (await hasSshLocalBranchConflict(provider, repoPath, branchName)) {
+    return 'local'
+  }
+  return (await hasSshRemoteBranchConflict(provider, repoPath, branchName, allowedBaseRef))
+    ? 'remote'
+    : null
+}
+
 type SelectedReviewBranchInput = Pick<
   CreateWorktreeArgs,
   | 'branchNameOverride'
@@ -836,7 +871,7 @@ async function remotePathExists(
   fsProvider: IFilesystemProvider | null | undefined,
   pathValue: string
 ): Promise<boolean> {
-  if (!fsProvider) {
+  if (!fsProvider?.stat) {
     return false
   }
   try {
@@ -1237,10 +1272,7 @@ export async function prefetchRemoteWorktreeCreateBase(
 
   // Why: mirrors createRemoteWorktree's legacy local-base fallback so
   // prefetch and create share one process-local SSH fetch cache.
-  const fallbackRemote = basePlan.baseBranch.includes('/')
-    ? basePlan.baseBranch.split('/')[0]
-    : 'origin'
-  await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
+  await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
 }
 
 async function refreshLocalBaseRefForRemoteWorktreeCreate(
@@ -1419,19 +1451,6 @@ export async function createRemoteWorktree(
   // commit author identity rather than hosted-account usernames.
   const username = await getSshGitUsername(provider, repo.path)
 
-  const branchName = await resolveCreateBranchNameSsh(
-    provider,
-    repo.path,
-    args.branchNameOverride,
-    sanitizedName,
-    settings,
-    username
-  )
-
-  let remotePath = computeRemoteWorktreePath(sanitizedName, repo.path, worktreePathSettings, {
-    useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
-  })
-
   // Determine base branch
   // Why: previously fell back to a hardcoded 'origin/main' when
   // symbolic-ref failed. That silently handed addWorktree a ref that may
@@ -1446,34 +1465,55 @@ export async function createRemoteWorktree(
   }
   const { baseBranch, remoteTrackingBase } = basePlan
 
-  const checkoutExistingBranch = await canCheckoutExistingLocalBranchSsh(
-    provider,
-    repo.path,
-    branchName,
-    baseBranch
-  )
-  if (!checkoutExistingBranch) {
-    if (await hasSshRemoteBranchConflict(provider, repo.path, branchName, baseBranch)) {
-      const selectedReview = isAllowedPushTargetRemoteConflict('remote', branchName, args)
+  let branchName = ''
+  let checkoutExistingBranch = false
+  let remotePath = ''
+  let selectedExistingLocalBranchName: string | null = null
+  let lastBranchConflictKind: 'local' | 'remote' | null = null
+  let remotePathResolved = false
+  // Why: duplicate PR/MR checkouts still need a workspace; suffix the local
+  // branch/path while preserving the review metadata and push target.
+  for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
+    effectiveSanitizedName = getWorktreeCreateCandidate(sanitizedName, suffix)
+    effectiveRequestedName = args.name.trim()
+      ? getWorktreeCreateCandidate(args.name, suffix)
+      : effectiveSanitizedName
+    branchName = await resolveCreateBranchNameSsh(
+      provider,
+      repo.path,
+      selectedExistingLocalBranchName ??
+        getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
+      effectiveSanitizedName,
+      settings,
+      username
+    )
+    checkoutExistingBranch = await canCheckoutExistingLocalBranchSsh(
+      provider,
+      repo.path,
+      branchName,
+      baseBranch
+    )
+    if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
+      // Why: once a user-selected branch is safe to reuse, path retries should
+      // keep that branch exact instead of creating a sibling branch.
+      selectedExistingLocalBranchName = branchName
+    }
+    lastBranchConflictKind = checkoutExistingBranch
+      ? null
+      : await getSshBranchConflictKind(provider, repo.path, branchName, baseBranch)
+    if (lastBranchConflictKind) {
+      const selectedReview = isAllowedPushTargetRemoteConflict(
+        lastBranchConflictKind,
+        branchName,
+        args
+      )
         ? await getSelectedHostedReviewForBranch(repo, branchName, args).catch(() => null)
         : null
       if (!selectedReview?.matchesSelected) {
-        throw new Error(
-          `Branch "${branchName}" already exists on a remote. Pick a different worktree name.`
-        )
+        continue
       }
+      lastBranchConflictKind = null
     }
-  }
-
-  let remotePathResolved = !args.branchNameOverride
-  for (let suffix = 1; args.branchNameOverride && suffix < 100; suffix += 1) {
-    effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
-    effectiveRequestedName =
-      suffix === 1
-        ? args.name
-        : args.name.trim()
-          ? `${args.name}-${suffix}`
-          : effectiveSanitizedName
     remotePath = computeRemoteWorktreePath(
       effectiveSanitizedName,
       repo.path,
@@ -1488,6 +1528,11 @@ export async function createRemoteWorktree(
     }
   }
   if (!remotePathResolved) {
+    if (lastBranchConflictKind) {
+      throw new Error(
+        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different worktree name.`
+      )
+    }
     throw new Error(
       `Could not find an available remote worktree path for "${sanitizedName}". Pick a different worktree name.`
     )
@@ -1536,9 +1581,8 @@ export async function createRemoteWorktree(
     // Why: local or otherwise non-remote-tracking bases preserve legacy
     // best-effort fetch behavior. Verified PR/MR SHA bases already have the
     // commit object locally, so a broad remote fetch only updates unrelated refs.
-    const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {
-      await fetchRemoteForWorktreeCreate(provider, repo, fallbackRemote)
+      await fetchRemoteForWorktreeCreate(provider, repo, 'origin')
     } catch {
       /* best-effort */
     }
@@ -1890,17 +1934,15 @@ export async function createLocalWorktree(
       // (e.g. plain `main`, `master`, or any local branch), the legacy path
       // still ran a best-effort `git fetch origin`. Verified PR SHA bases
       // already have the needed commit object, so skip that broad fetch.
-      const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       legacyFetchPromise = runtime
-        .fetchRemoteWithCache(repo.path, fallbackRemote, ...localWorktreeGitOptionArgs)
+        .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
     if (!(await hasLocalCommitObjectWithOptions(repo.path, baseBranch, localWorktreeGitOptions))) {
-      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-      legacyFetchPromise = gitExecFileAsync(['fetch', remote], localGitExecOptions)
+      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], localGitExecOptions)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
@@ -1946,35 +1988,26 @@ export async function createLocalWorktree(
   let branchName = ''
   let worktreePath = ''
 
-  // Why: silently resolve branch/path/PR name collisions by appending -2/-3/etc.
-  // instead of failing and forcing the user back to the name picker. This is
-  // especially important for the new-workspace flow where the user may not have
-  // direct control over the branch name. Bounded by MAX_SUFFIX_ATTEMPTS so a
-  // misconfigured environment (e.g. a mock or stub that always reports a
-  // conflict) cannot spin this loop indefinitely.
-  const MAX_SUFFIX_ATTEMPTS = 100
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
   let lastBranchConflictKind: 'local' | 'remote' | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   let lastExistingReviewNumber: number | null = null
-  for (let suffix = 1; suffix <= MAX_SUFFIX_ATTEMPTS; suffix += 1) {
-    effectiveSanitizedName = suffix === 1 ? sanitizedName : `${sanitizedName}-${suffix}`
-    effectiveRequestedName =
-      suffix === 1
-        ? requestedName
-        : requestedName.trim()
-          ? `${requestedName}-${suffix}`
-          : effectiveSanitizedName
+  // Why: create-from-review can provide an exact branch override that already
+  // exists locally; suffix both branch and path instead of blocking the user.
+  for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
+    effectiveSanitizedName = getWorktreeCreateCandidate(sanitizedName, suffix)
+    effectiveRequestedName = requestedName.trim()
+      ? getWorktreeCreateCandidate(requestedName, suffix)
+      : effectiveSanitizedName
+    lastExistingReviewNumber = null
 
     branchName = await resolveCreateBranchName(
       repo.path,
       selectedExistingLocalBranchName
         ? selectedExistingLocalBranchName
-        : args.branchNameOverride
-          ? args.branchNameOverride
-          : undefined,
+        : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
       effectiveSanitizedName,
       settings,
       username,
@@ -2016,7 +2049,6 @@ export async function createLocalWorktree(
             lastBranchConflictKind = null
           } else if (lastExistingPR) {
             lastExistingReviewNumber = lastExistingPR.number
-            break
           }
         } else if (selectedReview) {
           let hostedReview: Awaited<ReturnType<typeof getSelectedHostedReviewForBranch>> = null
@@ -2029,18 +2061,11 @@ export async function createLocalWorktree(
             lastBranchConflictKind = null
           } else if (hostedReview) {
             lastExistingReviewNumber = hostedReview.number
-            break
           }
         }
       }
     }
     if (lastBranchConflictKind) {
-      // Why: PR resolver-provided branch names are exact branch identity.
-      // Retrying with a suffixed branch would silently detach the worktree
-      // from the PR being opened.
-      if (args.branchNameOverride) {
-        break
-      }
       continue
     }
 
@@ -2062,10 +2087,7 @@ export async function createLocalWorktree(
         // GitHub API may be unreachable, rate-limited, or token missing
       }
       if (lastExistingPR && !isMatchingSelectedGitHubPr(lastExistingPR, args, branchName)) {
-        if (args.branchNameOverride) {
-          lastExistingReviewNumber = lastExistingPR.number
-          break
-        }
+        lastExistingReviewNumber = lastExistingPR.number
         continue
       }
     }

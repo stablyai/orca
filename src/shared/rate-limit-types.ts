@@ -49,6 +49,8 @@ export type ProviderRateLimits = {
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
   weekly: RateLimitWindow | null
+  /** Claude Fable 7-day weekly window, null if not available. */
+  fableWeekly?: RateLimitWindow | null
   /** 30-day monthly window (OpenCode Go only), null if not available. */
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */

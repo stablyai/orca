@@ -8,13 +8,13 @@ export const DEFAULT_STATUS_VISUALS: Record<string, { color: string; icon: strin
 }
 
 export const DEFAULT_WORKSPACE_STATUSES = [
-  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
-  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
   {
     id: 'in-progress',
     label: 'In progress',
     color: 'conductor-progress',
     icon: 'conductor-progress'
   },
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' }
 ] as const satisfies readonly WorkspaceStatusDefinition[]

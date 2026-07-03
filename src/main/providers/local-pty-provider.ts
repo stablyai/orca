@@ -2,13 +2,17 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, delimiter } from 'path'
-import { win32 as pathWin32 } from 'path'
+import { basename, delimiter } from 'node:path'
+import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from './windows-powershell'
 import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
-import { existsSync } from 'fs'
+import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -17,7 +21,7 @@ import {
   updateHistFileForFallback,
   logHistoryInjection
 } from '../terminal-history'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
   validateWorkingDirectory,
@@ -34,6 +38,7 @@ import {
 } from './local-pty-shell-ready'
 import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -62,6 +67,7 @@ let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
+const ptyTerminalHandle = new Map<string, string>()
 // Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
 // callbacks. If the PTY is killed without disposing these listeners, the
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
@@ -182,6 +188,7 @@ function clearPtyState(id: string): void {
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
+  ptyTerminalHandle.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
@@ -389,6 +396,16 @@ export class LocalPtyProvider implements IPtyProvider {
       // the shared resolver can still fall back to inbox powershell.exe when
       // pwsh.exe was requested but is unavailable.
       const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+      const resolvedShellFamily: WindowsPowerShellShellFamily =
+        normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+          ? normalizedShellFamily
+          : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+            ? normalizedShellFamily
+            : undefined
+      const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+        shellFamily: resolvedShellFamily,
+        implementation: powerShellImplementation
+      })
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
       if (resolvedGitBashPath) {
@@ -398,14 +415,9 @@ export class LocalPtyProvider implements IPtyProvider {
       } else {
         shellPath = shouldResolvePowerShellFamily
           ? (resolveEffectiveWindowsPowerShell({
-              shellFamily:
-                normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                  ? 'powershell.exe'
-                  : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                    ? normalizedShellFamily
-                    : undefined,
+              shellFamily: resolvedShellFamily,
               implementation: powerShellImplementation,
-              pwshAvailable: this.opts.pwshAvailable?.() ?? false
+              pwshAvailable: shouldProbePwsh ? (this.opts.pwshAvailable?.() ?? false) : false
             }) ?? shellFamily)
           : shellFamily
       }
@@ -475,6 +487,7 @@ export class LocalPtyProvider implements IPtyProvider {
     // Why: Orca can be launched from an Orca terminal while developing. Pane
     // identity belongs to the child PTY, not the parent shell that spawned app.
     removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
+    removeAppImageRuntimeEnv(spawnEnv)
     removeInheritedNoColor(spawnEnv)
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
@@ -669,6 +682,9 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
     ptyShellName.set(id, getSpawnedShellName(shellPath))
+    if (finalEnv.ORCA_TERMINAL_HANDLE) {
+      ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
+    }
     ptyAgentForegroundContextPaths.set(
       id,
       getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
@@ -934,11 +950,12 @@ export class LocalPtyProvider implements IPtyProvider {
     /* re-spawning handles local revival */
   }
 
-  async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
+  async listProcesses(): Promise<PtyProcessInfo[]> {
     return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
       id,
       cwd: '',
-      title: proc.process || ptyShellName.get(id) || 'shell'
+      title: proc.process || ptyShellName.get(id) || 'shell',
+      ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
     }))
   }
 

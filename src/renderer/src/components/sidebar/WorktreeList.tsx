@@ -63,7 +63,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
-import { buildWorktreeComparator } from './smart-sort'
+import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
   type SmartClass,
@@ -135,6 +135,8 @@ import {
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
 import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import { useProjectGroupHeaderDrag } from './project-group-header-drag'
+import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups,
@@ -180,6 +182,10 @@ import {
   type WorktreeSidebarTrackedStatusDropTarget,
   type WorktreeSidebarDropPreview
 } from './worktree-sidebar-drop-preview'
+import {
+  getReorderedWorktreeIdsToUnnest,
+  getWorktreeLineageDropTargetId
+} from './worktree-lineage-drag-drop'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
@@ -984,11 +990,11 @@ function getPointerDropStatusTarget(args: {
   if (pinTarget && args.container.contains(pinTarget)) {
     return { status: null, isPinDrop: true, lineageParentId: null }
   }
-  const rowTarget = target.closest<HTMLElement>('[data-worktree-drag-id]')
-  let lineageParentId: string | null = null
-  if (rowTarget && args.container.contains(rowTarget)) {
-    lineageParentId = rowTarget.dataset.worktreeDragId ?? null
-  }
+  const lineageParentId = getWorktreeLineageDropTargetId({
+    container: args.container,
+    target,
+    pointerY: args.y
+  })
   const statusTarget = target.closest<HTMLElement>('[data-workspace-status-drop-target]')
   return {
     status:
@@ -1314,6 +1320,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const [highlightedRevealRowKey, setHighlightedRevealRowKey] = useState<string | null>(null)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
+  const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -1372,7 +1379,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const suppressWorktreeClickUntilRef = useRef(0)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
+  const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
+  const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
   const lastVisibleRefreshKeyRef = useRef('')
   const reportVisibleGitHubPRRefreshCandidates = useAppStore(
     (s) => s.reportVisibleGitHubPRRefreshCandidates
@@ -1392,6 +1401,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           .filter((group) => group.createdFrom === 'folder-scan')
           .map((group) => group.id)
       ),
+    [projectGroups]
+  )
+  const projectGroupByIdForHeaderDrag = useMemo(
+    () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
   )
 
@@ -1494,6 +1507,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       groupKey: string
       rects: readonly WorktreeSidebarDragRect[]
       draggedIds: readonly string[]
+      draggingWorktreeId?: string | null
     }): WorktreeSidebarDropPreview | null => {
       const container = scrollRef.current
       if (!container) {
@@ -1510,7 +1524,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         scrollTop: container.scrollTop,
         rects: args.rects,
         groupIds: group.worktreeIds,
-        draggedIds: args.draggedIds
+        draggedIds: args.draggedIds,
+        draggingWorktreeId: args.draggingWorktreeId
       })
     },
     [worktreeDragUnitGroups]
@@ -1525,7 +1540,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         pointerY,
         groupKey: session.sourceGroupKey,
         rects: session.rects,
-        draggedIds: session.reorderUnitDraggedIds
+        draggedIds: session.reorderUnitDraggedIds,
+        draggingWorktreeId: session.draggingWorktreeId
       })
     },
     [computeWorktreeDropForGroup]
@@ -1545,7 +1561,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         pointerY: args.pointerY,
         groupKey,
         rects: getWorktreeSidebarDragRectsForGroup(container, groupKey),
-        draggedIds: args.draggedIds
+        draggedIds: args.draggedIds,
+        draggingWorktreeId: worktreeDragSessionRef.current?.draggingWorktreeId ?? null
       })
     },
     [computeWorktreeDropForGroup]
@@ -1557,6 +1574,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         rows.filter((row): row is Row => row.type !== 'host-header')
       ),
     [rows]
+  )
+  const sidebarProjectGroupHeaderIdsByBucket = useMemo(
+    () =>
+      getSidebarOrderedProjectGroupHeaderIdsByBucket(
+        rows.filter((row): row is Row => row.type !== 'host-header'),
+        projectGroupByIdForHeaderDrag
+      ),
+    [projectGroupByIdForHeaderDrag, rows]
   )
   const repoHeaderIndexByRepoId = useMemo(() => {
     const map = new Map<string, number>()
@@ -1576,11 +1601,42 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
     return map
   }, [sidebarRepoHeaderIdsByBucket])
+  const projectGroupHeaderIndexByGroupId = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const groupIds of sidebarProjectGroupHeaderIdsByBucket.values()) {
+      groupIds.forEach((groupId, index) => {
+        map.set(groupId, index)
+      })
+    }
+    return map
+  }, [sidebarProjectGroupHeaderIdsByBucket])
+  const projectGroupHeaderBucketByGroupId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [bucketKey, groupIds] of sidebarProjectGroupHeaderIdsByBucket) {
+      for (const groupId of groupIds) {
+        map.set(groupId, bucketKey)
+      }
+    }
+    return map
+  }, [sidebarProjectGroupHeaderIdsByBucket])
   const commitProjectGroupOrder = useCallback(
     (repoId: string, projectGroupId: string | null, order: number) => {
       void moveProjectToGroup(repoId, projectGroupId, order)
     },
     [moveProjectToGroup]
+  )
+  const commitProjectGroupHeaderOrder = useCallback(
+    (groupId: string, tabOrder: number) => {
+      if (!Number.isFinite(tabOrder)) {
+        return
+      }
+      const suppressUntil =
+        window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
+      suppressMeasurementAdjustmentUntilRef.current = suppressUntil
+      directScrollInputUntilRef.current = suppressUntil
+      void updateProjectGroup(groupId, { tabOrder })
+    },
+    [updateProjectGroup]
   )
   // Drag is only meaningful when repo headers are using manual order. The
   // controller is still constructed for hook order stability when inert.
@@ -1591,6 +1647,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     usesProjectGroupOrdering: hasProjectGroups,
     onCommitRepoOrder: commitRepoReorder,
     onCommitProjectGroupOrder: commitProjectGroupOrder,
+    getScrollContainer: () => scrollRef.current
+  })
+  const projectGroupDrag = useProjectGroupHeaderDrag({
+    sidebarProjectGroupHeaderIdsByBucket,
+    projectGroupById: projectGroupByIdForHeaderDrag,
+    onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
     getScrollContainer: () => scrollRef.current
   })
   const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] = useState<{
@@ -2587,6 +2649,37 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [assignWorktreeParent, getEligibleLineageDropTarget]
   )
 
+  const clearReorderedWorktreeParents = useCallback(
+    (args: { draggedIds: readonly string[]; sourceGroupKey: string }) => {
+      const sourceGroup = worktreeDragGroups.find((group) => group.key === args.sourceGroupKey)
+      if (!sourceGroup) {
+        return
+      }
+      const ids = getReorderedWorktreeIdsToUnnest({
+        draggedIds: args.draggedIds,
+        sourceGroupIds: sourceGroup.worktreeIds,
+        lineageById: worktreeLineageById
+      })
+      if (ids.length === 0) {
+        return
+      }
+      // Why: dropping a nested card onto a reorder line is the escape hatch
+      // from accidental nesting, so clear only the directly dragged children.
+      void Promise.all(ids.map((id) => updateWorktreeLineage(id, { noParent: true }))).catch(
+        (err) => {
+          console.error('Failed to unnest workspace:', err)
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.failedUnnestWorkspace',
+              'Failed to unnest workspace'
+            )
+          )
+        }
+      )
+    },
+    [updateWorktreeLineage, worktreeDragGroups, worktreeLineageById]
+  )
+
   const flushWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
     if (!drag) {
@@ -3101,6 +3194,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               dropIndex: drop.dropIndex
             })
           })
+          clearReorderedWorktreeParents({
+            draggedIds: drag.draggedIds,
+            sourceGroupKey: drag.sourceGroupKey
+          })
         } else if (scrollRef.current) {
           const currentTarget = preferredStatusTarget
           const currentPreview = currentTarget.status
@@ -3157,6 +3254,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   }, [
     beginWorktreePointerDrag,
     clearWorktreeDrag,
+    clearReorderedWorktreeParents,
     commitWorktreeLineageParentDrop,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
@@ -3504,10 +3602,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           dropIndex: drop.dropIndex
         })
       })
+      clearReorderedWorktreeParents({
+        draggedIds: session.draggedIds,
+        sourceGroupKey: session.sourceGroupKey
+      })
       clearWorktreeDrag()
     },
     [
       clearWorktreeDrag,
+      clearReorderedWorktreeParents,
       commitWorktreeLineageParentDrop,
       computeWorktreeDrop,
       computeWorktreeStatusDrop,
@@ -3757,6 +3860,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           dropIndex: drop.dropIndex
         })
       })
+      clearReorderedWorktreeParents({
+        draggedIds: session.draggedIds,
+        sourceGroupKey: session.sourceGroupKey
+      })
       clearWorktreeDrag()
     }
 
@@ -3764,6 +3871,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     return () => document.removeEventListener('drop', handleDocumentDrop, true)
   }, [
     clearWorktreeDrag,
+    clearReorderedWorktreeParents,
     commitWorktreeLineageParentDrop,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
@@ -3852,6 +3960,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               // the top while scrolled. Match the worktree indicator's tier.
               className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
               style={{ top: `${repoDrag.state.dropIndicatorY}px` }}
+            />
+          ) : null}
+          {canReorderProjectGroupHeaders &&
+          projectGroupDrag.state.draggingGroupId !== null &&
+          projectGroupDrag.state.dropIndicatorY !== null ? (
+            <div
+              role="presentation"
+              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
+              style={{ top: `${projectGroupDrag.state.dropIndicatorY}px` }}
             />
           ) : null}
           {hostDrag.state.draggingHostId !== null && hostDrag.state.dropIndicatorY !== null ? (
@@ -3943,6 +4060,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
               const isProjectGroupHeader = groupBy === 'repo' && row.projectGroup !== undefined
               const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
+              const projectGroupIdForHeader =
+                isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
+                  ? row.projectGroup.id
+                  : undefined
               const repoHeaderIndex =
                 projectIdForHeader !== undefined
                   ? repoHeaderIndexByRepoId.get(projectIdForHeader)
@@ -3951,6 +4072,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 projectIdForHeader !== undefined
                   ? repoHeaderBucketByRepoId.get(projectIdForHeader)
                   : undefined
+              const projectGroupHeaderIndex =
+                projectGroupIdForHeader !== undefined
+                  ? projectGroupHeaderIndexByGroupId.get(projectGroupIdForHeader)
+                  : undefined
+              const projectGroupHeaderBucketKey =
+                projectGroupIdForHeader !== undefined
+                  ? projectGroupHeaderBucketByGroupId.get(projectGroupIdForHeader)
+                  : undefined
               const isDraggableRepoHeader = Boolean(
                 canReorderRepoHeaders &&
                 isRepoHeader &&
@@ -3958,10 +4087,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 repoHeaderBucketKey &&
                 (sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
               )
+              const isDraggableProjectGroupHeader = Boolean(
+                canReorderProjectGroupHeaders &&
+                projectGroupIdForHeader &&
+                projectGroupHeaderBucketKey &&
+                (sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
+                  0) > 1
+              )
               const isDraggingThis =
                 canReorderRepoHeaders &&
                 repoDrag.state.draggingRepoId !== null &&
                 repoDrag.state.draggingRepoId === projectIdForHeader
+              const isDraggingThisProjectGroup =
+                canReorderProjectGroupHeaders &&
+                projectGroupDrag.state.draggingGroupId !== null &&
+                projectGroupDrag.state.draggingGroupId === projectGroupIdForHeader
               const headerWorkspaceStatus =
                 groupBy === 'workspace-status'
                   ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses)
@@ -3997,10 +4137,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
-              // Why: repo/project headers already reveal actions on hover; tuck
-              // the collapse chevron into that cluster instead of a new surface.
+              // Why: repo/project and status headers use the same compact
+              // section chrome; flat "All" stays a simple label.
               const showHeaderCollapseAffordance =
-                row.count > 0 && (isRepoHeader || isProjectGroupHeader)
+                row.count > 0 &&
+                (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null)
               // Why: non-project section headers like "All" are labels for the
               // flat list, so they should not reserve project hierarchy indent.
               const headerPaddingLeft =
@@ -4044,6 +4185,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-repo-header-id={projectIdForHeader}
                     data-repo-header-index={repoHeaderIndex}
                     data-repo-header-bucket={repoHeaderBucketKey}
+                    data-project-group-header-id={projectGroupIdForHeader}
+                    data-project-group-header-index={projectGroupHeaderIndex}
+                    data-project-group-header-bucket={projectGroupHeaderBucketKey}
                     data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
@@ -4052,7 +4196,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       'cursor-pointer',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
-                      isDraggingThis &&
+                      (isDraggingThis || isDraggingThisProjectGroup) &&
                         'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
                       headerWorkspaceStatus &&
                         dragOverStatus === headerWorkspaceStatus &&
@@ -4101,15 +4245,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     {row.icon ? (
                       <div
                         data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
+                        data-project-group-header-drag-handle={
+                          isDraggableProjectGroupHeader ? '' : undefined
+                        }
                         className={cn(
                           'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                           repoHeaderColor ? 'text-muted-foreground' : row.tone,
-                          isDraggableRepoHeader && 'hover:cursor-grab active:cursor-grabbing'
+                          (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
+                            'hover:cursor-grab active:cursor-grabbing'
                         )}
                         onPointerDown={
                           isDraggableRepoHeader && projectIdForHeader
                             ? (event) => repoDrag.onHandlePointerDown(event, projectIdForHeader)
-                            : undefined
+                            : isDraggableProjectGroupHeader && projectGroupIdForHeader
+                              ? (event) =>
+                                  projectGroupDrag.onHandlePointerDown(
+                                    event,
+                                    projectGroupIdForHeader
+                                  )
+                              : undefined
                         }
                       >
                         {row.repo ? (
@@ -4614,11 +4768,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   onClickCapture={handleWorktreeRowClickCapture}
                   onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
                   onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}
-                  onPointerDown={(event) =>
-                    nested
-                      ? undefined
-                      : handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
-                  }
+                  onPointerDown={(event) => {
+                    if (nested) {
+                      event.stopPropagation()
+                    }
+                    handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
+                  }}
                   style={{
                     paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
                   }}
@@ -5192,7 +5347,7 @@ const WorktreeList = React.memo(function WorktreeList({
         sessionHasHadPty.current = true
       } else {
         nonArchivedWorktrees.sort(
-          (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
+          (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
         )
         lastAttentionByWorktreeRef.current = null
         return nonArchivedWorktrees.map((w) => w.id)

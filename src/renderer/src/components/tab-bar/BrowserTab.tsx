@@ -26,6 +26,7 @@ import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
+import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -169,6 +170,10 @@ export default function BrowserTab({
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
+  // Why: defer activation to pointer-up so dragging the tab (reorder / move into
+  // another pane / split) does not switch the active tab mid-gesture.
+  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({ onActivate })
+
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -178,11 +183,10 @@ export default function BrowserTab({
       {...listeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        if (e.button !== 0) {
-          return
-        }
-        onActivate()
-        listeners?.onPointerDown?.(e)
+        onTabPointerDown(
+          e,
+          listeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
       }}
       onMouseDown={(e) => {
         if (e.button === 1) {

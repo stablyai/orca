@@ -1,7 +1,15 @@
-import { execFile, execFileSync } from 'child_process'
-import { randomBytes } from 'crypto'
-import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
-import { dirname, win32 as pathWin32 } from 'path'
+import { execFile, execFileSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, win32 as pathWin32 } from 'node:path'
 
 let cachedWindowsUserSid: string | null | undefined
 

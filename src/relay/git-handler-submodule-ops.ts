@@ -7,7 +7,7 @@
  * configured submodule paths so inner files recurse into the submodule worktree.
  * Split from git-handler-ops.ts to keep that file under the max-lines budget.
  */
-import * as path from 'path'
+import * as path from 'node:path'
 import { buildDiffResult } from './git-diff-result'
 import { parseBranchDiff } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'

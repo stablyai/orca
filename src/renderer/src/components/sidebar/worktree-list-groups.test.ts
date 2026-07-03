@@ -629,7 +629,7 @@ describe('buildRows with pinned worktrees', () => {
     })
   })
 
-  it('splits same-host checkouts of one project into separate per-setup groups', () => {
+  it('keeps same-host checkouts of one project under the project header', () => {
     const repoB: Repo = { ...repo, id: 'repo-2', path: '/tmp/orca-2', displayName: 'orca-2' }
     const worktreeB: Worktree = {
       ...worktree,
@@ -676,22 +676,15 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     const headers = rows.filter((row) => row.type === 'header')
-    expect(headers).toHaveLength(2)
-    expect(headers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          key: 'project:github:stablyai/orca::setup:repo-1',
-          label: 'orca'
-        }),
-        expect.objectContaining({
-          key: 'project:github:stablyai/orca::setup:repo-2',
-          label: 'orca-2'
-        })
-      ])
-    )
+    expect(headers).toHaveLength(1)
+    expect(headers[0]).toMatchObject({
+      key: 'project:github:stablyai/orca',
+      label: 'Orca',
+      count: 2
+    })
   })
 
-  it('splits all project setups when one host has duplicate checkouts', () => {
+  it('keeps runtime copies under the project header when one host has duplicate checkouts', () => {
     const localRepoB: Repo = {
       ...repo,
       id: 'repo-local-b',
@@ -745,11 +738,8 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     const headers = rows.filter((row) => row.type === 'header')
-    expect(headers.map((row) => row.key)).toEqual([
-      'project:github:stablyai/orca::setup:repo-1',
-      'project:github:stablyai/orca::setup:repo-local-b',
-      'project:github:stablyai/orca::setup:repo-remote'
-    ])
+    expect(headers.map((row) => row.key)).toEqual(['project:github:stablyai/orca'])
+    expect(headers[0]).toMatchObject({ label: 'Orca', count: 3 })
   })
 
   it('groups Windows host and WSL setups on the same runtime host', () => {
@@ -2283,6 +2273,67 @@ describe('project groups', () => {
       'repo:repo-fresh',
       'repo:repo-stale'
     ])
+  })
+
+  it('orders Project Group siblings by tabOrder within each parent bucket', () => {
+    const rootA: ProjectGroup = {
+      id: 'group-root-a',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 20,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const rootB: ProjectGroup = {
+      ...rootA,
+      id: 'group-root-b',
+      name: 'Infrastructure',
+      tabOrder: 10
+    }
+    const childLate: ProjectGroup = {
+      ...rootA,
+      id: 'group-child-late',
+      name: 'late',
+      parentGroupId: rootB.id,
+      tabOrder: 30
+    }
+    const childEarly: ProjectGroup = {
+      ...rootA,
+      id: 'group-child-early',
+      name: 'early',
+      parentGroupId: rootB.id,
+      tabOrder: 5
+    }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'recent',
+      {},
+      undefined,
+      false,
+      undefined,
+      [rootA, rootB, childLate, childEarly]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-root-b',
+      'project-group:group-child-early',
+      'project-group:group-child-late',
+      'project-group:group-root-a'
+    ])
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.projectGroupDepth)).toEqual(
+      [0, 1, 1, 0]
+    )
   })
 
   it('renders nested Project Groups before repos assigned to their leaf group', () => {

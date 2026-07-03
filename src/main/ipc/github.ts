@@ -3,7 +3,7 @@ the repo-path validation, preference-threading, and stats wiring patterns are
 reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain, webContents } from 'electron'
-import { resolve } from 'path'
+import { resolve } from 'node:path'
 import type {
   Repo,
   GitHubCreateIssueFields,

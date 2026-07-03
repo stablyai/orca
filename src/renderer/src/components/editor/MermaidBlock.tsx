@@ -1,8 +1,22 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import mermaid from 'mermaid'
+import type mermaidNamespace from 'mermaid'
 import DOMPurify from 'dompurify'
 import { getMermaidConfig } from './mermaid-config'
 import { translate } from '@/i18n/i18n'
+
+type MermaidApi = typeof mermaidNamespace
+
+// Why: mermaid is ~650KB and only needed when a diagram actually renders, yet a
+// static import drags it into the eager startup chunk (it is reachable from the
+// sidebar comment-markdown path). Load it on first render and cache the promise
+// so subsequent diagrams reuse the same module instance.
+let mermaidModulePromise: Promise<MermaidApi> | null = null
+function loadMermaid(): Promise<MermaidApi> {
+  if (!mermaidModulePromise) {
+    mermaidModulePromise = import('mermaid').then((mod) => mod.default)
+  }
+  return mermaidModulePromise
+}
 
 type MermaidBlockProps = {
   content: string
@@ -47,6 +61,10 @@ export default function MermaidBlock({
 
     const render = async (): Promise<void> => {
       try {
+        const mermaid = await loadMermaid()
+        if (cancelled) {
+          return
+        }
         // Why: Mermaid stores initialize() config in global module state. Apply
         // the config inside the same serialized render task so another
         // MermaidBlock cannot overwrite htmlLabels/theme between initialize()

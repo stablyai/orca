@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: this class owns the daemon socket protocol,
    request routing, stream fanout, and session lifecycle in one place so
    renderer/daemon request semantics stay auditable across platform branches. */
-import { createServer, type Server, type Socket } from 'net'
-import { randomUUID } from 'crypto'
-import { performance } from 'perf_hooks'
-import { writeFileSync, chmodSync, unlinkSync } from 'fs'
-import { StringDecoder } from 'string_decoder'
+import { createServer, type Server, type Socket } from 'node:net'
+import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import { writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import { StringDecoder } from 'node:string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'

@@ -1,4 +1,4 @@
-import { platform } from 'os'
+import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionInfo } from './emulator-types'
 import type { SimulatorDevice } from './simctl-simulator-devices'

@@ -430,20 +430,6 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getStatsPaneSearchEntries(),
       group: 'interface'
     },
-    {
-      id: 'servers',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
-      ),
-      description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
-      icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
-    },
     ...(showDesktopOnlySettings
       ? [
           {
@@ -459,6 +445,20 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
+    {
+      id: 'servers',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
+        'Remote Orca Servers'
+      ),
+      description: isWebClient
+        ? 'Connect this browser to a saved Orca server.'
+        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+      icon: Server,
+      searchEntries: [runtimeEnvironmentsSearchEntry],
+      group: 'remote',
+      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+    },
     ...(showDesktopOnlySettings && isMac
       ? [
           {

@@ -161,6 +161,11 @@ export const listStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.md
   },
+  commitButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
   generateButton: {
     width: 42,
     minHeight: 42,
@@ -179,6 +184,9 @@ export const listStyles = StyleSheet.create({
     color: colors.bgBase,
     fontSize: typography.bodySize,
     fontWeight: '700'
+  },
+  commitButtonSecondaryText: {
+    color: colors.textPrimary
   },
   commitFailurePanel: {
     marginTop: spacing.sm,

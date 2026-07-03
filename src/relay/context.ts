@@ -1,5 +1,5 @@
-import { resolve } from 'path'
-import { homedir } from 'os'
+import { resolve } from 'node:path'
+import { homedir } from 'node:os'
 
 // Why: Node's fs APIs don't understand shell tilde expansion. Old repos may
 // have been stored with `~` or `~/…` paths before the client-side fix, so the

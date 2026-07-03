@@ -9,10 +9,10 @@ import {
   statSync,
   writeFileSync,
   chmodSync
-} from 'fs'
-import { homedir, tmpdir } from 'os'
-import { join } from 'path'
-import { spawnSync } from 'child_process'
+} from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import {
   buildWindowsAgentHookPostCommand,
   buildWindowsAgentHookCurlPostCommand,
@@ -21,6 +21,8 @@ import {
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsCmdHookCommand,
+  wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
@@ -339,19 +341,19 @@ describe('wrapPosixHookCommand', () => {
   )
 })
 
+const qualifiedWindowsPowerShellCommand =
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+
+function decodeWindowsHookCommand(command: string): string {
+  const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+  expect(encodedCommand).toBeTruthy()
+  return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
+}
+
 describe('wrapWindowsHookCommand', () => {
-  const qualifiedPowerShellCommand =
-    /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
-
-  function decodeWindowsHookCommand(command: string): string {
-    const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
-    expect(encodedCommand).toBeTruthy()
-    return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
-  }
-
   it('invokes the .cmd through an encoded PowerShell command', () => {
     const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
-    expect(command).toMatch(qualifiedPowerShellCommand)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
     expect(command).not.toMatch(/^powershell\b/i)
     expect(decodeWindowsHookCommand(command)).toBe(
       "& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
@@ -363,7 +365,7 @@ describe('wrapWindowsHookCommand', () => {
   // the whole path inside the encoded command so shells do not split it.
   it('preserves spaces in the script path (user profile with space case)', () => {
     const cmd = wrapWindowsHookCommand('C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd')
-    expect(cmd).toMatch(qualifiedPowerShellCommand)
+    expect(cmd).toMatch(qualifiedWindowsPowerShellCommand)
     expect(decodeWindowsHookCommand(cmd)).toBe(
       "& 'C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
     )
@@ -393,6 +395,43 @@ describe('wrapWindowsHookCommand', () => {
       expect(result.status).toBe(7)
     }
   )
+})
+
+describe('wrapWindowsCmdHookCommand', () => {
+  it('returns a bare .cmd path when cmd.exe can invoke it safely', () => {
+    const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
+    expect(wrapWindowsCmdHookCommand(scriptPath)).toBe(scriptPath)
+  })
+
+  it('falls back to the encoded launcher when cmd.exe would split or expand the path', () => {
+    const scriptPath = 'C:\\Users\\Jane Doe\\%ORCA_TEST%\\codex-hook.cmd'
+    const command = wrapWindowsCmdHookCommand(scriptPath)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(decodeWindowsHookCommand(command)).toBe(`& '${scriptPath}'; exit $LASTEXITCODE`)
+  })
+})
+
+describe('wrapWindowsGitBashHookCommand', () => {
+  it('returns a forward-slash .cmd path when Git Bash can execute it safely', () => {
+    expect(
+      wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
+    ).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd')
+  })
+
+  it('falls back to the encoded launcher when bash would split the path', () => {
+    const scriptPath = 'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\claude-hook.cmd'
+    const command = wrapWindowsGitBashHookCommand(scriptPath)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(decodeWindowsHookCommand(command)).toBe(`& '${scriptPath}'; exit $LASTEXITCODE`)
+  })
+
+  it('falls back to the encoded launcher when bash metacharacters are present', () => {
+    const scriptPath = 'C:\\Users\\alice & bob\\.orca\\agent-hooks\\claude-hook.cmd'
+    const command = wrapWindowsGitBashHookCommand(scriptPath)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(command).not.toContain('& bob')
+    expect(decodeWindowsHookCommand(command)).toBe(`& '${scriptPath}'; exit $LASTEXITCODE`)
+  })
 })
 
 describe('buildWindowsAgentHookPostCommand', () => {

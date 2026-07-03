@@ -11,7 +11,7 @@
  * Quick Open showed "No matching files" even though the scan was incomplete.
  * Centralizing the policy prevents future drift.
  */
-import { posix, win32 } from 'path'
+import { posix, win32 } from 'node:path'
 
 // ─── Hidden-dir blocklist ────────────────────────────────────────────
 

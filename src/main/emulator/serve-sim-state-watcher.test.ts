@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ServeSimStateWatcher, type ServeSimStateDetectedEvent } from './serve-sim-state-watcher'
 
@@ -34,7 +34,7 @@ describe('ServeSimStateWatcher', () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-serve-sim-watch-'))
     cleanupPaths.push(parentDir)
     const stateDir = join(parentDir, 'serve-sim')
-    const watcher = new ServeSimStateWatcher({ parentDir, stateDir })
+    const watcher = new ServeSimStateWatcher({ stateDir })
     const events: ServeSimStateDetectedEvent[] = []
 
     watcher.bindPty('pty-1', 'worktree-1')

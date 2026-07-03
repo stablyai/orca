@@ -158,6 +158,12 @@ export function getWindowSections(
       window: p.weekly
     }
   ]
+  if (p.fableWeekly !== undefined && p.fableWeekly !== null) {
+    sections.push({
+      label: translate('auto.components.status.bar.tooltip.a79c64f87e', 'Fable'),
+      window: p.fableWeekly
+    })
+  }
   if (p.monthly !== undefined && p.monthly !== null) {
     sections.push({
       label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
@@ -229,7 +235,7 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
@@ -324,7 +330,7 @@ export function ProviderPanel({
       {p.error ? (
         <ErrorMessage
           message={p.error}
-          stale={!!(p.session || p.weekly || p.monthly)}
+          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
           inverted={inverted}
         />
       ) : null}

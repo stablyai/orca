@@ -1,5 +1,5 @@
-import { createReadStream } from 'fs'
-import { createInterface } from 'readline'
+import { createReadStream } from 'node:fs'
+import { createInterface } from 'node:readline'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'

@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config'
-import { fileURLToPath } from 'node:url'
 
 const tsconfigRaw = JSON.stringify({
   compilerOptions: {
@@ -12,7 +11,7 @@ const tsconfigRaw = JSON.stringify({
 })
 
 export default defineConfig({
-  root: fileURLToPath(new URL('.', import.meta.url)),
+  root: import.meta.dirname,
   esbuild: {
     tsconfigRaw
   },

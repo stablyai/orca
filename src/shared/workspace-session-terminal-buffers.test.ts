@@ -91,6 +91,17 @@ function makeRuntimeSession(): WorkspaceSessionState {
 }
 
 describe('pruneLocalTerminalScrollbackBuffers', () => {
+  it('tolerates legacy sessions without terminal maps', () => {
+    const legacySession = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null
+    } as WorkspaceSessionState
+
+    expect(() => pruneLocalTerminalScrollbackBuffers(legacySession, [])).not.toThrow()
+    expect(pruneLocalTerminalScrollbackBuffers(legacySession, [])).toEqual(legacySession)
+  })
+
   it('classifies which worktrees need renderer-captured scrollback', () => {
     const repos = [
       { id: 'local-repo', connectionId: null },

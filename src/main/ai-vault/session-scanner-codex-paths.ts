@@ -1,4 +1,4 @@
-import { dirname, resolve } from 'path'
+import { dirname, resolve } from 'node:path'
 
 export function codexHomeForSessionsDir(
   sessionsDir: string,
