@@ -48,7 +48,7 @@ describe('TerminalWebView text zoom', () => {
     const end = terminalWebViewSource.indexOf('/>', start)
     expect(end).toBeGreaterThan(start)
     const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(terminalWebViewSource).toContain('const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }')
+    expect(terminalHtmlSource).toContain('export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }')
     expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
     expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
   })
@@ -113,8 +113,8 @@ describe('TerminalWebView text zoom', () => {
   })
 
   it('loads Unicode 11 before replaying mobile terminal bytes', () => {
-    expect(terminalHtmlSource).toContain('@xterm/xterm@6.1.0-beta.285')
-    expect(terminalHtmlSource).toContain('@xterm/addon-unicode11@0.10.0-beta.285')
+    expect(terminalHtmlSource).toContain('XTERM_ENGINE_JS')
+    expect(terminalHtmlSource).toContain('window.Unicode11Addon.Unicode11Addon')
     const open = terminalHtmlSource.indexOf('term.open(surface)')
     const unicode = terminalHtmlSource.indexOf("term.unicode.activeVersion = '11'")
     const replay = terminalHtmlSource.indexOf('enqueueWrite(replayData)')
@@ -123,8 +123,9 @@ describe('TerminalWebView text zoom', () => {
     expect(replay).toBeGreaterThan(unicode)
   })
 
-  it('uses the newer WebGL-capable xterm stack and desktop font fallbacks', () => {
-    expect(terminalHtmlSource).toContain('@xterm/addon-webgl@0.20.0-beta.284')
+  it('uses the bundled WebGL-capable xterm stack and desktop font fallbacks', () => {
+    expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
+    expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
     expect(terminalHtmlSource).toContain('"SF Mono", "Menlo", "Monaco", "Cascadia Mono"')
     expect(terminalHtmlSource).toContain("fontWeight: '300'")
     expect(terminalHtmlSource).toContain("fontWeightBold: '500'")

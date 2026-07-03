@@ -14,7 +14,7 @@ function iifeSource(): string {
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script src=')
+  const end = XTERM_HTML.indexOf('<script>', start)
   return XTERM_HTML.slice(start, end)
 }
 
