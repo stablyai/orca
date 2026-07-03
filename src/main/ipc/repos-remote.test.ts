@@ -4,14 +4,14 @@ fixture setup and mock plumbing can be shared. Splitting by line count would
 duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
 setup. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { EventEmitter } from 'events'
-import { existsSync } from 'fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { isGitRepo } from '../git/repo'
+import { getGitRepoRoot, isGitRepo } from '../git/repo'
 
 const {
   handleMock,
@@ -93,6 +93,7 @@ vi.mock('../git/repo', async () => {
     ...actual,
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo: vi.fn().mockReturnValue(true),
+    getGitRepoRoot: vi.fn((path: string) => path),
     getGitUsername: vi.fn().mockReturnValue(''),
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
@@ -185,6 +186,8 @@ describe('projectGroups IPC validation', () => {
     listWorktreeGraphMock.mockResolvedValue([])
     vi.mocked(isGitRepo).mockReset()
     vi.mocked(isGitRepo).mockReturnValue(true)
+    vi.mocked(getGitRepoRoot).mockReset()
+    vi.mocked(getGitRepoRoot).mockImplementation((path: string) => path)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
     invalidateAuthorizedRootsCacheMock.mockReset()
@@ -1754,6 +1757,43 @@ describe('repos:add + repos:clone', () => {
       mockStore,
       expect.objectContaining({ path: '/tmp/from-add', kind: 'git' })
     )
+  })
+
+  it('canonicalizes local git repos:add to the detected root path', async () => {
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/from-add',
+        displayName: 'from-add'
+      })
+    )
+    expect(result).toHaveProperty('repo.path', '/tmp/from-add')
+  })
+
+  it('dedupes local git repos:add after canonical root resolution', async () => {
+    const existing = {
+      id: 'repo-add-existing-root',
+      path: '/tmp/from-add',
+      displayName: 'from-add',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {

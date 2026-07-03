@@ -3,8 +3,8 @@ routing, clone lifecycle, and store persistence stay behind a single audited
 boundary. Splitting by line count would scatter tightly coupled repo behavior. */
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { dialog, ipcMain } from 'electron'
-import { randomUUID } from 'crypto'
-import { homedir } from 'os'
+import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
@@ -40,10 +40,10 @@ import {
 } from '../../shared/cross-platform-path'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
-import type { ChildProcess } from 'child_process'
-import { access, mkdir, readdir, rm } from 'fs/promises'
+import type { ChildProcess } from 'node:child_process'
+import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { gitExecFileAsync, gitSpawn } from '../git/runner'
-import { isAbsolute, join, posix } from 'path'
+import { isAbsolute, join, posix } from 'node:path'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -60,6 +60,7 @@ import {
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import {
   isGitRepo,
+  getGitRepoRoot,
   getGitUsername,
   getRepoName,
   getBaseRefDefault,
@@ -79,6 +80,7 @@ import { getSshGitUsername } from '../git/git-username'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
@@ -183,6 +185,7 @@ async function addLocalRepoFromPath(
     return { error: `Not a valid git repository: ${path}` }
   }
 
+  const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
   const existing = store
     .getRepos()
@@ -191,11 +194,24 @@ async function addLocalRepoFromPath(
     return { repo: existing, alreadyExisted: true }
   }
 
-  const detected = await detectRepoIconAndUpstream({ repoPath: path, kind: repoKind })
+  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
+  if (resolvedPathKey !== pathKey) {
+    const existingAfterRootResolve = store
+      .getRepos()
+      .find(
+        (repo) =>
+          !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+      )
+    if (existingAfterRootResolve) {
+      return { repo: existingAfterRootResolve, alreadyExisted: true }
+    }
+  }
+
+  const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: repoKind })
   const repo: Repo = {
     id: randomUUID(),
-    path,
-    displayName: getRepoName(path),
+    path: resolvedPath,
+    displayName: getRepoName(resolvedPath),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,
     ...detected,
     addedAt: Date.now(),
@@ -1599,7 +1615,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
       const failedCount = results.filter((entry) => entry.status === 'failed').length
       if (importedCount + alreadyKnownCount === 0) {
-        for (const group of groupResolver.getCreatedGroups().reverse()) {
+        for (const group of groupResolver.getCreatedGroups().toReversed()) {
           store.deleteProjectGroup(group.id)
         }
       }
@@ -1926,10 +1942,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'forkSyncMode'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
+            | 'externalWorktreeInboxBaselinePaths'
+            | 'importedExternalWorktreePaths'
             | 'projectGroupId'
             | 'projectGroupOrder'
           >
-        > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+        > & {
+          sourceControlAi?: Repo['sourceControlAi'] | null
+          externalWorktreeDiscoverySuppressedAt?:
+            | Repo['externalWorktreeDiscoverySuppressedAt']
+            | null
+        }
       }
     ) => {
       // Why: validate the persisted preference string at the IPC boundary
@@ -2008,6 +2031,38 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           !Number.isFinite(updates.externalWorktreeVisibilityPromptDismissedAt))
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
+      }
+      // Why: null is the transport sentinel for clearing discovery suppression.
+      if (
+        'externalWorktreeDiscoverySuppressedAt' in updates &&
+        updates.externalWorktreeDiscoverySuppressedAt === null
+      ) {
+        updates.externalWorktreeDiscoverySuppressedAt = undefined
+      } else if (
+        'externalWorktreeDiscoverySuppressedAt' in updates &&
+        updates.externalWorktreeDiscoverySuppressedAt !== undefined &&
+        (typeof updates.externalWorktreeDiscoverySuppressedAt !== 'number' ||
+          !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
+      ) {
+        delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if (
+        'externalWorktreeInboxBaselinePaths' in updates &&
+        updates.externalWorktreeInboxBaselinePaths !== undefined
+      ) {
+        const value = updates.externalWorktreeInboxBaselinePaths as unknown
+        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+          delete updates.externalWorktreeInboxBaselinePaths
+        }
+      }
+      if (
+        'importedExternalWorktreePaths' in updates &&
+        updates.importedExternalWorktreePaths !== undefined
+      ) {
+        const value = updates.importedExternalWorktreePaths as unknown
+        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+          delete updates.importedExternalWorktreePaths
+        }
       }
       // Why: null is the transport sentinel for clearing Source Control AI.
       // Other invalid fields are deleted; this one must flow as undefined.
@@ -2525,6 +2580,7 @@ function notifyReposChanged(mainWindow: BrowserWindow): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
+  scheduleCurrentWorktreeBaseDirectoryWatcherSync()
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {

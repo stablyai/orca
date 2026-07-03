@@ -48,6 +48,7 @@ describe('Session History session drag data', () => {
       sessionId: 'session-1',
       title: 'Fix terminal split',
       command: "cd '/repo' && claude --resume session-1",
+      sessionFilePath: '/Users/ada/.claude/projects/-repo/session-1.jsonl',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
       launchConfig: {
         agentCommand: 'claude --dangerously-skip-permissions',
@@ -61,6 +62,24 @@ describe('Session History session drag data', () => {
     expect(transfer.effectAllowed).toBe('copy')
     expect(hasAiVaultSessionDragData(transfer)).toBe(true)
     expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
+  })
+
+  it('rejects blank session file paths', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'claude',
+        sessionId: 'session-1',
+        title: 'Blank session file path',
+        command: 'claude --resume session-1',
+        sessionFilePath: '   '
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
   })
 
   it('rejects malformed payloads', () => {

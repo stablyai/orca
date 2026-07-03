@@ -46,6 +46,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
+        cwd: params.cwd,
         ...(params.env ? { env: params.env } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
@@ -103,7 +104,8 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       runtime.setMobileSessionTabProps(params.worktree, {
         tabId: params.tabId,
         ...(params.color !== undefined ? { color: params.color } : {}),
-        ...(params.isPinned !== undefined ? { isPinned: params.isPinned } : {})
+        ...(params.isPinned !== undefined ? { isPinned: params.isPinned } : {}),
+        ...(params.viewMode !== undefined ? { viewMode: params.viewMode } : {})
       })
   }),
   defineStreamingMethod({

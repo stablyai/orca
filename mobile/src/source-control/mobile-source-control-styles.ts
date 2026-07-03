@@ -172,6 +172,41 @@ const baseStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  createPrBlock: {
+    marginTop: spacing.md,
+    gap: spacing.xs
+  },
+  createPrButton: {
+    minHeight: 42,
+    borderRadius: radii.button,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md
+  },
+  createPrButtonDisabled: {
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
+  createPrButtonPressed: {
+    opacity: 0.78
+  },
+  createPrButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  createPrButtonTextDisabled: {
+    color: colors.textSecondary
+  },
+  createPrHint: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    lineHeight: 16
   }
 })
 

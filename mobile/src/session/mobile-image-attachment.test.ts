@@ -118,4 +118,30 @@ describe('attachMobileImageToTerminal', () => {
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).not.toHaveProperty('client')
   })
+
+  it('waits for pending live input before sending the image payload', async () => {
+    const client = clientWithResponses([
+      {
+        id: 'start',
+        ok: false,
+        error: { code: 'method_not_found', message: 'no' },
+        _meta: { runtimeId: 'r' }
+      },
+      ok('save', '/tmp/pending.png')
+    ])
+    const beforeTerminalSend = vi.fn(async () => false)
+
+    const sent = await attachMobileImageToTerminal('library', {
+      client,
+      terminal: 'term-pending',
+      deviceToken: null,
+      getConnectionId: async () => null,
+      pickImage: vi.fn().mockResolvedValue({ base64: 'DDDD' }),
+      beforeTerminalSend
+    })
+
+    expect(sent).toBe(false)
+    expect(beforeTerminalSend).toHaveBeenCalledWith('term-pending')
+    expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
+  })
 })

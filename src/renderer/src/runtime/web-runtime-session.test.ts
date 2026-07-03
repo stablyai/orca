@@ -480,6 +480,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
         launchConfig: {
@@ -499,6 +500,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         afterTabId: 'host-tab-1::leaf-1',
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
+        cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
         startupCommandDelivery: 'shell-ready',
         launchConfig: {

@@ -41,6 +41,7 @@ function renderStepMarkup(
           onGroupNameChange={vi.fn()}
           onSelectedPathsChange={vi.fn()}
           onImport={vi.fn()}
+          onOpenAsFolder={vi.fn()}
           onStopScan={vi.fn()}
           {...overrides}
         />
@@ -122,6 +123,7 @@ describe('AddRepoNestedImportStep', () => {
               onGroupNameChange={vi.fn()}
               onSelectedPathsChange={vi.fn()}
               onImport={onImport}
+              onOpenAsFolder={vi.fn()}
               onStopScan={vi.fn()}
             />
           </Dialog>
@@ -162,6 +164,7 @@ describe('AddRepoNestedImportStep', () => {
                 onImport(mode)
                 setIsAdding(true)
               }}
+              onOpenAsFolder={vi.fn()}
               onStopScan={vi.fn()}
             />
           </Dialog>
@@ -180,5 +183,45 @@ describe('AddRepoNestedImportStep', () => {
     expect(onImport).toHaveBeenCalledWith('group')
     expect(findButton(host, 'Yes, import as group').querySelector('.animate-spin')).not.toBeNull()
     expect(findButton(host, 'No, import separately').querySelector('.animate-spin')).toBeNull()
+  })
+
+  it('offers opening the parent folder when no repositories are selected', () => {
+    const onOpenAsFolder = vi.fn()
+    const host = document.createElement('div')
+    container = host
+    document.body.appendChild(host)
+    root = createRoot(host)
+
+    act(() => {
+      root?.render(
+        <TooltipProvider>
+          <Dialog open>
+            <AddRepoNestedImportStep
+              scan={scan}
+              groupName=""
+              selectedPaths={new Set()}
+              isAdding={false}
+              scanInProgress={false}
+              onGroupNameChange={vi.fn()}
+              onSelectedPathsChange={vi.fn()}
+              onImport={vi.fn()}
+              onOpenAsFolder={onOpenAsFolder}
+              onStopScan={vi.fn()}
+            />
+          </Dialog>
+        </TooltipProvider>
+      )
+    })
+
+    expect(host.textContent).toContain('No repositories are selected')
+    expect(findButton(host, 'No, import separately').disabled).toBe(true)
+    expect(findButton(host, 'Yes, import as group').disabled).toBe(true)
+    expect(findButton(host, 'Open as Folder').disabled).toBe(false)
+
+    act(() => {
+      findButton(host, 'Open as Folder').click()
+    })
+
+    expect(onOpenAsFolder).toHaveBeenCalledTimes(1)
   })
 })

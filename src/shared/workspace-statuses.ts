@@ -214,7 +214,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
-  // Why: this PR briefly wrote the default columns in reverse workflow order.
+  // Why: a previous build briefly wrote the default columns in reverse order.
   // The repair is one-shot and checks the raw payload, because normalized
   // IDs/labels are indistinguishable from a user-authored column reorder.
   if (

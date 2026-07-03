@@ -1,12 +1,13 @@
 /* eslint-disable max-lines */
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'fs/promises'
-import type { FileHandle } from 'fs/promises'
-import { randomUUID } from 'crypto'
-import { dirname, extname, join, resolve } from 'path'
-import type { ChildProcess } from 'child_process'
+import { readdir, readFile, writeFile, stat, lstat, open, rename, rm } from 'node:fs/promises'
+import type { FileHandle } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { dirname, extname, join, resolve } from 'node:path'
+import type { ChildProcess } from 'node:child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
+import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -17,6 +18,7 @@ import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult,
   GlobalSettings,
+  GitStagingArea,
   GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
@@ -37,6 +39,7 @@ import {
 } from '../../shared/text-search'
 import {
   getStatus,
+  getSubmoduleStatus,
   abortMerge,
   abortRebase,
   detectConflictOperation,
@@ -112,6 +115,8 @@ import {
   type CommitMessageAgentEnvironmentResolvers
 } from '../text-generation/commit-message-agent-environment'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -480,27 +485,48 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'fs:readDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.readDir(args.dirPath)
-      }
-      const dirPath = await resolveAuthorizedPath(args.dirPath, store)
-      const entries = await readdir(dirPath, { withFileTypes: true })
-      const mapped = await Promise.all(
-        entries.map(async (entry) => ({
-          name: entry.name,
-          isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
-            resolveAuthorizedPath(entryPath, store)
-          ),
-          isSymlink: entry.isSymbolicLink()
-        }))
-      )
-      return mapped.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
+      // Why: a thrown fs:readDir reaches the renderer as the opaque "Error
+      // invoking remote method 'fs:readDir'" (Windows WSL/UNC realpath/readdir
+      // failures, dropped SSH providers). Record which throw site fired plus a
+      // redacted path shape so these are diagnosable without the raw path.
+      let throwSite: ReadDirThrowSite = 'authorize'
+      try {
+        if (args.connectionId) {
+          throwSite = 'ssh-provider'
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          return await provider.readDir(args.dirPath)
         }
-        return a.name.localeCompare(b.name)
-      })
+        throwSite = 'authorize'
+        const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+        throwSite = 'readdir'
+        const entries = await readdir(dirPath, { withFileTypes: true })
+        const mapped = await Promise.all(
+          entries.map(async (entry) => ({
+            name: entry.name,
+            isDirectory: await isDirectoryEntry(dirPath, entry, (entryPath) =>
+              resolveAuthorizedPath(entryPath, store)
+            ),
+            isSymlink: entry.isSymbolicLink()
+          }))
+        )
+        return mapped.sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) {
+            return a.isDirectory ? -1 : 1
+          }
+          return a.name.localeCompare(b.name)
+        })
+      } catch (error: unknown) {
+        recordCrashBreadcrumb(
+          'fs_readdir_error',
+          buildReadDirErrorBreadcrumb({
+            dirPath: args.dirPath,
+            connectionId: args.connectionId,
+            throwSite,
+            error
+          })
+        )
+        throw error
+      }
     }
   )
 
@@ -806,6 +832,14 @@ export function registerFilesystemHandlers(
         preserveSymlink: true
       })
 
+      // Why: WSL UNC targets (\\wsl.localhost\<distro>\...) have no Recycle Bin,
+      // so shell.trashItem throws. Hard-delete via `rm` inside the distro instead
+      // (true delete, honors Linux perms). Returns false for normal local paths,
+      // which still go to the Recycle Bin (issue #6415).
+      if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
+        return
+      }
+
       // Why: once auto-refresh exists, an external delete can race with a
       // UI-initiated delete. Swallowing ENOENT keeps the action idempotent
       // from the user's perspective (design §7.1).
@@ -1048,6 +1082,40 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       return getStatus(worktreePath, { ...options, ...gitOptions })
+    }
+  )
+
+  // Why: the parent status only reports one gitlink row per submodule. When the
+  // user expands a dirty submodule, this fetches the inner per-file changes by
+  // running a plain status inside the submodule's own worktree (read-only).
+  ipcMain.handle(
+    'git:submoduleStatus',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        submodulePath: string
+        connectionId?: string
+        area?: GitStagingArea
+      }
+    ): Promise<GitStatusResult> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getSubmoduleStatus(worktreePath, args.submodulePath, {
+        ...gitOptions,
+        ...(args.area === 'staged' ? { staged: true } : {})
+      })
     }
   )
 

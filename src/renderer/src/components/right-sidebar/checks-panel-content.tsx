@@ -118,7 +118,8 @@ export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string
   neutral: CircleDashed,
   skipped: CircleMinus,
   cancelled: CircleX,
-  timed_out: CircleX
+  timed_out: CircleX,
+  action_required: AlertTriangle
 }
 
 export const CHECK_COLOR: Record<string, string> = {
@@ -128,7 +129,8 @@ export const CHECK_COLOR: Record<string, string> = {
   neutral: 'text-muted-foreground',
   skipped: 'text-muted-foreground/60',
   cancelled: 'text-muted-foreground/60',
-  timed_out: 'text-rose-500'
+  timed_out: 'text-rose-500',
+  action_required: 'text-amber-500'
 }
 
 type ConflictReview = {
@@ -504,6 +506,7 @@ export function ConflictTriageStrip({
 const CHECK_SORT_ORDER: Record<string, number> = {
   failure: 0,
   timed_out: 0,
+  action_required: 0,
   cancelled: 1,
   pending: 2,
   neutral: 3,
@@ -539,7 +542,12 @@ function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['co
 }
 
 function isFailedCheck(check: PRCheckDetail): boolean {
-  return ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
+  // Why: action_required blocks merge just like a failure, so it must count as
+  // not-passing — otherwise the summary reads "all checks passing" while
+  // auto-merge stays blocked.
+  return ['failure', 'cancelled', 'timed_out', 'action_required'].includes(
+    getCheckConclusion(check)
+  )
 }
 
 function isFailureState(state: string | null | undefined): boolean {
@@ -559,6 +567,9 @@ function getCheckStatusLabel(check: PRCheckDetail): string {
   }
   if (conclusion === 'timed_out') {
     return 'Timed out'
+  }
+  if (conclusion === 'action_required') {
+    return 'Action required'
   }
   if (conclusion === 'neutral') {
     return 'Neutral'
@@ -905,10 +916,15 @@ function CheckRunDetails({
 
           {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
             <div className="text-[12px] text-muted-foreground">
-              {translate(
-                'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
-                'No inline details are available for this check.'
-              )}
+              {getCheckConclusion(detailsStatusCheck) === 'action_required'
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.actionRequiredHint',
+                    'Needs a manual action on GitHub (e.g. approving the run) to unblock merging.'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.e15a8b77ef',
+                    'No inline details are available for this check.'
+                  )}
             </div>
           )}
         </div>
@@ -971,10 +987,7 @@ export function ChecksList({
     [checkDetailsContextKey, sorted]
   )
   const passingCount = checks.filter((c) => c.conclusion === 'success').length
-  const failingCount = checks.filter(
-    (c) =>
-      c.conclusion === 'failure' || c.conclusion === 'cancelled' || c.conclusion === 'timed_out'
-  ).length
+  const failingCount = checks.filter((c) => isFailedCheck(c)).length
   const pendingCount = checks.filter(
     (c) => c.conclusion === 'pending' || c.conclusion === null
   ).length

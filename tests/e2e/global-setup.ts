@@ -10,11 +10,11 @@
  * temp file so the worker fixture can pick it up at runtime.
  */
 
-import { execSync } from 'child_process'
-import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs'
-import path from 'path'
-import os from 'os'
+import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
@@ -56,7 +56,10 @@ export default function globalSetup(): void {
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
-  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
+  // Why: realpathSync so the seeded path matches the store's repo.path on
+  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
+  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
+  const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })

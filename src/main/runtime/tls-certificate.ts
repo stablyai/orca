@@ -2,10 +2,10 @@
 // to prevent passive sniffing of device tokens on shared WiFi networks. The
 // cert is generated once on first run and reused across restarts. The mobile
 // app pins the certificate fingerprint received during QR pairing.
-import { createHash } from 'crypto'
-import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, chmodSync } from 'fs'
-import { join } from 'path'
+import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync, chmodSync } from 'node:fs'
+import { join } from 'node:path'
 
 const TLS_CERT_FILENAME = 'orca-tls-cert.pem'
 const TLS_KEY_FILENAME = 'orca-tls-key.pem'

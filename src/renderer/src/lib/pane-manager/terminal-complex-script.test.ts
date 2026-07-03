@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  nativeWindowsRewriteNeedsFollowupRenderRefresh,
   terminalOutputContainsEastAsianRendererRisk,
   terminalOutputPrefersRenderRefresh,
   terminalRewriteOutputRenderRefreshDecision,
-  terminalRewriteOutputPrefersRenderRefresh
+  terminalRewriteOutputPrefersRenderRefresh,
+  windowsEastAsianOutputPrefersRenderRefresh,
+  type TerminalRewriteOutputRenderRefreshState
 } from './terminal-complex-script'
 
 describe('terminalOutputPrefersRenderRefresh', () => {
@@ -88,6 +91,86 @@ describe('terminalOutputContainsEastAsianRendererRisk', () => {
     expect(terminalOutputContainsEastAsianRendererRisk('Arabic: السلام عليكم')).toBe(false)
     expect(terminalOutputContainsEastAsianRendererRisk('status 🚀')).toBe(false)
     expect(terminalOutputContainsEastAsianRendererRisk('developer 👩‍💻')).toBe(false)
+  })
+})
+
+describe('windowsEastAsianOutputPrefersRenderRefresh', () => {
+  const maxInteractiveRedrawChars = 128 * 1024
+
+  it('refreshes native Windows ConPTY agent output with CJK or Korean glyphs', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('Korean: 터미널', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+  })
+
+  it('keeps the recent-input Windows renderer path for SSH and other non-native panes', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: false,
+        hadRecentInput: true,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(true)
+  })
+
+  it('skips remote agent output and non-Windows clients without recent input', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: false,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已经安装完成，软件已更新后重启。', {
+        isWindowsClient: false,
+        isNativeWindowsConpty: false,
+        hadRecentInput: true,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+  })
+
+  it('does not refresh ASCII, non-East-Asian Unicode, or bulk chunks', () => {
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('plain terminal output', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('Arabic: السلام عليكم', {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
+    expect(
+      windowsEastAsianOutputPrefersRenderRefresh('已'.repeat(maxInteractiveRedrawChars + 1), {
+        isWindowsClient: true,
+        isNativeWindowsConpty: true,
+        hadRecentInput: false,
+        maxInteractiveRedrawChars
+      })
+    ).toBe(false)
   })
 })
 
@@ -241,5 +324,83 @@ describe('terminalRewriteOutputRenderRefreshDecision', () => {
       nextRewriteCsiScanTail: '\x1b[',
       prefersRenderRefresh: false
     })
+  })
+})
+
+describe('nativeWindowsRewriteNeedsFollowupRenderRefresh', () => {
+  // Why: Claude Code (issue #5656/#5653) echoes prompt keystrokes by redrawing
+  // the input line in place with CR + CHA + reprint + erase-line, split across
+  // ConPTY chunks, and WITHOUT DEC 2026 synchronized output. Replay that exact
+  // pattern through the rewrite decision and assert that on native Windows it
+  // requests a follow-up next-frame repaint, which is what stops the phantom /
+  // overwritten characters without the user resizing the window.
+  function rewriteIsInPlace(chunks: string[]): boolean[] {
+    const state: TerminalRewriteOutputRenderRefreshState = {
+      previousChunkEndsWithCarriageReturn: false,
+      previousRewriteCsiScanTail: ''
+    }
+    return chunks.map((chunk) => {
+      const decision = terminalRewriteOutputRenderRefreshDecision(chunk, state)
+      state.previousChunkEndsWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
+      state.previousRewriteCsiScanTail = decision.nextRewriteCsiScanTail
+      return decision.prefersRenderRefresh
+    })
+  }
+
+  it('schedules a follow-up repaint for the split Claude prompt redraw on native Windows', () => {
+    // "> " prompt, then user types z, z, z, x — each keystroke redraws in place.
+    const claudeRedrawChunks = [
+      '\r\x1b[3G',
+      'z\x1b[K',
+      '\r\x1b[3G',
+      'zz\x1b[K',
+      '\r\x1b[3G',
+      'zzz\x1b[K',
+      '\r\x1b[3G',
+      'zzzx\x1b[K'
+    ]
+    const inPlace = rewriteIsInPlace(claudeRedrawChunks)
+    // Every redraw chunk is an in-place rewrite (CR continuation or erase-line).
+    expect(inPlace.every(Boolean)).toBe(true)
+    for (const isInPlaceRewrite of inPlace) {
+      expect(
+        nativeWindowsRewriteNeedsFollowupRenderRefresh({
+          isNativeWindowsConpty: true,
+          isForeground: true,
+          isInPlaceRewrite
+        })
+      ).toBe(true)
+    }
+  })
+
+  it('does not schedule a follow-up repaint for ordinary CRLF foreground output', () => {
+    const inPlace = rewriteIsInPlace(['line one\r\n', 'line two\r\n'])
+    expect(inPlace).toEqual([false, false])
+    for (const isInPlaceRewrite of inPlace) {
+      expect(
+        nativeWindowsRewriteNeedsFollowupRenderRefresh({
+          isNativeWindowsConpty: true,
+          isForeground: true,
+          isInPlaceRewrite
+        })
+      ).toBe(false)
+    }
+  })
+
+  it('stays off for non-Windows renderers and background writes', () => {
+    expect(
+      nativeWindowsRewriteNeedsFollowupRenderRefresh({
+        isNativeWindowsConpty: false,
+        isForeground: true,
+        isInPlaceRewrite: true
+      })
+    ).toBe(false)
+    expect(
+      nativeWindowsRewriteNeedsFollowupRenderRefresh({
+        isNativeWindowsConpty: true,
+        isForeground: false,
+        isInPlaceRewrite: true
+      })
+    ).toBe(false)
   })
 })

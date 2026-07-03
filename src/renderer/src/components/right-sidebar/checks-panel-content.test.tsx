@@ -377,8 +377,20 @@ describe('CheckJobLogTail', () => {
       })
     )
 
-    expect(markup).toContain('Log tail (last 200 lines)')
+    expect(markup).toContain('Log excerpt')
     expect(markup).toContain('Error: expected true to be false')
-    expect(markup).toContain('Copy log tail')
+    expect(markup).toContain('Copy log excerpt')
+  })
+
+  it('uses a taller viewport when expanded for failed-job details', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(CheckJobLogTail, {
+        logTail: 'Error: expected true to be false',
+        expanded: true
+      })
+    )
+
+    expect(markup).toContain('min-h-48')
+    expect(markup).toContain('max-h-[min(50vh,32rem)]')
   })
 })

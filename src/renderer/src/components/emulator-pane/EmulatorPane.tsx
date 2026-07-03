@@ -1,6 +1,4 @@
 import type { Tab } from '../../../../shared/types'
-import { isMacOs } from './emulator-pane-types'
-import { EmulatorUnavailablePane } from './emulator-unavailable-pane'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
@@ -15,14 +13,6 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
-  if (!isMacOs) {
-    return <EmulatorUnavailablePane />
-  }
-
-  return <EmulatorPaneContent tab={tab} worktreeId={worktreeId} isActive={isActive} />
-}
-
-function EmulatorPaneContent({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
   const {
     devices,
     selectedUdid,

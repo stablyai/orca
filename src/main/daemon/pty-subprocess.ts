@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning centralizes platform launch setup,
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
-import { statSync } from 'fs'
-import { delimiter, win32 as pathWin32 } from 'path'
+import { statSync } from 'node:fs'
+import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -17,10 +17,19 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
-import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
+import {
+  resolveEffectiveWindowsPowerShell,
+  shouldProbeWindowsPowerShellAvailability,
+  type WindowsPowerShellShellFamily
+} from '../providers/windows-powershell'
+import {
+  buildWindowsPowerShellSpawnAttempts,
+  type WindowsShellSpawnAttempt
+} from '../providers/windows-shell-fallback-chain'
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -54,7 +63,12 @@ const PANE_IDENTITY_ENV_KEYS = [
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+// Why: a busy machine right after an upgrade can make one short-lived shell
+// spawn slow. Retry once before declaring the daemon unable to spawn PTYs, so
+// a transient stall does not silently route every fresh terminal to the local
+// fallback (losing daemon persistence) until a manual restart.
+const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 export type PtySubprocessOptions = {
@@ -240,8 +254,6 @@ function preflightMacNodePtySpawnEnvironment(): void {
     return
   }
 
-  preflightDaemonCwd()
-
   let candidates: string[]
   try {
     candidates = getNodePtySpawnHelperCandidates()
@@ -260,6 +272,20 @@ function preflightMacNodePtySpawnEnvironment(): void {
   }
 
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+}
+
+/**
+ * Ensures POSIX daemon-owned native PTY spawn prerequisites are still valid.
+ */
+function preflightUnixPtySpawnEnvironment(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: detached daemons can outlive their launch cwd; repair before every
+  // PTY spawn so Linux/macOS do not wait for startup health recovery.
+  preflightDaemonCwd()
+  preflightMacNodePtySpawnEnvironment()
 }
 
 /**
@@ -302,16 +328,9 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
 }
 
 /**
- * Runs a short native PTY spawn probe for daemon health checks.
+ * Runs one short native PTY spawn probe (spawn `/bin/sh -c 'exit 0'`).
  */
-export async function checkPtySpawnHealth(): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
-  }
-
-  ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
-
+function runSinglePtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : getDefaultCwd()
@@ -332,7 +351,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
     throw formatPtySpawnError(err, '/bin/sh', cwd)
   }
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     let settled = false
     let exitDisposable: { dispose(): void } | undefined
     const finish = (error?: Error, opts?: { kill?: boolean }): void => {
@@ -374,6 +393,42 @@ export async function checkPtySpawnHealth(): Promise<void> {
 }
 
 /**
+ * Runs a short native PTY spawn probe for daemon health checks, retrying once
+ * so a transient stall (e.g. a busy machine right after an upgrade) does not
+ * mis-classify a healthy daemon as unable to spawn PTYs.
+ */
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform === 'win32') {
+    return
+  }
+
+  // Why: Linux/macOS daemons can outlive an app update with a deleted cwd or
+  // stale native PTY path. A real short-lived spawn catches that before the
+  // main process routes fresh panes to a daemon that cannot create terminals.
+  if (process.platform === 'darwin') {
+    ensureNodePtySpawnHelperExecutable()
+  }
+  preflightUnixPtySpawnEnvironment()
+
+  let lastError: unknown
+  for (let attempt = 1; attempt <= PTY_SPAWN_HEALTH_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await runSinglePtySpawnHealthProbe()
+      return
+    } catch (err) {
+      lastError = err
+      if (attempt < PTY_SPAWN_HEALTH_RETRY_ATTEMPTS) {
+        console.warn(
+          `[daemon] PTY spawn health probe attempt ${attempt} failed; retrying`,
+          err instanceof Error ? err.message : err
+        )
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+/**
  * Normalizes node-pty foreground process strings to executable basenames.
  */
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
@@ -398,6 +453,73 @@ function resolveFallbackForegroundProcess(
   // Why: Windows node-pty can report the terminal name instead of the shell.
   // Use the spawned shell so shell-rooted foreground enrichment still runs.
   return normalizeForegroundProcessName(pathWin32.basename(shellPath))
+}
+
+/**
+ * Spawns the daemon PTY, walking the Windows PowerShell -> cmd.exe fallback
+ * chain when ConPTY rejects the primary shell with ERROR_ACCESS_DENIED.
+ *
+ * Why: the daemon spawns node-pty directly (no LocalPtyProvider), so it needs
+ * its own chain walk. The first attempt must match the already-resolved
+ * shellPath/shellArgs/spawnCwd; later attempts carry their own recomputed args
+ * so the cmd.exe fallback still gets `chcp 65001`.
+ */
+function spawnDaemonPtyWithWindowsFallback(args: {
+  shellPath: string
+  shellArgs: string[]
+  spawnCwd: string
+  env: Record<string, string>
+  cols: number
+  rows: number
+  windowsFallbackAttempts: WindowsShellSpawnAttempt[]
+}): {
+  process: pty.IPty
+  shellPath: string
+  spawnCwd: string
+  startupCommandDeliveredInShellArgs?: boolean
+} {
+  const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty =>
+    pty.spawn(shellPath, shellArgs, {
+      name: args.env.TERM ?? 'xterm-256color',
+      cols: args.cols,
+      rows: args.rows,
+      cwd,
+      env: args.env,
+      // Why: bundled ConPTY has the modern wrap-marker behavior xterm expects;
+      // legacy system ConPTY can corrupt full-width TUI rows in scrollback.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+    })
+
+  try {
+    return {
+      process: spawnAt(args.shellPath, args.shellArgs, args.spawnCwd),
+      shellPath: args.shellPath,
+      spawnCwd: args.spawnCwd
+    }
+  } catch (primaryErr) {
+    if (process.platform !== 'win32') {
+      throw primaryErr
+    }
+    // Skip the first entry: it is the primary that already failed above.
+    for (const attempt of args.windowsFallbackAttempts.slice(1)) {
+      try {
+        const process = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
+        const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
+        console.warn(
+          `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`
+        )
+        return {
+          process,
+          shellPath: attempt.shellPath,
+          spawnCwd: attempt.effectiveCwd,
+          startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+        }
+      } catch {
+        // This fallback shell also failed -- try the next link in the chain.
+      }
+    }
+    throw primaryErr
+  }
 }
 
 /**
@@ -438,6 +560,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
+  removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
@@ -460,6 +583,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
+  let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
@@ -474,6 +598,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // one-off override. Normalize both forms back to the PowerShell family so
     // the shared resolver can still fall back to inbox powershell.exe when
     // pwsh.exe was requested but is unavailable.
+    const resolvedShellFamily: WindowsPowerShellShellFamily =
+      normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+        ? normalizedShellFamily
+        : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+          ? normalizedShellFamily
+          : undefined
+    const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
+      shellFamily: resolvedShellFamily,
+      implementation: opts.terminalWindowsPowerShellImplementation
+    })
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
@@ -484,33 +618,44 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     } else {
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
-            shellFamily:
-              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                ? 'powershell.exe'
-                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                  ? normalizedShellFamily
-                  : undefined,
+            shellFamily: resolvedShellFamily,
             implementation: opts.terminalWindowsPowerShellImplementation,
-            pwshAvailable: isPwshAvailable()
+            pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
           }) ?? shellPath)
         : shellPath
     }
-    // Why: matches LocalPtyProvider — CMD needs chcp 65001, PowerShell needs
-    // $PROFILE dot-sourcing, WSL needs a --bash entry with a translated cwd.
-    // Reuse the same shared launch-args helper after resolving the effective
-    // PowerShell executable so daemon-backed terminals preserve parity with the
-    // in-process PTY path.
-    const resolved = resolveWindowsShellLaunchArgs(
+    // Why: when the selected shell is a PowerShell family, resolve it to a real
+    // absolute executable and build a PowerShell -> cmd.exe fallback chain. A
+    // bare `pwsh.exe` lets ConPTY resolve the Store App Execution Alias stub,
+    // whose CreateProcessW launch fails with ERROR_ACCESS_DENIED (error code 5).
+    // Mirrors LocalPtyProvider so daemon-backed terminals keep arg parity.
+    windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
-      spawnCwd,
-      getDefaultCwd(),
-      sessionWslContext ?? preferredWslContext,
-      opts.command
-    )
-    shellArgs = resolved.shellArgs
-    spawnCwd = resolved.effectiveCwd
-    validationCwd = resolved.validationCwd
-    startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+      cwd: spawnCwd,
+      defaultCwd: getDefaultCwd(),
+      wslContext: sessionWslContext ?? preferredWslContext,
+      startupCommand: opts.command
+    })
+    const primaryAttempt = windowsFallbackAttempts[0]
+    if (primaryAttempt) {
+      shellPath = primaryAttempt.shellPath
+      shellArgs = primaryAttempt.shellArgs
+      spawnCwd = primaryAttempt.effectiveCwd
+      validationCwd = primaryAttempt.validationCwd
+      startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
+    } else {
+      const resolved = resolveWindowsShellLaunchArgs(
+        shellPath,
+        spawnCwd,
+        getDefaultCwd(),
+        sessionWslContext ?? preferredWslContext,
+        opts.command
+      )
+      shellArgs = resolved.shellArgs
+      spawnCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
+      startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+    }
     if (isWindowsGitBashShellPath(shellPath)) {
       // Why: Git for Windows login startup files otherwise cd to $HOME,
       // ignoring node-pty's cwd for repo-scoped terminals.
@@ -623,7 +768,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
-  preflightMacNodePtySpawnEnvironment()
+  preflightUnixPtySpawnEnvironment()
   preflightWindowsPtySpawnEnvironment({
     validationCwd,
     cwdWasExplicit: opts.cwd !== undefined
@@ -631,13 +776,23 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   let proc: pty.IPty
   try {
-    proc = pty.spawn(shellPath, shellArgs, {
-      name: env.TERM ?? 'xterm-256color',
+    const spawned = spawnDaemonPtyWithWindowsFallback({
+      shellPath,
+      shellArgs,
+      spawnCwd,
+      env,
       cols: size.cols,
       rows: size.rows,
-      cwd: spawnCwd,
-      env
+      windowsFallbackAttempts
     })
+    proc = spawned.process
+    // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded
+    // startup command, so adopt the winning shell's identity + delivery flag.
+    shellPath = spawned.shellPath
+    spawnCwd = spawned.spawnCwd
+    if (spawned.startupCommandDeliveredInShellArgs !== undefined) {
+      startupCommandDeliveredInShellArgs = spawned.startupCommandDeliveredInShellArgs
+    }
   } catch (err) {
     if (process.platform === 'win32') {
       throw formatPtySpawnError(err, shellPath, spawnCwd)

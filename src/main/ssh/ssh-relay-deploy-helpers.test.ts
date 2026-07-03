@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
@@ -215,6 +215,55 @@ describe('execCommand', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('closes and rejects with AbortError when a command is aborted', async () => {
+    const channel = createMockChannel()
+    const controller = new AbortController()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'sleep 60', {
+      signal: controller.signal
+    })
+
+    await Promise.resolve()
+    controller.abort()
+
+    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(channel.close).toHaveBeenCalledOnce()
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('handles aborts that happen while the SSH exec channel is still opening', async () => {
+    const channel = createMockChannel()
+    const controller = new AbortController()
+    let resolveExec: (channel: ClientChannel) => void = () => {}
+    const conn = {
+      exec: vi.fn().mockReturnValue(
+        new Promise<ClientChannel>((resolve) => {
+          resolveExec = resolve
+        })
+      )
+    }
+
+    const commandPromise = execCommand(conn as never, 'sleep 60', {
+      signal: controller.signal
+    })
+    controller.abort()
+    resolveExec(channel)
+
+    await expect(commandPromise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(channel.close).toHaveBeenCalledOnce()
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {

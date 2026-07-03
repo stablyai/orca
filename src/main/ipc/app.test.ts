@@ -175,7 +175,70 @@ describe('registerAppHandlers', () => {
     expect(appExitMock).not.toHaveBeenCalled()
   })
 
-  it('falls back when the macOS keyboard layout probe never reports completion', async () => {
+  it('returns the selected macOS input mode before the keyboard layout fallback', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        null,
+        JSON.stringify([
+          { 'Bundle ID': 'com.apple.PressAndHold', InputSourceKind: 'Non Keyboard Input Method' },
+          {
+            'Bundle ID': 'com.apple.inputmethod.SCIM',
+            'Input Mode': 'com.apple.inputmethod.SCIM.ITABC',
+            InputSourceKind: 'Input Mode'
+          }
+        ])
+      )
+      return { kill: vi.fn() }
+    })
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.inputmethod.SCIM.ITABC'
+    )
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/usr/bin/plutil',
+      expect.arrayContaining(['AppleSelectedInputSources']),
+      expect.any(Object),
+      expect.any(Function)
+    )
+  })
+
+  it('falls back to the keyboard layout when no keyboard input mode is selected', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    execFileMock
+      .mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(
+          null,
+          JSON.stringify([
+            {
+              'Bundle ID': 'com.apple.PressAndHold',
+              InputSourceKind: 'Non Keyboard Input Method'
+            }
+          ])
+        )
+        return { kill: vi.fn() }
+      })
+      .mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, 'com.apple.keylayout.ABC\n')
+        return { kill: vi.fn() }
+      })
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('app:getKeyboardInputSourceId')?.(null)).resolves.toBe(
+      'com.apple.keylayout.ABC'
+    )
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/usr/bin/defaults',
+      ['read', 'com.apple.HIToolbox', 'AppleCurrentKeyboardLayoutInputSourceID'],
+      expect.any(Object),
+      expect.any(Function)
+    )
+  })
+
+  it('falls back when macOS keyboard input source probes never report completion', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     const killMock = vi.fn()
     execFileMock.mockImplementation(() => ({ kill: killMock }))
@@ -189,11 +252,11 @@ describe('registerAppHandlers', () => {
       return result
     })
 
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1000)
 
     expect(settled).toBe(true)
     await expect(resultPromise).resolves.toBeNull()
-    expect(killMock).toHaveBeenCalled()
+    expect(killMock).toHaveBeenCalledTimes(2)
   })
 
   it('picks an existing floating workspace directory without enabling native directory creation', async () => {

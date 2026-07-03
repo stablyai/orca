@@ -34,6 +34,7 @@ import {
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export {
+  getTerminalAdvancedTypographySearchEntries,
   getTerminalTypographySearchEntries,
   getTerminalRenderingSearchEntries,
   getTerminalCursorSearchEntries

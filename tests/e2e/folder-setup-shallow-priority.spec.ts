@@ -1,8 +1,8 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'fs'
-import { mkdtemp } from 'fs/promises'
-import os from 'os'
-import path from 'path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -28,7 +28,12 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   webClientPath: string
   groupName: string
 }> {
-  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
+  // Why: realpathSync so the paths the test asserts on match the store's
+  // repo.path / projectGroup.parentPath on macOS, where os.tmpdir() (/var/...)
+  // symlinks to /private/var/... and the app canonicalizes paths on import.
+  const parentPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
+  )
   tempRoots.push(parentPath)
   const archivePath = path.join(parentPath, 'archive')
   const webClientPath = path.join(parentPath, 'z-web-client')
@@ -54,7 +59,12 @@ async function createCancellableScanFixture(): Promise<{
   webPath: string
   groupName: string
 }> {
-  const parentPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
+  // Why: realpathSync so the paths the test asserts on match the store's
+  // canonicalized repo.path / projectGroup.parentPath on macOS (os.tmpdir()
+  // /var/... symlinks to /private/var/...).
+  const parentPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
+  )
   tempRoots.push(parentPath)
   const apiPath = path.join(parentPath, 'api')
   const webPath = path.join(parentPath, 'web')

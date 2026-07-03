@@ -39,6 +39,15 @@ const devices: SimulatorDeviceRow[] = [
   { name: 'iPhone B', udid: 'device-b', state: 'Shutdown', isAvailable: true }
 ]
 
+// emulator.listDevices returns the unified EmulatorDevice shape.
+const deviceList = devices.map((device) => ({
+  backend: 'ios' as const,
+  id: device.udid,
+  name: device.name,
+  state: device.state === 'Booted' ? ('booted' as const) : ('shutdown' as const),
+  isAvailable: device.isAvailable
+}))
+
 let attachDeferred: Deferred<AttachResult>
 let container: HTMLDivElement
 let root: Root
@@ -118,8 +127,8 @@ describe('useEmulatorPaneSession', () => {
       value: {
         runtime: {
           call: vi.fn(async ({ method }: RuntimeCallRequest) => {
-            if (method === 'emulator.listSimulators') {
-              return runtimeSuccess(devices)
+            if (method === 'emulator.listDevices') {
+              return runtimeSuccess(deviceList)
             }
             if (method === 'emulator.attach') {
               return runtimeSuccess(await attachDeferred.promise)
@@ -192,7 +201,7 @@ describe('useEmulatorPaneSession', () => {
       'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
     const runtimeCall = vi.fn(async ({ method }: RuntimeCallRequest) => {
-      if (method === 'emulator.listSimulators') {
+      if (method === 'emulator.listDevices') {
         return runtimeFailure('emulator_simctl_unavailable', message)
       }
       if (method === 'emulator.attach') {

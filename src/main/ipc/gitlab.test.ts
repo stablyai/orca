@@ -213,6 +213,68 @@ describe('GitLab IPC handlers', () => {
     )
   })
 
+  it('forwards the typed search query into listMRs and listWorkItems', async () => {
+    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
+    listWorkItemsMock.mockResolvedValueOnce({ items: [] })
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+
+    await ipcHandlers.get('gitlab:listMRs')?.(null, {
+      repoPath: '/local/orca',
+      state: 'opened',
+      page: 1,
+      perPage: 20,
+      query: '  fix login  '
+    })
+    await ipcHandlers.get('gitlab:listWorkItems')?.(null, {
+      repoPath: '/local/orca',
+      state: 'opened',
+      page: 1,
+      perPage: 20,
+      query: 'fix login'
+    })
+
+    // Why (#6263): the trimmed query must land in the 6th positional arg —
+    // previously the slot was hardcoded to `undefined`, so search never worked.
+    expect(listMergeRequestsMock).toHaveBeenCalledWith(
+      '/local/orca',
+      'opened',
+      1,
+      20,
+      undefined,
+      'fix login',
+      null
+    )
+    expect(listWorkItemsMock).toHaveBeenCalledWith(
+      '/local/orca',
+      'opened',
+      1,
+      20,
+      undefined,
+      'fix login',
+      null
+    )
+  })
+
+  it('drops blank or whitespace-only search queries to undefined', async () => {
+    listMergeRequestsMock.mockResolvedValueOnce({ items: [] })
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+
+    await ipcHandlers.get('gitlab:listMRs')?.(null, {
+      repoPath: '/local/orca',
+      query: '   '
+    })
+
+    expect(listMergeRequestsMock).toHaveBeenCalledWith(
+      '/local/orca',
+      'opened',
+      1,
+      20,
+      undefined,
+      undefined,
+      null
+    )
+  })
+
   it('rejects source context for a different host', async () => {
     registerGitLabHandlers(
       storeWithRepos([repo({ id: 'repo-local', path: '/local/orca' })]) as Store

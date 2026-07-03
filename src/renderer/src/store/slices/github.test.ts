@@ -3255,6 +3255,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
       branch,
+      currentHeadOid: null,
       linkedAzureDevOpsPR: null,
       linkedBitbucketPR: null,
       linkedGitHubPR: null,

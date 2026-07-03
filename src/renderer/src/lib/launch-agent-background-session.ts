@@ -10,11 +10,13 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   registerEagerPtyBuffer,
@@ -66,6 +68,9 @@ export async function launchAgentBackgroundSession(
         repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
       )
     : CLIENT_PLATFORM
+  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+  // `orca-ide` rename must not be applied for remote launches.
+  const isRemote = repo ? repoIsRemote(repo) : false
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -80,6 +85,7 @@ export async function launchAgentBackgroundSession(
       agentArgs,
       agentEnv,
       platform: launchPlatform,
+      isRemote,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -91,6 +97,7 @@ export async function launchAgentBackgroundSession(
       agentArgs,
       agentEnv,
       platform: launchPlatform,
+      isRemote,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }
@@ -100,6 +107,14 @@ export async function launchAgentBackgroundSession(
 
   // Why: automation runs should start without revealing the workspace.
   // Spawn the PTY immediately, then attach an inactive tab to the live session.
+  // Background-mount the hidden worktree first so its off-screen terminal surface
+  // gets a measurable layout box and the eager PTY buffer flushes on the first
+  // mount — mirroring the renderer-backed Codex startup path in useIpcEvents.
+  window.dispatchEvent(
+    new CustomEvent(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, {
+      detail: { worktreeId }
+    })
+  )
   const tab = store.createTab(worktreeId, undefined, undefined, {
     activate: false,
     recordInteraction: false
@@ -141,8 +156,7 @@ export async function launchAgentBackgroundSession(
       }),
     write: (ptyId, data) => window.api.pty.write(ptyId, data)
   })
-  // Route by the worktree's owner host: the agent terminal must spawn on the host
-  // that owns this worktree, not on the focused runtime.
+  // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
   )
@@ -167,7 +181,8 @@ export async function launchAgentBackgroundSession(
           title,
           tabId: tab.id,
           leafId,
-          focus: false
+          // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
+          presentation: 'background'
         },
         { timeoutMs: 15_000 }
       )

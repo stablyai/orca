@@ -1,10 +1,11 @@
 /* eslint-disable max-lines -- Why: these tests cover one reconciliation boundary
  * across ready, pending, split, and batched session snapshots. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { posix as pathPosix } from 'path'
+import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -13,6 +14,10 @@ import {
   recordWebSessionCloseIntent,
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
+import {
+  recordWebSessionReorderIntent,
+  resetWebSessionReorderIntentForTests
+} from './web-session-reorder-intent'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import {
@@ -96,6 +101,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebSessionFocusIntentForTests()
     resetWebSessionCloseIntentForTests()
+    resetWebSessionReorderIntentForTests()
   })
 
   it('ignores stale or duplicate same-epoch snapshots after a newer version was applied', () => {
@@ -139,6 +145,65 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
   })
 
+  it('ignores remote snapshots for the local floating workspace', () => {
+    const floatingTab: TerminalTab = {
+      id: 'floating-tab-1',
+      ptyId: 'pty-floating-1',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      title: 'VPS tmux',
+      defaultTitle: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const floatingUnifiedTab: Tab = {
+      id: floatingTab.id,
+      entityId: floatingTab.id,
+      groupId: 'floating-group',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contentType: 'terminal',
+      label: floatingTab.title,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false
+    }
+    const state = makeState({
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+      ptyIdsByTabId: { [floatingTab.id]: ['pty-floating-1'] },
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingUnifiedTab] },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: floatingTab.id,
+            tabOrder: [floatingTab.id],
+            recentTabIds: [floatingTab.id]
+          }
+        ]
+      },
+      activeTabId: floatingTab.id,
+      activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: floatingTab.id }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], {
+        worktree: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        activeTabType: null
+      }),
+      ENV,
+      NOW
+    )
+
+    expect(patch).toBe(state)
+  })
+
   it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {
     const surface = {
       type: 'terminal' as const,
@@ -174,6 +239,69 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect((reopened.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).toContain(
       toWebTerminalSurfaceTabId('host-tab-1')
     )
+  })
+
+  it('keeps a client reorder until the host echoes it (no order snap-back)', () => {
+    const local1 = toWebTerminalSurfaceTabId('host-tab-1')
+    const local2 = toWebTerminalSurfaceTabId('host-tab-2')
+    const surfaces: RuntimeMobileSessionTabsResult['tabs'] = [
+      {
+        type: 'terminal',
+        id: `host-tab-1::${LEAF_ID}`,
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        title: 'Terminal 1',
+        status: 'ready',
+        terminal: 'term_host_1',
+        isActive: true
+      },
+      {
+        type: 'terminal',
+        id: `host-tab-2::${SECOND_LEAF_ID}`,
+        parentTabId: 'host-tab-2',
+        leafId: SECOND_LEAF_ID,
+        title: 'Terminal 2',
+        status: 'ready',
+        terminal: 'term_host_2',
+        isActive: false
+      }
+    ]
+    const groupWithOrder = (tabOrder: string[]): RuntimeMobileSessionTabsResult['tabGroups'] => [
+      { id: 'host-group-1', activeTabId: 'host-tab-1', tabOrder }
+    ]
+
+    // Client dragged tab 2 ahead of tab 1; an in-flight snapshot still has the
+    // original host order.
+    recordWebSessionReorderIntent(WT, 'host-group-1', [local2, local1], NOW)
+    const stalePreMove = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(surfaces, { tabGroups: groupWithOrder(['host-tab-1', 'host-tab-2']) }),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    expect(stalePreMove.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([local2, local1])
+
+    // The host's post-move snapshot echoes the new order -> intent clears; a
+    // later snapshot reverting to the old order is no longer overridden.
+    applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(surfaces, {
+        snapshotVersion: 5,
+        tabGroups: groupWithOrder(['host-tab-2', 'host-tab-1'])
+      }),
+      ENV,
+      NOW + 1
+    )
+    const reverted = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(surfaces, {
+        snapshotVersion: 6,
+        tabGroups: groupWithOrder(['host-tab-1', 'host-tab-2'])
+      }),
+      ENV,
+      NOW + 2
+    ) as Partial<WebSessionTabsSyncState>
+    expect(reverted.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([local1, local2])
   })
 
   it('does not bootstrap a terminal from a stale empty active-worktree snapshot', () => {
@@ -620,6 +748,7 @@ describe('applyWebSessionTabsSnapshot', () => {
           leafId: LEAF_ID,
           isActive: true,
           launchAgent: 'codex',
+          startupCwd: '/worktree/packages/web',
           status: 'ready',
           terminal: 'terminal-1'
         }
@@ -637,6 +766,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         id: mirroredId,
         ptyId: 'remote:web-env-1@@terminal-1',
         launchAgent: 'codex',
+        startupCwd: '/worktree/packages/web',
         title: 'host shell',
         worktreeId: WT
       }
@@ -697,6 +827,124 @@ describe('applyWebSessionTabsSnapshot', () => {
       title: 'zsh'
     })
     expect(patch.tabsByWorktree?.[WT]?.[0]?.launchAgent).toBeUndefined()
+  })
+
+  it('drops mirrored startup cwd when a later host snapshot omits it', () => {
+    const existingTab: TerminalTab = {
+      id: toWebTerminalSurfaceTabId('host-tab-1'),
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'zsh',
+      defaultTitle: 'zsh',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      startupCwd: '/worktree/packages/web'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-1'] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'zsh',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: existingTab.id,
+      title: 'zsh'
+    })
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.startupCwd).toBeUndefined()
+  })
+
+  it('adopts host viewMode when this client has no prior tab', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'zsh',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          viewMode: 'chat',
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    console.error('PATCH tabs', JSON.stringify(patch.tabsByWorktree?.[WT]))
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.viewMode).toBe('chat')
+    expect(
+      patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)?.viewMode
+    ).toBe('chat')
+  })
+
+  it('keeps the client viewMode when an in-flight host snapshot echoes the old value', () => {
+    // Echo-window: client just toggled to chat; a host snapshot carrying the
+    // pre-toggle 'terminal' value must not revert it (mirrors color/pin rule).
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const existingTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'old title',
+      defaultTitle: 'old title',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      viewMode: 'chat'
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [mirroredId]: ['remote:web-env-1@@terminal-1'] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          // Title differs so the reconcile emits a tabsByWorktree delta; the echo
+          // rule must still keep the client's optimistic 'chat' viewMode.
+          title: 'new title',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          viewMode: 'terminal',
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.title).toBe('new title')
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.viewMode).toBe('chat')
+    expect(
+      patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)?.viewMode
+    ).toBe('chat')
   })
 
   it('preserves quick command labels from host terminal surfaces', () => {
@@ -1363,6 +1611,49 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.agentStatusByPaneKey?.[hostPaneKey]).toBeUndefined()
     expect(patch.agentStatusEpoch).toBe(1)
     expect(patch.sortEpoch).toBe(1)
+  })
+
+  it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Pi ready',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1',
+          launchAgent: 'omp',
+          agentStatus: {
+            state: 'done',
+            prompt: '',
+            updatedAt: NOW - 100,
+            stateStartedAt: NOW - 1_000,
+            agentType: 'pi',
+            paneKey: hostPaneKey,
+            terminalTitle: 'Pi ready',
+            stateHistory: []
+          }
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      title: 'OMP ready',
+      launchAgent: 'omp'
+    })
+    expect(patch.agentStatusByPaneKey?.[mirroredPaneKey]).toMatchObject({
+      agentType: 'omp',
+      terminalTitle: 'OMP ready'
+    })
   })
 
   it('hydrates multiple initial host snapshots in one merged patch', () => {

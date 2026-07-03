@@ -33,19 +33,21 @@ import {
   getTerminalOrcaFileOpenHint,
   getTerminalWorktreePathOpenHint,
   getTerminalFileOpenHint,
-  getTerminalUrlOpenHint,
-  isMacPlatform
+  getTerminalUrlOpenHint
 } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { isTerminalLinkActivation } from './terminal-link-activation'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
+export { isTerminalLinkActivation } from './terminal-link-activation'
 
 export type LinkHandlerDeps = {
   worktreeId: string
   worktreePath: string
   startupCwd: string
+  getPaneLinkCwd?: (paneId: number) => string | null
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
   pathExistsCache: Map<string, boolean>
@@ -123,8 +125,9 @@ export function createFilePathLinkProvider(
         logicalLines.flatMap((logicalLine) =>
           extractTerminalFileLinkCandidates(logicalLine.text).map(
             async (parsed): Promise<ProvidedFileLink | null> => {
-              const resolved = startupCwd
-                ? resolveTerminalFileLink(parsed, startupCwd, deps.terminalHomePath)
+              const paneLinkCwd = deps.getPaneLinkCwd?.(paneId) ?? startupCwd
+              const resolved = paneLinkCwd
+                ? resolveTerminalFileLink(parsed, paneLinkCwd, deps.terminalHomePath)
                 : null
               if (!resolved) {
                 return null
@@ -289,7 +292,7 @@ export function installFilePathLinkClickFallback(
       position,
       terminal.cols,
       {
-        startupCwd: deps.startupCwd,
+        startupCwd: deps.getPaneLinkCwd?.(paneId) ?? deps.startupCwd,
         terminalHomePath: deps.terminalHomePath,
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,
@@ -312,11 +315,4 @@ export function installFilePathLinkClickFallback(
       terminalElement?.removeEventListener('mouseup', handleMouseUp, mouseUpListenerOptions)
     }
   }
-}
-
-export function isTerminalLinkActivation(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
-): boolean {
-  const isMac = isMacPlatform()
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
 }

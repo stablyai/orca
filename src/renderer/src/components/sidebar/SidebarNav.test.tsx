@@ -36,7 +36,7 @@ vi.mock('@/components/activity/useActivityUnreadCount', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: () => '⌘P'
+  useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'J'], doubleTap: false }]
 }))
 
 vi.mock('./mobile-sidebar-onboarding-badge', () => ({
@@ -271,6 +271,23 @@ describe('SidebarNav', () => {
     await clickButton(getHideButton(mobileMenu as HTMLElement))
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
+  })
+
+  it('hides the worktree palette shortcut until the search field is hovered or focused', async () => {
+    const container = await renderSidebarNav()
+
+    const searchButton = container.querySelector(
+      'button[aria-label="Search worktrees and browser tabs"]'
+    )
+    expect(searchButton).not.toBeNull()
+
+    const shortcuts = searchButton?.querySelector('span.hidden')
+    expect(shortcuts?.className).toContain('hidden')
+    expect(shortcuts?.className).toContain('group-hover:inline-flex')
+    expect(shortcuts?.className).toContain('group-focus-within:inline-flex')
+    expect(shortcuts?.textContent).toContain('⌘')
+    expect(shortcuts?.textContent).toContain('J')
+    expect(searchButton?.querySelector('kbd')).toBeNull()
   })
 
   it('hides task source shortcuts until the Tasks row is hovered or focused', async () => {

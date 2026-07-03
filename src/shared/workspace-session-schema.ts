@@ -78,6 +78,7 @@ const terminalTabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
+  startupCwd: z.string().min(1).optional(),
   // Why: persist the launched agent so a restored idle agent tab keeps its
   // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
   // unknown agent id from failing the whole-session parse (which would reset
@@ -116,7 +117,13 @@ const tabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional()
+  isPinned: z.boolean().optional(),
+  // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
+  // session restore. `.catch('terminal')` tolerates unknown future values (a
+  // newer build that wrote an unrecognized mode) by degrading to the safe
+  // default instead of failing the whole-session parse. Legacy/missing stays
+  // undefined → 'terminal' in the renderer.
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
 })
 
 const tabGroupSchema = z.object({

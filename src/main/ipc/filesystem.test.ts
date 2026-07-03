@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: filesystem authorization and git/file IPC invariants are exercised end-to-end here, so the scenarios stay together to keep the security boundary readable. */
-import path from 'path'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
@@ -41,7 +41,9 @@ const {
   cancelGenerateCommitMessageLocalMock,
   cancelGeneratePullRequestFieldsLocalMock,
   getSshFilesystemProviderMock,
-  getSshGitProviderMock
+  getSshGitProviderMock,
+  tryDeleteWslUncPathMock,
+  recordCrashBreadcrumbMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   showSaveDialogMock: vi.fn(),
@@ -80,7 +82,9 @@ const {
   cancelGenerateCommitMessageLocalMock: vi.fn(),
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+  getSshGitProviderMock: vi.fn(),
+  tryDeleteWslUncPathMock: vi.fn(),
+  recordCrashBreadcrumbMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -108,6 +112,14 @@ vi.mock('fs/promises', () => ({
   rm: rmMock,
   realpath: realpathMock,
   lstat: lstatMock
+}))
+
+vi.mock('../wsl-unc-delete', () => ({
+  tryDeleteWslUncPath: tryDeleteWslUncPathMock
+}))
+
+vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
+  recordCrashBreadcrumb: recordCrashBreadcrumbMock
 }))
 
 vi.mock('../git/status', () => ({
@@ -241,6 +253,7 @@ describe('registerFilesystemHandlers', () => {
       rmMock,
       realpathMock,
       lstatMock,
+      recordCrashBreadcrumbMock,
       commitChangesMock,
       getStatusMock,
       abortMergeMock,
@@ -264,7 +277,8 @@ describe('registerFilesystemHandlers', () => {
       cancelGenerateCommitMessageLocalMock,
       cancelGeneratePullRequestFieldsLocalMock,
       getSshFilesystemProviderMock,
-      getSshGitProviderMock
+      getSshGitProviderMock,
+      tryDeleteWslUncPathMock
     ]) {
       mock.mockReset()
     }
@@ -288,6 +302,8 @@ describe('registerFilesystemHandlers', () => {
       }
     ])
     trashItemMock.mockResolvedValue(undefined)
+    // Default: not a WSL UNC path, so deletePath falls through to shell.trashItem.
+    tryDeleteWslUncPathMock.mockResolvedValue(false)
     showSaveDialogMock.mockResolvedValue({ canceled: true })
     fromWebContentsMock.mockReturnValue(null)
     getSshGitProviderMock.mockReturnValue(null)
@@ -314,6 +330,70 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow(
       'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
     )
+  })
+
+  // Why: handler-level WSL UNC authorization depends on native Windows path
+  // resolution; path-shape classification has separate cross-platform coverage.
+  it.runIf(process.platform === 'win32')(
+    'records a redacted breadcrumb when fs:readDir throws on a WSL UNC path',
+    async () => {
+      registerFilesystemHandlers(store as never)
+      const wslPath = path.win32.join('\\\\wsl.localhost\\Ubuntu', 'home', 'user', 'repo')
+      // resolveAuthorizedPath authorizes the path, then readdir fails (distro stopped).
+      realpathMock.mockResolvedValue(wslPath)
+      registerWorktreeRootsForRepo(store as never, 'repo-1', [wslPath])
+      readdirMock.mockRejectedValue(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
+
+      await expect(handlers.get('fs:readDir')!(null, { dirPath: wslPath })).rejects.toThrow(/EIO/)
+
+      expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith('fs_readdir_error', {
+        throwSite: 'readdir',
+        errorName: 'Error',
+        errorCode: 'EIO',
+        hasConnectionId: false,
+        isUNC: true,
+        isWsl: true
+      })
+      // The raw path must never appear in the breadcrumb payload.
+      const [, breadcrumbData] = recordCrashBreadcrumbMock.mock.calls[0]
+      expect(JSON.stringify(breadcrumbData)).not.toContain('user')
+    }
+  )
+
+  it('records a breadcrumb tagged ssh-provider when the SSH provider is gone', async () => {
+    registerFilesystemHandlers(store as never)
+    getSshFilesystemProviderMock.mockReturnValue(undefined)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: '/remote/repo', connectionId: 'ssh-1' })
+    ).rejects.toThrow()
+
+    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'fs_readdir_error',
+      expect.objectContaining({ throwSite: 'ssh-provider', hasConnectionId: true })
+    )
+  })
+
+  it('records a breadcrumb tagged authorize when the path is denied', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: path.resolve('/etc/passwd') })
+    ).rejects.toThrow()
+
+    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'fs_readdir_error',
+      expect.objectContaining({ throwSite: 'authorize', hasConnectionId: false })
+    )
+  })
+
+  it('does not record a breadcrumb when fs:readDir succeeds', async () => {
+    registerFilesystemHandlers(store as never)
+    readdirMock.mockResolvedValue([dirEntry({ name: 'file.ts', file: true })])
+
+    await handlers.get('fs:readDir')!(null, { dirPath: REPO_PATH })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
   })
 
   it('rejects remote downloads with missing required arguments', async () => {
@@ -868,6 +948,63 @@ describe('registerFilesystemHandlers', () => {
     await handlers.get('fs:deletePath')!(null, { targetPath })
 
     expect(trashItemMock).toHaveBeenCalledWith(targetPath)
+    expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(targetPath, { recursive: undefined })
+  })
+
+  // Regression for #6415: WSL UNC paths have no Recycle Bin, so shell.trashItem
+  // throws. The handler must hard-delete via the distro instead of surfacing an
+  // error popup.
+  it('hard-deletes a WSL UNC path instead of trashing it', async () => {
+    // Why: build the UNC-style root with path.join so it resolves as a real
+    // parent/child pair under the host's path semantics. A literal
+    // '\\wsl.localhost\...' string only resolves correctly under win32 path
+    // rules — on the Linux CI runner POSIX treats the backslashes as filename
+    // characters, so the target would not be a descendant of the root and auth
+    // would deny it before the WSL hard-delete ran (the real production path is
+    // Windows-only).
+    const wslUncRoot = path.join(
+      `${path.sep}${path.sep}wsl.localhost`,
+      'Ubuntu',
+      'home',
+      'me',
+      'repo'
+    )
+    const targetPath = path.join(wslUncRoot, 'file.txt')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, wslUncRoot])
+    tryDeleteWslUncPathMock.mockResolvedValue(true)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('fs:deletePath')!(null, { targetPath, recursive: true })
+
+    expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(targetPath, { recursive: true })
+    // Critical: we must NOT call trashItem for WSL UNC paths — that is exactly
+    // the call that throws and produced the user-facing error.
+    expect(trashItemMock).not.toHaveBeenCalled()
+  })
+
+  it('propagates a WSL hard-delete failure instead of swallowing it', async () => {
+    // Why: see sibling test — path.join keeps the UNC root/target a real
+    // parent/child pair under both win32 and POSIX (Linux CI) path semantics.
+    const wslUncRoot = path.join(
+      `${path.sep}${path.sep}wsl.localhost`,
+      'Ubuntu',
+      'home',
+      'me',
+      'repo'
+    )
+    const targetPath = path.join(wslUncRoot, 'file.txt')
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, wslUncRoot])
+    tryDeleteWslUncPathMock.mockRejectedValue(
+      new Error('Failed to delete WSL path: Permission denied')
+    )
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:deletePath')!(null, { targetPath })).rejects.toThrow(
+      'Failed to delete WSL path: Permission denied'
+    )
+    expect(trashItemMock).not.toHaveBeenCalled()
   })
 
   it('keeps non-image binaries hidden from the editor payload', async () => {

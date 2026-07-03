@@ -66,6 +66,17 @@ type AgentLaunchConfigRegistrationMetadata = {
   providerSession?: AgentProviderSessionMetadata
 }
 
+type AgentLaunchConfigStatusMetadata = {
+  paneKey: string
+  agentType?: AgentType
+  tabId?: string
+  terminalHandle?: string
+  launchToken?: string
+  providerSession?: AgentProviderSessionMetadata
+  existingProviderSession?: AgentProviderSessionMetadata
+  providerSessionChanged?: boolean
+}
+
 type AgentLaunchConfigRegistryEntry = {
   launchConfig: SleepingAgentLaunchConfig
   registeredAt: number
@@ -129,6 +140,9 @@ export type AgentStatusSlice = {
   ) => void
   getAgentLaunchConfigForStatusEntry: (
     entry: AgentStatusEntry
+  ) => SleepingAgentLaunchConfig | undefined
+  getAgentLaunchConfigForStatusMetadata: (
+    metadata: AgentLaunchConfigStatusMetadata
   ) => SleepingAgentLaunchConfig | undefined
   clearAgentLaunchConfig: (paneKey: string) => void
 
@@ -640,14 +654,16 @@ function registryEntryMatchesStatus(args: {
   ) {
     return false
   }
-  if (identity.providerSession !== undefined) {
-    return providerSessionsEqual(identity.providerSession, args.providerSession)
-  }
   if (
     identity.launchToken !== undefined &&
     (args.launchToken === undefined || identity.launchToken !== args.launchToken)
   ) {
+    // Why: missing or mismatched launch tokens are stale launch proof even if a
+    // provider session id was reused by a later manual/mixed Codex run.
     return false
+  }
+  if (identity.providerSession !== undefined) {
+    return providerSessionsEqual(identity.providerSession, args.providerSession)
   }
   if (identity.launchToken !== undefined) {
     return true
@@ -688,6 +704,26 @@ function getLaunchConfigForEntry(
     entry.providerSession &&
     providerSessionsEqual(sleepingRecord.providerSession, entry.providerSession)
     ? sleepingRecord.launchConfig
+    : undefined
+}
+
+function getLaunchConfigForStatusMetadata(
+  state: AppState,
+  metadata: AgentLaunchConfigStatusMetadata
+): SleepingAgentLaunchConfig | undefined {
+  const registryEntry = state.agentLaunchConfigByPaneKey[metadata.paneKey]
+  return registryEntryMatchesStatus({
+    entry: registryEntry,
+    paneKey: metadata.paneKey,
+    agentType: metadata.agentType,
+    tabId: metadata.tabId ?? getTabIdFromPaneKey(metadata.paneKey) ?? undefined,
+    terminalHandle: metadata.terminalHandle,
+    launchToken: metadata.launchToken,
+    providerSession: metadata.providerSession,
+    existingProviderSession: metadata.existingProviderSession,
+    providerSessionChanged: metadata.providerSessionChanged ?? false
+  })
+    ? registryEntry?.launchConfig
     : undefined
 }
 
@@ -916,6 +952,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
     getAgentLaunchConfigForStatusEntry: (entry) => getLaunchConfigForEntry(get(), entry),
+    getAgentLaunchConfigForStatusMetadata: (metadata) =>
+      getLaunchConfigForStatusMetadata(get(), metadata),
 
     clearAgentLaunchConfig: (paneKey) => {
       set((s) => {
@@ -1100,6 +1138,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           stateHistory: history,
           toolName: payload.toolName,
           toolInput: payload.toolInput,
+          // Why: full untruncated AskUserQuestion JSON; carried so mobile/web
+          // clients can render the live prompt card. parseAgentStatusPayload
+          // already clears it when the agent moves to a different tool/state.
+          interactivePrompt: payload.interactivePrompt,
           lastAssistantMessage: payload.lastAssistantMessage,
           // Why: reused panes may start non-orchestrated work after runtime
           // metadata expires. Only final done rows keep the previous lineage

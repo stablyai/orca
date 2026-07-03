@@ -31,6 +31,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     | null
     | undefined
   launchPlatform: NodeJS.Platform
+  /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
+   * `orca-ide` rename must not be applied for remote launches. */
+  isRemote?: boolean
 }): {
   startupPlan: AgentStartupPlan | null
   draftLaunchedNatively: boolean
@@ -53,6 +56,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           draft: args.draftContent,
           cmdOverrides: args.settings?.agentCmdOverrides ?? {},
           platform: args.launchPlatform,
+          isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
           agentEnv: effectiveAgentEnv
         })
@@ -80,10 +84,14 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     prompt: '',
     cmdOverrides: args.settings?.agentCmdOverrides ?? {},
     platform: args.launchPlatform,
+    isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
     allowEmptyPromptLaunch: true
   })
+  if (startupPlan && args.promptDelivery === 'draft') {
+    startupPlan.draftPrompt = args.draftContent
+  }
   return {
     startupPlan,
     draftLaunchedNatively: false,
@@ -101,6 +109,7 @@ export function buildDirectWorkItemStartupOpts(
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
+    draftPrompt?: string
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
   }
@@ -118,6 +127,7 @@ export function buildDirectWorkItemStartupOpts(
       ...(plan.env ? { env: plan.env } : {}),
       launchConfig: plan.launchConfig,
       ...(agent ? { launchAgent: agent } : {}),
+      ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),

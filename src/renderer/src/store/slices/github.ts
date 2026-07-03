@@ -1038,8 +1038,12 @@ function buildPRRefreshCandidate(
     true
   )
   const cachedFallbackPRNumber = cachedPR?.number ?? null
+  const cachedMergedPRMovedPastHead =
+    worktree.linkedPR == null && cachedPR?.state === 'merged' && cachedPR.headSha !== worktree.head
   const fallbackPRNumber =
-    worktree.linkedPR == null ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber) : null
+    worktree.linkedPR == null && !cachedMergedPRMovedPastHead
+      ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
+      : null
   const fallbackPRSource: GitHubPRFallbackSource | null =
     worktree.linkedPR != null || fallbackPRNumber == null
       ? null

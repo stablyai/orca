@@ -27,7 +27,25 @@ export type PaneSpawnHints = {
 export type ClosedPaneInfo = {
   paneId: number
   leafId: TerminalLeafId
+  reason?: 'close' | 'detach'
 }
+
+export type PaneExternalDropTarget = {
+  id: string
+  rect: DOMRect
+  overlayKind?: 'area' | 'insertion'
+}
+
+export type PaneExternalDropResolver = (args: {
+  sourcePaneId: number
+  clientX: number
+  clientY: number
+}) => PaneExternalDropTarget | null
+
+export type PaneExternalDropHandler = (
+  sourcePaneId: number,
+  target: PaneExternalDropTarget
+) => boolean
 
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
@@ -37,9 +55,15 @@ export type PaneManagerOptions = {
   /** Why: Electron webviews can steal pointer streams from renderer-owned
    *  pane drags unless callers temporarily put them in pointer passthrough. */
   onPaneDragActiveChange?: (active: boolean) => void
+  resolveExternalPaneDropTarget?: PaneExternalDropResolver
+  onExternalPaneDrop?: PaneExternalDropHandler
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
+  formatLinkTooltip?: (
+    url: string,
+    openLinkHint: string
+  ) => string | null | undefined | Promise<string | null | undefined>
   initialRenderingSuspended?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal

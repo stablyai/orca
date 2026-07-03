@@ -7,10 +7,10 @@ import {
   copyFileSync,
   renameSync,
   unlinkSync
-} from 'fs'
-import { homedir } from 'os'
-import { dirname, join } from 'path'
-import { randomUUID } from 'crypto'
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 
@@ -161,6 +161,24 @@ export function wrapWindowsHookCommand(scriptPath: string): string {
   const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
   const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
   return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+}
+
+export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
+
+export function wrapWindowsCmdHookCommand(scriptPath: string): string {
+  // Why: skip the ~360ms PowerShell interpreter startup when the path is safe
+  // for cmd.exe to invoke directly. The fallback keeps the encoded PowerShell
+  // launcher for paths with spaces or metacharacters.
+  return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
+}
+
+export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
+
+export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
+  const bashPath = scriptPath.replaceAll('\\', '/')
+  // Why: Claude Code's Windows hook runner is Git Bash/MSYS. It can execute a
+  // bare .cmd via forward slashes, but shell metacharacters must stay encoded.
+  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath) ? bashPath : wrapWindowsHookCommand(scriptPath)
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
