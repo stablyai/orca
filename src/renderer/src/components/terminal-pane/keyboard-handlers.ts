@@ -22,6 +22,9 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
+import { writeTerminalClipboardText } from './terminal-clipboard-write'
+import { showTerminalClipboardCopyFailedToast } from './terminal-clipboard-copy-failure-toast'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -305,14 +308,16 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const selection = pane.terminal.getSelection()
-        if (!selection) {
+        if (!pane.terminal.getSelection()) {
           return
         }
         e.preventDefault()
         e.stopImmediatePropagation()
-        void window.api.ui.writeClipboardText(selection).catch(() => {
-          /* ignore clipboard write failures */
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: writeTerminalClipboardText
+        }).catch(() => {
+          showTerminalClipboardCopyFailedToast()
         })
         return
       }

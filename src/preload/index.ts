@@ -186,7 +186,7 @@ import {
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
-import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
+import type { ReadClipboardTextOptions, WriteClipboardTextOptions } from '../shared/clipboard-text'
 import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
@@ -3438,8 +3438,8 @@ const api = {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
-    writeClipboardText: (text: string): Promise<void> =>
-      ipcRenderer.invoke('clipboard:writeText', text),
+    writeClipboardText: (text: string, options?: WriteClipboardTextOptions): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeText', text, options),
     writeSelectionClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>

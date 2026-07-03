@@ -208,9 +208,18 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('registers normal and selection text clipboard IPC handlers', async () => {
+    let normalClipboard = 'standard text'
+    let selectionClipboard = 'selection text'
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
-      clipboardType === 'selection' ? 'selection text' : 'standard text'
+      clipboardType === 'selection' ? selectionClipboard : normalClipboard
     )
+    clipboardWriteTextMock.mockImplementation((text: string, clipboardType?: string) => {
+      if (clipboardType === 'selection') {
+        selectionClipboard = text
+      } else {
+        normalClipboard = text
+      }
+    })
 
     registerClipboardHandlers({} as never)
 
@@ -227,6 +236,52 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardReadTextMock).toHaveBeenCalledWith()
     expect(clipboardReadTextMock).toHaveBeenCalledWith('selection')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('normal text')
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
+  })
+
+  it('does not verify standard text writes by default', async () => {
+    clipboardReadTextMock.mockReturnValue('old clipboard')
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'copilot answer')
+    ).resolves.toBeUndefined()
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith('copilot answer')
+    expect(clipboardReadTextMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects verified standard text writes when the clipboard read-back does not match', async () => {
+    // Why: Electron can return without throwing while the OS clipboard keeps its
+    // previous contents (#5611), so the handler must surface a failure instead.
+    clipboardReadTextMock.mockReturnValue('old clipboard')
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'copilot answer', {
+        verify: true
+      })
+    ).rejects.toThrow('Clipboard write verification failed')
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith('copilot answer')
+  })
+
+  it('does not verify the X11 PRIMARY selection clipboard read-back', async () => {
+    // Why: the PRIMARY selection hands ownership to the last selector, so a
+    // read-back can legitimately differ from what we wrote — verifying it would
+    // surface false failures on Linux primary-selection copies.
+    clipboardReadTextMock.mockReturnValue('owned by another app')
+
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:writeSelectionText')?.(makeClipboardEvent(), 'primary text', {
+        verify: true
+      })
+    ).resolves.toBeUndefined()
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
   })
 
@@ -473,7 +528,6 @@ describe('registerClipboardHandlers', () => {
   it('yields before writing large text clipboard IPC payloads', async () => {
     vi.useFakeTimers()
     const text = 'é'.repeat(300_000)
-
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()

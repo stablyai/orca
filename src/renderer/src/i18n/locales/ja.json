@@ -2481,6 +2481,12 @@
                   "7cf51f74fd": "SSH、tmux、Neovim、または fzf からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
                   "89eaa3e80b": "Terminal のクリップボードへの書き込みがブロックされました"
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard write failed",
+                  "fdd3e7e977": "The terminal app requested a copy, but the system clipboard did not update."
+                }
               }
             }
           },
@@ -2521,6 +2527,16 @@
                 "b4cf68e889": "{{value0}} {{value1}} をスキップしました。",
                 "writeTimeout": "ファイルドロップをキャンセルしました: 安全タイムアウト前にターミナルがパスを受け付けませんでした。",
                 "writeRejected": "ファイルドロップをキャンセルしました: ターミナルがパスを受け付けられませんでした。"
+              }
+            },
+            "clipboard": {
+              "copy": {
+                "failure": {
+                  "toast": {
+                    "title": "Terminal copy failed",
+                    "description": "The system clipboard did not update. Your selection is still highlighted."
+                  }
+                }
               }
             }
           },

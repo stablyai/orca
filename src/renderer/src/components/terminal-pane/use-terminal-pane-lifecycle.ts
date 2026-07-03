@@ -60,7 +60,10 @@ import {
   mode2031SequenceFor
 } from './terminal-appearance'
 import { handleOsc52ClipboardRequest } from './osc52-clipboard'
-import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
+import {
+  showOsc52ClipboardBlockedToast,
+  showOsc52ClipboardFailedToast
+} from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
@@ -113,6 +116,9 @@ import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import { copyTerminalSelection } from './terminal-selection-copy'
+import { writeTerminalClipboardText } from './terminal-clipboard-write'
+import { showTerminalClipboardCopyFailedToast } from './terminal-clipboard-copy-failure-toast'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -791,8 +797,9 @@ export function useTerminalPaneLifecycle({
         const osc52Disposable = pane.terminal.parser.registerOscHandler(52, (data) =>
           handleOsc52ClipboardRequest(data, {
             allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
-            writeClipboardText: window.api.ui.writeClipboardText,
-            onBlockedWrite: showOsc52ClipboardBlockedToast
+            writeClipboardText: writeTerminalClipboardText,
+            onBlockedWrite: showOsc52ClipboardBlockedToast,
+            onWriteFailure: showOsc52ClipboardFailedToast
           })
         )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
@@ -1004,12 +1011,11 @@ export function useTerminalPaneLifecycle({
           if (!shouldWriteClipboard) {
             return
           }
-          const selection = pane.terminal.getSelection()
-          if (!selection) {
-            return
-          }
-          void window.api.ui.writeClipboardText(selection).catch(() => {
-            /* ignore clipboard write failures */
+          void copyTerminalSelection({
+            terminal: pane.terminal,
+            writeClipboardText: writeTerminalClipboardText
+          }).catch(() => {
+            showTerminalClipboardCopyFailedToast()
           })
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)

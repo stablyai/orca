@@ -13,7 +13,8 @@ import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
-  type ReadClipboardTextOptions
+  type ReadClipboardTextOptions,
+  type WriteClipboardTextOptions
 } from '../../shared/clipboard-text'
 import {
   saveClipboardImageBufferAsTempFile,
@@ -69,6 +70,19 @@ function runCommand(command: string, args: string[], stdin?: string): Promise<vo
     )
     child.stdin?.end(stdin ?? '')
   })
+}
+
+function writeStandardClipboardText(text: string, options?: WriteClipboardTextOptions): void {
+  clipboard.writeText(text)
+  if (!options?.verify) {
+    return
+  }
+  // Why: terminal copy success UI depends on pasteable text. Electron can
+  // return from writeText while the OS clipboard stayed unchanged (#5611), so
+  // verified callers pay the read-back cost only when they need that guarantee.
+  if (clipboard.readText() !== text) {
+    throw new Error('Clipboard write verification failed')
+  }
 }
 
 export function registerClipboardHandlers(store: Store): void {
@@ -140,17 +154,28 @@ export function registerClipboardHandlers(store: Store): void {
       return writeFileToClipboard(request.filePath, deps)
     }
   )
-  ipcMain.handle('clipboard:writeText', async (event, text: string) => {
-    assertTrustedClipboardSender(event)
-    return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
-  })
-  ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
-    assertTrustedClipboardSender(event)
-    return clipboard.writeText(
-      await assertClipboardTextWriteWithinLimitWithYield(text),
-      'selection'
-    )
-  })
+  ipcMain.handle(
+    'clipboard:writeText',
+    async (event, text: string, options?: WriteClipboardTextOptions) => {
+      assertTrustedClipboardSender(event)
+      return writeStandardClipboardText(
+        await assertClipboardTextWriteWithinLimitWithYield(text, options),
+        options
+      )
+    }
+  )
+  ipcMain.handle(
+    'clipboard:writeSelectionText',
+    async (event, text: string, options?: WriteClipboardTextOptions) => {
+      assertTrustedClipboardSender(event)
+      // Why: the X11 PRIMARY "selection" clipboard hands ownership to whoever
+      // last selected text, so read-back verification would create false failures.
+      return clipboard.writeText(
+        await assertClipboardTextWriteWithinLimitWithYield(text, options),
+        'selection'
+      )
+    }
+  )
   ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
     // Why: only accept validated PNG data URIs to prevent writing arbitrary

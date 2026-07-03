@@ -2481,6 +2481,12 @@
                   "7cf51f74fd": "在终端设置中启用 TUI 剪贴板写入，以从 SSH、tmux、Neovim 或 fzf 进行复制。",
                   "89eaa3e80b": "终端剪贴板写入被阻止"
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard write failed",
+                  "fdd3e7e977": "The terminal app requested a copy, but the system clipboard did not update."
+                }
               }
             }
           },
@@ -2521,6 +2527,16 @@
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
                 "writeRejected": "文件拖放已取消：终端无法接受路径。"
+              }
+            },
+            "clipboard": {
+              "copy": {
+                "failure": {
+                  "toast": {
+                    "title": "Terminal copy failed",
+                    "description": "The system clipboard did not update. Your selection is still highlighted."
+                  }
+                }
               }
             }
           },

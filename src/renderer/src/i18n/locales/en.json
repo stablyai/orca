@@ -2481,6 +2481,12 @@
                   "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, or fzf.",
                   "89eaa3e80b": "Terminal clipboard write blocked"
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard write failed",
+                  "fdd3e7e977": "The terminal app requested a copy, but the system clipboard did not update."
+                }
               }
             }
           },
@@ -2521,6 +2527,16 @@
                 "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
                 "writeRejected": "File drop cancelled: terminal could not accept the path."
+              }
+            },
+            "clipboard": {
+              "copy": {
+                "failure": {
+                  "toast": {
+                    "title": "Terminal copy failed",
+                    "description": "The system clipboard did not update. Your selection is still highlighted."
+                  }
+                }
               }
             }
           },

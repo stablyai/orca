@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import type * as Osc52ClipboardBlockedToastModule from './osc52-clipboard-blocked-toast'
 
-const { toastInfoMock, storeMock } = vi.hoisted(() => ({
+const { toastInfoMock, toastErrorMock, storeMock } = vi.hoisted(() => ({
   toastInfoMock: vi.fn(),
+  toastErrorMock: vi.fn(),
   storeMock: {
     setSettingsSearchQuery: vi.fn(),
     openSettingsTarget: vi.fn(),
@@ -13,7 +14,8 @@ const { toastInfoMock, storeMock } = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    info: toastInfoMock
+    info: toastInfoMock,
+    error: toastErrorMock
   }
 }))
 
@@ -31,6 +33,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
   beforeEach(() => {
     vi.resetModules()
     toastInfoMock.mockReset()
+    toastErrorMock.mockReset()
     storeMock.setSettingsSearchQuery.mockReset()
     storeMock.openSettingsTarget.mockReset()
     storeMock.openSettingsPage.mockReset()
@@ -66,5 +69,32 @@ describe('showOsc52ClipboardBlockedToast', () => {
     showOsc52ClipboardBlockedToast()
 
     expect(toastInfoMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('showOsc52ClipboardFailedToast', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    toastErrorMock.mockReset()
+  })
+
+  it('reports that the host clipboard did not update', async () => {
+    const { showOsc52ClipboardFailedToast } = await importToastModule()
+
+    showOsc52ClipboardFailedToast()
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Terminal clipboard write failed', {
+      description: 'The terminal app requested a copy, but the system clipboard did not update.',
+      duration: 12_000
+    })
+  })
+
+  it('only shows once per renderer session', async () => {
+    const { showOsc52ClipboardFailedToast } = await importToastModule()
+
+    showOsc52ClipboardFailedToast()
+    showOsc52ClipboardFailedToast()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 })

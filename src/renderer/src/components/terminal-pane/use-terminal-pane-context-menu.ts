@@ -41,6 +41,9 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { copyTerminalSelection } from './terminal-selection-copy'
+import { writeTerminalClipboardText } from './terminal-clipboard-write'
+import { showTerminalClipboardCopyFailedToast } from './terminal-clipboard-copy-failure-toast'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -154,15 +157,20 @@ export function useTerminalPaneContextMenu({
     if (!pane) {
       return
     }
-    const selection = pane.terminal.getSelection()
-    if (selection) {
-      await window.api.ui.writeClipboardText(selection)
+    try {
+      await copyTerminalSelection({
+        terminal: pane.terminal,
+        writeClipboardText: writeTerminalClipboardText
+      })
+    } catch {
+      showTerminalClipboardCopyFailedToast()
+    } finally {
+      // Why: Radix returns focus to the menu trigger (the pane container) on
+      // close, but xterm.js only accepts input when its own helper textarea is
+      // focused. Without this, the user has to click the pane again before
+      // typing works (see #592).
+      pane.terminal.focus()
     }
-    // Why: Radix returns focus to the menu trigger (the pane container) on
-    // close, but xterm.js only accepts input when its own helper textarea is
-    // focused. Without this, the user has to click the pane again before
-    // typing works (see #592).
-    pane.terminal.focus()
   }
 
   const onCopyPaneId = async (): Promise<void> => {
@@ -489,10 +497,14 @@ export function useTerminalPaneContextMenu({
       if (!clickedPane) {
         return
       }
-      const selection = clickedPane.terminal.getSelection()
-      if (selection) {
-        void window.api.ui.writeClipboardText(selection)
-        clickedPane.terminal.clearSelection()
+      if (clickedPane.terminal.getSelection()) {
+        void copyTerminalSelection({
+          terminal: clickedPane.terminal,
+          writeClipboardText: writeTerminalClipboardText,
+          clearSelectionOnSuccess: true
+        }).catch(() => {
+          showTerminalClipboardCopyFailedToast()
+        })
       } else {
         void pasteResolvedPane('right-click')
       }

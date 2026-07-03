@@ -113,4 +113,18 @@ describe('handleOsc52ClipboardRequest', () => {
 
     expect(onBlockedWrite).not.toHaveBeenCalled()
   })
+
+  it('surfaces host clipboard write failures for OSC 52 requests', async () => {
+    const onWriteFailure = vi.fn()
+
+    handleOsc52ClipboardRequest(`c;${b64('from copilot')}`, {
+      allowClipboardWrite: true,
+      writeClipboardText: vi
+        .fn<(text: string) => Promise<void>>()
+        .mockRejectedValue(new Error('clipboard unchanged')),
+      onWriteFailure
+    })
+
+    await vi.waitFor(() => expect(onWriteFailure).toHaveBeenCalledTimes(1))
+  })
 })

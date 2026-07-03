@@ -88,7 +88,8 @@ import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
-  type ReadClipboardTextOptions
+  type ReadClipboardTextOptions,
+  type WriteClipboardTextOptions
 } from '../../../shared/clipboard-text'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
@@ -2139,8 +2140,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
-    writeClipboardText: async (text) => {
-      await assertClipboardTextWriteWithinLimitWithYield(text)
+    writeClipboardText: async (text, options?: WriteClipboardTextOptions) => {
+      await assertClipboardTextWriteWithinLimitWithYield(text, options)
       await (navigator.clipboard?.writeText?.(text) ?? Promise.resolve())
     },
     writeSelectionClipboardText: () =>

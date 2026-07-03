@@ -2481,6 +2481,12 @@
                   "7cf51f74fd": "Habilite las escrituras en el portapapeles TUI en la configuración de Terminal para copiar desde SSH, tmux, Neovim o fzf.",
                   "89eaa3e80b": "Escritura en el portapapeles del terminal bloqueada"
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard write failed",
+                  "fdd3e7e977": "The terminal app requested a copy, but the system clipboard did not update."
+                }
               }
             }
           },
@@ -2521,6 +2527,16 @@
                 "b4cf68e889": "Se omitió {{value0}} {{value1}}.",
                 "writeTimeout": "Se canceló la suelta de archivos: la terminal no aceptó la ruta antes del tiempo de seguridad.",
                 "writeRejected": "Se canceló la suelta de archivos: la terminal no pudo aceptar la ruta."
+              }
+            },
+            "clipboard": {
+              "copy": {
+                "failure": {
+                  "toast": {
+                    "title": "Terminal copy failed",
+                    "description": "The system clipboard did not update. Your selection is still highlighted."
+                  }
+                }
               }
             }
           },

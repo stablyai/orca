@@ -2481,6 +2481,12 @@
                   "7cf51f74fd": "SSH, tmux, Neovim 또는 fzf에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
                 }
+              },
+              "failed": {
+                "toast": {
+                  "62a0af2cb4": "Terminal clipboard write failed",
+                  "fdd3e7e977": "The terminal app requested a copy, but the system clipboard did not update."
+                }
               }
             }
           },
@@ -2521,6 +2527,16 @@
                 "b4cf68e889": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
                 "writeTimeout": "파일 드롭이 취소되었습니다. 안전 시간 제한 전에 터미널이 경로를 받지 않았습니다.",
                 "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다."
+              }
+            },
+            "clipboard": {
+              "copy": {
+                "failure": {
+                  "toast": {
+                    "title": "Terminal copy failed",
+                    "description": "The system clipboard did not update. Your selection is still highlighted."
+                  }
+                }
               }
             }
           },

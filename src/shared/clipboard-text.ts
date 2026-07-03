@@ -10,6 +10,7 @@ export type ReadClipboardTextOptions = {
 
 export type WriteClipboardTextOptions = {
   maxBytes?: number
+  verify?: boolean
 }
 
 export type ClipboardTextByteLengthMeasurement = {

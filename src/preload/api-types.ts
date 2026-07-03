@@ -9,7 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
-import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
+import type { ReadClipboardTextOptions, WriteClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
@@ -2675,7 +2675,7 @@ export type PreloadApi = {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
     }) => Promise<string | null>
-    writeClipboardText: (text: string) => Promise<void>
+    writeClipboardText: (text: string, options?: WriteClipboardTextOptions) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
