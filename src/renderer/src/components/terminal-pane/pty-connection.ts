@@ -3646,6 +3646,8 @@ export function connectPanePty(
     let hiddenSynchronizedOutputMarkerTail = ''
     let hiddenRewriteChunkEndedWithCarriageReturn = false
     let hiddenRewriteCsiScanTail = ''
+    let rendererOrderedPtyId: string | null = null
+    let rendererOrderedSeq: number | null = null
 
     function canUseMainBufferSnapshot(ptyId: string | null): ptyId is string {
       return Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
@@ -4120,6 +4122,39 @@ export function connectPanePty(
       return chunk.data.slice(offset)
     }
 
+    function recordRendererOrderedSeq(meta?: Pick<PtyDataMeta, 'seq'>): void {
+      if (typeof meta?.seq !== 'number') {
+        return
+      }
+      const ptyId = transport.getPtyId()
+      if (!ptyId) {
+        return
+      }
+      if (rendererOrderedPtyId !== ptyId) {
+        rendererOrderedPtyId = ptyId
+        rendererOrderedSeq = meta.seq
+        return
+      }
+      rendererOrderedSeq = Math.max(rendererOrderedSeq ?? 0, meta.seq)
+    }
+
+    function getHiddenRendererDataAfterOrderedSeq(
+      data: string,
+      meta: PtyDataMeta | undefined
+    ): string | null {
+      if (
+        rendererOrderedPtyId === null ||
+        rendererOrderedSeq === null ||
+        transport.getPtyId() !== rendererOrderedPtyId
+      ) {
+        return data
+      }
+      return getChunkDataAfterSnapshot(
+        { data, seq: meta?.seq, rawLength: meta?.rawLength },
+        rendererOrderedSeq
+      )
+    }
+
     function drainPendingLiveChunksAfterSnapshot(snapshotSeq: number | undefined): boolean {
       if (hiddenOutputRestorePendingOverflow) {
         hiddenOutputRestorePendingOverflow = false
@@ -4143,6 +4178,7 @@ export function connectPanePty(
           }
           if (data) {
             writePtyOutputToXterm(data, true)
+            recordRendererOrderedSeq(chunk)
           }
         }
         if (hiddenOutputRestorePendingOverflow) {
@@ -4404,6 +4440,7 @@ export function connectPanePty(
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       hiddenRendererStateDirty = false
+      recordRendererOrderedSeq(snapshot)
       resetHiddenRendererRiskState()
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
@@ -4632,6 +4669,20 @@ export function connectPanePty(
         meta,
         pendingForegroundQuery?.consumedCurrentChars ?? 0
       )
+      const orderedRendererData = foreground
+        ? rendererData
+        : getHiddenRendererDataAfterOrderedSeq(rendererData, rendererMeta)
+      if (orderedRendererData === null) {
+        // Why: renderer-side filtering cannot map cleaned text back onto raw
+        // sequence offsets. Rebuild from main instead of risking stale bytes.
+        markHiddenOutputRestoreNeeded()
+        schedulePendingStartupCommandDelivery()
+        return
+      }
+      if (!foreground && orderedRendererData.length === 0) {
+        schedulePendingStartupCommandDelivery()
+        return
+      }
       if (pendingForegroundQuery?.statelessQueryData) {
         writePtyOutputToXterm(pendingForegroundQuery.statelessQueryData, true, {
           hiddenStartupRendererQuery: true
@@ -4650,11 +4701,11 @@ export function connectPanePty(
         meta?.background === true &&
         shouldWritePtyOutputForeground(deps.isVisibleRef.current) &&
         pane.terminal.buffer.active.type === 'alternate' &&
-        !containsStatefulRendererQuery(data)
+        !containsStatefulRendererQuery(orderedRendererData)
       if (skipBackgroundAlternateScreenFrame) {
-        skipBackgroundAlternateScreenOutput(data)
-      } else if (shouldSkipHiddenRendererOutput(foreground, data)) {
-        skipHiddenRendererOutput(data)
+        skipBackgroundAlternateScreenOutput(orderedRendererData)
+      } else if (shouldSkipHiddenRendererOutput(foreground, orderedRendererData)) {
+        skipHiddenRendererOutput(orderedRendererData)
       } else if (
         (hiddenOutputRestoreNeeded || hiddenOutputRestoreInFlight) &&
         restoreAppliesToCurrentPty
@@ -4663,7 +4714,7 @@ export function connectPanePty(
           if (pendingForegroundQuery?.statefulQueryData) {
             queueLiveChunkDuringRestore(pendingForegroundQuery.statefulQueryData)
           }
-          queueLiveChunkDuringRestore(rendererData, rendererMeta)
+          queueLiveChunkDuringRestore(orderedRendererData, rendererMeta)
           requestHiddenOutputRestoreIfNeeded()
         } else if (hiddenOutputRestoreInFlight) {
           resetSkippedHiddenRendererRiskState()
@@ -4676,7 +4727,10 @@ export function connectPanePty(
             hiddenStartupRendererQuery: true
           })
         }
-        writePtyOutputToXterm(rendererData, foreground)
+        writePtyOutputToXterm(orderedRendererData, foreground)
+        if (foreground) {
+          recordRendererOrderedSeq(rendererMeta)
+        }
       }
 
       schedulePendingStartupCommandDelivery()

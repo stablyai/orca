@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/headless'
 import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
@@ -42,6 +43,26 @@ async function drainPendingTimeouts(pendingTimeouts: (() => void)[], limit = 100
     iterations += 1
     pendingTimeouts.shift()?.()
     await flushAsyncTicks()
+  }
+}
+
+function writeHeadlessTerminal(term: Terminal, data: string): Promise<void> {
+  return new Promise((resolve) => term.write(data, resolve))
+}
+
+async function renderHeadlessBuffer(writes: string[], cols = 80, rows = 8): Promise<string[]> {
+  const term = new Terminal({ cols, rows, allowProposedApi: true })
+  try {
+    for (const write of writes) {
+      await writeHeadlessTerminal(term, write)
+    }
+    const lines: string[] = []
+    for (let lineIndex = 0; lineIndex < term.buffer.active.length; lineIndex++) {
+      lines.push(term.buffer.active.getLine(lineIndex)?.translateToString(true) ?? '')
+    }
+    return lines
+  } finally {
+    term.dispose()
   }
 }
 
@@ -6997,6 +7018,86 @@ describe('connectPanePty', () => {
     expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
     expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b[6n', expect.any(Function))
 
+    binding.dispose()
+  })
+
+  it('does not apply stale background Codex query chunks after hidden snapshot restore', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current:
+        | ((
+            data: string,
+            meta?: { seq?: number; rawLength?: number; background?: boolean }
+          ) => void)
+        | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+
+    const hiddenFrame = '\r\x1b[2KWorking hidden'
+    const staleQueryFrame = '\r\x1b[2KWorking stale\x1b[6n'
+    const currentFrame = '\r\x1b[2KWorking current'
+    const staleSeq = hiddenFrame.length + staleQueryFrame.length
+    const currentSeq = staleSeq + currentFrame.length
+    getMainBufferSnapshot.mockResolvedValue({
+      data: currentFrame,
+      cols: 80,
+      rows: 8,
+      seq: currentSeq
+    })
+
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 8
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      startup: { command: 'codex' }
+    })
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(hiddenFrame, {
+      seq: hiddenFrame.length,
+      rawLength: hiddenFrame.length
+    })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(currentFrame, {
+      seq: currentSeq,
+      rawLength: currentFrame.length
+    })
+    await flushAsyncTicks(20)
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.(staleQueryFrame, {
+        seq: staleSeq,
+        rawLength: staleQueryFrame.length,
+        background: true
+      })
+      vi.advanceTimersByTime(50)
+      await flushAsyncTicks(6)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const rendererBuffer = await renderHeadlessBuffer(writes, 80, 8)
+    const referenceBuffer = await renderHeadlessBuffer(
+      [hiddenFrame, staleQueryFrame, currentFrame],
+      80,
+      8
+    )
+
+    expect(writes).not.toContain(staleQueryFrame)
+    expect(rendererBuffer).toEqual(referenceBuffer)
     binding.dispose()
   })
 
