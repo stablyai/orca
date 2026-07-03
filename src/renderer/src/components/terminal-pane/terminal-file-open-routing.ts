@@ -7,7 +7,7 @@ import {
   statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
@@ -54,6 +54,29 @@ export function shouldOpenTerminalFileWithSystemDefault(
   filePath: string
 ): boolean {
   return !fileContext.connectionId && !isRemoteRuntimeFileOperation(fileContext, filePath)
+}
+
+export function shouldProbeTerminalFilePathThroughRuntime(
+  context: RuntimeFileOperationArgs
+): boolean {
+  // Why: a runtime-owned terminal path belongs to that remote host even when it
+  // is outside the runtime worktree, so link probing must not fall back locally.
+  return (
+    Boolean(context.connectionId) || getActiveRuntimeTarget(context.settings).kind === 'environment'
+  )
+}
+
+export function isTerminalFilePathLocalToClient(
+  context: RuntimeFileOperationArgs,
+  filePath: string
+): boolean {
+  // Why: local OS reveal/open can only receive paths from the client machine,
+  // not SSH or remote-runtime paths.
+  return (
+    !context.connectionId &&
+    getActiveRuntimeTarget(context.settings).kind === 'local' &&
+    !isRemoteRuntimeFileOperation(context, filePath)
+  )
 }
 
 let latestOpenDetectedFilePathRequestId = 0

@@ -20,12 +20,21 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
+  getBufferPositionForTerminalMouseEvent,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import {
+  resolveFilePathLinkAtBufferPosition,
+  type TerminalFileLinkResolver
+} from './terminal-file-link-hit-testing'
+import {
+  getTerminalFileContext,
+  isTerminalFilePathLocalToClient
+} from './terminal-file-open-routing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import {
   installHttpLinkClickFallback,
@@ -274,6 +283,9 @@ type UseTerminalPaneLifecycleDeps = {
   // imperative managerRef.getPanes().length is not reactive, so without this
   // dispatcher structural changes wouldn't trigger dependent effects.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
+  /** Set by the link effect so the right-click context menu can resolve the
+   *  file link under the cursor (reusing the same link deps as ⌘-click). */
+  fileLinkResolverRef: React.RefObject<TerminalFileLinkResolver | null>
   // Why: same pane count does not imply same geometry; drag-reorder can move
   // panes without resizing them, so overlay rects need a layout-change tick.
   setPaneLayoutRevision: React.Dispatch<React.SetStateAction<number>>
@@ -538,6 +550,7 @@ export function useTerminalPaneLifecycle({
   paneTitlesRef,
   setRenamingPaneId,
   setPaneCount,
+  fileLinkResolverRef,
   setPaneLayoutRevision,
   resolveExternalPaneDropTarget,
   onExternalPaneDrop
@@ -665,6 +678,39 @@ export function useTerminalPaneLifecycle({
         const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId()
         return ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null
       }
+    }
+    // Why: the right-click menu needs the file link under the cursor without
+    // opening it. Reuse linkDeps so resolution matches ⌘-click exactly, and
+    // mark remote/SSH paths non-local so local-OS actions stay hidden for them.
+    fileLinkResolverRef.current = (paneId, event) => {
+      const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
+      if (!pane) {
+        return null
+      }
+      const position = getBufferPositionForTerminalMouseEvent(pane.terminal, event)
+      if (!position) {
+        return null
+      }
+      const runtimeEnvironmentId = linkDeps.getRuntimeEnvironmentIdForPane?.(paneId) ?? null
+      const resolved = resolveFilePathLinkAtBufferPosition(
+        pane.terminal.buffer.active,
+        position,
+        pane.terminal.cols,
+        {
+          startupCwd,
+          terminalHomePath,
+          worktreeId,
+          worktreePath,
+          runtimeEnvironmentId,
+          pathExistsCache
+        }
+      )
+      if (!resolved) {
+        return null
+      }
+      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+      const isLocal = isTerminalFilePathLocalToClient(fileContext, resolved.absolutePath)
+      return { ...resolved, isLocal, runtimeEnvironmentId }
     }
     let resizeRaf: number | null = null
     const queueResizeAll = (focusActive: boolean): void => {
@@ -1606,6 +1652,7 @@ export function useTerminalPaneLifecycle({
         currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
       )
       unregisterRuntimeTab()
+      fileLinkResolverRef.current = null
       if (resizeRaf !== null) {
         cancelAnimationFrame(resizeRaf)
       }

@@ -15,7 +15,8 @@ import {
   getTerminalFileContext,
   isHtmlFilePath,
   openDetectedFilePath,
-  shouldOpenTerminalFileWithSystemDefault
+  shouldOpenTerminalFileWithSystemDefault,
+  shouldProbeTerminalFilePathThroughRuntime
 } from './terminal-file-open-routing'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -36,10 +37,12 @@ import {
   getTerminalUrlOpenHint
 } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+import { getBufferPositionForTerminalMouseEvent } from './terminal-mouse-buffer-position'
 import { isTerminalLinkActivation } from './terminal-link-activation'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+export { getBufferPositionForTerminalMouseEvent } from './terminal-mouse-buffer-position'
 export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
 export { isTerminalLinkActivation } from './terminal-link-activation'
 
@@ -59,6 +62,18 @@ export type LinkHandlerDeps = {
 type ProvidedFileLink = {
   link: ILink
   logicalLine: WrappedLogicalLine
+}
+
+function resolveRuntimeEnvironmentIdForPane(
+  deps: Pick<LinkHandlerDeps, 'getRuntimeEnvironmentIdForPane' | 'runtimeEnvironmentId'>,
+  paneId: number
+): string | null | undefined {
+  // Why: null is an explicit local-owner signal; undefined means fall back to
+  // the currently active runtime settings.
+  if (deps.getRuntimeEnvironmentIdForPane) {
+    return deps.getRuntimeEnvironmentIdForPane(paneId)
+  }
+  return deps.runtimeEnvironmentId
 }
 
 function rangesOverlap(left: ILink['range'], right: ILink['range']): boolean {
@@ -137,8 +152,7 @@ export function createFilePathLinkProvider(
                 return null
               }
 
-              const runtimeEnvironmentId =
-                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+              const runtimeEnvironmentId = resolveRuntimeEnvironmentIdForPane(deps, paneId)
               const fileContext = getTerminalFileContext(
                 worktreeId,
                 worktreePath,
@@ -164,8 +178,10 @@ export function createFilePathLinkProvider(
                 const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
                 const exists =
                   cachedExists ??
-                  (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, resolved.absolutePath)
+                  // Why: runtime-owned paths must probe the remote host, never the
+                  // local FS; a failed remote probe means "not present" here.
+                  (shouldProbeTerminalFilePathThroughRuntime(fileContext)
+                    ? await runtimePathExists(fileContext, resolved.absolutePath).catch(() => false)
                     : await window.api.shell.pathExists(resolved.absolutePath))
                 writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
                 if (!exists) {
@@ -235,38 +251,6 @@ export function createFilePathLinkProvider(
   }
 }
 
-function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
-  return terminal.element?.querySelector('.xterm-screen') ?? null
-}
-
-function getBufferPositionForTerminalMouseEvent(
-  terminal: Terminal,
-  event: MouseEvent
-): { x: number; y: number } | null {
-  const screenElement = getTerminalScreenElement(terminal)
-  if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
-    return null
-  }
-
-  const rect = screenElement.getBoundingClientRect()
-  const relativeX = event.clientX - rect.left
-  const relativeY = event.clientY - rect.top
-  if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
-    return null
-  }
-
-  const cellWidth = rect.width / terminal.cols
-  const cellHeight = rect.height / terminal.rows
-  if (cellWidth <= 0 || cellHeight <= 0) {
-    return null
-  }
-
-  return {
-    x: Math.floor(relativeX / cellWidth) + 1,
-    y: Math.floor(relativeY / cellHeight) + terminal.buffer.active.viewportY + 1
-  }
-}
-
 export function installFilePathLinkClickFallback(
   paneId: number,
   terminal: Terminal,
@@ -282,8 +266,7 @@ export function installFilePathLinkClickFallback(
     if (!position) {
       return
     }
-    const runtimeEnvironmentId =
-      deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+    const runtimeEnvironmentId = resolveRuntimeEnvironmentIdForPane(deps, paneId)
     // Why: xterm can show a wrapped provider link as active while still missing
     // activation for the clicked wrapped row. Always retry file-path hit testing
     // on modifier mouseup; openDetectedFilePath coalesces duplicate opens.

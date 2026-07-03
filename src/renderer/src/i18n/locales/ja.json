@@ -2452,6 +2452,9 @@
             "c2f0b72b8d": "入れる",
             "925f49f210": "ペインを展開する",
             "df766809e0": "ペインを折りたたむ",
+            "41fc98243e": "Copy Path",
+            "1ca591826e": "Open with Default App",
+            "590496273b": "Open",
             "cff67afad1": "Copy Context"
           },
           "TerminalErrorToast": {
@@ -11368,6 +11371,10 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "すべての未送信のメモ"
+        },
+        "UnrenderableBinaryFileNotice": {
+          "d4ba27a05b": "Open with Default App",
+          "11d463b73c": "Orca can&rsquo;t preview this file type."
         },
         "LargeDiffFallback": {
           "a3c74f8a21": "行数が安全な表示制限を超えています",

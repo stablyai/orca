@@ -72,6 +72,7 @@ import {
   resolveTerminalTabStripDropTarget
 } from './terminal-pane-tab-detach'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
+import type { TerminalFileLinkResolver } from './terminal-file-link-hit-testing'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
@@ -1307,6 +1308,11 @@ export default function TerminalPane({
     setPendingCloseConfirmation(null)
   }, [])
 
+  // Why: the link effect (in useTerminalPaneLifecycle) owns the link deps; it
+  // publishes a resolver here so the context menu can resolve the file link
+  // under a right-click without re-deriving cwd/home/runtime context.
+  const fileLinkResolverRef = useRef<TerminalFileLinkResolver | null>(null)
+
   const resolveExternalPaneDropTarget = useCallback(
     ({
       sourcePaneId,
@@ -1411,6 +1417,7 @@ export default function TerminalPane({
     paneTitlesRef,
     setRenamingPaneId,
     setPaneCount,
+    fileLinkResolverRef,
     setPaneLayoutRevision,
     resolveExternalPaneDropTarget,
     onExternalPaneDrop: handleExternalPaneDrop
@@ -2523,7 +2530,8 @@ export default function TerminalPane({
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
     forceBracketedMultilineTextPaste,
-    rightClickToPaste
+    rightClickToPaste,
+    fileLinkResolverRef
   })
   const getContextMenuLeafId = useCallback((): string | null => {
     const paneId = contextMenu.menuPaneId
@@ -2971,6 +2979,11 @@ export default function TerminalPane({
         menuPaneIsExpanded={
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
+        menuLink={contextMenu.menuLink}
+        onOpenLink={contextMenu.onOpenLink}
+        onRevealLink={contextMenu.onRevealLink}
+        onOpenLinkExternally={contextMenu.onOpenLinkExternally}
+        onCopyLinkPath={() => void contextMenu.onCopyLinkPath()}
         onCopy={() => void contextMenu.onCopy()}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
