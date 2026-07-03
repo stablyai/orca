@@ -2168,7 +2168,6 @@ const api = {
         pageUrl: string
         linkUrl: string | null
         selectionText: string
-        canCopy: boolean
         canGoBack: boolean
         canGoForward: boolean
       }) => void
@@ -2184,7 +2183,6 @@ const api = {
           pageUrl: string
           linkUrl: string | null
           selectionText: string
-          canCopy: boolean
           canGoBack: boolean
           canGoForward: boolean
         }

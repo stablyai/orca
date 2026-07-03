@@ -284,7 +284,6 @@ type RemoteBrowserContextMenu = {
   linkUrl: string | null
   pageUrl: string
   selectionText: string
-  canCopy: boolean
 }
 
 type RemoteBrowserViewportSize = {
@@ -619,16 +618,21 @@ function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
     const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
     const anchor = target && typeof target.closest === 'function' ? target.closest('a[href]') : null;
+    // Why: read the guest selection here so the remote/paired browser can offer
+    // the same Copy affordance as the local webview (there is no ContextMenuParams
+    // over the runtime RPC).
+    const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
     return JSON.stringify({
       linkUrl: anchor && anchor.href ? anchor.href : null,
-      pageUrl: location.href || 'about:blank'
+      pageUrl: location.href || 'about:blank',
+      selectionText: selection ? String(selection) : ''
     });
   })()`
 }
 
 function readRemoteContextMenuResult(
   result: unknown
-): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl'> | null {
+): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl' | 'selectionText'> | null {
   if (!result || typeof result !== 'object') {
     return null
   }
@@ -637,10 +641,16 @@ function readRemoteContextMenuResult(
     return null
   }
   try {
-    const parsed = JSON.parse(raw) as { linkUrl?: unknown; pageUrl?: unknown }
+    const parsed = JSON.parse(raw) as {
+      linkUrl?: unknown
+      pageUrl?: unknown
+      selectionText?: unknown
+    }
     return {
       linkUrl: typeof parsed.linkUrl === 'string' && parsed.linkUrl ? parsed.linkUrl : null,
-      pageUrl: typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank'
+      pageUrl:
+        typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank',
+      selectionText: typeof parsed.selectionText === 'string' ? parsed.selectionText : ''
     }
   } catch {
     return null
@@ -2161,7 +2171,9 @@ function RemoteBrowserPagePane({
       x: event.clientX,
       y: event.clientY,
       linkUrl: null,
-      pageUrl: browserTab.url || 'about:blank'
+      pageUrl: browserTab.url || 'about:blank',
+      // Why: filled in below once the async eval reads the guest selection.
+      selectionText: ''
     })
     enqueueRemoteInput(async () => {
       const operationToken = createRemoteOperationToken(pageId)
@@ -2186,7 +2198,8 @@ function RemoteBrowserPagePane({
               ? {
                   ...current,
                   linkUrl: parsed.linkUrl,
-                  pageUrl: redactKagiSessionToken(parsed.pageUrl)
+                  pageUrl: redactKagiSessionToken(parsed.pageUrl),
+                  selectionText: parsed.selectionText
                 }
               : current
           )
@@ -2444,20 +2457,20 @@ function RemoteBrowserPagePane({
                     <div className="my-1 h-px bg-border/70" />
                   </>
                 ) : null}
-                {contextMenu.selectionText ? (
-                  <button
-                    role="menuitem"
-                    className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
-                    onClick={() => {
-                      void window.api.ui.writeClipboardText(contextMenu.selectionText)
-                      setContextMenu(null)
-                    }}
-                  >
-                    {translate(
-                      'auto.components.browser.pane.BrowserPane.2a4c4b8e1f',
-                      'Copy'
-                    )}
-                  </button>
+                {contextMenu.selectionText.trim() ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.selectionText)
+                        setContextMenu(null)
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
                 ) : null}
                 <button
                   role="menuitem"
@@ -2778,7 +2791,6 @@ function BrowserPagePane({
     linkUrl: string | null
     pageUrl: string
     selectionText: string
-    canCopy: boolean
   } | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
@@ -3090,8 +3102,7 @@ function BrowserPagePane({
         y,
         linkUrl: event.linkUrl,
         pageUrl: event.pageUrl,
-        selectionText: event.selectionText ?? '',
-        canCopy: event.canCopy ?? false
+        selectionText: event.selectionText ?? ''
       })
     })
   }, [browserTab.id])
@@ -4837,20 +4848,20 @@ function BrowserPagePane({
                     <div className="my-1 h-px bg-border/70" />
                   </>
                 ) : null}
-                {contextMenu.selectionText ? (
-                  <button
-                    role="menuitem"
-                    className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
-                    onClick={() => {
-                      void window.api.ui.writeClipboardText(contextMenu.selectionText)
-                      setContextMenu(null)
-                    }}
-                  >
-                    {translate(
-                      'auto.components.browser.pane.BrowserPane.2a4c4b8e1f',
-                      'Copy'
-                    )}
-                  </button>
+                {contextMenu.selectionText.trim() ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+                      onClick={() => {
+                        void window.api.ui.writeClipboardText(contextMenu.selectionText)
+                        setContextMenu(null)
+                      }}
+                    >
+                      {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
+                    </button>
+                    <div className="my-1 h-px bg-border/70" />
+                  </>
                 ) : null}
                 <button
                   role="menuitem"
